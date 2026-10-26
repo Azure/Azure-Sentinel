@@ -2,8 +2,7 @@ function Get-EventGridRbacModeParameter {
     param([switch]$IncludeDefault)
 
     $parameter = [PSCustomObject]@{
-        type = 'securestring'
-        minLength = 1
+        type = 'string'
         allowedValues = @('CreateRoleAssignment', 'UseExistingRoleAssignment')
     }
     if ($IncludeDefault) {
@@ -18,6 +17,7 @@ function Get-EventGridManagedIdentityDeployments {
             type       = 'Microsoft.Resources/deployments'
             apiVersion = '2025-04-01'
             name       = "[[variables('eventGridTopicDeploymentName')]"
+            condition  = "[[parameters('existingSystemTopicMatchesStorageAccount')]"
             properties = [ordered]@{
                 mode = 'Incremental'
                 expressionEvaluationOptions = @{ scope = 'inner' }
@@ -25,11 +25,10 @@ function Get-EventGridManagedIdentityDeployments {
                     topicName = @{ value = "[[variables('EGSystemTopicName')]" }
                     StorageAccountLocation = @{ value = "[[parameters('StorageAccountLocation')]" }
                     sourceId = @{
-                        value = "[[resourceId(parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+                        value = "[[variables('storageAccountId')]"
                     }
-                    # Read the supplied topic before updating it in the inner-scoped deployment.
-                    existingTopic = @{
-                        value = "[[if(empty(parameters('EGSystemTopicName')), createObject(), reference(resourceId(parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics', variables('EGSystemTopicName')), '2025-02-15', 'Full'))]"
+                    existingSystemTopic = @{
+                        value = "[[parameters('existingSystemTopic')]"
                     }
                 }
                 template = [ordered]@{
@@ -37,26 +36,26 @@ function Get-EventGridManagedIdentityDeployments {
                     contentVersion = '1.0.0.0'
                     parameters = [ordered]@{
                         topicName = @{ type = 'string' }
-                        StorageAccountLocation = @{ type = 'securestring' }
+                        StorageAccountLocation = @{ type = 'string' }
                         sourceId = @{ type = 'string' }
-                        existingTopic = @{ type = 'object' }
+                        existingSystemTopic = @{ type = 'object' }
                     }
                     variables = [ordered]@{
-                        existingIdentity = "[[if(contains(parameters('existingTopic'), 'identity'), coalesce(parameters('existingTopic').identity, createObject()), createObject())]"
-                        userAssignedIdentities = "[[if(contains(variables('existingIdentity'), 'userAssignedIdentities'), coalesce(variables('existingIdentity').userAssignedIdentities, createObject()), createObject())]"
-                        topicIdentity = "[[if(empty(variables('userAssignedIdentities')), createObject('type', 'SystemAssigned'), createObject('type', 'SystemAssigned, UserAssigned', 'userAssignedIdentities', variables('userAssignedIdentities')))]"
+                        existingTopicIdentity = "[[if(contains(parameters('existingSystemTopic'), 'identity'), coalesce(parameters('existingSystemTopic').identity, createObject()), createObject())]"
+                        existingUserAssignedIdentities = "[[if(contains(variables('existingTopicIdentity'), 'userAssignedIdentities'), coalesce(variables('existingTopicIdentity').userAssignedIdentities, createObject()), createObject())]"
+                        topicIdentity = "[[if(empty(variables('existingUserAssignedIdentities')), createObject('type', 'SystemAssigned'), createObject('type', 'SystemAssigned, UserAssigned', 'userAssignedIdentities', variables('existingUserAssignedIdentities')))]"
                     }
                     resources = @(
                         [ordered]@{
                             type       = 'Microsoft.EventGrid/systemTopics'
                             apiVersion = '2025-02-15'
                             name       = "[[parameters('topicName')]"
-                            location   = "[[parameters('StorageAccountLocation')]"
-                            tags       = "[[if(contains(parameters('existingTopic'), 'tags'), coalesce(parameters('existingTopic').tags, createObject()), createObject())]"
+                            location   = "[[if(empty(parameters('existingSystemTopic')), parameters('StorageAccountLocation'), parameters('existingSystemTopic').location)]"
+                            tags       = "[[if(contains(parameters('existingSystemTopic'), 'tags'), coalesce(parameters('existingSystemTopic').tags, createObject()), createObject())]"
                             identity   = "[[variables('topicIdentity')]"
                             properties = [ordered]@{
-                                source = "[[parameters('sourceId')]"
-                                topicType = 'microsoft.storage.storageaccounts'
+                                source = "[[if(empty(parameters('existingSystemTopic')), parameters('sourceId'), parameters('existingSystemTopic').properties.source)]"
+                                topicType = "[[if(empty(parameters('existingSystemTopic')), 'microsoft.storage.storageaccounts', parameters('existingSystemTopic').properties.topicType)]"
                             }
                         }
                     )
@@ -76,17 +75,17 @@ function Get-EventGridManagedIdentityDeployments {
             condition  = "[[equals(parameters('eventGridRbacMode'), 'CreateRoleAssignment')]"
             dependsOn  = @(
                 "[[variables('eventGridTopicDeploymentId')]",
-                "[[resourceId(parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts/queueServices/queues', variables('storageAccountName'), 'default', variables('queueName'))]"
+                "[[variables('notificationQueueResourceId')]"
             )
             properties = [ordered]@{
                 mode = 'Incremental'
                 expressionEvaluationOptions = @{ scope = 'inner' }
                 parameters = [ordered]@{
                     principalId = @{
-                        value = "[[reference(variables('eventGridTopicDeploymentId'), '2025-04-01').outputs.principalId.value]"
+                        value = "[[if(equals(parameters('eventGridRbacMode'), 'CreateRoleAssignment'), reference(variables('eventGridTopicDeploymentId'), '2025-04-01').outputs.principalId.value, '')]"
                     }
                     storageAccountResourceId = @{
-                        value = "[[resourceId(parameters('StorageAccountSubscription'), parameters('StorageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+                        value = "[[variables('storageAccountId')]"
                     }
                 }
                 template = [ordered]@{
