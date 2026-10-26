@@ -34,7 +34,6 @@ STATUS_ICON = {
     "not-applicable": "➖",
     "not-run": "⏭️",
     "warning": "⚠️",
-    "shadow-only-failure": "⚠️",
 }
 
 
