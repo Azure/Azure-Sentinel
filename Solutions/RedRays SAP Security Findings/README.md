@@ -15,35 +15,30 @@ populate `ABAPAuditLog` or activate Microsoft's built-in SAP audit detections.
 
 ## Set up the integration
 
-The Content Hub package installs a data connector definition, six analytics rule templates
-and a workbook template. You configure the connection and enable the rules after installation.
-The connector guides you through setup; RedRays sends the data. The package does not deploy
-a RedRays server, Azure Function, VM or polling agent.
+The Content Hub package installs a Codeless Connector Framework (CCF) push connector, six
+analytics rule templates and a workbook template. You deploy the ingestion resources from the
+connector page and enable the rules after installation. RedRays sends the data. The package does
+not deploy a RedRays server, Azure Function, VM or polling agent.
 
-1. **Prepare the workspace and application.** Use a Log Analytics workspace with Sentinel
-   enabled. Create a dedicated Microsoft Entra application and credential, or use an approved
-   existing service principal. Record the tenant ID, application (client) ID and **service
-   principal object ID**. Find the last value under Enterprise applications; it differs from
-   the application object ID and client ID.
-2. **Deploy the ingestion resources.** Deploy `Deployment/azuredeploy.json` in your workspace's
-   resource group and region. You can also download the template from RedRays > Platform
-   Settings > Microsoft Sentinel. Leave `deployAnalyticsRules=false` to avoid creating a
-   second set of rules. This step creates eight tables, a data collection rule (DCR) for
-   direct ingestion and a Monitoring Metrics Publisher role assignment scoped to that DCR.
-   Deployment requires resource and role-assignment permissions. RedRays itself needs only
-   the ingestion role. Use a dedicated DCR name and a RedRays version with matching table schemas.
-3. **Configure RedRays.** Copy `ingestionEndpoint` and `dcrImmutableId` from the deployment
-   outputs into RedRays, along with the tenant ID, client ID and secret. Choose the modules
-   and export interval, then save and enable the integration. Keep `alertOnBaseline` disabled
-   for the first import so you can review the initial findings before creating alerts.
-4. **Check delivery.** Send a test event, then wait for a scheduled export. Query
+1. **Deploy the push connector resources.** In Microsoft Sentinel, open **Data connectors >
+   RedRays SAP Security Findings** and select **Deploy**. Sentinel creates a data collection
+   endpoint (DCE), a data collection rule (DCR) and the eight RedRays tables, then registers a
+   Microsoft Entra application with a client secret and grants it the Monitoring Metrics
+   Publisher role on the DCR. You need permission to create app registrations and to assign
+   roles on the DCR. Copy the client secret immediately; it is shown only once.
+2. **Configure RedRays.** In RedRays > Platform Settings > Microsoft Sentinel, enter the tenant
+   ID, application (client) ID, client secret, DCE URI and DCR immutable ID shown on the
+   connector page. Choose the modules and export interval, then save and enable the integration.
+   Keep `alertOnBaseline` disabled for the first import so you can review the initial findings
+   before creating alerts.
+3. **Check delivery.** Send a test event, then wait for a scheduled export. Query
    `RedRaysExportHealth_CL` for `RecordKind == 'HEARTBEAT'`. A successful test means Azure
    accepted the request; the data may take time to appear in queries.
-5. **Enable the content you need.** In Manage solution, create the workbook and your chosen
+4. **Enable the content you need.** In Manage solution, create the workbook and your chosen
    analytics rules. Review the initial findings first. Set the workbook export health threshold above
    your export interval, allowing time for ingestion.
 
-Allow outbound HTTPS from RedRays to Microsoft Entra and the Azure Monitor ingestion endpoint.
+Allow outbound HTTPS from RedRays to Microsoft Entra and the data collection endpoint.
 No inbound connection to RedRays is required. Rotate the application credential in Entra and
 update it in RedRays before it expires. Keep credentials out of the solution package.
 
@@ -91,7 +86,7 @@ Only instances with a heartbeat in the selected time range are visible; never-co
 instances require a separate expected-instance inventory. Heartbeat loss is operational
 monitoring and has no ATT&CK mapping, so it is not packaged as a Sentinel analytics rule.
 For notifications, configure an Azure Monitor log search alert separately. The connector's
-Connected badge uses a two-day heartbeat window and does not confirm every module is exporting.
+Connected status shows that the push connector is deployed; it does not confirm every module is exporting.
 
 Finding updates do not close Sentinel incidents automatically. A finding deleted at the
 source is not treated as resolved.
@@ -105,16 +100,16 @@ Profile check severity follows the integration's policy; custom profile paramete
 Password findings show detected issues, but do not establish that a full password audit completed.
 See `Deployment/setup.json` for these details.
 
-The deployment uses Analytics tables with 30-day retention. Azure bills ingestion and retention
-to your subscription.
+The connector creates Analytics tables that use the workspace's default retention. Azure bills
+ingestion and retention to your subscription.
 
 ## Upgrades and removal
 
 Export any rules and workbooks you have customized before upgrading. Review template changes
 before applying them, and test the upgrade in a separate workspace. Disable equivalent rules
-from earlier standalone deployments to avoid duplicate alerts. When redeploying ingestion
-resources, reuse this integration's DCR name and sender principal; keep other integrations on
-their own DCRs.
+from earlier standalone deployments to avoid duplicate alerts. If you previously deployed the
+standalone RedRays ARM template, switch RedRays to the connector's DCE URI, DCR immutable ID and
+application credentials, then remove the old DCR and its role assignment.
 
 To stop exports, disable the integration in RedRays. Uninstalling the Content Hub solution does
 not delete ingested data or revoke sender access. Review your rules, workbooks, DCR and its role
@@ -137,9 +132,10 @@ Building the package does not complete release validation. Maintainers should:
 
 ## Connector architecture and packaged assets
 
-RedRays scheduler -> Microsoft Entra token endpoint -> Azure Monitor Logs Ingestion API -> DCR -> Log Analytics.
-The sender runs in the customer-controlled RedRays backend. There is no Azure Function or
-CCF polling component. Any CCF migration requires an agreed design for this push-based model.
+RedRays scheduler -> Microsoft Entra token endpoint -> data collection endpoint (Logs Ingestion API) -> DCR -> Log Analytics.
+The connector is a CCF `Push` connector defined in `Data Connectors/RedRaysSAPSecurityFindings_PUSH_CCP/`:
+the connector definition, the push data connector, one DCR with a stream per table, and the eight table schemas.
+The sender runs in the customer-controlled RedRays backend; there is no Azure Function or polling component.
 The connector references the raw SVG URL under the repository's `Logos/` folder for portal rendering; a copy is also included as
 `Data Connectors/RedRays.svg`. Light and dark previews are included inside
 `Workbooks/Images/Preview/` as well as the repository workbook gallery.

@@ -27,22 +27,6 @@ const CEFRestAPIPermissions = {
     ]
 };
 
-// Direct Logs Ingestion API senders use a DCR role assignment, not workspace shared keys.
-// Keep this profile limited to REST API connectors; CEF and Event retain their existing checks.
-const LogsIngestionAPIPermissions = {
-    resourceProvider: [{
-        provider: "Microsoft.OperationalInsights/workspaces",
-        permissionsDisplayText: "Read and write permissions are required to configure the workspace tables.",
-        providerDisplayName: "Workspace",
-        scope: "Workspace",
-        requiredPermissions: { read: true, write: true }
-    }],
-    custom: {
-        name: "Azure Monitor Logs Ingestion API",
-        description: "The sending application requires the Monitoring Metrics Publisher role on the data collection rule (DCR). Workspace shared keys are not used."
-    }
-};
-
 const SysLogPermissions = {
     "resourceProvider": [
         {
@@ -111,10 +95,7 @@ export function isValidPermissions(permissions: RequiredConnectorPermissions, co
         case ConnectorCategory.CEF:
         case ConnectorCategory.Event:
         case ConnectorCategory.RestAPI:
-            const hasLogsIngestionPermissions = connectorCategory === ConnectorCategory.RestAPI
-                && _.isEqual(permissions.resourceProvider, LogsIngestionAPIPermissions.resourceProvider)
-                && permissions.customs?.some(custom => _.isEqual(custom, LogsIngestionAPIPermissions.custom));
-            if(!_.isEqual(permissions.resourceProvider, CEFRestAPIPermissions.resourceProvider) && !hasLogsIngestionPermissions)
+            if(!_.isEqual(permissions.resourceProvider, CEFRestAPIPermissions.resourceProvider))
             {
                 throw new DataConnectorValidationError("Provided permissions does not match with "+ connectorCategory +" Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_"+ connectorCategory +"_template.json ");
             }
