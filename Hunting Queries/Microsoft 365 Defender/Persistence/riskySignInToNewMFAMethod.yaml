@@ -16,6 +16,7 @@ query: |
   let lookback = 7d;
   let timeDelta = 6h;
   let mfaMethodAdded=CloudAppEvents
+  | where Timestamp > ago(lookback)
   | where ActionType =~ "Update user." 
   | where RawEventData has "StrongAuthenticationPhoneAppDetail"
   | where isnotempty(RawEventData.ObjectId) and isnotempty(RawEventData.Target[1].ID)
@@ -26,6 +27,8 @@ query: |
   | distinct AccountObjectId;
   let hasusersWithNewMFAMethod = isnotempty(toscalar(usersWithNewMFAMethod));
   let riskySignins=EntraIdSignInEvents
+  // Sign-ins can precede the first MFA event by up to timeDelta
+  | where Timestamp > ago(lookback + timeDelta)
   | where hasusersWithNewMFAMethod
   | where AccountObjectId in (usersWithNewMFAMethod)
   // Medium (50) and High (100) sign-in risk level
@@ -37,8 +40,8 @@ query: |
   mfaMethodAdded
   | join kind=inner riskySignins on AccountObjectId
   | extend TimeDelta = MfaAddedTimestamp - SignInTimestamp
-  // Risky sign-in before MFA method added by a maximum of 6h
-  | where TimeDelta between (0min .. 6h)
+  // Risky sign-in before MFA method added by at most timeDelta (default 6h)
+  | where TimeDelta between (0min .. timeDelta)
   | project-away AccountObjectId1
 entityMappings:
 - entityType: Account

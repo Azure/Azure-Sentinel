@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.11      | 26-10-2026                     | Fixed time-window and join logic in **Hunting Query** Risky Sign-in with new MFA method |
 | 3.0.10       | 10-11-2025                     | Update in **Analytical Rule** alert description                                          |
 | 3.0.9       | 05-06-2024                     | **Analytical Rule** description updated                                          |
 | 3.0.8       | 04-04-2024                     | Updated **Entity Mappings**                                                     |
