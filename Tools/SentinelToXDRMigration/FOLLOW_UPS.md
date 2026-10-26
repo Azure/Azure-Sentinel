@@ -144,13 +144,65 @@ themselves establish a toolkit fix is required.
   `Microsoft.Graph/applications@v1.0`, `servicePrincipals@v1.0`, and
   `oauth2PermissionGrants@v1.0` when `ThreatHunting.Read.All` or
   `CustomDetection.ReadWrite.All` is missing.
+- **Align GitHub Actions ARM-TTK CI with local V3.1 filters and `lab-deployment`
+  qualification mode.** Synchronized `.github/actions/entrypoint.ps1` with
+  `.script/local-validation/run-arm-ttk.ps1` (`-Skip @("Template Should Not
+  Contain Blanks", "URIs Should Be Properly Constructed")`, exempt `"packageId"`,
+  `"fromTemplateId"`, `"columnId"`, and `customDetails` `*Id` keys in
+  `IDs Should Be Derived From ResourceIDs`, and fixed nested-template
+  `Summary.Fail` decrement math), guarded `Expand-AzTemplate.ps1` against
+  `"microsoft.resources/deployments/write"` string literals inside KQL
+  `queryText`, and allowed `.github/workflows/arm-ttk-validations.yaml` to
+  recognize verified `lab-deployment` qualification evidence for V3.1
+  `languageVersion: "2.0"` `MicrosoftSecurity` resources (`#15397`).
+- **Rewrite scalar `dynamic([...])` and `mv-apply` filters in `kind: NRT` (`PT0S`)
+  Custom Detections for the Defender XDR streaming compiler.** Added
+  `rewrite_nrt_streaming_constructs` in `converter.py` to inline `let <var> =
+  dynamic([...]);` lists and rewrite scalar `mv-apply` filter stages into
+  streaming-compatible predicates, and added `_assess_nrt_eligibility` checks
+  rejecting residual `dynamic([...])` and `mv-apply` / `mv-expand` in `PT0S`
+  rules (`HuntingRuleQueryStreamingNotSupported`).
 
 ## Candidate follow-ups
 
+- **Enable XDR Custom Detections and Sentinel Analytic Rules during
+  Qualification flow.** Enable deployed Defender XDR Custom Detections and
+  Sentinel Analytic Rules during lab Qualification (instead of keeping them
+  `enabled: false` / `status: disabled` throughout Qualification) so that
+  Qualification exercises live rule enablement, triggers the Defender XDR NRT
+  streaming compiler (`HuntingRuleQueryStreamingNotSupported` /
+  `KqlCompilationFailed`) on `PT0S` rules, and validates live alert generation
+  before disabling or cleaning up rules after the test window.
+- **Reject false-success packaging results in V3.1 without changing legacy V3
+  flow.** Do not accept a null or zero exit status as sufficient proof of
+  packaging success. Fail V3.1 packaging acceptance on reported packaging
+  errors, missing or stale output artifacts, or missing required resources,
+  even when the invoked script returns no explicit failure status. Preserve
+  zero as the normal success exit code when artifact and resource checks pass.
+  Cover swallowed connector-processing errors and incomplete CCF packages in
+  regression tests.
 - **Flip default workflow profile from `authoring` to `qualification` after live
   lab sign-off.** `evaluate_qualification_promotion_gate` now verifies all 5
   qualification stages end-to-end; once signed off against a live lab run,
   switch the default profile in `workflow-init` and agent adapters.
+- **KQL static validations extend to XDR artifacts.** Extend static KQL syntax
+  and schema validation coverage (such as `.script/tests/KqlvalidationsTests`
+  and local validation) to `Solutions/**/XDR Detections/*.yaml` and
+  `Solutions/**/XDR Workbooks/*.json` alongside Sentinel `Analytic Rules`,
+  `Hunting Queries`, and `Parsers`.
+- **Qualification mode overrides static KQL failures.** When a solution has
+  verified live `qualification` evidence (such as live KQL execution, alert
+  parity, and workbook query receipts), allow Qualification mode to override
+  offline static KQL analyzer false positives (for example `KS107` on
+  `todynamic(<dynamic>)` in `Microsoft.Azure.Sentinel.KustoServices`).
+  See `Tools/ignored/kql-static-validation-and-qualification-override-plan.md`.
+- **Instrument NPF metrics in validation and qualification artifacts.** Record
+  first-pass PR validation rate (`runNumber`, `firstPassPassed`), per-stage UTC
+  cycle-time timestamps (`stageTimestamps`), top-level qualification `verdict`
+  and `verdictReasons`, structured human `overrides[]` in
+  `decision-manifest.json`, and privacy-safe `operatorHash` toolkit usage in
+  `workflow-state.json`, alongside `<!-- npf-meta: ... -->` PR solution-count
+  metadata. See `Tools/ignored/npf-metrics-instrumentation-plan.md`.
 
 Any future environment write remains separately gated by explicit approval
 immediately before the exact operation. No cloud action is authorized by this

@@ -10,9 +10,11 @@ import yaml
 
 from solution_manager.migration._workbook_core import migrator, rewrite, workbook
 from solution_manager.migration.converter import (
+    _assess_nrt_eligibility,
     build_xdr_document,
     convert_security_alert_incident_query,
     rewrite_cosmetic_nrt_summarize,
+    rewrite_nrt_streaming_constructs,
 )
 from solution_manager.migration.workbooks import convert_workbooks, validate_workbooks
 
@@ -428,6 +430,65 @@ class TestNrtSummarizeHandling:
         assert any("nrt_behavioral_summarize_fallback_pt1h" in n for n in conv["notes"])
         assert conv["errors"] == []
         assert conv["status"] == "converted"
+
+    def test_nrt_streaming_constructs_rewritten_for_pt0s(self, tmp_path: Path) -> None:
+        sol = _write_minimal_solution(tmp_path)
+        rule_path = _write_rule(
+            sol,
+            "NRT_Creation_of_Expensive_Computes_in_Azure.yaml",
+            {
+                "id": "56fe0db0-6779-46fa-b3c5-006082a53064",
+                "name": "NRT Creation of expensive computes in Azure",
+                "description": "Identifies creation of expensive computes.",
+                "severity": "High",
+                "kind": "NRT",
+                "tactics": ["Impact"],
+                "relevantTechniques": ["T1496"],
+                "query": (
+                    'let tokens = dynamic(["24", "30", "32", "64"]);\n'
+                    'let operationList = dynamic(["MICROSOFT.COMPUTE/VIRTUALMACHINES/WRITE", "MICROSOFT.COMPUTE/VIRTUALMACHINES/CREATE"]);\n'
+                    "AzureActivity\n"
+                    "| where OperationNameValue in~ (operationList)\n"
+                    "| where ActivityStatusValue =~ 'Start'\n"
+                    "| extend vmSize = tostring(parse_json(Properties).requestbody)\n"
+                    "| mv-apply token=tokens to typeof(string) on (where vmSize contains token)\n"
+                    "| extend AccountName = tostring(split(Caller, '@')[0])\n"
+                    "| project TimeGenerated, Caller, CallerIpAddress, vmSize, AccountName, ResourceId, SubscriptionId"
+                ),
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {"identifier": "Name", "columnName": "AccountName"}
+                        ],
+                    }
+                ],
+            },
+        )
+        doc = build_xdr_document(rule_path, sol, {})
+        query_text = doc["properties"]["queryCondition"]["queryText"]
+        conv = doc["contentProvenance"]["conversion"]
+        assert doc["properties"]["schedule"] == {"frequency": "PT0S"}
+        assert "dynamic(" not in query_text.lower()
+        assert "mv-apply" not in query_text.lower()
+        assert 'OperationNameValue in~ ("MICROSOFT.COMPUTE/VIRTUALMACHINES/WRITE", "MICROSOFT.COMPUTE/VIRTUALMACHINES/CREATE")' in query_text
+        assert 'where vmSize contains "24" or vmSize contains "30" or vmSize contains "32" or vmSize contains "64"' in query_text
+        assert any("nrt_streaming_constructs_rewritten" in n for n in conv["notes"])
+        assert conv["errors"] == []
+        assert conv["status"] == "converted"
+
+        eligible, reasons = _assess_nrt_eligibility(query_text, query_text)
+        assert eligible is True
+        assert reasons == []
+
+        bad_eligible, bad_reasons = _assess_nrt_eligibility(
+            'let x = dynamic(["a"]);\nAzureActivity | mv-apply t=x on (where Caller contains t)',
+            'let x = dynamic(["a"]);\nAzureActivity | mv-apply t=x on (where Caller contains t)',
+        )
+        assert bad_eligible is False
+        assert any("dynamic([" in r for r in bad_reasons)
+        assert any("mv-apply" in r for r in bad_reasons)
+
 
 
 class TestSampleDataCatalogValidator:
