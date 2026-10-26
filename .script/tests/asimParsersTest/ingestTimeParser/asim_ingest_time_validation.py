@@ -34,6 +34,7 @@ from asim_ingestion.parser.discovery import (
     resolve_query_time_pair,
 )
 from asim_ingestion.parser.kql import (
+    compact_kql,
     mask_kql,
     resolve_source_specific_fixture,
     split_kql_statements,
@@ -50,6 +51,7 @@ __all__ = [
     "build_validation_manifest",
     "classify_changed_path",
     "classify_parser_path",
+    "compact_kql",
     "get_changed_files",
     "load_yaml_file",
     "main",

@@ -239,8 +239,12 @@ Authored `contentProvenance.requiredWorkspaceFunctions` records bind each
 Function aliases are not table names: underlying source data types require
 separate evidence. The connected workspace, access, nested dependencies,
 external data, and exact parameterized execution remain runtime concerns.
-`_GetWatchlist` is a supported Sentinel built-in available in AH, not a custom
-parser to install or an unsupported-function gap. Preserve its calls and
+`_GetWatchlist` and `_GetWatchlistAlias` are supported Sentinel built-ins available
+through a connected workspace, not custom parsers to install or unsupported-function
+gaps. Both Python conversion and PowerShell packaging recognize their calls.
+Do not exempt every underscore-prefixed function: vendor-specific `_vim_*`
+parsers and arbitrary custom `_...` or `__...` functions still require reviewed
+workspace-function dependencies. Preserve supported built-in calls and
 review underlying data inputs separately; only actual execution/data failures
 are findings.
 `Watchlist` is platform reference data, not connector-fed telemetry. Retain it
@@ -256,10 +260,10 @@ preview and fresh review/validation; it must not silently delete shared parser
 resources, unrelated branches, or panels. Catalog joins may reintroduce removed
 products and need coordinated changes.
 
-V3.1 installs required workspace parsers unconditionally and orders workbook
+V3.1 installs required workspace parsers (gated only by the DeployParser parameter, bool, defaultValue true) and orders workbook
 installation after their actual `Microsoft.OperationalInsights/workspaces/savedSearches`
 resources in the same enclosing ARM template. Parser content-template registration
-alone is not installation. Missing, stale, ambiguous, or conditional required
+alone is not installation. Missing, stale, ambiguous, or otherwise conditional/copy-looped required
 resources block packaging. Full workbook registration retains function prerequisites;
 the installed notebook retains only the identity/version quartet. ARM ordering
 does not establish AH propagation, query correctness, or provider/UI acceptance.

@@ -9,7 +9,10 @@ from typing import Any, Mapping, Protocol, Sequence
 
 import yaml
 
-from asim_ingestion.fixtures.timestamps import parse_kusto_datetime_ticks
+from asim_ingestion.fixtures.timestamps import (
+    parse_kusto_datetime_ticks,
+    ticks_to_kusto_datetime,
+)
 from asim_ingestion.parser.kql import split_kql_statements, split_pipeline
 
 MAX_MISMATCH_EXAMPLES = 10
@@ -49,6 +52,12 @@ def _quote_kql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def _quote_column_name(value: str) -> str:
+    if IDENTIFIER_RE.fullmatch(value):
+        return value
+    return "['" + value.replace("'", "''") + "']"
+
+
 def _timestamp_literals(timestamps: Sequence[str]) -> str:
     unique = sorted(set(timestamps))
     if not unique:
@@ -60,27 +69,104 @@ def _timestamp_literals(timestamps: Sequence[str]) -> str:
     return ", ".join(f"datetime({value})" for value in unique)
 
 
+def _datatable_type(value: str) -> str:
+    normalized = _normalize_column_type(value)
+    return "bool" if normalized == "boolean" else normalized
+
+
+def _datatable_value(value: Any, column_type: str) -> str:
+    normalized = _normalize_column_type(column_type)
+    if value is None:
+        if normalized == "string":
+            return "@''"
+        return f"{_datatable_type(normalized)}(null)"
+    if normalized == "string":
+        return "@'" + str(value).replace("'", "''") + "'"
+    if normalized == "datetime":
+        parse_kusto_datetime_ticks(str(value))
+        return f"datetime({value})"
+    if normalized == "boolean":
+        if not isinstance(value, bool):
+            raise ValidationError(
+                "query-build",
+                f"Boolean fixture value is invalid: {value!r}",
+            )
+        return "true" if value else "false"
+    if normalized in {"int", "long"}:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValidationError(
+                "query-build",
+                f"Integer fixture value is invalid: {value!r}",
+            )
+        return str(value)
+    if normalized == "real":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValidationError(
+                "query-build",
+                f"Real fixture value is invalid: {value!r}",
+            )
+        return repr(float(value))
+    if normalized == "dynamic":
+        return (
+            "dynamic("
+            + json.dumps(
+                value,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+            + ")"
+        )
+    if normalized == "guid":
+        return f"guid({value})"
+    raise ValidationError(
+        "query-build",
+        f"Unsupported fixture schema type: {column_type}",
+    )
+
+
+def build_fixture_datatable(
+    schema: Sequence[Mapping[str, str]],
+    rows: Sequence[Mapping[str, Any]],
+) -> str:
+    if not schema:
+        raise ValidationError(
+            "query-build", "Fixture schema must not be empty."
+        )
+    columns = [
+        (
+            str(column["name"]),
+            str(column["type"]),
+        )
+        for column in schema
+    ]
+    declaration = ", ".join(
+        f"{_quote_column_name(name)}:{_datatable_type(column_type)}"
+        for name, column_type in columns
+    )
+    values = [
+        ", ".join(
+            _datatable_value(row.get(name), column_type)
+            for name, column_type in columns
+        )
+        for row in rows
+    ]
+    return (
+        f"datatable({declaration})\n[\n"
+        + ",\n".join(values)
+        + "\n]"
+    )
+
+
 def build_exact_slice_expression(
     table_name: str,
     timestamps: Sequence[str],
-    projected_columns: Sequence[str] | None = None,
 ) -> str:
     table_name = _require_identifier(table_name, "table_name")
-    query = (
+    return (
         f"{table_name}\n"
         f"| where TimeGenerated in ({_timestamp_literals(timestamps)})"
     )
-    if projected_columns is not None:
-        if not projected_columns:
-            raise ValidationError(
-                "query-build", "At least one projected column is required."
-            )
-        columns = [
-            _require_identifier(column, "projected column")
-            for column in projected_columns
-        ]
-        query += "\n| project " + ", ".join(columns)
-    return query
 
 
 def _is_source_passthrough(filter_query: str) -> bool:
@@ -92,12 +178,14 @@ def _is_source_passthrough(filter_query: str) -> bool:
 
 
 def build_filter_count_query(
-    source_table: str,
-    timestamps: Sequence[str],
     filter_query: str,
+    *,
+    source_schema: Sequence[Mapping[str, str]],
+    source_rows: Sequence[Mapping[str, Any]],
 ) -> str:
-    source_expression = build_exact_slice_expression(
-        source_table, timestamps
+    source_expression = build_fixture_datatable(
+        source_schema,
+        source_rows,
     )
     return (
         f"let source = materialize({source_expression});\n"
@@ -168,11 +256,20 @@ def _parse_filter_counts(
     timestamps: Sequence[str],
 ) -> dict[str, int]:
     _, rows = _normalize_query_table(query_table, "filter")
-    expected_timestamps = set(timestamps)
+    expected_timestamps = {
+        ticks_to_kusto_datetime(
+            parse_kusto_datetime_ticks(str(timestamp))
+        )
+        for timestamp in timestamps
+    }
     counts = {timestamp: 0 for timestamp in expected_timestamps}
     for row in rows:
         timestamp = row.get("TimeGenerated")
         count = row.get("_AsimSelectedCount")
+        if isinstance(timestamp, str):
+            timestamp = ticks_to_kusto_datetime(
+                parse_kusto_datetime_ticks(timestamp)
+            )
         if not isinstance(timestamp, str) or timestamp not in counts:
             raise ValidationError(
                 "filter",
@@ -349,12 +446,10 @@ def build_asim_tester_query(
     target_table: str,
     timestamps: Sequence[str],
     schema_name: str,
-    projected_columns: Sequence[str] | None = None,
 ) -> str:
     target_expression = build_exact_slice_expression(
         target_table,
         timestamps,
-        projected_columns,
     )
     schema_literal = _quote_kql_string(schema_name)
     if tester_name == "ASimDataTester":
