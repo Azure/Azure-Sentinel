@@ -1,0 +1,146 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - CiscoISEEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6107cba5-2974-4c22-8222-2a6f7bbea664
+    path: Analytic Rules/CiscoISECertExpired.yaml
+    version: 1.0.3
+    querySha256: d98d4fda33cdaa45b7fa5344d0827bd21553a9f163b6fa0de5453c8a6dce807f
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity` is provisionally represented
+      by hosts.nameColumn `HostCustomEntity`; confirm that this column is the intended host identifier. The original value
+      is also retained in customDetails when the query output binding is available; this assumption does not prove entity
+      parity'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `AccountCustomEntity`, but its
+      target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `HostCustomEntity`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `HostCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1552
+    reviewScope:
+      sourceDocumentSha256: 378d0aa32b74476e48204c7754ae250a478b65168f31ac38428cd208a6783700
+      targetQuerySha256: 3a3c13d8c0546e269e06d460c3bbcf45b7f38c02aebeafd4e40538bf9ad65419
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity` is provisionally
+        represented by hosts.nameColumn `HostCustomEntity`; confirm that this column is the intended host identifier. The
+        original value is also retained in customDetails when the query output binding is available; this assumption does
+        not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 378d0aa32b74476e48204c7754ae250a478b65168f31ac38428cd208a6783700
+      targetQuerySha256: 3a3c13d8c0546e269e06d460c3bbcf45b7f38c02aebeafd4e40538bf9ad65419
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 378d0aa32b74476e48204c7754ae250a478b65168f31ac38428cd208a6783700
+      targetQuerySha256: 3a3c13d8c0546e269e06d460c3bbcf45b7f38c02aebeafd4e40538bf9ad65419
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: HostCustomEntity
+      column: HostCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity` is provisionally represented
+      by hosts.nameColumn `HostCustomEntity`; confirm that this column is the intended host identifier. The original value
+      is also retained in customDetails when the query output binding is available; this assumption does not prove entity
+      parity'
+properties:
+  id: xdr-6107cba5-2974-4c22-8222-2a6f7bbea664
+  displayName: CiscoISE - Certificate has expired
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lbtime = 1h;
+      CiscoISEEvent
+      | where TimeGenerated > ago(lbtime)
+      | where EventId == '60167'
+      | project SrcIpAddr, DvcIpAddr, DvcHostname, DstUserName
+      | extend HostCustomEntity = DvcHostname
+      | extend IPCustomEntity = SrcIpAddr
+      | extend AccountCustomEntity = DstUserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: CiscoISE - Certificate has expired
+      description: '''Detects certificate expiration.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1552
+      customDetails:
+        AccountFullName: AccountCustomEntity
+        HostFullName: HostCustomEntity
