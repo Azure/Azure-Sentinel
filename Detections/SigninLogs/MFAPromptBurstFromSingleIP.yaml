@@ -1,8 +1,8 @@
 id: 284c73e0-3e14-4698-9202-36fcd458034e
-name: Repeated MFA-required interrupts for one user from one IP (AADSTS50074)
+name: Repeated failed MFA challenges for one user from one IP (AADSTS50074 / AADSTS500121)
 description: |
-  'Finds users with several AADSTS50074 sign-in results (strong authentication required, MFA not completed) from the same IP address within one hour.
-  One such row is often normal because the interrupt is logged when MFA is first requested. A burst from an IP or country the user does not use can indicate MFA fatigue (an attacker with the password generating prompts), and a later successful sign-in from the same IP suggests the user approved a prompt they did not start.
+  'Finds users with several AADSTS50074 (strong authentication required, the user did not pass the MFA challenge) or AADSTS500121 (authentication failed during the MFA challenge) sign-in results from the same IP address within one hour.
+  One such row is often normal, for example a user who ignores a prompt once. A burst from an IP or country the user does not use can indicate MFA fatigue (an attacker with the password generating prompts), and a later successful sign-in from the same IP suggests the user approved a prompt they did not start.
   The threshold of 3 is a starting point, not a Microsoft number. Tune it against your own baseline.
   Time bins use CreatedDateTime (when the sign-in happened), not TimeGenerated (when Log Analytics received the entry).
   Reference: https://learn.microsoft.com/en-us/entra/identity/monitoring-health/concept-interactive-sign-ins'
@@ -22,8 +22,9 @@ relevantTechniques:
 query: |
   SigninLogs
   | where TimeGenerated > ago(1d)
-  | where ResultType == "50074"
+  | where ResultType in ("50074", "500121")
   | summarize Prompts = count(),
+              ResultTypes = make_set(ResultType),
               FirstSeen = min(CreatedDateTime),
               LastSeen = max(CreatedDateTime),
               Apps = make_set(AppDisplayName, 5)
