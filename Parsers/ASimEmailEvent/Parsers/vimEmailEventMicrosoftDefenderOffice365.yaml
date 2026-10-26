@@ -1,0 +1,194 @@
+Parser:
+  Title: Email Event ASIM filtering parser for Microsoft Defender for Office 365
+  Version: 0.1.0
+  LastUpdated: Oct 26, 2026
+Product:
+  Name: Microsoft Defender for Office 365
+Normalization:
+  Schema: EmailEvent
+  Version: 1.0.0
+References:
+- Title: ASIM Email Event Schema
+  Link: https://aka.ms/ASimEmailEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Native Sentinel EmailEvents table
+  Link: https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/emailevents
+Description: |
+  Normalizes native EmailEvents delivery records into ASIM EmailEvent 1.0.0.
+  Preserves source records and keeps delivery outcomes separate from threat verdicts.
+  Created using the agentic ASIM parser creation skills with tenant-data analysis and read-only validation.
+  Supports standard EmailEvent filtering parameters, disabled and optional packing.
+ParserName: vimEmailEventMicrosoftDefenderOffice365
+EquivalentBuiltInParser: _Im_EmailEvent_MicrosoftDefenderOffice365
+ParserParams:
+- Name: starttime
+  Type: datetime
+  Default: datetime(null)
+- Name: endtime
+  Type: datetime
+  Default: datetime(null)
+- Name: ipaddr_has_any_prefix
+  Type: dynamic
+  Default: dynamic([])
+- Name: emailfromaddress_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: emailrecipient_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: emailsubject_has_any
+  Type: dynamic
+  Default: dynamic([])
+- Name: emaildirection_in
+  Type: dynamic
+  Default: dynamic([])
+- Name: emaildeliverylocation_in
+  Type: dynamic
+  Default: dynamic([])
+- Name: eventresult
+  Type: string
+  Default: '*'
+- Name: disabled
+  Type: bool
+  Default: false
+- Name: pack
+  Type: bool
+  Default: false
+ParserQuery: |
+  let parser=(
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      ipaddr_has_any_prefix:dynamic=dynamic([]),
+      emailfromaddress_has_any:dynamic=dynamic([]),
+      emailrecipient_has_any:dynamic=dynamic([]),
+      emailsubject_has_any:dynamic=dynamic([]),
+      emaildirection_in:dynamic=dynamic([]),
+      emaildeliverylocation_in:dynamic=dynamic([]),
+      eventresult:string="*",
+      disabled:bool=false,
+      pack:bool=false
+  ) {
+      EmailEvents
+      | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+      | where array_length(emailfromaddress_has_any) == 0
+          or SenderFromAddress has_any (emailfromaddress_has_any)
+      | where array_length(emailsubject_has_any) == 0
+          or Subject has_any (emailsubject_has_any)
+      | where array_length(emailrecipient_has_any) == 0
+          or RecipientEmailAddress has_any (emailrecipient_has_any)
+          or (gettype(column_ifexists("To", dynamic([]))) == "array"
+              and column_ifexists("To", dynamic([])) has_any (emailrecipient_has_any))
+          or (gettype(column_ifexists("Cc", dynamic([]))) == "array"
+              and column_ifexists("Cc", dynamic([])) has_any (emailrecipient_has_any))
+      | extend
+          _remaining = iff(pack, pack_all(), dynamic({})),
+          _to = column_ifexists("To", dynamic([])),
+          _cc = column_ifexists("Cc", dynamic([])),
+          _bytes = tolong(column_ifexists("EmailSize", long(null))),
+          _delivery = tolower(DeliveryAction),
+          _destination = tolower(DeliveryLocation)
+      | extend SrcIpAddr = case(
+          SenderIPv4 !contains "/" and isnotnull(parse_ipv4(SenderIPv4)), SenderIPv4,
+          SenderIPv6 !contains "/" and isnotempty(parse_ipv6(SenderIPv6)), SenderIPv6, "")
+      // Match literal prefixes without expanding records or recipient arrays.
+      | where array_length(ipaddr_has_any_prefix) == 0 or SrcIpAddr matches regex
+          strcat(@"(?i)^(?:", replace_string(
+              replace_regex(strcat_array(ipaddr_has_any_prefix, "\x1e"),
+                  @"([\\.^$|?*+(){}\[\]])", @"\\\1"), "\x1e", "|"), ")")
+      | extend
+          _normalizedDirection = case(EmailDirection =~ "Inbound", "Inbound",
+              EmailDirection =~ "Outbound", "Outbound", EmailDirection =~ "Intra-org", "Internal", "Unknown"),
+          _normalizedLocation = case(_destination == "inbox/folder", "Inbox",
+              _destination == "junk", "Junk", _destination == "quarantine", "Quarantine",
+              _destination == "deleted items", "DeletedItems", ""),
+          _normalizedResult = case(_delivery == "blocked" or _destination in ("failed", "dropped"), "Failure",
+              _delivery in ("delivered", "junked", "replaced"), "Success", "NA")
+      | where (array_length(emaildirection_in) == 0 or _normalizedDirection in~ (emaildirection_in))
+          and (array_length(emaildeliverylocation_in) == 0 or _normalizedLocation in~ (emaildeliverylocation_in))
+          and (eventresult == "*" or _normalizedResult =~ eventresult)
+      | extend _authentication = parse_json(AuthenticationDetails)
+      | project-rename
+          EmailFromAddress = SenderFromAddress,
+          EmailFromDomain = SenderFromDomain,
+          EmailMailFromAddress = SenderMailFromAddress,
+          EmailMailFromDomain = SenderMailFromDomain,
+          Dst = RecipientEmailAddress,
+          EmailSubject = Subject,
+          EventOriginalUid = ReportId,
+          EventOriginalResultDetails = EmailAction,
+          DvcOriginalAction = DeliveryAction,
+          EmailOriginalDeliveryLocation = DeliveryLocation,
+          RuleName = EmailActionPolicy,
+          ThreatOriginalCategory = ThreatTypes,
+          ThreatName = ThreatNames,
+          ThreatOriginalConfidence = ConfidenceLevel,
+          SrcUserId = SenderObjectId
+      | extend
+          EventVendor = "Microsoft",
+          EventProduct = "Microsoft Defender for Office 365",
+          EventSchema = "EmailEvent",
+          EventSchemaVersion = "1.0.0",
+          EventType = "EmailDelivery",
+          EventCount = int(1),
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          Dvc = "Microsoft Defender for Office 365",
+          DvcEntityKey = "",
+          AdditionalEntities = dynamic([]),
+          EmailToRecipients = iff(gettype(_to) == "array", _to, dynamic([])),
+          EmailCCRecipients = iff(gettype(_cc) == "array", _cc, dynamic([])),
+          EmailSizeBytes = iff(_bytes >= 0, _bytes, long(null)),
+          EmailFileCount = iff(AttachmentCount >= 0, AttachmentCount, int(null)),
+          EmailUrlCount = iff(UrlCount >= 0, UrlCount, int(null)),
+          EmailDirection = _normalizedDirection,
+          EmailDeliveryLocation = _normalizedLocation,
+          EventResult = _normalizedResult,
+          DvcAction = case(_delivery == "blocked" and _destination == "quarantine", "Quarantined",
+              _delivery == "blocked", "Blocked", _delivery == "replaced", "Modified",
+              _delivery in ("delivered", "junked"), "Delivered", "NA"),
+          SrcUserIdType = iff(isnotempty(SrcUserId), "AADID", ""),
+          EmailSpfOriginalResult = tostring(_authentication.SPF),
+          EmailDkimOriginalResult = tostring(_authentication.DKIM),
+          EmailDmarcOriginalResult = tostring(_authentication.DMARC),
+          EventMessage = case(isnull(TimeGenerated), "Missing source timestamp",
+              isempty(Dst), "Missing source recipient",
+              gettype(_to) !in ("array", "null"), "Invalid To container",
+              gettype(_cc) !in ("array", "null"), "Invalid Cc container", "")
+      | extend
+          EventResultDetails = case(ThreatOriginalCategory has "Malware", "MalwareDetected",
+              ThreatOriginalCategory has "Phish", "PhishingDetected",
+              ThreatOriginalCategory has "Spam" and _delivery == "blocked", "BlockedBySpamFilter",
+              EventResult == "Failure", "Other", ""),
+          EmailSpfResult = tostring(dynamic({"pass":"Pass","fail":"Fail","softfail":"SoftFail",
+              "neutral":"Neutral","none":"None","temperror":"TemporaryError","permerror":"PermanentError"})[tolower(EmailSpfOriginalResult)]),
+          EmailDkimResult = tostring(dynamic({"pass":"Pass","fail":"Fail","none":"None",
+              "temperror":"TemporaryError","permerror":"PermanentError"})[tolower(EmailDkimOriginalResult)]),
+          EmailDmarcResult = tostring(dynamic({"pass":"Pass","fail":"Fail","none":"None",
+              "bestguesspass":"BestGuessPass"})[tolower(EmailDmarcOriginalResult)]),
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          Rule = RuleName,
+          AdditionalFields = bag_remove_keys(_remaining, dynamic([
+              "TimeGenerated","Type","SenderFromAddress","SenderFromDomain","SenderMailFromAddress",
+              "SenderMailFromDomain","RecipientEmailAddress","Subject","ReportId","EmailAction",
+              "DeliveryAction","DeliveryLocation","EmailActionPolicy","ThreatTypes","ThreatNames",
+              "ConfidenceLevel","SenderObjectId","SenderIPv4","SenderIPv6","EmailDirection",
+              "AuthenticationDetails","To","Cc","EmailSize","AttachmentCount","UrlCount","EmailLanguage"]))
+      | project
+          TimeGenerated, Type, EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+          EventType, EventCount, EventStartTime, EventEndTime, EventResult, EventResultDetails,
+          EventOriginalUid, EventOriginalResultDetails, EventMessage,
+          Dvc, DvcEntityKey, DvcAction, DvcOriginalAction,
+          Dst, Src, SrcIpAddr, IpAddr, SrcUserId, SrcUserIdType,
+          EmailFromAddress, EmailFromDomain, EmailMailFromAddress, EmailMailFromDomain,
+          EmailSubject, EmailLanguage, EmailToRecipients, EmailCCRecipients,
+          EmailSizeBytes, EmailFileCount, EmailUrlCount, EmailDirection,
+          EmailDeliveryLocation, EmailOriginalDeliveryLocation,
+          EmailSpfOriginalResult, EmailSpfResult, EmailDkimOriginalResult, EmailDkimResult,
+          EmailDmarcOriginalResult, EmailDmarcResult, RuleName, Rule,
+          ThreatOriginalCategory, ThreatName, ThreatOriginalConfidence, AdditionalFields, AdditionalEntities
+  };
+  parser(starttime=starttime, endtime=endtime, ipaddr_has_any_prefix=ipaddr_has_any_prefix, emailfromaddress_has_any=emailfromaddress_has_any, emailrecipient_has_any=emailrecipient_has_any, emailsubject_has_any=emailsubject_has_any, emaildirection_in=emaildirection_in, emaildeliverylocation_in=emaildeliverylocation_in, eventresult=eventresult, disabled=disabled, pack=pack)
