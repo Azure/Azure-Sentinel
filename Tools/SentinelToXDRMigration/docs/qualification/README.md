@@ -9,11 +9,13 @@ receipts, proof of implementation, or permission to access a tenant.
 
 ## Checklist architecture
 
-| Checklist | Scope | Execution boundary |
-|---|---|---|
-| [Validation](validation-checks.md) | General Sentinel/XDR solution PRs; offline/CI checks, authoring, package inventory, mock existence/schema | No lab writes. Import current CI and approved external evidence rather than silently performing network operations. |
-| [Qualification](qualification-checks.md) | General solution runtime, live fixtures, alerts, portal content and human review | Explicit Qualification selection and separate exact-scope approvals. First check is `QUAL-00`. |
-| [Migration](migration-checks.md) | Additional source-to-target checks for Sentinel-to-Defender-XDR migrations | Overlay only; static checks augment Validation and live checks augment Qualification. |
+| Checklist | Operator Flow Guide | Scope | Execution boundary |
+|---|---|---|---|
+| [Validation](validation-checks.md) | [Validation Flow Guide](../validation-flow-readme.md) | General Sentinel/XDR solution PRs; offline/CI checks, authoring, package inventory, mock existence/schema | No lab writes. Import current CI and approved external evidence rather than silently performing network operations. |
+| [Qualification](qualification-checks.md) | [Qualification Flow Guide](../qualification-flow-readme.md) | General solution runtime, live fixtures, alerts, portal content and human review | Explicit Qualification selection and separate exact-scope approvals. First check is `QUAL-00`. |
+| [Migration](migration-checks.md) | [Migration Flow Guide](../migration-flow-readme.md) | Additional source-to-target checks for Sentinel-to-Defender-XDR migrations | Overlay only; static checks augment Validation and live checks augment Qualification. |
+
+> **No-Code / Chat-Based Execution:** The entire Validation, Qualification, and Migration experience can be completed conversationally with **no code** using LLM agents (`XDR Solution Manager` / `.github/agents/xdr-solution-manager.agent.md` and `sentinel-xdr-end-to-end-orchestrator`). See each Operator Flow Guide above for example chat prompts alongside the deterministic CLI commands.
 
 Migration is active only when the PR introduces or changes a migration of
 Sentinel content into `XDR Detections/` or `XDR Workbooks/`, with a defensible

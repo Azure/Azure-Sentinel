@@ -7,6 +7,15 @@ candidate V3.1 Defender Workbook packaging.
 See [tracked follow-up areas](FOLLOW_UPS.md) for curated capability and
 operator-experience work that may be considered separately.
 
+## Operator Flow Guides & Checklists
+
+> **No-Code / Chat-Based Agent Experience:** All three flows below can be executed end-to-end with **no code** via natural-language chat using LLM agents (`@XDR Solution Manager` / `.github/agents/xdr-solution-manager.agent.md` and the `sentinel-xdr-end-to-end-orchestrator` skill). The agent orchestrates every deterministic CLI step, approval gate, and report below automatically from chat prompts.
+
+- **[Validation Flow Guide (`docs/validation-flow-readme.md`)](docs/validation-flow-readme.md)** — Offline/CI authoring validation, mock schema validation, V3.1 packaging, `build-and-validate.ps1`, and `Validated` / `Partially Validated` rollups.
+- **[Qualification Flow Guide (`docs/qualification-flow-readme.md`)](docs/qualification-flow-readme.md)** — Live non-production lab qualification: target lock, preflight & approvals, disabled ARM/Graph deployment, DCR & shared mock ingestion, live LA/AH query validation, alert parity, workbook browser QA, and `Qualified` / `Conditionally Qualified` rollups.
+- **[Migration Flow Guide (`docs/migration-flow-readme.md`)](docs/migration-flow-readme.md)** — Sentinel-to-Defender-XDR conversion contracts (`Analytic Rules -> XDR Detections`, `Workbooks -> XDR Workbooks`), `>50%` partial selection rule, and Migration overlay integration.
+- **[PR Qualification Checklists Specification (`docs/qualification/README.md`)](docs/qualification/README.md)** — Machine-readable check definitions ([`validation-checks.md`](docs/qualification/validation-checks.md), [`qualification-checks.md`](docs/qualification/qualification-checks.md), [`migration-checks.md`](docs/qualification/migration-checks.md)).
+
 ## Package architecture (`solution_manager`)
 
 Implementation modules live under `Tools/SentinelToXDRMigration/solution_manager/`
@@ -230,8 +239,12 @@ Authored `contentProvenance.requiredWorkspaceFunctions` records bind each
 Function aliases are not table names: underlying source data types require
 separate evidence. The connected workspace, access, nested dependencies,
 external data, and exact parameterized execution remain runtime concerns.
-`_GetWatchlist` is a supported Sentinel built-in available in AH, not a custom
-parser to install or an unsupported-function gap. Preserve its calls and
+`_GetWatchlist` and `_GetWatchlistAlias` are supported Sentinel built-ins available
+through a connected workspace, not custom parsers to install or unsupported-function
+gaps. Both Python conversion and PowerShell packaging recognize their calls.
+Do not exempt every underscore-prefixed function: vendor-specific `_vim_*`
+parsers and arbitrary custom `_...` or `__...` functions still require reviewed
+workspace-function dependencies. Preserve supported built-in calls and
 review underlying data inputs separately; only actual execution/data failures
 are findings.
 `Watchlist` is platform reference data, not connector-fed telemetry. Retain it
@@ -247,10 +260,10 @@ preview and fresh review/validation; it must not silently delete shared parser
 resources, unrelated branches, or panels. Catalog joins may reintroduce removed
 products and need coordinated changes.
 
-V3.1 installs required workspace parsers unconditionally and orders workbook
+V3.1 installs required workspace parsers (gated only by the DeployParser parameter, bool, defaultValue true) and orders workbook
 installation after their actual `Microsoft.OperationalInsights/workspaces/savedSearches`
 resources in the same enclosing ARM template. Parser content-template registration
-alone is not installation. Missing, stale, ambiguous, or conditional required
+alone is not installation. Missing, stale, ambiguous, or otherwise conditional/copy-looped required
 resources block packaging. Full workbook registration retains function prerequisites;
 the installed notebook retains only the identity/version quartet. ARM ordering
 does not establish AH propagation, query correctness, or provider/UI acceptance.
