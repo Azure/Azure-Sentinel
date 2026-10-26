@@ -348,13 +348,13 @@ class FilteringTest(unittest.TestCase):
         )
         self.assertEqual(empty_count, baseline, f"Parameter: {parameter_name} - Empty array changed results.")
         available_columns = [column for column in recipient_columns if column in columns_in_answer]
+        array_values = ", ".join(
+            f"coalesce({column}, dynamic([]))" for column in available_columns
+        )
         if not available_columns:
             print(f"Parameter: {parameter_name} - recipient columns are unavailable; matching validation is partial.")
             values = []
         else:
-            array_values = ", ".join(
-                f"coalesce({column}, dynamic([]))" for column in available_columns
-            )
             values = []
             for column in available_columns:
                 candidates = [row[0] for row in self.send_query(

@@ -351,6 +351,21 @@ class EmailEventFilteringValidatorTests(unittest.TestCase):
                 self.assertIn("query(disabled=true)", test.send_query.call_args_list[0].args[0])
                 self.assertIn("query(disabled=false)", test.send_query.call_args_list[1].args[0])
 
+    def test_recipient_filter_without_available_columns_checks_default_and_absent(self):
+        for test_class in self.validator_classes():
+            with self.subTest(validator=test_class):
+                test = test_class()
+                test.send_query = Mock(side_effect=[
+                    response([[3]]), response([[3]]), response([[0]])
+                ])
+                test.email_recipient_test(
+                    "emailrecipient_has_any", "let query=() { Logs };\n",
+                    ("EmailToRecipients", "EmailCCRecipients", "EmailBCCRecipients"), set()
+                )
+                self.assertEqual(test.send_query.call_count, 3)
+                self.assertIn("dynamic([])", test.send_query.call_args_list[1].args[0])
+                self.assertIn("!not_REAL_vAlUe", test.send_query.call_args_list[2].args[0])
+
     def test_prefix_results_use_native_kql_for_embedded_ipv4_tokens(self):
         for test_class in self.validator_classes():
             with self.subTest(validator=test_class):
