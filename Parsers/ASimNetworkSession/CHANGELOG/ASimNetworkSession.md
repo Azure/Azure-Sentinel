@@ -1,5 +1,10 @@
 # Changelog for ASimNetworkSession.yaml
 
+## Version 0.7.7
+
+- (2026-10-26) Add the CrowdStrike Falcon Data Replicator Network Session parser.
+- Forward the pack parameter and honor the source-specific disabled-parser setting.
+
 ## Version 0.7.6
 
 - (2026-09-29) Add Zscaler Private Access (ZPA) Network Session data to NetworkSession schema - [PR #15184](https://github.com/Azure/Azure-Sentinel/pull/15184)
@@ -47,4 +52,3 @@
 ## Version 0.2
 
 - (2021-09-12) Dev/normalization/network v2 reboot - [PR #3000](https://github.com/Azure/Azure-Sentinel/pull/3000)
-
