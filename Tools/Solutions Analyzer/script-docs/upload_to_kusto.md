@@ -38,8 +38,14 @@ python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase -
 # Upload Solution Analyzer data from GitHub
 python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase --solution-analyzer
 
+# Upload Solution Analyzer data from a specific output branch raw URL
+python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase --solution-analyzer --raw-base-url https://raw.githubusercontent.com/<org>/<repo>/<branch>/Tools/Solutions%20Analyzer
+
 # Upload Solution Analyzer data from a local folder
 python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase --solution-analyzer --source-dir ./
+
+# Use managed identity authentication (recommended for Azure Function)
+python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase --solution-analyzer --auth-mode managed-identity
 
 # Dry run to see what would be uploaded
 python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase --dry-run data.csv
@@ -53,8 +59,11 @@ python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase -
 | `-d`, `--database` | *(required)* | Kusto database name |
 | `csv_files` | | One or more CSV files to upload (positional arguments) |
 | `--solution-analyzer` | `False` | Download and upload Solution Analyzer CSVs from the public Azure-Sentinel GitHub repo |
+| `--raw-base-url` | `https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/Solutions%20Analyzer` | Raw GitHub base URL for Solution Analyzer CSVs (used when `--solution-analyzer` and no `--source-dir`) |
 | `--source-dir` | *(none)* | Source directory for Solution Analyzer CSVs (local folder instead of GitHub download). Requires `--solution-analyzer`. |
 | `--prefix` | *(empty)* | Prefix for generated table names (custom CSV mode only) |
+| `--auth-mode` | `azure-cli` | Kusto authentication mode: `azure-cli` or `managed-identity` |
+| `--managed-identity-client-id` | *(none)* | User-assigned managed identity client ID (used with `--auth-mode managed-identity`) |
 | `--dry-run` | `False` | Show what would be done without making changes |
 
 > **Note:** You must provide either CSV files or the `--solution-analyzer` flag, but not both.
@@ -95,7 +104,14 @@ When using `--solution-analyzer`, files are downloaded from the Azure-Sentinel G
 
 ## Authentication
 
-The script uses Azure CLI authentication to obtain an access token for Kusto. Make sure you are logged in:
+The script supports two authentication modes:
+
+- **`azure-cli`** (default): Uses Azure CLI token (`az account get-access-token`)
+- **`managed-identity`**: Uses Azure Managed Identity (recommended for Azure Function)
+
+### Azure CLI mode
+
+Make sure you are logged in:
 
 ```bash
 az login
@@ -103,6 +119,20 @@ az account show  # Verify your account
 ```
 
 The token is obtained by running `az account get-access-token` with a 60-second timeout. If the Azure CLI is not found on the PATH, the script checks common Windows installation locations.
+
+### Managed identity mode
+
+When running in Azure (Function App, VM, etc.), use:
+
+```bash
+python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase --solution-analyzer --auth-mode managed-identity
+```
+
+For user-assigned managed identity:
+
+```bash
+python upload_to_kusto.py -c https://mycluster.kusto.windows.net -d MyDatabase --solution-analyzer --auth-mode managed-identity --managed-identity-client-id <client-id>
+```
 
 ## Upload Process
 

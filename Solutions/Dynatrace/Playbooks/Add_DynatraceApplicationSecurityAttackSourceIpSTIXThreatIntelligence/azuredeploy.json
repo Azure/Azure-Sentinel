@@ -1,0 +1,386 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Add Dynatrace Application Security Attack Source IP Address to Threat Intelligence (STIX)",
+        "description": "This playbook will add an attacker's source IP address to Microsoft Sentinel Threat Intelligence as a STIX 2.1 indicator when a new alert is opened in Microsoft Sentinel.",
+        "prerequisites": [
+            "1. Dynatrace tenant (ex. xyz.dynatrace.com)",
+            "2. Dynatrace Access Token with Read attacks (attacks.read) scope, stored in Azure Key Vault."
+        ],
+        "lastUpdateTime": "2026-06-30T00:00:00.000Z",
+        "tags": [ "Attacks", "ThreatIntelligence", "STIX" ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Dynatrace"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Add Dynatrace Application Security Attack Source IP Address to Threat Intelligence (STIX)",
+                "notes": [
+                    "Initial version — replaces deprecated tiIndicators-based playbook with the Microsoft Sentinel STIX threat intelligence upload API."
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AddDynatraceAppSecSrcIPAddressSTIX",
+            "type": "string",
+            "metadata": {
+                "description": "Alert trigger"
+            }
+        },
+        "DynatraceTenant": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Dynatrace tenant (ex. xyz.dynatrace.com)"
+            }
+        },
+        "KeyvaultName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Enter the key vault name where Dynatrace Access Token is stored"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('microsoftsentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('akv-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/Connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                    "type": "Microsoft.Web/locations/managedApis"
+                },
+                "parameterValueSet": {
+                    "name": "oauthMI",
+                    "values": {
+                        "vaultName": {
+                            "value": "[parameters('KeyvaultName')]"
+                        }
+                    }
+                },
+                "displayName": "[variables('KeyvaultConnectionName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "AddDynatraceApplicationSecurityAttackSourceIPAddressSTIXThreatIntelligence-Alert",
+                "hidden-SentinelTemplateVersion": "1.0.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object",
+                            "defaultValue": {}
+                        },
+                        "KeyvaultName": {
+                            "type": "String"
+                        },
+                        "Tenant": {
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Parse_Incident_Alert_Custom_Body_JSON": {
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['ExtendedProperties']?['Custom Details']",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "AttackIdentifier": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "AttackState": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "AttackType": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "DisplayIdentifier": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {}
+                        },
+                        "Get_Dynatrace_Access_Token": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('DynatraceAccessToken')}/value"
+                            },
+                            "runAfter": {
+                                "Parse_Incident_Alert_Custom_Body_JSON": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Get_Dynatrace_Attack_Details": {
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://@{parameters('Tenant')}/api/v2/attacks/@{first(body('Parse_Incident_Alert_Custom_Body_JSON')?['AttackIdentifier'])}",
+                                "method": "GET",
+                                "headers": {
+                                    "Authorization": "Api-Token @{body('Get_Dynatrace_Access_Token')?['value']}",
+                                    "User-Agent": "dynatrace-microsoft-sentinel/3.0.4/playbooks/adddynatraceapplicationsecurityattacksourceipaddressstix"
+                                },
+                                "queries": {
+                                    "fields": "+attacker"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_Dynatrace_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Parse_Dynatrace_Attack_JSON": {
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Dynatrace_Attack_Details')",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "attackId": {
+                                            "type": "string"
+                                        },
+                                        "attackType": {
+                                            "type": "string"
+                                        },
+                                        "attacker": {
+                                            "type": "object",
+                                            "properties": {
+                                                "sourceIp": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        },
+                                        "affectedEntities": {
+                                            "type": "object",
+                                            "properties": {
+                                                "processGroup": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": { "type": "string" },
+                                                        "name": { "type": "string" }
+                                                    }
+                                                },
+                                                "processGroupInstance": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "id": { "type": "string" },
+                                                        "name": { "type": "string" }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "displayId": { "type": "string" },
+                                        "displayName": { "type": "string" },
+                                        "state": { "type": "string" },
+                                        "timestamp": { "type": "integer" }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_Dynatrace_Attack_Details": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "If_SourceIP_available_create_threat_indicator": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']",
+                                                ""
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "Threat_Intelligence_-_Upload_STIX_Objects_(Preview)": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "sourcesystem": "Dynatrace",
+                                            "stixobjects": [
+                                                {
+                                                    "type": "indicator",
+                                                    "spec_version": "2.1",
+                                                    "id": "indicator--@{guid()}",
+                                                    "name": "Dynatrace Application Security - @{body('Parse_Dynatrace_Attack_JSON')?['attackType']} Attack Detected",
+                                                    "description": "Dynatrace Application Security - @{body('Parse_Dynatrace_Attack_JSON')?['attackType']} Attack Detected",
+                                                    "created": "@{utcNow()}",
+                                                    "modified": "@{utcNow()}",
+                                                    "pattern": "[[ipv4-addr:value = '@{body('Parse_Dynatrace_Attack_JSON')?['attacker']?['sourceIp']}']",
+                                                    "pattern_type": "stix",
+                                                    "valid_from": "@{utcNow()}",
+                                                    "valid_until": "@{addDays(utcNow(),7)}",
+                                                    "confidence": 0,
+                                                    "indicator_types": [
+                                                        "watchlist"
+                                                    ],
+                                                    "object_marking_refs": [
+                                                        "marking-definition--613f2e26-407d-48c7-9eca-b8e91df99dc9"
+                                                    ],
+                                                    "external_references": [
+                                                        {
+                                                            "source_name": "Dynatrace",
+                                                            "external_id": "@{body('Parse_Dynatrace_Attack_JSON')?['attackId']}"
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "path": "/ThreatIntelligence/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/UploadStixObjects/"
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Dynatrace_did_not_supply_a_source_ip_for_attack": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Succeeded"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Dynatrace_Attack_JSON": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    },
+                    "metadata": {
+                        "notes": {}
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "microsoftsentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "KeyvaultName": {
+                        "value": "[parameters('KeyvaultName')]"
+                    },
+                    "Tenant": {
+                        "value": "[parameters('DynatraceTenant')]"
+                    }
+                }
+            }
+        }
+    ]
+}

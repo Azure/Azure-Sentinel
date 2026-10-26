@@ -1,0 +1,95 @@
+schemaVersion: 1.0.0
+version: 3.3.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoUmbrellaDataConnector
+  dataTypes:
+  - Cisco_Umbrella_proxy_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoUmbrellaWebTraffic_CL
+  requiredDataConnectors:
+  - connectorId: CiscoUmbrellaConnector
+    dataTypes:
+    - CiscoUmbrellaWebTraffic_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 75297f62-10a8-4fc1-9b2a-12f25c6f05a7
+    path: Analytic Rules/CiscoUmbrellaConnectionToUnpopularWebsiteDetected.yaml
+    version: 1.1.3
+    querySha256: 72f928ecdb148f5bc0c2559b518e46db27f6613557ce0bd93f2d8340588e37d3
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    - Exfiltration
+    originalTechniques:
+    - T1071.001
+    - T1041
+    reviewScope:
+      sourceDocumentSha256: be0353f6c8822d16d1eee11dd8b1d5e994f044ee31c91e834d1e28dab9d007da
+      targetQuerySha256: 33b60f493c99636f0957f402b3f9f09e81020017710bd5516e633ba95be0cad0
+properties:
+  id: xdr-75297f62-10a8-4fc1-9b2a-12f25c6f05a7
+  displayName: Cisco Cloud Security - Connection to Unpopular Website Detected
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let top_million_list = Cisco_Umbrella
+      | where EventType == "proxylogs"
+      | extend Hostname = parse_url(UrlOriginal)["Host"]
+      | summarize count() by tostring(Hostname)
+      | top 1000000 by count_
+      | summarize make_list(Hostname);
+      Cisco_Umbrella
+      | where EventType == "proxylogs"
+      | extend Hostname = parse_url(UrlOriginal)["Host"]
+      | where Hostname !in (top_million_list)
+      | extend Message = "Connect to unpopular website (possible malicious payload delivery)"
+      | project TimeGenerated, Message, SrcIpAddr, DstIpAddr, UrlOriginal
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Cisco Cloud Security - Connection to Unpopular Website Detected
+      description: '''Detects first connection to an unpopular website (possible malicious payload delivery).'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: UrlOriginal
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+          subTechniques:
+          - T1071.001
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1041

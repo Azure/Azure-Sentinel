@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                       |
+|-------------|--------------------------------|--------------------------------------------------------------------------|   
+| 3.0.0       | 31-07-2026                     | Updated Solution to version 3.0.0 by migrating from TemplateSpec to contentTemplates/contentPackages 					  |

@@ -42,7 +42,7 @@ This custom connector connects to Forcepoint SMC (Security Management Center) se
 Click on the below button to deploy Forcepoint SMC Custom Connector in your Azure subscription.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json)
- [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json) 
+ [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FForcepointNGFW%2FForcepointSMCApiConnector%2Fazuredeploy.json) 
 
 
 # Deployment Instructions 

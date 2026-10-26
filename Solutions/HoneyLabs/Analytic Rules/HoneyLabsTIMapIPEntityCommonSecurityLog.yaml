@@ -1,0 +1,57 @@
+id: c7061f05-d0ed-40e1-862e-bc52e454e3a1
+name: HoneyLabs TI Map IP Entity to CommonSecurityLog
+version: 1.0.0
+kind: Scheduled
+description: |
+  'Identifies source-IP matches in CommonSecurityLog (firewall, proxy and other CEF sources) against IP indicators from HoneyLabs honeypot telemetry. A match means a source IP that ran exploit or loader commands against HoneyLabs sensors also appeared as a source in your own logs. Only the structured SourceIP field is matched; destination IPs and IPs merely mentioned inside the free-text Message are ignored, because those are frequently unrelated and generate false positives. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let HoneyLabs_IPs = ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where IsActive == true and ValidUntil > now()
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+    | where SourceSystem startswith 'HoneyLabs'
+    | where ObservableKey == 'ipv4-addr:value'
+    | extend TI_ipEntity = tostring(ObservableValue),
+             HoneyLabsConfidence = Confidence,
+             HoneyLabsLabels = tostring(Data.labels),
+             IndicatorDescription = tostring(Data.description),
+             HoneyLabsReport = strcat('https://honeylabs.net/lookup/', tostring(ObservableValue));
+  HoneyLabs_IPs
+  | join kind=innerunique (
+      CommonSecurityLog
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where isnotempty(SourceIP)
+      | extend CS_ipEntity = SourceIP
+      | extend CommonSecurityLog_TimeGenerated = TimeGenerated
+  ) on $left.TI_ipEntity == $right.CS_ipEntity
+  | where CommonSecurityLog_TimeGenerated < ValidUntil
+  | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, CS_ipEntity
+  | project CommonSecurityLog_TimeGenerated, IndicatorDescription, Id, ValidUntil,
+    HoneyLabsConfidence, HoneyLabsLabels, HoneyLabsReport, TI_ipEntity, CS_ipEntity, LogSeverity,
+    DeviceAction, SourceIP, DestinationIP, DeviceName, SourceUserName
+  | extend timestamp = CommonSecurityLog_TimeGenerated
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CS_ipEntity

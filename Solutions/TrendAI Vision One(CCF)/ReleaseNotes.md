@@ -1,0 +1,5 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
+|---|---|---|
+| 3.0.2 | 07-10-2026 | Fixed **Package** template for portal deployment and corrected array-typed default values for the `excludeThirdPartyOat` and `apiDomain` connector parameters. Updated **OAT Parser** to deduplicate records by tenant-scoped `xdrCustomerId_g` and `detail_uuid_g`, and reworked the `rt` column handling to allow non-destructive upgrade from 3.0.1. |
+| 3.0.1 | 16-09-2026 | Updated connector version. |
+| 3.0.0 | 05-08-2026 | Initial release of TrendAI Vision One solution via Codeless Connector Framework (CCF). Includes Workbench Alerts and OAT Detections connectors with DCR-based ingestion-time transformations, dropdown selectors for API domain and third-party exclusion, TMV1-Filter pass-through support, KQL parsers, an analytic rule with MITRE ATT&CK mappings, and a workbook dashboard. Fixed ARM template bracket escaping, added token rotation warning, optimized workbook queries, and removed the null alertRuleTemplateName field. |

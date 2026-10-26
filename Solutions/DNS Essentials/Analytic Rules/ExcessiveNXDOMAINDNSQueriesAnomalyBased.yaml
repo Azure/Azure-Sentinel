@@ -1,7 +1,7 @@
 id: 02f23312-1a33-4390-8b80-f7cd4df4dea0
 name: Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)
 description: |
-  'This rule makes use of the series decompose anomaly method to generate an alert when client requests excessive amount of DNS queries to non-existent domains. This helps in identifying possible C2 communications. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+  'This rule makes use of the series decompose anomaly method to generate an alert when client requests excessive amount of DNS queries to non-existent domains. This helps in identifying possible C2 communications. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema. The rule also depends on the "**DNSEssentialsCustomParser**" Parser, so please make sure it is installed and configured before you use this Rule.'
 severity: Medium
 status: Available 
 tags:
@@ -25,7 +25,8 @@ query: |
   let summarizationexist = (
     union isfuzzy=true 
         (
-        DNS_Summarized_Logs_ip_CL
+        DNSEssentialsCustomParser
+        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
         | where EventTime_t > ago(1d) 
         | project v = int(2)
         ),
@@ -49,7 +50,8 @@ query: |
         | project-away exists, maxv, sum*
         ),
         (
-        DNS_Summarized_Logs_ip_CL
+        DNSEssentialsCustomParser
+        | where Type in ("DNS_Summarized_Logs_ip_CL", "DNS_Summarized_Logs_ipV1_CL")
         | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'
         | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)
         );
@@ -84,5 +86,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: "[Anomaly] Excessive NXDOMAIN DNS Queries has been detected from client IP: '{{SrcIpAddr}}'"
   alertDescriptionFormat: "This client is generating excessive amount of DNS queries for non-existent domains. This can be an indication of possible C2 communications.\n\nBaseline for 'NXDOMAIN' error count for this client: '{{baseline}}'\n\nCurrent 'NXDOMAIN' error count for this client: '{{Total}}'\n\nDNS queries requested by the client include:\n\n'{{DNSQueries}}'"
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled

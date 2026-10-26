@@ -10,6 +10,9 @@ Legacy wide table that joins solution metadata, connector metadata, and table re
 
 > **For new integrations, prefer the normalized files** — [`connectors.csv`](connectors.md), [`solutions.csv`](solutions.md), [`tables.csv`](tables.md), [`solutions_connectors_tables_mapping_simplified.csv`](solutions_connectors_tables_mapping_simplified.md) — which are smaller and easier to maintain.
 
+> **Empty-table rows:** every solution is guaranteed at least one row. Solutions with no data connectors get a row with empty `connector_id`/`Table`. A connector that produced no table rows — because all of its table tokens were filtered out (no tokens, parser-only tokens, failed validation, or a `reported_table_exclusions` override, e.g. a Function App health connector that only references `AzureDiagnostics`/`AzureMetrics`) — still gets a row with its `connector_id` populated and an empty `Table`, so the solution is never dropped from this CSV (and therefore the docs index).
+
+
 ## Use Cases
 
 - **Legacy integrations** — scripts written before the normalized split that expect this single file.

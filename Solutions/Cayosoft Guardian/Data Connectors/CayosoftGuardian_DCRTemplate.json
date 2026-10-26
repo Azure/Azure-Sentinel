@@ -1,0 +1,211 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of your Log Analytics / Microsoft Sentinel Workspace."
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Region to deploy solution resources"
+      }
+    },
+    "arcMachineName": {
+      "type": "string",
+      "metadata": {
+        "description": "The exact name of your local Windows machine as it appears in Azure Arc."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[concat('DCE-Cayosoft-Guardian-', resourceGroup().name)]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2025-07-01",
+      "name": "[concat(parameters('workspaceName'), '/CayosoftThreatAlerts_CL')]",
+      "properties": {
+        "schema": {
+          "name": "CayosoftThreatAlerts_CL",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime"
+            },
+            {
+              "name": "Severity",
+              "type": "string"
+            },
+            {
+              "name": "Subject",
+              "type": "string"
+            },
+            {
+              "name": "ThreatId",
+              "type": "string"
+            },
+            {
+              "name": "Categories",
+              "type": "dynamic"
+            },
+            {
+              "name": "Evidence",
+              "type": "dynamic"
+            },
+            {
+              "name": "TargetLocation",
+              "type": "string"
+            },
+            {
+              "name": "TargetObjectName",
+              "type": "string"
+            },
+            {
+              "name": "TargetObjectType",
+              "type": "string"
+            },
+            {
+              "name": "TargetObjectId",
+              "type": "string"
+            },
+            {
+              "name": "CreatedDateTime",
+              "type": "datetime"
+            },
+            {
+              "name": "RemediationComplexity",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[concat('DCR-Cayosoft-Guardian-', resourceGroup().name)]",
+      "location": "[parameters('location')]",
+      "kind": "Windows",
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', concat('DCE-Cayosoft-Guardian-', resourceGroup().name))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'CayosoftThreatAlerts_CL')]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', concat('DCE-Cayosoft-Guardian-', resourceGroup().name))]",
+        "streamDeclarations": {
+          "Custom-CayosoftThreatAlerts_CL": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "Severity",
+                "type": "string"
+              },
+              {
+                "name": "Subject",
+                "type": "string"
+              },
+              {
+                "name": "ThreatId",
+                "type": "string"
+              },
+              {
+                "name": "Categories",
+                "type": "dynamic"
+              },
+              {
+                "name": "Evidence",
+                "type": "dynamic"
+              },
+              {
+                "name": "TargetLocation",
+                "type": "string"
+              },
+              {
+                "name": "TargetObjectName",
+                "type": "string"
+              },
+              {
+                "name": "TargetObjectType",
+                "type": "string"
+              },
+              {
+                "name": "TargetObjectId",
+                "type": "string"
+              },
+              {
+                "name": "CreatedDateTime",
+                "type": "datetime"
+              },
+              {
+                "name": "RemediationComplexity",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "dataSources": {
+          "windowsEventLogs": [
+            {
+              "streams": [
+                "Microsoft-Event"
+              ],
+              "xPathQueries": [
+                "Cayosoft Guardian Alerts!*[System[(EventID=2)]]"
+              ],
+              "name": "CayosoftEventLogSource"
+            }
+          ]
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+              "name": "SentinelWorkspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Microsoft-Event"
+            ],
+            "destinations": [
+              "SentinelWorkspace"
+            ],
+            "transformKql": "source | where EventID == 2 | extend JsonText = extract('<Data>([^<]+)</Data>', 1, EventData) | extend JS = parse_json(JsonText) | extend Severity = iff(tostring(JS.severity) =~ 'critical', 'high', tostring(JS.severity)) | extend ThreatId = extract('CTD-00[0-9]+', 0, tostring(JS.objectName)) | project TimeGenerated, Severity, Subject = tostring(JS.subject), ThreatId, Categories = JS.categories, Evidence = JS.evidence, TargetLocation = tostring(JS.targetObjectLocations[0]), TargetObjectName = tostring(JS.targetObjectName), TargetObjectType = tostring(JS.targetObjectType), TargetObjectId = tostring(JS.targetObject['id']), CreatedDateTime = todatetime(JS.createdDateTime), RemediationComplexity = tostring(JS.remediationComplexity)",
+            "outputStream": "Custom-CayosoftThreatAlerts_CL"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRuleAssociations",
+      "apiVersion": "2024-03-11",
+      "scope": "[format('Microsoft.HybridCompute/machines/{0}', parameters('arcMachineName'))]",
+      "name": "[concat('DCR-Associations-Cayosoft-Guardian-', resourceGroup().name)]",
+      "properties": {
+        "description": "Associates the Cayosoft Guardian DCR with the hybrid Arc machine.",
+        "dataCollectionRuleId": "[resourceId('Microsoft.Insights/dataCollectionRules', concat('DCR-Cayosoft-Guardian-', resourceGroup().name))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionRules', concat('DCR-Cayosoft-Guardian-', resourceGroup().name))]"
+      ]
+    }
+  ]
+}

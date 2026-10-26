@@ -1,5 +1,9 @@
 # Changelog for ASimNetworkSessionMicrosoft365Defender.yaml
 
+## Version 0.4.1
+
+- (2026-09-24) Include `ConnectionAttempt` events as inbound based on the [documented device-discovery scenario](https://learn.microsoft.com/en-us/defender-endpoint/assess-devices#query-network-related-information) of a non-onboarded device initiating a TCP connection to an onboarded device. Addresses [issue #15182](https://github.com/Azure/Azure-Sentinel/issues/15182). - [PR #15198](https://github.com/Azure/Azure-Sentinel/pull/15198)
+
 ## Version 0.4
 
 - (2023-05-01) Asim/update windows usertype function - [PR #7947](https://github.com/Azure/Azure-Sentinel/pull/7947)
@@ -23,4 +27,3 @@
 ## Version 0.0
 
 - (2021-06-22) Adding M365D to NwS and converting to new format - [PR #2537](https://github.com/Azure/Azure-Sentinel/pull/2537)
-

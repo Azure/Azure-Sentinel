@@ -17,10 +17,12 @@ relevantTechniques:
 query: |
   //This query visualises total inbound emails which has any Bulk complaint level. It is summarizing the data by the various Bulk Complaint levels and SenderFromDomain of the email sender. It provides insights how many messages are detected with each Bulk Complaint level for each sender domain.
   EmailEvents
-  | where EmailDirection == "Inbound" and BulkComplaintLevel !=""
-  | where Timestamp > ago(30d) // last 30 days by default, replace 30d with the desired period
+  | where Timestamp > ago(30d)
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | where EmailDirection == "Inbound" and isnotempty(BulkComplaintLevel)
   | summarize count() by BulkComplaintLevel, SenderFromDomain
-  | sort by count_ desc
-  | project SenderFromDomain,BulkComplaintLevel,Emails=count_
-  | take 10
-version: 1.0.0
+  | top 10 by count_
+  | project SenderFromDomain, BulkComplaintLevel, Emails = count_
+version: 1.1.0

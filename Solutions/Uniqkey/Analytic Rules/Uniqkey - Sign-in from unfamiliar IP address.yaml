@@ -1,0 +1,53 @@
+id: 6909c70c-fb52-47a3-9eb9-3b8109b0b32a
+name: Uniqkey - Sign-in from unfamiliar IP address
+version: 1.0.0
+kind: Scheduled
+description: |-
+  Identifies successful Uniqkey sign-ins (browser extension, mobile, web or desktop) originating from an IP address that has not been observed for that user during the trailing 14 days. A new source address can indicate session hijacking or use of stolen master credentials, particularly when combined with an unusual client system. Uniqkey audits successful authentications only, so pair this rule with identity-provider telemetry if failed sign-in coverage is required.
+severity: Low
+requiredDataConnectors:
+  - connectorId: UniqkeyEventsConnector
+    dataTypes:
+      - UniqkeyEvents_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- InitialAccess
+relevantTechniques:
+- T1078
+query: |-
+  let lookback = 14d;
+  let frequency = 1h;
+  let knownPairs =
+      UniqkeyEvents_CL
+      | where TimeGenerated between (ago(lookback) .. ago(frequency))
+      | where Category == "authentication" and isnotempty(SrcIpAddr) and isnotempty(ActorEmail)
+      | summarize by ActorEmail, SrcIpAddr;
+  UniqkeyEvents_CL
+  | where TimeGenerated > ago(frequency)
+  | where Category == "authentication" and isnotempty(SrcIpAddr) and isnotempty(ActorEmail)
+  | join kind=leftanti knownPairs on ActorEmail, SrcIpAddr
+  | summarize arg_max(TimeGenerated, Action, ActionId, ActorType, ClientSystem) by ActorEmail, SrcIpAddr
+  | project TimeGenerated, ActorEmail, ActorType, Action, ActionId, ClientSystem, SrcIpAddr
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: ActorEmail
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddr
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: SingleAlert

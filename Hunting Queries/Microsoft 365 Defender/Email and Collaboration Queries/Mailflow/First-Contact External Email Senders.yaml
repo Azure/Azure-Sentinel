@@ -1,0 +1,29 @@
+id: a7373b95-2471-4169-9bca-412d6c41334d
+name: First-Contact External Email Senders
+description: |
+  This query lists external email senders seen for the first time in the period (most recent first), surfacing new first-contact relationships, using the EmailEvents table.
+description-detailed: |
+  New or first-contact sender relationships, especially ones already carrying threats, are a common precursor to phishing, business email compromise (BEC) and supply-chain attacks. This query lists inbound external senders ordered by when they were first seen in the period, with their message and threat counts. In tenants with longer history this highlights genuinely new relationships worth reviewing.
+  This query is part of the Microsoft Defender for Office 365 Detections and Insights workbook in Microsoft Sentinel: https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/part-3-build-custom-email-security-reports-with-power-bi-and-workbooks-in-micros/4490127
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // TIP: to hide your own accepted domains, uncomment the ExcludeDomains line and the matching where-clause.
+  // let ExcludeDomains = dynamic(["contoso.com", "fabrikam.com"]);
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where EmailDirection == "Inbound" and isnotempty(SenderFromAddress)
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | extend SenderDomain = tostring(split(SenderFromAddress, '@')[1])
+  // | where SenderDomain !in~ (ExcludeDomains)
+  | summarize FirstSeen = min(Timestamp), Messages = count(), ThreatMessages = countif(isnotempty(ThreatTypes)) by SenderFromAddress, SenderDomain
+  | top 20 by FirstSeen desc
+  | project Sender = SenderFromAddress, SenderDomain, FirstSeen, Messages, ThreatMessages
+version: 1.0.0

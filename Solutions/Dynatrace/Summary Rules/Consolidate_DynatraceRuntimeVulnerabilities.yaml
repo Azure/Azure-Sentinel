@@ -1,0 +1,63 @@
+id: 2f1d8c6e-7b3a-4e91-9c2f-5a6b8d4e1c70
+displayName: Consolidate Dynatrace Runtime Vulnerabilities
+description: |
+  Collapses raw Dynatrace runtime vulnerability events into one current-state row per
+  vulnerability, aggregating status across all affected entities.
+  Reads DynatraceSecurityProblemsV3Raw_CL, writes DynatraceSecurityProblemsV3_CL.
+destinationTable: DynatraceSecurityProblemsV3_CL
+query: |
+  let lookback = 24h;
+  DynatraceSecurityProblemsV3Raw_CL
+  | where TimeGenerated > ago(lookback)
+  | summarize arg_max(TimeGenerated, *) by vulnerability_display_id, affected_entity_id
+  | summarize
+      vulnerability_stack                      = take_any(vulnerability_stack),
+      vulnerability_type                       = take_any(vulnerability_type),
+      securityProblemTitle                     = take_any(vulnerability_title),
+      vulnerability_references_cve             = take_any(vulnerability_references_cve),
+      vulnerability_first_seen                 = max(todatetime(vulnerability_first_seen)),
+      vulnerability_risk_score                 = round(max(iff(vulnerability_mute_status != "MUTED",
+                                                   todouble(vulnerability_risk_score), 0.0)), 1),
+      muteStatuses                             = make_set(vulnerability_mute_status),
+      resolutionStatuses                       = make_set(vulnerability_resolution_status),
+      functionStatuses                         = make_set(vulnerability_vulnerable_function_status),
+      exposureStatuses                         = make_set(vulnerability_exposure_status),
+      exploitStatuses                          = make_set(vulnerability_exploit_status),
+      dataAssetStatuses                        = make_set(vulnerability_data_assets_status)
+      by vulnerability_display_id
+  | extend
+      vulnerability_resolution_status          = iff(set_has_element(resolutionStatuses, "OPEN"), "OPEN", "RESOLVED"),
+      vulnerability_mute_status                = iff(set_has_element(muteStatuses, "NOT_MUTED"), "NOT_MUTED", "MUTED"),
+      vulnerability_vulnerable_function_status = case(
+          set_has_element(functionStatuses, "IN_USE"), "IN_USE",
+          set_has_element(functionStatuses, "NOT_AVAILABLE"), "NOT_AVAILABLE",
+          "NOT_IN_USE"),
+      vulnerability_exposure_status            = case(
+          set_has_element(exposureStatuses, "PUBLIC_NETWORK"), "PUBLIC_NETWORK",
+          set_has_element(exposureStatuses, "NOT_AVAILABLE"), "NOT_AVAILABLE",
+          "NOT_DETECTED"),
+      vulnerability_exploit_status             = iff(set_has_element(exploitStatuses, "AVAILABLE"), "AVAILABLE", "NOT_AVAILABLE"),
+      vulnerability_data_assets_status         = case(
+          set_has_element(dataAssetStatuses, "REACHABLE"), "REACHABLE",
+          set_has_element(dataAssetStatuses, "NOT_AVAILABLE"), "NOT_AVAILABLE",
+          "NOT_DETECTED"),
+      vulnerability_risk_level                 = case(
+          vulnerability_risk_score >= 9,   "CRITICAL",
+          vulnerability_risk_score >= 7,   "HIGH",
+          vulnerability_risk_score >= 4,   "MEDIUM",
+          vulnerability_risk_score >= 0.1, "LOW",
+          "NONE")
+  | project
+      vulnerability_display_id, securityProblemTitle, vulnerability_references_cve,
+      vulnerability_first_seen, vulnerability_risk_score, vulnerability_risk_level,
+      vulnerability_resolution_status, vulnerability_mute_status,
+      vulnerability_vulnerable_function_status, vulnerability_exposure_status,
+      vulnerability_data_assets_status, vulnerability_exploit_status,
+      vulnerability_stack, vulnerability_type
+binSize: 60
+binDelay: 5
+version: 1.0.0
+requiredDataConnectors:
+  - connectorId: DTRunVulnV3CCPDefinition
+    dataTypes:
+      - DynatraceSecurityProblemsV3Raw_CL

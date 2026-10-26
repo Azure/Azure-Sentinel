@@ -13,7 +13,7 @@ Issues report listing every exception or warning encountered while parsing conne
 - **Connector debugging** — when a connector is missing from `connectors.csv`, search this report by `solution_name` or `connector_id` to find the reason.
 - **Data-quality monitoring** — track `json_parse_error` entries to find solutions with broken JSON.
 - **Coverage audit** — `missing_solution_metadata` flags solutions with connectors but no `SolutionMetadata.json`.
-- **Parser-only false positives** — `parser_tables_only` connectors are excluded because their tokens are all parser function names, not real tables.
+- **Parser-only false positives** — `parser_tables_only` connectors contribute no real-table rows because their tokens are all parser function names; they still retain an empty-table placeholder row so their solution is never dropped from the mapping CSV.
 
 ## Columns
 
@@ -34,10 +34,10 @@ Issues report listing every exception or warning encountered while parsing conne
 | `issue_type` | Description | Primary CSV impact |
 |--------------|-------------|--------------------|
 | `json_parse_error` | JSON file could not be parsed | Connector excluded entirely |
-| `no_table_definitions` | No table tokens detected in connector | Connector excluded |
-| `parser_tables_only` | All detected tables are parser function names | Connector excluded (no real tables) |
-| `partial_parser_tables` | Some detected tokens are parser functions and were filtered out | Filtered tokens excluded; remaining tables kept |
-| `table_detection_failed` | Tables detected but validation failed | Connector excluded |
+| `no_table_definitions` | No table tokens detected in connector | Connector kept with an empty-table placeholder row |
+| `parser_tables_only` | All detected tables are parser function names | Connector kept with an empty-table placeholder row (no real tables) |
+| `partial_parser_tables` | Some detected tokens are parser functions and were filtered out | Filtered tokens excluded; remaining tables kept (empty-table placeholder if none remain) |
+| `table_detection_failed` | Tables detected but all filtered out (validation, parser, or `reported_table_exclusions` override) | Connector kept with an empty-table placeholder row |
 | `missing_connector_json` | Data Connectors folder exists but contains no valid JSON | Solution has no connector entries |
 | `missing_solution_metadata` | Solution has connectors but no `SolutionMetadata.json` | Solution appears with empty metadata fields |
 | `solution_package_template_skipped` | A full solution-package ARM template (contains a `contentPackages` resource) was found in the `Data Connectors` folder and skipped during connector discovery | File ignored as a connector source; its connectors are discovered from their own definition files |

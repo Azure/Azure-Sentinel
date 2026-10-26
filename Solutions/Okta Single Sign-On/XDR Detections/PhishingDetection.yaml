@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: OktaSSO
+  dataTypes:
+  - Okta_CL
+- connectorId: OktaSSOv2
+  dataTypes:
+  - OktaSSO
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OktaV2_CL
+  requiredDataConnectors:
+  - connectorId: OktaSSOv2
+    dataTypes:
+    - OktaV2_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 78d2b06c-8dc0-40e1-91c8-66d916c186f3
+    path: Analytic Rules/PhishingDetection.yaml
+    version: 1.1.2
+    querySha256: 3690e123024638c1c25c52e9834c24acb21e4985b695a3c5511ce92d18dac3f4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'UserAgent' column `client_userAgent_rawUserAgent_s` requires runtime output-schema binding verification
+    - customDetails 'UserAgentOS' column `client_userAgent_os_s` requires runtime output-schema binding verification
+    - customDetails 'UserAgentBrowser' column `client_userAgent_browser_s` requires runtime output-schema binding verification
+    - customDetails 'Location' column `Location` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566.002
+    reviewScope:
+      sourceDocumentSha256: 12432423395cd7b708e6eb848125b03b33f9da3a37eb3df540118ac8e2eaf3d3
+      targetQuerySha256: d6e9febe59790de753c391f20b5302c70edd8fdf61aaaa97a835b8eac3c458ab
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 12432423395cd7b708e6eb848125b03b33f9da3a37eb3df540118ac8e2eaf3d3
+      targetQuerySha256: d6e9febe59790de753c391f20b5302c70edd8fdf61aaaa97a835b8eac3c458ab
+properties:
+  id: xdr-78d2b06c-8dc0-40e1-91c8-66d916c186f3
+  displayName: Okta Fast Pass phishing Detection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Add any known good IPs to this list to reduce noise
+      let AllowedIPList = dynamic([]);
+      OktaSSO
+      | where isnotempty(client_ipAddress_s) and client_ipAddress_s !in (AllowedIPList)
+      | where eventType_s == 'user.authentication.auth_via_mfa'
+      | where outcome_result_s == 'FAILURE'
+      | where outcome_reason_s == 'FastPass declined phishing attempt'
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, client_geographicalContext_state_s,displayMessage_s, outcome_result_s,
+       outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s', ""), client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, client_geographicalContext_city_s, client_geographicalContext_country_s
+      | extend Location = strcat(client_geographicalContext_city_s, "-", client_geographicalContext_country_s), AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Okta Fast Pass phishing Detection
+      description: This query detects cases in which Okta FastPass effectively prevented access to a known phishing website.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: client_ipAddress_s
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+          subTechniques:
+          - T1566.002
+      customDetails:
+        UserAgent: client_userAgent_rawUserAgent_s
+        UserAgentOS: client_userAgent_os_s
+        UserAgentBrowser: client_userAgent_browser_s
+        Location: Location

@@ -1,4 +1,4 @@
-# AWS WAF ASIM WebSession Filtering Parser
+# AWS WAF ASIM WebSession Normalization Parser
 
 ARM template for ASIM WebSession schema parser for AWS WAF.
 
@@ -18,4 +18,4 @@ For the changelog, see:
 
 <br>
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimWebSession%2FARM%2FvimWebSessionAWSWAF%2FvimWebSessionAWSWAF.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimWebSession%2FARM%2FvimWebSessionAWSWAF%2FvimWebSessionAWSWAF.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimWebSession%2FARM%2FvimWebSessionAWSWAF%2FvimWebSessionAWSWAF.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FParsers%2FASimWebSession%2FARM%2FvimWebSessionAWSWAF%2FvimWebSessionAWSWAF.json)

@@ -89,7 +89,6 @@ class SemperisIOEExecutionResults:
             response = requests.get(
                 result_endpoint,
                 headers=headers,
-                verify=False,
                 timeout=30,
             )
             response.raise_for_status()

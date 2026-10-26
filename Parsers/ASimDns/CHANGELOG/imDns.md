@@ -1,4 +1,19 @@
 # Changelog for imDns.yaml
+## Version 0.5.6
+
+- (2026-10-08) Corrected the GCP and Microsoft Sysmon Windows Event parser disable watchlist keys - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
+
+## Version 0.5.5
+
+- (2026-10-08) Updated the DNS schema version to 1.0.0 and changed the default event type from `lookup` to `Query`.
+
+## Version 0.5.4
+
+- (2026-09-02) Added Gigamon V-Series Application Metadata Intelligence parser.
+
+## Version 0.5.3
+
+- (2026-06-09) Added vimDnsHalcyon to the source-agnostic filtering parser - [PR #14606](https://github.com/Azure/Azure-Sentinel/pull/14606)
 
 ## Version 0.5.2
 
@@ -19,4 +34,3 @@
 ## Version 0.1
 
 - (2021-08-30) param parsers, ASim parsers, custom table - [PR #2878](https://github.com/Azure/Azure-Sentinel/pull/2878)
-

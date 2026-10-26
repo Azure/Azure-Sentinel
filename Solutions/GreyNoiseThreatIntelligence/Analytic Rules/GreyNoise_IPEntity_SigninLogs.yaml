@@ -1,6 +1,6 @@
 id: f6c76cc9-218c-5b76-9b82-8607f09ea1b4
 name: GreyNoise TI Map IP Entity to SigninLogs
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled
 description: |
   'This query maps any GreyNoise IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SigninLogs.'
@@ -8,10 +8,10 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: ThreatIntelligence
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: ThreatIntelligenceTaxii
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
@@ -20,10 +20,10 @@ requiredDataConnectors:
       - AADNonInteractiveUserSignInLogs
   - connectorId: MicrosoftDefenderThreatIntelligence
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
   - connectorId: GreyNoise2SentinelAPI
     dataTypes:
-      - ThreatIntelligenceIndicator
+      - ThreatIntelIndicators
 queryFrequency: 1h
 queryPeriod: 14d
 triggerOperator: gt
@@ -35,19 +35,25 @@ relevantTechniques:
 query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
+  // Fetch GreyNoise IPv4 indicators from the ThreatIntelIndicators (STIX 2.1) table.
+  // GreyNoise only publishes ipv4-addr patterns, so a single ObservableKey filter is sufficient.
+  // Materialized because the union below evaluates this branch twice.
+  let GreyNoise_IPs = materialize (
+    ThreatIntelIndicators
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where SourceSystem == 'GreyNoise'
+    | where ObservableKey == 'ipv4-addr:value'
+    // Take the latest row per indicator first, then evaluate its current state, so an
+    // indicator that has since been deactivated cannot be resurrected by an older row.
+    | summarize arg_max(TimeGenerated, *) by Id
+    | where IsActive == true and IsDeleted == false and ValidUntil > now()
+    | extend TI_ipEntity = ObservableValue
+    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+    // Explicit projection keeps TimeGenerated and Type off the left side of the join, avoiding column collisions.
+    | project IndicatorId = Id, TI_ipEntity, ThreatType = tostring(Data.indicator_types[0]), IoCDescription = tostring(Data.description), Tags, Confidence, ValidFrom, ValidUntil
+  );
   let aadFunc = (tableName:string){
-  ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack)
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true and ExpirationDateTime > now()
-  | where SourceSystem == 'GreyNoise'
-  // Picking up only IOC's that contain the entities we want
-  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
-  // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
-  // Taking the first non-empty value based on potential IOC match availability
-  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
-  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
-  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  GreyNoise_IPs
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
   | join kind=innerunique (
       table(tableName) | where TimeGenerated >= ago(dt_lookBack)
@@ -55,13 +61,13 @@ query: |
       | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)
       | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
       // renaming time column so it is clear the log this came from
-      | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type
+      | extend SigninLogs_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.IPAddress
-  | where SigninLogs_TimeGenerated < ExpirationDateTime
+  | where SigninLogs_TimeGenerated < ValidUntil
   | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, IPAddress
-  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
-  TI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
+  | project SigninLogs_TimeGenerated, IoCDescription, IndicatorId, ThreatType, ValidFrom, ValidUntil, Confidence, Tags,
+  TI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, Type
   | extend timestamp = SigninLogs_TimeGenerated, Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
   };
   let aadSignin = aadFunc("SigninLogs");
@@ -78,7 +84,3 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-  - entityType: URL
-    fieldMappings:
-      - identifier: Url
-        columnName: Url

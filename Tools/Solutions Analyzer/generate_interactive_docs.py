@@ -156,11 +156,17 @@ def load_tables_overrides(tables_overrides_csv: Path, tables_ref: Dict[str, Dict
     """Load tables.csv (mapper output) and merge overrides into tables_ref in-place.
     
     Tables not in tables_ref are added; existing entries get category/is_clv1 overrides.
+    The mapper's tables.csv is the authoritative real-table list, so any tables_ref
+    entry the mapper did NOT keep (parser names mis-listed as tables in
+    tables_reference.csv, e.g. `ImpervaWAFCloud`) is removed here, keeping the
+    interactive index in sync with the static docs (no broken phantom-table links).
     """
+    mapper_table_names: Set[str] = set()
     for row in load_csv(tables_overrides_csv):
         name = row.get('table_name', '')
         if not name:
             continue
+        mapper_table_names.add(name)
         if name not in tables_ref:
             tables_ref[name] = row
         else:
@@ -168,6 +174,9 @@ def load_tables_overrides(tables_overrides_csv: Path, tables_ref: Dict[str, Dict
                 tables_ref[name]['category'] = 'Internal'
             if row.get('is_clv1', ''):
                 tables_ref[name]['is_clv1'] = row['is_clv1']
+    if mapper_table_names:
+        for name in [t for t in tables_ref if t not in mapper_table_names]:
+            del tables_ref[name]
 
 
 def load_content_tables(content_tables_csv: Path) -> Dict[str, Dict[str, Set[str]]]:
@@ -317,7 +326,10 @@ def build_solutions_table_data(
         content_count = len(content_items.get(sol_name, []))
         content_in_solution = sum(1 for i in content_items.get(sol_name, []) if i.get('not_in_solution_json', 'false') != 'true')
         content_discovered = content_count - content_in_solution
-        is_published = first.get('is_published', 'true') != 'false'
+        # Use the solution's own metadata for publication status (not the first
+        # connector's), so a solution published to the marketplace is not shown
+        # as Unpublished just because a connector is unpublished.
+        is_published = sol_meta.get('is_published', 'true') != 'false'
         is_deprecated = first.get('solution_is_deprecated', 'false') == 'true'
         support_tier = first.get('solution_support_tier', '')
         publisher = first.get('solution_support_name', sol_meta.get('support_name', ''))
@@ -380,7 +392,7 @@ def build_connectors_table_data(
 
             connectors_map[cid] = {
                 'id': cid,
-                'title': c.get('connector_title', cid),
+                'title': c.get('connector_title', cid).strip(),
                 'solution': sol_name,
                 'publisher': c.get('connector_publisher', ''),
                 'collection_method': ref.get('collection_method', ''),
@@ -624,6 +636,11 @@ def build_asim_table_data(asim_parsers: List[Dict[str, str]]) -> List[Dict[str, 
             continue  # skip empty/placeholder parsers
         name = p.get('parser_name', '')
         if not name:
+            continue
+        # Deduplicate unifying parsers: each schema exposes an ASim (parameter-less) and an
+        # im/vim (filtering) union parser. List only the ASim variant; the filtering variant
+        # is documented on the same parser detail page.
+        if ptype == 'union' and not name.startswith('ASim'):
             continue
         schema = p.get('schema', '')
         product = p.get('product_name', '')
@@ -2151,6 +2168,34 @@ def generate_interactive(
     solutions_ref = load_solutions_data(solutions_csv)
     content_items = load_content_items(content_items_csv)
     tables_ref = load_tables_reference(tables_csv)
+
+    # Safety net: seed any solution present in solutions.csv but absent from the
+    # mapping CSV so it is never silently dropped from the interactive index. A
+    # solution can lack mapping rows when all of its connectors had their table
+    # tokens filtered out (parser-only, validation, or reported_table_exclusions
+    # overrides). Mirrors the same seeding in generate_connector_docs.py. The
+    # placeholder carries an empty connector_id so it adds no phantom connector.
+    seeded_missing = 0
+    for sol_name, sol_info in solutions_ref.items():
+        if sol_name in by_solution:
+            continue
+        by_solution[sol_name] = [{
+            'Table': '',
+            'solution_name': sol_name,
+            'connector_id': '',
+            'connector_title': '',
+            'connector_publisher': '',
+            'is_published': sol_info.get('is_published', 'true'),
+            'solution_is_deprecated': sol_info.get('is_deprecated', 'false'),
+            'solution_logo_url': sol_info.get('solution_logo_url', ''),
+            'solution_support_tier': sol_info.get('solution_support_tier', ''),
+            'solution_categories': sol_info.get('solution_categories', ''),
+            'solution_author_name': sol_info.get('solution_author_name', ''),
+            'solution_version': sol_info.get('solution_version', ''),
+        }]
+        seeded_missing += 1
+    if seeded_missing:
+        print(f"  Seeded {seeded_missing} solution(s) present in solutions.csv but absent from the mapping CSV")
 
     # Merge tables overrides (tables.csv) into tables_ref
     load_tables_overrides(tables_overrides_csv, tables_ref)

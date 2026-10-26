@@ -19,7 +19,7 @@ This playbook is triggered manually from the Data Breaches tab in the Cyjax Work
    * KeyVaultName: Name of the Azure Key Vault where the Cyjax API key is stored.
    * TenantId: Microsoft Entra ID Tenant ID where the Key Vault is located.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCyjax%2FPlaybooks%2FCyjaxDataBreaches%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCyjax%2FPlaybooks%2FCyjaxDataBreaches%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCyjax%2FPlaybooks%2FCyjaxDataBreaches%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCyjax%2FPlaybooks%2FCyjaxDataBreaches%2Fazuredeploy.json)
 
 ### Post-Deployment Instructions
 

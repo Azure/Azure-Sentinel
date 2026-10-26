@@ -120,7 +120,7 @@ From the left menu blade, click **Overview** and take note of the **Resource ID*
 This single deployment creates the custom log table, Data Collection Endpoint (DCE), Data Collection Rule (DCR), Key Vault API connection, Logic App, and all required role assignments.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Checkmarx-SAST-Ingestion%2Fazuredeploy.json)
 
 Click the "**Deploy to Azure**" button and it will bring you to the custom deployment template.
 

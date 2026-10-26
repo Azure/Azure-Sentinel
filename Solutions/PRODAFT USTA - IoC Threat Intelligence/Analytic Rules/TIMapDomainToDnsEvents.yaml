@@ -1,0 +1,80 @@
+id: c6f85aff-4ef0-4fde-b90e-e0ba1a9c3df6
+name: PRODAFT USTA - TI map Domain to DnsEvents
+description: |
+  'Identifies a match in DnsEvents from any domain-name indicator ingested from PRODAFT USTA
+  IoC Threat Intelligence (SourceSystem starting with "PRODAFT USTA").'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: PRODAFTUstaIoCUploadIndicators
+    dataTypes:
+      - ThreatIntelIndicators
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let Domain_Indicators = ThreatIntelIndicators
+    // Each USTA IoC feed uploads under its own SourceSystem ("PRODAFT USTA - Malicious URLs", etc.)
+    | where SourceSystem startswith "PRODAFT USTA"
+    | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+    | where IndicatorType == "domain-name"
+    | extend DomainName = tolower(ObservableValue)
+    | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+    | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
+  // TLD allow-list built from the feed: lets the DnsEvents scan discard most rows before the join
+  let maxListSize = 100000;
+  let list_tlds = Domain_Indicators
+    | extend parts = split(DomainName, '.')
+    | extend tld = parts[(array_length(parts)-1)]
+    | extend IndicatorId = tostring(split(Id, "--")[2])
+    | summarize count() by tostring(tld)
+    | project tld
+    | summarize make_list(tld, maxListSize);
+  Domain_Indicators
+   | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
+    // innerunique: one match per indicator is enough to alert, and it keeps the join cheap
+    | join kind=innerunique (
+      DnsEvents
+      | where TimeGenerated > ago(dt_lookBack)
+      | where isnotempty(Name)
+      // DnsEvents.Name keeps the queried casing; the indicator side is lowercased, and the join below is case-sensitive
+      | extend Name = tolower(Name)
+      | extend parts = split(Name, '.')
+      | extend tld = parts[(array_length(parts)-1)]
+      | where tld in~ (list_tlds)
+      | extend DNS_TimeGenerated = TimeGenerated
+    ) on $left.DomainName==$right.Name
+    // non-expiring indicators are allowed above, so they must survive this filter too
+    | where isempty(ValidUntil) or DNS_TimeGenerated < ValidUntil
+    | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by Id, Name
+    | extend Description = tostring(parse_json(Data).description)
+    | extend IndicatorTags = tostring(parse_json(Data).labels)
+    | project DNS_TimeGenerated, Description, IndicatorTags, Id, ValidUntil, Confidence, Computer, ClientIP
+    | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+    | extend timestamp = DNS_TimeGenerated
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.0
+kind: Scheduled

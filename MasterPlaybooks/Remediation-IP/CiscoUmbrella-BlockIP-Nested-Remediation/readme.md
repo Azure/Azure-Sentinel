@@ -24,7 +24,7 @@ When  this playbook gets triggered and performs the following actions:
     * Cisco Umbrella Organization Id: Organization id in Cisco Umbrella
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fmaster%2FMasterPlaybooks%2FRemediation-IP%2FCiscoUmbrella-BlockIP-Nested-Remediation%2Fazuredeploy.json)
-[![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fmaster%2FMasterPlaybooks%2FRemediation-IP%2FCiscoUmbrella-BlockIP-Nested-Remediation%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsocprime%2FAzure-Sentinel%2Fmaster%2FMasterPlaybooks%2FRemediation-IP%2FCiscoUmbrella-BlockIP-Nested-Remediation%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 

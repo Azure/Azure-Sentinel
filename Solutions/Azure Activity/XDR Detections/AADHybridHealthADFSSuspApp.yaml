@@ -1,0 +1,107 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureActivity
+  requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+    - AzureActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d9938c3b-16f9-444d-bc22-ea9a9110e0fd
+    path: Analytic Rules/AADHybridHealthADFSSuspApp.yaml
+    version: 2.0.3
+    querySha256: ef45fb6f3fca6a4e00954b4f2f90dbad47b8a64583f6e542c8dd86441bfb50f0
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `Caller` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - DefenseEvasion
+    originalTechniques:
+    - T1528
+    - T1550
+    reviewScope:
+      sourceDocumentSha256: 26c33322fa59de2e13c78d5569aba783e6963a1a63ed0c9e60135ab287d71b5c
+      targetQuerySha256: eec3d773e368b9d11e3ede81b9808bd57b7f3f0ecd33b621be7c5276d1ed47a3
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Caller
+      column: Caller
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-d9938c3b-16f9-444d-bc22-ea9a9110e0fd
+  displayName: Microsoft Entra ID Hybrid Health AD FS Suspicious Application
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Microsoft Entra ID Connect Health Agent - cf6d7e68-f018-4e0a-a7b3-126e053fb88d
+      // Microsoft Entra ID Connect - cb1056e2-e479-49de-ae31-7812af012ed8
+      let appList = dynamic(['cf6d7e68-f018-4e0a-a7b3-126e053fb88d','cb1056e2-e479-49de-ae31-7812af012ed8']);
+      let operationNamesList = dynamic(['Microsoft.ADHybridHealthService/services/servicemembers/action','Microsoft.ADHybridHealthService/services/delete']);
+      AzureActivity
+      | where CategoryValue =~ 'Administrative'
+      | where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'
+      | where _ResourceId has 'AdFederationService'
+      | where OperationNameValue in~ (operationNamesList)
+      | extend claimsJson = parse_json(Claims)
+      | extend AppId = tostring(claimsJson.appid), AccountName = tostring(claimsJson.name), Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+      | where AppId !in (appList)
+      | project-away claimsJson
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Microsoft Entra ID Hybrid Health AD FS Suspicious Application
+      description: |-
+        'This detection uses AzureActivity logs (Administrative category) to identify a suspicious application adding a server instance to an Microsoft Entra ID Hybrid Health AD FS service or deleting the AD FS service instance.
+        Usually the Microsoft Entra ID Connect Health Agent application with ID cf6d7e68-f018-4e0a-a7b3-126e053fb88d and ID cb1056e2-e479-49de-ae31-7812af012ed8 is used to perform those operations.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1528
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1550

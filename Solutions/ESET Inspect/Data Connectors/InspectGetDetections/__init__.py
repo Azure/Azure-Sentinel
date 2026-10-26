@@ -19,11 +19,19 @@ import json
 import logging
 import os
 import re
-from distutils.util import strtobool
 
 import azure.functions as func
 from datacollector import post_data
 from esetinspect import Inspect
+
+
+def _strtobool(val):
+    val = val.lower()
+    if val in ('y', 'yes', 't', 'true', 'on', '1'):
+        return True
+    if val in ('n', 'no', 'f', 'false', 'off', '0'):
+        return False
+    raise ValueError(f"invalid truth value {val!r}")
 
 # Hack to keep the EI object cached (preventing multiple logins).
 # See: https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/azure-functions/functions-reference-python.md#global-variables
@@ -47,8 +55,8 @@ def main(
     base_url = os.environ["baseUrl"]
     username = os.environ["eiUsername"]
     password = os.environ["eiPassword"]
-    domain = bool(strtobool(os.environ["domainLogin"]))
-    verify = bool(strtobool(os.environ["verifySsl"]))
+    domain = bool(_strtobool(os.environ["domainLogin"]))
+    verify = bool(_strtobool(os.environ["verifySsl"]))
     start_from_id = int(os.environ["startFromID"])
     workspace_id = os.environ["workspaceId"]
     workspace_key = os.environ["workspaceKey"]

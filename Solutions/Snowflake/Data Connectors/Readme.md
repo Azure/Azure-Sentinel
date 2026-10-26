@@ -3,6 +3,7 @@
 - [Introduction](#intro)
 - [Steps to obtain the Snowflake Account Identifier](#accountId)
 - [Steps to obtain Programmatic Access Token in Snowflake](#pat)
+- [Understand V3 row-level ingestion](#v3-ingestion)
 
 <a name = "intro">
 
@@ -57,3 +58,69 @@ Once these commands are successfully executed, the network policy configuration 
 - Click on **Settings**.
 - Under the **Programmatic access tokens** section, click **Generate new token**.
 - Copy and securely store the generated token, as it will only be displayed once.
+<a name = "v3-ingestion">
+
+## Understand V3 row-level ingestion
+
+The Snowflake SQL API returns query results in a `data` array. Each array element represents one Snowflake record. The values are positional, and the response does not include source column names.
+
+For example:
+
+```json
+{
+  "data": [
+    ["1001", "2026-09-22 10:00:00.000 +0000", "LOGIN", "USER_A"],
+    ["1002", "2026-09-22 10:01:00.000 +0000", "LOGIN", "USER_B"]
+  ]
+}
+```
+
+### Why V3 was introduced
+
+Earlier connector versions stored the result array in a generic `Data` column. At query time, the parser used `mv-expand` to expand the multivalue array and extract values into named fields. 
+V3 instead ingests each Snowflake record as a separate Log Analytics row with named columns. This design makes fields available for direct query and removes query-time array expansion for V3 data.
+
+### How the connector processes V3 data
+
+The connector processes the response as follows:
+
+1. The connector uses the `$.data` JSONPath expression to select the Snowflake result array.
+1. The SCUBA processing service applies `/ASI/Microsoft/MvExpandTransformer` to expand the array into individual records.
+1. The transformer exposes the values in each positional record as `col0`, `col1`, `col2`, through `colN`.
+1. The data collection rule (DCR) maps each positional field to the corresponding Snowflake column name.
+1. The DCR writes the named fields to the appropriate `Snowflake*V3_CL` table.
+
+For example, the transformer presents an expanded Login History record to the DCR in the following form:
+
+```text
+col0 = "1001"
+col1 = "2026-09-22 10:00:00.000 +0000"
+col2 = "LOGIN"
+col3 = "USER_A"
+```
+
+The DCR converts the positional fields into named columns:
+
+```kusto
+source
+| project
+    TimeGenerated = now(),
+    SnowflakeAccountIdentifier = tostring(accountId),
+    EventId = tostring(col0),
+    EventTimestamp = tostring(col1),
+    EventType = tostring(col2),
+    UserName = tostring(col3)
+```
+
+The resulting Log Analytics record contains named fields such as `EventId`, `EventTimestamp`, `EventType`, and `UserName`.
+
+> [!IMPORTANT]
+> The positional order is part of the ingestion contract. When you add, remove, or reorder a column in a Snowflake `SELECT` statement, update all related components.
+
+Keep the following components aligned:
+
+- The column order in the Snowflake SQL statement.
+- The DCR stream declaration from `col0` through `colN`.
+- The index-to-name mapping in `transformKql`.
+- The destination V3 table schema.
+- The V3 parser mapping.

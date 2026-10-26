@@ -1,5 +1,9 @@
 # Changelog for vimProcessCreateMicrosoftSecurityEvents.yaml
 
+## Version 0.2.1
+
+- (2026-08-27) Added acting and target process filename extraction - [PR #14999](https://github.com/Azure/Azure-Sentinel/pull/14999)
+
 ## Version 0.2.0
 
 - (2022-04-27) Process Create SecurityEvent - [PR #4720](https://github.com/Azure/Azure-Sentinel/pull/4720)
@@ -11,4 +15,3 @@
 ## Version 0.1
 
 - (2021-06-22) Normalized Process Events package - Take 2 - [PR #2552](https://github.com/Azure/Azure-Sentinel/pull/2552)
-

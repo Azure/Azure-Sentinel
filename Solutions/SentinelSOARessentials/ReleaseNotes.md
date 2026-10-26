@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYY)**  | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.0.8       | 05-03-2026                     | Enhanced the *Incident-Trigger-Entity-Analyzer* **Playbook** with intelligent user identifier detection (objectGuid, aadUserId, UPN, and Name+UPNSuffix) for reliable user resolution, and added handling to skip and comment on incidents when no valid user identifier is present. |
 | 3.0.7       | 13-01-2026                     | Removed the redundant *IncidentOverview* **workbook** from SentinelSOAREssentianls |
 | 3.0.6       | 24-12-2025                     | Added new **playbooks** for the incident alerting.|
 | 3.0.5       | 11-12-2025                     | Updated the lookback value to 7 days across all three **Logic Apps** and Renamed the Logic App title to "URL Trigger Entity Analyzer".|

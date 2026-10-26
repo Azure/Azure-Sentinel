@@ -53,8 +53,8 @@ except ImportError:
     requests = None
 
 
-# GitHub raw URL base for Solution Analyzer CSVs
-GITHUB_RAW_BASE = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/Solutions%20Analyzer"
+# Default GitHub raw URL base for Solution Analyzer CSVs
+DEFAULT_GITHUB_RAW_BASE = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Tools/Solutions%20Analyzer"
 
 # Solution Analyzer CSV files and their default Kusto table names
 SOLUTION_ANALYZER_FILES: List[Tuple[str, str]] = [
@@ -123,13 +123,13 @@ def get_csv_columns_from_content(content: str) -> List[str]:
     return list(reader.fieldnames)
 
 
-def download_csv_from_github(filename: str) -> Optional[str]:
+def download_csv_from_github(filename: str, raw_base_url: str) -> Optional[str]:
     """Download a CSV file from the GitHub repository."""
     if requests is None:
         print(f"Error: 'requests' package required for --solution-analyzer feature")
         return None
     
-    url = f"{GITHUB_RAW_BASE}/{filename}"
+    url = f"{raw_base_url.rstrip('/')}/{filename}"
     print(f"  Downloading: {url}")
     
     try:
@@ -338,6 +338,11 @@ Examples:
         help="Download and upload Solution Analyzer CSVs from the public Azure-Sentinel GitHub repo"
     )
     parser.add_argument(
+        "--raw-base-url",
+        default=DEFAULT_GITHUB_RAW_BASE,
+        help="Raw GitHub base URL for Solution Analyzer CSVs (used when --solution-analyzer and --source-dir is not set)"
+    )
+    parser.add_argument(
         "--prefix",
         default="",
         help="Prefix for generated table names (for custom CSV files)"
@@ -351,6 +356,17 @@ Examples:
         "--dry-run",
         action="store_true",
         help="Show what would be done without making changes"
+    )
+    parser.add_argument(
+        "--auth-mode",
+        choices=["azure-cli", "managed-identity"],
+        default="azure-cli",
+        help="Authentication mode for Kusto (default: azure-cli)"
+    )
+    parser.add_argument(
+        "--managed-identity-client-id",
+        default=None,
+        help="User-assigned managed identity client ID (only for --auth-mode managed-identity)"
     )
     
     args = parser.parse_args()
@@ -384,7 +400,7 @@ Examples:
             print(f"Source: {source_dir.resolve()}")
         else:
             print("Mode: Solution Analyzer (downloading from GitHub)")
-            print(f"Source: {GITHUB_RAW_BASE}")
+            print(f"Source: {args.raw_base_url}")
         print()
         
         if args.dry_run:
@@ -419,7 +435,7 @@ Examples:
         else:
             # Download files from GitHub
             for filename, table_name in SOLUTION_ANALYZER_FILES:
-                content = download_csv_from_github(filename)
+                content = download_csv_from_github(filename, args.raw_base_url)
                 if content:
                     files_to_upload.append((filename, table_name, None, content))
                 else:
@@ -464,27 +480,50 @@ Examples:
         sys.exit(1)
     
     # Authenticate
-    print("Authenticating with Azure CLI...")
+    print(f"Authenticating with mode: {args.auth_mode}...")
     try:
-        token = get_azure_cli_token()
-        
-        # Management client for DDL operations
-        mgmt_kcsb = KustoConnectionStringBuilder.with_aad_application_token_authentication(
-            cluster_url, token
-        )
-        mgmt_client = KustoClient(mgmt_kcsb)
-        
-        # Queued ingest client - derive ingest URL from cluster URL
         ingest_url = cluster_url.replace("https://", "https://ingest-")
-        ingest_kcsb = KustoConnectionStringBuilder.with_aad_application_token_authentication(
-            ingest_url, token
-        )
-        ingest_client = QueuedIngestClient(ingest_kcsb)
+
+        if args.auth_mode == "azure-cli":
+            token = get_azure_cli_token()
+
+            # Management client for DDL operations
+            mgmt_kcsb = KustoConnectionStringBuilder.with_aad_application_token_authentication(
+                cluster_url, token
+            )
+            mgmt_client = KustoClient(mgmt_kcsb)
+
+            # Queued ingest client - derive ingest URL from cluster URL
+            ingest_kcsb = KustoConnectionStringBuilder.with_aad_application_token_authentication(
+                ingest_url, token
+            )
+            ingest_client = QueuedIngestClient(ingest_kcsb)
+        else:
+            if args.managed_identity_client_id:
+                mgmt_kcsb = KustoConnectionStringBuilder.with_aad_managed_service_identity_authentication(
+                    cluster_url, args.managed_identity_client_id
+                )
+                ingest_kcsb = KustoConnectionStringBuilder.with_aad_managed_service_identity_authentication(
+                    ingest_url, args.managed_identity_client_id
+                )
+            else:
+                mgmt_kcsb = KustoConnectionStringBuilder.with_aad_managed_service_identity_authentication(
+                    cluster_url
+                )
+                ingest_kcsb = KustoConnectionStringBuilder.with_aad_managed_service_identity_authentication(
+                    ingest_url
+                )
+
+            mgmt_client = KustoClient(mgmt_kcsb)
+            ingest_client = QueuedIngestClient(ingest_kcsb)
         
         print("Authentication successful.\n")
     except Exception as e:
         print(f"Error: Failed to authenticate: {e}")
-        print("\nMake sure you are logged in with Azure CLI (az login).")
+        if args.auth_mode == "azure-cli":
+            print("\nMake sure you are logged in with Azure CLI (az login).")
+        else:
+            print("\nMake sure a managed identity is enabled and has Kusto permissions.")
         sys.exit(1)
     
     # Process each file

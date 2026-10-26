@@ -1,0 +1,194 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "markdown",
+        "version": "MarkdownItem/1.0",
+        "content": "# Cybereinforce Threat Enforcement (CTE) - Microsoft Sentinel Workbook\nOperational visibility for SOC teams: ingestion health, URL blocks, audit activity, and IOC synchronization.\n\n**Data source:** `CybereinforceCTE_CL` custom log table (Logic App / DCR ingestion).\n\n> Tip: Use the workbook time range (top-right) to scope all charts and tables."
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| summarize\n    TotalEvents = count(),\n    AuditEvents = countif(EventType in (\"auth.login\",\"token.generated\")),\n    UrlBlocks = countif(EventType == \"block.url\"),\n    DevicesOnHold = countif(EventType == \"device.onhold\"),\n    IocSyncEvents = countif(EventType has \"ioc\")\n| project TotalEvents, AuditEvents, UrlBlocks, DevicesOnHold, IocSyncEvents",
+        "size": "large",
+        "title": "Key Metrics",
+        "queryType": 0,
+        "visualization": "tiles"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| summarize\n    LastEvent = max(TimeGenerated),\n    FirstEvent = min(TimeGenerated),\n    Events = count(),\n    Tenants = dcount(TenantId)\n| extend IngestionDelayMinutes = (now() - LastEvent) / 1m\n| project LastEvent, IngestionDelayMinutes, Events, Tenants, FirstEvent",
+        "size": "large",
+        "title": "Ingestion Health",
+        "queryType": 0,
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| summarize Events=count() by Severity\n| order by Events desc",
+        "size": "medium",
+        "title": "Events by Severity",
+        "queryType": 0,
+        "visualization": "piechart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| summarize Events=count() by EventType\n| top 15 by Events",
+        "size": "medium",
+        "title": "Top Event Types",
+        "queryType": 0,
+        "visualization": "barchart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where EventType == \"block.url\"\n| summarize Blocks=count() by bin(TimeGenerated, 1h)\n| order by TimeGenerated asc",
+        "size": "large",
+        "title": "URL Blocks Over Time",
+        "queryType": 0,
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where EventType in (\"auth.login\",\"token.generated\")\n| summarize Audit=count() by bin(TimeGenerated, 1h), EventType\n| order by TimeGenerated asc",
+        "size": "large",
+        "title": "Audit Activity Over Time (Auth + Token)",
+        "queryType": 0,
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where tostring(Severity) in (\"high\",\"critical\")\n| project TimeGenerated, TenantId, EventType, Severity, Actor, Entity, EntityId, Category, Source, Details\n| sort by TimeGenerated desc\n| take 200",
+        "size": "large",
+        "title": "Recent High / Critical Events (latest 200)",
+        "queryType": 0,
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where EventType == \"block.url\"\n| extend d=parse_json(tostring(Details))\n| extend Url = coalesce(tostring(d.url), tostring(d.Url), tostring(d.blockedUrl), tostring(d.destinationUrl))\n| summarize Blocks=count(), Devices=dcount(EntityId), Tenants=dcount(TenantId), LastSeen=max(TimeGenerated) by Url\n| where isnotempty(Url)\n| top 20 by Blocks",
+        "size": "large",
+        "title": "Top Blocked URLs",
+        "queryType": 0,
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where EventType == \"block.url\"\n| extend d=parse_json(tostring(Details))\n| extend Url = coalesce(tostring(d.url), tostring(d.Url), tostring(d.blockedUrl), tostring(d.destinationUrl))\n| where isnotempty(Url)\n| extend Domain = tostring(parse_url(Url).Host)\n| summarize Blocks=count(), Devices=dcount(EntityId), Tenants=dcount(TenantId), LastSeen=max(TimeGenerated) by Domain\n| top 20 by Blocks",
+        "size": "large",
+        "title": "Top Blocked Domains",
+        "queryType": 0,
+        "visualization": "barchart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where EventType == \"block.url\"\n| summarize Blocks=count(), LastSeen=max(TimeGenerated) by TenantId, EntityId\n| top 20 by Blocks",
+        "size": "large",
+        "title": "Devices with Most URL Blocks",
+        "queryType": 0,
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "markdown",
+        "version": "MarkdownItem/1.0",
+        "content": "## IOC Synchronization\nThis section tracks indicators of compromise (IOCs) that are imported/sent between Microsoft security tooling and Cybereinforce.\n\nIf your pipeline logs IOC actions under a different `EventType`, update the queries below (search `EventType has \"ioc\"`)."
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where EventType has \"ioc\"\n| summarize IocEvents=count() by bin(TimeGenerated, 1h), EventType\n| order by TimeGenerated asc",
+        "size": "large",
+        "title": "IOC Events Over Time",
+        "queryType": 0,
+        "visualization": "timechart"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where EventType has \"ioc\"\n| project TimeGenerated, TenantId, EventType, Severity, Actor, Entity, EntityId, Details\n| sort by TimeGenerated desc\n| take 200",
+        "size": "large",
+        "title": "Recent IOC Events (latest 200)",
+        "queryType": 0,
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "markdown",
+        "version": "MarkdownItem/1.0",
+        "content": "## Audit & Administration\nTrack authentication and administrative actions that may indicate configuration changes, unusual access, or token misuse."
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| where Category in (\"admin\",\"audit\") or EventType in (\"auth.login\",\"token.generated\")\n| project TimeGenerated, TenantId, EventType, Severity, Actor, Entity, EntityId, Category, Details\n| sort by TimeGenerated desc\n| take 300",
+        "size": "large",
+        "title": "Recent Admin / Audit Events (latest 300)",
+        "queryType": 0,
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CybereinforceCTE_CL\n| summarize\n    Events=count(),\n    UrlBlocks=countif(EventType==\"block.url\"),\n    AuditEvents=countif(EventType in (\"auth.login\",\"token.generated\")),\n    DevicesOnHold=countif(EventType==\"device.onhold\"),\n    LastSeen=max(TimeGenerated)\n  by TenantId\n| order by Events desc",
+        "size": "large",
+        "title": "Tenant Overview",
+        "queryType": 0,
+        "visualization": "table"
+      }
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "markdown",
+        "version": "MarkdownItem/1.0",
+        "content": "---\n### About Cybereinforce CTE\nCybereinforce Threat Enforcement (CTE) provides rapid URL blocking and security event telemetry designed to integrate into SOC operations.\n\nWorkbook generated for: **SOC triage, operational monitoring, and incident investigation workflows.**"
+      }
+    }
+  ],
+  "fallbackResourceIds": [
+    "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.OperationalInsights/workspaces/workspace"
+  ]
+}

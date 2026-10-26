@@ -2,17 +2,26 @@
 
 List of behavior detection rules for CommonSecurityLog data source (CyberArk, Palo Alto, etc.)
 
-**Total Behaviors**: 142
+**Total Behaviors**: 183
 
 | Name | Title |
 |------|-------|
+| BehaviorAdminArtifactDeletion | FortiGate Administrative Artifact Deletion |
+| BehaviorAdminConfigBurst | Administrator Performs Multiple FortiGate Configuration Changes |
 | BehaviorAppServiceLateralMovement | Lateral Movement via Internal Application-Specific TCP Services |
 | BehaviorAsymmetricBulkTransfer | High-Volume Asymmetric Data Transfer to External Web, SaaS, Remote Access Services |
 | BehaviorAuditTrailSuppression | Defense Evasion – CyberArk Vault Session Audit Artifact Suppression |
+| BehaviorAutoscriptStopDeletion | FortiGate Autoscript Stop Followed by Result Deletion |
 | BehaviorBackupReplicationOutbound | Outbound Backup and Replication Service Traffic to External Network Destinations |
 | BehaviorBittorrentOutboundTraffic | Outbound Bittorrent Peer-to-Peer Traffic Through Perimeter Firewall |
 | BehaviorBlockedP2PRemoteAccess | Firewall-Blocked Outbound Peer-to-Peer Remote Access Application Traffic |
 | BehaviorBruteForceMultiService | Source IP Conducting Brute Force Authentication Across Multiple Services |
+| BehaviorBulkLocalUserCreation | Multiple FortiGate Local Users Added from the Same GUI Source |
+| BehaviorBulkUserChanges | Multiple FortiGate Local User Accounts Modified by Same Administrator |
+| BehaviorCertRegenFortiCloudJoin | Local Certificate Regeneration Followed by FortiCloud Auto-Join Attempt |
+| BehaviorCertificateLifecycle | FortiGate Certificate Lifecycle Activity |
+| BehaviorCertificateOperations | Multiple Certificate Operations on a FortiGate Appliance |
+| BehaviorCertificateRegeneration | Repeated Local Certificate Regeneration on FortiGate Appliance |
 | BehaviorChainedPivot | Chained Internal Remote Management Pivot through Intermediate Host |
 | BehaviorChainedWebExploit | Chained Web Exploit Activity From Directory Traversal To Remote Code Execution On Single Server |
 | BehaviorCloudControllerComm | Outbound Communication to Network Infrastructure Management Cloud Controllers |
@@ -21,6 +30,7 @@ List of behavior detection rules for CommonSecurityLog data source (CyberArk, Pa
 | BehaviorCloudPushManagement | Outbound Communication to Cloud Push Notification and Endpoint Management Services |
 | BehaviorConcentratedThreatDnsQueries | Internal Host Generating Concentrated Threat-Flagged DNS Queries |
 | BehaviorConcentratedUnknownUdp | Command and Control – Concentrated Unknown UDP Application Sessions Involving Single Host |
+| BehaviorConfigChangeBurst | FortiGate Configuration Change Burst |
 | BehaviorContentInspectionBypass | Network Evasion: Repeated Use of Content Inspection Bypass Policies Through Palo Alto Firewall |
 | BehaviorCredentialScreenshotSequence | Credential Access and Collection – Sequential Use of Authentication and Screenshot Capture Services from Same Host |
 | BehaviorCyberArkMultiHostActivity | Account Manipulation: CyberArk Password Management Identity Used From Multiple Source Hosts in Short Interval |
@@ -41,7 +51,18 @@ List of behavior detection rules for CommonSecurityLog data source (CyberArk, Pa
 | BehaviorEnvConfigScan | External Web Scanning for Environment and Configuration Files on a Single Host |
 | BehaviorExternalIdentitySync | Account Manipulation – CyberArk LDAP-Sourced External Identity Synchronization |
 | BehaviorExternalOracleFormsAccess | Initial Access via External Client to Internal Oracle Forms Service over Non-Standard Port |
+| BehaviorFSSODisconnectionAuthDisruption | FortiGate FSSO Server Disconnection Followed by User Authentication Disruption |
 | BehaviorFileServiceExternalAccess | SMB and NFS File Service Sessions Between Internal Hosts and External IP Addresses |
+| BehaviorFirmwareRestore | FortiGate Firmware Image Load Followed by Image Restore |
+| BehaviorFortiGateBackup | FortiGate Account Logon Followed by Configuration Backup |
+| BehaviorFortiGateCertChanges | Multiple FortiGate Certificate Object Changes |
+| BehaviorFortiGateCertFailures | Repeated FortiGate Certificate Management Failures |
+| BehaviorFortiGateInterruptions | FortiGate Repeated Unplanned System Interruptions |
+| BehaviorFortiGateReconfiguration | Multiple FortiGate System Setting Changes on a Device |
+| BehaviorFortiGateRestart | FortiGate Restart Sequence |
+| BehaviorFortiGateUserAccountManagement | FortiGate Local User Account Management Activity |
+| BehaviorFortiGuardOverrideBurst | Repeated FortiGuard Authentication Overrides from Same Source |
+| BehaviorFortiServiceDisruption | Repeated Loss of FortiAnalyzer, FortiCloud, or FortiGuard Service Connectivity |
 | BehaviorHighFrequencyDnsOutbound | Application Layer Protocol: High-Frequency DNS Communications from Single Host to Multiple Destinations |
 | BehaviorHighVolumeSaaSExfil | Exfiltration over Web Services – High-Volume Outbound Data Transfers from Single Internal Host to Cloud SaaS and Security Services |
 | BehaviorHighVolumeServiceTransfer | High-Volume Data Transfer Over Database, OPC UA, SNMP Services Between Single Host Pair |
@@ -53,6 +74,7 @@ List of behavior detection rules for CommonSecurityLog data source (CyberArk, Pa
 | BehaviorIcsDiscoveryCommandSequence | ICS Command Sessions Following CIP EtherNet/IP Device Discovery to Same Host |
 | BehaviorIcsProtocolNonStandardPort | ICS Application Protocol Traffic Over Non-Standard Ports from Single Source Host |
 | BehaviorIcsWebAccess | Web-Based ICS and Building Management Interface Access from Single Internal Host |
+| BehaviorImageRestoreCertificate | FortiGate Image Restore Followed by Certificate Operation |
 | BehaviorInboundTcpFlood | Network Denial-of-Service via High-Volume Inbound TCP Connections from Internet to Single Internal Host |
 | BehaviorInboundVpnAccess | External Remote Services via Inbound VPN Sessions to Internal Private IP Addresses |
 | BehaviorJavaDeserializationAbuse | Repeated Java Deserialization Exploit Traffic from Single Source to Web Service |
@@ -62,17 +84,22 @@ List of behavior detection rules for CommonSecurityLog data source (CyberArk, Pa
 | BehaviorLateralSMBBurst | Concentrated Internal SMB and Remote Administration Service Connectivity from Single Source Host |
 | BehaviorLdapSmbSequence | LDAP NTLM Authentication Followed by SMB Login to Remote Windows Host |
 | BehaviorLdapSyncBurst | CyberArk Vault LDAP-Synchronized External Identity Management Burst |
+| BehaviorLocalCertUpdateFailures | Repeated Local Certificate Update Failures |
+| BehaviorLogCapacityBurst | FortiGate Repeated Log Capacity Warnings |
 | BehaviorLsaQueryDeleteAccess | Remote LSA Policy Query Followed by Delete-Access Operations Over Windows Network Protocols |
 | BehaviorManagementChannelExfiltration | Exfiltration Over Trusted Enterprise Management Services |
 | BehaviorManagementProtocolOutboundBlocked | Outbound Management Protocol Communications Blocked by Firewall |
 | BehaviorManagementServiceMultiHostAccess | Internal Management Service Endpoint Receiving Connections from Multiple Hosts |
 | BehaviorMassSSHKeyRetrieval | Credential Access via High-Volume CyberArk SSH Key Retrieval Across Multiple Accounts or Hosts |
 | BehaviorMemcachedAmplification | Network Denial of Service via UDP Memcached Amplification Traffic Through Firewall |
+| BehaviorModifiedUserLogon | FortiGate Local User Modification Followed by User Authentication |
+| BehaviorMultiAccountIP | Single Source IP Authentication Across Multiple FortiGate Accounts |
 | BehaviorMultiCategoryWebExploit | Web Exploit Signature Activity From Single Source Across Multiple URL Categories |
 | BehaviorMultiComponentKeyUpdate | CyberArk Vault Multi-Component JWT Authentication Key Update Sequence |
 | BehaviorMultiProtocolFileSharing | Single Destination Host Accessed Via Multiple File-Sharing Application Protocols |
 | BehaviorMultiProtocolHostAccess | Single Destination Host Accessed via Multiple ICS Protocols from Diverse Source Addresses |
 | BehaviorMultiProtocolSession | Multi-Protocol ICS and Building Automation Network Sessions from Single Source Host |
+| BehaviorMultiProtocolVpnPeer | Same Remote Address Using Multiple VPN Protocols on a FortiGate |
 | BehaviorMultiRCEExploitTarget | Multiple Remote Code Execution Exploit Signatures Targeting Enterprise Security and Management Platforms on Single Host |
 | BehaviorMultiRemoteAccessUsage | Network Security Device Handling Multiple Commercial Remote Access and RMM Applications |
 | BehaviorMultiSaaSExfiltration | Exfiltration Over Web Services to Multiple SaaS Destinations from Single Internal Host |
@@ -90,6 +117,7 @@ List of behavior detection rules for CommonSecurityLog data source (CyberArk, Pa
 | BehaviorNmapHNAP1Probing | Discovery – Nmap Scripting Engine Probing of HNAP1 Web Device Endpoints |
 | BehaviorNonBlockingRCE | Remote Code Execution Web Exploit Traffic Permitted by Non-Blocking Firewall Policies |
 | BehaviorNonBrowsingWebC2 | Web Command and Control via Non-Browsing Application Protocols to External Destinations |
+| BehaviorNtpClockChange | FortiGate NTP Status Change Followed by System Clock Modification |
 | BehaviorOTServiceRecon | OT Service Discovery via Control Protocol Scanning |
 | BehaviorObfuscatedScriptDelivery | External Host Serving Repeated Obfuscated Or Embedded Script Content |
 | BehaviorOutboundDatabaseConnection | Outbound Database Protocol Connections from Internal Network to External Hosts |
@@ -105,20 +133,30 @@ List of behavior detection rules for CommonSecurityLog data source (CyberArk, Pa
 | BehaviorRemoteAccessConcentration | Virtual Desktop Application Sessions Concentrated on Single Destination Host |
 | BehaviorRemoteAdminSession | Remote Administrative Service Sessions via Palo Alto Firewall |
 | BehaviorRemoteCodeProbe | Remote Code Execution Web Vulnerability Probing From Single Source Host |
+| BehaviorRepeatedAutoscriptStops | Repeated FortiGate Autoscript Stops on a Firewall |
 | BehaviorRepeatedBlockedInboundTCP | Repeated Blocked Inbound TCP Connections from External Source Host |
+| BehaviorRepeatedIPsecFailures | Repeated IPsec VPN Negotiation Failures from the Same Remote Peer |
 | BehaviorRepeatedIkeProbing | Repeated Outbound IKE VPN Service Probing From Single Internal Host |
+| BehaviorRepeatedSSHFailures | Repeated SSH Negotiation Failures from a Remote Address |
 | BehaviorRepeatedSmbAdminAccess | Repeated SMB Administrative Share Access Attempts Logged as Palo Alto Threats |
+| BehaviorRepeatedSslVpnDenials | Repeated SSL VPN Web Access Denials from Single Remote IP |
 | BehaviorRepeatedTlsNoInspection | Repeated TLS Traffic with Disabled Content Inspection from Single Source |
 | BehaviorRepeatedUpdateProtocolDenials | Command and Control: Repeated Firewall-Denied Application-Layer Update Protocol Connections from Single Host |
 | BehaviorRepeatedVulnSignatureEmptyPath | Repeated Web Vulnerability Signatures With Empty URL Path Between Single Source And Server |
 | BehaviorSIPExploitBlocked | Exploit Public-Facing SIP Service Traffic Matching Vulnerability Signature Dropped by Firewall |
 | BehaviorSMBMaliciousTransfer | SMB File Transfer of Malicious or Obfuscated Payloads Between Internal Hosts |
 | BehaviorSMBRpcLateralMovement | Lateral Movement Over SMB Using Encrypted Microsoft Windows RPC Between Internal Hosts |
+| BehaviorSSHBackupFailure | Repeated Failed Configuration Backup from SSH |
+| BehaviorSSHNegotiationFailure | Repeated SSH Negotiation Failures From a Source Address |
+| BehaviorSSLVPNBruteForceByRemoteAddress | Repeated SSL VPN Access Failures from a Remote Address |
+| BehaviorSSLVPNBruteForceByUser | Repeated SSL VPN Authentication Failures Against FortiGate User Accounts |
+| BehaviorSSLVPNPasswordSpray | SSL VPN Login Failures from One Remote IP Across Multiple Accounts |
 | BehaviorScadaProtocolExploit | Exploitation: SCADA DNP3 or Modbus Protocol Exploit Signature on Internal Traffic |
 | BehaviorScadaThreatBurst | Concentrated Palo Alto SCADA Protocol Threat Alerts From Single Source Host |
 | BehaviorScannerBurst | Reconnaissance – Concentrated Network Scanner Application Traffic |
 | BehaviorScriptObfuscationBurst | Concentrated Script Obfuscation And Embedded Script Threats In Web Traffic |
 | BehaviorServiceControllerLateralMovement | Remote Windows Service Control Lateral Movement via ms-service-controller Traffic to Multiple Internal Hosts |
+| BehaviorSettingChangeBackup | FortiGate System Setting Change Followed by Configuration Backup |
 | BehaviorSmbBruteForceLogin | SMB Remote Login Attempt Following SMB Password Brute Force Activity |
 | BehaviorSmbBruteForceSequence | SMB Login Attempt Followed by Password Brute Force from Same Source to Same Destination |
 | BehaviorSmbNonStandardPort | SMB Application Traffic To Non-Standard TCP Ports From Single Source Host |
@@ -126,6 +164,7 @@ List of behavior detection rules for CommonSecurityLog data source (CyberArk, Pa
 | BehaviorSmbShareEnumeration | Discovery via SMB NetrShareEnum File Share Enumeration Through Palo Alto Firewall |
 | BehaviorSnmpFlood | High-Volume SNMP Management Traffic Across Network Boundary |
 | BehaviorSslTlsReconScan | Network Reconnaissance Using SSL/TLS Vulnerability Scanning Across Multiple Hosts |
+| BehaviorSslVpnChangeConnection | SSL VPN Setting Change Followed by New SSL VPN Connections |
 | BehaviorTelnetLateralMovement | Lateral Movement via Internal Telnet Remote Administrative Sessions |
 | BehaviorThreatConnectionBurst | External Source Host with Repeated Palo Alto THREAT-Flagged Connections to Internal Addresses |
 | BehaviorUnencryptedUdpExfiltration | Exfiltration Over Unencrypted UDP to External Reporting Service |
@@ -134,6 +173,8 @@ List of behavior detection rules for CommonSecurityLog data source (CyberArk, Pa
 | BehaviorVaultMultiAccountOperations | CyberArk client host performing multiple vault file operations via different accounts |
 | BehaviorVoiceSignalingC2 | Command and Control – Voice Signaling Protocol Connectivity Across Firewall Boundaries |
 | BehaviorVoipBypassOutbound | Outbound Encrypted VoIP Bypass Sessions From Internal Host to External Service |
+| BehaviorVpnAccountBruteforce | Repeated Remote VPN Authentication Failures for a Single Account |
+| BehaviorVpnCertActivation | VPN Certificate Load Followed by SSL or IPsec Tunnel Activity |
 | BehaviorVpnLateralMovement | VPN Client Lateral Movement via Direct Database and Data-Store Service Access |
 | BehaviorVulnScannerProbing | Web-Browsing Vulnerability Scanner Probing Multiple Internal Hosts from a Single Source |
 | BehaviorWebAppExploitDetection | Web Application Exploitation via Palo Alto Vulnerability and Malicious HTTP Payload Signatures |

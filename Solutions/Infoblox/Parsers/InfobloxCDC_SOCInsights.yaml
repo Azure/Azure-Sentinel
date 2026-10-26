@@ -1,43 +1,48 @@
 id: f18321d5-f146-4df5-81c3-f0ba660efc48
 Function:
   Title: Parser for InfobloxCDC_SOCInsights
-  Version: '1.0.0'
-  LastUpdated: '2024-03-06'
+  Version: '1.1.0'
+  LastUpdated: '2026-07-28'
 Category: Microsoft Sentinel Parser
 FunctionName: InfobloxCDC_SOCInsights
 FunctionAlias: InfobloxCDC_SOCInsights
 FunctionQuery: |
     CommonSecurityLog
-    | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector" and DeviceEventClassID == "BloxOne-InsightsNotification-Log"
-    | extend AdditionalExtensions = strcat(AdditionalExtensions, ";")
-    | extend 
-    // SOC Insights
-    BlockedCount = toint(extract("InfobloxEventsBlockedCount=(.*?);", 1, AdditionalExtensions)),
-    NotBlockedCount = toint(extract("InfobloxEventsNotBlockedCount=(.*?);", 1, AdditionalExtensions)),
-    InfobloxInsightID = extract("InfobloxInsightId=(.*?);", 1, AdditionalExtensions),
-    ThreatType = extract("InfobloxInsightThreatType=(.*?);", 1, AdditionalExtensions),
-    ThreatClass = extract("InfobloxThreatClass=(.*?);", 1, AdditionalExtensions),
-    ThreatProperty = extract("InfobloxThreatFamily=(.*?);", 1, AdditionalExtensions),
-    ThreatFamily = extract("InfobloxThreatFamily=(.*?);", 1, AdditionalExtensions),
-    Status = extract("status=(.*?);", 1, AdditionalExtensions),
-    FeedSource = extract("InfobloxInsightFeedSource=(.*?);", 1, AdditionalExtensions),
-    Comment = extract("InfobloxInsightUserComment=(.*?);", 1, AdditionalExtensions),
-    Description = extract("InfobloxInsightDescription=(.*?);", 1, AdditionalExtensions),
-    InfobloxInsightLogType = "Insight",
-    ThreatConfidence_Score = toint(extract("InfobloxThreatConfidence=(.*?);", 1, AdditionalExtensions))
-    | extend ThreatConfidence= case(ThreatConfidence_Score==3, "High",
-                       ThreatConfidence_Score==2, "Medium",
-                       ThreatConfidence_Score==1, "Low",
-                       ThreatConfidence_Score == 0,"Info",
+    | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector" and DeviceEventClassID == "BloxOne-InsightsNotification-V2-Log"
+    | extend AdditionalExtensions = strcat(";", AdditionalExtensions, ";")
+    | extend
+    // SOC Insights (V2)
+    InfobloxInsightID = extract(@";InfobloxInsightId=(.*?);", 1, AdditionalExtensions),
+    Name = trim(@'"', extract(@";name=(.*?);", 1, AdditionalExtensions)),
+    Description = trim(@'"', extract(@";InfobloxInsightBody=(.*?);", 1, AdditionalExtensions)),
+    Status = extract(@";status=(.*?);", 1, AdditionalExtensions),
+    InsightSubType = extract(@";InfobloxInsightSubType=(.*?);", 1, AdditionalExtensions),
+    Severity = extract(@";severity=(.*?);", 1, AdditionalExtensions),
+    ProductName = extract(@";InfobloxProductName=(.*?);", 1, AdditionalExtensions),
+    InfobloxConnectorVersion = extract(@";version=(.*?);", 1, AdditionalExtensions),
+    InfobloxGeneratedTime = todatetime(extract(@";InfobloxGeneratedTime=(.*?);", 1, AdditionalExtensions)),
+    InsightAssets = extract(@";InfobloxInsightAssets=(.*?);", 1, AdditionalExtensions),
+    InsightIndicators = extract(@";InfobloxInsightIndicators=(.*?);", 1, AdditionalExtensions),
+    InsightUsers = extract(@";InfobloxInsightUsers=(.*?);", 1, AdditionalExtensions),
+    InfobloxInsightLogType = "Insight"
+    | extend
+    // Multiple indicators/assets/users can be present per insight, so every value below is a comma-separated list rather than just the first entry
+    ThreatIndicator = strcat_array(extract_all(@'"indicator":"(.*?)"', InsightIndicators), ","),
+    ThreatLevel_Scores = strcat_array(extract_all(@'"threat_level":"(.*?)"', InsightIndicators), ","),
+    ThreatConfidence_Scores = strcat_array(extract_all(@'"confidence_level":"(.*?)"', InsightIndicators), ","),
+    AssetHostName = strcat_array(extract_all(@'"hostname":"(.*?)"', InsightAssets), ","),
+    AssetIP = strcat_array(extract_all(@'"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"', InsightAssets), ","),
+    AssetMACAddress = strcat_array(extract_all(@'"([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})"', InsightAssets), ","),
+    UserName = strcat_array(parse_json(InsightUsers), ",")
+    | extend
+    InsightAssets = parse_json(InsightAssets),
+    InsightIndicators = parse_json(InsightIndicators),
+    InsightUsers = parse_json(InsightUsers)
+    | extend IncidentSeverity= case(tolower(Severity)=="high", "High",
+                       tolower(Severity)=="medium", "Medium",
+                       tolower(Severity)=="low", "Low",
+                       tolower(Severity) in ("info","informational"),"Informational",
                        "N/A" ),
-    ThreatLevel_Score = toint(extract("InfobloxThreatLevel=(.*?);", 1, AdditionalExtensions))
-    | extend ThreatLevel= case(ThreatLevel_Score==3, "High",
-                       ThreatLevel_Score==2, "Medium",
-                       ThreatLevel_Score==1, "Low",
-                       ThreatLevel_Score == 0,"Info",
-                       "N/A" )
-    | extend IncidentSeverity= case(ThreatLevel_Score==3, "High",
-                       ThreatLevel_Score==2, "Medium",
-                       ThreatLevel_Score==1, "Low",
-                       ThreatLevel_Score == 0,"Informational",
-                       "N/A" )
+            IndicatorCount = array_length(InsightIndicators),
+            AssetCount = array_length(InsightAssets),
+            UserCount = array_length(InsightUsers)

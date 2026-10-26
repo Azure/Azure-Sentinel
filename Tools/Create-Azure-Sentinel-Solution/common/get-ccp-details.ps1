@@ -1,27 +1,45 @@
+function Read-ContainedSolutionJson($filePath, $solutionRoot, $solutionName) {
+    $relativePath = [System.IO.Path]::GetRelativePath(
+        [System.IO.Path]::GetFullPath($solutionRoot),
+        [System.IO.Path]::GetFullPath($filePath)
+    )
+    $resolved = Resolve-SolutionContentPath `
+        -SolutionRoot $solutionRoot `
+        -SolutionName $solutionName `
+        -ContentPath $relativePath `
+        -RequireFile
+    return ReadFileContent -filePath $resolved.FullPath
+}
 
 function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFolderName) {
     try {
+    $dataFileMetadata = Convert-SolutionDataContentArrays -Content $dataFileMetadata
     $ccpDict = @()
     $dataConnectorsInputArray = $dataFileMetadata.PsObject.Properties | Where-Object { $_.Name -eq "$DCFolderName" };
+    $solutionRoot = Join-Path -Path $baseFolderPath -ChildPath $solutionName
+    $resolvedConnectorFolder = Resolve-SolutionContentPath `
+        -SolutionRoot $solutionRoot `
+        -SolutionName $solutionName `
+        -ContentPath $DCFolderName
+    $identifiedDCPath = $resolvedConnectorFolder.FullPath
 
     # IDENTIFY CCP DATA DEFINITION IN DATA INPUT FILE
     foreach ($objectProperties in $dataConnectorsInputArray) {
         $items = $objectProperties.Value 
-        if ($items -is [System.String]) {
-            $items = $items | ConvertFrom-Json
+        if ($items -isnot [array]) {
+            throw "Solution Data content array '$DCFolderName' must be a JSON-encoded or native array."
         }
-
         foreach ($file in $items) {
-            $file = $file.Replace("$baseFolderPath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
-
-            $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
+            $resolvedDefinition = Resolve-SolutionContentPath `
+                -SolutionRoot $solutionRoot `
+                -SolutionName $solutionName `
+                -ContentPath $file `
+                -RequireFile
+            $file = $resolvedDefinition.RelativePath
+            $currentFileDCPath = $resolvedDefinition.FullPath.Replace('\', '/')
             $ccpBaseFolderPath = (Split-Path -Path $currentFileDCPath -Parent) -replace '\\', '/'
-            # Resolve to absolute path for proper comparison later
-            $ccpBaseFolderPath = (Resolve-Path -Path $ccpBaseFolderPath).Path -replace '\\', '/'
             Write-Host "currentFileDCPath $currentFileDCPath, ccpBaseFolderPath $ccpBaseFolderPath"
-            #$fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
-            
-            $fileContent = ReadFileContent -filePath "$currentFileDCPath"
+            $fileContent = Read-ContainedSolutionJson -filePath $currentFileDCPath -solutionRoot $solutionRoot -solutionName $solutionName
             if ($null -eq $fileContent) {
                 exit 1;
             }
@@ -126,12 +144,10 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
 
     # identify ccp files definition provided has corresponding poller files if no then fail it.
     if ($ccpDict.Count -gt 0) {
-        $identifiedDCPath = ($baseFolderPath + $solutionName + "/" + $DCFolderName).Replace("//", "/")
-        
         # identify relation between definition and poller files
         foreach ($ccpDefinitionFile in $ccpDict) {
             #identify given file is present in dc folder or not
-            foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+            foreach ($inputFile in $(Get-ChildItem -LiteralPath $identifiedDCPath -Filter '*.json' -File -Recurse -ErrorAction Stop)) {
                 $currentFolderPath = $inputFile.DirectoryName -replace '\\', '/'
                 if ($currentFolderPath -ne $ccpDefinitionFile.CCPBaseFolder -or
                 ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
@@ -143,7 +159,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     try
                     {
                         #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
-                        $fileContent = ReadFileContent -filePath $inputFile.FullName
+                        $fileContent = Read-ContainedSolutionJson -filePath $inputFile.FullName -solutionRoot $solutionRoot -solutionName $solutionName
                         if ($null -eq $fileContent) {
                             exit 1;
                         }
@@ -157,7 +173,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                     ) {
                                         if ($counter -eq 0) {
                                             # update details for this record only.
-                                            $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
+                                            $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName.Replace('\', '/')
                                             $ccpDefinitionFile.DCPollerStreamName = $pollerArrayItem.properties.dcrConfig.streamName
                                             $ccpDefinitionFile.PollerKind = $pollerArrayItem.kind;
                                             if ($null -eq $pollerArrayItem.properties.dcrConfig.dataCollectionEndpoint) {
@@ -204,7 +220,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                 if ($fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId -or
                                 $fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.PollerConnectorDefinitionName
                                 ) {
-                                    $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
+                                    $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName.Replace('\', '/')
                                     $ccpDefinitionFile.DCPollerStreamName = $fileContent.properties.dcrConfig.streamName
                                     $ccpDefinitionFile.PollerKind = $fileContent.kind;
                                     if ($null -eq $fileContent.properties.dcrConfig.dataCollectionEndpoint) {
@@ -235,7 +251,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
         
         # identify relation between poller and DCR
         foreach ($ccpPollerFile in $ccpDict) {
-            foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+            foreach ($inputFile in $(Get-ChildItem -LiteralPath $identifiedDCPath -Filter '*.json' -File -Recurse -ErrorAction Stop)) {
                 $currentFolderPath = $inputFile.DirectoryName -replace '\\', '/'
                 if ($currentFolderPath -ne $ccpPollerFile.CCPBaseFolder -or
                 $inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
@@ -245,7 +261,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                 }
                 else {
                     #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
-                    $fileContent = ReadFileContent -filePath $inputFile.FullName
+                    $fileContent = Read-ContainedSolutionJson -filePath $inputFile.FullName -solutionRoot $solutionRoot -solutionName $solutionName
                     if ($null -eq $fileContent) {
                         exit 1;
                     }
@@ -255,7 +271,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                         if ($ccpPollerFile.isDynamicStreamName -and [string]::IsNullOrEmpty($ccpPollerFile.DCRFilePath)) {
                             $isDCRType = if ($fileContent -is [System.Object[]]) { $fileContent[0].type -eq "Microsoft.Insights/dataCollectionRules" } else { $fileContent.type -eq "Microsoft.Insights/dataCollectionRules" }
                             if ($isDCRType) {
-                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                 continue
                             }
                         }
@@ -278,13 +294,13 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                         Write-Host "Error For given CCP, DCR file 'stream' value is not correct. Please make sure that StreamName in Data Connector poller file and that in DCR Stream name are correct. Refer Tools/Create-Azure-Sentinel-Solution/common/StandardLogStreams.ps1 file for Standard mapping." -BackgroundColor Red
                                         exit 1; 
                                     } else {
-                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                     }
                                 }
                                 else {
                                     # this is a custom table
                                     if ($dcrDataFlowStream.streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
-                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                         if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
                                             $ccpPollerFile.TableOutputStream = $dcrDataFlowStream.outputStream.Replace('Custom-', '')
                                             $ccpPollerFile.DCROutputStream = $dcrDataFlowStream.outputStream
@@ -300,7 +316,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                         $dataFlowOutputStreamName = $dataFlowItem.outputStream
 
                                         if ($dataFlowStreamName -eq $ccpPollerFile.DCPollerStreamName) {
-                                            $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                            $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
 
                                             if ($dataFlowOutputStreamName.contains('Custom-')) {
                                                 $ccpPollerFile.TableOutputStream = $dataFlowStreamName.Replace('Custom-', '')
@@ -315,13 +331,13 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                             . "$PSScriptRoot/standardLogStreams.ps1" # load standard data connector poller and dcr mapper
                                             $dcPollerStreamNameValue = GetKeyValue -key $ccpPollerFile.DCPollerStreamName
                                             if ($dcPollerStreamNameValue -eq $dataFlowStreamName) {
-                                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                                $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                             }
                                         }
                                     }
                                 }
                                 if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
-                                    $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                    $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                     if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
                                         $ccpPollerFile.TableOutputStream = $fileContent.properties.dataFlows[0].outputStream.Replace('Custom-', '')
                                         $ccpPollerFile.DCROutputStream = $fileContent.properties.dataFlows[0].outputStream
@@ -339,7 +355,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
 
         # identify relation between DCR and table
         foreach ($ccpTable in $ccpDict) {
-            foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+            foreach ($inputFile in $(Get-ChildItem -LiteralPath $identifiedDCPath -Filter '*.json' -File -Recurse -ErrorAction Stop)) {
                 $currentFolderPath = $inputFile.DirectoryName -replace '\\', '/'
                 if ($currentFolderPath -ne $ccpTable.CCPBaseFolder -or
                 $inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
@@ -349,7 +365,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                 }
                 else {
                     #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
-                    $fileContent = ReadFileContent -filePath $inputFile.FullName
+                    $fileContent = Read-ContainedSolutionJson -filePath $inputFile.FullName -solutionRoot $solutionRoot -solutionName $solutionName
                     if ($null -eq $fileContent) {
                         exit 1;
                     }
@@ -359,14 +375,14 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                             foreach ($tableArrayItem in $fileContent) {
                                 if($tableArrayItem.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
                                     if ($tableArrayItem.name -eq $ccpTable.TableOutputStream) {
-                                        $ccpTable.TableFilePath = $inputFile.FullName
+                                        $ccpTable.TableFilePath = $inputFile.FullName.Replace('\', '/')
                                     }
                                 }
                             }
                         } else {
                             if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
                                 if ($fileContent.name -eq $ccpTable.TableOutputStream) {
-                                    $ccpTable.TableFilePath = $inputFile.FullName
+                                    $ccpTable.TableFilePath = $inputFile.FullName.Replace('\', '/')
                                 }
                             }
                         }
@@ -395,18 +411,25 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
     return $ccpDict;
   }
   catch {
-    Write-Host "Error in get-ccpdetails. Error Details: $_" -ForegroundColor Red
-    return $null;
+    throw "Error in get-ccpdetails. Error Details: $_"
   }
 }
 
 function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, $DCFolderName) {
     # call this only when there are atleast 1 ccp connector
     $ccpTablesFilePaths = @()
-    $identifiedDCPath = ($baseFolderPath + $solutionName + "/" + $DCFolderName).Replace("//", "/")
+    $solutionRoot = Join-Path -Path $baseFolderPath -ChildPath $solutionName
+    $resolvedConnectorFolder = Resolve-SolutionContentPath `
+        -SolutionRoot $solutionRoot `
+        -SolutionName $solutionName `
+        -ContentPath $DCFolderName
+    $identifiedDCPath = $resolvedConnectorFolder.FullPath
+    if (-not (Test-Path -LiteralPath $identifiedDCPath -PathType Container)) {
+        throw "Solution Data Connector folder does not exist: $identifiedDCPath"
+    }
     #$currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $identifiedDCPath).Replace("//", "/")
 
-    foreach ($inputFile in $(Get-ChildItem -Path $identifiedDCPath -Include *.json -Recurse)) {
+    foreach ($inputFile in $(Get-ChildItem -LiteralPath $identifiedDCPath -Filter '*.json' -File -Recurse -ErrorAction Stop)) {
         if ($inputFile.Extension -eq ".md" -or $inputFile.Extension -eq ".txt" -or $inputFile.Extension -eq ".py" -or $inputFile.Extension -eq ".zip" -or 
         $inputFile.Name -eq "Images" -or $inputFile.Name -eq "function.json" -or $inputFile.Name -eq "host.json" -or $inputFile.Name -eq "proxies.json")
         {
@@ -414,19 +437,19 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
         }
         else {
             #$fileContent = Get-Content -Raw $inputFile.FullName | Out-String | ConvertFrom-Json
-            $fileContent = ReadFileContent -filePath $inputFile.FullName
+            $fileContent = Read-ContainedSolutionJson -filePath $inputFile.FullName -solutionRoot $solutionRoot -solutionName $solutionName
             if ($null -eq $fileContent) {
                 exit 1;
             }
 
             if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
-                $currentTableFilePath = $inputFile.FullName
+                $currentTableFilePath = $inputFile.FullName.Replace('\', '/')
                 if ($existingCCPDict.Count -gt 0) {
                     # check if current file path already present in variable $existingCCPDict if not present then add it in new variable list
                     $isTablePresent = $false;
                     foreach ($ccpRecord in $existingCCPDict) {
                         $currentFolderPath = $inputFile.DirectoryName -replace '\\', '/'
-                        if ($currentFolderPath -eq $ccpDefinitionFile.CCPBaseFolder) {
+                        if ($currentFolderPath -eq $ccpRecord.CCPBaseFolder) {
                             if ($ccpRecord.TableFilePath -ne '' -and $ccpRecord.TableFilePath -eq $currentTableFilePath) {
                                 $isTablePresent = $true;
                                 break;

@@ -17,7 +17,8 @@ For more details, visit the [Microsoft Entra ID Protection documentation](https:
 ## Deployment
 ### Quick Deployment
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%20Entra%20ID%20Protection%2FPlaybooks%2FIdentityProtection-TeamsBotResponse%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%20Entra%20ID%20Protection%2FPlaybooks%2FIdentityProtection-TeamsBotResponse%2Fazuredeploy.json)
+
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FMicrosoft%20Entra%20ID%20Protection%2FPlaybooks%2FIdentityProtection-TeamsBotResponse%2Fazuredeploy.json)
 
 ## Post Deployment Instructions
 1. **Authorize Connections**:

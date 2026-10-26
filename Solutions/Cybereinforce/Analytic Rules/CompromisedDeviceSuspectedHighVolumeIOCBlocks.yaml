@@ -1,0 +1,51 @@
+id: 59246163-4cc0-4e96-a0f0-f098a83cf425
+name: CTE - Compromised Device Suspected (High-Volume IOC Blocks)
+description: |
+  A single device is generating an unusually high volume of threat-intel-matched (IOC) blocks in a short window. This pattern is more consistent with malware/beaconing behavior than manual browsing and should be investigated for device compromise. Note: the 5-per-hour threshold below is a starting point based on limited sample data - tune it once a real baseline is established.
+severity: High
+requiredDataConnectors:
+  - connectorId: cybereinforce_cte
+    dataTypes:
+      - CybereinforceCTE_CL
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1071
+  - T1041
+query: |
+  CybereinforceCTE_CL
+  | where EventType == "block.url"
+  | extend d = parse_json(Details)
+  | extend
+      DeviceId = tostring(d.deviceId),
+      HostName = iff(isnotempty(tostring(d.hostname)), tostring(d.hostname), strcat("cte-device-", substring(EntityId, 0, 8))),
+      DeviceUser = tostring(d.deviceUser),
+      DeviceOs = tostring(d.deviceOs),
+      DeviceVersion = tostring(d.deviceVersion),
+      Url = tostring(d.url),
+      IsIoc = tobool(d.ioc),
+      ClientIp = tostring(split(tostring(d.clientIp), ":")[0])
+  | where IsIoc == true
+  | summarize IOC_BlockCount=count(), SampleUrls=make_set(Url, 20), SampleIps=make_set(ClientIp, 20), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by DeviceId, HostName, DeviceUser, DeviceOs, DeviceVersion, TenantId
+  | where IOC_BlockCount >= 5
+  | extend Url = tostring(SampleUrls[0]), ClientIp = tostring(SampleIps[0])
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.0.0
+kind: Scheduled

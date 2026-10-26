@@ -1,0 +1,80 @@
+id: 68ff493b-de53-472b-9a34-15b1453060a1
+name: Netcraft Takedown - New takedown
+description: |
+  Identifies new Netcraft Takedown records from the Integration Gateway (`EventType == "takedown"` and `ChangeType == "new"`).
+  Updates to an existing takedown do not alert; use the Takedown workbook to follow status changes. `IsAuthorized` and `IsEscalated` are booleans.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetcraftIntegrationGatewayDefinition
+    dataTypes:
+      - NetcraftTakedown_CL
+queryFrequency: 15m
+queryPeriod: 4h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+  - InitialAccess
+relevantTechniques:
+  - T1583
+  - T1566
+query: |
+  NetcraftTakedown_Unique
+  | where IngestedAt > ago(15m)
+  | where EventType == "takedown"
+  | where ChangeType == "new"
+  | extend
+      ThreatUrl = iff(Threat matches regex @"(?i)^https?://", Threat, ""),
+      ThreatIp = iff(isnotempty(parse_ipv4(Threat)) or isnotempty(parse_ipv6(Threat)), Threat, "")
+  | extend
+      ThreatDomain = iff(isempty(ThreatUrl) and isempty(ThreatIp) and Threat !has "@" and Threat matches regex @"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", Threat, "")
+  | project
+      TimeGenerated,
+      EventId,
+      ChangeType,
+      Subject,
+      TakedownId,
+      GroupId,
+      AttackType,
+      Threat,
+      ThreatUrl,
+      ThreatIp,
+      ThreatDomain,
+      IsAuthorized,
+      IsEscalated,
+      IsMaliciousDomain,
+      IsMaliciousHostname,
+      Status,
+      CustomerLabel,
+      ActionRequired
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ThreatUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ThreatIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: ThreatDomain
+customDetails:
+  ChangeType: ChangeType
+  GroupId: GroupId
+  AttackType: AttackType
+  IsAuthorized: IsAuthorized
+  IsEscalated: IsEscalated
+  IsMaliciousDomain: IsMaliciousDomain
+  IsMaliciousHostname: IsMaliciousHostname
+  ActionRequired: ActionRequired
+  CustomerLabel: CustomerLabel
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Netcraft Takedown - {{AttackType}} ({{TakedownId}})"
+  alertDescriptionFormat: "Takedown {{TakedownId}} ({{AttackType}}): {{Threat}}."
+kind: Scheduled
+version: 1.0.0
