@@ -74,6 +74,7 @@ If you use the response playbooks, create the following secrets in the Key Vault
     - Under **Configuration**, enter the following:
        - **Commvault Environment Endpoint URL**: Your Commvault Cloud API base URL including the `/commandcenter/api` path (for example, `https://your-commvault-endpoint/commandcenter/api`).
        - **API token**: The API token generated in step 1.
+       - **Ingestion Mode**: Select **Incremental (Time Window)** to poll events using the 30-minute query window, or **All Active Anomalies (No Time Window)** to query without time bounds.
     - Click **Connect**.
 
 The connector polls Commvault every 30 minutes and ingests threat anomaly events into the `CommvaultAlertsCCF_CL` table in your Log Analytics workspace.
