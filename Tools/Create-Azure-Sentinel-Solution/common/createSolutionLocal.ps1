@@ -505,7 +505,7 @@ try {
                             if ($ccpDict.Count -gt 0) {
                                 $isCCPConnectorFile = $false;
                                 foreach ($item in $ccpDict) {
-                                    if ($item.DCDefinitionFullPath -eq $finalPath) {
+                                    if ($item.DCDefinitionFullPath.Replace('\', '/') -eq $finalPath.Replace('\', '/')) {
                                         $isCCPConnectorFile = $true
                                         break;
                                     }
@@ -609,15 +609,16 @@ try {
         if ($EnforceV31Versions -and $VersionMode -eq 'local' -and ($VersionBump -ne 'none' -or -not [string]::IsNullOrWhiteSpace($TargetVersion))) {
             Save-V31LocalPackageVersion -DataFilePath $inputFile.FullName -Version $contentToImport.Version
         }
+
+        # check if mainTemplate and createUiDefinition json files are valid or not
+        CheckJsonIsValid($solutionFolderBasePath)
+
         if ($ArmValidationMethod -eq "arm-ttk") {
             RunArmTtkOnPackage -solutionName $solutionName -isPipelineRun $false;
         }
         else {
             Write-Host "ARM-VALIDATION: Method=lab-deployment Status=pending CandidateGenerated=true Accepted=false"
         }
-
-        # check if mainTemplate and createUiDefinition json files are valid or not
-        CheckJsonIsValid($solutionFolderBasePath)
     }
 }
 catch {
@@ -625,4 +626,5 @@ catch {
         throw
     }
     Write-Host "Error occurred in $EntryPointName local package creation. Error details are $_" -ForegroundColor Red
+    exit 1
 }

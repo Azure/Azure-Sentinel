@@ -33,8 +33,8 @@ ACCESS.update(identityId="fixture-principal", **{key: TARGET[key] for key in ("t
 
 
 def workbook_template():
-    provenance = {"packageId": "publisher.fixture", "packageVersion": "3.2.1",
-                  "contentId": "aaaaaaaa-1111-2222-3333-444444444444", "contentVersion": "3.2.1"}
+    provenance = {"packageId": "publisher.fixture", "packageVersion": "3.2.2",
+                  "contentId": "aaaaaaaa-1111-2222-3333-444444444444", "contentVersion": "3.2.2"}
     notebook = {"version": "Notebook/1.0", "items": [], "contentProvenance": provenance}
     inner = {
         "languageVersion": "2.0", "imports": {"MicrosoftSecurity": {"provider": "MicrosoftSecurity", "version": "1.0.0"}},
@@ -49,8 +49,8 @@ def workbook_template():
             {"type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dwb-',uniqueString('fixture')))]",
              "condition": "[parameters('DeployDefenderWorkbook')]",
-             "properties": {"contentKind": "DefenderWorkbook", "contentId": provenance["contentId"], "version": "3.2.1",
-                            "packageId": provenance["packageId"], "packageVersion": "3.2.1", "mainTemplate": copy.deepcopy(inner),
+             "properties": {"contentKind": "DefenderWorkbook", "contentId": provenance["contentId"], "version": "3.2.2",
+                            "packageId": provenance["packageId"], "packageVersion": "3.2.2", "mainTemplate": copy.deepcopy(inner),
                             "contentProvenance": {**provenance, "requiredWorkloads": [], "requiredDataConnectors": []}}},
         ],
     }
@@ -69,14 +69,14 @@ def case():
     (package / "mainTemplate.json").write_text(json.dumps(template))
     (package / "createUiDefinition.json").write_text("{}")
     (package / "testParameters.json").write_text("{}")
-    with zipfile.ZipFile(package / "3.2.1.zip", "w") as archive:
+    with zipfile.ZipFile(package / "3.2.2.zip", "w") as archive:
         archive.write(package / "mainTemplate.json", "mainTemplate.json")
         archive.write(package / "createUiDefinition.json", "createUiDefinition.json")
     paths = {"mainTemplate": "Package/mainTemplate.json", "createUiDefinition": "Package/createUiDefinition.json",
-             "testParameters": "Package/testParameters.json", "zip": "Package/3.2.1.zip"}
+             "testParameters": "Package/testParameters.json", "zip": "Package/3.2.2.zip"}
     hashes = {name: hashlib.sha256((solution / path).read_bytes()).hexdigest() for name, path in paths.items()}
     identity = package_input_identity(solution)
-    report = {"packager": "V3.1", "workflowRunId": CONTEXT["runId"], "packageAttemptId": "fixture-attempt", "version": "3.2.1",
+    report = {"packager": "V3.1", "workflowRunId": CONTEXT["runId"], "packageAttemptId": "fixture-attempt", "version": "3.2.2",
               "armValidationMethod": "lab-deployment", "packageInputs": {"after": {**identity, "files": package_input_file_hashes(solution)}},
               "packageArtifactHashes": hashes, "packageArtifactsSha256": _canonical_sha256(hashes), **paths}
     report_path = logs / "packaging.v3_1.json"
@@ -230,7 +230,7 @@ def test_production_input_manifest_must_be_exact_even_when_aggregate_is_current(
         )
 
 
-@pytest.mark.parametrize("item", ["input.json", "Package/mainTemplate.json", "Package/3.2.1.zip", "Logs/review.json", "Logs/packaging.v3_1.json"])
+@pytest.mark.parametrize("item", ["input.json", "Package/mainTemplate.json", "Package/3.2.2.zip", "Logs/review.json", "Logs/packaging.v3_1.json"])
 def test_stale_input_artifact_gate_or_report_blocks_dispatch(case, item):
     path = case["solution"] / item
     path.write_bytes(path.read_bytes() + b"\n")
@@ -592,7 +592,7 @@ def test_same_type_changed_hash_count_uses_old_scope_only_with_fresh_evidence(ca
         "properties": {"mode": "Incremental", "template": {"resources": []}},
     })
     template_path.write_text(json.dumps(template))
-    with zipfile.ZipFile(root / "Package/3.2.1.zip", "w") as archive:
+    with zipfile.ZipFile(root / "Package/3.2.2.zip", "w") as archive:
         archive.write(template_path, "mainTemplate.json")
         archive.write(root / "Package/createUiDefinition.json", "createUiDefinition.json")
     report = case["report"]

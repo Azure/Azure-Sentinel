@@ -23,7 +23,10 @@ from solution_manager.core.artifacts import (
 from solution_manager.migration.converter import custom_detail_schema_errors, load_config, xdr_detection_files
 from solution_manager.authoring.dependencies import dependency_identity, live_dependency_check
 from solution_manager.core.content_paths import content_path
-from solution_manager.qualification.graph_auth import validate_delegated_graph_claims
+from solution_manager.qualification.graph_auth import (
+    GRAPH_RESOURCE_DEFAULT_SCOPE,
+    validate_delegated_graph_claims,
+)
 from solution_manager.core.onboarding import (
     AUTH_RECORD_NAME,
     CONFIG_NAME,
@@ -34,6 +37,8 @@ from solution_manager.core.onboarding import (
     _state_dir,
 )
 from solution_manager.qualification.graph_client_config import (
+    azure_cli_credential,
+    configured_azure_cli_profile,
     graph_auth_record_path,
     graph_token_cache_name,
     resolve_graph_client_id,
@@ -144,14 +149,20 @@ def _assert_graph_auth_tenant_scope(
     record_tenant = getattr(record, "tenant_id", None) if record is not None else None
     config = _read_json(state_root / CONFIG_NAME)
     configured_tenant = config.get("tenantId")
-    if not isinstance(record_tenant, str) or not record_tenant.strip():
-        raise ValueError(
-            "Graph authentication record has no tenant identity for the selected workflow tenant"
-        )
-    if record_tenant.strip().casefold() != locked_tenant_id.casefold():
-        raise ValueError(
-            "Graph authentication record tenant does not match the selected workflow tenant"
-        )
+    use_cli_fallback = (
+        (not isinstance(record_tenant, str) or record_tenant.strip().casefold() != locked_tenant_id.casefold())
+        and configured_azure_cli_profile(state_root) is not None
+        and azure_cli_credential(tenant_id=locked_tenant_id, state_root=state_root) is not None
+    )
+    if not use_cli_fallback:
+        if not isinstance(record_tenant, str) or not record_tenant.strip():
+            raise ValueError(
+                "Graph authentication record has no tenant identity for the selected workflow tenant"
+            )
+        if record_tenant.strip().casefold() != locked_tenant_id.casefold():
+            raise ValueError(
+                "Graph authentication record tenant does not match the selected workflow tenant"
+            )
     if (
         configured_tenant
         and str(configured_tenant).strip().casefold() != locked_tenant_id.casefold()
@@ -859,13 +870,36 @@ def _advanced_hunting_token(
         state_root, "advancedHunting", client_id, AUTH_RECORD_NAME
     )
     record = _load_auth_record(record_path)
+    config = _read_json(state_root / CONFIG_NAME)
+    configured_tenant = config.get("tenantId") or getattr(record, "tenant_id", None)
+    effective_tenant = tenant_id or configured_tenant
+    record_tenant = getattr(record, "tenant_id", None) if record is not None else None
+    if (
+        effective_tenant
+        and (
+            record is None
+            or not isinstance(record_tenant, str)
+            or record_tenant.strip().casefold() != str(effective_tenant).strip().casefold()
+        )
+        and configured_azure_cli_profile(state_root) is not None
+    ):
+        cli_cred = azure_cli_credential(tenant_id=str(effective_tenant), state_root=state_root)
+        if cli_cred is not None:
+            token = cli_cred.get_token(GRAPH_RESOURCE_DEFAULT_SCOPE).token
+            from solution_manager.qualification.graph_readiness import _token_claims
+
+            validate_delegated_graph_claims(
+                _token_claims(token),
+                tenant_id=str(effective_tenant),
+                required_scopes=(GRAPH_SCOPE,),
+                purpose="Advanced Hunting",
+            )
+            return token
     if record is None:
         raise RuntimeError(
             "Advanced Hunting authentication is missing; run "
             "`sentinel-xdr-migration setup` first"
         )
-    config = _read_json(state_root / CONFIG_NAME)
-    configured_tenant = config.get("tenantId") or getattr(record, "tenant_id", None)
     try:
         verify_graph_auth_binding(
             record_path,
@@ -925,6 +959,28 @@ def _http_retry_after(exc: urllib.error.HTTPError) -> float | None:
     return _retry_after_seconds(value)
 
 
+def _is_odata_annotation(key: Any) -> bool:
+    """Graph adds per-row annotations such as ``count_@odata.type: "#Int64"``."""
+    return isinstance(key, str) and key.endswith("@odata.type")
+
+
+def _strip_odata_annotations(rows: list[Any], schema: Any) -> list[Any]:
+    declared = {
+        str(column.get("name", column.get("Name"))).casefold()
+        for column in (schema if isinstance(schema, list) else [])
+        if isinstance(column, dict)
+    }
+    return [
+        {
+            key: value
+            for key, value in row.items()
+            if not (_is_odata_annotation(key) and key.casefold() not in declared)
+        }
+        if isinstance(row, dict) else row
+        for row in rows
+    ]
+
+
 def _hunting_query_response_error(body: Any) -> str | None:
     if not isinstance(body, dict):
         return "Graph Advanced Hunting returned a JSON value instead of an object"
@@ -960,7 +1016,8 @@ def _hunting_query_response_error(body: Any) -> str | None:
     if any(not isinstance(row, dict) for row in rows):
         return "Graph Advanced Hunting results contain a non-object row"
     if any(
-        not isinstance(name, str) or name.casefold() not in seen_names
+        not isinstance(name, str)
+        or (name.casefold() not in seen_names and not _is_odata_annotation(name))
         for row in rows
         for name in row
     ):
@@ -1058,6 +1115,7 @@ def run_advanced_hunting_query(
                 }
             rows = body.get("results", body.get("Results"))
             schema = body.get("schema", body.get("Schema"))
+            rows = _strip_odata_annotations(rows, schema)
             return {
                 "ok": True,
                 "statusCode": status_code,

@@ -465,7 +465,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                 if ($TemplateCounter -eq 1) {
                     #========start:dc definition resource===========
-                    $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath.Replace($solutionName + "/", "").Replace($dcFolderName + "/", "")
+                    $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath -replace "^$([regex]::Escape($solutionName + '/'))", "" -replace "^$([regex]::Escape($dcFolderName + '/'))", ""
                     $ccpDataDefinitionFilePath = $solutionBasePath + "/" + $solutionName + "/" + $dcFolderName + "/" + $dcDefinitionFilteredPath
                     $ccpDataDefinitionFilePath = $ccpDataDefinitionFilePath.Replace("//", "/")
                     Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
@@ -850,6 +850,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 }
                 $armResource = Get-ArmResource $fileContent.name $fileContent.type $fileContent.kind $fileContent.properties
 
+                if ($fileContent.PSObject.Properties.Name -contains "dependsOn") {
+                    $armResource | Add-Member -NotePropertyName "dependsOn" -NotePropertyValue @($fileContent.dependsOn)
+                }
+
                 # location
                 ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $true -isRequired $false -fileType 'dataCollectionRules' -minLength 1
 
@@ -1101,6 +1105,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     }
     catch {
         Write-Host "Error occurred in createCCPConnector file. Error Details $_" -ForegroundColor Red
+        throw
     }
 }
 

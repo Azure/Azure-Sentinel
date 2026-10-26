@@ -156,7 +156,10 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
             self.assertNotEqual(0, result.returncode, result.stdout)
             self.assertNotIn("__RESULT__", result.stdout)
             self.assertNotIn("TEMPLATE_MUTATED_BEFORE_FAILURE", result.stderr)
-            return {"error": result.stderr}
+            normalized = " ".join(
+                re.sub(r"\x1b\[[0-9;]*m", "", result.stderr).replace("|", " ").split()
+            )
+            return {"error": f"{result.stderr}\n{normalized}"}
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("__RESULT__", result.stdout)
         return json.loads(result.stdout.split("__RESULT__", 1)[1].strip())
@@ -223,7 +226,10 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
         ], capture_output=True, text=True, check=False)
         self.assertEqual(success, result.returncode == 0, result.stderr)
         self.assertEqual(success, "__PREREQUISITES_PASSED__" in result.stdout)
-        return result.stderr
+        normalized = " ".join(
+            re.sub(r"\x1b\[[0-9;]*m", "", result.stderr).replace("|", " ").split()
+        )
+        return f"{result.stderr}\n{normalized}"
 
     def scope_fixture(self) -> None:
         original = json.loads(self.source.read_bytes())
@@ -377,6 +383,12 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
             "range x from 0 to 10 step 1 | union HiddenParser",
             "union (range x from 0 to 10 step 1), (HiddenParser())",
             "range x from 0 to 10 step 1 | union EmailEvents",
+            "let UsersLocation = externaldata(ip:string)[@\"https://example.invalid/geo.csv\"] with (format='csv'); UsersLocation | take 1",
+            "let UsersLocation = externaldata(ip:string)['https://example.invalid/geo.csv']; UsersLocation | join (HiddenParser()) on ip // trailing https://comment",
+            "let U = datatable(u:string)[\"http://a//b\"]; // real comment HiddenParser()\nU | take 1",
+            "_GetWatchlistAlias() | take 1",
+            "let Aliases = _GetWatchlistAlias(); Aliases | take 1",
+            "_GetWatchlistAliasCustom() | take 1",
         ]
         payload = self.root / "scanner-queries.json"
         payload.write_text(json.dumps(queries), encoding="utf-8")
@@ -453,6 +465,46 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
         error = self.invoke_prerequisites(success=False)
         self.assertIn("unreviewed implicit workspace function 'EmailEvents'", error)
 
+    def _set_single_query(self, text: str) -> None:
+        self.notebook["items"][0]["content"]["query"] = text
+        query = self.notebook["contentProvenance"]["conversion"]["queries"][0]
+        query["targetSha256"] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        query["workspaceFunctions"] = []
+        self.notebook["contentProvenance"]["requiredWorkspaceFunctions"] = []
+
+    def test_builtin_asim_unifying_parsers_need_no_declaration_or_saved_search(self) -> None:
+        for name in ("_ASim_RegistryEvent", "_Im_NetworkSession"):
+            with self.subTest(name=name):
+                self._set_single_query(f"{name} | take 1")
+                self.invoke_prerequisites(success=True)
+                self.assertFalse([
+                    r for r in self.template["resources"]
+                    if r.get("type") == "Microsoft.OperationalInsights/workspaces/savedSearches"
+                ])
+
+    def test_other_unknown_implicit_functions_are_still_rejected(self) -> None:
+        for name in (
+            "_Foo_RegistryEvent", "_Im_Test", "ASim_RegistryEvent",
+            "_vim_FileEvent_AWSCloudTrail", "_CustomFunction", "__CustomFunction",
+            "_GetWatchlistAliasCustom",
+        ):
+            with self.subTest(name=name):
+                self._set_single_query(f"{name} | take 1")
+                error = self.invoke_prerequisites(success=False)
+                self.assertIn(f"unreviewed implicit workspace function '{name}'", error)
+
+    def test_builtin_watchlist_aliases_need_no_declaration_or_saved_search(self) -> None:
+        from sentinel_xdr_migration._workbook_core import workbook
+
+        for text in (
+            "_GetWatchlistAlias() | take 1",
+            "let Aliases = _GetWatchlistAlias(); Aliases | take 1",
+        ):
+            with self.subTest(query=text):
+                self.assertEqual(set(), workbook.opaque_functions(text))
+                self._set_single_query(text)
+                self.invoke_prerequisites(success=True)
+
     def test_required_parser_dependencies_use_emitted_names_and_preserve_provenance(self) -> None:
         self.add_function()
         self.add_function("SecondParser", folder="Workspace Functions", name="lab/arm-name-not-alias")
@@ -476,11 +528,12 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
         self.assertEqual({"packageId", "packageVersion", "contentId", "contentVersion"}, set(installed["contentProvenance"]))
         self.assertEqual(authored, self.target.read_bytes())
         self.assertEqual(source, self.source.read_bytes())
-        self.assertNotIn("DeployParser", result["template"]["parameters"])
-        self.assertNotIn("DeployParser", result["ui"]["parameters"]["outputs"])
+        self.assertIn("DeployParser", result["template"]["parameters"])
+        self.assertTrue(result["template"]["parameters"]["DeployParser"]["defaultValue"])
+        self.assertIn("DeployParser", result["ui"]["parameters"]["outputs"])
         for resource in resources:
             if resource["type"].endswith("/savedSearches"):
-                self.assertNotIn("condition", resource)
+                self.assertEqual("[parameters('DeployParser')]", resource.get("condition"))
                 self.assertEqual("*", resource["properties"]["eTag"])
 
     def test_syslog_two_parser_objects_emit_canonical_parser_ids_and_pass_python_verifier(self) -> None:
@@ -583,8 +636,9 @@ class DefenderWorkbookPackagingTests(unittest.TestCase):
         self.invoke(package=True)
         package = json.loads((self.solution / "Package/mainTemplate.json").read_text(encoding="utf-8-sig"))
         self.assertIn("DeployParser", package["parameters"])
+        self.assertTrue(package["parameters"]["DeployParser"]["defaultValue"])
         for resource in package["resources"][2:5]:
-            self.assertNotIn("condition", resource)
+            self.assertEqual("[parameters('DeployParser')]", resource.get("condition"))
         self.assertEqual("[parameters('DeployParser')]", package["resources"][5]["condition"])
         installation = next(r for r in package["resources"] if r["type"] == "Microsoft.Resources/deployments")
         self.assertIn(

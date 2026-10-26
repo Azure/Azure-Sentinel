@@ -191,7 +191,7 @@ class PackagedConnectorMetadataTests(unittest.TestCase):
         stored = registration["properties"]["mainTemplate"]["resources"]["detectionRule"]["properties"]["contentProvenance"]
         full = registration["properties"]["contentProvenance"]
         self.assertEqual({
-            "packageId": "testpublisher.test-sentinel", "packageVersion": "3.2.0",
+            "packageId": "testpublisher.test-sentinel", "packageVersion": "3.2.2",
             "contentId": registration["properties"]["contentId"], "contentVersion": "3.1.0",
         }, deployed)
         self.assertEqual(deployed, stored)

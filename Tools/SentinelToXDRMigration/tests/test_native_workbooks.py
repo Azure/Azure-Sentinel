@@ -27,11 +27,11 @@ def solution():
     (root / "Workbook Sources" / "Native").mkdir(parents=True)
     (root / "Data" / "Solution_Sample.json").write_text(json.dumps({
         "Name": "Sample", "Author": "Synthetic - test@example.invalid",
-        "Version": "3.2.0", "Metadata": "SolutionMetadata.json",
+        "Version": "3.2.2", "Metadata": "SolutionMetadata.json",
         "Description": "Synthetic native workbook import regression.", "XDR Workbooks": [],
     }), encoding="utf-8")
     (root / "SolutionMetadata.json").write_text(json.dumps({
-        "name": "Sample", "version": "3.2.0", "trackingId": "pid-native-regression",
+        "name": "Sample", "version": "3.2.2", "trackingId": "pid-native-regression",
         "support": {"name": "Synthetic", "email": "test@example.invalid", "tier": "Community"},
         "categories": {"domains": [], "verticals": []},
     }), encoding="utf-8")
@@ -484,7 +484,7 @@ def test_real_v31_mixed_package_and_static_validator(solution, monkeypatch, revi
     assert "xdrMetadata" not in notebook
     assert set(notebook["contentProvenance"]) == {"packageId", "packageVersion", "contentId", "contentVersion"}
     assert template["parameters"]["DeployDefenderWorkbook"]["defaultValue"] is False
-    assert json.loads(data_file.read_bytes())["Version"] == "3.2.0"
+    assert json.loads(data_file.read_bytes())["Version"] == "3.2.2"
     from sentinel_xdr_migration.packaging import _verify_workbook_package
     zip_path = next((solution / "Package").glob("*.zip"))
     _verify_workbook_package(solution, workbooks.selected_workbook_files(solution), template, zip_path)

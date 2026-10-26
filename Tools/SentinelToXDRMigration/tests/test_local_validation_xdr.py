@@ -144,7 +144,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             "Name": "SampleSolution",
             "Author": "Microsoft - support@microsoft.com",
             "Description": "Sample hybrid Sentinel + Defender XDR solution.",
-            "Version": "3.2.1",
+            "Version": "3.2.2",
             "BasePath": str(self.solution),
             "Metadata": "SolutionMetadata.json",
             "Analytic Rules": ["Analytic Rules/SampleRule.yaml"],
@@ -241,7 +241,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             "variables": {
                 "solutionId": "azuresentinel.azure-sentinel-solution-samplesolution",
                 "_solutionId": "[variables('solutionId')]",
-                "_solutionVersion": "3.2.1",
+                "_solutionVersion": "3.2.2",
                 "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
                 "uiuk": "sample-uiuk",
             },
@@ -302,7 +302,7 @@ class LocalValidationXdrTests(unittest.TestCase):
                     "location": "[parameters('workspace-location')]",
                     "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
                     "properties": {
-                        "version": "3.2.1",
+                        "version": "3.2.2",
                         "contentId": "[variables('_solutionId')]",
                         "contentProductId": "sample-pkg",
                         "displayName": "SampleSolution",
@@ -461,6 +461,60 @@ class LocalValidationXdrTests(unittest.TestCase):
         self.assertTrue(report["detections"][0]["liveKqlSkipped"])
         self.assertTrue(report["workbooks"][0]["applicable"])
         self.assertTrue(report["workbooks"][0]["liveKqlSkipped"])
+
+    def test_required_parser_gated_by_deploy_parser_is_accepted_and_other_gates_rejected(self) -> None:
+        paths = self._populate_valid_hybrid_solution(with_package=True)
+        main_template_path = paths["main_template"]
+        original = json.loads(main_template_path.read_text(encoding="utf-8"))
+        deploy_parser_condition = "[parameters('DeployParser')]"
+
+        def validate(mutate) -> str:
+            template = copy.deepcopy(original)
+            saved = next(
+                res
+                for res in template["resources"]
+                if res.get("type") == "Microsoft.OperationalInsights/workspaces/savedSearches"
+                and res.get("properties", {}).get("functionAlias") == "HelperFunction"
+            )
+            mutate(template, saved)
+            main_template_path.write_text(json.dumps(template, indent=2), encoding="utf-8")
+            report = VALIDATE_XDR.run_validation(
+                content_root=self.root,
+                solution_paths=[self.solution],
+                family="workbooks",
+            )
+            return "\n".join(
+                res.get("error") or "" for res in report["results"] if not res.get("passed", True)
+            )
+
+        def gate(template, saved) -> None:
+            template["parameters"]["DeployParser"] = {"type": "bool", "defaultValue": True}
+            saved["condition"] = deploy_parser_condition
+
+        self.assertEqual("", validate(gate))
+
+        def other_condition(template, saved) -> None:
+            gate(template, saved)
+            saved["condition"] = "[parameters('DeployDefenderWorkbook')]"
+
+        def literal_condition(template, saved) -> None:
+            gate(template, saved)
+            saved["condition"] = True
+
+        def default_false(template, saved) -> None:
+            gate(template, saved)
+            template["parameters"]["DeployParser"]["defaultValue"] = False
+
+        def missing_parameter(template, saved) -> None:
+            saved["condition"] = deploy_parser_condition
+
+        def copy_loop(template, saved) -> None:
+            gate(template, saved)
+            saved["copy"] = {"name": "parserLoop", "count": 1}
+
+        for mutate in (other_condition, literal_condition, default_false, missing_parameter, copy_loop):
+            with self.subTest(mutation=mutate.__name__):
+                self.assertIn("savedSearches resource must be unconditional or gated only by", validate(mutate))
 
     def test_xdr_detection_schema_and_provenance_failures_are_reported(self) -> None:
         paths = self._populate_valid_hybrid_solution(with_package=False)
@@ -666,7 +720,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             json.dumps({"workspace": {"value": "ws"}}, indent=2),
             encoding="utf-8",
         )
-        zip_path = package_dir / "3.2.1.zip"
+        zip_path = package_dir / "3.2.2.zip"
         with zipfile.ZipFile(zip_path, "w") as archive:
             archive.write(package_dir / "mainTemplate.json", "mainTemplate.json")
             archive.write(package_dir / "createUiDefinition.json", "createUiDefinition.json")
@@ -677,7 +731,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             "mainTemplate": "Package/mainTemplate.json",
             "createUiDefinition": "Package/createUiDefinition.json",
             "testParameters": "Package/testParameters.json",
-            "zip": "Package/3.2.1.zip",
+            "zip": "Package/3.2.2.zip",
         }
         pkg_hashes = {
             name: hashlib.sha256((self.solution / rel).read_bytes()).hexdigest()
@@ -688,7 +742,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             "packager": "V3.1",
             "workflowRunId": "test-xdr-local-val-run",
             "packageAttemptId": "attempt-1",
-            "version": "3.2.1",
+            "version": "3.2.2",
             "armValidationMethod": "lab-deployment",
             "packageInputs": {
                 "after": {**identity, "files": package_input_file_hashes(self.solution)}
@@ -713,7 +767,7 @@ class LocalValidationXdrTests(unittest.TestCase):
             key=lambda item: item["path"],
         )
         package_identity = {
-            "version": "3.2.1",
+            "version": "3.2.2",
             "packageInputSha256": identity["sha256"],
             "packageContentSha256": _canonical_sha256(package_files),
             "packageReportSha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),

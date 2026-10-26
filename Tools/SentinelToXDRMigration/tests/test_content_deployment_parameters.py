@@ -235,7 +235,7 @@ class ContentDeploymentTests(unittest.TestCase):
                         self.assertEqual("disabled", body["resources"]["detectionRule"]["properties"]["status"])
                         self.assertNotIn("Deploy", json.dumps(body))
                     self.assertIn(attribution.AttributionTests.marker(attribution.TRACKING_ID), template["resources"])
-                    with zipfile.ZipFile(package / "3.2.0.zip") as archive:
+                    with zipfile.ZipFile(package / "3.2.2.zip") as archive:
                         self.assertEqual(template, json.loads(archive.read("mainTemplate.json")))
                         self.assertEqual(ui, json.loads(archive.read("createUiDefinition.json")))
         original["XDR Detections"] = []
@@ -507,7 +507,7 @@ class ContentDeploymentTests(unittest.TestCase):
                     expected["detectionAction"]["alertTemplate"]["tactics"] = [authored[0]]
                     expected["contentProvenance"] = {
                         "packageId": "testpublisher.test-sentinel",
-                        "packageVersion": "3.2.0",
+                        "packageVersion": "3.2.2",
                         "contentId": "xdr-" + document["contentProvenance"]["source"]["id"],
                         "contentVersion": document["version"],
                     }

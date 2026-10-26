@@ -1,0 +1,136 @@
+{
+    "name": "MiroAILogsDataConnector",
+    "apiVersion": "2025-09-01",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "{{location}}",
+    "kind": "Customizable",
+    "properties": {
+        "connectorUiConfig": {
+            "id": "MiroAILogsDataConnector",
+            "title": "Miro AI Interaction Logs (Beta) (Enterprise Plan + Enterprise Guard)",
+            "publisher": "Miro",
+            "descriptionMarkdown": "The [Miro AI Interaction Logs](https://developers.miro.com/reference/enterprise-get-ai-interaction-logs) data connector enables you to ingest AI interaction logs from Miro into Microsoft Sentinel. AI interaction logs capture user interactions with AI features in Miro: the prompt received from the user, the response returned to them, and the model and tool calls made in between.\n\nThis connector is in **Beta**: the AI interaction logs API may change before general availability.\n\n**Key features:**\n- Track AI interactions by user, session, and affected object.\n- Follow each step of an interaction: input, model calls, tool calls, and output.\n- Support compliance and eDiscovery requirements.\n\n**Requirements:**\n- **Miro Plan**: [Enterprise Plan](https://miro.com/pricing/) + **Enterprise Guard** add-on.\n- **Collection enabled**: A Miro admin turns on **Collect AI interaction logs** in Admin console > Security > Audit logs > Settings. Only interactions after that are recorded. If the setting is not visible, contact your Miro account manager.\n- **OAuth scope**: `aiinteractionlogs:read`.\n- **Organization ID**: Your Miro organization identifier.\n\n**Note:** The `details` column may contain unstructured data that could reveal information used in interactions with the LLM. Azure Monitor truncates any field value longer than 64 KB at ingestion, so a long `details` value can arrive cut off.\n\nFor detailed instructions, refer to the [documentation](https://help.miro.com/hc/en-us/articles/31325908249362).",
+            "graphQueriesTableName": "MiroAILogs_CL",
+            "graphQueries": [
+                {
+                    "metricName": "Miro AI Logs",
+                    "legend": "MiroAILogs_CL",
+                    "baseQuery": "MiroAILogs_CL"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "Recent AI interactions",
+                    "query": "MiroAILogs_CL\n| sort by TimeGenerated desc\n| take 10"
+                },
+                {
+                    "description": "Activity by event type",
+                    "query": "MiroAILogs_CL\n| summarize count() by eventType\n| render piechart"
+                },
+                {
+                    "description": "Activity by surface",
+                    "query": "MiroAILogs_CL\n| summarize count() by surface"
+                },
+                {
+                    "description": "Daily activity",
+                    "query": "MiroAILogs_CL\n| summarize count() by bin(TimeGenerated, 1d)\n| render timechart"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "MiroAILogs_CL",
+                    "lastDataReceivedQuery": "MiroAILogs_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                }
+            ],
+            "availability": {
+                "isPreview": true
+            },
+            "connectivityCriteria": [
+                {
+                    "type": "HasDataConnectors"
+                }
+            ],
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Miro Enterprise Plan with Enterprise Guard",
+                        "description": "Miro Enterprise Plan with Enterprise Guard add-on is required. AI interaction logs are not available on base Enterprise Plan or lower tiers."
+                    },
+                    {
+                        "name": "AI interaction logs collection",
+                        "description": "A Miro admin must turn on Collect AI interaction logs in Admin console > Security > Audit logs > Settings. Only interactions after that are recorded."
+                    },
+                    {
+                        "name": "Miro OAuth Application",
+                        "description": "Miro OAuth application with aiinteractionlogs:read scope is required."
+                    },
+                    {
+                        "name": "Miro Organization ID",
+                        "description": "Your Miro organization ID is required to access AI interaction logs."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "description": "**Step 1: Verify your Miro plan and enable collection**\n\n1. Ensure your organization has [Miro Enterprise Plan](https://miro.com/pricing/) with **Enterprise Guard** add-on.\n2. If you don't have Enterprise Guard yet, contact your [Miro account manager](https://miro.com/contact/sales/) to upgrade.\n3. As a Miro admin, open Admin console > Security > Audit logs > Settings and turn on **Collect AI interaction logs**. Only interactions after that are recorded.\n4. If the setting is not visible, contact your [Miro account manager](https://miro.com/contact/sales/)."
+                },
+                {
+                    "description": "**Step 2: Choose your setup option**\n\nThere are two ways to set up the Miro AI Interaction Logs connector.\n\n**Option 1 (recommended):** Use Enterprise integrations\n- Simplest setup with automatic token generation.\n- Recommended for most users.\n- See Option 1 below.\n\n**Option 2 (alternative):** Create custom OAuth application\n- More control over OAuth app configuration.\n- For advanced users or custom integration needs.\n- See Option 2 below.\n\n**Note:** When using Option 1, the integration is automatically tied to the team with the largest number of users in your organization. When using Option 2, you can choose which team to install the app to. However, **the team selection does not affect which logs are collected**—both options provide organization-wide log access."
+                },
+                {
+                    "description": "**Option 1: Enterprise integrations (recommended)**\n\n1. Open [Miro Company Settings](https://miro.com/app/settings/).\n2. Expand the **Apps and integrations** section.\n3. Click **Enterprise integrations**.\n4. Enable the **SIEM** toggle.\n5. Copy the **Access Token** value that appears.\n6. Get your **Organization ID** from the browser URL:\n   - Look at the browser URL to find your Organization ID.\n   - The URL format is: `https://miro.com/app/settings/company/{ORGANIZATION_ID}/`.\n   - Copy your Organization ID from the URL (the numeric value).\n7. **Important:** Store both the token and Organization ID securely—they provide full access to AI interaction logs.\n8. The token will work until you disable the toggle.\n9. Proceed to Step 3.\n\n**One token for all Miro connectors:** the SIEM toggle creates one access token with every log scope your organization is entitled to: `auditlogs:read` (Enterprise Plan), `contentlogs:export` (Enterprise Guard add-on) and `aiinteractionlogs:read` (Enterprise Guard add-on with AI interaction logs). If the SIEM toggle was enabled before it offered these scopes, turn it off and on again to get a token that includes them, then update the token in every connector that uses it. Turning the toggle off invalidates its current token, so every connector that uses it fails to poll until it has the new token."
+                },
+                {
+                    "description": "**Option 2: Custom OAuth application (alternative)**\n\n1. Go to [Miro App Settings](https://miro.com/app/settings/user-profile/apps).\n2. Click **Create new app**.\n3. Select **Non-expiring access token** option during app creation.\n4. Enable the OAuth scope: **`aiinteractionlogs:read`**.\n5. Click **Install app and get OAuth token**.\n6. Authorize the app to access your organization.\n7. Copy the **Access Token** that is displayed.\n8. Get your **Organization ID**:\n   - Go to [Miro Company Settings](https://miro.com/app/settings/).\n   - Look at the browser URL to find your Organization ID.\n   - The URL format is: `https://miro.com/app/settings/company/{ORGANIZATION_ID}/`.\n   - Copy your Organization ID from the URL (the numeric value).\n9. **Important:** Store both the token and Organization ID securely—they provide full access to AI interaction logs.\n10. The token will work until you uninstall the app."
+                },
+                {
+                    "description": "**Step 3: Learn more**\n\nFor detailed information about Miro AI interaction logs:\n- [Miro API reference](https://developers.miro.com/reference/enterprise-get-ai-interaction-logs)\n- [Miro Enterprise Guard](https://miro.com/enterprise-guard/)\n- [OAuth non-expiring tokens](https://developers.miro.com/reference/authorization-flow-for-expiring-access-tokens)"
+                },
+                {
+                    "description": "**Step 4: Connect to Miro**\n\nProvide the required values below to complete the connection.",
+                    "instructions": [
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Organization ID",
+                                "placeholder": "Enter your Miro Organization ID",
+                                "type": "text",
+                                "name": "organizationId"
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Access token",
+                                "placeholder": "Enter your Miro Access Token",
+                                "type": "password",
+                                "name": "AccessToken"
+                            }
+                        },
+                        {
+                            "type": "ConnectionToggleButton",
+                            "parameters": {
+                                "label": "toggle",
+                                "name": "toggle"
+                            }
+                        }
+                    ],
+                    "title": "Connect to Miro to start collecting AI interaction logs in Microsoft Sentinel."
+                }
+            ]
+        }
+    }
+}

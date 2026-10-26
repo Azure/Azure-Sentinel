@@ -91,7 +91,7 @@ def _query(surface, *, allowed_tables=(), allowed_functions=(), allow_sentinel=F
     # Built-in parsers are supported functions, not proof of their hidden
     # input tables, workloads or connector prerequisites.
     tables -= asim | allowed_functions
-    local = set(re.findall(r"\blet\s+([A-Za-z_]\w*)\s*=", code))
+    local = workbook._local_tabular_vars(code)
     tables -= local | workbook._BUILTINS | workbook._STATEMENT_PREFIXES
     opaque = workbook.opaque_functions(raw) - tables - allowed_functions
     explicit = (workbook.opaque_functions(raw, include_bare=False)
@@ -246,7 +246,7 @@ def import_native_workbook(solution, source, review):
         selected_workbook_files(root)
     version = _release(data, {})
     if version is None:
-        raise ValueError("Native import requires a solution release >=3.2.0,<4.0.0.")
+        raise ValueError("Native import requires a solution release >=3.2.2,<4.0.0.")
     content, instance = identities(root, source)
     document["xdrMetadata"] = {
         "contentId": content, "instanceId": instance, "version": version,

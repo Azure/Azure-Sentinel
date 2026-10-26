@@ -257,7 +257,7 @@ def test_selected_release_not_notebook_format_and_no_silent_pre31_promotion(solu
     document = json.loads(data.read_bytes())
     document["Version"] = "3.0.8"
     data.write_text(json.dumps(document))
-    with pytest.raises(ValueError, match=">= 3.2.0"):
+    with pytest.raises(ValueError, match=">= 3.2.2"):
         initialize(solution)
     workflow.initialize_workflow(
         solution, workflow_profile="authoring", workbook_capability_version=1,

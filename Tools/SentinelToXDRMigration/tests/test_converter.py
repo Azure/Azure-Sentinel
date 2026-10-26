@@ -848,7 +848,7 @@ AzureActivity
         data_dir = self.solution / "Data"
         data_dir.mkdir(exist_ok=True)
         (data_dir / "Solution_Sample.json").write_text(
-            json.dumps({"Name": "Sample", "Version": "3.2.1"}),
+            json.dumps({"Name": "Sample", "Version": "3.2.2"}),
             encoding="utf-8",
         )
         result = convert_solution(self.solution, overwrite=True)
@@ -856,7 +856,7 @@ AzureActivity
         output = yaml.safe_load(
             (self.solution / "XDR Detections" / "SampleRule.yaml").read_text(encoding="utf-8")
         )
-        self.assertEqual(output["version"], "3.2.1")
+        self.assertEqual(output["version"], "3.2.2")
         self.assertEqual(output["contentProvenance"]["source"]["version"], "1.0")
 
     def test_entity_identity_rejects_synthetic_hash_and_filename_only_hash_bindings(self) -> None:

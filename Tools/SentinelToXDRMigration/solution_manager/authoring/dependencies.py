@@ -39,7 +39,7 @@ TABLE_WORKLOADS = {
     "CloudAppEvents": "mda",
     **{table: "sentinel" for table in (
         "Syslog", "SecurityAlert", "SecurityIncident", "SecurityEvent", "WindowsEvent", "Event",
-        "AzureActivity", "CommonSecurityLog", "SigninLogs", "AuditLogs",
+        "AzureActivity", "AzureDiagnostics", "CommonSecurityLog", "SigninLogs", "AuditLogs",
         "OfficeActivity", "AWSCloudTrail", "AWSGuardDuty",
     )},
 }
