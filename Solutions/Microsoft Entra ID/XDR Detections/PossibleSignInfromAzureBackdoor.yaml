@@ -1,0 +1,139 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: fa00014c-c5f4-4715-8f5b-ba567e19e41e
+    path: Analytic Rules/PossibleSignInfromAzureBackdoor.yaml
+    version: 1.0.0
+    querySha256: 8a649bc249743a8eb97c6242a1c195352b8d52e65a0a7ab98f4d39fee4e39d67
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping was repaired from projected column `UserPrincipalName`
+    - customDetails 'AppDisplayName' column `AppDisplayName` requires runtime output-schema binding verification
+    - customDetails 'ResourceDisplayName' column `ResourceDisplayName` requires runtime output-schema binding verification
+    - customDetails 'DomainAdded' column `DomainName` requires runtime output-schema binding verification
+    - customDetails 'InitiatedBy' column `InitiatedBy` requires runtime output-schema binding verification
+    - customDetails 'ModifiedProperties' column `ModifiedProperties` requires runtime output-schema binding verification
+    - customDetails 'DomainAddedTime' column `DomainAddedTime` requires runtime output-schema binding verification
+    - customDetails 'SignInTime' column `SignInTime` requires runtime output-schema binding verification
+    - Account.NTDomain value is retained as customDetails.AccountNTDomain from query column `UserDomain`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountNTDomain column `UserDomain` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName `UserPrincipalName` is retained by an equivalent account mapping
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: c9844b88c62ca629b13422cd86ab73b6e6de12bcc141c8f5ae360f672386fd4f
+      targetQuerySha256: 32f1c13e8a74e5a599822c6ecca03874edd07af73adfd6ae515d49625f2b448a
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: c9844b88c62ca629b13422cd86ab73b6e6de12bcc141c8f5ae360f672386fd4f
+      targetQuerySha256: 32f1c13e8a74e5a599822c6ecca03874edd07af73adfd6ae515d49625f2b448a
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: NTDomain
+      sourceColumn: UserDomain
+      column: UserDomain
+      status: runtime-binding-pending
+      customDetailKey: AccountNTDomain
+properties:
+  id: xdr-fa00014c-c5f4-4715-8f5b-ba567e19e41e
+  displayName: Possible SignIn from Azure Backdoor
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Microsoft Entra ID  Backdoors: Identity Federation
+      //Ref: https://www.inversecos.com/2021/11/how-to-detect-azure-active-directory.html
+      AuditLogs
+      | where OperationName == "Add unverified domain"
+      | where Result == "success"
+      | extend InitiatedBy = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+      | extend DomainName = tostring(TargetResources[0].displayName)
+      | summarize DomainAddedTime = min(TimeGenerated), ModifiedProperties = make_set(parse_json(TargetResources[0].modifiedProperties),1048576) by InitiatedBy, DomainName
+      | join kind=inner (
+      SigninLogs
+      | where ResultType == "0"
+      | extend UserDomain = tostring(parse_json(split(UserPrincipalName,"@",1)[0]))
+      | summarize SignInTime = min(TimeGenerated)  by UserPrincipalName, IPAddress, tostring(LocationDetails),AppDisplayName,ResourceDisplayName,UserDomain
+      ) on $left.DomainName == $right.UserDomain
+      // Getting UserName and Domain
+      | extend Name = split(UserPrincipalName,"@",0), Domain = split(UserPrincipalName,"@",1)
+      | mv-expand Name,Domain
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Possible SignIn from Azure Backdoor
+      description: '''Identifies when a user adds an unverified domain as an authentication method, followed by a sign-in from a user the newly added domain. Threat actors may add custom domains to create a backdoor to your tenant. It''s important to monitor whenever custom domains are added to the tenant.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: UserPrincipalName
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      customDetails:
+        AppDisplayName: AppDisplayName
+        ResourceDisplayName: ResourceDisplayName
+        DomainAdded: DomainName
+        InitiatedBy: InitiatedBy
+        ModifiedProperties: ModifiedProperties
+        DomainAddedTime: DomainAddedTime
+        SignInTime: SignInTime
+        AccountNTDomain: UserDomain

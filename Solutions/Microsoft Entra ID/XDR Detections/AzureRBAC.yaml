@@ -1,0 +1,100 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 132fdff4-c044-4855-a390-c1b71e0f833b
+    path: Analytic Rules/AzureRBAC.yaml
+    version: 1.0.1
+    querySha256: de3199ac1eda2caa39dd82abeabd25b537e31d508e9d98260e9c5d91715f8f7b
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=2h, lookback=2h; target frequency=PT2H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved as customDetails.AccountName from query
+      column `Actor`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 9b7718abfc9d7ecc9f6142e6d4a56f91385110030b572fcb8b4dc790441f2174
+      targetQuerySha256: e0ba0dd8e419dce9be6d623b9ff10961d4c0bf781abc9125032be6591f6dfea3
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: Actor
+      column: Actor
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-132fdff4-c044-4855-a390-c1b71e0f833b
+  displayName: Azure RBAC (Elevate Access)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AuditLogs
+      | where Category =~ "AzureRBACRoleManagementElevateAccess"
+      | where ActivityDisplayName =~ "User has elevated their access to User Access Administrator for their Azure Resources"
+      | extend Actor = tostring(InitiatedBy.user.userPrincipalName)
+      | extend IPAddress = tostring(InitiatedBy.user.ipAddress)
+      | project
+          TimeGenerated,
+          Actor,
+          OperationName,
+          IPAddress,
+          Result,
+          LoggedByService
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: Azure RBAC (Elevate Access)
+      description: '''Detects when a Global Administrator elevates access to all subscriptions and management groups in a
+        tenant. When a Global Administrator elevates access they are assigned the User Access Administrator role at root scope.
+        This Microsoft Sentinel Analytic Rule monitors who has elevated access in your tenant so that admins can take appropriate
+        action. [Learn more](https://learn.microsoft.com/en-us/azure/role-based-access-control/elevate-access-global-admin?tabs=azure-portal)'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: Actor
