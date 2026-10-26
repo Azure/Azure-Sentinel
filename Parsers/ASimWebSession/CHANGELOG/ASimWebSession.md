@@ -1,8 +1,12 @@
 # Changelog for ASimWebSession.yaml
 
+## Version 0.5.9
+
+- (2026-10-26) Add parser for Salesforce Real-Time Event Monitoring page view events - [PR #tbd](https://github.com/Azure/Azure-Sentinel/pull/tbd)
+
 ## Version 0.5.8
 
-- (2026-10-26) Add parser for Salesforce Real-Time Event Monitoring page view events
+- (2026-09-30) Add parser for Cloudflare One logs - [PR #14982](https://github.com/Azure/Azure-Sentinel/pull/14982)
 
 ## Version 0.5.7
 
