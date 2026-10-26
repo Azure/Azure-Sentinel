@@ -1,5 +1,9 @@
 # Changelog for imFileEvent.yaml
 
+## Version 0.2.3
+
+- (2026-10-26) Add the CrowdStrike Falcon Data Replicator filtering parser with standard FileEvent parameters, disable-watchlist support, and optional field packing.
+
 ## Version 0.2.2
 
 - (2026-02-04) [ASIM] FileEvent - AWSCloudTrail (New Parser) [PR #13569](https://github.com/Azure/Azure-Sentinel/pull/13569)
@@ -25,4 +29,3 @@
 ## Version 0.1
 
 - (2021-08-03) File Event, schema, parsers and detections - [PR #2775](https://github.com/Azure/Azure-Sentinel/pull/2775)
-

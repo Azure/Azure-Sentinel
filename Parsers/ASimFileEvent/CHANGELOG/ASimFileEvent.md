@@ -1,5 +1,9 @@
 # Changelog for ASimFileEvent.yaml
 
+## Version 0.1.6
+
+- (2026-10-26) Add the CrowdStrike Falcon Data Replicator FileEvent parser with disable-watchlist and optional field-packing support.
+
 ## Version 0.1.5
 
 - (2026-10-08) Corrected the schema-level parser disable watchlist key - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
