@@ -3,11 +3,6 @@
 ARM template for ASIM UserManagement schema parser for CrowdStrike Falcon Data Replicator.
 
 Normalizes account creation, deletion, and group-membership events from CrowdStrike_User_Events_CL to ASIM UserManagement.
-Filters TimeGenerated, target username tokens, and normalized event types before field mapping.
-Actor identity and initiating client IP are unavailable; nonempty filters for these fields return no rows.
-Maps available device and target account fields even when the current source samples leave them empty.
-Event timestamps use Unix milliseconds with TimeGenerated as a fallback. Each source record remains one normalized event.
-Set pack=true to retain source metadata and the original AdditionalFields object under AdditionalFields.SourceAdditionalFields.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 
