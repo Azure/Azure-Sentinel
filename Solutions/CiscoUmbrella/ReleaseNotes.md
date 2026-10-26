@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                          |
 |-------------|--------------------------------|-------------------------------------------------------------|
+| 3.3.4 | 25-10-2026 | Restored `DeployParser` parameter and `Parser` resource deployment condition for the `Cisco_Umbrella` **Parser** alongside the ten disabled **Defender XDR Custom Detections** and one **Defender XDR Workbook** so Content Hub installation and multi-workspace deployment succeed. |
 | 3.3.3 | 15-10-2026 | Added 10 disabled **Defender XDR Custom Detections** and 1 **Defender XDR Workbook** (`CiscoUmbrella.json`) alongside the existing Sentinel content and updated the solution package to 3.3.3. |
 | 3.3.2       | 04-09-2026                     | Updated the Cisco Umbrella template to allow an empty S3 bucket prefix or one with or without a trailing slash, allowing customer root directories to work. |
 | 3.3.1       | 26-08-2026                     | Fixed Cisco Umbrella CCF connection resource naming to include the S3 bucket, region, and prefix, preventing connections for different account prefixes from overwriting each other. |
