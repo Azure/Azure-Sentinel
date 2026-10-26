@@ -45,8 +45,10 @@ query: |
   | project SignInTimestamp=TimeGenerated, AppDisplayName, CorrelationId, AccountObjectId=UserId, IPAddress, RiskLevelDuringSignIn 
   | summarize SignInTimestamp=argmin(SignInTimestamp,*) by AppDisplayName, CorrelationId, AccountObjectId, IPAddress, RiskLevelDuringSignIn;
   mfaMethodAdded 
-  | join riskySignins on AccountObjectId 
-  | where  MfaAddedTimestamp - SignInTimestamp < timeDelta //Time delta between risky sign-in and device registration less than 6h 
+  | join kind=inner riskySignins on AccountObjectId 
+  //Time delta between risky sign-in and MFA added by a maximum timeDelta (6h by default) 
+  | extend SignInToMfaAdded = MfaAddedTimestamp - SignInTimestamp
+  | where SignInToMfaAdded between (0min .. timeDelta)
   | project-away AccountObjectId1
   | extend timestamp = MfaAddedTimestamp, AccountCustomEntity = tolower(AccountUpn), IPCustomEntity = IPAddress
   | join kind=leftouter (
@@ -91,4 +93,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 2.0.2
+version: 2.0.3
