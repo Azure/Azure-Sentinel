@@ -3,9 +3,6 @@
 ARM template for ASIM NetworkSession schema parser for CrowdStrike Falcon Data Replicator.
 
 Filters and normalizes CrowdStrike_Network_Events_CL connection, accept, listen, close, raw-bind, and firewall-match events to the ASIM Network Session schema. Firewall-rule configuration and local-address removal events are excluded. event_simpleName is authoritative and is expected to be populated.
-Supports inclusive TimeGenerated bounds, IPv4 address-prefix, destination-port, device-action, event-result, and disabled filters. Nonempty hostname filters return no records because the source has no hostname column. IPv6 events are normalized but do not match the IPv4-prefix filters.
-Maps available endpoint, local-user, process, interface, and ICMP fields, including columns empty in initial samples. Unknown direction codes leave endpoint roles unassigned. Numeric firewall actions are retained raw, not guessed; EventResult follows the schema default of Success unless a recognized denial or nonzero TCP error is present.
-Source-only fields and original action codes are retained in AdditionalFields only when pack is true.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 
