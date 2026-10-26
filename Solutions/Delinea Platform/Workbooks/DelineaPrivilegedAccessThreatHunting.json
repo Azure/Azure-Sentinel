@@ -1,0 +1,140 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Delinea Platform — Privileged Access Threat Hunting\n\nHunting queries over Delinea Platform audit events (`DelineaAuditEvents_CL`) for suspicious authentication and secret-access behaviour. Each tile is a starting point for investigation — tune thresholds to your environment."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "33333333-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time range",
+            "type": 4,
+            "isRequired": true,
+            "value": { "durationMs": 604800000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 86400000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ]
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": { "json": "### Authentication anomalies" },
+      "name": "text-auth"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend EventName = tostring(d.eventType.name), Actor = tostring(d.actor.name), SourceIP = tostring(d.source.host.network.ipAddress), attrs = d.additionalAttributes | where EventName has 'MfaAuthentication' | extend MfaResult = tostring(attrs.MfaResult[0]) | summarize Failures = countif(MfaResult == 'Failed'), Successes = countif(MfaResult == 'Success'), FirstFailure = minif(TimeGenerated, MfaResult == 'Failed'), LastSuccess = maxif(TimeGenerated, MfaResult == 'Success') by Actor, SourceIP | where Failures > 0 and Successes > 0 and LastSuccess > FirstFailure | sort by Failures desc",
+        "size": 0,
+        "title": "Failed MFA followed by success (possible push-fatigue / brute force)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "mfa-fail-then-success"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend ServiceType = tostring(d.service.type), Actor = tostring(d.actor.name), SourceIP = tostring(d.source.host.network.ipAddress) | where ServiceType == 'Identity' and isnotempty(SourceIP) and isnotempty(Actor) | summarize DistinctIPs = dcount(SourceIP), IPs = make_set(SourceIP, 50), Events = count() by Actor | where DistinctIPs > 1 | sort by DistinctIPs desc",
+        "size": 0,
+        "title": "Users authenticating from multiple source IPs",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "multi-ip-users"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend ServiceType = tostring(d.service.type), Actor = tostring(d.actor.name), SourceIP = tostring(d.source.host.network.ipAddress) | where ServiceType == 'Identity' and isnotempty(SourceIP) and isnotempty(Actor) | summarize Events = count(), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by Actor, SourceIP | where Events <= 2 | sort by FirstSeen desc",
+        "size": 0,
+        "title": "Rare user / source-IP pairs (<=2 events in range)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "rare-ip-pairs"
+    },
+    {
+      "type": 1,
+      "content": { "json": "### Secret-access anomalies" },
+      "name": "text-secret"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend ServiceType = tostring(d.service.type), EventName = tostring(d.eventType.name), SourceIP = tostring(d.source.host.network.ipAddress), Actor = tostring(d.actor.name) | where (ServiceType == 'Secret Server' or EventName has 'Vault') and isnotempty(SourceIP) | summarize DistinctSecrets = dcount(SecretId), TotalAccesses = count(), Users = make_set(Actor, 25) by SourceIP | where DistinctSecrets > 5 | sort by DistinctSecrets desc",
+        "size": 0,
+        "title": "Single source IP accessing many distinct secrets",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "ip-many-secrets"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend ServiceType = tostring(d.service.type), EventName = tostring(d.eventType.name), Actor = tostring(d.actor.name) | where (ServiceType == 'Secret Server' or EventName has 'Vault') and isnotempty(Actor) | extend Hour = hourofday(TimeGenerated), OffHours = iff(hourofday(TimeGenerated) < 6 or hourofday(TimeGenerated) >= 20, 'Off-hours', 'Business hours') | summarize Count = count() by Hour, OffHours | sort by Hour asc",
+        "size": 0,
+        "title": "Secret access by hour of day (off-hours highlighted)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "chartSettings": { "group": "OffHours" }
+      },
+      "name": "secret-offhours"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend ServiceType = tostring(d.service.type), EventName = tostring(d.eventType.name), Actor = tostring(d.actor.name), SourceIP = tostring(d.source.host.network.ipAddress) | where (ServiceType == 'Secret Server' or EventName has 'Vault') and isnotempty(Actor) | summarize Accesses = count(), DistinctSecrets = dcount(SecretId) by Actor | where DistinctSecrets > 10 | sort by DistinctSecrets desc",
+        "size": 0,
+        "title": "Users accessing an unusually high number of distinct secrets",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "user-many-secrets"
+    }
+  ],
+  "fallbackResourceIds": [
+    ""
+  ],
+  "fromTemplateId": "sentinel-DelineaPrivilegedAccessThreatHunting",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

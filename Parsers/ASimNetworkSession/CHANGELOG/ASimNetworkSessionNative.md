@@ -1,5 +1,9 @@
 # Changelog for ASimNetworkSessionNative.yaml
 
+## Version 0.3.0
+
+- (2026-10-02) Standardized Parser.Version to three components by appending .0 for version consistency - [PR #15246](https://github.com/Azure/Azure-Sentinel/pull/15246)
+
 ## Version 0.3
 
 - (2023-01-25) Update the value of Dvc Alias in Network Session Schema - [PR #7149](https://github.com/Azure/Azure-Sentinel/pull/7149)

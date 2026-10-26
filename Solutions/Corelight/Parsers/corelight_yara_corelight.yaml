@@ -1,0 +1,73 @@
+id: 8fe8f008-efa2-4b72-8a6d-3d00f2a1862f
+Function:
+  Title: Corelight Yara Corelight Events
+  Version: '1.0.0'
+  LastUpdated: '2026-09-24'
+Category: Microsoft Sentinel Parser
+FunctionName: corelight_yara_corelight
+FunctionAlias: corelight_yara_corelight
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime, uid: string) [];
+    let corelight_yara_corelight = view () {
+        union isfuzzy=true Corelight_v3_yara_corelight_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid
+        | join kind=leftouter
+            (corelight_conn
+            | project uid, local_orig, local_resp
+            )
+            on $left.uid == $right.uid
+        | project-away uid1
+        | extend
+            EventVendor = "Corelight",
+            EventProduct = "CorelightSensor",
+            EventType = "yara_corelight",
+            ts = coalesce(ts, TimeGenerated),
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            sensor_name = coalesce(system_name, "unknown")
+        | extend
+            is_broadcast = iff(src in ("0.0.0.0", "255.255.255.255") or dest in ("255.255.255.255", "0.0.0.0"), "true", "false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false"),
+            direction = case(
+                    local_orig == true and local_resp == true,
+                    "internal",
+                    local_orig == true and local_resp == false,
+                    "outbound",
+                    local_orig == false and local_resp == false,
+                    "external",
+                    local_orig == false and local_resp == true,
+                    "inbound",
+                    "unknown"
+                )
+        | project
+            TimeGenerated,
+            path,
+            system_name,
+            write_ts,
+            ts,
+            uid,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            EventVendor,
+            EventProduct,
+            EventType,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            sensor_name,
+            is_broadcast,
+            is_dest_internal_ip,
+            is_src_internal_ip,
+            direction
+    };
+    corelight_yara_corelight

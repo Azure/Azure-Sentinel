@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.3.1       | 24-09-2026                     | Added new **Parsers** (ML results, network performance, YARA) and **Watchlists**, updated **Data Connector** DCE/DCR resources, and enhanced **Corelight Data Insights** Workbook with anomaly, ML and shadow AI (GenAI) insights |
 | 3.3.0       | 18-08-2026                     | Updated **Data Connector** page for DCE/DCR based ingestion, added new **Parsers**, and updated **Workbooks** and **Analytic Rules** queries for the new table schema and field names |
 | 3.2.5       | 04-06-2026                     | Restructuring dashboards and adding asset classification tab in data explorer                         |
 | 3.2.4       | 19-03-2026                     | Added 'Show Aggregation' filters in Corelight Data Explorer Workbook.                         |
