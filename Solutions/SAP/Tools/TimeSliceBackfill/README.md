@@ -178,16 +178,20 @@ Use the `MPLLogID` from the CSV to check the message in the CPI message monitor.
 
 ## Finding gaps
 
-Use time-binned counts to spot empty windows, then export the result as the gap CSV. Sample
-query:
+Use time-binned counts to spot empty windows, then export the result as the gap CSV. The query
+uses aligned buckets and only includes completed windows, so it avoids treating a partially
+elapsed current bucket as a gap:
 
 ```kusto
 let lookback = 7d;
 let bin_size = 15m;
+let end_utc = bin(now(), bin_size);
+let start_utc = bin(end_utc - lookback, bin_size);
+let last_completed_bucket = end_utc - bin_size;
 ABAPAuditLog
-| where TimeGenerated > ago(lookback)
-| summarize Events = count() by bin(TimeGenerated, bin_size)
-| make-series Events = sum(Events) default = 0 on TimeGenerated from ago(lookback) to now() step bin_size
+| where TimeGenerated >= start_utc and TimeGenerated < end_utc
+| make-series Events = count() default = 0 on TimeGenerated
+    from start_utc to last_completed_bucket step bin_size
 | mv-expand TimeGenerated to typeof(datetime), Events to typeof(long)
 | where Events == 0
 | project StartTimeUTC = TimeGenerated, EndTimeUTC = TimeGenerated + bin_size
