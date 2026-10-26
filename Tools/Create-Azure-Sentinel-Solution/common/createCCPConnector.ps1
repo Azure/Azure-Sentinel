@@ -770,7 +770,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     elseif ($armResource.kind.ToLower() -eq 'storageaccountblobcontainer') {
                         . "$PSScriptRoot/storageAccountDeploymentTemplate.ps1" # load storage resource creator
-                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
+                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType -instructionParameters $paramItems
                     }
                     elseif ($armResource.kind.ToLower() -eq 'oci') {                        
                         CreateOciResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
