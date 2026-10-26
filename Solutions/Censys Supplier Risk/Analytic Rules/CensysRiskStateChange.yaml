@@ -8,7 +8,7 @@ requiredDataConnectors:
     dataTypes:
       - CensysRiskEvents_CL
 queryFrequency: 1h
-queryPeriod: 7d
+queryPeriod: 1d
 suppressionDuration: PT1H
 suppressionEnabled: false
 triggerOperator: GreaterThan
@@ -19,27 +19,31 @@ relevantTechniques:
   - T1195
 severity: Medium
 description: |
-  Creates one incident per supplier risk and keeps the whole life of that risk in it. An incident is opened when a risk is opened with CRITICAL or HIGH severity, or when any risk is reopened. Alerts are grouped by RiskInstanceId, so later reopened and resolved events for the same risk are added to the same incident while it is open.
-  A resolved event raises an alert only when the same risk has an opened (CRITICAL or HIGH) or reopened event in the last 7 days, so a resolved event never creates an incident on its own.
-  Alert severity follows the Censys severity: CRITICAL maps to High, HIGH to Medium, MEDIUM to Low, LOW to Informational. Rapid response findings (actively exploited) are always High. Resolved alerts are Informational.
+  Creates one incident per supplier risk instance that is opened, or reopened, with CRITICAL or HIGH severity. Alerts are grouped by RiskInstanceId, so further events of the same risk instance within 24 hours are added to the same incident while it is open.
+  Alert severity follows the Censys severity: CRITICAL maps to High and HIGH to Medium. Rapid response findings (actively exploited) are always High.
+  By default the rule alerts only on new CRITICAL and HIGH risks. The query holds commented lines to follow the whole life of a risk instead (reopened events of any severity and resolved events), see the comments in the query.
 query: |
   // New events are selected by the time they reached Sentinel (IngestedAt), not by the Censys insert time,
   // so a delay between Censys and the connector can never make an event fall between two runs.
   // Each run covers 60 minutes that end 5 minutes ago, and consecutive runs are contiguous, so no event is alerted twice.
-  // The 7 day query period is only used to look up earlier opened or reopened events of the same risk (matches the incident grouping look-back).
-  let Alertable = materialize(
-      CensysRiskEvents
-      | where ChangeType == "reopened" or (ChangeType == "opened" and Severity in ("CRITICAL", "HIGH")));
-  let TrackedRisks = Alertable | distinct RiskInstanceId;
+  //
+  // OPTIONAL - follow the whole life of a risk instance (reopened events of any severity, and resolved events of risks that
+  // were alerted before). To use it, uncomment the two "let" lines below, comment out the line "Default" in the query, uncomment
+  // the line "Full lifecycle", and in the rule settings set the query period to 7 days and the incident grouping look-back to 7 days.
+  // let Alertable = materialize(CensysRiskEvents | where ChangeType == "reopened" or (ChangeType == "opened" and Severity in ("CRITICAL", "HIGH")));
+  // let TrackedRisks = Alertable | distinct RiskInstanceId;
   CensysRiskEvents
   | where IngestedAt between (ago(65m) .. ago(5m))
-  | where (ChangeType == "reopened" or (ChangeType == "opened" and Severity in ("CRITICAL", "HIGH")))
-      or (ChangeType == "resolved" and RiskInstanceId in (TrackedRisks))
+  // Default: opened or reopened risks with CRITICAL or HIGH severity
+  | where ChangeType in ("opened", "reopened") and Severity in ("CRITICAL", "HIGH")
+  // Full lifecycle (needs the optional "let" lines above):
+  // | where (ChangeType == "reopened" or (ChangeType == "opened" and Severity in ("CRITICAL", "HIGH"))) or (ChangeType == "resolved" and RiskInstanceId in (TrackedRisks))
+  //
   // Optional filters: remove the leading // of a line to use it. Each line narrows the alerts further, and several lines can be combined.
   // Do not remove or change the IngestedAt window above, it keeps every event alerted exactly once.
   // | where Confidence >= 0.8                           // only findings with a confidence of 80% or more
-  // | where Severity in ("CRITICAL", "HIGH")            // Censys severities: CRITICAL, HIGH, MEDIUM, LOW
-  // | where ChangeType in ("opened", "reopened")        // skip resolved alerts
+  // | where Severity == "CRITICAL"                      // only CRITICAL risks (Censys severities: CRITICAL, HIGH, MEDIUM, LOW)
+  // | where ChangeType == "opened"                      // only newly opened risks, skip reopened risks
   // | where RapidResponse == true                       // only actively exploited (rapid response) risks
   // | where RiskCategory == "VULNERABILITY"             // VULNERABILITY, MISCONFIGURATION, EXPOSURE or THREAT
   // | where SupplierDisplayName in ("OpenAI", "Harvey") // only these suppliers
@@ -76,7 +80,7 @@ incidentConfiguration:
   groupingConfiguration:
     enabled: true
     reopenClosedIncident: false
-    lookbackDuration: P7D
+    lookbackDuration: P1D
     matchingMethod: Selected
     groupByCustomDetails:
       - RiskInstanceId
