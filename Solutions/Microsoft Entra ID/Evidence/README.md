@@ -1,6 +1,6 @@
-# Reviewer Guide: Microsoft Entra ID (`3.3.21`) Qualification Evidence
+# Reviewer Guide: Microsoft Entra ID (`3.3.20`) Qualification Evidence
 
-This folder holds the qualification evidence and PR verification reports for **Microsoft Entra ID (`3.3.21`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR.
+This folder holds the qualification evidence and PR verification reports for **Microsoft Entra ID (`3.3.20`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR.
 
 **Rollup:** Validation **Validated** | Qualification **Qualified** | Migration **Migration Verified** — overall **Qualified** (`72 Passed | 0 Waived | 4 Human Review Required | 0 Failed`, 5 N/A of 81)
 
@@ -25,9 +25,9 @@ Start your human review by opening **`Evidence/pr-qualification/qualification-re
 
 ## 2. Live Lab Receipts (`Evidence/receipts/`)
 
-- **`arm-deployment-readback.json`** — ARM deployment of `Package/mainTemplate.json` (`provisioningState` = `Succeeded`) and all 75 Analytic Rules and 2 Workbooks deployed with `enabled: false`, with GET readback verification (`resourceCount: 150`).
-- **`graph-detection-deployment.json`** — Microsoft Graph `/beta/security/rules/detectionRules` upsert and GET readback of all 75 Custom Detections (`isEnabled: false`) and content-provenance verification.
-- **`alert-parity-live.json`** — All 75 Analytic Rule <-> Custom Detection pairs executed across Log Analytics and Defender XDR Advanced Hunting against shared mock telemetry (`pairCount: 74`, `allPairsMatched: true`, `entityParityVerified: true`, `customDetailsParityVerified: true`).
+- **`arm-deployment-readback.json`** — ARM deployment of `Package/mainTemplate.json` (`provisioningState` = `Succeeded`) and all 74 Analytic Rules and 2 Workbooks deployed with `enabled: false`, with GET readback verification (`resourceCount: 150`).
+- **`graph-detection-deployment.json`** — Microsoft Graph `/beta/security/rules/detectionRules` upsert and GET readback of all 74 Custom Detections (`isEnabled: false`) and content-provenance verification.
+- **`alert-parity-live.json`** — All 74 Analytic Rule <-> Custom Detection pairs executed across Log Analytics and Defender XDR Advanced Hunting against shared mock telemetry (`pairCount: 74`, `allPairsMatched: true`, `entityParityVerified: true`, `customDetailsParityVerified: true`).
 - **`workbook-queries-live.json`** — All 48 workbook KQL queries (`AzureActiveDirectoryAuditLogs.json` and `AzureActiveDirectorySignins.json` across Sentinel and XDR Workbooks) and 26 Data Connector queries (`sampleQueries`, `graphQueries`, `connectivityCriterias`) executed with `ok: true` and `rowCount >= 1`.
 - **`url-and-asset-verification.json`** — Verification of all 73 documentation/reference URLs (`HTTP 200`) and 2 SVG logo assets (`AzureActiveDirectory.svg`).
 
