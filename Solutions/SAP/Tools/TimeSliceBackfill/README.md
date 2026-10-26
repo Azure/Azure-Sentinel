@@ -16,6 +16,13 @@ Use it to:
 > This tool is provided as-is, as a sample. Test it in a non-production landscape first.
 > Read [Sizing and load protection](#sizing-and-load-protection) before you run any large load.
 
+## Analyze ingestion without running a backfill
+
+Looking for **SAP ingestion peaks, truncation or high-volume accounts**? Jump to
+[SAP ingestion analysis and exclusion candidates](#sap-ingestion-analysis-and-exclusion-candidates)
+for seven copyable KQL queries and guidance on reviewing potential exclusions.
+This standalone section does not require running the backfill script.
+
 ## How it works
 
 ```
@@ -245,3 +252,185 @@ creates **duplicate records**. To avoid this:
 
 If duplicates were ingested, deduplicate in queries, for example with
 `summarize arg_max(TimeGenerated, *) by <unique key columns>`.
+
+## SAP ingestion analysis and exclusion candidates
+
+These queries analyze **already ingested SAP Security Audit Log data** independently of
+the backfill procedure. Use them in the Microsoft Sentinel Logs view to investigate
+truncation, understand volume patterns, and identify high-volume accounts for review.
+They do not change collection or configure exclusions.
+
+All timestamps are UTC. The date-range examples use a start-inclusive, end-exclusive
+interval: replace `StartUtc` and `EndUtc` with your dates. For example, October 19 through
+October 25 uses `StartUtc = datetime(2026-10-19)` and `EndUtc = datetime(2026-10-26)`.
+In a shared workspace, apply the same SAP system and client filters to every query,
+using the identifying columns in your data.
+
+`TimeGenerated` groups events by their recorded event time; `ingestion_time()` groups
+them by approximate arrival time in the workspace. Historic loads can therefore show
+an arrival peak today but an event-time peak in the past. For ingestion-time queries,
+set the Logs time picker wide enough to include the underlying historic events so
+an implicit `TimeGenerated` filter does not hide them. Null ingestion timestamps cannot
+be assigned to an arrival-time bucket.
+
+`_BilledSize` is the record size in bytes. The examples label binary units as GB
+(bytes / 1024^3) and TB (GB / 1024), matching the calculations below. These totals and
+projections are volume indicators, **not invoice estimates**: pricing, billable status,
+commitment tiers, retention and other charges are not accounted for.
+
+### Truncation events
+
+Find truncation markers and extract the counts from their messages:
+
+```kusto
+let StartUtc = datetime(2026-10-19);
+let EndUtc = datetime(2026-10-26);
+ABAPAuditLog
+| where TimeGenerated >= StartUtc and TimeGenerated < EndUtc
+| where Instance == "TRUNCATED"
+| extend TruncatedCount = tolong(extract(@"truncated:\s*(\d+)", 1, MessageText)),
+         ProcessedCount = tolong(extract(@"processed\s+(\d+)", 1, MessageText))
+| extend TruncationAmount = TruncatedCount - ProcessedCount
+| project TimeGenerated, MessageText, TruncatedCount, ProcessedCount, TruncationAmount
+| order by TimeGenerated desc
+```
+
+The extraction assumes messages contain `truncated: <number>` and `processed <number>`.
+Check the actual message format and count meanings for your deployed iFlow version
+before interpreting the difference as unprocessed events. Unmatched counts stay null,
+not zero; a negative difference also warrants checking the format and semantics.
+Ingested rows cannot establish the full volume of events that were dropped or never
+collected. Correlate markers with SAP and Integration Suite diagnostics.
+
+### Daily ingestion volume by event time
+
+Count events and their record-size volume for each event day:
+
+```kusto
+let StartUtc = datetime(2026-10-19);
+let EndUtc = datetime(2026-10-26);
+ABAPAuditLog
+| where TimeGenerated >= StartUtc and TimeGenerated < EndUtc
+| summarize EventCount = count(), IngestedBytes = sum(_BilledSize)
+    by Day = bin(TimeGenerated, 1d)
+| project Day, EventCount, IngestedGB = round(IngestedBytes / 1024.0 / 1024.0 / 1024.0, 2)
+| order by Day asc
+```
+
+This shows when the ingested events occurred, not when their bytes arrived. Missing
+days are absent from this result; partial days should not be compared with full days.
+
+### Average ingested GB per day
+
+Use complete UTC days and approximate ingestion time to measure arrival volume.
+Zero-volume days are included in the average:
+
+```kusto
+let StartUtc = datetime(2026-10-19);
+let EndUtc = datetime(2026-10-26);
+let DailyVolume =
+    ABAPAuditLog
+    | extend IngestedAt = ingestion_time()
+    | where IngestedAt >= StartUtc and IngestedAt < EndUtc
+    | summarize IngestedBytes = sum(_BilledSize) by Day = startofday(IngestedAt);
+range Day from StartUtc to (EndUtc - 1d) step 1d
+| join kind=leftouter DailyVolume on Day
+| extend IngestedGB = coalesce(IngestedBytes, 0.0) / 1024.0 / 1024.0 / 1024.0
+| summarize AvgDailyGB = avg(IngestedGB)
+| project AvgDailyGB = round(AvgDailyGB, 2),
+          EstimatedMonthlyGB = round(AvgDailyGB * 30, 2),
+          EstimatedMonthlyTB = round(AvgDailyGB * 30 / 1024, 2)
+```
+
+Set both dates to midnight, with `EndUtc` later than `StartUtc` and no later than
+the start of today. The monthly values project 30 days from the **unrounded** average;
+they assume the selected period is representative. Catch-up loads, outages and missing
+retained data can skew the estimate.
+
+### Peak periods per hour
+
+Visualize event-time activity over the last seven days to locate bursts:
+
+```kusto
+ABAPAuditLog
+| where TimeGenerated > ago(7d)
+| summarize EventCount = count() by Hour = bin(TimeGenerated, 1h)
+| order by Hour asc
+| render timechart
+```
+
+For actual arrival peaks, instead group on `bin(ingestion_time(), 1h)` and filter
+on ingestion time, with the Logs time picker adjusted as described above.
+Neither chart measures SAP ERP, Cloud Connector or Integration Suite resource capacity.
+
+### Highest-volume user accounts
+
+Identify the top five accounts by record-size volume. Ranking uses unrounded bytes:
+
+```kusto
+let StartUtc = datetime(2026-10-19);
+let EndUtc = datetime(2026-10-26);
+ABAPAuditLog
+| where TimeGenerated >= StartUtc and TimeGenerated < EndUtc
+| summarize EventCount = count(), IngestedBytes = sum(_BilledSize) by User
+| top 5 by IngestedBytes desc
+| project User, EventCount, IngestedGB = round(IngestedBytes / 1024.0 / 1024.0 / 1024.0, 2)
+```
+
+Investigate the event types, SAP systems and business processes behind these accounts.
+High volume alone does not mean an account is safe to exclude, especially for technical,
+privileged or security-sensitive users. Empty usernames may also appear and need
+investigation rather than blanket exclusion.
+
+### User and volume analysis
+
+Estimate the share of already ingested volume attributable to an explicit account list:
+
+```kusto
+let StartUtc = datetime(2026-10-19);
+let EndUtc = datetime(2026-10-26);
+let CandidateUsers = dynamic(["USER"]);
+ABAPAuditLog
+| where TimeGenerated >= StartUtc and TimeGenerated < EndUtc
+| summarize AllBytes = sum(_BilledSize),
+            WithoutUsersBytes = sumif(_BilledSize, User !in (CandidateUsers))
+    by Day = startofday(TimeGenerated)
+| extend UserImpactBytes = AllBytes - WithoutUsersBytes
+| project Day = format_datetime(Day, "yyyy-MM-dd"),
+          AllEventsGB = round(AllBytes / 1024.0 / 1024.0 / 1024.0, 2),
+          WithoutUsersGB = round(WithoutUsersBytes / 1024.0 / 1024.0 / 1024.0, 2),
+          UserImpactGB = round(UserImpactBytes / 1024.0 / 1024.0 / 1024.0, 2),
+          UserImpactPercent = iff(AllBytes > 0, round(100.0 * UserImpactBytes / AllBytes, 2), real(null))
+| order by Day asc
+```
+
+Replace `USER` with the candidate accounts. Matching is exact and case-sensitive
+(`in`/`!in`), not token-based `has_any`, so similar usernames are not inadvertently grouped.
+Differences and percentages are computed before rounding. The result is a what-if
+analysis only; it does not exclude anything or guarantee future savings.
+
+Before configuring exclusions, review detection and investigation coverage, audit and
+compliance requirements, and obtain approval from the SAP and security owners.
+Confirm where filtering occurs: filtering after ingestion does not reduce source
+extraction load, and a workspace-side filter does not remove upstream RFC/CPI work.
+Any source-side exclusion also needs assessment of its impact on SAP audit requirements.
+
+### Threshold ingestion chart
+
+Compare observed event counts per minute with an editable reference line:
+
+```kusto
+let ReferenceEventsPerMinute = 150000;
+ABAPAuditLog
+| where TimeGenerated > ago(7d)
+| summarize Count = count() by Minute = bin(TimeGenerated, 1m)
+| extend Threshold = ReferenceEventsPerMinute
+| order by Minute asc
+| render timechart with (ycolumns = Count, Threshold)
+```
+
+**150,000 events/minute is an illustrative reference, not a documented supported limit**
+for the SAP connector, Integration Suite, Cloud Connector or SAP ERP, and it does not
+predict truncation. Adjust it to an agreed operational baseline. This chart uses
+event time and only shows minutes with ingested events; it cannot reveal the true peak
+of data lost through truncation or pipeline failures.
