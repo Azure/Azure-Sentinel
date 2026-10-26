@@ -3248,18 +3248,20 @@ function RunArmTtkOnPackage {
     if ($isPipelineRun -eq $false) {
         #downloading and running arm-ttk on generated solution
         $armTtkFolder = "$PSScriptRoot/../arm-ttk"
-        try {
-            if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
+        $moduleManifest = Join-Path $PSScriptRoot "../tmp/arm-ttk/arm-ttk.psd1"
+        if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
+            if (Test-Path -Path $moduleManifest -PathType Leaf) {
+                Import-Module $moduleManifest
+            }
+            else {
                 Write-Output "Missing arm-ttk validations. Downloading module..."
                 & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
             }
-            & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
         }
-        catch {
-            Write-Host "Warning: ARM-TTK check encountered an error: $_" -ForegroundColor Yellow
-        }
-        finally {
-            $global:LASTEXITCODE = 0
+        $global:LASTEXITCODE = 0
+        & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM-TTK validation failed for solution '$solutionName' (exit code $LASTEXITCODE)."
         }
     }
 }

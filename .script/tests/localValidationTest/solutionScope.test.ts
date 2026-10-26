@@ -160,11 +160,27 @@ describe("local validation folder scope", () => {
     const stubDirectory = path.join(repoRoot, ".script/tests/localValidationTest", `.dotnet-stub-${process.pid}`);
     const markerPath = path.join(stubDirectory, "selected-content-root.txt");
     const reportPath = path.join(repoRoot, ".script/tests/localValidationTest", `cross-root-dotnet-${process.pid}.json`);
-    const stubPath = path.join(stubDirectory, process.platform === "win32" ? "dotnet.cmd" : "dotnet");
+    const stubPath = path.join(stubDirectory, process.platform === "win32" ? "dotnet.cjs" : "dotnet");
     fs.mkdirSync(stubDirectory, { recursive: true });
     fs.writeFileSync(stubPath, process.platform === "win32"
-      ? "@echo off\r\nif \"%1\"==\"--version\" (echo 8.0.100 & exit /b 0)\r\necho %SENTINEL_VALIDATION_CONTENT_ROOT%>%DOTNET_CONTENT_ROOT_MARKER%\r\necho Stubbed dotnet test\r\nexit /b 0\r\n"
-      : "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '8.0.100\\n'; exit 0; fi\nprintf '%s' \"$SENTINEL_VALIDATION_CONTENT_ROOT\" > \"$DOTNET_CONTENT_ROOT_MARKER\"\nprintf 'Stubbed dotnet test\\n'\n", "utf8");
+      ? [
+        "const childProcess = require('node:child_process');",
+        "const originalExecSync = childProcess.execSync;",
+        "const originalExecFileSync = childProcess.execFileSync;",
+        "childProcess.execSync = (command, ...args) => {",
+        "  if (command === 'dotnet --version') return '8.0.100\\n';",
+        "  if (command === 'dotnet --list-runtimes') return 'Microsoft.NETCore.App 8.0.0\\n';",
+        "  return originalExecSync(command, ...args);",
+        "};",
+        "childProcess.execFileSync = (command, args, options) => {",
+        "  if (command !== 'dotnet') return originalExecFileSync(command, args, options);",
+        "  require('node:assert/strict').equal(args[0], 'test');",
+        "  require('node:fs').writeFileSync(options.env.DOTNET_CONTENT_ROOT_MARKER, options.env.SENTINEL_VALIDATION_CONTENT_ROOT);",
+        "  return 'Stubbed dotnet test\\n';",
+        "};",
+        "require('node:module').syncBuiltinESMExports();",
+      ].join("\n")
+      : "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '8.0.100\\n'; exit 0; fi\nif [ \"$1\" = \"--list-runtimes\" ]; then printf 'Microsoft.NETCore.App 8.0.0\\n'; exit 0; fi\nprintf '%s' \"$SENTINEL_VALIDATION_CONTENT_ROOT\" > \"$DOTNET_CONTENT_ROOT_MARKER\"\nprintf 'Stubbed dotnet test\\n'\n", "utf8");
     fs.chmodSync(stubPath, 0o755);
 
     try {
@@ -181,10 +197,13 @@ describe("local validation folder scope", () => {
           ...process.env,
           PATH: `${stubDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
           DOTNET_CONTENT_ROOT_MARKER: markerPath,
+          ...(process.platform === "win32" ? {
+            NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --require ${JSON.stringify(stubPath)}`,
+          } : {}),
         },
       });
 
-      expect(result.status, result.stderr).to.equal(0);
+      expect(result.status, `${result.stderr}\n${result.stdout}`).to.equal(0);
       expect(fs.readFileSync(markerPath, "utf8").trim()).to.equal(contentRoot);
       const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
       const kqlResult = report.results.find((entry: { validator: string }) =>
