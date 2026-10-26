@@ -1,0 +1,278 @@
+{
+  "name": "BitSightEventsConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "BitSightEventsConnector",
+      "title": "BitSight Security Events (via Codeless Connector Framework)",
+      "publisher": "Microsoft",
+      "descriptionMarkdown": "The [BitSight](https://www.bitsight.com/) data connector provides the capability to ingest security alerts, breaches, and findings from your BitSight portfolio into Microsoft Sentinel through the BitSight REST API. The connector monitors portfolio companies for rating changes, news alerts, data breaches, and detailed security findings across Diligence, Compromised Systems, and User Behavior risk categories. Refer to the [BitSight API documentation](https://help.bitsighttech.com/hc/en-us/articles/115014888388-API-Token-Management) for more information.",
+      "graphQueriesTableName": "BitSightAlerts",
+      "graphQueries": [
+        {
+          "metricName": "Total Alerts received",
+          "legend": "BitSight Alerts",
+          "baseQuery": "{{graphQueriesTableName}}"
+        },
+        {
+          "metricName": "Total Breaches received",
+          "legend": "BitSight Breaches",
+          "baseQuery": "BitSightBreaches"
+        },
+        {
+          "metricName": "Total Findings received",
+          "legend": "BitSight Findings",
+          "baseQuery": "BitSightFindings"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get sample of BitSight Alerts",
+          "query": "BitSightAlerts\n | take 10"
+        },
+        {
+          "description": "Get recent high-severity alerts",
+          "query": "BitSightAlerts\n | where severity in ('WARN', 'CRITICAL') and TimeGenerated > ago(7d)\n | project TimeGenerated, company_name, alert_type, severity\n | order by TimeGenerated desc"
+        },
+        {
+          "description": "Get sample of BitSight Findings",
+          "query": "BitSightFindings\n | take 10"
+        },
+        {
+          "description": "Get active severe findings",
+          "query": "BitSightFindings\n | where currently_active == true and severity_category in ('MATERIAL', 'SEVERE')\n | project TimeGenerated, company_name, risk_vector_label, severity_category, severity, first_seen\n | order by severity desc"
+        },
+        {
+          "description": "Get sample of BitSight Breaches",
+          "query": "BitSightBreaches\n | take 10"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where TimeGenerated > ago(12h)\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "BitSightBreaches",
+          "lastDataReceivedQuery": "BitSightBreaches\n | where TimeGenerated > ago(12h)\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        },
+        {
+          "name": "BitSightFindings",
+          "lastDataReceivedQuery": "BitSightFindings\n | where TimeGenerated > ago(12h)\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "BitSight API Token",
+            "description": "A BitSight API Token is required to authenticate requests to the BitSight REST API. [See the documentation](https://help.bitsighttech.com/hc/en-us/articles/115014888388-API-Token-Management) to learn more about API Token management."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Connection Management",
+          "description": "Manage your BitSight data stream connections",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## BitSight Connections\n\nManage multiple BitSight data stream connections. Each connection selects a specific data type - **Alerts**, **Breaches**, or **Findings** - and assigns a **Connection Name** that is stored in the `ConnectorName` column of every ingested record.\n\n> **Authentication**: BitSight uses HTTP Basic Authentication where the API token is used as **both** the username and password."
+              }
+            },
+            {
+              "type": "DataConnectorsGrid",
+              "parameters": {
+                "mapping": [
+                  {
+                    "columnName": "Connection Name",
+                    "columnValue": "properties.addOnAttributes.friendlyName"
+                  },
+                  {
+                    "columnName": "Data Stream",
+                    "columnValue": "properties.addOnAttributes.userStream"
+                  },
+                  {
+                    "columnName": "API URL",
+                    "columnValue": "properties.request.apiEndpoint"
+                  }
+                ],
+                "menuItems": [
+                  "DeleteConnector"
+                ]
+              }
+            },
+            {
+              "type": "ContextPane",
+              "parameters": {
+                "isPrimary": true,
+                "label": "Add Connection",
+                "title": "Add BitSight Connection",
+                "subtitle": "Configure a new BitSight data stream connection",
+                "contextPaneType": "DataConnectorsContextPane",
+                "instructionSteps": [
+                  {
+                    "instructions": [
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "## 1. Select Data Stream\n\nChoose which BitSight data type to collect for this connection. Create separate connections for each stream you want to ingest."
+                        }
+                      },
+                      {
+                        "type": "Dropdown",
+                        "parameters": {
+                          "label": "Data Stream",
+                          "name": "dataStream",
+                          "options": [
+                            {
+                              "key": "ALERTS",
+                              "text": "Alerts - Rating changes and news events (BitSightAlerts)"
+                            },
+                            {
+                              "key": "BREACHES",
+                              "text": "Breaches - Data breach events for portfolio companies (BitSightBreaches)"
+                            },
+                            {
+                              "key": "DILIGENCE",
+                              "text": "Diligence Findings - Web, app, and network risk factors (BitSightFindings)"
+                            },
+                            {
+                              "key": "COMPROMISED_SYSTEMS",
+                              "text": "Compromised Systems Findings - Botnet and malware activity (BitSightFindings)"
+                            },
+                            {
+                              "key": "USER_BEHAVIOR",
+                              "text": "User Behavior Findings - Credential and employee risk activity (BitSightFindings)"
+                            }
+                          ],
+                          "required": true
+                        }
+                      },
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "## 2. API Configuration"
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "BitSight API Base URL",
+                          "placeholder": "https://api.bitsighttech.com",
+                          "type": "text",
+                          "name": "bitSightApiUrl",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "## 3. Authentication\n\nBitSight uses your API token as **both** the username and password for HTTP Basic Authentication."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "BitSight API Token (Username)",
+                          "placeholder": "Paste your BitSight API Token",
+                          "type": "text",
+                          "name": "username",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "BitSight API Token (Password)",
+                          "placeholder": "Paste your BitSight API Token again",
+                          "type": "password",
+                          "name": "password",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Both fields must contain the **same API token value**. Entering different values will cause authentication to fail.",
+                          "visible": true,
+                          "inline": false
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Obtain your API Token from **Settings > Account > User Preferences > API Token** in the BitSight portal.",
+                          "visible": true,
+                          "inline": false
+                        }
+                      },
+                      {
+                        "type": "Markdown",
+                        "parameters": {
+                          "content": "## 4. Connection Name\n\nAssign a unique name to identify this connection in the grid and in every ingested log record."
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Connection Name",
+                          "placeholder": "e.g. BitSight-Alerts-Prod",
+                          "type": "text",
+                          "name": "friendlyName",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "The connection name is stored in the `ConnectorName` column of every ingested record, enabling you to trace data back to this specific connection.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

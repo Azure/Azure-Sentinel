@@ -9,9 +9,10 @@ requiredDataConnectors:
     dataTypes:
       - AzureDiagnostics
 tactics:
-  - InitialAccess
+  - Impact
 relevantTechniques:
-  - T1190
+  - T1565.001
+  - T1485
 tags:
   - SQL
 query: |
@@ -36,16 +37,13 @@ query: |
                         , 0),
       AdditionalInfo = additional_information_s, timeSlice = floor(TimeGenerated, timeSliceSize));
   let totals = processedData
-  | summarize count() by PrincipalName, ApplicationName
-  | extend joinKey = strcat(PrincipalName, ApplicationName)
-  | project joinKey, count_;
+  | summarize count() by PrincipalName, ApplicationName;
   processedData
   //Count the total number of times each number of rows was accessed
   | summarize count() by AffectedRows, PrincipalName, ApplicationName
-  | extend joinKey = strcat(PrincipalName, ApplicationName)
-  | join kind=leftouter (
-    totals
-  ) on joinKey
+    | join kind=leftouter (
+      totals
+    ) on PrincipalName, ApplicationName
   | extend prevalence = round(toreal(count_) / toreal(count_1) * 100, 2)
   | where prevalence <= threshold
   | extend Name = tostring(split(PrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(PrincipalName, '@', 1)[0])
@@ -63,4 +61,4 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: ApplicationName
-version: 1.0.1
+version: 1.0.2

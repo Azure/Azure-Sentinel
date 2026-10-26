@@ -1,0 +1,70 @@
+id: d6ab015a-0a76-47f4-959f-54f49edff3f3
+name: AI Agents - Newly observed MCP server on existing agent
+description: |
+  Identifies MCP server names newly observed on an existing AI agent compared with its latest baseline snapshot. Review inventory and audit records to confirm whether the configuration change was authorized. Run within 2 days of a change to retain coverage.
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+  let lookback = 14d;
+  let recent = 2d;
+  let IdentityIdtoUPN = materialize(
+      IdentityInfo
+      | extend ResolvedAccountUpn = tostring(column_ifexists("AccountUpn", column_ifexists("AccountUPN", ""))),
+               IdentityTimestamp = todatetime(column_ifexists("Timestamp", column_ifexists("TimeGenerated", datetime(null))))
+      | where IdentityTimestamp >= ago(lookback)
+      | where isnotempty(AccountObjectId) and isnotempty(ResolvedAccountUpn)
+      | summarize arg_max(IdentityTimestamp, ResolvedAccountUpn) by AccountObjectId
+      | project AccountObjectId = tostring(AccountObjectId), AccountUpn = ResolvedAccountUpn);
+  let CurrentRaw = materialize(
+      AgentsInfo
+      | where Timestamp > ago(recent)
+      | summarize arg_max(Timestamp, *) by AgentId
+      | where LifecycleStatus != "Deleted");
+  let CurrentMcp =
+      CurrentRaw
+      | mv-expand Mcp = McpServers
+      | extend McpName = tostring(Mcp.name)
+      | where isnotempty(McpName)
+      | summarize CurrentMcpServers = make_set(McpName) by AgentId;
+  let BaselineRaw = materialize(
+      AgentsInfo
+      | where Timestamp between (ago(lookback) .. ago(recent))
+      | where LifecycleStatus != "Deleted"
+      | summarize arg_max(Timestamp, *) by AgentId);
+  let BaselineMcp =
+      BaselineRaw
+      | mv-expand Mcp = McpServers
+      | extend McpName = tostring(Mcp.name)
+      | where isnotempty(McpName)
+      | summarize KnownMcpServers = make_set(McpName) by AgentId;
+  let Baseline =
+      BaselineRaw
+      | join kind=leftouter BaselineMcp on AgentId
+      | extend BaselineMcpServers = coalesce(KnownMcpServers, dynamic([]))
+      | project AgentId, PreviousTimestamp = Timestamp, BaselineMcpServers;
+  CurrentRaw
+  | join kind=inner CurrentMcp on AgentId
+  | join kind=inner Baseline on AgentId
+  | extend AddedMcpServers = set_difference(CurrentMcpServers, BaselineMcpServers)
+  | where array_length(AddedMcpServers) > 0
+  | extend OwnerIds = iff(array_length(coalesce(Owners, dynamic([]))) > 0, Owners, dynamic([""]))
+  | mv-expand OwnerId = OwnerIds to typeof(string)
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | extend OwnerAccountName = tostring(split(OwnerUpn, "@")[0]),
+           OwnerAccountUPNSuffix = tostring(split(OwnerUpn, "@")[1])
+  | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
+           AddedMcpServers, BaselineMcpServers, CurrentMcpServers, OwnerId, OwnerUpn,
+           OwnerAccountName, OwnerAccountUPNSuffix
+  | sort by Timestamp desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: OwnerAccountName
+      - identifier: UPNSuffix
+        columnName: OwnerAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: OwnerId
+version: 1.0.0

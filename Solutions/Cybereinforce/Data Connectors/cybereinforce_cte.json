@@ -1,0 +1,93 @@
+{
+    "id": "cybereinforce_cte",
+    "title": "Cybereinforce Threat Enforcement (CTE)",
+    "publisher": "Cybeurope",
+    "descriptionMarkdown": "The [Cybereinforce Threat Enforcement](https://cybereinforce.com) data connector ingests browser-level URL blocking, threat-intelligence match, and audit/administration events into Microsoft Sentinel using a scheduled Logic App and the Azure Monitor Logs Ingestion API. Cybereinforce enforces Microsoft Defender threat intelligence directly at the browser (Chrome, Firefox, Safari) on enrolled endpoints, and this connector surfaces that enforcement activity for SOC investigation, hunting, and alerting.",
+    "graphQueries": [
+        {
+            "metricName": "Total events received",
+            "legend": "CybereinforceCTE_CL",
+            "baseQuery": "CybereinforceCTE_CL"
+        }
+    ],
+    "sampleQueries": [
+        {
+            "description": "All Cybereinforce events",
+            "query": "CybereinforceCTE_CL\n| sort by TimeGenerated desc\n| take 10"
+        },
+        {
+            "description": "URL blocks matched to Cybereinforce Threat Intelligence",
+            "query": "CybereinforceCTE_CL\n| where EventType == \"block.url\"\n| extend d = parse_json(Details)\n| where tobool(d.ioc) == true\n| sort by TimeGenerated desc"
+        },
+        {
+            "description": "High / critical severity events",
+            "query": "CybereinforceCTE_CL\n| where tolower(Severity) in (\"high\", \"critical\")\n| sort by TimeGenerated desc"
+        }
+    ],
+    "dataTypes": [
+        {
+            "name": "CybereinforceCTE_CL",
+            "lastDataReceivedQuery": "CybereinforceCTE_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+    ],
+    "connectivityCriterias": [
+        {
+            "type": "IsConnectedQuery",
+            "value": [
+                "CybereinforceCTE_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(1d)"
+            ]
+        }
+    ],
+    "availability": {
+        "status": 1,
+        "isPreview": false
+    },
+    "permissions": {
+        "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                }
+            },
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "action": true
+                }
+            }
+        ],
+        "customs": [
+            {
+                "name": "Azure Subscription",
+                "description": "Contributor or Owner permissions on the resource group are required to deploy the data ingestion infrastructure (Data Collection Endpoint, Data Collection Rule, custom table, and Logic App)."
+            },
+            {
+                "name": "Cybereinforce Account",
+                "description": "An active Cybereinforce Threat Enforcement tenant with admin access to generate a MicrosoftToken from the Cybereinforce Admin portal."
+            }
+        ]
+    },
+    "instructionSteps": [
+        {
+            "title": "Step 1 - Generate a Cybereinforce MicrosoftToken",
+            "description": "1. Sign in to the [Cybereinforce Admin portal](https://cybereinforce.com/admin/).\n2. Under **Integrations**, find the **MicrosoftToken** section.\n3. Click **Generate MicrosoftToken (/api/microsoftToken)**.\n4. Copy the generated token and your Cybereinforce **Tenant ID** - both are required for the deployment in Step 2."
+        },
+        {
+            "title": "Step 2 - Deploy the data ingestion infrastructure",
+            "description": "This step deploys the required Azure resources: a custom Log Analytics table (`CybereinforceCTE_CL`), a Data Collection Endpoint, a Data Collection Rule, a user-assigned managed identity, and a Logic App that polls Cybereinforce on a schedule and forwards new events into the table.\n\n1. Click the **Deploy to Azure** button below.\n\n\t[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCybereinforce%2FData%20Connectors%2Fdeployment%2Fazuredeploy_cybereinforce.json)\n\n2. Select the **Subscription**, **Resource Group**, and **Location** where your Microsoft Sentinel workspace resides.\n3. Enter the **Log Analytics Workspace Resource ID**, the **Cybereinforce Tenant ID**, and the **MicrosoftToken** copied in Step 1.\n4. Click **Review + create** and then **Create**."
+        },
+        {
+            "title": "Step 3 - Confirm ingestion",
+            "description": "After a few polling cycles (default every 15 minutes), new events should appear in the `CybereinforceCTE_CL` table. Run one of the sample queries above in Log Analytics to confirm data is flowing."
+        }
+    ]
+}

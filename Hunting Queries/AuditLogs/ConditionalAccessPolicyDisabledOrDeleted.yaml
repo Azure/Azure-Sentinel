@@ -1,0 +1,120 @@
+id: 0456a783-2fd9-4e07-aa05-4aa0afdab0a6
+name: Conditional Access policy disabled or deleted
+description: |
+  Hunting query that identifies Conditional Access policies that have been disabled or
+  deleted. An attacker who obtains privileged access to an Entra ID tenant will commonly
+  disable or delete CA policies to remove multi-factor authentication requirements,
+  trusted location restrictions, or compliant-device conditions before proceeding with
+  lateral movement or data exfiltration. Disabling a CA policy is a silent, low-noise
+  action that does not interrupt active sessions and may go unnoticed without dedicated
+  monitoring.
+  This query surfaces two event types: policy state changes from enabled to disabled
+  (OperationName: Update conditional access policy) and outright policy deletions
+  (OperationName: Delete conditional access policy). Both are extracted from the Policy
+  category of AuditLogs and include the actor identity and source IP for analyst
+  correlation.
+  Analysts must validate every result. Benign matches include authorized policy
+  lifecycle management, scheduled policy reviews, tenant restructuring activities,
+  and break-glass account testing. The signal value is highest when the actor is not
+  a known CA administrator or when the action occurs outside of change-window hours.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/conditional-access/overview
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1562/001/
+  - https://attack.mitre.org/techniques/T1556/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1562.001
+  - T1556
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  // Deleted policies - always surface regardless of modifiedProperties content
+  let Deletions =
+      AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where Category =~ "Policy"
+      | where OperationName =~ "Delete conditional access policy"
+      | where Result =~ "success"
+      | extend PolicyName  = tostring(TargetResources[0].displayName)
+      | extend PolicyId    = tostring(TargetResources[0].id)
+      | extend ActorUpn    = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+      | extend ActorApp    = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+      | extend ActorIp     = iff(
+            isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+            tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+            tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+      | extend Actor       = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+      | extend StateChange = "Deleted"
+      | extend OldValue    = ""
+      | extend NewValue    = "";
+  // Updated policies where the state transitioned from enabled to disabled
+  let Disablements =
+      AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where Category =~ "Policy"
+      | where OperationName =~ "Update conditional access policy"
+      | where Result =~ "success"
+      | extend PolicyName = tostring(TargetResources[0].displayName)
+      | extend PolicyId   = tostring(TargetResources[0].id)
+      | extend ActorUpn   = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+      | extend ActorApp   = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+      | extend ActorIp    = iff(
+            isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+            tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+            tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+      | extend Actor      = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+      | mv-expand ModProp = TargetResources[0].modifiedProperties
+      | extend PropName   = tostring(ModProp.displayName)
+      | extend OldValue   = tostring(ModProp.oldValue)
+      | extend NewValue   = tostring(ModProp.newValue)
+      | where PropName =~ "State"
+            and OldValue has "enabled"
+            and NewValue has "disabled"
+      | extend StateChange = "Disabled";
+  union Deletions, Disablements
+  | extend AccountName      = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      OperationName,
+      PolicyName,
+      PolicyId,
+      StateChange,
+      OldValue,
+      NewValue,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

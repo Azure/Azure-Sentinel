@@ -1,0 +1,110 @@
+id: c4e0baf0-283b-49d7-8b40-a1c72e92a4b2
+name: Application registration or update with external redirect URI
+description: |
+  Hunting query that identifies Entra ID application registrations and updates where one
+  or more redirect URIs (reply URLs) point to an external domain that is not a trusted
+  Microsoft endpoint, localhost, or a standard OAuth out-of-band value. An attacker who
+  can register or modify an application may add an attacker-controlled redirect URI to
+  intercept OAuth authorization codes and exchange them for access tokens without user
+  interaction after consent is granted.
+  Trusted prefixes excluded by this query include login.microsoftonline.com,
+  login.microsoft.com, login.windows.net, portal.azure.com, localhost, 127.0.0.1,
+  urn:ietf:wg, ms-appx-web, and msal. Any redirect URI not matching these prefixes
+  is surfaced for analyst review.
+  Analysts must validate every result. Benign matches include newly registered
+  third-party SaaS integrations, legitimate ISV applications, and authorized partner
+  applications that use their own domains as redirect targets.
+  References:
+  - https://learn.microsoft.com/azure/active-directory/develop/reply-url
+  - https://learn.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1528/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let trustedPrefixes = dynamic([
+      "https://login.microsoftonline.com",
+      "https://login.microsoft.com",
+      "https://login.windows.net",
+      "https://portal.azure.com",
+      "http://localhost",
+      "https://localhost",
+      "http://127.0.0.1",
+      "https://127.0.0.1",
+      "urn:ietf:wg",
+      "ms-appx-web://",
+      "msal"
+  ]);
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName in~ ("Add application", "Update application")
+  | where Result =~ "success"
+  | extend ModProps  = TargetResources[0].modifiedProperties
+  | extend AppName   = tostring(TargetResources[0].displayName)
+  | extend AppId     = tostring(TargetResources[0].id)
+  | extend ActorUpn  = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | extend ActorApp  = tostring(parse_json(tostring(InitiatedBy.app)).displayName)
+  | extend ActorIp   = iff(
+        isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)),
+        tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+        tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+  | extend Actor = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | mv-expand ModProp = ModProps
+  | where tostring(ModProp.displayName) =~ "ReplyUrls"
+  // newValue is a JSON array of redirect URIs
+  | extend RawUrls = tostring(ModProp.newValue)
+  | extend UrlArray = todynamic(RawUrls)
+  | mv-expand RedirectUri = UrlArray to typeof(string)
+  | extend RedirectUri = trim('"', trim(' ', RedirectUri))
+  | where isnotempty(RedirectUri)
+  // Exclude trusted prefixes
+  | where not(RedirectUri has_any (trustedPrefixes))
+  | extend AccountName      = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[0]), Actor)
+  | extend AccountUPNSuffix = iff(ActorUpn has "@", tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      OperationName,
+      AppName,
+      AppId,
+      RedirectUri,
+      Actor,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId,
+      Result
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Actor
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: AppName
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

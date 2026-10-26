@@ -43,7 +43,7 @@ query: |
   //Bin the data into 1 day windows, taking the average of tokens and parameters for that user and application during the period
   | summarize round(avg(tokens), 2), round(avg(parameters),2), min(TimeGenerated), max(TimeGenerated) by PrincipalName, ApplicationName, bin(TimeGenerated, resolution)
   //Summarise by user and application and create lists ready for anomaly detection
-  | summarize make_list(avg_tokens, 10000), make_list(avg_parameters, 10000), make_list(min_TimeGenerated, 10000), make_list(max_TimeGenerated, 10000) by PrincipalName, ApplicationName
+  | summarize make_list(avg_tokens, 1000), make_list(avg_parameters, 1000), make_list(min_TimeGenerated, 1000), make_list(max_TimeGenerated, 1000) by PrincipalName, ApplicationName
   | extend series_decompose_anomalies(list_avg_tokens, scoreThreshold, -1, 'linefit'), series_decompose_anomalies(list_avg_parameters, scoreThreshold, -1, 'linefit')
   | mv-expand TokenAnomaly=series_decompose_anomalies_list_avg_tokens_ad_flag, ParameterAnomaly=series_decompose_anomalies_list_avg_parameters_ad_flag, WindowStart=list_min_TimeGenerated, WindowEnd=list_max_TimeGenerated
   | project WindowStart, WindowEnd, PrincipalName, ApplicationName, TokenAnomaly, ParameterAnomaly
@@ -54,12 +54,10 @@ query: |
   //Split the query here to see raw anomaly results
   //The next section will re-join back to the SQL diagnostics data to
   //display the queries executed within the anomalous windows identified
-  | extend joinKey = strcat(PrincipalName, ApplicationName)
   | join kind=leftouter (
       processedData
       | project ApplicationName, PrincipalName, Statement, TimeGenerated
-      | extend joinKey = strcat(PrincipalName, ApplicationName)
-  ) on joinKey
+  ) on PrincipalName, ApplicationName
   | where TimeGenerated between (todatetime(WindowStart) .. todatetime(WindowEnd))
   | extend Parameters = countof(Statement, "=")
   | extend Tokens = array_length(split(Statement, " "))
@@ -80,4 +78,4 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: ApplicationName
-version: 1.0.1
+version: 1.0.2

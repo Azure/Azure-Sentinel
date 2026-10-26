@@ -1,0 +1,76 @@
+id: 6f2d71d6-e6c4-0da4-91da-e8192dc5b12c
+name: "UniFi Site Manager: ISP Packet Loss"
+description: |
+  Identifies when WAN packet loss occurs. Even small loss percentages can significantly degrade VoIP calls and video conferencing quality.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: UniFiSiteManagerConnectorDefinition
+    dataTypes:
+      - Unifi_SiteManager_ISPMetrics_CL
+queryFrequency: 15m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1499
+subTechniques:
+  - T1498.001
+  - T1499.002
+query: |
+  // UniFi ISP Packet Loss Detection
+  let PacketLossThreshold = 5;
+  let MinTotalPacketLoss = 10;
+  Unifi_SiteManager_ISPMetrics_CL
+  | where TimeGenerated > ago(30m)
+  | mv-expand period = Periods
+  | extend
+      metricTime = todatetime(period.metricTime),
+      packetLoss = toint(period.data.wan.packetLoss),
+      ispName = tostring(period.data.wan.ispName),
+      ispAsn = tostring(period.data.wan.ispAsn),
+      avgLatency = toint(period.data.wan.avgLatency)
+  // De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime
+  | summarize arg_max(TimeGenerated, packetLoss, avgLatency, ispAsn) by tostring(SiteId), ispName, metricTime
+  | where metricTime > ago(30m)
+  | where packetLoss >= PacketLossThreshold
+  | summarize
+      TotalPacketLoss = sum(packetLoss),
+      EventCount = count(),
+      AvgLatency = avg(avgLatency),
+      FirstSeen = min(metricTime),
+      LastSeen = max(metricTime)
+      by SiteId, ispName, ispAsn
+  | where TotalPacketLoss >= MinTotalPacketLoss
+  | extend TimeGenerated = now()
+  | project
+      TimeGenerated,
+      SiteId = SiteId,
+      ISPName = ispName,
+      ISPAsn = ispAsn,
+      TotalPacketLoss,
+      EventCount,
+      AvgLatencyMs = round(AvgLatency, 1),
+      FirstSeen,
+      LastSeen
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SiteId
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ISPName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT4H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.1

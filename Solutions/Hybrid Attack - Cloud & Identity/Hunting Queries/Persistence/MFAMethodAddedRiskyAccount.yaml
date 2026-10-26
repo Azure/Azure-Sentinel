@@ -1,0 +1,93 @@
+id: d99ec2df-bcaf-4195-be29-9dd92e8d5e93
+name: MFA Method Added on Risky Account
+description: |
+  Identifies MFA method registration, update, or deletion on an account with medium/high Entra ID risk, where a risky sign-in preceded the change. Consistent with Scattered Spider post-compromise persistence (CISA AA23-320A).
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1556.006
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let riskLevels = dynamic(["medium", "high"]);
+  let MFAEvents = AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName in (
+      "User registered security info",
+      "Admin registered security info",
+      "User updated security info",
+      "Admin updated security info",
+      "User changed default security info",
+      "User deleted security info",
+      "Admin deleted security info")
+  | where Result =~ "success"
+  | extend TargetUserUPN = tostring(TargetResources[0].userPrincipalName)
+  | extend TargetUserId  = tostring(TargetResources[0].id)
+  | extend ActorUPN      = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorId       = tostring(InitiatedBy.user.id)
+  | extend ActorIP       = tostring(InitiatedBy.user.ipAddress)
+  | where isnotempty(TargetUserId)
+  | mv-expand Detail     = AdditionalDetails
+  | extend DetailKey     = tostring(Detail.key)
+  | extend DetailValue   = tostring(Detail.value)
+  | summarize
+      MFATime    = min(TimeGenerated),
+      ActorUPN   = any(ActorUPN),
+      ActorId    = any(ActorId),
+      ActorIP    = any(ActorIP),
+      AuthMethod = anyif(DetailValue, DetailKey == "AuthenticationMethod")
+      by Id, OperationName, TargetUserUPN, TargetUserId;
+  let RiskyUsers = SigninLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where RiskLevelAggregated in (riskLevels)
+  | extend RiskRank = case(RiskLevelAggregated =~ "high", 3, RiskLevelAggregated =~ "medium", 2, RiskLevelAggregated =~ "low", 1, 0)
+  | summarize
+      LastRiskySignIn = max(TimeGenerated),
+      arg_max(RiskRank, RiskLevelAggregated, IPAddress, Location)
+      by UserId
+  | project UserId, LastRiskySignIn,
+            MaxRiskLevel  = RiskLevelAggregated,
+            RiskySignInIP = IPAddress,
+            RiskyLocation = Location;
+  MFAEvents
+  | join kind=inner RiskyUsers on $left.TargetUserId == $right.UserId
+  | where LastRiskySignIn <= MFATime
+  | extend AdminPerformedChange = iff(ActorUPN != TargetUserUPN and isnotempty(ActorUPN), true, false)
+  | project
+      MFATime,
+      OperationName,
+      TargetUserUPN,
+      ActorUPN,
+      TargetUserId,
+      ActorId,
+      AdminPerformedChange,
+      AuthMethod,
+      MFARegistrationIP = ActorIP,
+      UserRiskLevel     = MaxRiskLevel,
+      LastRiskySignIn,
+      RiskySignInIP,
+      RiskyLocation
+  | order by MFATime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: ActorId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: MFARegistrationIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RiskySignInIP
+version: 1.0.0

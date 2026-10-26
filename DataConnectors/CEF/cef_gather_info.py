@@ -111,10 +111,14 @@ def run_command(command):
                                          stderr=subprocess.STDOUT)
         command_to_run = subprocess.Popen(command_dict[command][1].split(' '), stdin=first_command.stdout,
                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+          # Initialize output variables to ensure they are defined even if communicate() fails
+        o = ''
+        e = None
     try:
         o, e = command_to_run.communicate()
     except Exception:
-        pass
+          # Preserve previous behavior of swallowing the exception, but keep a useful message
+        o = 'Failed to run command "{}"'.format(command)
     if not isinstance(o, str):
         o = o.decode(encoding='UTF-8')
     command_object = SystemInfo(command, o)

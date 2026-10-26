@@ -1,0 +1,126 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: OktaSSO
+  dataTypes:
+  - Okta_CL
+- connectorId: OktaSSOv2
+  dataTypes:
+  - OktaSSO
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OktaV2_CL
+  requiredDataConnectors:
+  - connectorId: OktaSSOv2
+    dataTypes:
+    - OktaV2_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 884be6e7-e568-418e-9c12-89229865ffde
+    path: Analytic Rules/FailedLoginsFromUnknownOrInvalidUser.yaml
+    version: 1.1.2
+    querySha256: 1e3df90037a40a3502e15d23e87e777cc32ebe158af3ffd85d697ccce82e12fa
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'FailedLoginCount' column `FailedLoginCount` requires runtime output-schema binding verification
+    - customDetails 'City' column `City` requires runtime output-schema binding verification
+    - customDetails 'Country' column `Country` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110.001
+    reviewScope:
+      sourceDocumentSha256: 085533030cc7d0d86cf05a6a1f8da130b5880737118fb3a95f564d7d4ed185e0
+      targetQuerySha256: 6cf0a6b06a60db5021a12a83283b64cb9ee7e91f018ca931db586664d3eb3c90
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 085533030cc7d0d86cf05a6a1f8da130b5880737118fb3a95f564d7d4ed185e0
+      targetQuerySha256: 6cf0a6b06a60db5021a12a83283b64cb9ee7e91f018ca931db586664d3eb3c90
+properties:
+  id: xdr-884be6e7-e568-418e-9c12-89229865ffde
+  displayName: Failed Logins from Unknown or Invalid User
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Adjust threshold for failed logins to reduce noise. This can be customized based on the organization's typical login patterns.
+      let FailureThreshold = 15;
+      // Adjust list of allowed users to reduce false positives. This can include service accounts, known test accounts, or any other accounts that are expected to generate failed login attempts.
+      let AllowedUsers = dynamic([]);
+      let FailedLogins = OktaSSO
+      | where eventType_s =~ "user.session.start" and outcome_reason_s =~ "VERIFICATION_ERROR"
+      | where isnotempty(actor_alternateId_s) and actor_alternateId_s !in (AllowedUsers)
+      | summarize count() by actor_alternateId_s, client_ipAddress_s, bin(TimeGenerated, 5m)
+      | where count_ > FailureThreshold
+      | project client_ipAddress_s, actor_alternateId_s;
+      OktaSSO
+      | join kind=inner (FailedLogins) on client_ipAddress_s, actor_alternateId_s
+      | where eventType_s =~ "user.session.start" and outcome_reason_s =~ "VERIFICATION_ERROR"
+      | summarize FailedLoginCount = count(), City = take_any(column_ifexists('client_geographicalContext_city_s', "")), Country = take_any(column_ifexists('client_geographicalContext_country_s', "")), LastSeen = max(column_ifexists('TimeGenerated', now())) by actor_alternateId_s, client_ipAddress_s
+      | sort by LastSeen desc
+      | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Failed Logins from Unknown or Invalid User
+      description: This rule alerts when an unknown or invalid user generates more than 15 failed Okta management console
+        login attempts from the same IP address within 5 minutes.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: client_ipAddress_s
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+          subTechniques:
+          - T1110.001
+      customDetails:
+        FailedLoginCount: FailedLoginCount
+        City: City
+        Country: Country

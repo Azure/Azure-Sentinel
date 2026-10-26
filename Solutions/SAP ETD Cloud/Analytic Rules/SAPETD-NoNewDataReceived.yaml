@@ -1,0 +1,54 @@
+id: a9206c5a-3e72-4c10-807f-313a56075b20
+kind: Scheduled
+name: SAP ETD - No new data received
+description: |
+  Identifies a complete gap in the SAP Enterprise Threat Detection (ETD) feed when no records have been ingested into the SAPETDAlerts_CL table within the configured time window (default 1 hour). A full-feed blackout may indicate that an adversary is tampering with the security telemetry pipeline (for example by stopping the SAP ETD collector, disabling the data connector, or blocking network egress to Microsoft Sentinel) to hide follow-on activity in the SAP landscape. Benign causes such as a service outage, connector failure, or maintenance window are also possible and should be ruled out during triage. This rule is complementary to the per-SAP-system rule "SAP ETD - SAP system stopped reporting data", which can help distinguish a targeted silencing of a single system from a full-feed blackout. To change the freshness threshold, update the `LookbackPeriod` variable in the query and align `queryFrequency` / `queryPeriod` accordingly.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPETDAlerts
+    dataTypes:
+      - SAPETDAlerts_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+  - T1562.006
+query: |
+  // Configurable freshness threshold for the entire SAP ETD data feed.
+  // When changing this value also update queryFrequency and queryPeriod accordingly.
+  let LookbackPeriod = 1h;
+  SAPETDAlerts_CL
+  | summarize
+      LastIngestionTime = max(TimeGenerated),
+      RecordsInWindow   = countif(TimeGenerated > ago(LookbackPeriod))
+  | where RecordsInWindow == 0 or isnull(LastIngestionTime)
+  | extend
+      LookbackPeriod = LookbackPeriod,
+      TimeSinceLastIngestion = now() - coalesce(LastIngestionTime, datetime(null)),
+      FeedName = "SAPETD",
+      Reason = iff(isnull(LastIngestionTime),
+          "No SAPETDAlerts_CL records have ever been ingested.",
+          strcat("No SAPETDAlerts_CL records ingested in the last ", tostring(LookbackPeriod), " (last ingestion: ", tostring(LastIngestionTime), ")."))
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: FeedName
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP ETD - No new data received in the last {{LookbackPeriod}}'
+  alertDescriptionFormat: |
+    {{Reason}}
+
+    A complete gap in the SAP ETD feed may indicate that an adversary is tampering with the security telemetry pipeline (for example by stopping the SAP ETD collector, disabling the data connector, or blocking network egress to Microsoft Sentinel) in order to hide malicious activity in the SAP landscape. Treat the silence as suspicious until proven otherwise: validate the integrity and runtime state of the SAP ETD data connector, the SAP ETD service, and the network path between them, and review recent change / admin activity on those components before concluding the cause is a benign outage.
+customDetails:
+  LookbackPeriod: LookbackPeriod
+  LastIngestion: LastIngestionTime
+  LastIngestionGap: TimeSinceLastIngestion
+version: 1.0.0

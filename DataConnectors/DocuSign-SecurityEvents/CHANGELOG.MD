@@ -1,3 +1,8 @@
+## 2.3
+- Updated Az module from 5.* to 11.* to resolve compatibility issues with Azure Functions PowerShell 7.2+ runtime
+- Fixes GitHub issue #14389: Module load failures for Connect-AzAccount, New-AzStorageContext, Get-AzStorageBlob
+- Updated script version and last modified date
+
 ## 2.2
 - Updated path for key file 
 

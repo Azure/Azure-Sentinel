@@ -1,0 +1,526 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Microsoft Sentinel integration for AWS Config logs (CCF custom-API pull pattern). Creates a time-indexed DynamoDB
+  store, an ingest Lambda (SNS-subscribed to the AWS Config delivery channel), a query Lambda, and an API Gateway REST API
+  secured with an API key. Microsoft Sentinel''s CCF RestApiPoller polls GET /logs by time window. Unlike the native CloudTrail
+  connector, Sentinel does NOT assume an IAM role here; it authenticates with the API key. The "role" below is the Lambda
+  execution role.
+
+  '
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+      - W1030
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: Account / naming
+      Parameters:
+      - AwsAccountId
+      - DynamoDBTableName
+      - LambdaExecutionRoleName
+      - IngestFunctionName
+      - QueryFunctionName
+    - Label:
+        default: AWS Config notifications (SNS)
+      Parameters:
+      - CreateSnsTopic
+      - SnsTopicName
+      - ExistingSnsTopicArn
+    - Label:
+        default: API Gateway
+      Parameters:
+      - ApiName
+      - ApiStageName
+      - ApiKeyName
+      - ApiKeyValue
+      - ThrottleRateLimit
+      - ThrottleBurstLimit
+      - DailyQuota
+    - Label:
+        default: Retention & sizing
+      Parameters:
+      - TtlDays
+      - LambdaMemory
+      - LambdaTimeout
+      - LogRetentionDays
+    ParameterLabels:
+      AwsAccountId:
+        default: AWS account ID (12 digits)
+      DynamoDBTableName:
+        default: DynamoDB table name
+      LambdaExecutionRoleName:
+        default: Lambda execution role name
+      ApiKeyValue:
+        default: API key value (paste into the Sentinel connector)
+Parameters:
+  AwsAccountId:
+    Type: String
+    AllowedPattern: ^[0-9]{12}$
+    Description: 'The 12-digit AWS account ID you are deploying into. Validated against the actual deployment account (see
+      Rules) to catch wrong-account mistakes.
+
+      '
+  DynamoDBTableName:
+    Type: String
+    Default: SentinelConfigLogs
+    AllowedPattern: ^[a-zA-Z0-9_.-]{3,255}$
+    Description: Name of the time-indexed DynamoDB table buffering Config items.
+  LambdaExecutionRoleName:
+    Type: String
+    Default: sentinel-config-lambda-role
+    AllowedPattern: ^[-_a-zA-Z0-9]+$
+    Description: Name of the IAM execution role shared by the ingest and query Lambdas.
+  IngestFunctionName:
+    Type: String
+    Default: sentinel-config-ingest
+    AllowedPattern: ^[-_a-zA-Z0-9]+$
+    Description: Name of the Lambda that normalizes Config SNS notifications into DynamoDB.
+  QueryFunctionName:
+    Type: String
+    Default: sentinel-config-query
+    AllowedPattern: ^[-_a-zA-Z0-9]+$
+    Description: Name of the Lambda behind API Gateway that Sentinel polls.
+  CreateSnsTopic:
+    Type: String
+    AllowedValues:
+    - 'true'
+    - 'false'
+    Default: 'true'
+    Description: '"true" to create a new SNS topic for AWS Config notifications (then point your Config delivery channel at
+      the output topic ARN). "false" to subscribe the ingest Lambda to an existing topic given in ExistingSnsTopicArn.
+
+      '
+  SnsTopicName:
+    Type: String
+    Default: sentinel-config-notifications
+    AllowedPattern: ^[-_a-zA-Z0-9]+$
+    Description: Name of the SNS topic to create (used only when CreateSnsTopic is "true").
+  ExistingSnsTopicArn:
+    Type: String
+    Default: ''
+    Description: ARN of an existing SNS topic (used only when CreateSnsTopic is "false").
+  ApiName:
+    Type: String
+    Default: sentinel-config-api
+    AllowedPattern: ^[-_a-zA-Z0-9 ]+$
+    Description: Name of the API Gateway REST API.
+  ApiStageName:
+    Type: String
+    Default: prod
+    AllowedPattern: ^[a-zA-Z0-9_-]+$
+    Description: Deployment stage name (forms part of the invoke URL).
+  ApiKeyName:
+    Type: String
+    Default: sentinel-config-key
+    AllowedPattern: ^[-_a-zA-Z0-9]+$
+    Description: Name of the API key.
+  ApiKeyValue:
+    Type: String
+    NoEcho: true
+    MinLength: 20
+    MaxLength: 128
+    Description: 'The API key value Sentinel will send in the x-api-key header. Choose a long random string; you paste this
+      same value into the CCF connector. Not echoed.
+
+      '
+  ThrottleRateLimit:
+    Type: Number
+    Default: 20
+    Description: Steady-state request rate limit (req/s) for the usage plan.
+  ThrottleBurstLimit:
+    Type: Number
+    Default: 50
+    Description: Burst request limit for the usage plan.
+  DailyQuota:
+    Type: Number
+    Default: 1000000
+    Description: Maximum requests per day for the usage plan.
+  TtlDays:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    Description: Days to retain items in the DynamoDB buffer (TTL). Sentinel is the system of record.
+  LambdaMemory:
+    Type: Number
+    Default: 256
+    MinValue: 128
+    MaxValue: 10240
+    Description: Memory (MB) for both Lambdas.
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 3
+    MaxValue: 900
+    Description: Timeout (seconds) for both Lambdas.
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues:
+    - 1
+    - 3
+    - 5
+    - 7
+    - 14
+    - 30
+    - 60
+    - 90
+    - 120
+    - 150
+    - 180
+    - 365
+    - 400
+    - 545
+    - 731
+    - 1827
+    - 3653
+    Description: CloudWatch Logs retention for the Lambda log groups (controls log cost).
+Rules:
+  ValidateAccountId:
+    Assertions:
+    - Assert:
+        Fn::Equals:
+        - Ref: AwsAccountId
+        - Ref: AWS::AccountId
+      AssertDescription: AwsAccountId must match the account this stack is deployed into.
+  RequireExistingTopicArn:
+    RuleCondition:
+      Fn::Equals:
+      - Ref: CreateSnsTopic
+      - 'false'
+    Assertions:
+    - Assert:
+        Fn::Not:
+        - Fn::Equals:
+          - Ref: ExistingSnsTopicArn
+          - ''
+      AssertDescription: ExistingSnsTopicArn is required when CreateSnsTopic is "false".
+Conditions:
+  CreateSnsTopicCondition:
+    Fn::Equals:
+    - Ref: CreateSnsTopic
+    - 'true'
+Resources:
+  ConfigLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Ref: DynamoDBTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: bucket
+        AttributeType: S
+      - AttributeName: ts_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: bucket
+        KeyType: HASH
+      - AttributeName: ts_id
+        KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expireAt
+        Enabled: true
+      Tags:
+      - Key: DeployedInAccount
+        Value:
+          Ref: AwsAccountId
+      - Key: Solution
+        Value: sentinel-aws-config-ccf
+  ConfigNotificationTopic:
+    Type: AWS::SNS::Topic
+    Condition: CreateSnsTopicCondition
+    Properties:
+      TopicName:
+        Ref: SnsTopicName
+  ConfigNotificationTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Condition: CreateSnsTopicCondition
+    Properties:
+      Topics:
+      - Ref: ConfigNotificationTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AllowConfigPublish
+          Effect: Allow
+          Principal:
+            Service: config.amazonaws.com
+          Action: SNS:Publish
+          Resource:
+            Ref: ConfigNotificationTopic
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Ref: LambdaExecutionRoleName
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: DynamoDBAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: DdbReadWrite
+            Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:Query
+            - dynamodb:GetItem
+            Resource:
+              Fn::GetAtt: ConfigLogsTable.Arn
+      - PolicyName: Logs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Sid: WriteLogs
+            Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource:
+            - Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${IngestFunctionName}:*
+            - Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${QueryFunctionName}:*
+  IngestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${IngestFunctionName}
+      RetentionInDays:
+        Ref: LogRetentionDays
+  QueryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${QueryFunctionName}
+      RetentionInDays:
+        Ref: LogRetentionDays
+  IngestFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: IngestLogGroup
+    Properties:
+      FunctionName:
+        Ref: IngestFunctionName
+      Runtime: python3.12
+      Handler: index.handler
+      MemorySize:
+        Ref: LambdaMemory
+      Timeout:
+        Ref: LambdaTimeout
+      Role:
+        Fn::GetAtt: LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: DynamoDBTableName
+          TTL_DAYS:
+            Ref: TtlDays
+      Code:
+        ZipFile: "import json,os,uuid,decimal,datetime as dt,boto3\nT=boto3.resource(\"dynamodb\").Table(os.environ[\"TABLE_NAME\"\
+          ])\nD=int(os.environ.get(\"TTL_DAYS\",\"90\"))\ndef pt(v):\n  try:return dt.datetime.fromisoformat(v.replace(\"\
+          Z\",\"+00:00\"))\n  except Exception:return None\ndef ti(v):\n  try:return int(v)\n  except (TypeError,ValueError):return\
+          \ None\ndef norm(m):\n  ci=m.get(\"configurationItem\") or {}\n  ev=m.get(\"newEvaluationResult\") or {}\n  w=pt(ci.get(\"\
+          configurationItemCaptureTime\")) or pt(m.get(\"notificationCreationTime\")) or dt.datetime.now(dt.timezone.utc)\n\
+          \  iso=w.astimezone(dt.timezone.utc).isoformat().replace(\"+00:00\",\"Z\")\n  return w,{\"CaptureTime\":iso,\n \
+          \   \"AwsAccountId\":ci.get(\"awsAccountId\") or m.get(\"awsAccountId\"),\n    \"AwsRegion\":ci.get(\"awsRegion\"\
+          ) or m.get(\"awsRegion\"),\n    \"ResourceType\":ci.get(\"resourceType\") or ev.get(\"complianceResourceType\"),\n\
+          \    \"ResourceId\":ci.get(\"resourceId\") or ev.get(\"complianceResourceId\"),\n    \"Arn\":ci.get(\"ARN\") or\
+          \ ci.get(\"arn\"),\n    \"AvailabilityZone\":ci.get(\"availabilityZone\"),\n    \"ConfigItemStatus\":ci.get(\"configurationItemStatus\"\
+          ),\n    \"ConfigItemVersion\":ci.get(\"version\"),\n    \"ConfigStateId\":ti(ci.get(\"configurationStateId\")),\n\
+          \    \"ConfigStateMd5Hash\":ci.get(\"configurationItemMD5Hash\"),\n    \"RelatedEvents\":ci.get(\"relatedEvents\"\
+          ),\n    \"Relationships\":ci.get(\"relationships\"),\n    \"Tags\":ci.get(\"tags\"),\n    \"Configuration\":ci.get(\"\
+          configuration\"),\n    \"SupplementaryConfiguration\":ci.get(\"supplementaryConfiguration\"),\n    \"MessageType\"\
+          :m.get(\"messageType\",\"Unknown\"),\n    \"SourceFile\":None,\n    \"RawItem\":m}\ndef handler(e,c):\n  exp=int((dt.datetime.now(dt.timezone.utc)+dt.timedelta(days=D)).timestamp())\n\
+          \  n=0\n  with T.batch_writer() as b:\n    for r in e.get(\"Records\",[]):\n      raw=r[\"Sns\"][\"Message\"]\n\
+          \      try:m=json.loads(raw)\n      except Exception:m={\"messageType\":\"Raw\",\"RawItem\":raw}\n      w,it=norm(m)\n\
+          \      iso=w.astimezone(dt.timezone.utc).isoformat().replace(\"+00:00\",\"Z\")\n      it[\"bucket\"]=iso[:13];it[\"\
+          ts_id\"]=iso+\"#\"+str(uuid.uuid4());it[\"expireAt\"]=exp\n      it=json.loads(json.dumps(it,default=str),parse_float=decimal.Decimal)\n\
+          \      b.put_item(Item={k:v for k,v in it.items() if v not in (None,\"\")})\n      n+=1\n  return {\"ingested\"\
+          :n}\n"
+  IngestSnsInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: IngestFunction
+      Principal: sns.amazonaws.com
+      SourceArn:
+        Fn::If:
+        - CreateSnsTopicCondition
+        - Ref: ConfigNotificationTopic
+        - Ref: ExistingSnsTopicArn
+  IngestSnsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn:
+        Fn::If:
+        - CreateSnsTopicCondition
+        - Ref: ConfigNotificationTopic
+        - Ref: ExistingSnsTopicArn
+      Endpoint:
+        Fn::GetAtt: IngestFunction.Arn
+  QueryFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: QueryLogGroup
+    Properties:
+      FunctionName:
+        Ref: QueryFunctionName
+      Runtime: python3.12
+      Handler: index.handler
+      MemorySize:
+        Ref: LambdaMemory
+      Timeout:
+        Ref: LambdaTimeout
+      Role:
+        Fn::GetAtt: LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: DynamoDBTableName
+          MAX_LIMIT: '5000'
+          DEFAULT_LIMIT: '1000'
+      Code:
+        ZipFile: "import base64,json,os,decimal,datetime as dt,boto3\nfrom boto3.dynamodb.conditions import Key\nT=boto3.resource(\"\
+          dynamodb\").Table(os.environ[\"TABLE_NAME\"])\nML=int(os.environ.get(\"MAX_LIMIT\",\"5000\"));DL=int(os.environ.get(\"\
+          DEFAULT_LIMIT\",\"1000\"))\nSKIP={\"bucket\",\"ts_id\",\"expireAt\"}\nclass E(json.JSONEncoder):\n  def default(self,o):\n\
+          \    if isinstance(o,decimal.Decimal):return int(o) if o==o.to_integral_value() else float(o)\n    return str(o)\n\
+          def resp(c,b):return {\"statusCode\":c,\"headers\":{\"Content-Type\":\"application/json\"},\"body\":json.dumps(b,cls=E)}\n\
+          def piso(v):return dt.datetime.fromisoformat(v.replace(\"Z\",\"+00:00\"))\ndef buckets(s,e):\n  c=s.replace(minute=0,second=0,microsecond=0);o=[]\n\
+          \  while c<=e:o.append(c.strftime(\"%Y-%m-%dT%H\"));c+=dt.timedelta(hours=1)\n  return o\ndef enc(s):return base64.urlsafe_b64encode(json.dumps(s).encode()).decode()\n\
+          def dec(t):return json.loads(base64.urlsafe_b64decode(t.encode()).decode())\ndef handler(ev,ctx):\n  q=ev.get(\"\
+          queryStringParameters\") or {}\n  try:\n    s=piso(q[\"startTime\"]);e=piso(q[\"endTime\"])\n  except Exception:\n\
+          \    return resp(400,{\"error\":\"startTime and endTime (ISO 8601) are required\"})\n  lim=min(int(q.get(\"limit\"\
+          ,DL)),ML)\n  si=s.astimezone(dt.timezone.utc).isoformat().replace(\"+00:00\",\"Z\")\n  ei=e.astimezone(dt.timezone.utc).isoformat().replace(\"\
+          +00:00\",\"Z\")\n  bs=buckets(s,e)\n  st=dec(q[\"nextToken\"]) if q.get(\"nextToken\") else {\"i\":0,\"lek\":None}\n\
+          \  out=[];i=st[\"i\"];lek=st[\"lek\"]\n  while i<len(bs) and len(out)<lim:\n    kw={\"KeyConditionExpression\":Key(\"\
+          bucket\").eq(bs[i]) & Key(\"ts_id\").between(si+\"#\",ei+\"#\\uffff\"),\"Limit\":lim-len(out)}\n    if lek:kw[\"\
+          ExclusiveStartKey\"]=lek\n    p=T.query(**kw)\n    for it in p.get(\"Items\",[]):\n      out.append({k:v for k,v\
+          \ in it.items() if k not in SKIP})\n    lek=p.get(\"LastEvaluatedKey\")\n    if not lek:i+=1\n    if len(out)>=lim:break\n\
+          \  body={\"events\":out}\n  if i<len(bs):body[\"nextToken\"]=enc({\"i\":i,\"lek\":lek})\n  return resp(200,body)\n"
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name:
+        Ref: ApiName
+      Description: Exposes AWS Config logs by time window for the Sentinel CCF poller.
+      EndpointConfiguration:
+        Types:
+        - REGIONAL
+  LogsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: RestApi
+      ParentId:
+        Fn::GetAtt: RestApi.RootResourceId
+      PathPart: logs
+  LogsGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId:
+        Ref: RestApi
+      ResourceId:
+        Ref: LogsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QueryFunction.Arn}/invocations
+  QueryApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: QueryFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/GET/logs
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: LogsGetMethod
+    Properties:
+      RestApiId:
+        Ref: RestApi
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId:
+        Ref: RestApi
+      DeploymentId:
+        Ref: ApiDeployment
+      StageName:
+        Ref: ApiStageName
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: ApiStage
+    Properties:
+      Name:
+        Ref: ApiKeyName
+      Enabled: true
+      Value:
+        Ref: ApiKeyValue
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: ApiStage
+    Properties:
+      UsagePlanName:
+        Fn::Sub: ${ApiName}-plan
+      ApiStages:
+      - ApiId:
+          Ref: RestApi
+        Stage:
+          Ref: ApiStageName
+      Throttle:
+        RateLimit:
+          Ref: ThrottleRateLimit
+        BurstLimit:
+          Ref: ThrottleBurstLimit
+      Quota:
+        Limit:
+          Ref: DailyQuota
+        Period: DAY
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId:
+        Ref: ApiKey
+      KeyType: API_KEY
+      UsagePlanId:
+        Ref: UsagePlan
+Outputs:
+  ApiEndpoint:
+    Description: Use this as the CCF apiEndpoint (path /logs is already included).
+    Value:
+      Fn::Sub: https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/logs
+  ConfigNotificationTopicArn:
+    Description: Point the AWS Config delivery channel snsTopicARN at this topic.
+    Value:
+      Fn::If:
+      - CreateSnsTopicCondition
+      - Ref: ConfigNotificationTopic
+      - Ref: ExistingSnsTopicArn
+  DynamoDBTableNameOutput:
+    Description: Name of the DynamoDB buffer table.
+    Value:
+      Ref: ConfigLogsTable
+  IngestFunctionArn:
+    Description: ARN of the ingest Lambda.
+    Value:
+      Fn::GetAtt: IngestFunction.Arn
+  QueryFunctionArn:
+    Description: ARN of the query Lambda.
+    Value:
+      Fn::GetAtt: QueryFunction.Arn
+  LambdaExecutionRoleArn:
+    Description: ARN of the shared Lambda execution role.
+    Value:
+      Fn::GetAtt: LambdaExecutionRole.Arn

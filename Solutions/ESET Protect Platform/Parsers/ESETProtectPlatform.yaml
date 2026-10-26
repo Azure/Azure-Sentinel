@@ -1,14 +1,18 @@
 id: 'b0f36d45-4e08-4764-9200-4c5f7d706bb2'
 Function:
   Title: Parser for ESET Protect Platform
-  Version: '1.0.0'
-  LastUpdated: '2024-11-08'
+  Version: '1.1.0'
+  LastUpdated: '2026-07-02'
 Category: Microsoft Sentinel Parser
-Description: ""
+Description: "Parser for ESET Protect Platform detections. Normalizes data from both the legacy Azure Functions connector (IntegrationTable_CL) and the Codeless Connector Framework (CCF) connector (IntegrationTableV2_CL) so that downstream content works regardless of which data connector is deployed."
 FunctionName: ESETProtectPlatform
 FunctionAlias: ESETProtectPlatform
 FunctionQuery: |
-    IntegrationTable_CL
+    union isfuzzy=true IntegrationTable_CL, IntegrationTableV2_CL
+        | extend
+            networkCommunication = column_ifexists('NetworkCommunication', column_ifexists('networkCommunication', dynamic(null))),
+            severityLevel = tostring(column_ifexists('SeverityLevel', column_ifexists('severityLevel', ''))),
+            occurTime = column_ifexists('OccurTime', column_ifexists('occurTime', ''))
         | extend 
             EventResult = "NA",
             EventProduct = "ESET Connect",
@@ -32,21 +36,20 @@ FunctionQuery: |
                 severityLevel == "SEVERITY_LEVEL_MEDIUM", "Medium",
                 severityLevel == "SEVERITY_LEVEL_HIGH", "High",
                 "Unknown"
-            )
-        | project-rename
-            EventMessage = displayName,
-            EventOriginalUid = detectionUuid,
-            EventCount= groupSize, 
-            EventOriginalSeverity = severityScore,
-            EventOriginalType = category, 
-            EventType = typeName, 
-            DvcDescription = deviceDisplayName, 
-            DvcId = deviceUuid, 
-            ActorUsername = userNameBase, 
-            TargetProcessCurrentDirectory = processPath, 
-            TargetProcessGuid = processUuid,
-            TargetProcessCommandLine = processCommandline,
-            TargetProcessFileSize = objectSizeBytes
+            ),
+            EventMessage = column_ifexists('DisplayName', column_ifexists('displayName', '')),
+            EventOriginalUid = column_ifexists('DetectionUuid', column_ifexists('detectionUuid', '')),
+            EventCount = column_ifexists('GroupSize', column_ifexists('groupSize', int(null))),
+            EventOriginalSeverity = column_ifexists('SeverityScore', column_ifexists('severityScore', '')),
+            EventOriginalType = column_ifexists('Category', column_ifexists('category', '')),
+            EventType = column_ifexists('TypeName', column_ifexists('typeName', '')),
+            DvcDescription = column_ifexists('DeviceDisplayName', column_ifexists('deviceDisplayName', '')),
+            DvcId = column_ifexists('DeviceUuid', column_ifexists('deviceUuid', '')),
+            ActorUsername = column_ifexists('UserNameBase', column_ifexists('userNameBase', '')),
+            TargetProcessCurrentDirectory = column_ifexists('ProcessPath', column_ifexists('processPath', '')),
+            TargetProcessGuid = column_ifexists('ProcessUuid', column_ifexists('processUuid', '')),
+            TargetProcessCommandLine = column_ifexists('ProcessCommandline', column_ifexists('processCommandline', '')),
+            TargetProcessFileSize = column_ifexists('ObjectSizeBytes', column_ifexists('objectSizeBytes', ''))
         | extend 
             Dvc = DvcId,
             User = ActorUsername

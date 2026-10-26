@@ -1,0 +1,163 @@
+id: 0a990e01-15bb-49bd-b0fb-9549ec98363a
+name: Suspicious LSASS access request by non-system account
+description: |
+  This query identifies unauthorized interactive user accounts explicitly requesting highly privileged access masks against the LSASS process. It flags credential dumping attempts by standard users even if the actual memory read fails or is delayed.
+description-detailed: |
+  Extracting credentials requires specific Windows API access masks (e.g., PROCESS_VM_READ, PROCESS_ALL_ACCESS) to map LSASS memory. While OS services legitimately request these masks, standard interactive users have almost no operational reason to do so.
+  This detection catches the absolute intent to dump memory at the exact millisecond the handle is requested. This defeats evasions where an attacker requests a handle but delays the actual file write by several minutes to break time-based correlation rules.
+  False Positives Avoided: Drastically reduces OS noise by completely filtering out SYSTEM, LOCAL SERVICE, and NETWORK SERVICE accounts. It also leverages cryptographic whitelisting.
+  Limitations : This rule strictly monitors the OpenProcess behavior of non-SYSTEM users. It will NOT detect an attack if the adversary escalates to SYSTEM privilege (e.g., via "getsystem") before executing the dump. Furthermore, it will NOT detect Handle Hijacking (DuplicateHandle) because the attacker avoids requesting a new handle entirely. Both of these blind spots are natively covered by the companion "High volume LSASS memory read" query.
+  References:
+  https://thedfirreport.com/2026/02/23/apache-activemq-exploit-leads-to-lockbit-ransomware
+  https://medium.com/@bharathbandari/detect-credential-dumping-signals-lsass-access-suspicious-tools-1f3ae9d4fa0d
+  https://troopers.de/downloads/troopers22/TR22_LiftingTheVeilALookAtMDE.pdf
+  
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+      - DeviceFileCertificateInfo
+
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1003.001
+query: |
+  // DETECTION STRATEGY:
+  // Detect unauthorized interactive user accounts explicitly requesting highly privileged access masks against LSASS.
+  //
+  // THE MECHANIC:
+  // Credential dumping tools (Mimikatz, NanoDump, Cobalt Strike) use specific privileged Windows API access masks 
+  // (like 0x1FFFFF or 0x1010) via the OpenProcess API to read and map LSASS memory. Legitimate OS services 
+  // also request these masks, but they do so almost exclusively from isolated Session 0 SYSTEM contexts.
+  //
+  // THE RESILIENCE:
+  // By focusing on the exact Access Mask (The Physics) combined with the Execution Context (Standard User vs SYSTEM),
+  // this traps standard interactive users attempting to dump memory, even if the memory read ultimately fails 
+  // or is delayed to avoid time-based correlation rules.
+  
+  // Define known malicious access masks (Decimal formats).
+  // Why: These specific combinations grant PROCESS_VM_READ, which is mandatory for credential extraction.
+  let suspiciousAccessMasks = dynamic([
+      2097151, // PROCESS_ALL_ACCESS (0x1fffff)
+      4112,    // PROCESS_VM_READ | PROCESS_QUERY_INFORMATION (0x1010)
+      5136,    // PROCESS_VM_READ | PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION (0x1410)
+      5178,    // Mimikatz/Cobalt Strike specific (0x143a)
+      5176,    // Mimikatz/Cobalt Strike specific (0x1438)
+      16       // PROCESS_VM_READ only (0x10)
+  ]);
+  
+  // Define legitimate execution contexts.
+  // Why: Deep LSASS interactions should only originate from the OS or designated Service accounts.
+  // Note: We deliberately leave out Local Admins, as compromised admin accounts are the primary vector.
+  let systemAccounts = dynamic(["system", "local service", "network service"]);
+  let systemDomains = dynamic(["nt authority"]);
+  
+  // Define the explicitly trusted tools for cryptographically-backed whitelisting.
+  // Why: Relying on ProcessName alone is unsafe, as attackers rename malware to "taskmgr.exe". 
+  // We bind the expected name to the verified digital signer.
+  // Note: Internal tools like procdump.exe are often used by attackers. Whitelist with caution.
+  let allowedProcesses = datatable(ProcessNameLower:string, SignerNameLower:string)[
+      "taskmgr.exe", "microsoft windows",
+      "procdump.exe", "microsoft corporation",
+      "devenv.exe", "microsoft corporation" // Visual Studio interop debugging
+  ];
+  
+  // Define the deduplicated Certificate dataset.
+  // Note: We use a 14-day lookback here specifically for the join to ensure we find the certificate 
+  // even if the file was dropped/loaded days before the handle request occurred.
+  let certInfo = DeviceFileCertificateInfo
+      | where Timestamp >= ago(14d)
+      | where isnotempty(SHA1) and isnotempty(Signer)
+      | summarize Signer = take_any(Signer) by SHA1;
+  
+  // Base Query: Look for explicit handle requests targeting LSASS.
+  DeviceEvents
+  // STEP 1: Filter aggressively using string indexes and context exclusions.
+  | where ActionType =~ "OpenProcessApiCall"
+  | where isnotempty(AdditionalFields)
+  | where isnotempty(InitiatingProcessAccountName)
+  | where FileName =~ "lsass.exe" or AdditionalFields has "lsass.exe"
+  
+  // CONDITION A: The account requesting access is not an OS service account.
+  | where InitiatingProcessAccountName !in~ (systemAccounts)
+  | where InitiatingProcessAccountDomain !in~ (systemDomains)
+  
+  // STEP 2: Execute expensive JSON parsing ONLY on the heavily reduced dataset.
+  | extend DesiredAccess = tolong(parse_json(tostring(AdditionalFields)).DesiredAccess)
+  
+  // CONDITION B: The requested mask has memory reading capabilities.
+  | where DesiredAccess in (suspiciousAccessMasks)
+  
+  // STEP 3: Cryptographic Whitelisting (The Join).
+  | join kind=leftouter (certInfo) on $left.InitiatingProcessSHA1 == $right.SHA1
+  | extend ProcessNameLower = tolower(InitiatingProcessFileName)
+  | extend SignerNameLower = tolower(Signer)
+  | join kind=leftanti (allowedProcesses) on ProcessNameLower, SignerNameLower
+  
+  // EXCLUSION:
+  // Filter out highly frequent enterprise administration or backup tools running under user context.
+  // Never whitelist purely by filename. Use FolderPath or Verified Signer.
+  // | where SignerLower !has "your internal company ca"
+  // | where InitiatingProcessFolderPath !has @"\Program Files\Your Approved Backup Tool\"
+  
+  // STEP 4: Output Engineering & Schema Alignment.
+  // Explicitly cast mapped entities to strings to guarantee type-safety for the Sentinel schema.
+  | extend HostName = tostring(DeviceName)
+  | extend AccountName = tostring(InitiatingProcessAccountName)
+  | extend InitiatingProcessAccountDomain = tostring(InitiatingProcessAccountDomain)
+  | extend ProcessIdString = tostring(InitiatingProcessId)
+  | extend VerifiedSigner = tostring(Signer)
+  
+  // STEP 5: Format the output for triage.
+  // ANALYST ACTION: A standard user interacting this deeply with LSASS is highly anomalous. Review 
+  // 'RequestingProcess' and 'VerifiedSigner'. If the binary is unsigned, obfuscated, or running from 
+  // a suspicious path (e.g., C:\Perflogs\), isolate the host as credential dumping is in progress.
+  | project Timestamp, 
+            HostName, 
+            AccountName, 
+            InitiatingProcessAccountDomain,
+            RequestingProcess = InitiatingProcessFileName, 
+            VerifiedSigner, 
+            RequestingProcessPath = InitiatingProcessFolderPath, 
+            InitiatingProcessCommandLine, 
+            ProcessIdString, 
+            DesiredAccess, 
+            ActionType, 
+            TargetProcess = FileName
+  | project-reorder Timestamp, HostName, AccountName, RequestingProcess, VerifiedSigner, InitiatingProcessCommandLine, DesiredAccess, ActionType, TargetProcess, RequestingProcessPath, InitiatingProcessAccountDomain, ProcessIdString
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessIdString
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+
+customDetails:
+  Requested_Access_Mask: DesiredAccess
+  Requesting_Process: RequestingProcess
+  Execution_Path: RequestingProcessPath
+  Verified_Signer: VerifiedSigner
+
+version: 1.0.0
+
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Younes Al Taleb
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection" ]

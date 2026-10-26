@@ -1,0 +1,185 @@
+id: 3d0ffd07-026f-44cf-9f60-8df51ba76690
+name: Post-Auth Config Change on Network Appliance (3P)
+description: Hunts for post-auth configuration tampering on Fortinet, Palo Alto, and Cisco appliances in CommonSecurityLog, including firewall policy weakening, 
+    local admin changes, auth updates, and VPN/routing/ACL modifications.
+description-detailed: Hunts for post-exploitation configuration changes on 3P network appliances (Fortinet, Palo Alto, Cisco) in CommonSecurityLog - 
+    covering firewall policy weakening, local admin account creation, auth method changes, VPN config modification, and routing/ACL tampering.
+requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1562.004
+  - T1136.001
+  - T1098
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let FortinetConfigChanges =
+      CommonSecurityLog
+      | where TimeGenerated between (starttime .. endtime)
+      | where DeviceVendor =~ "Fortinet"
+      | where DeviceProduct startswith "FortiGate"
+      | where DeviceEventClassID in ("44547", "0100044547")
+      | extend
+          CfgAction = extract(@'^(Add|Edit|Delete|Rename)\s', 1, Message),
+          CfgPath   = extract(@'^(?:Add|Edit|Delete|Rename)\s+(\S+)\s+', 1, Message),
+          CfgObject = extract(@'^(?:Add|Edit|Delete|Rename)\s+\S+\s+(.*)', 1, Message)
+      | extend AdminUser = coalesce(DestinationUserName, SourceUserName, extract(@'FTNTFGTuser=([^;]+)', 1, AdditionalExtensions))
+      | where isnotempty(CfgPath)
+      | extend ConfigCategory = case(
+          CfgPath has_any ("firewall.policy", "firewall.address", "firewall.addrgrp",
+                           "firewall.service", "firewall.schedule"),             "A - Firewall Policy",
+          CfgPath has_any ("system.admin", "user.local", "user.group"),          "B - Local User/Admin",
+          CfgPath has_any ("system.settings", "user.ldap", "user.radius",
+                           "user.tacacs+", "user.saml", "system.autoupdate"),    "C - Auth/Identity Config",
+          CfgPath has_any ("vpn.ipsec", "vpn.ssl", "router.static",
+                           "router.policy", "router.bgp", "system.interface"),   "D - VPN/Routing/Interface",
+          "Other Config")
+      | extend SignalStrength = case(
+          ConfigCategory == "B - Local User/Admin" and CfgAction == "Add",       "High - local user added",
+          ConfigCategory == "B - Local User/Admin" and CfgAction == "Delete",    "High - local user deleted",
+          ConfigCategory == "B - Local User/Admin" and CfgAction == "Edit",      "Medium - admin account modified",
+          ConfigCategory == "C - Auth/Identity Config",                          "High - auth method changed",
+          ConfigCategory == "D - VPN/Routing/Interface",                         "Medium - VPN/routing changed",
+          ConfigCategory == "A - Firewall Policy",                               "Medium - firewall policy modified",
+          "Low - other config change")
+      | project
+          EventTime      = TimeGenerated,
+          Vendor         = DeviceVendor,
+          Appliance      = Computer,
+          SourceIP,
+          AdminUser,
+          ConfigCategory,
+          CfgPath,
+          CfgAction,
+          CfgObject,
+          SignalStrength,
+          RawMessage     = Message;
+  let PANConfigChanges =
+      CommonSecurityLog
+      | where TimeGenerated between (starttime .. endtime)
+      | where DeviceVendor =~ "Palo Alto Networks"
+      | where DeviceEventClassID =~ "CONFIG"
+      | where isempty(Reason) or Reason !in ("Failed", "Unauthorized")
+      | where Message !has "dhcp"
+      | extend
+          CfgPath = coalesce(
+              extract(@"path: ([^\s,]+)", 1, Message),
+              extract(@"config\s+([\w][\w\s/-]*\w)", 1, Message))
+      | extend
+          CfgAction = coalesce(
+              DeviceAction,
+              extract(@"\b(add|set|edit|delete|rename|clone|move|commit)\b", 1, tolower(Message)))
+      | extend
+          AdminUser = coalesce(DestinationUserName, SourceUserName, DeviceCustomString1)
+      | extend ConfigCategory = case(
+          Message has_any ("security", "nat", "pbf", "decryption",
+                           "address", "address-group", "service"),               "A - Firewall Policy",
+          Message has_any ("admin", "user", "role", "administrator"),            "B - Local User/Admin",
+          Message has_any ("authentication-profile", "server-profile",
+                           "mfa-config", "radius", "ldap", "kerberos", "saml"), "C - Auth/Identity Config",
+          Message has_any ("ipsec-tunnel", "ike-gateway", "gp-gateway",
+                           "gp-portal", "virtual-router", "static-route",
+                           "bgp", "ospf", "interface"),                          "D - VPN/Routing/Interface",
+          "Other Config")
+      | extend SignalStrength = case(
+          ConfigCategory == "B - Local User/Admin",                              "High - admin user configured",
+          ConfigCategory == "C - Auth/Identity Config",                          "High - auth method changed",
+          ConfigCategory == "D - VPN/Routing/Interface",                         "Medium - VPN/routing changed",
+          ConfigCategory == "A - Firewall Policy",                               "Medium - firewall policy modified",
+          "Low - other config change")
+      | project
+          EventTime      = TimeGenerated,
+          Vendor         = DeviceVendor,
+          Appliance      = Computer,
+          SourceIP,
+          AdminUser,
+          ConfigCategory,
+          CfgPath,
+          CfgAction,
+          CfgObject      = "",
+          SignalStrength,
+          RawMessage     = Message;
+  let CiscoConfigChanges =
+      CommonSecurityLog
+      | where TimeGenerated between (starttime .. endtime)
+      | where DeviceVendor =~ "Cisco"
+      | where DeviceProduct has_any ("ASA", "FTD", "Firepower")
+      | where DeviceEventClassID has_any ("111007", "111008", "111010")
+      | extend SyslogText = coalesce(Activity, Message)
+      | extend
+          AdminUser = coalesce(
+              extract(@"User '([^']+)'", 1, SyslogText),
+              trim("'", SourceUserName)),
+          CfgCommand = coalesce(
+              extract(@"executed (?:the )?'([^']+)'", 1, SyslogText),
+              extract(@'command="([^"]+)"', 1, DeviceCustomString1),
+              extract(@'cmd="([^"]+)"',     1, DeviceCustomString1))
+      | where isnotempty(CfgCommand)
+      | where CfgCommand !in~ ("enable", "who", "exit", "logout")
+          and CfgCommand !startswith "show "
+          and CfgCommand !startswith "debug "
+          and CfgCommand !startswith "terminal "
+          and CfgCommand !startswith "enable "
+          and CfgCommand !startswith "more "
+          and CfgCommand !startswith "dir "
+          and CfgCommand !startswith "pager "
+          and CfgCommand !startswith "write terminal"
+          and CfgCommand !startswith "changeto context"
+          and CfgCommand !startswith "packet-tracer "
+          and CfgCommand !startswith "failover exec mate show "
+          and CfgCommand !startswith "copy /noconfirm system:running-config disk0"
+          and CfgCommand !has "#ACSACL#"
+      | extend ConfigCategory = case(
+          CfgCommand has_any ("access-list", "access-group", "nat ", "route "),  "A - Firewall Policy",
+          CfgCommand has_any ("username", "aaa "),                                "B - Local User/Admin",
+          CfgCommand has_any ("crypto", "ikev2", "ssl", "radius", "ldap",
+                              "strong-encryption"),                               "C - Auth/Identity Config",
+          CfgCommand has_any ("vpn-tunnel", "tunnel-group", "interface "),       "D - VPN/Routing/Interface",
+          "Other Config")
+      | extend SignalStrength = case(
+          ConfigCategory == "B - Local User/Admin",                              "High - local user configured",
+          ConfigCategory == "C - Auth/Identity Config",                          "High - auth method changed",
+          ConfigCategory == "A - Firewall Policy"
+              and CfgCommand has_any ("permit any", "allow all"),                "Critical - permit-all policy",
+          ConfigCategory == "A - Firewall Policy",                               "Medium - firewall policy modified",
+          ConfigCategory == "D - VPN/Routing/Interface",                         "Medium - VPN/routing changed",
+          DeviceEventClassID == "111010"
+              and CfgCommand !in~ ("configure terminal", "configure term"),      "High - config change committed",
+          CfgCommand has_any ("shun", "write memory", "policy-map"),             "High - security-relevant command",
+          "Medium - config command executed")
+      | project
+          EventTime      = TimeGenerated,
+          Vendor         = DeviceVendor,
+          Appliance      = Computer,
+          SourceIP,
+          AdminUser,
+          ConfigCategory,
+          CfgPath        = CfgCommand,
+          CfgAction      = DeviceEventClassID,
+          CfgObject      = "",
+          SignalStrength,
+          RawMessage     = SyslogText;
+  union FortinetConfigChanges, PANConfigChanges, CiscoConfigChanges
+  | where ConfigCategory != "Other Config"
+  | extend SortPriority = case(
+      SignalStrength startswith "Critical", 1,
+      SignalStrength startswith "High",     2,
+      SignalStrength startswith "Medium",   3,
+      4)
+  | sort by SortPriority asc, EventTime desc
+  | project-away SortPriority
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Appliance
+version: 1.0.0

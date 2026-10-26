@@ -1,0 +1,190 @@
+{
+  "name": "OrcaSecurityAlertsCCF",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "[parameters('workspace-location')]",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "OrcaSecurityAlertsCCF",
+      "title": "Orca Security Alerts (via Microsoft Entra ID)",
+      "logo": "OrcaSecurityLogo.svg",
+      "publisher": "Orca Security",
+      "descriptionMarkdown": "The [Orca Security](https://orca.security/) Alerts connector lets you stream Orca cloud security alerts into Microsoft Sentinel. Orca pushes alerts to the Logs Ingestion API of a Data Collection Endpoint using a Microsoft Entra ID application, replacing the legacy Log Analytics Shared Key authentication.",
+      "graphQueries": [
+        {
+          "metricName": "Total alerts received",
+          "legend": "OrcaAlerts_CL",
+          "baseQuery": "OrcaAlerts_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All Orca alerts",
+          "query": "OrcaAlerts_CL\n | sort by TimeGenerated desc"
+        },
+        {
+          "description": "Fetch all service vulnerabilities on running assets",
+          "query": "OrcaAlerts_CL\n | where alert_type == \"service_vulnerability\"\n | where asset_state == \"running\"\n | sort by TimeGenerated desc"
+        },
+        {
+          "description": "Fetch all alerts with the \"remote_code_execution\" label",
+          "query": "OrcaAlerts_CL\n | where alert_labels contains \"remote_code_execution\"\n | sort by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "OrcaAlerts_CL",
+          "lastDataReceivedQuery": "OrcaAlerts_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "OrcaAlerts_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+          ]
+        }
+      ],
+      "availability": {
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft Entra ID",
+            "description": "Permission to create an app registration in Microsoft Entra ID (if using the auto-created app). Typically requires the Application Developer role or higher."
+          },
+          {
+            "name": "Microsoft Azure",
+            "description": "Permission to create and configure Azure resources (DCE, DCR, table) and assign RBAC roles. Typically requires the Contributor and User Access Administrator roles."
+          },
+          {
+            "name": "Orca Security",
+            "description": "Access to the Orca Security platform to configure the Microsoft Sentinel integration."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Deploy connector resources",
+          "description": "Deploy the Azure resources required to ingest Orca Security alerts via the Logs Ingestion API using Microsoft Entra ID authentication.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Choose your deployment option\n\n---\n\n### Option A: Auto-create a Microsoft Entra application (Recommended)\n\nClicking **Deploy Orca Security Alerts Connector** automatically creates:\n- A Data Collection Endpoint (DCE)\n- A Data Collection Rule (DCR) with the Orca alerts stream\n- The Log Analytics table (OrcaAlerts_CL)\n- A Microsoft Entra application with a client secret\n- The role assignment (Monitoring Metrics Publisher) on the DCR\n\n**After deployment:** the Tenant ID, Client ID, Client Secret, DCE URI and DCR Immutable ID are auto-populated below for copy-paste into the Orca platform.\n\n---\n\n### Option B: Use a pre-existing Microsoft Entra application (BYOA)\n\nClicking **Deploy Orca Security Alerts Connector** creates the DCE, DCR and table, plus an Entra application you can ignore.\n\n**Additional steps required:**\n1. Assign your existing Entra application's service principal the **Monitoring Metrics Publisher** role on the created DCR.\n2. Use your own application's Client ID and Client Secret (ignore the auto-generated ones below).\n3. Use the DCE URI, DCR Immutable ID and Stream Name from below.\n\n---\n\n**Click Deploy to begin:**"
+              }
+            },
+            {
+              "parameters": {
+                "label": "Deploy Orca Security Alerts Connector",
+                "applicationDisplayName": "Orca Security Alerts Connector Application"
+              },
+              "type": "DeployPushConnectorButton"
+            }
+          ]
+        },
+        {
+          "title": "2. Configure the Orca Security integration",
+          "description": "Copy the following values into the Microsoft Sentinel integration settings in the Orca Security platform.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "**For Option A (auto-created app):** use all the auto-populated values below.\n\n**For Option B (pre-existing app):** use the DCE URI, DCR Immutable ID and Stream Name below, but use your own application's Tenant ID, Client ID and Client Secret.\n\n---\n\n#### Azure configuration values:\n"
+              }
+            },
+            {
+              "parameters": {
+                "label": "Tenant ID",
+                "fillWith": [
+                  "TenantId"
+                ]
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Application (Client) ID",
+                "fillWith": [
+                  "ApplicationId"
+                ],
+                "placeholder": "Deploy connector to get the Application ID"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Client Secret",
+                "fillWith": [
+                  "ApplicationSecret"
+                ],
+                "placeholder": "Deploy connector to get the Client Secret"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Data Collection Endpoint (DCE) URI",
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ],
+                "placeholder": "Deploy connector to get the DCE URI"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Data Collection Rule (DCR) Immutable ID",
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ],
+                "placeholder": "Deploy connector to get the DCR Immutable ID"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "parameters": {
+                "label": "Stream Name",
+                "value": "Custom-OrcaSecurityAlerts"
+              },
+              "type": "CopyableLabel"
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "---\n\n#### Configure in the Orca Security platform\n\n1. Log in to your **Orca Security** console.\n2. Navigate to **Settings > Integrations > Microsoft Sentinel**.\n3. Paste the configuration values from above (Tenant ID, Application (Client) ID, Client Secret, DCE URI, DCR Immutable ID and Stream Name).\n4. Click **Save** to complete the integration."
+              }
+            }
+          ]
+        },
+        {
+          "title": "3. Verify data ingestion",
+          "description": "Confirm that alerts are flowing from Orca Security into Microsoft Sentinel.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### Verification steps\n\n1. Trigger or wait for an alert in Orca Security.\n2. Wait 5-10 minutes for the data to appear in Microsoft Sentinel.\n3. Run the following query to verify alerts:\n\n```kusto\nOrcaAlerts_CL\n| take 10\n```\n\n4. Check connectivity:\n\n```kusto\nOrcaAlerts_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)\n```\n\nIf data appears and IsConnected returns true, the connector is configured correctly."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

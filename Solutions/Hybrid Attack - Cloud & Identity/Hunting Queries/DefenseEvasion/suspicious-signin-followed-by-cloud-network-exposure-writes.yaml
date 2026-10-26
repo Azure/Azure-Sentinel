@@ -1,0 +1,156 @@
+id: ae4f0362-8ba1-43db-9899-4d05e0890133
+name: Suspicious sign-in followed by cloud network exposure writes
+description: |
+  Detects likely compromised identity usage where a suspicious sign-in is followed by network exposure-changing writes on Key Vault, Storage, or Azure database services.
+description-detailed: |
+  This hunt correlates first-seen successful sign-ins with near-term AzureActivity control-plane writes that weaken network protections. It focuses on identity-driven exposure tampering patterns.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+  - Discovery
+relevantTechniques:
+  - T1078.004
+  - T1562.007
+  - T1526
+tags:
+  - Hybrid attack
+  - Identity abuse
+  - Network configuration tampering
+  - Key Vault
+  - Storage
+  - Azure SQL
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineWindow = 14d;
+  let SequenceWindow = 4h;
+  // Successful activity status values for AzureActivity write operations.
+  let SuccessActivityStatusValues = dynamic(["succeeded", "success"]);
+  // Successful sign-in result values observed across interactive and non-interactive logs.
+  let SuccessResultValues = dynamic(["0", "success"]);
+  // Cloud providers in scope for network exposure tampering.
+  let ExposurePrefixes = dynamic([
+    "microsoft.keyvault/vaults/",
+    "microsoft.storage/storageaccounts/",
+    "microsoft.sql/servers/",
+    "microsoft.dbforpostgresql/",
+    "microsoft.dbformysql/"
+  ]);
+  // Action suffixes that indicate network protection weakening writes.
+  let ExposureActionValues = dynamic([
+    "networkacls/write",
+    "firewallrules/write",
+    "accesspolicies/write",
+    "virtualnetworkrules/write",
+    "publicnetworkaccess/write"
+  ]);
+  // Parent operations that can carry network exposure changes in operation properties.
+  let ExposureParentWriteOps = dynamic([
+    "microsoft.keyvault/vaults/write",
+    "microsoft.storage/storageaccounts/write",
+    "microsoft.sql/servers/write",
+    "microsoft.dbforpostgresql/flexibleservers/write",
+    "microsoft.dbformysql/flexibleservers/write"
+  ]);
+  // Property tokens that indicate firewall, ACL, or public access weakening.
+  let NetworkConfigSignals = dynamic([
+    "publicnetworkaccess",
+    "networkacls",
+    "defaultaction",
+    "iprules",
+    "virtualnetworkrules",
+    "bypass",
+    "firewallrules"
+  ]);
+  // Build a unified successful-signin stream for baseline and novelty analysis.
+  let SuccessfulSignins =
+    union isfuzzy=true
+      (SigninLogs
+        | where TimeGenerated between ((StartTime - BaselineWindow) .. EndTime)
+        | project TimeGenerated, Identity=tostring(coalesce(UserPrincipalName, Identity)), IPAddress=tostring(IPAddress),
+                  AppDisplayName=tostring(AppDisplayName), UserAgent=tostring(UserAgent), ResultType=tostring(ResultType)),
+      (AADNonInteractiveUserSignInLogs
+        | where TimeGenerated between ((StartTime - BaselineWindow) .. EndTime)
+        | project TimeGenerated, Identity=tostring(coalesce(UserPrincipalName, Identity)), IPAddress=tostring(IPAddress),
+                  AppDisplayName=tostring(AppDisplayName), UserAgent=tostring(UserAgent), ResultType=tostring(ResultType))
+    | extend ResultTypeNorm = tolower(ResultType)
+    | where ResultTypeNorm in (SuccessResultValues)
+    | where isnotempty(Identity) and isnotempty(IPAddress)
+    | extend IdentityNorm = tolower(Identity), IpNorm = tolower(IPAddress), AppNorm = tolower(AppDisplayName), UaNorm = tolower(UserAgent);
+  // Baseline historical tuples to identify first-seen sign-in context in the hunt window.
+  let BaselineSignins =
+    SuccessfulSignins
+    | where TimeGenerated between ((StartTime - BaselineWindow) .. StartTime)
+    | summarize by IdentityNorm, IpNorm, AppNorm, UaNorm;
+  // Keep only recent sign-ins that do not exist in baseline context.
+  let RecentNovelSignins =
+    SuccessfulSignins
+    | where TimeGenerated between (StartTime .. EndTime)
+    | join kind=leftanti BaselineSignins on IdentityNorm, IpNorm, AppNorm, UaNorm
+    | summarize FirstSignin=min(TimeGenerated), LastSignin=max(TimeGenerated), Apps=make_set(AppNorm, 10), UserAgents=make_set(UaNorm, 10)
+      by IdentityNorm, IpNorm;
+  // Extract control-plane writes that can reduce network restrictions.
+  let ExposureWrites =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(Caller) and isnotempty(CallerIpAddress)
+    | extend Op = tolower(OperationNameValue), CallerNorm = tolower(Caller), CallerIp = tolower(tostring(CallerIpAddress)),
+             ActivityStatusNorm = tolower(tostring(ActivityStatusValue)), Props = tolower(tostring(Properties_d))
+    | where ActivityStatusNorm in (SuccessActivityStatusValues)
+    | where Op has_any (ExposurePrefixes)
+    | where (Op has_any (ExposureActionValues))
+      or (Op in~ (ExposureParentWriteOps) and Props has_any (NetworkConfigSignals))
+    | extend ServiceFamily = case(
+        Op startswith "microsoft.keyvault/vaults/", "KeyVault",
+        Op startswith "microsoft.storage/storageaccounts/", "Storage",
+        Op startswith "microsoft.sql/servers/", "AzureSQL",
+        Op startswith "microsoft.dbforpostgresql/", "PostgreSQL",
+        Op startswith "microsoft.dbformysql/", "MySQL",
+        "Other")
+    | summarize FirstWrite=min(TimeGenerated), LastWrite=max(TimeGenerated), ExposureCount=count(),
+                ExposureOps=make_set(OperationNameValue, 30), ExposedResources=make_set(ResourceId, 30),
+                ServiceSet=make_set(ServiceFamily, 10)
+      by CallerNorm, CallerIp, SubscriptionId;
+  // Strong correlation path: same identity and source IP across sign-in and exposure write stages.
+  let StrongIdentityIpMatches =
+    RecentNovelSignins
+    | join kind=inner ExposureWrites on $left.IdentityNorm == $right.CallerNorm and $left.IpNorm == $right.CallerIp
+    | where FirstWrite between (FirstSignin .. (LastSignin + SequenceWindow))
+    | extend CorrelationStrength = "StrongIdentityAndIp";
+  // Fallback path for service and proxy edge-cases: retain IP-only correlation with reduced confidence.
+  let WeakIpOnlyMatches =
+    RecentNovelSignins
+    | join kind=inner ExposureWrites on $left.IpNorm == $right.CallerIp
+    | where FirstWrite between (FirstSignin .. (LastSignin + SequenceWindow))
+    | join kind=leftanti StrongIdentityIpMatches on IdentityNorm, IpNorm, CallerNorm, SubscriptionId, FirstWrite
+    | extend CorrelationStrength = "WeakIpOnly";
+  union StrongIdentityIpMatches, WeakIpOnlyMatches
+  | extend DistinctServiceCount = array_length(ServiceSet),
+           IdentityName = iff(IdentityNorm contains "@", tostring(split(IdentityNorm, "@")[0]), IdentityNorm),
+           IdentityUPNSuffix = iff(IdentityNorm contains "@", tostring(split(IdentityNorm, "@")[1]), "")
+  | project TimeGenerated=FirstSignin, Identity=IdentityNorm, SigninIp=IpNorm, FirstSignin, LastSignin,
+            Caller=CallerNorm, SubscriptionId, FirstWrite, LastWrite,
+            DistinctServiceCount, ExposureCount,
+            IdentityName, IdentityUPNSuffix,
+            CorrelationStrength, Apps, UserAgents, ExposureOps, ExposedResources
+  | order by DistinctServiceCount desc, ExposureCount desc, FirstWrite desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: IdentityName
+      - identifier: UPNSuffix
+        columnName: IdentityUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SigninIp
+version: 1.0.0

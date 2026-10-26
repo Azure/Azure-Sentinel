@@ -1,0 +1,148 @@
+{
+  "name": "MimecastEventsCCFDefinition",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "[parameters('workspace-location')]",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "MimecastEventsCCFDefinition",
+      "title": "Mimecast Security Events (via Codeless Connector Framework)",
+      "publisher": "Obrela",
+      "descriptionMarkdown": "Ingests Mimecast Secure Email Gateway, Targeted Threat Protection, DLP and Audit events into Microsoft Sentinel using Mimecast **Event Push** and the Codeless Connector Framework (Push). Mimecast posts events directly to the Azure Monitor Logs Ingestion API \u2014 no Mimecast credentials are stored in Sentinel.",
+      "graphQueriesTableName": "MimecastEvents_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total events received",
+          "legend": "MimecastEvents_CL",
+          "baseQuery": "MimecastEvents_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All Mimecast events by type",
+          "query": "MimecastEvents_CL\n| summarize count() by mimecastEventType\n| order by count_ desc"
+        },
+        {
+          "description": "Secure Email Gateway events (deduplicated)",
+          "query": "MimecastCG\n| take 100"
+        },
+        {
+          "description": "TTP URL Protect events",
+          "query": "MimecastTTPUrl\n| take 100"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "MimecastEvents_CL",
+          "lastDataReceivedQuery": "MimecastEvents_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "MimecastEvents_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(7d)"
+          ]
+        }
+      ],
+      "availability": {
+        "isPreview": false
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Mimecast Event Push",
+            "description": "Access to the Mimecast Administration Console (Integrations Hub) to configure an Event Push integration with OAuth 2.0 client credentials."
+          },
+          {
+            "name": "Microsoft Entra ID",
+            "description": "Permission to create an application registration (performed automatically by the Deploy button below)."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Deploy the ingestion resources",
+          "description": "This creates the Data Collection Endpoint, Data Collection Rule, custom table, and a Microsoft Entra application (with client secret) scoped to ingest into this connector's table only.",
+          "instructions": [
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy",
+                "applicationDisplayName": "Mimecast Events Push Connector"
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Configure Mimecast Event Push",
+          "description": "In the Mimecast Administration Console, open **Integrations Hub -> Event Push** and create a destination with format **JSON** and OAuth 2.0 client credentials. Enter the values below.\n\n- **Token endpoint**: the Microsoft Entra (v2.0) token endpoint for the Tenant ID below - the path is `/{Tenant ID}/oauth2/v2.0/token` on the Microsoft identity platform login endpoint ([documentation](https://learn.microsoft.com/entra/identity-platform/v2-oauth2-client-creds-grant-flow))\n- **Scope**: https://monitor.azure.com/.default\n- **Destination URL**: {Data Collection Endpoint}/dataCollectionRules/{DCR Immutable ID}/streams/Custom-MimecastEvents_CL?api-version=2023-01-01",
+          "instructions": [
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Tenant ID (Directory ID)",
+                "fillWith": [
+                  "TenantId"
+                ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Client ID (Application ID)",
+                "fillWith": [
+                  "ApplicationId"
+                ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Client secret",
+                "fillWith": [
+                  "ApplicationSecret"
+                ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "Data Collection Endpoint",
+                "fillWith": [
+                  "DataCollectionEndpoint"
+                ]
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "label": "DCR Immutable ID",
+                "fillWith": [
+                  "DataCollectionRuleId"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

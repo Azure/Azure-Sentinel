@@ -1,0 +1,314 @@
+Parser:
+  Title: Web Session ASIM filtering parser for AWS Web Application Firewall
+  Version: "0.1.0"
+  LastUpdated: Jun 18, 2026
+Product:
+  Name: AWS WAF
+Normalization:
+  Schema: WebSession
+  Version: "0.2.7"
+References:
+  - Title: ASIM Web Session Schema
+    Link: https://aka.ms/ASimWebSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: AWS WAF Logging Documentation
+    Link: https://docs.aws.amazon.com/waf/latest/developerguide/logging-fields.html
+Description: |
+  This ASIM parser supports filtering and normalizing AWS Web Application Firewall (WAF) web session logs from the AWSWAF table to the ASIM Web Session normalized schema.
+ParserName: vimWebSessionAWSWAF
+EquivalentBuiltInParser: _Im_WebSession_AWSWAF
+Exceptions:
+  - Field: SrcBytes
+    Warning: Missing recommended field
+    Exception: AWS WAF logs do not include request or response sizes. No byte counts are available in the WAF logs.
+  - Field: DstBytes
+    Warning: Missing recommended field
+    Exception: AWS WAF logs do not include request or response sizes. No byte counts are available in the WAF logs.
+  - Field: SrcHostname
+    Warning: Missing recommended field
+    Exception: AWS WAF identifies the client only by IP address (httpRequest.clientIp) and GeoIP country. No client hostname is reported, and the parser does not perform reverse-DNS enrichment.
+  - Field: SrcDomain
+    Warning: Missing recommended field
+    Exception: AWS WAF identifies the client only by IP address. No client domain information is reported.
+  - Field: DvcHostname
+    Warning: Missing recommended field
+    Exception: The reporting device is the AWS WAF managed cloud service, which has no host identity. The Web ACL ARN is used as the device identifier (Dvc, DvcId).
+  - Field: DvcDomain
+    Warning: Missing recommended field
+    Exception: The reporting device is the AWS WAF managed cloud service, which has no domain identity.
+  - Field: DvcIpAddr
+    Warning: Missing recommended field
+    Exception: The reporting device is the AWS WAF managed cloud service, which has no IP address identity.
+  - Field: EventResultDetails
+    Warning: Empty value in recommended field
+    Exception: Mapped from responseCodeSent, which AWS WAF populates only when a custom block response is configured. Empty for all allowed requests and for blocks using the default response.
+  - Field: DstIpAddr
+    Warning: Empty value in recommended field
+    Exception: AWS WAF does not report a destination IP address. Populated only when the HTTP Host header contains a valid IP literal (~3-5% of internet-facing traffic).
+  - Field: DstHostname
+    Warning: Empty value in recommended field
+    Exception: Empty for the rare records whose Host header is malformed or contains injection attempts; the raw value is preserved in Url and HttpHost.
+  - Field: ASimMatchingHostname
+    Warning: Missing recommended field
+    Exception: WebSession schema doesn't specify a filtering parameter for hostname, therefore this field isn't required.
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: url_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: httpuseragent_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: "*"
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      url_has_any: dynamic=dynamic([]),
+      httpuseragent_has_any: dynamic=dynamic([]),
+      eventresultdetails_in: dynamic=dynamic([]),
+      eventresult: string='*',
+      disabled: bool=false,
+      pack: bool=false
+  )
+  {
+    //According to AWS documentation: https://docs.aws.amazon.com/waf/latest/developerguide/logging-fields.html
+    let ActionLookup = datatable(Action:string, DvcAction:string, EventResult:string, EventSeverity:string)
+    [
+        'ALLOW',     'Allow', 'Success', 'Informational',
+        'BLOCK',     'Deny',  'Failure', 'Low',
+        'CAPTCHA',   'Deny',  'Failure', 'Low',
+        'CHALLENGE', 'Deny',  'Failure', 'Low',
+        '',          '',      'NA',      'Informational'
+    ];
+    AWSWAF
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    //Mandatory common fields
+    | extend
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventType = 'HTTPsession',
+        EventVendor = 'AWS',
+        EventProduct = 'WAF',
+        EventSchema = 'WebSession',
+        EventSchemaVersion = '0.2.7'
+    | extend Dvc = coalesce(WebAclId, strcat(EventVendor, '/', EventProduct))
+    | lookup ActionLookup on Action
+    | where (eventresult == '*' or EventResult =~ eventresult)
+    //Recommended common fields
+    | extend DvcId = Dvc,
+            DvcIdType = 'Other',
+            EventUid = _ItemId
+    | project-rename DvcOriginalAction = Action
+    // AWS WAF populates ResponseCodeSent only when a custom block response is configured; the field is empty for allowed requests and default-response blocks.
+    | extend EventResultDetails = tostring(ResponseCodeSent)
+    | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in (eventresultdetails_in))
+    | extend HttpStatusCode = EventResultDetails
+    //HTTP session fields
+    | extend parsedRequest = parse_json(HttpRequest)
+    //Network Source fields
+    | extend SrcIpAddr = tostring(parsedRequest.clientIp),
+            Src = tostring(parsedRequest.clientIp),
+            SrcGeoCountry = tostring(parsedRequest.country)
+    // -- srcipaddr_has_any_prefix post-filter
+    | where (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+    // -- ipaddr_has_any_prefix post-filter
+    | extend ASimMatchingIpAddr = case(
+            array_length(ipaddr_has_any_prefix) == 0, "-",
+            has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix), "SrcIpAddr",
+            "No match"
+        )
+    | where ASimMatchingIpAddr != "No match"
+    | extend headers = iff(array_length(parsedRequest.headers) > 0, parsedRequest.headers, dynamic([{}]))
+    | mv-apply header = headers on (
+        summarize
+            HttpHost = take_anyif(tostring(header.value), tostring(header.name) =~ 'host'),
+            HttpUserAgent = take_anyif(tostring(header.value), tostring(header.name) =~ 'user-agent'),
+            HttpReferrer = take_anyif(tostring(header.value), tostring(header.name) =~ 'referer'),
+            HttpCookie = take_anyif(tostring(header.value), tostring(header.name) =~ 'Cookie'),
+            HttpRequestXff = take_anyif(tostring(header.value), tostring(header.name) =~ 'X-Forwarded-For')
+        )
+    | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any (httpuseragent_has_any))
+    | extend
+        scheme = tostring(parsedRequest.scheme),
+        host = coalesce(tostring(parsedRequest.host), HttpHost),
+        uri = tostring(parsedRequest.uri),
+        args = tostring(parsedRequest.args)
+    | extend Url = case(
+                    isnotempty(scheme) and isnotempty(host),
+                    strcat(scheme, '://', host, uri, iff(isnotempty(args), strcat('?', args), '')),
+                    isnotempty(host),
+                    strcat(host, uri, iff(isnotempty(args), strcat('?', args), '')),
+                    uri
+                ),
+            HttpVersion = tostring(parsedRequest.httpVersion),
+            HttpRequestMethod = tostring(parsedRequest.httpMethod),
+            HttpRequestHeaderCount = toint(array_length(parsedRequest.headers)),
+            UserAgent = HttpUserAgent
+    | where (array_length(url_has_any) == 0 or Url has_any (url_has_any))
+    //Network session fields
+    | extend NetworkApplicationProtocol = toupper(scheme),
+            NetworkSessionId = tostring(parsedRequest.requestId)
+    //Network destination fields
+    | project-rename DstDvcId = HttpSourceId
+    | extend DstDvcIdType = 'Other',
+             DstPortNumber = case(
+                scheme =~ 'https', toint(443),
+                scheme =~ 'http', toint(80),
+                int(null)
+            )
+    // Normalize: unwrap bracketed IPv6 [::1]:443 -> ::1 ; strip :port from host:port (but not from bare IPv6)
+    | extend _hostNoPort = case(
+            host startswith '[', extract(@'^\[(.+?)\]', 1, host),                 // [IPv6] or [IPv6]:port
+            host matches regex @'^[^:]+:\d+$', tostring(split(host, ':')[0]),     // host:port  (single colon + digits)
+            host                                                                   // bare host or bare IPv6
+        )
+    | extend _hostIsIp =
+            isnotnull(parse_ipv4(_hostNoPort))
+            or (_hostNoPort contains ':' and isnotnull(parse_ipv6(_hostNoPort)))
+    | extend _hostIsIpShaped =
+            _hostIsIp
+            or _hostNoPort matches regex @'^\d{1,3}(\.\d{1,3}){3}$'   // padded/oversized dotted-quads e.g. 083.130.061.x
+    | extend _hostIsClean = _hostNoPort matches regex @'^[A-Za-z0-9\.\-\_]+$' or _hostIsIp
+    | extend _hostHasDomain = _hostIsClean and not(_hostIsIpShaped) and array_length(split(_hostNoPort, '.')) > 1
+    | extend
+        DstIpAddr   = iff(_hostIsIp, _hostNoPort, ''),          // strict: only real IPs
+        DstHostname = case(
+            _hostIsIp, _hostNoPort,                            // valid IP; keep
+            _hostIsIpShaped, '',                               // IP-shaped junk is blank, not a fake hostname
+            _hostIsClean, tostring(split(_hostNoPort, '.')[0]),
+            ''
+        ),
+        DstFQDN     = iff(_hostHasDomain, _hostNoPort, ''),
+        DstDomain   = iff(_hostHasDomain, strcat_array(array_slice(split(_hostNoPort, '.'), 1, -1), '.'), '')
+    | extend DstDomainType = iff(isnotempty(DstDomain), 'FQDN', '')
+    //Network Inspection fields
+    | project-rename RuleName = TerminatingRuleId
+    //Additional, non-normalized fields
+    | extend AdditionalFields = iff(
+            pack,
+            bag_pack(
+                'HttpSourceName', HttpSourceName,
+                'TerminatingRuleType', TerminatingRuleType,
+                'TerminatingRuleMatchDetails', TerminatingRuleMatchDetails,
+                'RuleGroupList', RuleGroupList,
+                'RateBasedRuleList', RateBasedRuleList,
+                'Labels', Labels,
+                'JA3', Ja3Fingerprint
+            ),
+            dynamic({})
+        )
+    //Aliases
+    | extend
+        IpAddr   = SrcIpAddr,
+        Hostname = DstHostname,
+        Dst      = DstDvcId,
+        EventOriginalUid = NetworkSessionId,
+        SessionId = NetworkSessionId,
+        Rule = RuleName
+    //Select fields
+    | project
+        // -- Mandatory
+        TimeGenerated,
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventResult,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventSchemaVersion,
+        Dvc,
+        Url,
+        Dst,
+        // -- Recommended
+        EventResultDetails,
+        EventSeverity,
+        EventUid,
+        DvcAction,
+        DvcOriginalAction,
+        DvcId,
+        DvcIdType,
+        HttpRequestMethod,
+        HttpStatusCode,
+        DstHostname,
+        SrcIpAddr,
+        ASimMatchingIpAddr,
+        // -- Event optional
+        EventOriginalUid,
+        // -- HTTP optional
+        HttpVersion,
+        HttpRequestHeaderCount,
+        HttpHost,
+        HttpUserAgent,
+        HttpReferrer,
+        HttpCookie,
+        HttpRequestXff,
+        // -- Destination optional
+        DstDvcId,
+        DstDvcIdType,
+        DstIpAddr,
+        DstPortNumber,
+        DstFQDN,
+        DstDomain,
+        DstDomainType,
+        // -- Source optional
+        SrcGeoCountry,
+        // -- Network fields
+        NetworkApplicationProtocol,
+        NetworkSessionId,
+        // -- Inspection fields
+        RuleName,
+        Rule,
+        // -- Additional
+        AdditionalFields,
+        // -- Aliases
+        IpAddr,
+        UserAgent,
+        Hostname,
+        SessionId,
+        Src,
+        // -- Source table
+        Type
+  };
+  parser(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      url_has_any=url_has_any,
+      httpuseragent_has_any=httpuseragent_has_any,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled,
+      pack=pack
+  )

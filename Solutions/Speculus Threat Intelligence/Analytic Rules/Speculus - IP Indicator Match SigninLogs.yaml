@@ -1,0 +1,84 @@
+id: e1b8d4a6-9c27-45f3-8a1e-7f2c0d9b5e64
+name: Speculus - Sign-in attempt from high-risk IP indicator
+description: |
+  'Matches Microsoft Entra ID sign-in attempts against high-risk Speculus IP indicators (risk score >= 75)
+  received in the last 14 days. A sign-in from a known C2, botnet, or brute-force source IP may indicate
+  credential theft or account takeover.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SpeculusThreatIntel
+    dataTypes:
+      - Speculus_Indicators_CL
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+  - T1110
+query: |
+  let indicators = Speculus_Indicators_CL
+      | where TimeGenerated > ago(14d)
+      | where isnotempty(IndicatorValue)
+      | where RiskScore >= 75
+      | summarize arg_max(Modified, *) by IndicatorValue
+      | project
+          IndicatorValue,
+          RiskScore,
+          SpeculusActivity = Activity,
+          Attribution,
+          Labels,
+          IndicatorDescription = Description;
+  SigninLogs
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(IPAddress)
+  | join kind=inner indicators on $left.IPAddress == $right.IndicatorValue
+  | project
+      TimeGenerated,
+      IPAddress,
+      UserPrincipalName,
+      UserDisplayName,
+      AppDisplayName,
+      ResultType,
+      ResultDescription,
+      RiskScore,
+      SpeculusActivity,
+      Attribution,
+      Labels,
+      IndicatorDescription
+suppressionDuration: 1h
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  RiskScore: RiskScore
+  Attribution: Attribution
+  Labels: Labels
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+version: 1.0.0
+kind: Scheduled

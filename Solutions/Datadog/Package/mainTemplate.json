@@ -1,0 +1,1759 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Datadog"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Datadog",
+    "_solutionVersion": "3.1.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-datadog",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.1.0",
+    "_dataConnectorContentIdConnectorDefinition1": "DatadogConnector",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "DatadogConnectorConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Datadog Logs (via Codeless Connector Framework)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "DatadogConnector",
+                  "title": "Datadog Logs (via Codeless Connector Framework)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The Datadog Logs data connector ingests [Datadog](https://www.datadoghq.com/) audit events, indexed logs, and security signals into Microsoft Sentinel through the [Datadog API](https://docs.datadoghq.com/api/latest/). The supported data types provide administrative activity, application and infrastructure telemetry, and Datadog Security Monitoring detections for investigation.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total audit events received",
+                      "legend": "Datadog Audit Events",
+                      "baseQuery": "DatadogAuditLogs_CL"
+                    },
+                    {
+                      "metricName": "Total logs received",
+                      "legend": "Datadog Logs",
+                      "baseQuery": "DatadogLogs_CL"
+                    },
+                    {
+                      "metricName": "Total security signals received",
+                      "legend": "Datadog Security Logs",
+                      "baseQuery": "DatadogSecurityLogs_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get sample of 20 recent Datadog audit events",
+                      "query": "DatadogAuditLogs_CL\n| take 20"
+                    },
+                    {
+                      "description": "Get sample of 20 recent Datadog logs",
+                      "query": "DatadogLogs_CL\n| take 20"
+                    },
+                    {
+                      "description": "Get sample of 20 recent Datadog security signals",
+                      "query": "DatadogSecurityLogs_CL\n| take 20"
+                    },
+                    {
+                      "description": "Audit events by action and status",
+                      "query": "DatadogAuditLogs_CL\n| summarize count() by Action, Status"
+                    },
+                    {
+                      "description": "Logs by Datadog service and status",
+                      "query": "DatadogLogs_CL\n| summarize count() by Service, Status"
+                    },
+                    {
+                      "description": "Security signals by status and title",
+                      "query": "DatadogSecurityLogs_CL\n| summarize count() by Status, SignalTitle"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "DatadogAuditLogs_CL",
+                      "lastDataReceivedQuery": "DatadogAuditLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    },
+                    {
+                      "name": "DatadogLogs_CL",
+                      "lastDataReceivedQuery": "DatadogLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    },
+                    {
+                      "name": "DatadogSecurityLogs_CL",
+                      "lastDataReceivedQuery": "DatadogSecurityLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    },
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "union DatadogAuditLogs_CL, DatadogLogs_CL, DatadogSecurityLogs_CL | where TimeGenerated > ago(1h) | take 1"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": true,
+                    "status": 1
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true,
+                          "action": false
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Datadog API access",
+                        "description": "**Datadog API and Application keys** are required. The Application key must have permission to read the selected data type. Security Logs require the `security_monitoring_signals_read` scope. See the [Datadog API and Application Keys documentation](https://docs.datadoghq.com/account_management/api-app-keys/)."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "1. Connections",
+                      "description": "Configure and manage Datadog connections.",
+                      "instructions": [
+                        {
+                          "type": "Markdown",
+                          "parameters": {
+                            "content": "Enter your Datadog API host (the region your account uses), without a scheme or trailing slash. Valid values: `api.datadoghq.com` (US1), `api.us3.datadoghq.com` (US3), `api.us5.datadoghq.com` (US5), `api.datadoghq.eu` (EU1), `api.ap1.datadoghq.com` (AP1), `api.ap2.datadoghq.com` (AP2), `api.ddog-gov.com` (US1-FED), `api.us2.ddog-gov.com` (US2-FED), `api.uk1.datadoghq.com` (UK1)."
+                          }
+                        },
+                        {
+                          "type": "DataConnectorsGrid",
+                          "parameters": {
+                            "mapping": [
+                              {
+                                "columnName": "Connection Name",
+                                "columnValue": "properties.addOnAttributes.friendlyName"
+                              },
+                              {
+                                "columnName": "Datadog API Endpoint",
+                                "columnValue": "properties.request.apiEndpoint"
+                              },
+                              {
+                                "columnName": "Data Type",
+                                "columnValue": "properties.addOnAttributes.dataType"
+                              }
+                            ],
+                            "menuItems": [
+                              "DeleteConnector"
+                            ]
+                          }
+                        },
+                        {
+                          "type": "ContextPane",
+                          "parameters": {
+                            "label": "Add Connection",
+                            "title": "Add Datadog Connection",
+                            "subtitle": "Connect Datadog data to Microsoft Sentinel",
+                            "contextPaneType": "DataConnectorsContextPane",
+                            "instructionSteps": [
+                              {
+                                "instructions": [
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Connection Name",
+                                      "placeholder": "e.g. Production US1",
+                                      "type": "text",
+                                      "name": "friendlyName",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Datadog Site (API host)",
+                                      "placeholder": "api.datadoghq.com",
+                                      "type": "text",
+                                      "name": "datadogsite",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Datadog API Key",
+                                      "placeholder": "Enter your Datadog API key",
+                                      "type": "password",
+                                      "name": "apikey",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                      "label": "Datadog Application Key",
+                                      "placeholder": "Enter your Datadog Application key",
+                                      "type": "password",
+                                      "name": "appkey",
+                                      "validations": {
+                                        "required": true
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "type": "Dropdown",
+                                    "parameters": {
+                                      "label": "Data Type",
+                                      "name": "selectedDataType",
+                                      "options": [
+                                        {
+                                          "key": "DatadogAuditLogs",
+                                          "text": "Audit Events"
+                                        },
+                                        {
+                                          "key": "DatadogLogs",
+                                          "text": "Logs"
+                                        },
+                                        {
+                                          "key": "DatadogSecurityLogs",
+                                          "text": "Security Logs"
+                                        }
+                                      ],
+                                      "placeholder": "Select a data type",
+                                      "required": true
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "DatadogLogsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-DatadogAuditLogs_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attributes",
+                        "type": "dynamic"
+                      }
+                    ]
+                  },
+                  "Custom-DatadogLogs_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attributes",
+                        "type": "dynamic"
+                      }
+                    ]
+                  },
+                  "Custom-DatadogSecurityLogs_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "attributes",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-DatadogAuditLogs_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-DatadogAuditLogs_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnotempty(tostring(attributes.timestamp)), todatetime(tostring(attributes.timestamp)), datetime(null)) , EventId = ['id'] , EventType = ['type'] , Attributes = ['attributes'] , EventService = tostring(['attributes']['service']) , AuditDetails = ['attributes']['attributes'] , Message = tostring(['attributes']['message']) , Tags = ['attributes']['tags'] , Action = tostring(['attributes']['attributes']['action']) , AuthenticationMethod = tostring(['attributes']['attributes']['auth_method']) , EventName = tostring(['attributes']['attributes']['evt']['name']) , ActorType = tostring(['attributes']['attributes']['evt']['actor']['type']) , OrganizationId = tostring(['attributes']['attributes']['org']['uuid']) , UserId = tostring(['attributes']['attributes']['usr']['id']) , UserEmail = tostring(['attributes']['attributes']['usr']['email']) , UserUuid = tostring(['attributes']['attributes']['usr']['uuid']) , HttpMethod = tostring(['attributes']['attributes']['http']['method']) , HttpStatusCode = tolong(['attributes']['attributes']['http']['status_code']) , HttpUrlHost = tostring(['attributes']['attributes']['http']['url_details']['host']) , HttpUrlPath = tostring(['attributes']['attributes']['http']['url_details']['path']) , HttpUserAgent = tostring(['attributes']['attributes']['http']['useragent']) , ClientIp = tostring(['attributes']['attributes']['network']['client']['ip']) , ClientGeo = ['attributes']['attributes']['network']['client']['geoip'] , RoutePath = tostring(['attributes']['attributes']['route']['path']) , Status = tostring(['attributes']['attributes']['status']) , EmittedSource = tostring(['attributes']['attributes']['emitted_source']) , EventTimestamp = tostring(['attributes']['timestamp']) | project TimeGenerated , EventId , EventType , Attributes , EventService , AuditDetails , Message , Tags , Action , AuthenticationMethod , EventName , ActorType , OrganizationId , UserId , UserEmail , UserUuid , HttpMethod , HttpStatusCode , HttpUrlHost , HttpUrlPath , HttpUserAgent , ClientIp , ClientGeo , RoutePath , Status , EmittedSource , EventTimestamp"
+                  },
+                  {
+                    "streams": [
+                      "Custom-DatadogLogs_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-DatadogLogs_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnotempty(tostring(attributes.timestamp)), todatetime(tostring(attributes.timestamp)), datetime(null)) , EventId = ['id'] , EventType = ['type'] , Attributes = ['attributes'] , LogAttributes = ['attributes']['attributes'] , Host = iff(isnotempty(tostring(['attributes']['host'])), tostring(['attributes']['host']), tostring(['attributes']['attributes']['host'])) , Message = tostring(['attributes']['message']) , Service = tostring(['attributes']['service']) , Status = tostring(['attributes']['status']) , Tags = ['attributes']['tags'] , EventTimestamp = tostring(['attributes']['timestamp']) , LogAttributeId = tostring(['attributes']['attributes']['id']) , LogAttributeTimestamp = iff(isnotnull(['attributes']['attributes']['timestamp']), datetime(1970-01-01) + (tolong(['attributes']['attributes']['timestamp']) * 1ms), datetime(null)) , Level = tostring(['attributes']['attributes']['level']) , LambdaArn = tostring(['attributes']['attributes']['lambda']['arn']) , AwsDetails = ['attributes']['attributes']['aws'] , AwsAccountId = iff(isnotempty(tostring(['attributes']['attributes']['aws']['account_id'])), tostring(['attributes']['attributes']['aws']['account_id']), tostring(['attributes']['attributes']['aws']['awslogs']['owner'])) , AwsInvokedFunctionArn = tostring(['attributes']['attributes']['aws']['invoked_function_arn']) , AwsLogGroup = tostring(['attributes']['attributes']['aws']['awslogs']['logGroup']) , AwsLogStream = tostring(['attributes']['attributes']['aws']['awslogs']['logStream']) , AwsS3Bucket = tostring(['attributes']['attributes']['aws']['s3']['bucket']) , AwsS3Key = tostring(['attributes']['attributes']['aws']['s3']['key']) , NetworkDetails = ['attributes']['attributes']['network'] , BytesWritten = tolong(['attributes']['attributes']['network']['bytes_written']) , ClientIp = tostring(['attributes']['attributes']['network']['client']['ip']) , ClientPort = tolong(['attributes']['attributes']['network']['client']['port']) , DestinationIp = tostring(['attributes']['attributes']['network']['destination']['ip']) , DestinationPort = tolong(['attributes']['attributes']['network']['destination']['port']) , NetworkInterface = tostring(['attributes']['attributes']['network']['interface']) , PacketCount = tolong(['attributes']['attributes']['network']['packet']) , NetworkProtocol = tostring(['attributes']['attributes']['network']['protocol']) , VpcDetails = ['attributes']['attributes']['vpc'] , VpcAction = tostring(['attributes']['attributes']['vpc']['action']) , VpcIntervalStart = iff(isnotnull(['attributes']['attributes']['vpc']['interval']['start']), datetime(1970-01-01) + (tolong(['attributes']['attributes']['vpc']['interval']['start']) * 1s), datetime(null)) , VpcIntervalEnd = iff(isnotnull(['attributes']['attributes']['vpc']['interval']['end']), datetime(1970-01-01) + (tolong(['attributes']['attributes']['vpc']['interval']['end']) * 1s), datetime(null)) , VpcStatus = tostring(['attributes']['attributes']['vpc']['status']) , VpcVersion = tolong(['attributes']['attributes']['vpc']['version']) | project TimeGenerated , EventId , EventType , Attributes , LogAttributes , Host , Message , Service , Status , Tags , EventTimestamp , LogAttributeId , LogAttributeTimestamp , Level , LambdaArn , AwsDetails , AwsAccountId , AwsInvokedFunctionArn , AwsLogGroup , AwsLogStream , AwsS3Bucket , AwsS3Key , NetworkDetails , BytesWritten , ClientIp , ClientPort , DestinationIp , DestinationPort , NetworkInterface , PacketCount , NetworkProtocol , VpcDetails , VpcAction , VpcIntervalStart , VpcIntervalEnd , VpcStatus , VpcVersion"
+                  },
+                  {
+                    "streams": [
+                      "Custom-DatadogSecurityLogs_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-DatadogSecurityLogs_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnotempty(tostring(attributes.timestamp)), todatetime(tostring(attributes.timestamp)), datetime(null)) , EventId = ['id'] , EventType = ['type'] , Attributes = ['attributes'] , SignalDetails = ['attributes']['attributes'] , SignalId = tostring(['attributes']['id']) , SignalVersion = tolong(['attributes']['version']) , SignalTitle = tostring(['attributes']['attributes']['title']) , Message = tostring(['attributes']['message']) , Host = tostring(['attributes']['host']) , Service = ['attributes']['service'] , Status = tostring(['attributes']['status']) , Severity = tolong(['attributes']['severity']) , Tags = ['attributes']['tags'] , TagDetails = ['attributes']['tag'] , EventTimestamp = tostring(['attributes']['timestamp']) , DiscoveryTimestamp = iff(isnotnull(['attributes']['discovery_timestamp']), datetime(1970-01-01) + (tolong(['attributes']['discovery_timestamp']) * 1ms), datetime(null)) , TriggeringLogTimestamp = iff(isnotnull(['attributes']['triggering_log_timestamp']), datetime(1970-01-01) + (tolong(['attributes']['triggering_log_timestamp']) * 1ms), datetime(null)) , EventTrackerId = tostring(['attributes']['event_tracker_id']) , GroupByValuesHash = tostring(['attributes']['groupByValuesHash']) , ReducerSignalId = tostring(['attributes']['reducer_signal_id']) , SourceFragmentId = tostring(['attributes']['source_fragment_id']) , TriggeringLogId = tostring(['attributes']['triggering_log_id']) , IngestSizeInBytes = tolong(['attributes']['ingest_size_in_bytes']) , Source = tostring(['attributes']['attributes']['source']) , EventSource = ['attributes']['attributes']['eventSource'] , EventName = ['attributes']['attributes']['evt']['name'] , Entities = ['attributes']['attributes']['entities'] , CloudEntities = ['attributes']['attributes']['cloudEntities'] , Datasets = ['attributes']['attributes']['datasets'] , Ocsf = ['attributes']['attributes']['ocsf'] , OcsfEntities = ['attributes']['attributes']['ocsfEntities'] , OcsfCategory = ['attributes']['attributes']['ocsf']['category_name'] , OcsfClass = ['attributes']['attributes']['ocsf']['class_name'] , OcsfSeverity = ['attributes']['attributes']['ocsf']['severity'] , OcsfStatus = ['attributes']['attributes']['ocsf']['status'] , OcsfCloudProvider = tostring(['attributes']['attributes']['ocsf']['cloud']['provider']) , OcsfCloudRegion = ['attributes']['attributes']['ocsf']['cloud']['region'] , OcsfActorUserId = ['attributes']['attributes']['ocsf']['actor']['user']['uid'] , OcsfSourceIp = ['attributes']['attributes']['ocsf']['src_endpoint']['ip'] , UserIdentity = ['attributes']['attributes']['userIdentity'] , UserIdentityType = tostring(['attributes']['attributes']['userIdentity']['type']) , UserIdentityArn = ['attributes']['attributes']['userIdentity']['arn'] , UserIdentityAccountId = ['attributes']['attributes']['userIdentity']['accountId'] , UserIdentityAccessKeyId = ['attributes']['attributes']['userIdentity']['accessKeyId'] , UserDetails = ['attributes']['attributes']['usr'] , UserId = ['attributes']['attributes']['usr']['id'] , UserName = ['attributes']['attributes']['usr']['name'] , Workflow = ['attributes']['attributes']['workflow'] , WorkflowState = tostring(['attributes']['attributes']['workflow']['triage']['state']) , EventsMatched = tolong(['attributes']['attributes']['workflow']['events_matched']) , RuleId = tostring(['attributes']['attributes']['workflow']['rule']['id']) , RuleName = tostring(['attributes']['attributes']['workflow']['rule']['name']) , RuleType = tostring(['attributes']['attributes']['workflow']['rule']['type']) , DetectionMethod = tostring(['attributes']['attributes']['workflow']['rule']['detectionMethod']) , WorkflowFirstSeen = iff(isnotnull(['attributes']['attributes']['workflow']['first_seen']), datetime(1970-01-01) + (tolong(['attributes']['attributes']['workflow']['first_seen']) * 1ms), datetime(null)) , WorkflowLastSeen = iff(isnotnull(['attributes']['attributes']['workflow']['last_seen']), datetime(1970-01-01) + (tolong(['attributes']['attributes']['workflow']['last_seen']) * 1ms), datetime(null)) , TriggeringRuleCase = ['attributes']['attributes']['triggeringRuleCase'] , TriggerCondition = tostring(['attributes']['attributes']['triggeringRuleCase']['condition']) , TriggerCaseName = tostring(['attributes']['attributes']['triggeringRuleCase']['name']) , TriggerCaseStatus = tostring(['attributes']['attributes']['triggeringRuleCase']['status']) , RelatedQuery = ['attributes']['attributes']['relatedQuery'] , SignalCasesHistory = ['attributes']['attributes']['signal_cases_history'] , Queries = ['attributes']['attributes']['queries'] , Samples = ['attributes']['attributes']['samples'] , NetworkDetails = ['attributes']['attributes']['network'] , HttpDetails = ['attributes']['attributes']['http'] | project TimeGenerated , EventId , EventType , Attributes , SignalDetails , SignalId , SignalVersion , SignalTitle , Message , Host , Service , Status , Severity , Tags , TagDetails , EventTimestamp , DiscoveryTimestamp , TriggeringLogTimestamp , EventTrackerId , GroupByValuesHash , ReducerSignalId , SourceFragmentId , TriggeringLogId , IngestSizeInBytes , Source , EventSource , EventName , Entities , CloudEntities , Datasets , Ocsf , OcsfEntities , OcsfCategory , OcsfClass , OcsfSeverity , OcsfStatus , OcsfCloudProvider , OcsfCloudRegion , OcsfActorUserId , OcsfSourceIp , UserIdentity , UserIdentityType , UserIdentityArn , UserIdentityAccountId , UserIdentityAccessKeyId , UserDetails , UserId , UserName , Workflow , WorkflowState , EventsMatched , RuleId , RuleName , RuleType , DetectionMethod , WorkflowFirstSeen , WorkflowLastSeen , TriggeringRuleCase , TriggerCondition , TriggerCaseName , TriggerCaseStatus , RelatedQuery , SignalCasesHistory , Queries , Samples , NetworkDetails , HttpDetails"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "DatadogSecurityLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "DatadogSecurityLogs_CL",
+                  "description": "Datadog security signals collected from the Security Monitoring API",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "EventId",
+                      "type": "string",
+                      "description": "Unique identifier of the Datadog security signal"
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "Resource type of the event (always 'signal')"
+                    },
+                    {
+                      "name": "Attributes",
+                      "type": "dynamic",
+                      "description": "Full attributes object of the Datadog security signal"
+                    },
+                    {
+                      "name": "SignalDetails",
+                      "type": "dynamic",
+                      "description": "Detection and workflow details associated with the security signal"
+                    },
+                    {
+                      "name": "SignalId",
+                      "type": "string",
+                      "description": "Datadog identifier stored in the signal attributes"
+                    },
+                    {
+                      "name": "SignalVersion",
+                      "type": "long",
+                      "description": "Version of the Datadog security signal"
+                    },
+                    {
+                      "name": "SignalTitle",
+                      "type": "string",
+                      "description": "Title of the security signal"
+                    },
+                    {
+                      "name": "Message",
+                      "type": "string",
+                      "description": "Security signal message"
+                    },
+                    {
+                      "name": "Host",
+                      "type": "string",
+                      "description": "Host associated with the security signal"
+                    },
+                    {
+                      "name": "Service",
+                      "type": "dynamic",
+                      "description": "Services associated with the security signal"
+                    },
+                    {
+                      "name": "Status",
+                      "type": "string",
+                      "description": "Severity status of the security signal"
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "long",
+                      "description": "Numeric severity of the security signal"
+                    },
+                    {
+                      "name": "Tags",
+                      "type": "dynamic",
+                      "description": "Tags associated with the security signal"
+                    },
+                    {
+                      "name": "TagDetails",
+                      "type": "dynamic",
+                      "description": "Structured tag values associated with the security signal"
+                    },
+                    {
+                      "name": "EventTimestamp",
+                      "type": "string",
+                      "description": "Timestamp reported by Datadog for the security signal"
+                    },
+                    {
+                      "name": "DiscoveryTimestamp",
+                      "type": "datetime",
+                      "description": "Timestamp when Datadog discovered the security signal"
+                    },
+                    {
+                      "name": "TriggeringLogTimestamp",
+                      "type": "datetime",
+                      "description": "Timestamp of the log that triggered the security signal"
+                    },
+                    {
+                      "name": "EventTrackerId",
+                      "type": "string",
+                      "description": "Datadog event tracker identifier"
+                    },
+                    {
+                      "name": "GroupByValuesHash",
+                      "type": "string",
+                      "description": "Hash of the values used to group the security signal"
+                    },
+                    {
+                      "name": "ReducerSignalId",
+                      "type": "string",
+                      "description": "Identifier of the reduced security signal"
+                    },
+                    {
+                      "name": "SourceFragmentId",
+                      "type": "string",
+                      "description": "Identifier of the source fragment"
+                    },
+                    {
+                      "name": "TriggeringLogId",
+                      "type": "string",
+                      "description": "Identifier of the log that triggered the security signal"
+                    },
+                    {
+                      "name": "IngestSizeInBytes",
+                      "type": "long",
+                      "description": "Size of the ingested security signal in bytes"
+                    },
+                    {
+                      "name": "Source",
+                      "type": "string",
+                      "description": "Source that produced the security signal"
+                    },
+                    {
+                      "name": "EventSource",
+                      "type": "dynamic",
+                      "description": "Event sources represented in the security signal"
+                    },
+                    {
+                      "name": "EventName",
+                      "type": "dynamic",
+                      "description": "Event names represented in the security signal"
+                    },
+                    {
+                      "name": "Entities",
+                      "type": "dynamic",
+                      "description": "Entities associated with the security signal"
+                    },
+                    {
+                      "name": "CloudEntities",
+                      "type": "dynamic",
+                      "description": "Cloud entities associated with the security signal"
+                    },
+                    {
+                      "name": "Datasets",
+                      "type": "dynamic",
+                      "description": "Datasets used to generate the security signal"
+                    },
+                    {
+                      "name": "Ocsf",
+                      "type": "dynamic",
+                      "description": "Open Cybersecurity Schema Framework data"
+                    },
+                    {
+                      "name": "OcsfEntities",
+                      "type": "dynamic",
+                      "description": "OCSF-normalized entities associated with the security signal"
+                    },
+                    {
+                      "name": "OcsfCategory",
+                      "type": "dynamic",
+                      "description": "OCSF event categories represented in the signal"
+                    },
+                    {
+                      "name": "OcsfClass",
+                      "type": "dynamic",
+                      "description": "OCSF event classes represented in the signal"
+                    },
+                    {
+                      "name": "OcsfSeverity",
+                      "type": "dynamic",
+                      "description": "OCSF severity values represented in the signal"
+                    },
+                    {
+                      "name": "OcsfStatus",
+                      "type": "dynamic",
+                      "description": "OCSF status values represented in the signal"
+                    },
+                    {
+                      "name": "OcsfCloudProvider",
+                      "type": "string",
+                      "description": "Cloud provider identified by OCSF"
+                    },
+                    {
+                      "name": "OcsfCloudRegion",
+                      "type": "dynamic",
+                      "description": "Cloud regions identified by OCSF"
+                    },
+                    {
+                      "name": "OcsfActorUserId",
+                      "type": "dynamic",
+                      "description": "Actor user identifiers identified by OCSF"
+                    },
+                    {
+                      "name": "OcsfSourceIp",
+                      "type": "dynamic",
+                      "description": "Source IP addresses identified by OCSF"
+                    },
+                    {
+                      "name": "UserIdentity",
+                      "type": "dynamic",
+                      "description": "Source identity details associated with the signal"
+                    },
+                    {
+                      "name": "UserIdentityType",
+                      "type": "string",
+                      "description": "Type of source identity associated with the signal"
+                    },
+                    {
+                      "name": "UserIdentityArn",
+                      "type": "dynamic",
+                      "description": "AWS ARNs associated with the source identity"
+                    },
+                    {
+                      "name": "UserIdentityAccountId",
+                      "type": "dynamic",
+                      "description": "AWS account identifiers associated with the source identity"
+                    },
+                    {
+                      "name": "UserIdentityAccessKeyId",
+                      "type": "dynamic",
+                      "description": "AWS access key identifiers associated with the source identity"
+                    },
+                    {
+                      "name": "UserDetails",
+                      "type": "dynamic",
+                      "description": "Normalized user details associated with the signal"
+                    },
+                    {
+                      "name": "UserId",
+                      "type": "dynamic",
+                      "description": "User identifiers associated with the signal"
+                    },
+                    {
+                      "name": "UserName",
+                      "type": "dynamic",
+                      "description": "User names associated with the signal"
+                    },
+                    {
+                      "name": "Workflow",
+                      "type": "dynamic",
+                      "description": "Detection workflow and triage details"
+                    },
+                    {
+                      "name": "WorkflowState",
+                      "type": "string",
+                      "description": "Current triage state of the security signal"
+                    },
+                    {
+                      "name": "EventsMatched",
+                      "type": "long",
+                      "description": "Number of events matched by the detection rule"
+                    },
+                    {
+                      "name": "RuleId",
+                      "type": "string",
+                      "description": "Identifier of the detection rule"
+                    },
+                    {
+                      "name": "RuleName",
+                      "type": "string",
+                      "description": "Name of the detection rule"
+                    },
+                    {
+                      "name": "RuleType",
+                      "type": "string",
+                      "description": "Type of the detection rule"
+                    },
+                    {
+                      "name": "DetectionMethod",
+                      "type": "string",
+                      "description": "Detection method used by the rule"
+                    },
+                    {
+                      "name": "WorkflowFirstSeen",
+                      "type": "datetime",
+                      "description": "Timestamp when the matching activity was first seen"
+                    },
+                    {
+                      "name": "WorkflowLastSeen",
+                      "type": "datetime",
+                      "description": "Timestamp when the matching activity was last seen"
+                    },
+                    {
+                      "name": "TriggeringRuleCase",
+                      "type": "dynamic",
+                      "description": "Triggering rule case details"
+                    },
+                    {
+                      "name": "TriggerCondition",
+                      "type": "string",
+                      "description": "Condition that triggered the rule case"
+                    },
+                    {
+                      "name": "TriggerCaseName",
+                      "type": "string",
+                      "description": "Name of the rule case that triggered the signal"
+                    },
+                    {
+                      "name": "TriggerCaseStatus",
+                      "type": "string",
+                      "description": "Status of the rule case that triggered the signal"
+                    },
+                    {
+                      "name": "RelatedQuery",
+                      "type": "dynamic",
+                      "description": "Query associated with the security signal"
+                    },
+                    {
+                      "name": "SignalCasesHistory",
+                      "type": "dynamic",
+                      "description": "History of rule cases associated with the signal"
+                    },
+                    {
+                      "name": "Queries",
+                      "type": "dynamic",
+                      "description": "Queries evaluated for the security signal"
+                    },
+                    {
+                      "name": "Samples",
+                      "type": "dynamic",
+                      "description": "Sample events associated with the security signal"
+                    },
+                    {
+                      "name": "NetworkDetails",
+                      "type": "dynamic",
+                      "description": "Network details associated with the security signal"
+                    },
+                    {
+                      "name": "HttpDetails",
+                      "type": "dynamic",
+                      "description": "HTTP details associated with the security signal"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "DatadogAuditLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "DatadogAuditLogs_CL",
+                  "description": "Datadog platform audit events collected from the Datadog Audit API",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "EventId",
+                      "type": "string",
+                      "description": "Unique identifier of the Datadog audit event"
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "Resource type of the event (always 'audit')"
+                    },
+                    {
+                      "name": "Attributes",
+                      "type": "dynamic",
+                      "description": "Full attributes object of the Datadog audit event"
+                    },
+                    {
+                      "name": "EventService",
+                      "type": "string",
+                      "description": "Datadog service that emitted the audit event"
+                    },
+                    {
+                      "name": "AuditDetails",
+                      "type": "dynamic",
+                      "description": "Detailed audit event payload"
+                    },
+                    {
+                      "name": "Message",
+                      "type": "string",
+                      "description": "Human-readable audit event message"
+                    },
+                    {
+                      "name": "Tags",
+                      "type": "dynamic",
+                      "description": "Tags associated with the audit event"
+                    },
+                    {
+                      "name": "Action",
+                      "type": "string",
+                      "description": "Action performed in the audit event"
+                    },
+                    {
+                      "name": "AuthenticationMethod",
+                      "type": "string",
+                      "description": "Authentication method used by the actor"
+                    },
+                    {
+                      "name": "EventName",
+                      "type": "string",
+                      "description": "Name of the audited event"
+                    },
+                    {
+                      "name": "ActorType",
+                      "type": "string",
+                      "description": "Type of actor that performed the action"
+                    },
+                    {
+                      "name": "OrganizationId",
+                      "type": "string",
+                      "description": "Datadog organization identifier"
+                    },
+                    {
+                      "name": "UserId",
+                      "type": "string",
+                      "description": "Identifier of the user that performed the action"
+                    },
+                    {
+                      "name": "UserEmail",
+                      "type": "string",
+                      "description": "Email address of the user that performed the action"
+                    },
+                    {
+                      "name": "UserUuid",
+                      "type": "string",
+                      "description": "Datadog UUID of the user that performed the action"
+                    },
+                    {
+                      "name": "HttpMethod",
+                      "type": "string",
+                      "description": "HTTP method associated with the audit event"
+                    },
+                    {
+                      "name": "HttpStatusCode",
+                      "type": "long",
+                      "description": "HTTP response status code"
+                    },
+                    {
+                      "name": "HttpUrlHost",
+                      "type": "string",
+                      "description": "Host of the requested URL"
+                    },
+                    {
+                      "name": "HttpUrlPath",
+                      "type": "string",
+                      "description": "Path of the requested URL"
+                    },
+                    {
+                      "name": "HttpUserAgent",
+                      "type": "string",
+                      "description": "User agent associated with the request"
+                    },
+                    {
+                      "name": "ClientIp",
+                      "type": "string",
+                      "description": "Client IP address associated with the audit event"
+                    },
+                    {
+                      "name": "ClientGeo",
+                      "type": "dynamic",
+                      "description": "Geolocation details associated with the client IP address"
+                    },
+                    {
+                      "name": "RoutePath",
+                      "type": "string",
+                      "description": "Datadog route associated with the request"
+                    },
+                    {
+                      "name": "Status",
+                      "type": "string",
+                      "description": "Status or severity of the audit event"
+                    },
+                    {
+                      "name": "EmittedSource",
+                      "type": "string",
+                      "description": "Datadog component that emitted the audit event"
+                    },
+                    {
+                      "name": "EventTimestamp",
+                      "type": "string",
+                      "description": "Timestamp reported by Datadog for the audit event"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "DatadogLogs_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "DatadogLogs_CL",
+                  "description": "Indexed Datadog logs collected from the Datadog Logs Search API",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime"
+                    },
+                    {
+                      "name": "EventId",
+                      "type": "string",
+                      "description": "Unique identifier of the Datadog log event"
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "Resource type of the event (always 'log')"
+                    },
+                    {
+                      "name": "Attributes",
+                      "type": "dynamic",
+                      "description": "Full attributes object of the Datadog log event"
+                    },
+                    {
+                      "name": "LogAttributes",
+                      "type": "dynamic",
+                      "description": "Custom attributes associated with the Datadog log event"
+                    },
+                    {
+                      "name": "Host",
+                      "type": "string",
+                      "description": "Host that generated the log event"
+                    },
+                    {
+                      "name": "Message",
+                      "type": "string",
+                      "description": "Log message"
+                    },
+                    {
+                      "name": "Service",
+                      "type": "string",
+                      "description": "Application or service that generated the log event"
+                    },
+                    {
+                      "name": "Status",
+                      "type": "string",
+                      "description": "Status or severity associated with the log event"
+                    },
+                    {
+                      "name": "Tags",
+                      "type": "dynamic",
+                      "description": "Tags associated with the log event"
+                    },
+                    {
+                      "name": "EventTimestamp",
+                      "type": "string",
+                      "description": "Timestamp reported by Datadog for the log event"
+                    },
+                    {
+                      "name": "LogAttributeId",
+                      "type": "string",
+                      "description": "Source-specific identifier in the log attributes"
+                    },
+                    {
+                      "name": "LogAttributeTimestamp",
+                      "type": "datetime",
+                      "description": "Source timestamp from the log attributes"
+                    },
+                    {
+                      "name": "Level",
+                      "type": "string",
+                      "description": "Source-specific log level"
+                    },
+                    {
+                      "name": "LambdaArn",
+                      "type": "string",
+                      "description": "ARN of the AWS Lambda function that generated the log"
+                    },
+                    {
+                      "name": "AwsDetails",
+                      "type": "dynamic",
+                      "description": "AWS metadata associated with the log event"
+                    },
+                    {
+                      "name": "AwsAccountId",
+                      "type": "string",
+                      "description": "AWS account identifier associated with the log"
+                    },
+                    {
+                      "name": "AwsInvokedFunctionArn",
+                      "type": "string",
+                      "description": "ARN of the AWS Lambda function invoked by the integration"
+                    },
+                    {
+                      "name": "AwsLogGroup",
+                      "type": "string",
+                      "description": "AWS CloudWatch log group"
+                    },
+                    {
+                      "name": "AwsLogStream",
+                      "type": "string",
+                      "description": "AWS CloudWatch log stream"
+                    },
+                    {
+                      "name": "AwsS3Bucket",
+                      "type": "string",
+                      "description": "S3 bucket containing the source log"
+                    },
+                    {
+                      "name": "AwsS3Key",
+                      "type": "string",
+                      "description": "S3 object key containing the source log"
+                    },
+                    {
+                      "name": "NetworkDetails",
+                      "type": "dynamic",
+                      "description": "Network metadata associated with the log event"
+                    },
+                    {
+                      "name": "BytesWritten",
+                      "type": "long",
+                      "description": "Number of bytes written during the network flow"
+                    },
+                    {
+                      "name": "ClientIp",
+                      "type": "string",
+                      "description": "Source IP address of the network flow"
+                    },
+                    {
+                      "name": "ClientPort",
+                      "type": "long",
+                      "description": "Source port of the network flow"
+                    },
+                    {
+                      "name": "DestinationIp",
+                      "type": "string",
+                      "description": "Destination IP address of the network flow"
+                    },
+                    {
+                      "name": "DestinationPort",
+                      "type": "long",
+                      "description": "Destination port of the network flow"
+                    },
+                    {
+                      "name": "NetworkInterface",
+                      "type": "string",
+                      "description": "AWS network interface associated with the flow"
+                    },
+                    {
+                      "name": "PacketCount",
+                      "type": "long",
+                      "description": "Number of packets in the network flow"
+                    },
+                    {
+                      "name": "NetworkProtocol",
+                      "type": "string",
+                      "description": "IP protocol number of the network flow"
+                    },
+                    {
+                      "name": "VpcDetails",
+                      "type": "dynamic",
+                      "description": "Amazon VPC flow metadata"
+                    },
+                    {
+                      "name": "VpcAction",
+                      "type": "string",
+                      "description": "Action applied to the VPC network flow"
+                    },
+                    {
+                      "name": "VpcIntervalStart",
+                      "type": "datetime",
+                      "description": "Start time of the VPC flow interval"
+                    },
+                    {
+                      "name": "VpcIntervalEnd",
+                      "type": "datetime",
+                      "description": "End time of the VPC flow interval"
+                    },
+                    {
+                      "name": "VpcStatus",
+                      "type": "string",
+                      "description": "Status of the VPC flow log record"
+                    },
+                    {
+                      "name": "VpcVersion",
+                      "type": "long",
+                      "description": "Version of the VPC flow log format"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "DatadogConnector",
+          "title": "Datadog Logs (via Codeless Connector Framework)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The Datadog Logs data connector ingests [Datadog](https://www.datadoghq.com/) audit events, indexed logs, and security signals into Microsoft Sentinel through the [Datadog API](https://docs.datadoghq.com/api/latest/). The supported data types provide administrative activity, application and infrastructure telemetry, and Datadog Security Monitoring detections for investigation.",
+          "graphQueries": [
+            {
+              "metricName": "Total audit events received",
+              "legend": "Datadog Audit Events",
+              "baseQuery": "DatadogAuditLogs_CL"
+            },
+            {
+              "metricName": "Total logs received",
+              "legend": "Datadog Logs",
+              "baseQuery": "DatadogLogs_CL"
+            },
+            {
+              "metricName": "Total security signals received",
+              "legend": "Datadog Security Logs",
+              "baseQuery": "DatadogSecurityLogs_CL"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get sample of 20 recent Datadog audit events",
+              "query": "DatadogAuditLogs_CL\n| take 20"
+            },
+            {
+              "description": "Get sample of 20 recent Datadog logs",
+              "query": "DatadogLogs_CL\n| take 20"
+            },
+            {
+              "description": "Get sample of 20 recent Datadog security signals",
+              "query": "DatadogSecurityLogs_CL\n| take 20"
+            },
+            {
+              "description": "Audit events by action and status",
+              "query": "DatadogAuditLogs_CL\n| summarize count() by Action, Status"
+            },
+            {
+              "description": "Logs by Datadog service and status",
+              "query": "DatadogLogs_CL\n| summarize count() by Service, Status"
+            },
+            {
+              "description": "Security signals by status and title",
+              "query": "DatadogSecurityLogs_CL\n| summarize count() by Status, SignalTitle"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "DatadogAuditLogs_CL",
+              "lastDataReceivedQuery": "DatadogAuditLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            },
+            {
+              "name": "DatadogLogs_CL",
+              "lastDataReceivedQuery": "DatadogLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            },
+            {
+              "name": "DatadogSecurityLogs_CL",
+              "lastDataReceivedQuery": "DatadogSecurityLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            },
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "union DatadogAuditLogs_CL, DatadogLogs_CL, DatadogSecurityLogs_CL | where TimeGenerated > ago(1h) | take 1"
+              ]
+            }
+          ],
+          "availability": {
+            "isPreview": true,
+            "status": 1
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true,
+                  "action": false
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Datadog API access",
+                "description": "**Datadog API and Application keys** are required. The Application key must have permission to read the selected data type. Security Logs require the `security_monitoring_signals_read` scope. See the [Datadog API and Application Keys documentation](https://docs.datadoghq.com/account_management/api-app-keys/)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "1. Connections",
+              "description": "Configure and manage Datadog connections.",
+              "instructions": [
+                {
+                  "type": "Markdown",
+                  "parameters": {
+                    "content": "Enter your Datadog API host (the region your account uses), without a scheme or trailing slash. Valid values: `api.datadoghq.com` (US1), `api.us3.datadoghq.com` (US3), `api.us5.datadoghq.com` (US5), `api.datadoghq.eu` (EU1), `api.ap1.datadoghq.com` (AP1), `api.ap2.datadoghq.com` (AP2), `api.ddog-gov.com` (US1-FED), `api.us2.ddog-gov.com` (US2-FED), `api.uk1.datadoghq.com` (UK1)."
+                  }
+                },
+                {
+                  "type": "DataConnectorsGrid",
+                  "parameters": {
+                    "mapping": [
+                      {
+                        "columnName": "Connection Name",
+                        "columnValue": "properties.addOnAttributes.friendlyName"
+                      },
+                      {
+                        "columnName": "Datadog API Endpoint",
+                        "columnValue": "properties.request.apiEndpoint"
+                      },
+                      {
+                        "columnName": "Data Type",
+                        "columnValue": "properties.addOnAttributes.dataType"
+                      }
+                    ],
+                    "menuItems": [
+                      "DeleteConnector"
+                    ]
+                  }
+                },
+                {
+                  "type": "ContextPane",
+                  "parameters": {
+                    "label": "Add Connection",
+                    "title": "Add Datadog Connection",
+                    "subtitle": "Connect Datadog data to Microsoft Sentinel",
+                    "contextPaneType": "DataConnectorsContextPane",
+                    "instructionSteps": [
+                      {
+                        "instructions": [
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Connection Name",
+                              "placeholder": "e.g. Production US1",
+                              "type": "text",
+                              "name": "friendlyName",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Datadog Site (API host)",
+                              "placeholder": "api.datadoghq.com",
+                              "type": "text",
+                              "name": "datadogsite",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Datadog API Key",
+                              "placeholder": "Enter your Datadog API key",
+                              "type": "password",
+                              "name": "apikey",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Textbox",
+                            "parameters": {
+                              "label": "Datadog Application Key",
+                              "placeholder": "Enter your Datadog Application key",
+                              "type": "password",
+                              "name": "appkey",
+                              "validations": {
+                                "required": true
+                              }
+                            }
+                          },
+                          {
+                            "type": "Dropdown",
+                            "parameters": {
+                              "label": "Data Type",
+                              "name": "selectedDataType",
+                              "options": [
+                                {
+                                  "key": "DatadogAuditLogs",
+                                  "text": "Audit Events"
+                                },
+                                {
+                                  "key": "DatadogLogs",
+                                  "text": "Logs"
+                                },
+                                {
+                                  "key": "DatadogSecurityLogs",
+                                  "text": "Security Logs"
+                                }
+                              ],
+                              "placeholder": "Select a data type",
+                              "required": true
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Datadog Logs (via Codeless Connector Framework)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Datadog Logs (via Codeless Connector Framework)",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "friendlyName": {
+              "defaultValue": "friendlyName",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "datadogsite": {
+              "defaultValue": "datadogsite",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "apikey": {
+              "defaultValue": "apikey",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "appkey": {
+              "defaultValue": "appkey",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "selectedDataType": {
+              "defaultValue": "selectedDataType",
+              "type": "array"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            },
+            {
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','DatadogAuditLogs_CL' , uniqueString(parameters('friendlyName')) )]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "DD-API-KEY"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://', parameters('datadogsite'), '/api/v2/audit/events')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 5,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "MS-Sentinel-CCP-DatadogAuditLogs",
+                    "DD-APPLICATION-KEY": "[[parameters('appkey')]"
+                  },
+                  "queryParameters": {
+                    "filter[from]": "{_QueryWindowStartTime}",
+                    "filter[to]": "{_QueryWindowEndTime}",
+                    "page[limit]": "1000",
+                    "sort": "timestamp"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.meta.page.after",
+                  "NextPageParaName": "page[cursor]",
+                  "pageSize": 1000,
+                  "pageSizeParameterName": "page[limit]"
+                },
+                "connectorDefinitionName": "DatadogConnector",
+                "dataType": "DatadogAuditLogs_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-DatadogAuditLogs_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "friendlyName": "[[parameters('friendlyName')]",
+                  "dataType": "Audit Events"
+                }
+              },
+              "condition": "[[equals(parameters('selectedDataType')[0], 'DatadogAuditLogs')]"
+            },
+            {
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','DatadogLogs_CL' , uniqueString(parameters('friendlyName')) )]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "DD-API-KEY"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://', parameters('datadogsite'), '/api/v2/logs/events/search')]",
+                  "httpMethod": "POST",
+                  "rateLimitQPS": 5,
+                  "paginatedCallsPerSecond": 5.0,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "isPostPayloadJson": true,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "User-Agent": "MS-Sentinel-CCP-DatadogLogs",
+                    "DD-APPLICATION-KEY": "[[parameters('appkey')]"
+                  },
+                  "queryParametersTemplate": "{\r\n  \"filter\": {\r\n    \"from\": \"{_QueryWindowStartTime}\",\r\n    \"to\": \"{_QueryWindowEndTime}\",\r\n    \"query\": \"*\"\r\n  },\r\n  \"page\": {\r\n    \"limit\": 1000\r\n  },\r\n  \"sort\": \"timestamp\"\r\n}"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.meta.page.after",
+                  "NextPageParaName": "$.page.cursor",
+                  "pageSize": 1000,
+                  "pageSizeParameterName": "$.page.limit",
+                  "pagingInfoPlacement": "RequestBody"
+                },
+                "connectorDefinitionName": "DatadogConnector",
+                "dataType": "DatadogLogs_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-DatadogLogs_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "friendlyName": "[[parameters('friendlyName')]",
+                  "dataType": "Logs"
+                }
+              },
+              "condition": "[[equals(parameters('selectedDataType')[0], 'DatadogLogs')]"
+            },
+            {
+              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','DatadogSecurityLogs_CL' , uniqueString(parameters('friendlyName')) )]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "DD-API-KEY"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://', parameters('datadogsite'), '/api/v2/security_monitoring/signals/search')]",
+                  "httpMethod": "POST",
+                  "rateLimitQPS": 5,
+                  "paginatedCallsPerSecond": 5.0,
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "isPostPayloadJson": true,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "User-Agent": "MS-Sentinel-CCP-DatadogSecurityLogs",
+                    "DD-APPLICATION-KEY": "[[parameters('appkey')]"
+                  },
+                  "queryParametersTemplate": "{\r\n  \"filter\": {\r\n    \"from\": \"{_QueryWindowStartTime}\",\r\n    \"to\": \"{_QueryWindowEndTime}\",\r\n    \"query\": \"*\"\r\n  },\r\n  \"page\": {\r\n    \"limit\": 1000\r\n  },\r\n  \"sort\": \"timestamp\"\r\n}"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.meta.page.after",
+                  "NextPageParaName": "$.page.cursor",
+                  "pageSize": 1000,
+                  "pageSizeParameterName": "$.page.limit",
+                  "pagingInfoPlacement": "RequestBody"
+                },
+                "connectorDefinitionName": "DatadogConnector",
+                "dataType": "DatadogSecurityLogs_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-DatadogSecurityLogs_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "friendlyName": "[[parameters('friendlyName')]",
+                  "dataType": "Security Logs"
+                }
+              },
+              "condition": "[[equals(parameters('selectedDataType')[0], 'DatadogSecurityLogs')]"
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.1.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Datadog",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Datadog/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.datadoghq.com/\">Datadog</a> solution for Microsoft Sentinel enables you to ingest Datadog audit events, indexed logs, and security signals through the <a href=\"https://docs.datadoghq.com/api/latest/\">Datadog API</a>. These data types provide visibility into administrative activity, application and infrastructure telemetry, and Datadog Security Monitoring detections.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://aka.ms/Sentinel-CCP_Platform\">Microsoft Sentinel Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Datadog",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-08-06",
+        "providers": [
+          "Datadog"
+        ],
+        "categories": {
+          "domains": [
+            "Application"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

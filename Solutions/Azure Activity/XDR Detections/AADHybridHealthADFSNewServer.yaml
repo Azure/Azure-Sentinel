@@ -1,0 +1,95 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureActivity
+  requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+    - AzureActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 88f453ff-7b9e-45bb-8c12-4058ca5e44ee
+    path: Analytic Rules/AADHybridHealthADFSNewServer.yaml
+    version: 2.0.3
+    querySha256: df6578089b0befe24909476c3ba4d5cac4e4110eaf0de4b5b2d6c2b8293201a6
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `Caller` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1578
+    reviewScope:
+      sourceDocumentSha256: 10042de0e9b125e13bf0e64e6a550e7cc89d482cd12e8ea7416b836ac1f26418
+      targetQuerySha256: b1cc83d247217854a80e7dfb4c9049cbf5c6ec0b4c94e3b60c2f73dc7c79aa0c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Caller
+      column: Caller
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-88f453ff-7b9e-45bb-8c12-4058ca5e44ee
+  displayName: Microsoft Entra ID Hybrid Health AD FS New Server
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AzureActivity
+      | where CategoryValue =~ 'Administrative'
+      | where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'
+      | where _ResourceId has 'AdFederationService'
+      | where OperationNameValue =~ 'Microsoft.ADHybridHealthService/services/servicemembers/action'
+      | extend claimsJson = parse_json(Claims)
+      | extend AppId = tostring(claimsJson.appid), AccountName = tostring(claimsJson.name), Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+      | project-away claimsJson
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Microsoft Entra ID Hybrid Health AD FS New Server
+      description: |-
+        'This detection uses AzureActivity logs (Administrative category) to identify the creation or update of a server instance in an Microsoft Entra ID Hybrid Health AD FS service.
+        A threat actor can create a new AD Health ADFS service and create a fake server instance to spoof AD FS signing logs. There is no need to compromise an on-premises AD FS server.
+        This can be done programmatically via HTTP requests to Azure. More information in this blog: https://o365blog.com/post/hybridhealthagent/'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1578

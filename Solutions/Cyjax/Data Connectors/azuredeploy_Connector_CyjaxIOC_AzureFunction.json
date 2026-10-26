@@ -1,0 +1,303 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "defaultValue": "CyjaxIOC",
+            "minLength": 1,
+            "maxLength": 11,
+            "type": "string",
+            "metadata": {
+                "description": "Enter a unique Function App name (max 11 characters)."
+            }
+        },
+        "Location": {
+            "defaultValue": "[resourceGroup().location]",
+            "type": "string",
+            "metadata": {
+                "description": "The location in which the data collection rules and data collection endpoints should be deployed."
+            }
+        },
+        "WorkspaceID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter the Log Analytics Workspace ID (used for Upload Indicator API endpoint)."
+            }
+        },
+        "AzureClientID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client ID (Application ID) from your App Registration."
+            }
+        },
+        "AzureClientSecret": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Client Secret from your App Registration."
+            }
+        },
+        "AzureTenantID": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter Azure Tenant ID of your Azure Active Directory."
+            }
+        },
+        "CyjaxBaseURL": {
+            "defaultValue": "https://api.cymon.co/v2",
+            "type": "string",
+            "metadata": {
+                "description": "Enter the Cyjax API v2 Base URL (e.g., https://api.cymon.co/v2)."
+            }
+        },
+        "CyjaxAccessToken": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter the Cyjax API Bearer Token (API Key) for authentication."
+            }
+        },
+        "LookbackDays": {
+            "type": "int",
+            "defaultValue": 1,
+            "minValue": 1,
+            "maxValue": 7,
+            "metadata": {
+                "description": "Number of days to look back on first run (default: 1)."
+            }
+        },
+        "EnableEnrichment": {
+            "type": "bool",
+            "allowedValues": [
+                true,
+                false
+            ],
+            "defaultValue": true,
+            "metadata": {
+                "description": "Set to true to enrich each IOC with GeoIP, ASN, and sighting data from the Cyjax enrichment API. Set to false to skip enrichment and reduce API calls and execution time."
+            }
+        },
+        "IOCQuery": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Optional free-text search query to filter IOCs from the Cyjax API (e.g. a keyword, ioc value, or ttp value etc.). Leave empty to fetch all available IOCs."
+            }
+        },
+        "IndicatorType":{
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Filter IOCs by type. Enter comma-separated values (e.g., URL,Domain,IPv4).Supported types: URL, Domain, IPv4, IPv6, Hostname, Email, FileHash-SHA1, FileHash-SHA256, FileHash-MD5, FileHash-SSDEEP. Leave empty to fetch all types."
+            }
+        },
+        "Schedule": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter a valid Quartz Cron-Expression (e.g., 0 */10 * * * * for every 10 minutes)."
+            },
+            "defaultValue": "0 */10 * * * *"
+        },
+        "LogLevel": {
+            "type": "string",
+            "metadata": {
+                "description": "Set the log level. Default is INFO."
+            },
+            "allowedValues": [
+                "Debug",
+                "Info",
+                "Error",
+                "Warning"
+            ],
+            "defaultValue": "Info"
+        },
+        "AppInsightsWorkspaceResourceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Migrate Classic Application Insights to Log Analytic Workspace. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value."
+            }
+        }
+    },
+    "variables": {
+        "FunctionName": "[concat(toLower(trim(parameters('FunctionName'))), uniqueString(resourceGroup().id))]",
+        "StorageSuffix": "[environment().suffixes.storage]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2023-01-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[parameters('Location')]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionName')]",
+            "location": "[parameters('Location')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionName')]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2023-01-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[parameters('Location')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "kind": "functionapp",
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "workerSize": "0",
+                "workerSizeId": "0",
+                "numberOfWorkers": "1",
+                "reserved": true
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2023-01-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[parameters('Location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('FunctionName'))]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.12",
+                    "appSettings": [
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(resourceId('Microsoft.Insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName')), '2023-01-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName')), '2023-01-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(variables('FunctionName'))]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "https://aka.ms/sentinel-CyjaxIOC-functionapp"
+                        },
+                        {
+                            "name": "CYJAX_BASE_URL",
+                            "value": "[parameters('CyjaxBaseURL')]"
+                        },
+                        {
+                            "name": "CYJAX_ACCESS_TOKEN",
+                            "value": "[parameters('CyjaxAccessToken')]"
+                        },
+                        {
+                            "name": "AZURE_CLIENT_ID",
+                            "value": "[parameters('AzureClientID')]"
+                        },
+                        {
+                            "name": "AZURE_CLIENT_SECRET",
+                            "value": "[parameters('AzureClientSecret')]"
+                        },
+                        {
+                            "name": "AZURE_TENANT_ID",
+                            "value": "[parameters('AzureTenantID')]"
+                        },
+                        {
+                            "name": "WORKSPACE_ID",
+                            "value": "[parameters('WorkspaceID')]"
+                        },
+                        {
+                            "name": "Schedule",
+                            "value": "[parameters('Schedule')]"
+                        },
+                        {
+                            "name": "LogLevel",
+                            "value": "[parameters('LogLevel')]"
+                        },
+                        {
+                            "name": "LOOKBACK_DAYS",
+                            "value": "[string(parameters('LookbackDays'))]"
+                        },
+                        {
+                            "name": "FILE_SHARE_NAME",
+                            "value": "cyjax-ioc"
+                        },
+                        {
+                            "name": "ENABLE_ENRICHMENT",
+                            "value": "[string(parameters('EnableEnrichment'))]"
+                        },
+                        {
+                            "name": "IOC_QUERY",
+                            "value": "[parameters('IOCQuery')]"
+                        },
+                        {
+                            "name": "Indicator_Type",
+                            "value": "[parameters('IndicatorType')]"
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}

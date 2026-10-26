@@ -1,5 +1,21 @@
 # Changelog for ASimWebSession.yaml
 
+## Version 0.5.8
+
+- (2026-09-30) Add parser for Cloudflare One logs - [PR #14982](https://github.com/Azure/Azure-Sentinel/pull/14982)
+
+## Version 0.5.7
+
+- (2026-06-11) Add parser for AWS Web Application Firewall (WAF) logs - [PR #14496](https://github.com/Azure/Azure-Sentinel/pull/14496)
+
+## Version 0.5.6
+
+- (2026-06-05) Add parser for Salesforce Service Cloud web session and API request logs
+
+## Version 0.5.5
+
+- (2026-03-24) Add parser for Cisco Umbrella proxy logs - [PR #13893](https://github.com/Azure/Azure-Sentinel/pull/13893)
+
 ## Version 0.5.4
 
 - (2024-05-30) ASimWebSessionBarracudaWAF.yaml-57 - [PR #10505](https://github.com/Azure/Azure-Sentinel/pull/10505)
@@ -27,4 +43,3 @@
 ## Version 0.1
 
 - (2021-12-01) Dev/normalization/web-frame-only - [PR #3625](https://github.com/Azure/Azure-Sentinel/pull/3625)
-

@@ -1,0 +1,145 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Abnormal Security - Add Incident Comment",
+    "description": "This playbook is triggered when a Microsoft Sentinel incident is created. It adds a comment to the incident summarizing the Abnormal Security alert (provider, severity, alert product names, and a link to the incident) so analysts have Abnormal context inline. It uses only the Microsoft Sentinel connector and requires no third-party credentials.",
+    "prerequisites": [
+      "1. None. This playbook uses the Microsoft Sentinel connector with a system-assigned managed identity."
+    ],
+    "lastUpdateTime": "2026-06-05T00:00:00.000Z",
+    "entities": [],
+    "tags": ["Utilities"],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Abnormal Security"
+    },
+    "source": {
+      "type": "solution",
+      "name": "AbnormalSecurity"
+    },
+    "postDeployment": [
+      "1. Assign the Microsoft Sentinel Responder role to the playbook's managed identity on the resource group or workspace.",
+      "2. Create an Automation Rule that runs this playbook on incidents created by the Abnormal Security analytic rules."
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Abnormal Security - Add Incident Comment",
+        "notes": ["Initial version"]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "AbnormalSecurity-AddIncidentComment",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    }
+  },
+  "variables": {
+    "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('MicrosoftSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "AbnormalSecurity-AddIncidentComment",
+        "hidden-SentinelTemplateVersion": "1.0.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Add_comment_to_incident_(V3)": {
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p><strong>Abnormal Security</strong></p>\n<p>Provider: @{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], ', ')}<br>\nSeverity: @{triggerBody()?['object']?['properties']?['severity']}<br>\nTitle: @{triggerBody()?['object']?['properties']?['title']}</p>\n<p><a href=\"@{triggerBody()?['object']?['properties']?['incidentUrl']}\">View incident in Microsoft Sentinel</a></p>\n<p>Review the alerts and entities on this incident for the Abnormal detection details.</p>"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/Comment"
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

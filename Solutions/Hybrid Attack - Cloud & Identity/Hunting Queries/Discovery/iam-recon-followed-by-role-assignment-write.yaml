@@ -1,0 +1,120 @@
+id: 9259db24-159e-411d-a893-a9f2c819bdf4
+name: IAM reconnaissance followed by role assignment write attempt
+description: |
+  Detects likely escalation staging where IAM discovery is followed by role assignment write operations by the same caller.
+description-detailed: |
+  This query sequences reconnaissance and privilege-modification behavior in AzureActivity.
+  It is tuned for high fidelity by requiring recon breadth before role assignment writes in short time windows.
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - Discovery
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1526
+  - T1087.004
+  - T1098.003
+tags:
+  - Role assignment
+  - Privilege escalation
+  - IAM reconnaissance
+  - AzureActivity
+query: |
+  // Parameterized execution window supplied by the hunting framework.
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  // Time allowed between reconnaissance and privilege-modifying action.
+  let SequenceWindow = 2h;
+  // Success-state filters for control-plane telemetry.
+  let SuccessActivityStatusValues = dynamic(["succeeded", "success", "accepted"]);
+  // Discovery operations that indicate IAM and scope mapping.
+  let ReconOps = dynamic([
+    "microsoft.authorization/roleassignments/read",
+    "microsoft.authorization/roledefinitions/read",
+    "microsoft.resources/subscriptions/read",
+    "microsoft.resources/subscriptions/resourcegroups/read",
+    "microsoft.resources/subscriptions/resourcegroups/resources/read",
+    "microsoft.resources/subscriptions/providers/read"
+  ]);
+  // Role-assignment write and delete operations for escalation/persistence.
+  let RoleWriteOps = dynamic([
+    "microsoft.authorization/roleassignments/write",
+    "microsoft.authorization/roleassignments/delete"
+  ]);
+  // Stage 1: successful and deduplicated IAM reconnaissance.
+  let ReconStage =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(Caller) and isnotempty(CallerIpAddress)
+    | extend CallerNorm = tolower(Caller), CallerIp = tolower(tostring(CallerIpAddress)), Op = tolower(OperationNameValue),
+             StatusNorm = tolower(tostring(ActivityStatusValue)), SubStatusNorm = tolower(tostring(ActivitySubstatusValue))
+    | where Op in (ReconOps)
+    | where StatusNorm in (SuccessActivityStatusValues) or SubStatusNorm has "ok"
+    // Dedupe multi-stage AzureActivity records for one logical operation.
+    | extend ActionKey = iff(
+        isnotempty(CorrelationId),
+        strcat(CorrelationId, "|", Op, "|", CallerNorm),
+        strcat(CallerNorm, "|", CallerIp, "|", Op, "|", tostring(SubscriptionId), "|", tostring(ResourceId), "|", tostring(bin(TimeGenerated, 1m)))
+      )
+    | summarize arg_min(TimeGenerated, *) by ActionKey
+    | summarize
+        ReconCount=count(),
+        DistinctReconOps=dcount(Op),
+        ReconOpsSeen=make_set(OperationNameValue, 20),
+        ReconCorrelationIds=make_set_if(CorrelationId, isnotempty(CorrelationId), 30),
+        FirstRecon=min(TimeGenerated),
+        LastRecon=max(TimeGenerated),
+        ReconSubscriptions=dcount(SubscriptionId)
+      by CallerNorm, CallerIp;
+  // Stage 2: successful and deduplicated role-assignment changes.
+  let RoleWriteStage =
+    AzureActivity
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where isnotempty(Caller) and isnotempty(CallerIpAddress)
+    | extend CallerNorm = tolower(Caller), CallerIp = tolower(tostring(CallerIpAddress)), Op = tolower(OperationNameValue),
+             StatusNorm = tolower(tostring(ActivityStatusValue)), SubStatusNorm = tolower(tostring(ActivitySubstatusValue))
+    | where Op in (RoleWriteOps)
+    | where StatusNorm in (SuccessActivityStatusValues) or SubStatusNorm has "ok"
+    // Dedupe multi-stage AzureActivity records for one logical operation.
+    | extend ActionKey = iff(
+        isnotempty(CorrelationId),
+        strcat(CorrelationId, "|", Op, "|", CallerNorm),
+        strcat(CallerNorm, "|", CallerIp, "|", Op, "|", tostring(SubscriptionId), "|", tostring(ResourceId), "|", tostring(bin(TimeGenerated, 1m)))
+      )
+    | summarize arg_min(TimeGenerated, *) by ActionKey
+    | summarize
+        RoleWriteCount=count(),
+        RoleWriteOpsSeen=make_set(OperationNameValue, 10),
+        RoleWriteResources=make_set(ResourceId, 20),
+        RoleWriteCorrelationIds=make_set_if(CorrelationId, isnotempty(CorrelationId), 30),
+        FirstRoleWrite=min(TimeGenerated),
+        LastRoleWrite=max(TimeGenerated),
+        RoleWriteSubscriptions=make_set(SubscriptionId, 20)
+      by CallerNorm, CallerIp;
+  // Sequence stage 1 into stage 2 for high-confidence escalation staging.
+  ReconStage
+  | where ReconCount >= 8 and DistinctReconOps >= 3
+  | join kind=inner RoleWriteStage on CallerNorm, CallerIp
+  | where FirstRoleWrite between (FirstRecon .. (LastRecon + SequenceWindow))
+  | extend IdentityName = iff(CallerNorm contains "@", tostring(split(CallerNorm, "@")[0]), CallerNorm),
+           IdentityUPNSuffix = iff(CallerNorm contains "@", tostring(split(CallerNorm, "@")[1]), "")
+  | project TimeGenerated=FirstRecon, Caller=CallerNorm, CallerIp,
+            IdentityName, IdentityUPNSuffix,
+            FirstRecon, LastRecon, ReconCount, DistinctReconOps, ReconSubscriptions, ReconOpsSeen, ReconCorrelationIds,
+            FirstRoleWrite, LastRoleWrite, RoleWriteCount, RoleWriteOpsSeen, RoleWriteResources, RoleWriteSubscriptions, RoleWriteCorrelationIds
+  | order by FirstRoleWrite desc, RoleWriteCount desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: IdentityName
+      - identifier: UPNSuffix
+        columnName: IdentityUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIp
+version: 1.0.0

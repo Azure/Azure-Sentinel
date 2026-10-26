@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                    |
 |-------------|--------------------------------|-------------------------------------------------------|
+| 3.0.8       | 21-09-2026                     | Updated the Atlassian Confluence Audit data connector with multi-site connection support and scoped API token guidance. Added the **ConfluenceAuditLogs** alias parser. |
+| 3.0.7       | 07-04-2026                     | Updated **Data Connector** - *Atlassian Confluence Audit* to change DCR data flows.  |
 | 3.0.6       | 28-07-2025                     | Removed Deprecated **Data Connector**.  |
 | 3.0.5       | 06-05-2025                     | Launching CCP **Data Connector** - *Atlassian Confluence Audit* from Public Preview to Global Availability.           |
 | 3.0.4       | 16-04-2025                     | Updated **Parser** to support new and old table. <br/>Updated table name in **CCP Connector**.           |

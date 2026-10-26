@@ -1,0 +1,77 @@
+id: cd8ec49c-b654-49be-b040-e552b8eba7c8
+name: SpyCloud identity access record exposure
+# The '#DONT_CORR#' prefix on the description below is functional, not documentation.
+# Microsoft Sentinel reads it to disable Microsoft Defender XDR incident correlation for
+# incidents raised by this rule. Without it, each hourly alert is merged into the previously
+# created incident instead of creating a new one; automation rules only fire on incident
+# creation, so remediation would run once and then silently stop. Do not remove it.
+description: |
+  #DONT_CORR#
+  'Identifies exposure of identity access material such as session cookies, OAuth tokens,
+  or SSO credentials. This material can grant direct account access without a password,
+  so it bypasses password resets and single-factor controls. Revoking active sessions is
+  the primary containment action.'
+severity: High
+requiredDataConnectors:
+  - connectorId: SpyCloudEnterpriseProtectionCCF
+    dataTypes:
+      - SpyCloudBreachWatchlistV2_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1539
+  - T1528
+  - T1550
+query: |
+  // Human-readable constant for the severity threshold used below
+  let severityThreshold = 30;
+  SpyCloudBreachWatchlistV2_CL
+  | where Severity == severityThreshold
+  | extend AccountName = Username, AccountEmail = Email, HostName = UserHostName,
+      AccountUpn = iff(isnotempty(Email), Email, Username),
+      // Under AlertPerResult every row becomes its own alert, so mv-expand on IPAddresses
+      // would raise one alert per IP for the same identity. Take the first address instead.
+      IPAddress = tostring(IPAddresses[0])
+  // One alert per exposed identity. Session revocation acts per user, so a user appearing
+  // several times in the same window would otherwise be revoked repeatedly. Deduplication is
+  // per rule execution, so a reappearance in a later window correctly raises a new alert.
+  | summarize arg_max(TimeGenerated, *) by AccountUpn
+  | project TimeGenerated, DocumentId, SourceId, SpyCloudPublishDate, AccountEmail,
+      AccountName, AccountUpn, HostName, TargetDomain, TargetUrl, AccountType, PasswordType,
+      InfectedMachineId, InfectedTime, UserOS, IPAddress
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+# Keeps each identity distinguishable in the incident list. The session revocation
+# automation rule matches IncidentTitle with Contains, so the base display name must
+# stay intact here.
+alertDetailsOverride:
+  alertDisplayNameFormat: SpyCloud identity access record exposure - {{AccountUpn}}
+customDetails:
+  DocumentID: DocumentId
+  SpyCloudPublishDate: SpyCloudPublishDate
+  InfectedTime: InfectedTime
+  InfectedMachineId: InfectedMachineId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUpn
+  - entityType: Mailbox
+    fieldMappings:
+      - identifier: MailboxPrimaryAddress
+        columnName: AccountEmail
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+kind: Scheduled

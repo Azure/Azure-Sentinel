@@ -1,13 +1,21 @@
 # Release Notes
 
-Microsoft Sentinel Solution for SAP ERP and S/4HANA. Used with SAP Integration Suite.
+Microsoft Sentinel Solution for SAP ERP and S/4HANA package officially available through [SAP API Business Accelerator Hub](https://api.sap.com/package/MicrosoftSentinelSolutionforSAP/integrationflow). Used with SAP Integration Suite.
 
-| **Version** | **Date Modified (DD-MM-YYYY)** | **Comments** |
+This repo serves the editable version of the solution package intended for hot fixes. The official release served through SAP API Business Accelerator Hub is in configure-only mode.
+
+> [!NOTE]
+> For solution release notes and version history, see [Release Notes](../ReleaseNotes.md).
+
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 | --- | --- | --- |
-| 1.1.9	| 23-02-2026 | Add safeguards for change docs and user master data |
-| 1.1.8	| 26-01-2026 | Fixed parameters on pre-requisites checker iflow |
-| 1.1.8 | 01-09-2025 | Update Heartbeat to Log Analytics V2 and added support for audit log user exclusions |
-| 1.1.7 | 01-09-2025 | Add max-rows parameter |
+| 1.1.14| 11-09-2026 | Add XML sanitization and fix RFC exception propagation |
+| 1.1.13| 11-08-2026 | Fix UserDetails OPTION_NOT_VALID handling. Prevent SAP-screened usernames and empty batches from producing invalid RFC_READ_TABLE clauses while preserving user visibility and adding redacted failure context. |
+| 1.1.12| 22-07-2026 | Audit log performance enhancements and force-sal-filesystem parameter addition |
+| 1.1.11 | 15-06-2026 | MPL handling improvements for search on web ui |
+| 1.1.10 | 10-04-2026 | Security and usability improvements |
+| 1.1.9 | 23-02-2026 | Add safeguards for change docs and user master data |
+| 1.1.8 | 26-01-2026 | Fixed parameters on pre-requisites checker iflow |
 | 1.1.6 | 21-08-2025 | SAP server time zone awareness and data connector heartbeat added |
 | 1.1.5 | 02-05-2025 | Added metadata for SAP certification |
 | 1.1.4 | 29-04-2025 | Added support for collection of XAL audit logs and ABAP role authorization details |

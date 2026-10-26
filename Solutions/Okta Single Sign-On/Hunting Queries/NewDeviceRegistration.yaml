@@ -1,7 +1,7 @@
 id: 4355f601-1421-4ac4-b2ce-88f0859cc101
 name: New device registration from unfamiliar location
 description: |
-  'This query identifies new device being registered from a location where the user does not normally login from'
+  This query identifies new device being registered from a location where the user does not normally logs in from. This can be an indication of an attacker gaining access to a user's credentials and then registering a new device.
 requiredDataConnectors:
   - connectorId: OktaSSO
     dataTypes:
@@ -17,6 +17,7 @@ tags:
   - Okta
 query: |
  let Events = dynamic(["device.enrollment.create"]);
+ let LookbackPeriod = ago(14d);
  let DeviceRegistrations =  OktaSSO
   | where eventType_s in (Events)
   | where outcome_result_s == "SUCCESS"
@@ -25,7 +26,7 @@ query: |
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, displayMessage_s, outcome_result_s,
   outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), column_ifexists('debugContext_debugData_threatSuspected_s',""), client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location ;
  let UserLogins =   OktaSSO
-  | where TimeGenerated > ago(14d)
+  | where TimeGenerated > LookbackPeriod
   | where eventType_s =~ "user.session.start"
   | where outcome_result_s =~ "SUCCESS"
   | extend Location = strcat(client_geographicalContext_city_s,  " | ", client_geographicalContext_state_s," | ", client_geographicalContext_country_s)
@@ -35,17 +36,16 @@ query: |
      UserLogins
   )
  on  Location, actor_alternateId_s
-  | extend Account_0_Name = actor_displayName_s
-  | extend IP_0_Address = client_ipAddress_s
+  | extend AccountName = tostring(split(actor_alternateId_s, "@")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: actor_alternateId_s
-      - identifier: DisplayName
-        columnName: actor_displayName_s
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: client_ipAddress_s
-version: 1.0.0
+version: 1.0.1

@@ -1,5 +1,16 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.3.20      | 14-10-2026                     | Added new **Analytic Rule** for PIM activation without MFA from unusual location(T1078.004 & T1098.003). |
+| 3.3.19      | 05-10-2026                     | Fixed OAuth scope parsing for **Suspicious application consent for offline access** **Analytic Rule**. |
+| 3.3.18      | 28-09-2026                     | Updated the **analytical rule** configuration. |
+| 3.3.17      | 06-09-2026                     | Added **EndUserConsentMailboxOfflineAccess** Analytic Rule to detect end-user OAuth consent to an app requesting delegated mailbox scopes (Mail.Read/Mail.ReadWrite/Mail.Send/MailboxSettings.ReadWrite) together with offline_access (T1528 - illicit consent grant). |
+| 3.3.16      | 06-08-2026                     | Removed locale-dependent **ResultDescription** filtering from the **Attempts to sign in to disabled accounts Analytic Rule** while retaining ResultType 50057 matching. |
+| 3.3.15       | 10-07-2026                    | Updated **SigninAttemptsByIPviaDisabledAccounts** **Analytic Rule** to include the additional "ResultDescription" value: "The user account is disabled." |
+| 3.3.14       | 30-06-2026                    | Updated **BruteForceAgainstanEntraAuthenticatedWindowsDevice** Analytic rule to add an explicit "sort by TimeGenerated asc" before building "make_list" arrays. |
+| 3.3.13       | 22-06-2026                    | Updated Description of **AccountCreatedandDeletedinShortTimeframe** Analytic Rule. |
+| 3.3.12       | 28-04-2026                    | Renamed analytic rule from **BruteForceCloudPC** to **BruteForceAgainstEntraAuthenticatedWindowsDevice** and updated name and description in **Analytic Rule** to reflect detection scope across all Entra-authenticated Windows devices (including Entra-joined, hybrid-joined, and Windows 365 Cloud PCs), resolving ambiguity around Cloud PC specificity |
+| 3.3.11       | 13-04-2026                    | Added **Watchlist** ConditionalAccessBenignStatusCodes and updated **BypassCondAccessRule** analytic rule |
+| 3.3.10       | 12-04-2026                    | Updated **AccountCreatedandDeletedinShortTimeframe** analytic rule to extend query period to 7 days, normalize UPN parsing, and use immutable UserId for improved detection accuracy and evasion resistance |
 | 3.3.9       | 23-02-2026                     | Updated **Block-AADUser Incident** trigger to fix the permissions for disable user block |
 | 3.3.8       | 06-02-2026                     | Fixed Broken Links in **Analytical Rule**. |
 | 3.3.7       | 20-01-2026                     | Updated Revoke-AADSignInSessions **Playbooks** Instructions. <br/> Add Conditional Access Insights **Workbook** for Microsoft Entra ID. |

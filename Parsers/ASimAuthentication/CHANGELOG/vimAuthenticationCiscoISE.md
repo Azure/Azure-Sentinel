@@ -1,5 +1,9 @@
 # Changelog for vimAuthenticationCiscoISE.yaml
 
+## Version 0.1.2
+
+- (2026-06-24) Update parser to extract EventOriginalType from SyslogMessage if the initial formatting differs from 10 digits - [PR #14554](https://github.com/Azure/Azure-Sentinel/pull/14554)
+
 ## Version 0.1.1
 
 - (2024-04-09) Authentication parser filter update - [PR #10243](https://github.com/Azure/Azure-Sentinel/pull/10243)

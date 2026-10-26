@@ -1,0 +1,43 @@
+id: b28cbdd2-8cef-be9b-a38e-7faceedfdbec
+name: "Tailscale Premium: Beaconing candidates (regular periodic flows)"
+description: Identifies flows that recur at a highly regular interval, which is the signature of C2 beaconing or scheduled exfiltration jobs. Looser threshold than the analytic rule - investigation aid.
+description-detailed: |
+  Identifies flows that recur at a highly regular interval, which is the signature of C2 beaconing or scheduled exfiltration jobs. Looks for src->dst pairs where 80%+ of inter-flow gaps cluster around the same delta. Requires Tailscale Premium or Enterprise.
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1071
+  - T1095
+  - T1029
+query: |
+  let lookback = 2d;
+  let minFlows = 10;
+  let beaconPercentThreshold = 80.0;
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(lookback)
+  | mv-expand t = VirtualTraffic
+  | extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)
+  | project TimeGenerated, Src, Dst, Proto
+  | sort by Src asc, Dst asc, Proto asc, TimeGenerated asc
+  | serialize
+  | extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)
+  | where Src == NextSrc and Dst == NextDst and Proto == NextProto
+  | extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)
+  | where DeltaSec > 5
+  | summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec
+  | summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto
+  | where TotalFlows >= minFlows
+  | extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)
+  | where BeaconPercent >= beaconPercentThreshold
+  | order by BeaconPercent desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Src
+version: 1.0.0

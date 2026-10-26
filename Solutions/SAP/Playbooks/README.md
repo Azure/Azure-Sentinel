@@ -12,7 +12,8 @@ Find out more from our blog series [here](https://blogs.sap.com/2023/05/22/from-
 
 | Playbook | Description |
 | --- | --- |
-| [Lock SAP User from Teams - Basic](./Basic-SAPLockUser-STD/) | Basic playbook with minimum integration effort for simple SAP user blocking on ERP via SOAP service |
+| [Lock SAP User from Teams - Basic (Consumption)](./Basic-SAPLockUser/) | Consumption Logic App for SAP user blocking via Teams adaptive card. Dynamically finds SAP alerts in complex Defender XDR incidents. |
+| [Lock SAP User from Teams - Basic (Standard)](./Basic-SAPLockUser-STD/) | Standard Logic App with minimum integration effort for simple SAP user blocking on ERP via SOAP service |
 | [Remediate SAP Sentinel Collector Agent attack](./SAPCollectorRemediate-STD/) | Sophisticated scenario distinguishing between SAP maintenance events and malicious deactivation of the audit log ingestion into Sentinel using [Azure Center for SAP Solutions (ACSS)](https://learn.microsoft.com/azure/sap/center-sap-solutions/overview) health APIs |
 
 > **Note**

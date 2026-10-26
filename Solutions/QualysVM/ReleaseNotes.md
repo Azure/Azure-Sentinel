@@ -1,5 +1,11 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            	|
 |-------------|--------------------------------|----------------------------------------------------------------|
+| 3.1.1       | 22-09-2026                     | Updated the Playbooks to fix the Azure deploy button issue for GOV and corrected the parameter value for Service Endpoint. |
+| 3.1.0       | 14-09-2026                     | Updated the **QualysHostDetection Parser** to reliably parse both single-object and array detection responses from the CCF connector. |
+| 3.0.11       | 10-09-2026                     | Updated the Qualys Host Detection Parser to deduplicate repeated V3 snapshots using stable vulnerability content and lifecycle fields, preserve ingestion TimeGenerated, and expose the source timestamp as DetectionTime. Updated the CCP Data Connector to use explicit table references for Defender portal query compatibility. |
+| 3.0.10      | 22-06-2026                     | Increased **CCP Connector** request timeout to 300s (platform max), reduced query window to 10 min, added a connectivity check using the `/msp/about.php` endpoint, and clarified Truncation Limit options to reduce timeouts on large environments. |
+| 3.0.9       | 29-05-2026                     | Adding new query string parameter                              |
+| 3.0.8       | 14-05-2026                     | Bumping API version                                            |
 | 3.0.7       | 18-11-2025                     | Adding adjustable API partition limit & rate limit protection. |
 | 3.0.6       | 18-09-2025                     | Updated Analytic rules, Parsers, and Workbooks in Sentinel solution content for **CCF connector** compatibility.     |
 | 3.0.5       | 29-07-2025                     | Removed Deprecated **Data Connector**.							|  

@@ -1,5 +1,12 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.2.1 | 14-10-2026 | Updated three disabled **Defender XDR Custom Detections** with preserved entity-mapping approvals and added one converted **Defender Workbook** (`Cisco.json`) bound to `CommonSecurityLog` (`CiscoAsaAma`). Offline content validation passed; runtime, alert parity, workbook UI, and provider acceptance remain unverified. |
+| 3.1.3 | 13-10-2026 | Added workload, data-type, and connector prerequisite records to all three disabled XDR Custom Detections. Updated XDR content versions to 3.1.3 and V3.1 packaging to include resolved package/content provenance in installation and Content Hub registration records. |
+| 3.1.2 | 12-10-2026 | Refreshed the V3.1 hybrid package for three disabled Defender XDR Custom Detections with reviewed Host mappings and source-rule provenance. |
+| 3.1.1       | 11-10-2026                     | Added a reviewed Host mapping to the threat-message Custom Detection and recorded accepted Host-mapping assumptions while preserving original host values in alert details. |
+| 3.1.0       | 11-10-2026                     | Added three disabled Defender XDR Custom Detections with source-rule provenance and V3.1 hybrid packaging support. |
+| 3.0.9       | 15-09-2026                     |Updated the CiscoASA workbook and analytic rules to incorporate FTD logs alongside ASA logs.                       |
+| 3.0.8       | 22-08-2026                     | Added new detection rule for Possible Data Exfilteration  			  				  |
 | 3.0.7       | 01-09-2025                     | Updates to the `template_CiscoAsaAma.json` file to reflect the general availability of the Cisco ASA/FTD via AMA connector  					  				  |
 | 3.0.6       | 10-07-2025                     | Preview tag removed from Connector title  					  				  |
 | 3.0.5       | 25-04-2025                     | Removed Legacy **Data Connector**   					  					  |

@@ -1,0 +1,83 @@
+{
+    "name": "M365AuditGeneralPolling",
+    "apiVersion": "2024-09-01",
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+        "connectorDefinitionName": "M365AuditGeneralCCPDefinition",
+        "dataType": "M365AuditGeneral_CL",
+        "dcrConfig": {
+            "streamName": "Custom-M365AuditGeneralInput",
+            "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+            "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+        },
+        "auth": {
+            "type": "OAuth2",
+            "ClientId": "{{clientId}}",
+            "ClientSecret": "{{clientSecret}}",
+            "GrantType": "client_credentials",
+            "TokenEndpoint": "[[concat(environment().authentication.loginEndpoint, subscription().tenantId, '/oauth2/v2.0/token')]",
+            "TokenEndpointHeaders": {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            "TokenEndpointQueryParameters": {},
+            "Scope": "https://manage.office.com/.default"
+        },
+        "request": {
+            "apiEndpoint": "[[concat('https://manage.office.com/api/v1.0/', subscription().tenantId, '/activity/feed/subscriptions/content?contentType=Audit.General&PublisherIdentifier=', subscription().tenantId)]",
+            "httpMethod": "GET",
+            "rateLimitQPS": 10,
+            "queryWindowInMin": 5,
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss",
+            "retryCount": 3,
+            "timeoutInSeconds": 60,
+            "headers": {
+                "Accept": "application/json"
+            },
+            "queryParameters": {
+                "startTime": "{_QueryWindowStartTime}",
+                "endTime": "{_QueryWindowEndTime}"
+            },
+            "isPostPayloadJson": false
+        },
+        "response": {
+            "eventsJsonPaths": [
+                "$[*]"
+            ],
+            "format": "json"
+        },
+        "paging": {
+            "pagingType": "NextPageUrl",
+            "nextPageParaName": "NextPageUri",
+            "nextPageTokenJsonPath": "$.NextPageUri"
+        },
+        "stepInfo": {
+            "stepType": "Nested",
+            "nextSteps": [
+                {
+                    "stepId": "fetchContentData",
+                    "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project contentUri = replace(@'\\$', '%24', tostring(res.contentUri))"
+                }
+            ]
+        },
+        "stepCollectorConfigs": {
+            "fetchContentData": {
+                "shouldJoinNestedData": false,
+                "request": {
+                    "apiEndpoint": "$contentUri$",
+                    "httpMethod": "GET",
+                    "headers": {
+                        "Accept": "application/json"
+                    }
+                },
+                "response": {
+                    "eventsJsonPaths": [
+                        "$[*]"
+                    ],
+                    "format": "json"
+                }
+            }
+        }
+    }
+}

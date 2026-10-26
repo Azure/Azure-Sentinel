@@ -1,9 +1,9 @@
 <#  
     Title:          DocuSign Security Events Data Connector
     Language:       PowerShell
-    Version:        2.1
+    Version:        2.3
     Author:         Sreedhar Ande
-    Last Modified:  3/31/2023
+    Last Modified:  6/25/2026
     Comment:        V2 re-designed; 
 					Ingests Security Events for your DocuSign account into Azure Log Analytics Workspace using DocuSign Monitor REST API
                     Ingests DocuSign Account Users into Azure Log Analytics Workspace using DocuSign Users REST API	

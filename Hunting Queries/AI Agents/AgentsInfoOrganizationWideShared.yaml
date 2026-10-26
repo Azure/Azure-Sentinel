@@ -1,0 +1,38 @@
+id: 8a53cf8e-04b1-4de6-95f2-916cc7c2b805
+name: AI Agents - Organization-wide Shared
+description: |
+  This query identifies AI agents that are shared with the entire organization (SharedWith contains "*").
+  Such configurations significantly increase the risk of unauthorized access by unintended users, which could lead to data exposure or misuse of agent capabilities.
+  Broad sharing is especially sensitive when the agent has access to sensitive data sources, tools, or credentials.
+  Recommended Action: Review these agents to confirm whether organization-wide sharing is necessary for the business scenario.
+  If not, restrict access to specific users or groups and apply least-privilege principles. For broadly shared configurations, ensure proper governance and compliance checks are in place.
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+  let IdentityIdtoUPN = materialize (
+      IdentityInfo
+      | where isnotempty(AccountObjectId) and isnotempty(AccountUpn)
+      | summarize arg_max(Timestamp, AccountUpn) by AccountObjectId
+      | project AccountObjectId = tostring(AccountObjectId), AccountUpn);
+  AgentsInfo
+  | summarize arg_max(Timestamp, *) by AgentId
+  | where LifecycleStatus != "Deleted"
+  | where array_length(SharedWith) > 0
+  | mv-expand Shared = SharedWith to typeof(string)
+  | where tostring(Shared) == "*"
+  | extend OwnerId = tostring(Owners[0])
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | project-away Shared, OwnerId, AccountObjectId
+  | project-reorder CreatedDateTime, AgentId, Name, Platform, SharedWith, OwnerUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: OwnerUpn
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Name
+version: 1.0.0

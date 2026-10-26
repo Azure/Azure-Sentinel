@@ -12,11 +12,13 @@ namespace Sentinel.Client
     {
         private ILoginApi _loginApi;
         protected VoneConfiguration _voneConfig;
+        protected readonly HttpClientHandler _httpClientHandler;
 
         public AuthenticatedVoneClientHandler(string baseUrl, string voneId, ISecretsManager secretsManager, ILogger<AuthenticatedVoneClientHandler> logger)
             : base(voneId, secretsManager, logger)
         {
-            _voneConfig = CreateVoneConfig(baseUrl);
+            _httpClientHandler = new HttpClientHandler();
+            _voneConfig = CreateVoneConfig(baseUrl, _httpClientHandler);
             _loginApi = new LoginApi(_voneConfig, _logger);
         }
 
@@ -83,13 +85,8 @@ namespace Sentinel.Client
             await _secretsManager.SaveTokensAsync(_clientId, tokens);
         }
 
-        protected static VoneConfiguration CreateVoneConfig(string baseUrl)
+        private static VoneConfiguration CreateVoneConfig(string baseUrl, HttpClientHandler handler)
         {
-            var handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-            };
-
             var httpClient = new HttpClient(handler)
             {
                 BaseAddress = new Uri(baseUrl)

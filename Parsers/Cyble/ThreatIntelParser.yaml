@@ -1,0 +1,43 @@
+id: 7cea7af7-5633-4145-9694-a23d173221d2
+Function:
+  Title: Cyble Threat Intelligence Parser
+  Version: '1.0.0'
+  LastUpdated: '2026-09-02'
+Category: Microsoft Sentinel Parser
+FunctionName: Cyble Threat Intelligence Parser
+FunctionAlias: CybleThreatIntel
+FunctionQuery: |
+    // Cyble Threat Intelligence parser
+    // Source table: ThreatIntelIndicators
+    //
+    // Replace SourceSystem value with SourceSystem of your TAXII connector
+    let SourceSystemName = "";
+    let Base = materialize(
+        ThreatIntelIndicators
+        | where isempty(SourceSystemName) or SourceSystem =~ SourceSystemName
+        | extend DataJson = todynamic(tostring(Data))
+        | extend RefCount = coalesce(array_length(DataJson.external_references), 0));
+    let WithRefs =
+        Base
+        | where RefCount > 0
+        | mv-apply ExtRef = DataJson.external_references on (
+              extend SourceName = tolower(tostring(ExtRef.source_name)),
+                     RefDescription = tostring(ExtRef.description)
+            | summarize ParsedFields = make_bag(bag_pack(
+                            strcat(SourceName, ".risk_score"),
+                                toint(trim(@"\s*", extract(@"risk_score\s*=\s*([^;]*)", 1, RefDescription))),
+                            strcat(SourceName, ".confidence_rating"),
+                                trim(@"\s*", extract(@"confidence_rating\s*=\s*([^;]*)", 1, RefDescription)))),
+                        SourceNames = make_set(SourceName)
+          )
+        | extend Data = bag_merge(
+                            DataJson,
+                            ParsedFields,
+                            bag_pack("ext_source_name", strcat_array(SourceNames, ", ")))
+        | project-away ParsedFields, SourceNames;
+    let WithoutRefs =
+        Base
+        | where RefCount == 0
+        | extend Data = DataJson;
+    union WithRefs, WithoutRefs
+    | project-away DataJson, RefCount

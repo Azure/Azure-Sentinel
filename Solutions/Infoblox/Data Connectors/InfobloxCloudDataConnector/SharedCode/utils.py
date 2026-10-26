@@ -7,12 +7,12 @@ import json
 import datetime
 import re
 from .state_manager import StateManager
+from .table_checkpoint_manager import TableCheckpointManager
 from azure.storage.fileshare import ShareDirectoryClient
 from azure.core.exceptions import ResourceNotFoundError
 from .infoblox_exception import InfobloxException
 from .logger import applogger
 from . import consts
-from .sentinel import post_data
 from random import randrange
 
 
@@ -85,6 +85,115 @@ class Utils:
             )
             raise InfobloxException()
 
+    def get_time_checkpoint(self, checkpoint_obj: TableCheckpointManager, load_flag=False):
+        """Get time-based checkpoint data from a TableCheckpointManager object.
+
+        Used exclusively for date/time checkpoints stored in Azure Table Storage.
+
+        Args:
+            checkpoint_obj (TableCheckpointManager): The TableCheckpointManager object.
+            load_flag (bool): Whether to parse the value as JSON (default is False).
+
+        Returns:
+            The checkpoint data, parsed as JSON if load_flag is True.
+        """
+        __method_name = inspect.currentframe().f_code.co_name
+        try:
+            checkpoint_data = checkpoint_obj.get()
+            if load_flag and checkpoint_data:
+                checkpoint_data = json.loads(checkpoint_data)
+                applogger.info(
+                    self.log_format.format(
+                        consts.LOGS_STARTS_WITH,
+                        __method_name,
+                        self.azure_function_name,
+                        "Time checkpoint fetched and parsed. key={}".format(checkpoint_obj.row_key),
+                    )
+                )
+                return checkpoint_data
+            applogger.info(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.azure_function_name,
+                    "Time checkpoint fetched. key={}".format(checkpoint_obj.row_key),
+                )
+            )
+            return checkpoint_data
+        except json.decoder.JSONDecodeError as json_error:
+            applogger.error(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.azure_function_name,
+                    "JSONDecodeError error : Error-{}".format(json_error),
+                )
+            )
+            raise InfobloxException()
+        except Exception as err:
+            applogger.error(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.azure_function_name,
+                    consts.UNEXPECTED_ERROR_MSG.format(err),
+                )
+            )
+            raise InfobloxException()
+
+    def post_time_checkpoint(self, checkpoint_obj: TableCheckpointManager, data, dump_flag=False):
+        """Post time-based checkpoint data to a TableCheckpointManager object.
+
+        Used exclusively for date/time checkpoints stored in Azure Table Storage.
+
+        Args:
+            checkpoint_obj (TableCheckpointManager): The TableCheckpointManager object.
+            data: The data to store.
+            dump_flag (bool): Whether to serialize data as JSON before storing (default is False).
+        """
+        __method_name = inspect.currentframe().f_code.co_name
+        try:
+            if dump_flag:
+                applogger.debug(
+                    self.log_format.format(
+                        consts.LOGS_STARTS_WITH,
+                        __method_name,
+                        self.azure_function_name,
+                        "Posting time checkpoint data = {}".format(data),
+                    )
+                )
+                checkpoint_obj.post(json.dumps(data))
+            else:
+                checkpoint_obj.post(data)
+            applogger.info(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.azure_function_name,
+                    "Time checkpoint posted to Azure Table. key={}".format(checkpoint_obj.row_key),
+                )
+            )
+        except TypeError as type_error:
+            applogger.error(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.azure_function_name,
+                    "Type error : Error-{}".format(type_error),
+                )
+            )
+            raise InfobloxException()
+        except Exception as err:
+            applogger.error(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.azure_function_name,
+                    consts.UNEXPECTED_ERROR_MSG.format(err),
+                )
+            )
+            raise InfobloxException()
+
     def get_checkpoint_data(self, checkpoint_obj: StateManager, load_flag=False):
         """Get checkpoint data from a StateManager object.
 
@@ -102,7 +211,20 @@ class Utils:
         try:
             checkpoint_data = checkpoint_obj.get()
             if load_flag and checkpoint_data:
-                checkpoint_data = json.loads(checkpoint_data)
+                try:
+                    checkpoint_data = json.loads(checkpoint_data)
+                except json.decoder.JSONDecodeError:
+                    # Recover from files written with a leading-comma bug ([,{...}])
+                    sanitized = re.sub(r'^\[,', '[', checkpoint_data.lstrip())
+                    applogger.warning(
+                        self.log_format.format(
+                            consts.LOGS_STARTS_WITH,
+                            __method_name,
+                            self.azure_function_name,
+                            "Malformed JSON detected, attempting recovery by stripping leading comma.",
+                        )
+                    )
+                    checkpoint_data = json.loads(sanitized)
                 applogger.info(
                     self.log_format.format(
                         consts.LOGS_STARTS_WITH,
@@ -241,7 +363,7 @@ class Utils:
                     "No storage directory found",
                 )
             )
-            return None
+            return []
         except Exception as err:
             applogger.error(
                 self.log_format.format(
@@ -304,7 +426,7 @@ class Utils:
             )
 
             filenames = self.list_file_names_in_file_share(parent_file, file_prefix)
-            if filenames is None:
+            if not filenames:
                 applogger.info(
                     self.log_format.format(
                         consts.LOGS_STARTS_WITH,
@@ -395,7 +517,7 @@ class Utils:
             raise InfobloxException()
 
     def handle_failed_indicators(self, indicator_list, response_json):
-        """Handle failed indicators by writing them to a new file or ingesting them into a log table.
+        """Handle failed indicators by writing them to a new file for later inspection.
 
         Args:
             indicator_list (list): List of indicators.
@@ -406,7 +528,6 @@ class Utils:
             record_indexes = [error.get("recordIndex") for error in response_json["errors"]]
             failed_indicators = [indicator_list[index] for index in record_indexes]
 
-            # LOGIC TO WRITE FAILED INDICATORS IN NEW FILE
             if self.azure_function_name == consts.INDICATOR_FUNCTION_NAME:
                 applogger.info(
                     self.log_format.format(
@@ -422,19 +543,6 @@ class Utils:
                     consts.CONN_STRING, failed_file_name, consts.FILE_SHARE_NAME_DATA
                 )
                 self.post_checkpoint_data(failed_indicator_file_obj, failed_indicators, dump_flag=True)
-            elif self.azure_function_name == consts.FAILED_INDICATOR_FUNCTION_NAME:
-                applogger.info(
-                    self.log_format.format(
-                        consts.LOGS_STARTS_WITH,
-                        __method_name,
-                        self.azure_function_name,
-                        "Ingesting Failed Indicators to Log Table.",
-                    )
-                )
-                post_data(
-                    body=json.dumps(failed_indicators, ensure_ascii=False),
-                    log_type=consts.FAILED_INDICATORS_TABLE_NAME,
-                )
         except KeyError as keyerror:
             applogger.error(
                 self.log_format.format(
@@ -882,10 +990,61 @@ class Utils:
             )
             raise InfobloxException()
 
+    def get_or_cache_customer_id(self):
+        """Return customer_id from checkpoint table; fetch from Infoblox account API if not cached."""
+        __method_name = inspect.currentframe().f_code.co_name
+        try:
+            checkpoint = TableCheckpointManager(
+                consts.CONN_STRING,
+                consts.CUSTOMER_ID_CHECKPOINT_KEY,
+                consts.CHECKPOINT_TABLE_NAME,
+            )
+            customer_id = checkpoint.get()
+            if customer_id:
+                applogger.debug(
+                    self.log_format.format(
+                        consts.LOGS_STARTS_WITH,
+                        __method_name,
+                        self.azure_function_name,
+                        "customer_id loaded from checkpoint table.",
+                    )
+                )
+                return customer_id
+            url = consts.BASE_URL.format(consts.ACCOUNT_ENDPOINT)
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            customer_id = response.json().get("results", {}).get("customer_id", "")
+            if customer_id:
+                checkpoint.post(customer_id)
+                applogger.info(
+                    self.log_format.format(
+                        consts.LOGS_STARTS_WITH,
+                        __method_name,
+                        self.azure_function_name,
+                        "customer_id fetched from Infoblox account API and cached.",
+                    )
+                )
+            return customer_id
+        except Exception as error:
+            applogger.warning(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.azure_function_name,
+                    "Could not retrieve customer_id: {}".format(error),
+                )
+            )
+            return ""
+
     def authenticate_infoblox_api(self):
         """Authenticate the Infoblox API."""
         __method_name = inspect.currentframe().f_code.co_name
         self.headers.update({"Authorization": "Token {}".format(consts.API_TOKEN)})
+        customer_id = self.get_or_cache_customer_id()
+        self.headers.update({
+            "x-Infoblox-client": consts.INFOBLOX_CLIENT,
+            "x-Infoblox-customer": customer_id,
+        })
         applogger.debug(
             self.log_format.format(
                 consts.LOGS_STARTS_WITH,

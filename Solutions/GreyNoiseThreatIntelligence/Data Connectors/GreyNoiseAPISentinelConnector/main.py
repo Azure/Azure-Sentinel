@@ -1,7 +1,7 @@
 import datetime
-import json
 import logging
 import os
+import re
 import sys
 import time
 from collections import namedtuple
@@ -10,6 +10,7 @@ import azure.functions as func
 import msal
 import requests
 from greynoise.api import APIConfig, GreyNoise
+from greynoise.exceptions import RateLimitError
 from requests.adapters import HTTPAdapter
 from requests_ratelimiter import LimiterSession
 from urllib3.util import Retry
@@ -25,14 +26,35 @@ REQUIRED_ENVIRONMENT_VARIABLES = [
     "WORKSPACE_ID",
     ]
 
+# Wait between retries after GreyNoise returns HTTP 429. With the default 3 tries this stays
+# well inside the 2 hour functionTimeout in host.json.
+RATE_LIMIT_BACKOFF_SECONDS = 300
+
+# Attempts per batch when the upload API returns 429 or 503, and the wait used when the response
+# does not say how long to wait. The API allows 100 requests per minute per user.
+UPLOAD_MAX_ATTEMPTS = 5
+UPLOAD_DEFAULT_RETRY_SECONDS = 60
+
+
+def upload_retry_delay(response) -> int:
+    """Seconds to wait before retrying a throttled upload: the Retry-After header, else the
+    'Try again in N seconds' message in the body, else the default, plus a 5 second margin."""
+    retry_after = response.headers.get('Retry-After', '')
+    if retry_after.isdigit():
+        return int(retry_after) + 5
+    match = re.search(r'Try again in (\d+) seconds', response.text or '')
+    if match:
+        return int(match.group(1)) + 5
+    return UPLOAD_DEFAULT_RETRY_SECONDS + 5
+
 GreyNoiseSetup = namedtuple("GreyNoiseSetup", ["api_key", "query", "tries", "size"])
 MSALSetup = namedtuple("MSALSetup", ["tenant_id", "client_id", "client_secret", "workspace_id"])
-class GreuNoiseSentinelUpdater(object):
+class GreyNoiseSentinelUpdater(object):
     """Simple wrapper class to handle consuming IPs"""
 
     def __init__(self, greynoise_setup: GreyNoiseSetup,
                  msal_setup: MSALSetup):
-        super(GreuNoiseSentinelUpdater, self).__init__()
+        super(GreyNoiseSentinelUpdater, self).__init__()
 
         self.greynoise_query = greynoise_setup.query
         self.greynoise_size = greynoise_setup.size
@@ -47,11 +69,16 @@ class GreuNoiseSentinelUpdater(object):
             per_minute=90,
             limit_statuses=[429, 503],
             )
+        # 429 is deliberately not retried here: urllib3's 1-4 second backoff is too short for the
+        # upload API, and its retries bypass the rate limiter. upload_indicators_to_sentinel waits
+        # as long as the API asks instead. raise_on_status=False hands the final response back so
+        # raise_for_status() reports it.
         retry_strategy = Retry(
             total=3,
             backoff_factor=1,
-            status_forcelist=[429, 503],
+            status_forcelist=[500, 502, 504],
             allowed_methods={'POST'},
+            raise_on_status=False,
             )
         self.limiter_session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
 
@@ -75,6 +102,8 @@ class GreuNoiseSentinelUpdater(object):
             A token access key.
         """
         logging.info("Getting token for tenant: {0}".format(self.msal_tenant_id))
+        logging.info("Using client_id: {0}".format(self.msal_client_id))
+        logging.info("Using workspace_id: {0}".format(self.msal_workspace_id))
         try:
             context = msal.ConfidentialClientApplication(self.msal_client_id,
                                                         authority='https://login.microsofto'
@@ -130,7 +159,6 @@ class GreuNoiseSentinelUpdater(object):
                 indicators (list): the list of indicators to upload
             Returns:
                 A response object."""
-        status_retry = 0
         url = "https://api.ti.sentinel.azure.com/workspaces/{0}/threat-intelligence-stix-objects:upload".format(self.msal_workspace_id)
         headers = {
             'Content-Type': 'application/json',
@@ -144,33 +172,36 @@ class GreuNoiseSentinelUpdater(object):
             'stixobjects': indicators
         }
 
-        try:
-            response = self.limiter_session.request("POST", url, 
+        # Retry only this batch on 429/503, so batches already uploaded from the same GreyNoise
+        # page are not sent again.
+        for attempt in range(1, UPLOAD_MAX_ATTEMPTS + 1):
+            response = self.limiter_session.request("POST", url,
                                         headers=headers,
                                         params=params,
                                         json=payload,
-                                        timeout=5,
+                                        timeout=30,
                                         )
+            if response.status_code not in (429, 503):
+                break
+            if attempt == UPLOAD_MAX_ATTEMPTS:
+                logging.error("Upload API still returned HTTP %s after %s attempts, exiting." % (response.status_code, attempt))
+                logging.error(response.text)
+                sys.exit(1)
+            sleep_for = upload_retry_delay(response)
+            logging.warning("Upload API returned HTTP %s (attempt %s of %s), waiting %s seconds before retrying this batch..."
+                            % (response.status_code, attempt, UPLOAD_MAX_ATTEMPTS, sleep_for))
+            time.sleep(sleep_for)
+
+        try:
             response.raise_for_status()
         except requests.HTTPError as e:
-            status_retry += 1
-            if e.response.status_code == (429 or 503):
-                logging.error("HTTP: " + int(e.response.status_code))
-                if status_retry > 3:
-                    logging.error("Too many upload indicators API retries, exiting.")
-                    sys.exit(1)
-                sleep_for = int(e.response.message.split()[7]) + 5 if e.response.message else 60
-                logging.info("API Rate limit exceeded (HTTP 429) or Server Error (HTTP 503), waiting {0} seconds...".format(sleep_for))
-                time.sleep(sleep_for)
-                logging.info("Retrying upload...")
-                self.upload_indicators_to_sentinel(token, indicators)
-            elif e.response.status_code == 401:
-                logging.error("HTTP: " + int(e.response.status_code))
+            if e.response.status_code in (401, 403):
+                logging.error("HTTP: " + str(e.response.status_code))
                 logging.error('Did you add the Azure Sentinel Contributor role to your service principal?')
                 logging.error('More info here: https://learn.microsoft.com/en-us/azure/sentinel/upload-indicators-api#acquire-an-access-token')
                 logging.error(e.response.text)
             elif e.response.status_code:
-                logging.error("HTTP: " + int(e.response.status_code))
+                logging.error("HTTP: " + str(e.response.status_code))
                 logging.error(e.response.text)
             logging.error('Cannot upload indicators to Azure Sentinel, exiting.')
             sys.exit(1)
@@ -179,8 +210,8 @@ class GreuNoiseSentinelUpdater(object):
             # Check for submission errors
             if response.json().get('errors') != []:
                     logging.warning('Nonfatal error in submitting indicator. While a field failed, \n'  \
-                                    'the rest of the indicator failed and we can continue.')
-                    logging.warning('Error: ' + json.loads(response.json()).get('error'))
+                                    'the rest of the indicator succeeded and we can continue.')
+                    logging.warning('Error: ' + str(response.json().get('errors')))
     
             return response.json()
         except requests.exceptions.JSONDecodeError:
@@ -289,17 +320,32 @@ class GreuNoiseSentinelUpdater(object):
                 ):
                     break
 
+            except RateLimitError:
+                # The GreyNoise SDK raises RateLimitError with no message on HTTP 429, so name it
+                # here and wait long enough for the limit to reset instead of the 10 second retry.
+                if tries != 0:
+                    tries -= 1
+                    logging.error(
+                        "GreyNoise API rate limit exceeded (HTTP 429). Trying again in %s seconds using same scroll..."
+                        % RATE_LIMIT_BACKOFF_SECONDS
+                    )
+                    time.sleep(RATE_LIMIT_BACKOFF_SECONDS)
+                else:
+                    logging.error(
+                        "Exiting program. GreyNoise API rate limit exceeded (HTTP 429) and max tries met. "
+                        "Check the API key's plan and quota, and that no other connector shares the key. "
+                        "Last scroll: %s" % scroll
+                    )
+                    sys.exit(3)
             except Exception as reqErr:
-                logging.error("Uploading IPs failed: %s" % str(reqErr))
+                # repr() keeps the exception type visible when its message is empty
+                logging.exception("Fetching or uploading IPs failed: %r" % reqErr)
                 if tries != 0:
                     tries -= 1
                     logging.error("Trying again in 10 seconds using same scroll...")
                     time.sleep(10)
                 else:
-                    logging.error(
-                        "Exiting program. Max tries met. With time str%s and last scroll: %s"
-                        % (str(time), scroll)
-                    )
+                    logging.error("Exiting program. Max tries met. Last scroll: %s" % scroll)
                     sys.exit(3)
 
         logging.info(
@@ -408,7 +454,7 @@ def main(mytimer: func.TimerRequest) -> None:
         env.get("TENANT_ID"), env.get("CLIENT_ID"), env.get("CLIENT_SECRET"), env.get("WORKSPACE_ID")
     )
 
-    g = GreuNoiseSentinelUpdater(greynoise_setup, msal_setup)
+    g = GreyNoiseSentinelUpdater(greynoise_setup, msal_setup)
     g.consume_ips()
 
     logging.info('Python timer trigger function ran at %s', utc_timestamp)

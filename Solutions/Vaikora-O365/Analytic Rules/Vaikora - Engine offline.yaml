@@ -1,0 +1,39 @@
+id: 968b70c1-b468-418a-ac02-1eb74783a52a
+name: Vaikora - Engine offline
+description: |
+  Identifies a Vaikora for O365 engine outage by absent quarantine telemetry. Fires when a tenant active in the last 24 hours has sent no rows in the last two hours, indicating the customer VM is unhealthy or the Graph subscription has lapsed.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: VaikoraO365
+    dataTypes:
+      - VaikoraO365_Quarantine_CL
+queryFrequency: 30m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  let recentTenants = toscalar(
+    VaikoraO365_Quarantine_CL
+    | where TimeGenerated >= ago(2h)
+    | summarize make_set(TenantId_s)
+  );
+  VaikoraO365_Quarantine_CL
+  | where TimeGenerated between (ago(1d) .. ago(2h))
+  | summarize LastSeen = max(TimeGenerated) by TenantId_s
+  | where TenantId_s !in (recentTenants)
+  | project TimeGenerated = now(), TenantId = TenantId_s, LastSeen, HoursOffline = (now() - LastSeen) / 1h
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: TenantId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Vaikora-O365 engine offline for tenant {{TenantId}}"
+  alertDescriptionFormat: "No Vaikora-O365 quarantine telemetry has arrived from this tenant in the last 2 hours. Last seen: {{LastSeen}}."
+version: 1.0.0
+kind: Scheduled

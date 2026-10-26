@@ -1,0 +1,44 @@
+id: f42f2906-c8e6-23d0-e48c-0620e50d5510
+name: "Tailscale: Exit node advertised or approved"
+description: |
+  Identifies when a device starts advertising itself as an exit node, or when an admin approves one. Validate the device and operator - rogue exit nodes can intercept tailnet egress.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscaleCCF
+    dataTypes:
+      - Tailscale_Audit_CL
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1090
+query: |
+  Tailscale_Audit_CL
+        | where Action contains "EXIT" or tostring(New.advertisedExitNode) == "true" or tostring(New.allowedExitNode) == "true"
+        | extend ActorLogin = tostring(Actor.loginName)
+        | extend NodeName = tostring(Target.name)
+        | extend NodeId = tostring(Target.id)
+        | project TimeGenerated, ActorLogin, Action, NodeName, NodeId, Origin, New, Old
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorLogin
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: NodeName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

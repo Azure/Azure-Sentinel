@@ -1,0 +1,57 @@
+id: d2e3f4a5-2b3c-4d5e-6f7a-8b9c0d1e2f3a
+name: "Tailscale Premium: Large outbound transfer over tailnet"
+description: |
+  Identifies when a single src-dst pair transfers more than 100 MB over the tailnet within a 1-hour window. Large bursts can indicate data staging, exfiltration, or a misconfigured backup. Requires Tailscale Premium or Enterprise.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: TailscalePremiumCCF
+    dataTypes:
+      - Tailscale_Network_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1041
+  - T1020
+query: |
+  let bytesThreshold = 100 * 1024 * 1024;
+  Tailscale_Network_CL
+  | where TimeGenerated > ago(1h)
+  | where HasVirtualTraffic
+  | mv-expand t = VirtualTraffic
+  | extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto), Bytes = tolong(t.txBytes) + tolong(t.rxBytes), Pkts = tolong(t.txPkts) + tolong(t.rxPkts)
+  | summarize TotalBytes = sum(Bytes), TotalPackets = sum(Pkts) by NodeId, SrcNodeName, SrcUser, DstNodeName, DstUser, Src, Dst, Proto
+  | where TotalBytes > bytesThreshold
+  | extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)
+  | order by TotalBytes desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcNodeName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DstNodeName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUser
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Src
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+kind: Scheduled
+version: 1.0.0

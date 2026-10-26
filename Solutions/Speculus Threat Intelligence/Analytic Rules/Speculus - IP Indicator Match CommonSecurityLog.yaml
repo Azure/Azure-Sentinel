@@ -1,0 +1,76 @@
+id: a7c3f9e2-4d18-4b6a-9f0c-2e5d8b1a6c43
+name: Speculus - Network traffic to or from high-risk IP indicator
+description: |
+  'Matches network events in CommonSecurityLog against high-risk Speculus IP indicators (risk score >= 75)
+  received in the last 14 days. These IPs are associated with malicious activity such as command and control,
+  botnets, ransomware infrastructure, or brute-force campaigns.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SpeculusThreatIntel
+    dataTypes:
+      - Speculus_Indicators_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071
+  - T1090
+query: |
+  let indicators = Speculus_Indicators_CL
+      | where TimeGenerated > ago(14d)
+      | where isnotempty(IndicatorValue)
+      | where RiskScore >= 75
+      | summarize arg_max(Modified, *) by IndicatorValue
+      | project
+          IndicatorValue,
+          RiskScore,
+          SpeculusActivity = Activity,
+          Attribution,
+          Labels,
+          IndicatorDescription = Description;
+  CommonSecurityLog
+  | where TimeGenerated > ago(1h)
+  | where isnotempty(SourceIP) or isnotempty(DestinationIP)
+  | extend MatchIP = iff(isnotempty(DestinationIP), DestinationIP, SourceIP)
+  | join kind=inner indicators on $left.MatchIP == $right.IndicatorValue
+  | project
+      TimeGenerated,
+      MatchIP,
+      SourceIP,
+      DestinationIP,
+      DeviceVendor,
+      DeviceProduct,
+      RiskScore,
+      SpeculusActivity,
+      Attribution,
+      Labels,
+      IndicatorDescription
+suppressionDuration: 1h
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: Selected
+    groupByEntities:
+      - IP
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  RiskScore: RiskScore
+  Attribution: Attribution
+  Labels: Labels
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: MatchIP
+version: 1.0.0
+kind: Scheduled

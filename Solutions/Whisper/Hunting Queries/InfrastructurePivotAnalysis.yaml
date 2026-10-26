@@ -1,0 +1,77 @@
+id: 4eabcdaa-bbe2-54d8-b930-c8d7b31a015c
+name: Whisper - Infrastructure Pivot Analysis
+description: |
+  Pivots from known-malicious indicators to discover related threat infrastructure sharing ASNs, IP addresses, or registrars.
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperInfraContext_CL
+  - WhisperThreatIntel_CL
+tactics:
+- ResourceDevelopment
+relevantTechniques:
+- T1583
+query: |
+  // MITRE ATT&CK: T1583 - Resource Development: Acquire Infrastructure
+  // Tactic: ResourceDevelopment
+  // Pivots from known-malicious indicators to discover related threat
+  // infrastructure sharing ASNs, IP addresses, or registrars.
+  let lookback = 30d;
+  let threatThreshold = 50;
+  let maliciousIndicators = WhisperThreatIntel_CL
+  | where TimeGenerated > ago(lookback)
+  | where isThreat == true and threatScore >= threatThreshold
+  | summarize arg_max(TimeGenerated, *) by indicator
+  | project indicator, threatScore, threatLevel, feedNames;
+  let infraAttributes = maliciousIndicators
+  | join kind=inner (
+      WhisperInfraContext_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, *) by indicator
+  ) on indicator
+  | project indicator, threatScore, asns, ipAddresses, registrar;
+  let sharedAsns = infraAttributes
+  | where isnotempty(asns)
+  | mv-expand asnValue = split(asns, ",")
+  | extend asnValue = tostring(asnValue)
+  | join kind=inner (
+      WhisperInfraContext_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, *) by indicator
+      | where isnotempty(asns)
+      | mv-expand asnValue = split(asns, ",")
+      | extend asnValue = tostring(asnValue)
+  ) on asnValue
+  | where indicator != indicator1
+  | project pivotType = "SharedASN", sourceIndicator = indicator, pivotValue = asnValue, relatedIndicator = indicator1;
+  let sharedRegistrars = infraAttributes
+  | where isnotempty(registrar)
+  | join kind=inner (
+      WhisperInfraContext_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, *) by indicator
+      | where isnotempty(registrar)
+  ) on registrar
+  | where indicator != indicator1
+  | project pivotType = "SharedRegistrar", sourceIndicator = indicator, pivotValue = registrar, relatedIndicator = indicator1;
+  union sharedAsns, sharedRegistrars
+  | join kind=leftouter (
+      WhisperThreatIntel_CL
+      | where TimeGenerated > ago(lookback)
+      | summarize arg_max(TimeGenerated, *) by indicator
+      | project indicator, relatedThreatScore = threatScore, relatedThreatLevel = threatLevel
+  ) on $left.relatedIndicator == $right.indicator
+  | project
+      sourceIndicator,
+      pivotType,
+      pivotValue,
+      relatedIndicator,
+      relatedThreatScore = coalesce(relatedThreatScore, real(0)),
+      relatedThreatLevel = coalesce(relatedThreatLevel, "unknown")
+  | sort by relatedThreatScore desc
+entityMappings:
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: relatedIndicator
+version: 1.0.0

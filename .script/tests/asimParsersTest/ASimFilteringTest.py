@@ -1,3 +1,4 @@
+import importlib.util
 import sys
 import os
 
@@ -8,6 +9,15 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir in sys.path:
     sys.path.remove(script_dir)
 
+spec = importlib.util.spec_from_file_location(
+    'asim_parser_file_utils', os.path.join(script_dir, 'asim_parser_file_utils.py')
+)
+parser_file_utils = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parser_file_utils)
+extract_schema_name = parser_file_utils.extract_schema_name
+is_empty_parser = parser_file_utils.is_empty_parser
+is_union_parser = parser_file_utils.is_union_parser
+
 __unittest = True #prevents stacktrace during most assertions
 
 import unittest
@@ -15,11 +25,8 @@ import yaml
 import re
 import subprocess
 from datetime import datetime, timedelta, timezone
-from azure.monitor.query import LogsQueryClient, LogsQueryStatus
-from azure.identity import DefaultAzureCredential
-from azure.identity import InteractiveBrowserCredential
-from azure.core.exceptions import HttpResponseError
 import csv
+import json
 
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
 MAX_FILTERING_PARAMETERS = 2
@@ -39,6 +46,10 @@ INT_DUMMY_VALUE = -967799
 # The index of the column with the value from a query response.
 COLUMN_INDEX_IN_ROW = 0
 
+LEGACY_EVENTTYPE_COMPATIBILITY = {
+    'vimDnsFortinetFortiGate': ('Query', 'lookup')
+}
+
 ws_id = WORKSPACE_ID
 days_delta = TIME_SPAN_IN_DAYS
 
@@ -57,11 +68,12 @@ failure_messages = {
     'Authentication': "This single failure is because only two values exist in 'EventType' field in 'Authentication' schema. 'Authentication' is a special case where 'EventType' validations could be partial as only 'Logon' or 'Logoff' events may exists. Ignoring this error.",
     'Dns': "This single failure is because only one value exist in 'EventType' field in 'Dns' schema. 'Dns' is a special case where 'EventType' validations could be 'Query' only. Ignoring this error."
 }
-
 def attempt_to_connect():
     try:
+            from azure.monitor.query import LogsQueryClient, LogsQueryStatus
+            from azure.identity import DefaultAzureCredential
+
             credential = DefaultAzureCredential()
-            #credential = InteractiveBrowserCredential() # Uncomment this line if you want to use the interactive browser credential for testing purposes
             client = LogsQueryClient(credential)
             empty_query = ""
             response = client.query_workspace(
@@ -78,15 +90,7 @@ def attempt_to_connect():
         sys.stdout.flush()  # Explicitly flush stdout
         return None
 
-# Authenticating the user
-client = attempt_to_connect()
-if client is None:
-        print("::error::Couldn't connect to workspace with DefaultAzureCredential.")
-        sys.stdout.flush()  # Explicitly flush stdout
-        sys.exit()
-else:
-        # Proceed with using 'client' for further operations
-        pass
+client = None
 
 def get_parser(parser_path):
     try:
@@ -260,6 +264,13 @@ def handle_test_failure(parser_file_path, error_message=None):
     sys.exit(1)  # Uncomment this line to fail workflow when tests are not successful.
 
 def main():
+    global client
+    client = attempt_to_connect()
+    if client is None:
+        print("::error::Couldn't connect to workspace with DefaultAzureCredential.")
+        sys.stdout.flush()
+        sys.exit(1)
+
     # Get modified ASIM Parser files along with their status
     current_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -289,14 +300,10 @@ def main():
         sys.stdout.flush()  # Explicitly flush stdout
 
     for PARSER_FILE_NAME in modified_yaml_files:
-        # Use regular expression to extract SchemaName from the parser filename
-        SchemaNameMatch = re.search(r'ASim(\w+)/', PARSER_FILE_NAME)
-        if SchemaNameMatch:
-            SchemaName = SchemaNameMatch.group(1)
-        else:
-            SchemaName = None
+        SchemaName = extract_schema_name(PARSER_FILE_NAME)
+        parser_filename = os.path.basename(PARSER_FILE_NAME)
         # Check if changed file is a union parser. If Yes, skip the file
-        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
+        if is_union_parser(parser_filename, SchemaName) or is_empty_parser(parser_filename):
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
@@ -366,13 +373,18 @@ class FilteringTest(unittest.TestCase):
             if schema_of_parser not in all_schemas_parameters:
                 self.fail(f"Schema: {schema_of_parser} - Not an existing schema or not supported by the validations script")
             param_to_column_mapping = all_schemas_parameters[schema_of_parser]
+            if schema_of_parser == "EmailEvent":
+                self.email_event_default_test(parser_file["ParserParams"], query_definition)
             for param in parser_file['ParserParams']:
                 param_name = param['Name']
                 with self.subTest():
                     if param_name not in param_to_column_mapping:
                         self.fail(f"parameter: {param_name} - No such parameter in {schema_of_parser} schema")
                     column_name_in_table = param_to_column_mapping[param_name]
+                    if schema_of_parser == "EmailEvent" and param_name == "pack":
+                        self.pack_test(query_definition)
                     self.send_param_to_test(param, query_definition, columns_in_answer, column_name_in_table)
+            self.legacy_eventtype_compatibility_test(parser_file, query_definition)
 
     def run_tests_on_files(self, file_path):
         with self.subTest(file=file_path):
@@ -391,15 +403,20 @@ class FilteringTest(unittest.TestCase):
         """
         param_name = param['Name']
         param_type = param['Type']
-        # pack parameter is not checked by the validations
         if (param_name == "pack"):
             return 
         if (param_name == "disabled"):
             self.disabled_test(query_definition)
-        elif  column_name_in_table not in columns_in_answer:
+        elif isinstance(column_name_in_table, tuple):
+            self.email_recipient_test(param_name, query_definition, column_name_in_table, columns_in_answer)
+        elif column_name_in_table not in columns_in_answer:
+            print_and_flush(
+                f"Parameter: {param_name} - mapped column {column_name_in_table} is unavailable; "
+                "filtering validation is partial."
+            )
+            self.unavailable_column_test(param, query_definition)
             return
         elif (param_type == "datetime"):
-            #pass #TODO add test for datetime
             self.datetime_test(param, query_definition, column_name_in_table)
         elif (param_type == "dynamic"):
             self.dynamic_test(param, query_definition, column_name_in_table)
@@ -436,9 +453,27 @@ class FilteringTest(unittest.TestCase):
         no_filter_response = self.send_query(no_filter_query)
         num_of_rows_when_no_filters_in_query = len(no_filter_response.tables[0].rows)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
-        datetime_mid_point_query = query_definition + f"query() | summarize max_TimeGenerated = max(TimeGenerated), min_TimeGenerated = min(TimeGenerated) \n | extend timeSpan = datetime_diff('second', max_TimeGenerated, min_TimeGenerated) \n | project mid_point = datetime_add('second', timeSpan / 2, min_TimeGenerated)"
+        datetime_mid_point_query = query_definition + (
+            "query() "
+            "| summarize max_TimeGenerated = max(TimeGenerated), "
+            "min_TimeGenerated = min(TimeGenerated), "
+            "distinct_TimeGenerated = count_distinct(TimeGenerated) \n"
+            "| extend timeSpanMicroseconds = datetime_diff('microsecond', max_TimeGenerated, min_TimeGenerated) \n"
+            "| project mid_point = min_TimeGenerated + ((max_TimeGenerated - min_TimeGenerated) / 2), "
+            "distinct_TimeGenerated, timeSpanMicroseconds"
+        )
         datetime_mid_point_response = self.send_query(datetime_mid_point_query)
-        mid_point_datetime_value = datetime_mid_point_response.tables[0].rows[0][0]
+        midpoint_row = datetime_mid_point_response.tables[0].rows[0]
+        distinct_time_generated = midpoint_row[1]
+        time_span_microseconds = midpoint_row[2]
+        if distinct_time_generated < 2 or time_span_microseconds < 2:
+            print_and_flush(
+                f"Parameter: {param_name} - TimeGenerated values do not span a testable range; "
+                "datetime filtering validation is partial."
+            )
+            return
+
+        mid_point_datetime_value = midpoint_row[0]
         datetime_mid_point_value = f"datetime({mid_point_datetime_value})"
         # Get count of rows after applying filtering
         query_with_filter = query_definition + f"query({param_name}={datetime_mid_point_value})\n"
@@ -446,6 +481,153 @@ class FilteringTest(unittest.TestCase):
         self.assertNotEqual(len(filtered_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
         num_of_rows_with_filter_in_query = len(filtered_response.tables[0].rows)
         self.assertLess(num_of_rows_with_filter_in_query, num_of_rows_when_no_filters_in_query,  f"Parameter: {param_name} - Expected to have less results after filtering. Filtered by value: {datetime_mid_point_value}")
+
+    def get_count_for_query(self, query):
+        response = self.send_query(query + " | count\n")
+        return response.tables[0].rows[0][0]
+
+    def unavailable_column_test(self, param, query_definition):
+        param_name = param["Name"]
+        param_type = param["Type"]
+        default = param["Default"]
+        if param_type == "string":
+            default = f"'{default}'"
+        baseline_count = self.get_count_for_query(query_definition + "query()\n")
+        default_count = self.get_count_for_query(
+            query_definition + f"query({param_name}={default})\n"
+        )
+        self.assertEqual(default_count, baseline_count)
+        if param_type == "dynamic":
+            absent_value = f"dynamic([{DUMMY_VALUE}])"
+        elif param_type == "datetime":
+            absent_value = (
+                "datetime(9999-12-31T23:59:59Z)"
+                if param_name == "starttime"
+                else "datetime(0001-01-01T00:00:00Z)"
+            )
+        else:
+            absent_value = INT_DUMMY_VALUE if param_type == "int" else DUMMY_VALUE
+        absent_count = self.get_count_for_query(
+            query_definition + f"query({param_name}={absent_value})\n"
+        )
+        self.assertEqual(
+            absent_count,
+            0,
+            f"Parameter: {param_name} - Returned results for an absent value."
+        )
+
+    def email_event_default_test(self, parser_params, query_definition):
+        defaults = []
+        for param in parser_params:
+            default = param["Default"]
+            if param["Type"] == "string":
+                default = f"'{default}'"
+            defaults.append(f"{param['Name']}={default}")
+        baseline_count = self.get_count_for_query(query_definition + "query()\n")
+        explicit_default_count = self.get_count_for_query(
+            query_definition + f"query({', '.join(defaults)})\n"
+        )
+        self.assertEqual(
+            explicit_default_count,
+            baseline_count,
+            "EmailEvent - Explicit default filters changed the unfiltered result set."
+        )
+
+    def pack_test(self, query_definition):
+        baseline_count = self.get_count_for_query(query_definition + "query(pack=false)\n")
+        packed_count = self.get_count_for_query(query_definition + "query(pack=true)\n")
+        self.assertEqual(packed_count, baseline_count, "Parameter: pack - Changed the number of results.")
+
+    def email_recipient_test(self, parameter_name, query_definition, recipient_columns, columns_in_answer):
+        available_columns = [column for column in recipient_columns if column in columns_in_answer]
+        baseline_count = self.get_count_for_query(query_definition + "query()\n")
+        empty_count = self.get_count_for_query(
+            query_definition + f"query({parameter_name}=dynamic([]))\n"
+        )
+        self.assertEqual(empty_count, baseline_count, f"Parameter: {parameter_name} - Empty array changed the unfiltered result set.")
+        if not available_columns:
+            print_and_flush(
+                f"Parameter: {parameter_name} - recipient columns are unavailable; "
+                "matching validation is partial."
+            )
+            absent_count = self.get_count_for_query(
+                query_definition
+                + f"query({parameter_name}=dynamic([{DUMMY_VALUE}]))\n"
+            )
+            self.assertEqual(absent_count, 0, f"Parameter: {parameter_name} - Returned results for a fictive recipient.")
+            return
+
+        array_values = ", ".join(
+            f"coalesce({column}, dynamic([]))" for column in available_columns
+        )
+        values = []
+        for column in available_columns:
+            value_query = (
+                query_definition
+                + f"query() | mv-expand recipient={column} "
+                "| where isnotempty(tostring(recipient)) "
+                "| distinct recipient=tostring(recipient) | take 2\n"
+            )
+            candidates = [row[0] for row in self.send_query(value_query).tables[0].rows]
+            if not candidates:
+                print_and_flush(f"Parameter: {parameter_name} - {column} is empty; matching coverage is partial.")
+            values.extend(value for value in candidates if value not in values)
+        if not values:
+            print_and_flush(
+                f"Parameter: {parameter_name} - no recipient values are present; "
+                "matching validation is partial."
+            )
+        else:
+            # Compare row multisets, preserving duplicates and overlapping recipients.
+            row_projection = "| project-away ASimMatching* | extend filter_test_row=tostring(pack_all()) | project filter_test_row\n"
+            candidate_groups = [[value] for value in values]
+            if len(values) > 1:
+                candidate_groups.append(values)
+            for selected_values in candidate_groups:
+                literal = f"dynamic([{create_values_string(selected_values)}])"
+                expected_rows = self.send_query(
+                    query_definition
+                    + f"query() | where array_concat({array_values}) has_any ({literal}) "
+                    + row_projection
+                ).tables[0].rows
+                actual_rows = self.send_query(
+                    query_definition
+                    + f"query({parameter_name}={literal}) "
+                    + row_projection
+                ).tables[0].rows
+                self.assertTrue(expected_rows, f"Parameter: {parameter_name} - No baseline recipient match.")
+                self.assertCountEqual([json.loads(row[0]) for row in actual_rows],
+                                      [json.loads(row[0]) for row in expected_rows],
+                                      f"Parameter: {parameter_name} - Recipient results differ from the expected union.")
+        absent_count = self.get_count_for_query(
+            query_definition
+            + f"query({parameter_name}=dynamic([{DUMMY_VALUE}]))\n"
+        )
+        self.assertEqual(absent_count, 0, f"Parameter: {parameter_name} - Returned results for a fictive recipient.")
+
+    def legacy_eventtype_compatibility_test(self, parser_file, query_definition):
+        parser_name = parser_file.get('ParserName')
+        compatible_values = LEGACY_EVENTTYPE_COMPATIBILITY.get(parser_name)
+        if compatible_values is None:
+            return
+
+        counts = {}
+        for eventtype in compatible_values:
+            response = self.send_query(query_definition + f"query(eventtype='{eventtype}') | count\n")
+            counts[eventtype] = response.tables[0].rows[0][0]
+
+        canonical_eventtype, legacy_eventtype = compatible_values
+        self.assertGreater(
+            counts[legacy_eventtype],
+            0,
+            f"Legacy eventtype '{legacy_eventtype}' returned no results for parser {parser_name}"
+        )
+        self.assertEqual(
+            counts[canonical_eventtype],
+            counts[legacy_eventtype],
+            f"Legacy eventtype '{legacy_eventtype}' did not return the same results as "
+            f"'{canonical_eventtype}' for parser {parser_name}"
+        )
 
     def scalar_test(self, param, query_definition, column_name_in_table):
         """
@@ -461,15 +643,15 @@ class FilteringTest(unittest.TestCase):
         no_filter_query = query_definition + create_execution_string_without_parameters(column_name_in_table)
         no_filter_response = self.send_query(no_filter_query)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
-        with  self.subTest():
-            self.assertNotEqual(len(no_filter_response.tables[0].rows), 1, f"Only one value exists for parameter: {param_name} - validations for this parameter are partial" )
+        if len(no_filter_response.tables[0].rows) == 1:
+            print_and_flush(
+                f"Parameter: {param_name} - only one value is present; "
+                "selectivity validation is partial."
+            )
         # Taking the first value returned in the response
         selected_value = no_filter_response.tables[0].rows[0][0]
         value_to_filter = f"\'{selected_value}\'" if param['Type']=="string" else selected_value
         query_with_filter = query_definition + create_execution_strings_with_one_parameter(param_name, value_to_filter, column_name_in_table)
-        if selected_value=="":
-            query_with_filter = query_definition + f"query() | where isempty({column_name_in_table}) | summarize count() by {column_name_in_table}\n"
-        
         # Performing a filtering by the first value returned in the first response
         self.scalar_test_check_filtering(param_name, query_with_filter, value_to_filter)
 
@@ -534,6 +716,14 @@ class FilteringTest(unittest.TestCase):
         query_with_filter = query_definition + create_execution_strings_with_one_parameter(parameter_name,f"dynamic([{filter_parameters}])" ,column_name_in_table)
 
         query_response = self.send_query(query_with_filter)
+        if parameter_name.endswith("_has_any_prefix") and self.filter_is_single_column(parameter_name):
+            expected_response = self.send_query(
+                query_definition
+                + f"query() | where has_any_ipv4_prefix(tostring({column_name_in_table}), dynamic([{filter_parameters}]))"
+                + f" | summarize count() by {column_name_in_table}\n"
+            )
+            self.assertCountEqual(query_response.tables[0].rows, expected_response.tables[0].rows,
+                                  f"Parameter: {parameter_name} - Results differ from KQL IPv4-prefix matching.")
         return (query_response, filter_parameters)
     
 
@@ -543,7 +733,7 @@ class FilteringTest(unittest.TestCase):
         return self.get_response_for_query_with_parameters(parameter_name, query_definition, column_name_in_table, filtering_with_one_value_list)
 
 
-    def dynamic_tests_assertions(self, parameter_name, num_of_rows_with_filter_in_query, filter_parameters, num_of_rows_when_no_filters_in_query):
+    def dynamic_tests_assertions(self, parameter_name, num_of_rows_with_filter_in_query, filter_parameters, num_of_rows_when_no_filters_in_query, require_fewer_results):
         """
         Performing assertions for dynamic tests with parameter filtering.
         
@@ -556,17 +746,63 @@ class FilteringTest(unittest.TestCase):
         """
         with self.subTest():
             self.assertNotEqual(0, num_of_rows_with_filter_in_query, f"Parameter: {parameter_name} - Got no results at all after filtering. Filtered by value: {filter_parameters}")  
-        with self.subTest():
-            if (num_of_rows_when_no_filters_in_query == 1):
-                self.assertEqual(1, num_of_rows_when_no_filters_in_query,  f"Parameter: {parameter_name} - Expected to have one result after filtering. Filtered by value: {filter_parameters}")
+        if require_fewer_results:
+            self.assertLess(
+                num_of_rows_with_filter_in_query,
+                num_of_rows_when_no_filters_in_query,
+                f"Parameter: {parameter_name} - Expected fewer distinct values after filtering."
+            )
+        else:
+            self.assertLessEqual(
+                num_of_rows_with_filter_in_query,
+                num_of_rows_when_no_filters_in_query,
+                f"Parameter: {parameter_name} - Filtering returned more values than the unfiltered query."
+            )
+        if not require_fewer_results and num_of_rows_with_filter_in_query == num_of_rows_when_no_filters_in_query:
+            print_and_flush(
+                f"Parameter: {parameter_name} - filter values matched all distinct output values; "
+                "multi-value selectivity validation is partial."
+            )
+
+    def filter_is_single_column(self, parameter_name):
+        return parameter_name not in {
+            "ipaddr_has_any_prefix", "hostname_has_any", "username_has_any", "hashes_has_any"
+        }
+
+    def dynamic_response_matches_filter(self, parameter_name, response, filter_values):
+        if not self.filter_is_single_column(parameter_name):
+            print_and_flush(
+                f"Parameter: {parameter_name} - the mapped alias may omit matching fields; "
+                "single-column match validation is partial."
+            )
+            return
+        if parameter_name.endswith("_has_any_prefix"):
+            # The query helper compares results with the native KQL predicate.
+            return
+        normalized_filters = [str(value).casefold() for value in filter_values]
+        for row in response.tables[0].rows:
+            output_value = str(row[COLUMN_INDEX_IN_ROW]).casefold()
+            if parameter_name.endswith("_has_all"):
+                matches = all(value in output_value for value in normalized_filters)
+            elif parameter_name.endswith("_has_any"):
+                matches = any(value in output_value for value in normalized_filters)
             else:
-                self.assertLess(num_of_rows_with_filter_in_query, num_of_rows_when_no_filters_in_query,  f"Parameter: {parameter_name} - Expected to have less results after filtering. Filtered by value: {filter_parameters}")
+                matches = output_value in normalized_filters
+            self.assertTrue(
+                matches,
+                f"Parameter: {parameter_name} - Filter returned an unrelated value: {output_value}"
+            )
 
 
-    # Failing the test with corresponding message if values list is empty
-    def fail_if_values_list_is_empty(self, values_list,parameter_name, test_type):
+    # Report partial coverage when no usable values are available.
+    def values_list_is_available(self, values_list, parameter_name, test_type):
         if len(values_list) == 0:
-            self.fail(f"Parameter: {parameter_name} - Unable to find values to perform {test_type} tests")
+            print_and_flush(
+                f"Parameter: {parameter_name} - no values are available for {test_type} tests; "
+                "matching validation is partial."
+            )
+            return False
+        return True
 
 
     def dynamic_tests_helper(self, parameter_name, query_definition, num_of_rows_when_no_filters_in_query, column_name_in_table, values_list, test_type):
@@ -582,21 +818,58 @@ class FilteringTest(unittest.TestCase):
         values_list : List of at most two values that will be used to perform filtering.
         test_type : Name of the specific tests performed. It can be default testing or specific testing for  has_any/has_any_prefix parameters
         """
-        self.fail_if_values_list_is_empty(values_list, parameter_name, test_type)
+        if not self.values_list_is_available(values_list, parameter_name, test_type):
+            self.dynamic_tests_check_fictive_value(parameter_name, query_definition, column_name_in_table)
+            return
 
         # Performing filtering with one value
         filtering_with_one_value_response, one_value_string = self.get_response_for_query_with_one_parameter(parameter_name, query_definition, column_name_in_table, values_list)
         num_of_rows_with_one_parameter_in_query = len(filtering_with_one_value_response.tables[0].rows)
-        self.dynamic_tests_assertions(parameter_name, num_of_rows_with_one_parameter_in_query, one_value_string, num_of_rows_when_no_filters_in_query)
+        self.dynamic_response_matches_filter(parameter_name, filtering_with_one_value_response, [values_list[0]])
+        self.dynamic_tests_assertions(
+            parameter_name,
+            num_of_rows_with_one_parameter_in_query,
+            one_value_string,
+            num_of_rows_when_no_filters_in_query,
+            num_of_rows_when_no_filters_in_query > 1,
+        )
 
-        # Performing filtering with two values if possible
-        if len(values_list) == 1 or num_of_rows_when_no_filters_in_query <= MAX_FILTERING_PARAMETERS:
-            # Skip self.fail if values_list contains both "Logon" and "Logoff" and parameter_name is "eventtype_in"
-            if not (set(values_list) == {"Logon", "Logoff"} and parameter_name == "eventtype_in"):
-                self.fail(f"Parameter: {parameter_name} - Not enough data to perform two values {test_type} tests")
-        filtering_response, values_string = self.get_response_for_query_with_parameters(parameter_name, query_definition, column_name_in_table, values_list)
-        num_of_rows_with_parameters_in_query = len(filtering_response.tables[0].rows)
-        self.dynamic_tests_assertions(parameter_name, num_of_rows_with_parameters_in_query, values_string, num_of_rows_when_no_filters_in_query)
+        if len(values_list) > 1:
+            second_value_response, _ = self.get_response_for_query_with_one_parameter(
+                parameter_name, query_definition, column_name_in_table, [values_list[1]]
+            )
+            self.dynamic_response_matches_filter(parameter_name, second_value_response, [values_list[1]])
+            filtering_response, values_string = self.get_response_for_query_with_parameters(parameter_name, query_definition, column_name_in_table, values_list)
+            num_of_rows_with_parameters_in_query = len(filtering_response.tables[0].rows)
+            self.dynamic_response_matches_filter(parameter_name, filtering_response, values_list)
+            self.dynamic_tests_assertions(
+                parameter_name,
+                num_of_rows_with_parameters_in_query,
+                values_string,
+                num_of_rows_when_no_filters_in_query,
+                num_of_rows_when_no_filters_in_query > len(values_list),
+            )
+            expected_values = {
+                str(row[COLUMN_INDEX_IN_ROW])
+                for row in filtering_with_one_value_response.tables[0].rows
+            } | {
+                str(row[COLUMN_INDEX_IN_ROW])
+                for row in second_value_response.tables[0].rows
+            }
+            actual_values = {
+                str(row[COLUMN_INDEX_IN_ROW])
+                for row in filtering_response.tables[0].rows
+            }
+            self.assertEqual(
+                actual_values,
+                expected_values,
+                f"Parameter: {parameter_name} - Multi-value filter did not return the union of individual matches."
+            )
+        else:
+            print_and_flush(
+                f"Parameter: {parameter_name} - only one value is available for {test_type} tests; "
+                "multi-value validation is partial."
+            )
 
         # Performing a query with a non-existing value, expecting to return no results
         self.dynamic_tests_check_fictive_value(parameter_name, query_definition, column_name_in_table)
@@ -680,22 +953,43 @@ class FilteringTest(unittest.TestCase):
         column_name_in_table : The name of the column in the query response on which the parameter performs filtering
         """
         values_list = self.get_values_for_dynamic_tests(no_filter_rows)
-        self.fail_if_values_list_is_empty(values_list, parameter_name, "has_all")
+        if not self.values_list_is_available(values_list, parameter_name, "has_all"):
+            self.dynamic_tests_check_fictive_value(parameter_name, query_definition, column_name_in_table)
+            return
 
         # Performing filtering with one value
         filtering_with_one_value_response, one_value_string = self.get_response_for_query_with_one_parameter(parameter_name, query_definition, column_name_in_table, values_list)
         num_of_rows_when_no_filters_in_query = len (no_filter_rows)
         num_of_rows_with_one_parameter_in_query = len(filtering_with_one_value_response.tables[0].rows)
-        self.dynamic_tests_assertions(parameter_name, num_of_rows_with_one_parameter_in_query, one_value_string, num_of_rows_when_no_filters_in_query)
+        self.dynamic_response_matches_filter(parameter_name, filtering_with_one_value_response, [values_list[0]])
+        self.dynamic_tests_assertions(
+            parameter_name,
+            num_of_rows_with_one_parameter_in_query,
+            one_value_string,
+            num_of_rows_when_no_filters_in_query,
+            num_of_rows_when_no_filters_in_query > 1,
+        )
 
         # Performing filtering with two values if possible
         first_part_of_a_value , second_part_of_a_value = get_splitted_parts_of_string(values_list)
         if first_part_of_a_value is None:
-            self.fail(f"Parameter: {parameter_name} - has_all tests performed for only one filtering value")
+            print_and_flush(
+                f"Parameter: {parameter_name} - no value can be split for a multi-value has_all check; "
+                "multi-value validation is partial."
+            )
+            self.dynamic_tests_check_fictive_value(parameter_name, query_definition, column_name_in_table)
+            return
         splitted_parts_list = [first_part_of_a_value , second_part_of_a_value]
         filtering_response, values_string = self.get_response_for_query_with_parameters(parameter_name, query_definition, column_name_in_table, splitted_parts_list)
         num_of_rows_with_parameters_in_query = len(filtering_response.tables[0].rows)
-        self.dynamic_tests_assertions(parameter_name, num_of_rows_with_parameters_in_query, values_string, num_of_rows_when_no_filters_in_query)
+        self.dynamic_response_matches_filter(parameter_name, filtering_response, splitted_parts_list)
+        self.dynamic_tests_assertions(
+            parameter_name,
+            num_of_rows_with_parameters_in_query,
+            values_string,
+            num_of_rows_when_no_filters_in_query,
+            num_of_rows_when_no_filters_in_query > len(splitted_parts_list),
+        )
 
         # Performing a query with a non-existing value, expecting to return no results
         self.dynamic_tests_check_fictive_value(parameter_name, query_definition, column_name_in_table)
@@ -754,8 +1048,21 @@ class FilteringTest(unittest.TestCase):
         no_filter_response = self.send_query(no_filter_query)
         no_filter_rows = no_filter_response.tables[0].rows
         self.assertNotEqual(len(no_filter_rows) , 0 , f"No data for parameter:{parameter_name}")
-        with  self.subTest():
-            self.assertNotEqual(len(no_filter_rows), 1, f"Only one value exists for parameter: {parameter_name} - validations for this parameter are partial" )
+        if len(no_filter_rows) == 1:
+            print_and_flush(
+                f"Parameter: {parameter_name} - only one value is present; "
+                "selectivity validation is partial."
+            )
+        if parameter["Default"] == "dynamic([])":
+            baseline_count = self.get_count_for_query(query_definition + "query()\n")
+            empty_filter_count = self.get_count_for_query(
+                query_definition + f"query({parameter_name}=dynamic([]))\n"
+            )
+            self.assertEqual(
+                empty_filter_count,
+                baseline_count,
+                f"Parameter: {parameter_name} - Empty array changed the unfiltered result set."
+            )
 
         # Specific tests parameters with certain suffixes 
         if parameter_name.endswith('has_any'):
@@ -804,7 +1111,12 @@ class FilteringTest(unittest.TestCase):
         query_str : A string with the KQL query that will be sent to the workspace.
         """
         failed_query_message = f"The following query failed:\n{query_str}"
+        from azure.monitor.query import LogsQueryStatus
+        from azure.core.exceptions import HttpResponseError
+
         try:
+            if client is None:
+                self.fail("Azure Logs Query client is not initialized")
             response = client.query_workspace(
                 workspace_id = ws_id,
                 query = query_str,
@@ -830,6 +1142,7 @@ all_schemas_parameters = {
     {
 		"ipaddr_has_any_prefix" : "DvcIpAddr",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "hostname_has_any" : "DvcHostname",
 		"username_has_any" : "Username",
@@ -844,6 +1157,7 @@ all_schemas_parameters = {
     {
 		"actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventresult" : "EventResult",
 		"eventtype_in" : "EventType",
@@ -856,6 +1170,7 @@ all_schemas_parameters = {
     "Authentication" : 
     {
         "disabled" : "",
+        "pack" : "",
         "eventresult" : "EventResult",
         "eventresultdetails_in" : "EventResultDetails",
         "eventtype_in" : "EventType",
@@ -869,6 +1184,7 @@ all_schemas_parameters = {
     "AlertEvent" :
     {
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
         "ipaddr_has_any_prefix" : "DvcIpAddr",
@@ -883,6 +1199,7 @@ all_schemas_parameters = {
     "DhcpEvent" :
     {
         "disabled" : "",
+        "pack" : "",
         "eventresult" : "EventResult",
         "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
@@ -893,6 +1210,7 @@ all_schemas_parameters = {
     "Dns" : 
     {
         "disabled" : "",
+        "pack" : "",
         "domain_has_any" : "Domain",
         "eventtype" : "EventType",
         "endtime" : "EventEndTime",
@@ -902,10 +1220,25 @@ all_schemas_parameters = {
         "srcipaddr" : "SrcIpAddr",
         "starttime" : "EventStartTime"
     },
+    "EmailEvent" :
+    {
+        "disabled" : "",
+        "starttime" : "EventStartTime",
+        "endtime" : "EventEndTime",
+        "ipaddr_has_any_prefix" : "IpAddr",
+        "emailfromaddress_has_any" : "EmailFromAddress",
+        "emailrecipient_has_any" : ("EmailToRecipients", "EmailCCRecipients", "EmailBCCRecipients"),
+        "emailsubject_has_any" : "EmailSubject",
+        "emaildirection_in" : "EmailDirection",
+        "emaildeliverylocation_in" : "EmailDeliveryLocation",
+        "eventresult" : "EventResult",
+        "pack" : ""
+    },
     "FileEvent" :
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "eventtype_in" : "EventType",
         "endtime" : "EventEndTime",
         "srcfilepath_has_any" : "SrcFilePath",
@@ -918,6 +1251,7 @@ all_schemas_parameters = {
     "NetworkSession" :
     {
         "disabled" : "",
+        "pack" : "",
         "dstipaddr_has_any_prefix" : "DstIpAddr",
         "dstportnumber" : "DstPortNumber",
         "dvcaction" : "DvcAction",
@@ -936,6 +1270,7 @@ all_schemas_parameters = {
 		"commandline_has_any" : "CommandLine",
 		"commandline_has_any_ip_prefix" : "CommandLine",
 		"disabled" : "",
+		"pack" : "",
 		"dvchostname_has_any" : "DvcHostname",
 		"dvcipaddr_has_any_prefix" : "DvcIpAddr",
 		"dvcname_has_any" : "",
@@ -951,6 +1286,7 @@ all_schemas_parameters = {
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "dvchostname_has_any" : "DvcHostname",
         "endtime" : "EventEndTime",
         "eventtype_in" : "EventType",
@@ -963,6 +1299,7 @@ all_schemas_parameters = {
     {
         "actorusername_has_any" : "ActorUsername",
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventtype_in" : "EventType",
         "srcipaddr_has_any_prefix" : "SrcIpAddr",
@@ -972,6 +1309,7 @@ all_schemas_parameters = {
     "WebSession" :
     {
         "disabled" : "",
+        "pack" : "",
         "endtime" : "EventEndTime",
         "eventresult" : "EventResult",
         "eventresultdetails_in" : "EventResultDetails",

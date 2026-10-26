@@ -1,0 +1,94 @@
+id: 6f8a8f48-e63b-4afb-9d2a-3ef5f6e2d1bc
+name: Rare kernel load followed by novel non-interactive sign-in tuple
+description: |
+  This query hunts for rare kernel or driver-load behavior on hybrid servers that is followed by a first-seen non-interactive Entra sign-in tuple for the same identity context.
+description-detailed: |
+  The hunt baselines kernel-related image loads on each server, then flags first-seen kernel or driver-load paths during the hunt window. It correlates those endpoint precursors with novel non-interactive sign-in tuples from the same identity within a short timeline to surface likely stealth-persistence and token-abuse progression.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceImageLoadEvents
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - Persistence
+  - DefenseEvasion
+  - CredentialAccess
+relevantTechniques:
+  - T1547.006
+  - T1562.001
+  - T1550.001
+  - T1528
+tags:
+  - Hybrid attack
+  - Kernel implant
+  - Driver load
+  - Token abuse
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 14d;
+  let BaselineEnd = StartTime;
+  let DriverPathToken = "\\windows\\system32\\drivers\\";
+  let BaselineKernelLoads =
+    DeviceImageLoadEvents
+    | where TimeGenerated between (BaselineStart .. BaselineEnd)
+    | project TimeGenerated, DeviceName, FileName, FolderPath
+    | where tolower(FileName) endswith ".sys" or tolower(FolderPath) has DriverPathToken
+    | summarize by Device=tostring(DeviceName), FileNameNorm=tolower(FileName), FolderPathNorm=tolower(FolderPath);
+  let CurrentKernelLoads =
+    DeviceImageLoadEvents
+    | where TimeGenerated between (StartTime .. EndTime)
+    | project TimeGenerated, DeviceName, FileName, FolderPath, SHA1,
+              InitiatingProcessAccountUpn, InitiatingProcessAccountDomain, InitiatingProcessAccountName,
+              InitiatingProcessFileName, InitiatingProcessCommandLine
+    | where tolower(FileName) endswith ".sys" or tolower(FolderPath) has DriverPathToken
+    | extend Device = tostring(DeviceName),
+             UserNorm = tolower(tostring(coalesce(InitiatingProcessAccountUpn, strcat(InitiatingProcessAccountDomain, "\\", InitiatingProcessAccountName)))),
+             FileNameNorm = tolower(FileName),
+             FolderPathNorm = tolower(FolderPath),
+             Evidence = strcat("DriverLoad:", FileName, " SHA1:", tostring(coalesce(SHA1, "unknown")))
+    | where isnotempty(Device)
+    | project LoadTime=TimeGenerated, Device, FileName, FolderPath, FileNameNorm, FolderPathNorm, UserNorm,
+              Evidence, InitiatingProcessFileName, InitiatingProcessCommandLine;
+  let RareKernelLoads =
+    CurrentKernelLoads
+    | join kind=leftanti BaselineKernelLoads on Device, FileNameNorm, FolderPathNorm;
+  let BaselineNISignin =
+    AADNonInteractiveUserSignInLogs
+    | where TimeGenerated between (BaselineStart .. BaselineEnd)
+    | where ResultType in~ ("0", "Success")
+    | where isnotempty(Identity) and isnotempty(IPAddress)
+    | extend IdentityNorm = tolower(Identity), AppIdNorm = tolower(AppId), SrcIp = tostring(IPAddress), Ua = tostring(UserAgent)
+    | summarize by IdentityNorm, AppIdNorm, SrcIp, Ua;
+  let NovelNISignin =
+    AADNonInteractiveUserSignInLogs
+    | where TimeGenerated between (StartTime .. EndTime)
+    | where ResultType in~ ("0", "Success")
+    | where isnotempty(Identity) and isnotempty(IPAddress)
+    | extend IdentityNorm = tolower(Identity), AppIdNorm = tolower(AppId), SrcIp = tostring(IPAddress), Ua = tostring(UserAgent)
+    | join kind=leftanti BaselineNISignin on IdentityNorm, AppIdNorm, SrcIp, Ua
+    | project SigninTime=TimeGenerated, Identity, IdentityNorm, AppId, SrcIp, Ua, CorrelationId, ConditionalAccessStatus;
+  RareKernelLoads
+  | where isnotempty(UserNorm)
+  | join kind=inner NovelNISignin on $left.UserNorm == $right.IdentityNorm
+  | where SigninTime between (LoadTime .. (LoadTime + 2h))
+  | project TimeGenerated=LoadTime, SigninTime, Device, FileName, FolderPath, Evidence,
+            InitiatingProcessFileName, InitiatingProcessCommandLine,
+            Identity, AppId, SrcIp, Ua, CorrelationId, ConditionalAccessStatus
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Device
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Identity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+version: 1.0.0

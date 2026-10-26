@@ -11,7 +11,7 @@ from json import dumps, loads
 import azure.functions as func
 
 from ..joesandbox import JoeSandbox
-from .utils import (INDICATOR_LIST, IOC_LIST, IOC_MAPPING_FUNCTION,
+from .utils import (IOC_LIST, IOC_MAPPING_FUNCTION,
                     parse_analysis_data)
 
 
@@ -35,11 +35,14 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         analysis_info = joe_sandbox.get_analysis_info(web_id)
         json_file_data = loads(file_data)
         iocs = parse_analysis_data(json_file_data)
+        indicator_list = []
         for key, value in iocs.items():
             if key in IOC_LIST:
-                IOC_MAPPING_FUNCTION[key](value, analysis_info)
+                results = IOC_MAPPING_FUNCTION[key](value, analysis_info)
+                if results:
+                    indicator_list.extend(results)
         return func.HttpResponse(
-            dumps({"api_response": json_file_data, "custom_response": INDICATOR_LIST}),
+            dumps({"api_response": json_file_data, "custom_response": indicator_list}),
             headers={"Content-Type": "application/json"},
             status_code=200,
         )

@@ -1,0 +1,96 @@
+[
+  {
+    "name": "WsCollectionRule",
+    "apiVersion": "2022-06-01",
+    "type": "Microsoft.Insights/dataCollectionRules",
+    "properties": {
+      "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
+      "streamDeclarations": {
+        "Custom-WsSecurityEventsRaw_CL": {
+          "columns": [
+            {
+              "name": "engine",
+              "type": "string"
+            },
+            {
+              "name": "action",
+              "type": "string"
+            },
+            {
+              "name": "severity",
+              "type": "string"
+            },
+            {
+              "name": "message",
+              "type": "string"
+            },
+            {
+              "name": "persistenceTimestamp",
+              "type": "datetime"
+            },
+            {
+              "name": "serverTimestamp",
+              "type": "datetime"
+            },
+            {
+              "name": "clientTimestamp",
+              "type": "datetime"
+            },
+            {
+              "name": "userName",
+              "type": "string"
+            },
+            {
+              "name": "details",
+              "type": "dynamic"
+            },
+            {
+              "name": "device",
+              "type": "dynamic"
+            },
+            {
+              "name": "organization",
+              "type": "dynamic"
+            },
+            {
+              "name": "target",
+              "type": "dynamic"
+            },
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "eventTransactionId",
+              "type": "string"
+            },
+            {
+              "name": "acknowledged",
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "destinations": {
+        "logAnalytics": [
+          {
+            "workspaceResourceId": "{{workspaceResourceId}}",
+            "name": "WsRuleDest"
+          }
+        ]
+      },
+      "dataFlows": [
+        {
+          "streams": [
+            "Custom-WsSecurityEventsRaw_CL"
+          ],
+          "destinations": [
+            "WsRuleDest"
+          ],
+          "transformKql": "source\n        | extend details = todynamic(details)\n        | extend device = todynamic(device)\n        | extend organization = todynamic(organization)\n        | extend engine = tostring(engine)\n        | extend action = tostring(action)\n        | extend severity = tostring(severity)\n        | extend _infectedObject =     case(\n        engine in (\"fileScanning\", \"manualScanning\"), case(\n    isnotempty(tostring(details.filePath)), tostring(details.filePath),\n    isnotempty(tostring(details.object)), tostring(details.object),\n    tostring(details.path)\n),\n        engine == \"deepGuard\" and not(tostring(details.name) matches regex @\"Rarity: (\\d+), Reputation: (\\d+)\" or tostring(details.name) == \"DeepGuard blocks a rare application\"), tostring(details.filePath),\n        engine == \"webTrafficScanning\" and isnotempty(tostring(details.alertType)), tostring(details.url),\n        engine == \"webTrafficScanning\", tostring(details.websiteUrl),\n        engine == \"amsi\", tostring(details.path),\n        \"\"\n    )\n        | extend _malwareName =     case(\n        engine in (\"fileScanning\", \"manualScanning\"), case(\n    isnotempty(tostring(details.name)), tostring(details.name),\n    tostring(details.infectionName)\n),\n        engine == \"deepGuard\" and not(tostring(details.name) matches regex @\"Rarity: (\\d+), Reputation: (\\d+)\" or tostring(details.name) == \"DeepGuard blocks a rare application\"), tostring(details.name),\n        engine == \"webTrafficScanning\" and isnotempty(tostring(details.alertType)), tostring(extract(@\"[^/\\\\]+$\", 0, tostring(details.process))),\n        engine == \"webTrafficScanning\", tostring(extract(@\"[^/\\\\]+$\", 0, tostring(details.filePath))),\n        engine == \"amsi\", tostring(details.infectionName),\n        \"\"\n    )\n        | extend\n            TimeGenerated = now(),\n            PersistenceTimestamp = todatetime(persistenceTimestamp),\n            Activity = case(\n        engine == \"webTrafficScanning\", \"Web Traffic Scanning event\",\n        engine == \"webContentControl\", \"Web Content Control event\",\n        engine == \"applicationControl\", \"Application Control event\",\n        engine == \"fileScanning\", \"File Scanning event\",\n        engine == \"manualScanning\", \"Manual Scanning event\",\n        engine == \"realtimeScanning\", \"Real - time Scanning event\",\n        engine == \"deviceControl\", \"Device Control event\",\n        engine == \"deepGuard\", \"DeepGuard event\",\n        engine == \"dataGuard\", \"DataGuard event\",\n        engine == \"browsingProtection\", \"Browsing Protection event\",\n        engine == \"connectionControl\", \"Network connection event\",\n        engine == \"reputationBasedBrowsing\", \"Browsing Protection event\",\n        engine == \"integrityChecker\", \"Integrity Checker event\",\n        engine == \"tamperProtection\", \"Tamper Protection event\",\n        engine == \"firewall\", \"Firewall event\",\n        engine == \"amsi\", \"Antimalware Scan Interface (AMSI) event\",\n        engine == \"connector\", \"Elements Connector event\",\n        engine == \"setting\", \"Setting event\",\n        engine == \"edr\", \"Endpoint Detection and Response (EDR) event\",\n        engine == \"xFence\", \"XFENCE event\",\n        engine == \"systemEventsLog\", \"System event\",\n        engine == \"activityMonitor\", \"Server Share Protection event\",\n        engine == \"emailScan\", \"Email scanning event\",\n        engine == \"emailBreach\", \"Email breach event\",\n        engine == \"teamsScan\", \"Microsoft Teams scanning event\",\n        engine == \"oneDriveScan\", \"Microsoft OneDrive scanning event\",\n        engine == \"sharePointScan\", \"Microsoft SharePoint scanning event\",\n        engine == \"inboxRuleScan\", \"Suspicious inbox rule event\",\n        engine == \"activityMonitorClientProtection\", \"Activity Monitor Client Protection\",\n        engine\n    ),\n            DeviceVendor = \"WithSecure\",\n            DeviceEventClassID = strcat(engine, \".\", action),\n            DeviceAction = action,\n            SimplifiedDeviceAction = action,\n            LogSeverity = case(\n        severity == \"critical\", int(10),\n        severity == \"fatal_error\", int(8),\n        severity == \"error\", int(6),\n        severity == \"warning\", int(4),\n        severity == \"info\", int(1),\n        int(null)\n    ),\n            Message = tostring(message),\n            SourceHostName = case(\n    isnotempty(tostring(device.name)), tostring(device.name),\n    isnotempty(tostring(device.id)), tostring(device.id),\n    isnotempty(tostring(device.winsAddress)), tostring(device.winsAddress),\n    \"\"\n),\n            SourceUserName = tostring(details.userName),\n            DeviceCustomString1 = _infectedObject,\n            DeviceCustomString1Label = iif(isnotempty(_infectedObject), \"Infected object\", \"\"),\n            DeviceCustomString2 = _malwareName,\n            DeviceCustomString2Label = iif(isnotempty(_malwareName), \"Malware\", \"\"),\n            AdditionalExtensions = strcat('{\"accountName\":\"', tostring(organization.name), '\",','\"details\":', iif(isempty(tostring(details)), \"null\", tostring(details)),'}')\n        | project TimeGenerated, PersistenceTimestamp, Activity, DeviceVendor, DeviceEventClassID, DeviceAction, SimplifiedDeviceAction, LogSeverity, Message, SourceHostName, SourceUserName, DeviceCustomString1, DeviceCustomString1Label, DeviceCustomString2, DeviceCustomString2Label, AdditionalExtensions",
+          "outputStream": "Custom-WsSecurityEvents_CL"
+        }
+      ]
+    }
+  }
+]

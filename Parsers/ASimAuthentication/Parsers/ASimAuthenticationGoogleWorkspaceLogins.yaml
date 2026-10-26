@@ -1,0 +1,173 @@
+Parser:
+  Title: Authentication ASIM filtering parser for Google Workspace Logins
+  Version: '0.1.0'
+  LastUpdated: Jul 16, 2026
+Product:
+  Name: Google Workspace
+Normalization:
+  Schema: Authentication
+  Version: '0.1.4'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Google Workspace documentation
+  Link: https://developers.google.com/admin-sdk/reports/v1/appendix/activity/login#login
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing the Google Workspace login activities ingested in 'GoogleWorkspaceReports' table (via Codeless Connector Framework) to the ASIM Authentication normalized schema.
+ParserName: ASimAuthenticationGoogleWorkspaceLogins
+EquivalentBuiltInParser: _ASim_Authentication_GoogleWorkspaceLogins
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+        let GoogleWorkspaceLoginParser = (
+            disabled: bool = false,
+            pack: bool = false
+        )
+        {
+            GoogleWorkspaceReports
+            | where not(disabled)
+            | where IdApplicationName == "login"
+            | where EventType in ("login", "logout")
+            | where EventName in (
+                "login_success",
+                "login_failure",
+                "logout",
+                "risky_sensitive_action_allowed",
+                "risky_sensitive_action_blocked",
+                "suspicious_login",
+                "suspicious_login_less_secure_app",
+                "suspicious_programmatic_login",
+                "user_signed_out_due_to_suspicious_session_cookie"
+                )
+            | extend
+                EventParametersJson = parse_json(EventParameters)
+            | extend
+                EventVendor = "Google",
+                Dvc = "Google Workspace",
+                LoginType = tostring(EventParametersJson.login_type),
+                SensitiveActionName = tostring(EventParametersJson.sensitive_action_name),
+                Challenges = iff(
+                    isempty(tostring(EventParametersJson.login_challenge_method)),
+                    dynamic(["none"]),
+                    EventParametersJson.login_challenge_method
+                ),
+                EventUid = _ItemId,
+                EventProduct = "Google Workspace",
+                EventSchema = "Authentication",
+                EventSchemaVersion = "0.1.4",
+                EventCount = int(1),
+                EventStartTime = TimeGenerated,
+                EventEndTime = TimeGenerated,
+                EventType = case(
+                    EventName in ("logout", "user_signed_out_due_to_suspicious_session_cookie"), "Logoff",
+                    "Logon"
+                ),
+                EventResult = case(
+                    EventName in ("login_success", "risky_sensitive_action_allowed", "logout", "user_signed_out_due_to_suspicious_session_cookie"), "Success",
+                    EventName in ("login_failure", "risky_sensitive_action_blocked", "suspicious_login", "suspicious_login_less_secure_app", "suspicious_programmatic_login"), "Failure",
+                    ""
+                ),
+                EventResultDetails = case(
+                    EventName in ("suspicious_login_less_secure_app", "suspicious_programmatic_login", "risky_sensitive_action_blocked"), "Logon violates policy",
+                    "Other"
+                ),
+                TargetUsernameType = "UPN",
+                TargetUserIdType = "Other",
+                Src = SrcIpAddr,
+                IpAddr = SrcIpAddr
+            | extend EventMessage = case(
+                EventName == "login_failure",
+                    strcat(ActorEmail, " failed to login."),
+                EventName == "login_success",
+                    strcat(ActorEmail, " logged in."),
+                EventName == "risky_sensitive_action_allowed",
+                    strcat(ActorEmail, " was allowed to attempt sensitive action: ", SensitiveActionName, ". This action might be restricted based on privileges or other limitations."),
+                EventName == "risky_sensitive_action_blocked",
+                    strcat(ActorEmail, " wasn't allowed to attempt sensitive action: ", SensitiveActionName, "."),
+                EventName == "logout",
+                    strcat(ActorEmail, " logged out."),
+                EventName == "suspicious_login",
+                    strcat("Google has detected a suspicious login for ", ActorEmail),
+                EventName == "suspicious_login_less_secure_app",
+                    strcat("Google has detected a suspicious login for ", ActorEmail , " from a less secure app."),
+                EventName == "suspicious_programmatic_login",
+                    strcat("Google has detected a suspicious programmatic login for ", ActorEmail),
+                EventName == "user_signed_out_due_to_suspicious_session_cookie",
+                    strcat("Suspicious session cookie detected for user ", ActorEmail),
+                ""
+            )
+            | extend HasMFA = Challenges has_any (
+                "security_key", "security_key_otp", "passkey", "userless_fido",
+                "google_authenticator", "google_prompt", "device_prompt",
+                "idv_preregistered_phone", "idv_any_phone", "backup_code",
+                "offline_otp", "internal_two_factor", "cross_device", "web_approval"
+                )
+            | extend LogonMethod = case(
+                HasMFA, "Multi factor authentication",
+                LoginType == "google_password", "Username & Password",
+                "Other"
+                ),
+                LogonProtocol = case(
+                    LoginType == "saml", "SAML",
+                    Challenges has_any ("saml"), "SAML",
+                    Challenges has_any ("oidc"), "OpenID Connect",
+                    "Other"
+                )
+            | project-rename
+                EventOriginalUid = IdUniqueQualifier,
+                TargetUserId = ActorProfileId,
+                TargetUsername = ActorEmail,
+                SrcGeoCountry = NetworkInfoRegionCode,
+                SrcGeoRegion = NetworkInfoSubdivisionCode
+            | extend AdditionalFields = iff(
+                pack == true,
+                bag_pack(
+                    "LoginType", LoginType,
+                    "LoginChallengeMethods", Challenges,
+                    "SensitiveActionName", SensitiveActionName
+                ),
+                dynamic({})
+            )
+            | project
+                TimeGenerated,
+                Type,
+                EventMessage,
+                EventStartTime,
+                EventEndTime,
+                EventType,
+                EventResult,
+                EventResultDetails,
+                LogonProtocol,
+                LogonMethod,
+                EventUid,
+                EventOriginalUid,
+                EventProduct,
+                EventVendor,
+                EventSchema,
+                EventSchemaVersion,
+                EventCount,
+                TargetUsername,
+                TargetUsernameType,
+                TargetUserId,
+                TargetUserIdType,
+                Dvc,
+                Src,
+                SrcIpAddr,
+                IpAddr,
+                SrcGeoCountry,
+                SrcGeoRegion,
+                AdditionalFields
+        };
+        GoogleWorkspaceLoginParser(
+            disabled = disabled,
+            pack = pack
+        )

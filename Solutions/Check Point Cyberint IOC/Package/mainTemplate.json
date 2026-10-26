@@ -2,7 +2,7 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "author": "Cyberint - support@checkpoint.com",
+    "author": "Check Point - support@checkpoint.com",
     "comments": "Solution template for Check Point Cyberint IOC"
   },
   "parameters": {
@@ -47,11 +47,11 @@
     "email": "support@checkpoint.com",
     "_email": "[variables('email')]",
     "_solutionName": "Check Point Cyberint IOC",
-    "_solutionVersion": "3.0.1",
+    "_solutionVersion": "3.0.5",
     "solutionId": "checkpoint.azure-sentinel-checkpoint-cyberint-ioc",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "1.0.0",
+    "dataConnectorCCPVersion": "3.0.5",
     "_dataConnectorContentIdConnectorDefinition1": "CheckPointCyberintIOC",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "CheckPointCyberintIOCConnections",
@@ -60,6 +60,8 @@
     "blanks": "[replace('b', 'b', '')]",
     "TemplateEmptyObject": "[json('{}')]",
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+    "connectorId": "CheckPointCyberintIOC",
+    "_connectorId": "[variables('connectorId')]",
     "xSenderId": "0",
     "_xSenderId": "[variables('xSenderId')]",
     "xIntegrationInstanceId": "0",
@@ -92,15 +94,15 @@
               "kind": "Customizable",
               "properties": {
                 "connectorUiConfig": {
-                  "id": "CheckPointCyberintIOC",
+                  "id": "[variables('_connectorId')]",
                   "title": "Check Point Cyberint IOC Connector",
                   "publisher": "Checkpoint Cyberint",
-                  "descriptionMarkdown": "This is data connector for Check Point Cyberint IOC.",
+                  "descriptionMarkdown": "Cyberint, a Check Point company, provides a Microsoft Sentinel integration to ingest Indicators of Compromise (IOCs) from the Infinity External Risk Management solution into Microsoft Sentinel. This connector automatically pulls the daily IOC feed — including malicious IPs, domains, URLs, and file hashes — enriched with threat context such as severity, confidence, and detected activity.",
                   "graphQueriesTableName": "iocsent_CL",
                   "graphQueries": [
                     {
                       "metricName": "IOC received",
-                      "legend": "My data connector IOC",
+                      "legend": "Check Point Cyberint IOC",
                       "baseQuery": "{{graphQueriesTableName}}"
                     }
                   ],
@@ -137,21 +139,21 @@
                     ],
                     "customs": [
                       {
-                        "name": "Check Point Cyberint API Key and Argos URL",
-                        "description": "The connector API key and Argos URL are required"
+                        "name": "Check Point Cyberint API Key, Argos URL, and Customer Name",
+                        "description": "The connector API key, Argos URL, and Customer Name are required"
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
-                      "title": "Connect Checkpoint Cyberint Alerts to Microsoft Sentinel",
-                      "description": "To enable the connector provide the required information below and click on Connect.\n>",
+                      "title": "Connect Check Point Cyberint IOC Feed to Microsoft Sentinel",
+                      "description": "To enable the connector provide the required information below and click on Connect.\n\n**Argos URL** — Cyberint API URL for your tenant (e.g. `https://your_tenant.cyberint.io`)\n\n**API Token** — Cyberint API access token\n\n**Customer Name** — Company (client) name associated with your Cyberint instance\n>",
                       "instructions": [
                         {
                           "type": "Textbox",
                           "parameters": {
                             "label": "Argos URL",
-                            "placeholder": "Argos URL",
+                            "placeholder": "https://your-company.cyberint.io",
                             "type": "text",
                             "name": "argosurl"
                           }
@@ -159,10 +161,19 @@
                         {
                           "type": "Textbox",
                           "parameters": {
-                            "label": "API key",
-                            "placeholder": "API key",
-                            "type": "text",
+                            "label": "API Token",
+                            "placeholder": "API Token",
+                            "type": "password",
                             "name": "apikey"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Customer Name",
+                            "placeholder": "Company (client) name associated with your Cyberint instance",
+                            "type": "text",
+                            "name": "customername"
                           }
                         },
                         {
@@ -193,13 +204,14 @@
                   "kind": "Solution"
                 },
                 "author": {
-                  "name": "Cyberint",
+                  "name": "Check Point",
                   "email": "[variables('_email')]"
                 },
                 "support": {
-                  "name": "Cyberint",
+                  "name": "Check Point",
+                  "email": "support@checkpoint.com",
                   "tier": "Partner",
-                  "link": "https://cyberint.com/customer-support/"
+                  "link": "https://www.checkpoint.com/support-services/contact-support/"
                 },
                 "dependencies": {
                   "criteria": [
@@ -265,8 +277,12 @@
                 },
                 "dataFlows": [
                   {
-                    "streams": ["Custom-iocsent_CL"],
-                    "destinations": ["ioc-sent"],
+                    "streams": [
+                      "Custom-iocsent_CL"
+                    ],
+                    "destinations": [
+                      "ioc-sent"
+                    ],
                     "transformKql": "source\n| extend TimeGenerated = todatetime(observation_date)\n| project-away observation_date\n\n",
                     "outputStream": "Custom-iocsent_CL"
                   }
@@ -281,59 +297,35 @@
               "kind": null,
               "properties": {
                 "schema": {
-                  "tableSubType": "DataCollectionRuleBased",
                   "name": "iocsent_CL",
-                  "tableType": "CustomLog",
                   "columns": [
                     {
                       "name": "confidence",
-                      "type": "int",
-                      "isDefaultDisplay": false,
-                      "isHidden": false
+                      "type": "int"
                     },
                     {
                       "name": "description",
-                      "type": "string",
-                      "isDefaultDisplay": false,
-                      "isHidden": false
+                      "type": "string"
                     },
                     {
                       "name": "detected_activity",
-                      "type": "string",
-                      "isDefaultDisplay": false,
-                      "isHidden": false
+                      "type": "string"
                     },
                     {
                       "name": "ioc_type",
-                      "type": "string",
-                      "isDefaultDisplay": false,
-                      "isHidden": false
+                      "type": "string"
                     },
                     {
                       "name": "ioc_value",
-                      "type": "string",
-                      "isDefaultDisplay": false,
-                      "isHidden": false
+                      "type": "string"
                     },
                     {
                       "name": "severity_score",
-                      "type": "int",
-                      "isDefaultDisplay": false,
-                      "isHidden": false
+                      "type": "int"
                     },
                     {
                       "name": "TimeGenerated",
-                      "type": "datetime",
-                      "isDefaultDisplay": false,
-                      "isHidden": false
-                    }
-                  ],
-                  "standardColumns": [
-                    {
-                      "name": "TenantId",
-                      "type": "guid",
-                      "isDefaultDisplay": false,
-                      "isHidden": false
+                      "type": "datetime"
                     }
                   ]
                 }
@@ -358,15 +350,15 @@
       "kind": "Customizable",
       "properties": {
         "connectorUiConfig": {
-          "id": "CheckPointCyberintIOC",
+          "id": "[variables('_connectorId')]",
           "title": "Check Point Cyberint IOC Connector",
           "publisher": "Checkpoint Cyberint",
-          "descriptionMarkdown": "This is data connector for Check Point Cyberint IOC.",
+          "descriptionMarkdown": "Cyberint, a Check Point company, provides a Microsoft Sentinel integration to ingest Indicators of Compromise (IOCs) from the Infinity External Risk Management solution into Microsoft Sentinel. This connector automatically pulls the daily IOC feed — including malicious IPs, domains, URLs, and file hashes — enriched with threat context such as severity, confidence, and detected activity.",
           "graphQueriesTableName": "iocsent_CL",
           "graphQueries": [
             {
               "metricName": "IOC received",
-              "legend": "My data connector IOC",
+              "legend": "Check Point Cyberint IOC",
               "baseQuery": "{{graphQueriesTableName}}"
             }
           ],
@@ -403,21 +395,21 @@
             ],
             "customs": [
               {
-                "name": "Check Point Cyberint API Key and Argos URL",
-                "description": "The connector API key and Argos URL are required"
+                "name": "Check Point Cyberint API Key, Argos URL, and Customer Name",
+                "description": "The connector API key, Argos URL, and Customer Name are required"
               }
             ]
           },
           "instructionSteps": [
             {
-              "title": "Connect Checkpoint Cyberint Alerts to Microsoft Sentinel",
-              "description": "To enable the connector provide the required information below and click on Connect.\n>",
+              "title": "Connect Check Point Cyberint IOC Feed to Microsoft Sentinel",
+              "description": "To enable the connector provide the required information below and click on Connect.\n\n**Argos URL** — Cyberint API URL for your tenant (e.g. `https://your_tenant.cyberint.io`)\n\n**API Token** — Cyberint API access token\n\n**Customer Name** — Company (client) name associated with your Cyberint instance\n>",
               "instructions": [
                 {
                   "type": "Textbox",
                   "parameters": {
                     "label": "Argos URL",
-                    "placeholder": "Argos URL",
+                    "placeholder": "https://your-company.cyberint.io",
                     "type": "text",
                     "name": "argosurl"
                   }
@@ -425,10 +417,19 @@
                 {
                   "type": "Textbox",
                   "parameters": {
-                    "label": "API key",
-                    "placeholder": "API key",
-                    "type": "text",
+                    "label": "API Token",
+                    "placeholder": "API Token",
+                    "type": "password",
                     "name": "apikey"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Customer Name",
+                    "placeholder": "Company (client) name associated with your Cyberint instance",
+                    "type": "text",
+                    "name": "customername"
                   }
                 },
                 {
@@ -459,13 +460,14 @@
           "kind": "Solution"
         },
         "author": {
-          "name": "Cyberint",
+          "name": "Check Point",
           "email": "[variables('_email')]"
         },
         "support": {
-          "name": "Cyberint",
+          "name": "Check Point",
+                  "email": "support@checkpoint.com",
           "tier": "Partner",
-          "link": "https://cyberint.com/customer-support/"
+          "link": "https://www.checkpoint.com/support-services/contact-support/"
         },
         "dependencies": {
           "criteria": [
@@ -527,6 +529,11 @@
               "defaultValue": "apikey",
               "type": "securestring",
               "minLength": 1
+            },
+            "customername": {
+              "defaultValue": "Default",
+              "type": "securestring",
+              "minLength": 1
             }
           },
           "variables": {
@@ -548,13 +555,14 @@
                   "kind": "Solution"
                 },
                 "author": {
-                  "name": "Cyberint",
+                  "name": "Check Point",
                   "email": "[variables('_email')]"
                 },
                 "support": {
-                  "name": "Cyberint",
+                  "name": "Check Point",
+                  "email": "support@checkpoint.com",
                   "tier": "Partner",
-                  "link": "https://cyberint.com/customer-support/"
+                  "link": "https://www.checkpoint.com/support-services/contact-support/"
                 }
               }
             },
@@ -579,7 +587,7 @@
                   "ApiKeyIdentifier": "access_token="
                 },
                 "request": {
-                  "apiEndpoint": "[[concat('https://', parameters('argosurl'), '/ioc/api/v1/feed/daily/get')]",
+                  "apiEndpoint": "[[concat(parameters('argosurl'),'/ioc/api/v1/feed/daily/get')]",
                   "rateLimitQPS": 10,
                   "queryWindowInMin": 1440,
                   "httpMethod": "POST",
@@ -593,14 +601,16 @@
                     "X-Integration-Type": "Azure Sentinel IOC",
                     "X-Integration-Instance-Name": "Default",
                     "X-Integration-Instance-Id": "[variables('_xIntegrationInstanceId')]",
-                    "X-Integration-Customer-Name": "Integration",
+                    "X-Integration-Customer-Name": "[[parameters('customername')]",
                     "X-Integration-Version": "1.0"
                   },
                   "isPostPayloadJson": true,
-                  "queryParametersTemplate": "{ 'date': '{_QueryWindowStartTime}', 'format': 'json', 'daysBack': 1, 'limit': 1000000, 'offset': 0 }"
+                  "queryParametersTemplate": "{ \"date\": \"{_QueryWindowStartTime}\", \"format\": \"json\", \"daysBack\": 1, \"limit\": 1000000, \"offset\": 0 }"
                 },
                 "response": {
-                  "eventsJsonPaths": ["$"]
+                  "eventsJsonPaths": [
+                    "$"
+                  ]
                 }
               }
             }
@@ -620,16 +630,16 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.1",
+        "version": "3.0.5",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Check Point Cyberint IOC",
-        "publisherDisplayName": "Cyberint",
+        "publisherDisplayName": "Check Point",
         "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Check%20Point%20Cyberint%20IOC/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Cyberint, a Check Point company, provides Microsoft Sentinel integration to streamline critical IOC and bring enriched threat intelligence from the Infinity External Risk Management solution into Microsoft Sentinel. This simplifies the process of tracking the status of tickets with automatic sync updates across systems. Using this new integration for Microsoft Sentinel, existing Cyberint and Microsoft Sentinel customers can easily pull logs based on Cyberint's findings into Microsoft Sentinel platform.</p>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
-        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/checkpoint-cyberint.svg\" width=\"75px\" height=\"75px\">",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/checkpoint.svg\" width=\"75px\" height=\"75px\">",
         "contentId": "[variables('_solutionId')]",
         "parentId": "[variables('_solutionId')]",
         "source": {
@@ -638,13 +648,14 @@
           "sourceId": "[variables('_solutionId')]"
         },
         "author": {
-          "name": "Cyberint",
+          "name": "Check Point",
           "email": "[variables('_email')]"
         },
         "support": {
-          "name": "Cyberint",
+          "name": "Check Point",
+                  "email": "support@checkpoint.com",
           "tier": "Partner",
-          "link": "https://cyberint.com/customer-support/"
+          "link": "https://www.checkpoint.com/support-services/contact-support/"
         },
         "dependencies": {
           "operator": "AND",
@@ -657,9 +668,13 @@
           ]
         },
         "firstPublishDate": "2025-04-29",
-        "providers": ["cyberint"],
+        "providers": [
+          "Check Point"
+        ],
         "categories": {
-          "domains": ["Security - Threat Intelligence"]
+          "domains": [
+            "Security - Threat Intelligence"
+          ]
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"

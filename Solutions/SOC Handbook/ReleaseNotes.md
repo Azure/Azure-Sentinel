@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                  |
 |-------------|--------------------------------|-------------------------------------------------------------------------------------|
+| 3.0.7       | 21-07-2026                     | Fixed bugs in *AnalyticsEfficiency* **Workbook** (typo fixes, added MITRE ATT&CK tactics, removed hardcoded timeContext overrides), rebranded 'Azure Sentinel' to 'Microsoft Sentinel' across *SentinelCentral*, *AzureSentinelSecurityAlerts*, and *AnalyticsEfficiency* **Workbooks**, fixed layout issues in *IntsightsIOCWorkbook*, and updated *MITREAttack* **Workbook** tactic mappings.|
 | 3.0.6       | 13-01-2026                     | Updated *IncidentOverview* **Workbook** to correct the incident render issue by using ProviderIncidentId with IncidentNumber|
 | 3.0.5       | 24-09-2025                     | Updated *SecurityOperationsEfficiency* to fix Mean time to triage |
 | 3.0.4       | 22-04-2025                     | Updated *Azure to Sentinel Cost* - **Workbook**.            |

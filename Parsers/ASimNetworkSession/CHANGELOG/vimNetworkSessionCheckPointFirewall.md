@@ -1,5 +1,9 @@
 # Changelog for vimNetworkSessionCheckPointFirewall.yaml
 
+## Version 1.2.1
+ - (2026-05-29) - Account for DeviceVendor fields being "CheckPoint" or "Check Point" [PR #13776](https://github.com/Azure/Azure-Sentinel/pull/13776)
+
+
 ## Version 1.2.0
 
 - (2025-11-26) Issue Resolved for vimNetworkSessionCheckPointFirewall  - [PR #12056](https://github.com/Azure/Azure-Sentinel/pull/12056)

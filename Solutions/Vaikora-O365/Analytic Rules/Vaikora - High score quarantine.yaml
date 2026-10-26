@@ -1,0 +1,72 @@
+id: 017031f6-be1d-4c68-b4d3-182fa84378cc
+name: Vaikora - High score quarantine
+description: |
+  Identifies high-confidence phishing or suspected-threat quarantine events from Vaikora for O365. Fires when the classifier returns action_id 4 (Suspected) or 5 (Phishing) with confidence above 0.8 on a Microsoft 365 mailbox.
+severity: High
+requiredDataConnectors:
+  - connectorId: VaikoraO365
+    dataTypes:
+      - VaikoraO365_Quarantine_CL
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - CredentialAccess
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1566
+  - T1566.001
+  - T1566.002
+query: |
+  VaikoraO365_Quarantine_CL
+  | where TimeGenerated >= ago(15m)
+  | where ActionId_d in (4, 5)
+  | where Confidence_d >= 0.8
+  | extend
+      EmailId          = EmailId_s,
+      TenantId         = TenantId_s,
+      ActionId         = ActionId_d,
+      ActionName       = ActionName_s,
+      Confidence       = Confidence_d,
+      RiskScore        = RiskScore_d,
+      SubCategory      = SubCategory_s,
+      Reasoning        = Reasoning_s,
+      SourceMailbox    = SourceMailbox_s,
+      SenderAddress    = SenderAddress_s,
+      SenderDomain     = SenderDomain_s,
+      Subject          = Subject_s,
+      RecipientAddress = RecipientAddress_s,
+      ModelVersion     = ModelVersion_s
+  | project
+      TimeGenerated, EmailId, TenantId, ActionId, ActionName, Confidence, RiskScore,
+      SubCategory, Reasoning, SourceMailbox, SenderAddress, SenderDomain, Subject,
+      RecipientAddress, ModelVersion
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: MailMessage
+    fieldMappings:
+      - identifier: Recipient
+        columnName: RecipientAddress
+      - identifier: NetworkMessageId
+        columnName: EmailId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SenderAddress
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: RecipientAddress
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: SenderDomain
+alertDetailsOverride:
+  alertDisplayNameFormat: "Vaikora-O365 {{ActionName}} on {{RecipientAddress}}"
+  alertDescriptionFormat: "Vaikora-O365 classified this message as {{ActionName}} with confidence {{Confidence}}. The message was quarantined from the recipient mailbox."
+version: 1.0.0
+kind: Scheduled

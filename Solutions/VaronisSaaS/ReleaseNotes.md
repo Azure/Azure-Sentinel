@@ -1,5 +1,8 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.0       | 20-08-2026                     | CCF Push data connector now ingests into the dedicated **VaronisAlertsV2_CL** table to avoid schema conflicts with the legacy Azure Function connector's table |
+| 3.1.1       | 29-07-2026                     | Mark Azure Function data connector as Deprecated |
+| 3.1.0       | 21-04-2026                     | Add CCF Push data connector                 |
 | 3.0.3       | 25-11-2025                     | Add Informational severity level support    |
 | 3.0.2       | 12-09-2025                     | Save last alert ingest time                 |
 | 3.0.1       | 02-12-2025                     | Bug fixes                                   |

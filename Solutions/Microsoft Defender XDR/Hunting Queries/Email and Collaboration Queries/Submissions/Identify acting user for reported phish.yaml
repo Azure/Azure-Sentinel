@@ -1,0 +1,96 @@
+id: a5888069-ad78-4ac5-9241-5ee83eb19d5d
+name: Identify acting user for reported phish
+description: |
+  Identifies the user who acted on a reported phishing message and compares that actor with the original recipient, helping investigate delegate or shared mailbox reporting scenarios.
+description-detailed: |
+  This query correlates user-reported phishing alerts with mailbox activity for the same InternetMessageId. It helps analysts determine the actual acting user associated with the report action and compare that user with the message recipient, which is useful when delegates or shared mailbox users report messages on behalf of another mailbox.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - AlertEvidence
+  - CloudAppEvents
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let ExtractInternetMessageId = (af: string) {
+      coalesce(
+          tostring(parse_json(af).InternetMessageId),
+          extract('\"InternetMessageId\":\"(<[^>]+@[^>]+>)\"', 1, af)
+      )
+  };
+  let ReportedMail = materialize(
+      AlertEvidence
+      | where Timestamp >= ago(7d)
+      | where EntityType == "MailMessage"
+      | where Title == "Email reported by user as malware or phish"
+      | extend AF = tostring(AdditionalFields)
+      | extend InternetMessageId = ExtractInternetMessageId(AF)
+      | where isnotempty(InternetMessageId)
+      | extend Recipient = tostring(parse_json(AF).Recipient)
+      | extend Subject = tostring(parse_json(AF).Subject)
+      | extend NetworkMessageId = coalesce(tostring(parse_json(AF).NetworkMessageId), NetworkMessageId)
+      | summarize arg_max(Timestamp, *) by AlertId, InternetMessageId
+      | project AlertTimestamp = Timestamp,
+          AlertId,
+          InternetMessageId,
+          NetworkMessageId,
+          Recipient,
+          Subject
+  );
+  let DeletedItemsActivity = materialize(
+      CloudAppEvents
+      | where Timestamp >= ago(7d)
+      | where ActionType in ("MovedToDeletedItems", "MoveToDeletedItems")
+      | where RawEventData has "AffectedItems"
+      | extend Raw = parse_json(RawEventData)
+      | mv-expand with_itemindex = AffectedItemIndex AffectedItem = Raw.AffectedItems to typeof(dynamic)
+      | extend InternetMessageId = tostring(AffectedItem.InternetMessageId)
+      | where isnotempty(InternetMessageId)
+      | extend ActorUser = coalesce(
+          tostring(Raw.UserId),
+          tostring(Raw.ActorUserId),
+          tostring(AccountId)
+      )
+      | extend ActorIp = coalesce(
+          tostring(Raw.ClientIP),
+          tostring(IPAddress)
+      )
+      | project AppTimestamp = Timestamp,
+          ActionType,
+          InternetMessageId,
+          AffectedItemIndex,
+          ActorUser,
+          ActorIp,
+          AccountDisplayName,
+          AccountObjectId,
+          ReportId
+  );
+  ReportedMail
+  | join kind=inner DeletedItemsActivity on InternetMessageId
+  | extend RecipientNorm = tolower(extract(@'([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})', 1, tostring(Recipient)))
+  | extend ActorUserNorm = tolower(extract(@'([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})', 1, tostring(ActorUser)))
+  | extend RecipientActorMatch = case(
+      isnotempty(RecipientNorm) and isnotempty(ActorUserNorm) and RecipientNorm == ActorUserNorm, "Match",
+      isnotempty(RecipientNorm) and isnotempty(ActorUserNorm) and RecipientNorm != ActorUserNorm, "Different",
+      "Unknown"
+  )
+  | project
+      AppTimestamp,
+      AlertTimestamp,
+      AlertId,
+      InternetMessageId,
+      NetworkMessageId,
+      Recipient,
+      ActorUser,
+      RecipientActorMatch,
+      Subject,
+      ActionType,
+      AffectedItemIndex,
+      AccountDisplayName,
+      AccountObjectId,
+      ActorIp,
+      ReportId
+  | order by AppTimestamp desc
+version: 1.0.0

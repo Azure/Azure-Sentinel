@@ -1,0 +1,130 @@
+id: c9b4347a-e5cf-4ca9-a58d-a9822c82467f
+name: AAD Connect host remote admin followed by Entra privilege operation
+description: |
+  This query hunts for remote administration of a likely AAD Connect or sync host that is followed by privileged Entra audit activity by the same hybrid identity.
+description-detailed: |
+  This hunt focuses on one of the most sensitive hybrid bridge systems in the environment: the Entra Connect synchronization host. It identifies likely sync hosts by process telemetry, looks for remote logon or remote execution activity on those hosts, and then correlates the same hybrid identity to near-term high-risk Entra audit operations such as credential changes, role changes, or service principal updates.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceLogonEvents
+      - DeviceProcessEvents
+      - IdentityInfo
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - LateralMovement
+relevantTechniques:
+  - T1021.001
+  - T1047
+  - T1098
+  - T1078.004
+tags:
+  - Hybrid identity
+  - AAD Connect
+  - Sync host
+  - Privileged operation
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 14d;
+  let BaselineEnd = EndTime + 1d;
+  // Process and operation lists used to detect sync-host admin and privileged cloud ops.
+  let SyncProcesses = dynamic(["miiserver.exe", "azureadconnectwizard.exe", "azureadconnect.exe", "directorysyncclientcmd.exe", "aadconnectprovisioningagent.exe", "azureadconnecthealthsyncmonitor.exe"]);
+  let RemoteParents = dynamic(["wmiprvse.exe", "wsmprovhost.exe", "psexesvc.exe", "winrs.exe"]);
+  let PrivilegedOps = dynamic(["Add member to role", "Add app role assignment to service principal", "Add service principal credentials", "Update application", "Update service principal", "Certificates and secrets management", "Add owner", "Add member to group", "Consent to application"]);
+  // Build latest hybrid identity keys for correlation.
+  let HybridUsersRaw =
+    IdentityInfo
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AccountUpn = coalesce(column_ifexists('AccountUpn', ''), column_ifexists('AccountUPN', ''))
+    | where Timestamp between (BaselineStart .. BaselineEnd)
+    | where column_ifexists('IdentityEnvironment', '') =~ "Hybrid" or (isnotempty(column_ifexists('AccountSID', '')) and isnotempty(AccountObjectId))
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius
+    | summarize arg_max(Timestamp, *) by AccountObjectId
+    | extend UPNKey = tolower(AccountUpn),
+             SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
+  // Normalize key variants into one join key.
+  let HybridUsers =
+    union isfuzzy=true
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius);
+  // Identify likely Entra Connect/sync hosts from process telemetry.
+  let SyncHosts =
+    _Im_ProcessEvent(starttime=BaselineStart, endtime=BaselineEnd)
+    | where EventType =~ "ProcessCreated"
+    | extend ProcessName = tolower(coalesce(TargetProcessFilename, TargetProcessFileOriginalName)),
+             ParentProcess = tolower(coalesce(ActingProcessFilename, ActingProcessFileOriginalName)),
+             DeviceJoinKey = tolower(coalesce(DvcId, DvcHostname))
+    | where ProcessName in~ (SyncProcesses) or ParentProcess in~ (SyncProcesses)
+    | where isnotempty(DeviceJoinKey)
+    | summarize arg_max(TimeGenerated, DvcHostname) by DeviceJoinKey
+    | project DeviceJoinKey, SyncHostName = DvcHostname;
+  // Collect remote administration activity (RDP and remote execution).
+  let RemoteAdmin =
+    union isfuzzy=true
+      (
+        _Im_Authentication(starttime=StartTime, endtime=EndTime)
+        | where EventResult in~ ("Success", "Partial")
+        | where EventSubType =~ "RemoteInteractive"
+        | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+                 DeviceJoinKey = tolower(coalesce(TargetDvcId, DvcId, TargetFQDN, DvcHostname)),
+                 SourceIP = tostring(SrcIpAddr),
+                 ActivityType = "RDP"
+        | where isnotempty(UserKey) and isnotempty(DeviceJoinKey)
+        | project ActivityTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, ActivityType, Evidence = tostring(coalesce(EventSubType, LogonMethod, LogonProtocol))
+      ),
+      (
+        _Im_ProcessEvent(starttime=StartTime, endtime=EndTime)
+        | where EventType =~ "ProcessCreated"
+        | extend ParentProcess = tolower(coalesce(ActingProcessFilename, ActingProcessFileOriginalName, ActingProcessName)),
+                 ParentOriginal = tolower(ActingProcessFileOriginalName),
+                 ChildCommandLine = tostring(TargetProcessCommandLine),
+                 UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+                 DeviceJoinKey = tolower(coalesce(DvcId, DvcHostname)),
+                 SourceIP = tostring(DvcIpAddr),
+                 ActivityType = "RemoteExec"
+        | where ParentProcess in~ (RemoteParents) or ParentOriginal in~ (RemoteParents)
+        | where isnotempty(UserKey) and isnotempty(DeviceJoinKey) 
+        | project ActivityTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, ActivityType, Evidence = ChildCommandLine
+      );
+  // Gather high-risk Entra audit activity performed by identities.
+  let EntraPrivOps =
+    _Im_AuditEvent(starttime=StartTime, endtime=(EndTime + 1d))
+    | extend ActorKey = tolower(ActorUsername),
+             ActorIP = tostring(SrcIpAddr),
+             OperationText = strcat(tostring(EventType), " ", tostring(EventMessage), " ", tostring(TargetAppName))
+    | where isnotempty(ActorKey)
+    | where EventResult in~ ("Success", "Partial")
+    | where OperationText has_any (PrivilegedOps)
+    | project AuditTime = TimeGenerated, ActorKey, ActorIP, OperationText;
+  // Correlate sync-host remote admin to near-term privileged Entra operations.
+  RemoteAdmin
+  | join kind=inner SyncHosts on DeviceJoinKey
+  | join kind=innerunique HybridUsers on UserKey
+  | join kind=inner EntraPrivOps on $left.UserKey == $right.ActorKey
+  | where AuditTime between (ActivityTime .. (ActivityTime + 4h))
+  | summarize FirstPrivilegedOp = min(AuditTime),
+              LastPrivilegedOp = max(AuditTime),
+              PrivilegedOpCount = count(),
+              ActorIPs = make_set(ActorIP, 10),
+              Operations = make_set(OperationText, 15)
+    by ActivityTime, SyncHostName, ActivityType, SourceIP,
+      HybridUPN, HybridSam, BlastRadius, Evidence
+    | extend Confidence = iff(BlastRadius =~ "high", "High", "Medium")
+  | extend TimeGenerated = ActivityTime
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SyncHostName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: HybridUPN
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0

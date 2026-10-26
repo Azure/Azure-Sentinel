@@ -1,0 +1,63 @@
+id: b6e26c67-f596-5c0f-8614-c88d715508c5
+name: Whisper Security - Domain Registrar Change Anomaly
+description: |
+  Detects domains whose registrar has changed across WHOIS history snapshots within the last 30 days. Registrar changes may indicate domain hijacking or adversary infrastructure acquisition.
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperHistory_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- ResourceDevelopment
+relevantTechniques:
+- T1584
+query: |
+  // MITRE ATT&CK: T1584 - Compromise Infrastructure
+  // Tactic: Resource Development
+  // Detects registrar changes across WHOIS history snapshots
+  let lookbackPeriod = 14d;
+  WhisperHistory_CL
+      | where TimeGenerated > ago(lookbackPeriod)
+      | where indicatorType == "domain"
+      | where isnotempty(registrar)
+      | summarize Registrars = make_set(registrar), SnapshotCount = count(), EarliestSnapshot = min(snapshotDate), LatestSnapshot = max(snapshotDate) by indicator
+      | where array_length(Registrars) > 1
+      | mv-expand CurrentRegistrar = Registrars
+      | extend CurrentRegistrar = tostring(CurrentRegistrar)
+      | join kind=inner (
+          WhisperHistory_CL
+          | where TimeGenerated > ago(lookbackPeriod)
+          | where indicatorType == "domain"
+          | where isnotempty(registrar)
+          | serialize
+          | extend PreviousRegistrar = prev(registrar), PreviousIndicator = prev(indicator)
+          | where indicator == PreviousIndicator
+          | where registrar != PreviousRegistrar
+          | where isnotempty(PreviousRegistrar)
+          | project indicator, OldRegistrar = PreviousRegistrar, NewRegistrar = registrar, ChangeDate = snapshotDate
+      ) on indicator
+      | project TimeGenerated = ChangeDate, DnsDomain = indicator, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount
+      | distinct TimeGenerated, DnsDomain, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount
+entityMappings:
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: DnsDomain
+customDetails:
+  OldRegistrar: OldRegistrar
+  NewRegistrar: NewRegistrar
+  ChangeDate: ChangeDate
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled

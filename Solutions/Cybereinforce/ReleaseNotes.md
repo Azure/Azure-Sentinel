@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                 |
+|-------------|--------------------------------|----------------------------------------------------|
+| 3.0.0       | 14-08-2026                     | Corrected solution package structure (content package registration), registered custom table schema for KQL validation, added MITRE ATT&CK tactics and techniques to the 11 attack-detection rules (the remaining 7 rules are operational/capacity alerts - license expiry, device/rule quota, enrollment on-hold - with no corresponding adversary technique, so left unmapped by design), added workbook preview images and logo.|

@@ -1,20 +1,23 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.1.0.0",
+    "contentVersion": "1.2.0.0",
     "metadata": {
         "title": "RFI-Playbook-Alert-Importer-LAW",
         "description": "This playbook fetches identity compromises from Recorded Future, places users in a security group and confirms them as 'risky users' in Entra ID.",
         "prerequisites": [
+            "Deploy the Data Connectors infrastructure (DCE, DCR, Log Analytics table, and connector definition) by deploying the azuredeploy-alert-importer.json template from the Data Connectors folder before deploying this playbook. This playbook must be deployed into the same resource group as the Data Connectors infrastructure.",
             "First install the RFI-CustomConnector-0-2-0 custom connector",
-            "To use the Recorded Future Identity connector, you will need a valid API token from Recorded Future as described in the [documentation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future%20Identity/Playbooks/readme.md#how-to-obtain-recorded-future-api-token)"
+            "To use the Recorded Future Identity connector, you will need a valid API token from Recorded Future as described in the [documentation](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future%20Identity/Playbooks/readme.md#api-token)"
         ],
         "postDeployment": [
             "After deployment, open the playbook to configure all connections and press save."
         ],
         "prerequisitesDeployTemplateFile": "../Connectors/RFI-CustomConnector-0-2-0/azuredeploy.json",
-        "lastUpdateTime": "2025-04-29T00:00:00.000Z",
+        "lastUpdateTime": "2026-06-02T00:00:00.000Z",
         "entities": [],
-        "tags": ["Identity protection"],
+        "tags": [
+            "Identity protection"
+        ],
         "support": {
             "tier": "Partner"
         },
@@ -25,12 +28,25 @@
             {
                 "version": "1.0",
                 "title": "Initial version",
-                "notes": [ "Initial version" ]
+                "notes": [
+                    "Initial version"
+                ]
             },
             {
                 "version": "1.1",
                 "title": "Improved stability",
-                "notes": [ "Removed Get Risky User action due to instability" ]
+                "notes": [
+                    "Removed Get Risky User action due to instability"
+                ]
+            },
+            {
+                "version": "1.2",
+                "title": "Migrated to Logs Ingestion API",
+                "notes": [
+                    "Replaced azureloganalyticsdatacollector connector with Azure Monitor Logs Ingestion API.",
+                    "MSI authentication via Monitoring Metrics Publisher role on shared DCR.",
+                    "DCE, DCR, and LA table moved to shared Data Connectors template."
+                ]
             }
         ]
     },
@@ -54,11 +70,15 @@
             "type": "String"
         },
         "confirm_user_as_risky": {
-            "metadata":{
+            "metadata": {
                 "description": "Optional. If specified, will confirm user as risky. Requires Microsoft Entra ID P1 or P2 license"
             },
-                "defaultValue": false,
-                "type": "Bool"
+            "defaultValue": "false",
+            "allowedValues": [
+                "true",
+                "false"
+            ],
+            "type": "string"
         },
         "entra_id_domain": {
             "defaultValue": "",
@@ -68,18 +88,26 @@
             "type": "String"
         },
         "save_to_log_analytics_workspace": {
-            "defaultValue": true,
+            "defaultValue": "true",
+            "allowedValues": [
+                "true",
+                "false"
+            ],
             "metadata": {
                 "description": "Required. If true, will save each Playbook Alert that matches an existing user to a Log Analytics Workspace table."
             },
-            "type": "Bool"
+            "type": "string"
         },
-        "playbook_alert_log_analytics_custom_log_name": {
-            "defaultValue": "RecordedFutureIdentity_PlaybookAlertResults_CL",
+        "create_role_assignment": {
+            "type": "string",
+            "defaultValue": "true",
+            "allowedValues": [
+                "true",
+                "false"
+            ],
             "metadata": {
-                "description": "Required. The name of the Log Analytics Workspace table where Playbook Alerts should be saved."
-            },
-            "type": "String"
+                "description": "If true, automatically assigns the Monitoring Metrics Publisher role on the shared DCR to the Logic App managed identity. Requires Owner or Role Based Access Control Administrator on the resource group. Set to false to assign the role manually after deployment."
+            }
         }
     },
     "resources": [
@@ -89,7 +117,7 @@
                 "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureadConnectionName'))]",
                 "[resourceId('Microsoft.Web/connections', variables('AzureadipConnectionName'))]",
-                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]"
             ],
             "identity": {
                 "type": "SystemAssigned"
@@ -135,6 +163,15 @@
                                                 },
                                                 "path": "/v1.0/groups/@{encodeURIComponent(parameters('entra_id_security_group_id'))}/members/$ref"
                                             }
+                                        },
+                                        "Catch_security_group_errors": {
+                                            "runAfter": {
+                                                "Add_risky_user_to_Active_Directory_security_group_for_users_at_risk": [
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@if(equals(body('Add_risky_user_to_Active_Directory_security_group_for_users_at_risk')?['error']?['message'], 'One or more added object references already exist for the following modified properties: ''members''.'), '- User was already present in security group.', '- Unknown error when adding user to security group.')"
                                         }
                                     },
                                     "else": {
@@ -216,6 +253,26 @@
                                 },
                                 "If_save_to_LAW": {
                                     "actions": {
+                                        "Send_Data_-_Save_Playbook_alert_to_LogAnalytics_Custom_Log": {
+                                            "runAfter": {
+                                                "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "POST",
+                                                "uri": "@{parameters('DceEndpoint')}/dataCollectionRules/@{parameters('DcrImmutableId')}/streams/@{parameters('StreamName')}?api-version=2023-01-01",
+                                                "headers": {
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "body": "@createArray(body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['result'])",
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity",
+                                                    "audience": "https://monitor.azure.com"
+                                                }
+                                            }
+                                        },
                                         "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": {
                                             "type": "ApiConnection",
                                             "inputs": {
@@ -229,52 +286,6 @@
                                                 "queries": {
                                                     "return_html": false
                                                 }
-                                            }
-                                        },
-                                        "Playbook_Alerts_-_Update_Playbook_Alert_-_Saved_to_LAW": {
-                                            "runAfter": {
-                                                "Send_Data_-_Save_Playbook_alert_to_LogAnalytics_Custom_Log": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "put",
-                                                "body": {
-                                                    "alert_id": "@item()?['alert_id']",
-                                                    "log_entry": "Actions taken in Entra ID integration: \n- User found. \n@{if(not(equals(parameters('entra_id_security_group_id'),'')), string('- Placed into security group.'), '- Did not place into security group')} \n@{if(equals(parameters('confirm_user_as_risky'),true), string('- Confirmed as risky user if present in that list.'), '- Did not confirm user as risky')}\n@{if(equals(parameters('save_to_log_analytics_workspace'),true), string('- Saved to log analytics workspace'), '- Did not save to log analytics workspace')}",
-                                                    "status": "Resolved",
-                                                    "added_actions_taken": [
-                                                        "@if(or(not(equals(parameters('entra_id_security_group_id'), '')),parameters('confirm_user_as_risky'), false),'identity_novel_exposures.placed_in_risky_group','identity_novel_exposures.other')"
-                                                    ]
-                                                },
-                                                "path": "/playbook-alerts/update"
-                                            }
-                                        },
-                                        "Send_Data_-_Save_Playbook_alert_to_LogAnalytics_Custom_Log": {
-                                            "runAfter": {
-                                                "Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": "@string(body('Playbook_Alerts_-_Detailed_Identity_Novel_Exposures_alert_data')?['result'])",
-                                                "headers": {
-                                                    "Log-Type": "@parameters('playbook_alert_log_analytics_custom_log_name')"
-                                                },
-                                                "path": "/api/logs"
                                             }
                                         }
                                     },
@@ -290,28 +301,7 @@
                                         ]
                                     },
                                     "else": {
-                                        "actions": {
-                                            "Playbook_Alerts_-_Update_Playbook_Alert-_If_user_found": {
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "put",
-                                                    "body": {
-                                                        "alert_id": "@item()?['alert_id']",
-                                                        "log_entry": "Actions taken in Entra ID integration: \n- User found. \n@{if(not(equals(parameters('entra_id_security_group_id'),'')), string('- Placed into security group.'), '- Did not place into security group')} \n@{if(equals(parameters('confirm_user_as_risky'),true), string('- Confirmed as risky user if present in that list.'), '- Did not confirm user as risky')}\n@{if(equals(parameters('save_to_log_analytics_workspace'),true), string('- Saved to log analytics workspace'), '- Did not save to log analytics workspace')}",
-                                                        "status": "Resolved",
-                                                        "added_actions_taken": [
-                                                            "@if(or(not(equals(parameters('entra_id_security_group_id'), '')),parameters('confirm_user_as_risky'), false),'identity_novel_exposures.placed_in_risky_group','identity_novel_exposures.other')"
-                                                        ]
-                                                    },
-                                                    "path": "/playbook-alerts/update"
-                                                }
-                                            }
-                                        }
+                                        "actions": {}
                                     },
                                     "expression": {
                                         "or": [
@@ -325,42 +315,90 @@
                                     },
                                     "type": "If"
                                 },
-                                "Playbook_Alerts_-_Update_Playbook_Alert_-_If_user_not_found": {
-                                    "inputs": {
-                                        "body": {
-                                            "alert_id": "@item()?['alert_id']",
-                                            "log_entry": "User not found. Might be false positive. Dismissed",
-                                            "status": "Dismissed"
-                                        },
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
-                                            }
-                                        },
-                                        "method": "put",
-                                        "path": "/playbook-alerts/update"
-                                    },
-                                    "runAfter": {
-                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
-                                            "Failed"
-                                        ],
-                                        "Workaround_-_Current_Time": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "ApiConnection"
-                                },
                                 "Workaround_-_Current_Time": {
-                                    "description": "This step is only here to handle a specific case where the user is not found but we have a alert id. Without this, the whole run would be seen as \"Failed\" even though it did everything correct",
-                                    "inputs": {},
-                                    "kind": "CurrentTime",
                                     "runAfter": {
                                         "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
                                             "Succeeded",
                                             "Failed"
                                         ]
                                     },
-                                    "type": "Expression"
+                                    "type": "Expression",
+                                    "kind": "CurrentTime",
+                                    "inputs": {},
+                                    "description": "This step is only here to handle a specific case where the user is not found but we have a alert id. Without this, the whole run would be seen as \"Failed\" even though it did everything correct"
+                                },
+                                "Update_Playbook_Alert": {
+                                    "actions": {
+                                        "User_exists_in_EntraID": {
+                                            "actions": {
+                                                "Playbook_Alerts_-_Update_Playbook_Alert_-_Saved_to_LAW": {
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "body": {
+                                                            "alert_id": "@item()?['alert_id']",
+                                                            "log_entry": "Actions taken in Entra ID integration: \n- User @{outputs('Compute_user_principal_name')} found. \n@{if(not(equals(parameters('entra_id_security_group_id'),'')), if(not(equals(outputs('Catch_security_group_errors'), null)), outputs('Catch_security_group_errors'), string('- Placed into security group.')), '- Did not place into security group')} \n@{if(equals(parameters('confirm_user_as_risky'),true), string('- Confirmed as risky user if present in that list.'), '- Did not confirm user as risky')}\n@{if(equals(parameters('save_to_log_analytics_workspace'),true), string('- Saved to log analytics workspace'), '- Did not save to log analytics workspace')}",
+                                                            "status": "Resolved",
+                                                            "added_actions_taken": [
+                                                                "@if(or(not(equals(parameters('entra_id_security_group_id'), '')),parameters('confirm_user_as_risky'), false),'identity_novel_exposures.placed_in_risky_group','identity_novel_exposures.other')"
+                                                            ]
+                                                        },
+                                                        "path": "/playbook-alerts/update"
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Playbook_Alerts_-_Update_Playbook_Alert_-_If_user_not_found": {
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['rfi-customconnector-0-2-0']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "put",
+                                                            "body": {
+                                                                "alert_id": "@item()?['alert_id']",
+                                                                "log_entry": "User not found. Might be false positive. Dismissed",
+                                                                "status": "Dismissed"
+                                                            },
+                                                            "path": "/playbook-alerts/update"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@actions('Get_User_-_Check_if_the_user_exists_in_Active_Directory')?['status']",
+                                                            "Succeeded"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "If_save_to_LAW": [
+                                            "Succeeded"
+                                        ],
+                                        "Workaround_-_Current_Time": [
+                                            "Succeeded"
+                                        ],
+                                        "Get_User_-_Check_if_the_user_exists_in_Active_Directory": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Scope"
                                 }
                             },
                             "foreach": "@body('Playbook_Alerts_-_Search_for_novel_identity_exposures')?['pba_items']",
@@ -372,6 +410,7 @@
                             "type": "Foreach"
                         },
                         "Playbook_Alerts_-_Search_for_novel_identity_exposures": {
+                            "type": "ApiConnection",
                             "inputs": {
                                 "body": {
                                     "lookback_days": 7,
@@ -388,8 +427,7 @@
                                 "method": "post",
                                 "path": "/playbook-alerts/search"
                             },
-                            "runAfter": {},
-                            "type": "ApiConnection"
+                            "runAfter": {}
                         }
                     },
                     "contentVersion": "1.0.0.0",
@@ -408,16 +446,21 @@
                             "type": "String"
                         },
                         "confirm_user_as_risky": {
-                            "defaultValue": "[parameters('confirm_user_as_risky')]",
+                            "defaultValue": "[bool(parameters('confirm_user_as_risky'))]",
                             "type": "Bool"
-                        },
-                        "playbook_alert_log_analytics_custom_log_name": {
-                            "defaultValue": "[parameters('playbook_alert_log_analytics_custom_log_name')]",
-                            "type": "String"
                         },
                         "save_to_log_analytics_workspace": {
-                            "defaultValue": "[parameters('save_to_log_analytics_workspace')]",
+                            "defaultValue": "[bool(parameters('save_to_log_analytics_workspace'))]",
                             "type": "Bool"
+                        },
+                        "DceEndpoint": {
+                            "type": "String"
+                        },
+                        "DcrImmutableId": {
+                            "type": "String"
+                        },
+                        "StreamName": {
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -447,23 +490,47 @@
                                 "connectionName": "[variables('AzureadipConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureadip')]"
                             },
-                            "azureloganalyticsdatacollector": {
-                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
-                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
-                            },
                             "rfi-customconnector-0-2-0": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('Rfi-Customconnector-0-2-0ConnectionName'))]",
                                 "connectionName": "[variables('Rfi-Customconnector-0-2-0ConnectionName')]",
                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('RFICustomConnector'))]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
                             }
                         }
+                    },
+                    "DceEndpoint": {
+                        "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
+                    },
+                    "DcrImmutableId": {
+                        "value": "[reference(variables('dcrResourceId'), '2024-03-11').immutableId]"
+                    },
+                    "StreamName": {
+                        "value": "[variables('StreamName')]"
                     }
                 },
                 "provisioningState": "Succeeded",
                 "state": "Disabled"
             },
             "type": "Microsoft.Logic/workflows"
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(variables('dcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+            "scope": "[variables('dcrResourceId')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            },
+            "condition": "[bool(parameters('create_role_assignment'))]"
         },
         {
             "apiVersion": "2016-06-01",
@@ -511,13 +578,13 @@
             "apiVersion": "2016-06-01",
             "kind": "V1",
             "location": "[resourceGroup().location]",
-            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
             "properties": {
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
                 },
                 "customParameterValues": {},
-                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]"
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]"
             },
             "type": "Microsoft.Web/connections"
         }
@@ -525,7 +592,13 @@
     "variables": {
         "AzureadConnectionName": "[concat('Azuread-', parameters('PlaybookName'))]",
         "AzureadipConnectionName": "[concat('Azureadip-', parameters('PlaybookName'))]",
-        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
-        "Rfi-Customconnector-0-2-0ConnectionName": "RFI-CustomConnector-0-2-0"
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "Rfi-Customconnector-0-2-0ConnectionName": "RFI-CustomConnector-0-2-0",
+        "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "DceName": "recorded-future-identity-dce",
+        "DcrName": "recorded-future-identity-dcr-playbook-alerts",
+        "StreamName": "Custom-RFI_PlaybookAlertResults_V2_CL",
+        "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+        "dcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]"
     }
 }

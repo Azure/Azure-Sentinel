@@ -1,0 +1,116 @@
+id: 9f776b5c-d9a6-4d95-8794-5cfec9f9d22d
+name: RDP to hybrid joined device followed by Entra access
+description: |
+  This query hunts for successful RDP logons by hybrid identities to hybrid or Entra-joined devices that are followed by near-term successful Entra sign-in activity.
+description-detailed: |
+  This hunt focuses on lateral movement to devices that materially bridge on-prem and cloud identity. It correlates successful RDP access to hybrid or Entra-joined endpoints with successful Entra non-interactive activity by the same hybrid identity shortly afterward.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceInfo
+      - DeviceLogonEvents
+      - IdentityInfo
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - LateralMovement
+  - ValidAccounts
+relevantTechniques:
+  - T1021.001
+  - T1078.004
+tags:
+  - Hybrid identity
+  - RDP
+  - Hybrid joined devices
+  - On-prem to cloud
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 14d;
+  let BaselineEnd = EndTime + 1d;
+  // Build latest hybrid identity keys for cross-platform joins.
+  let HybridUsersRaw =
+    IdentityInfo
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AccountUpn = coalesce(column_ifexists('AccountUpn', ''), column_ifexists('AccountUPN', ''))
+    | where Timestamp between (BaselineStart .. BaselineEnd)
+    | where column_ifexists('IdentityEnvironment', '') =~ "Hybrid" or (isnotempty(column_ifexists('AccountSID', '')) and isnotempty(AccountObjectId))
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius
+    | summarize arg_max(Timestamp, *) by AccountObjectId
+    | extend UPNKey = tolower(AccountUpn),
+             SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
+  // Normalize identity keys to one join key.
+  let HybridUsers =
+    union isfuzzy=true
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius);
+  // Keep latest hybrid or Entra-joined devices likely to bridge cloud and on-prem.
+  let HybridDevicesRaw =
+    DeviceInfo
+    | where TimeGenerated between (BaselineStart .. BaselineEnd)
+    | project TimeGenerated, DeviceId, DeviceName, JoinType, AadDeviceId, IsAzureADJoined
+    | summarize arg_max(TimeGenerated, *) by DeviceId
+    | where IsAzureADJoined == true or tostring(JoinType) has_any ("Hybrid", "Azure AD", "Entra")
+    | project DeviceId, HybridDeviceName = DeviceName, JoinType, AadDeviceId, IsAzureADJoined;
+  let HybridDevices =
+    union isfuzzy=true
+      (HybridDevicesRaw | where isnotempty(DeviceId) | project DeviceJoinKey = tolower(DeviceId), HybridDeviceName, JoinType, AadDeviceId, IsAzureADJoined),
+      (HybridDevicesRaw | where isnotempty(HybridDeviceName) | project DeviceJoinKey = tolower(HybridDeviceName), HybridDeviceName, JoinType, AadDeviceId, IsAzureADJoined);
+  // Identify successful RDP logons by candidate hybrid identities.
+  let RdpSessions =
+    _Im_Authentication(starttime=StartTime, endtime=EndTime)
+    | where EventResult in~ ("Success", "Partial")
+    | where EventSubType =~ "RemoteInteractive"
+    | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+             DeviceJoinKey = tolower(coalesce(TargetDvcId, DvcId, TargetFQDN, DvcHostname)),
+             SourceIP = tostring(SrcIpAddr),
+             InitiatorUPN = tostring(ActorUsername)
+    | where isnotempty(UserKey)
+    | where isnotempty(DeviceJoinKey)
+    | project RdpTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP, IsLocalAdmin = false, InitiatorUPN;
+  // Gather successful cloud sign-ins for same user keys.
+  let CloudUserSignins =
+    _Im_Authentication(starttime=StartTime, endtime=(EndTime + 1d))
+    | where EventResult in~ ("Success", "Partial")
+    | where EventProduct =~ "Microsoft Entra ID"
+    | where LogonProtocol has_any ("OAuth", "OpenID", "SAML")
+      or LogonMethod in~ ("Service Principal", "Managed Identity", "Username & Password", "Multi factor authentication", "Passwordless", "PKI")
+    | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+             CloudIP = tostring(SrcIpAddr),
+             AppName = tostring(TargetAppName),
+             ClientApp = tostring(ActingAppName)
+    | where isnotempty(UserKey)
+    | project SigninTime = TimeGenerated, UserKey, CloudIP, AppName, ClientApp, ConditionalAccessStatus = "", CorrelationId = EventOriginalUid;
+  // Correlate RDP activity to near-term cloud access by the same hybrid identity.
+  RdpSessions
+  | join kind=inner HybridDevices on DeviceJoinKey
+  | join kind=innerunique HybridUsers on UserKey
+  | join kind=inner CloudUserSignins on UserKey
+  | where SigninTime between (RdpTime .. (RdpTime + 2h))
+  | summarize FirstCloudSignin = min(SigninTime),
+              LastCloudSignin = max(SigninTime),
+              CloudSigninCount = count(),
+              Apps = make_set(AppName, 10),
+              ClientApps = make_set(ClientApp, 10),
+              CloudIPs = make_set(CloudIP, 10),
+              CorrelationIds = make_set(CorrelationId, 10)
+    by RdpTime, HybridDeviceName, JoinType, SourceIP, IsLocalAdmin,
+      HybridUPN, HybridSam, BlastRadius, InitiatorUPN
+  | extend Confidence = iff(IsLocalAdmin == true or BlastRadius =~ "high", "High", "Medium")
+  | extend TimeGenerated = RdpTime
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HybridDeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: HybridUPN
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0

@@ -1,0 +1,43 @@
+id: d4e5f6a7-b8c9-40d1-e2f3-a4b5c6d7e8f9
+name: Copilot - Plugin Tampering (Enable and Disable Within 5 Minutes)
+description: |
+  'Detects when a user enables and disables Copilot plugins within a 5-minute window. This behavior often indicates probing for security controls or living-off-Copilot techniques.
+  This rule identifies discovery and defense evasion activities where users rapidly toggle plugin states, potentially testing security boundaries.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftCopilot
+    dataTypes:
+      - CopilotActivity
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - DefenseEvasion
+relevantTechniques:
+  - T1087
+  - T1562
+query: |
+  CopilotActivity
+  | where RecordType in ("EnableCopilotPlugin","DisableCopilotPlugin")
+  | summarize
+      Actions = make_set(RecordType),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated)
+    by ActorName, SrcIpAddr
+  | where Actions has "EnableCopilotPlugin" and Actions has "DisableCopilotPlugin"
+  | where LastSeen - FirstSeen < 5m
+  | extend AccountCustomEntity = ActorName, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

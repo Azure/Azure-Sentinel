@@ -859,7 +859,7 @@
                 "kind": "Scheduled",
                 "location": "[parameters('workspace-location')]",
                 "properties": {
-                  "description": "MFA fatigue attack is a cybersecurity threat where attackers exploit user exhaustion from multi-factor authentication prompts to trick them into providing their MFA details thus compromising their own security. The query identifies MFA fatigue attempts in the Okta data. \n Ref: https://sec.okta.com/everythingisyes.",
+                  "description": "MFA fatigue attack is a cybersecurity threat where attackers exploit user exhaustion from multi-factor authentication prompts to trick them into providing their MFA details thus compromising their own security. The query identifies MFA fatigue attempts in the Okta data. \n Ref: https://www.okta.com/blog/identity-security/mfa-fatigue-growing-security-concern/.",
                   "displayName": "MFA Fatigue (OKTA)",
                   "enabled": false,
                   "query": "let PushThreshold = 10;\nOktaSSO\n| where ((eventType_s ==\"user.authentication.auth_via_mfa\" and debugContext_debugData_factor_s == \"OKTA_VERIFY_PUSH\") or eventType_s == \"system.push.send_factor_verify_push\" or eventType_s == \"user.mfa.okta_verify.deny_push\") \n| summarize IPAddress = make_set(client_ipAddress_s,100), City = make_set(client_geographicalContext_city_s,100),\n          successes = countif(eventType_s == \"user.authentication.auth_via_mfa\"),\n          denies = countif(eventType_s == \"user.mfa.okta_verify.deny_push\"),\n          pushes = countif(eventType_s == \"system.push.send_factor_verify_push\") by TimeGenerated, authenticationContext_externalSessionId_s, actor_alternateId_s,actor_displayName_s, outcome_result_s \n| summarize lasttime = max(TimeGenerated), firsttime = min(TimeGenerated),\n          successes = sum(successes), failures = sum(denies), pushes = sum(pushes) by  authenticationContext_externalSessionId_s, actor_alternateId_s,actor_displayName_s, outcome_result_s \n| extend seconds = lasttime - firsttime\n| where pushes >  (PushThreshold)\n| extend totalattempts = successes + failures\n| extend finding = case(\n            failures == pushes and pushes > 1, \"Authentication attempts not successful because multiple pushes denied\",\n            totalattempts == 0, \"Multiple pushes sent and ignored\",\n            successes > 0 and pushes > 3, \"Multiple pushes sent, eventual successful authentication!\",\n            \"Normal authentication pattern\")\n",
@@ -2608,7 +2608,7 @@
               },
               {
                 "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'OktaDCV1_', parameters('domainname'))]",
-                "apiVersion": "2023-02-01-preview",
+                "apiVersion": "2024-09-01",
                 "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
                 "location": "[parameters('workspace-location')]",
                 "kind": "RestApiPoller",
@@ -2640,7 +2640,8 @@
                   },
                   "request": {
                     "apiEndpoint": "[[concat('https://', parameters('domainname'), '/api/v1/logs')]",
-                    "rateLimitQPS": 10,
+                    "rateLimitQPS": 1,
+                    "paginatedCallsPerSecond": 1.0,
                     "queryWindowInMin": 5,
                     "httpMethod": "GET",
                     "retryCount": 3,
@@ -2648,6 +2649,20 @@
                     "headers": {
                       "Accept": "application/json",
                       "User-Agent": "Scuba"
+                    },
+                    "queryParameters": {
+                      "limit": "1000"
+                    },
+                    "rateLimitConfig": {
+                      "evaluation": {
+                        "checkMode": "OnlyWhen429"
+                      },
+                      "extraction": {
+                        "source": "DefaultHeaders"
+                      },
+                      "retryStrategy": {
+                        "useResetOrRetryAfterHeaders": true
+                      }
                     },
                     "startTimeAttributeName": "since",
                     "endTimeAttributeName": "until"

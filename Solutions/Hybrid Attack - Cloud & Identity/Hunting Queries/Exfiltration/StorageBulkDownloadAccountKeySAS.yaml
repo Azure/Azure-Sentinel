@@ -1,0 +1,92 @@
+id: eea3dc6d-7abd-465e-b8e8-5176c205bb8e
+name: Azure Storage Bulk Download via AccountKey or SAS Token from External IP
+description: Hunts for bulk Azure Blob Storage downloads authenticated with AccountKey or SAS tokens from external IPs, indicating potential credential abuse and silent data Exfiltration.
+requiredDataConnectors:
+  - connectorId: AzureStorageAccount
+    dataTypes:
+      - StorageBlobLogs
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1530
+  - T1041
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let opsThreshold = 100;
+  let bytesThreshold = 104857600;
+  let knownBackupAgents = dynamic([
+      "Microsoft BITS", "CVLT", "SQLBLOBACCESS",
+      "WA-Storage", "AzureStorage/CopyEngine",
+      "Veeam", "Komprise", "Nasuni", "Cohesity", "HYCU", "Panzura"]);
+  let knownExfilTools = dynamic([
+      "rclone", "s3cmd", "gsutil", "aws-cli",
+      "MinIO", "wget", "curl", "aria2", "FileZilla"]);
+  let browserAgents = dynamic([
+      "Mozilla", "Chrome", "Safari",
+      "Firefox", "Edge", "Edg/"]);
+  StorageBlobLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where AuthenticationType in ("AccountKey", "SAS", "DSas")
+  | where OperationName in (
+      "GetBlob", "ListBlobs",
+      "ListContainersSegment", "ListBlobsHierarchySegment")
+  | where StatusCode in ("200", "206")
+  | where isnotempty(CallerIpAddress)
+  | where not (CallerIpAddress startswith "10."
+            or CallerIpAddress startswith "192.168."
+            or (CallerIpAddress startswith "172."
+                and toint(split(CallerIpAddress, ".")[1]) between (16 .. 31))
+            or CallerIpAddress startswith "169.254."
+            or CallerIpAddress startswith "127.")
+  | where not (UserAgentHeader has_any (knownBackupAgents)
+            or UserAgentHeader contains "rubrik")
+  | extend
+      IsExfilTool    = UserAgentHeader has_any (knownExfilTools),
+      IsBrowserAgent = UserAgentHeader has_any (browserAgents),
+      IsEmptyAgent   = isempty(UserAgentHeader),
+      IsAccountKey   = AuthenticationType == "AccountKey"
+  | summarize
+      FirstSeen            = min(TimeGenerated),
+      LastSeen             = max(TimeGenerated),
+      TotalOperations      = count(),
+      TotalBytesDownloaded = sum(tolong(ResponseBodySize)),
+      DistinctContainers   = dcount(tostring(split(Uri, "/")[3])),
+      DistinctBlobs        = dcount(Uri),
+      AuthTypes            = make_set(AuthenticationType),
+      StorageAccounts      = make_set(AccountName),
+      UserAgents           = make_set(UserAgentHeader),
+      IsExfilTool          = max(IsExfilTool),
+      IsBrowserAgent       = max(IsBrowserAgent),
+      IsEmptyAgent         = max(IsEmptyAgent),
+      IsAccountKey         = max(IsAccountKey)
+      by CallerIpAddress
+  | where TotalOperations >= opsThreshold
+      or TotalBytesDownloaded >= bytesThreshold
+  | extend RiskScore =
+        toint(IsAccountKey)
+      + toint(IsExfilTool)
+      + toint(IsBrowserAgent and TotalBytesDownloaded > 104857600)
+      + toint(TotalBytesDownloaded > 1073741824)
+  | extend RiskFactors = set_difference(pack_array(
+      iff(IsAccountKey, "AccountKey auth", ""),
+      iff(IsExfilTool, "Known exfil tool", ""),
+      iff(IsBrowserAgent and TotalBytesDownloaded > 104857600, "Browser + large DL", ""),
+      iff(TotalBytesDownloaded > 1073741824, ">1GB downloaded", "")
+    ), dynamic([""]))
+  | where RiskScore >= 1
+  | extend TotalBytesGB = round(TotalBytesDownloaded / 1073741824.0, 2)
+  | project-reorder
+      FirstSeen, LastSeen, CallerIpAddress,
+      RiskScore, RiskFactors,
+      TotalOperations, TotalBytesGB,
+      DistinctContainers, DistinctBlobs,
+      AuthTypes, StorageAccounts, UserAgents
+  | order by RiskScore desc, TotalBytesGB desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 1.0.0

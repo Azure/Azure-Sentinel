@@ -1,0 +1,983 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Cyjax Incident Enrichment",
+        "description": "This playbook is triggered manually or automatically from a incident in Microsoft Sentinel. It iterates through each entity in the incident (IP addresses, DNS/Domain names, file hashes, URL and Emails) and enriches them with data from the Cyjax API. The enrichment data is added as an incident comment via the CyjaxAddCommentToIncident sub-playbook.",
+        "prerequisites": [
+            "1. Deploy the CyjaxAddCommentToIncident playbook before deploying this playbook.",
+            "2. Obtain a Cyjax API key and store it in Azure Key Vault as a secret named 'Cyjax-API-Key'.",
+            "3. Create or identify an Azure Key Vault and note its name and Tenant ID.",
+            "4. Ensure you have a Log Analytics Workspace configured for Microsoft Sentinel."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Go to your logic app → API connections → Select Microsoft Sentinel connection resource",
+            "2. Go to General → edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for Key Vault connection",
+            "**b. Add Access policy in Keyvault**",
+            "Add access policy for the playbook's managed identity to read secrets from Key Vault.",
+            "1. Go to logic app → <your logic app> → identity → System assigned Managed identity and copy Object (principal) ID.",
+            "2. Go to keyvaults → <your keyvault> → Access policies → create.",
+            "3. Select Get and List permissions for Secrets. Click next.",
+            "4. In the principal section, search by copied object ID. Click next.",
+            "5. Click review + create."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2025-02-24",
+        "entities": [
+            "IP",
+            "DNS",
+            "FileHash",
+            "URL",
+            "Email"
+        ],
+        "tags": [
+            "Cyjax",
+            "Enrichment",
+            "Incident",
+            "ThreatIntelligence"
+        ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Cyjax"
+        },
+        "version": "1.0.0",
+        "category": "Enrichment",
+        "triggerType": "Incident",
+        "requiredConnections": [
+            "Microsoft Sentinel",
+            "Azure Key Vault"
+        ],
+        "requiredPermissions": [
+            "Key Vault Secrets User or Get/List secrets access policy on Key Vault"
+        ],
+        "playbookType": "Enrichment",
+        "solution": "Cyjax",
+        "dataSource": "Cyjax API"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CyjaxIncidentEnrichment",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook."
+            }
+        },
+        "CyjaxBaseUrl": {
+            "type": "string",
+            "defaultValue": "https://api.cymon.co",
+            "metadata": {
+                "description": "Base URL for the Cyjax API (e.g., https://api.cymon.co)."
+            }
+        },
+        "AddIncidentCommentPlaybookName": {
+            "type": "string",
+            "defaultValue": "CyjaxAddCommentToIncident",
+            "metadata": {
+                "description": "Name of the deployed CyjaxAddCommentToIncident playbook (e.g., CyjaxAddCommentToIncident). This playbook will be called to add enrichment data as incident comments."
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Azure Key Vault where the Cyjax API key is stored as a secret named 'Cyjax-API-Key'"
+            }
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Microsoft Entra ID Tenant ID where the Key Vault is located. Found in Azure Portal → Microsoft Entra ID → Overview"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "Keyvault-ConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_Each_Entity": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                            "actions": {
+                                "Case_For_Entity_Type": {
+                                    "cases": {
+                                        "Case_For_IP": {
+                                            "case": "Ip",
+                                            "actions": {
+                                                "Set_Temporary_List_for_Host": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "temp_list",
+                                                        "value": "@split(replace(replace(replace(items('For_Each_Entity')?['properties']?['address'], '[\"', ''), '\"]', ''), '\",\"', ','), ',')"
+                                                    }
+                                                },
+                                                "For_Each_IP_Entity": {
+                                                    "foreach": "@variables('temp_list')",
+                                                    "actions": {
+                                                        "Condition_to_Check_IP_List_Contains_Current_IP_or_Not": {
+                                                            "actions": {},
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Append_IPv4_As_IP_Type_if_IP_Type_is_IPv4": {
+                                                                        "actions": {
+                                                                            "Append_IP_and_IPv4_To_IP_List": {
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "IPs",
+                                                                                    "value": {
+                                                                                        "type": "IPv4",
+                                                                                        "value": "@items('For_Each_IP_Entity')"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Append_IP_and_IPv6_To_IP_List": {
+                                                                                    "type": "AppendToArrayVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "IPs",
+                                                                                        "value": {
+                                                                                            "type": "IPv6",
+                                                                                            "value": "@items('For_Each_IP_Entity')"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "contains": [
+                                                                                        "@items('For_Each_IP_Entity')",
+                                                                                        "."
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "contains": [
+                                                                            "@variables('IPs')",
+                                                                            "@items('For_Each_IP_Entity')"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Temporary_List_for_Host": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                }
+                                            }
+                                        },
+                                        "Case_For_Domain": {
+                                            "case": "DnsResolution",
+                                            "actions": {
+                                                "Set_Temporary_List_for_Domain": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "temp_list",
+                                                        "value": "@split(replace(replace(replace(items('For_Each_Entity')?['properties']?['domainName'], '[', ''), ']', ''), '\"', ''), ',')"
+                                                    }
+                                                },
+                                                "For_Each_Domain_Entity": {
+                                                    "foreach": "@variables('temp_list')",
+                                                    "actions": {
+                                                        "Condition_to_Check_Domain_List_Contains_Current_Domain_or_Not": {
+                                                            "actions": {},
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Append_Domain_To_Domain_List": {
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "Domains",
+                                                                            "value": {
+                                                                                "type": "Domain",
+                                                                                "value": "@items('For_Each_Domain_Entity')"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "contains": [
+                                                                            "@variables('Domains')",
+                                                                            "@items('For_Each_Domain_Entity')"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Temporary_List_for_Domain": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                }
+                                            }
+                                        },
+                                        "Case_For_SHAs": {
+                                            "case": "FileHash",
+                                            "actions": {
+                                                "Set_Temporary_List_for_Certificate": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "temp_list",
+                                                        "value": "@split(replace(replace(replace(items('For_Each_Entity')?['properties']?['hashValue'], '[', ''), ']', ''), '\"', ''), ',')"
+                                                    }
+                                                },
+                                                "For_Each_Certificate_Entity": {
+                                                    "foreach": "@variables('temp_list')",
+                                                    "actions": {
+                                                        "Condition_to_Check_Hash_List_Contains_Current_Hash_or_Not": {
+                                                            "actions": {},
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Append_Hash_to_Certificate_Array": {
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "Certificates",
+                                                                            "value": {
+                                                                                "type": "@concat('FileHash-', items('For_Each_Entity')?['properties']?['algorithm'])",
+                                                                                "value": "@items('For_Each_Certificate_Entity')"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "contains": [
+                                                                            "@variables('Certificates')",
+                                                                            "@items('For_Each_Certificate_Entity')"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Temporary_List_for_Certificate": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                }
+                                            }
+                                        },
+                                        "Case_For_URLs": {
+                                            "case": "Url",
+                                            "actions": {
+                                                "Set_Temporary_List_for_URL": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "temp_list",
+                                                        "value": "@split(replace(replace(replace(items('For_Each_Entity')?['properties']?['url'], '[', ''), ']', ''), '\"', ''), ',')"
+                                                    }
+                                                },
+                                                "For_Each_URL_Entity": {
+                                                    "foreach": "@variables('temp_list')",
+                                                    "actions": {
+                                                        "Condition_to_Check_URL_List_Contains_Current_URL_or_Not": {
+                                                            "actions": {},
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Append_URL_to_URLs": {
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "URLs",
+                                                                            "value": {
+                                                                                "type": "URL",
+                                                                                "value": "@items('For_Each_URL_Entity')"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "contains": [
+                                                                            "@variables('URLs')",
+                                                                            "@items('For_Each_URL_Entity')"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Temporary_List_for_URL": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                }
+                                            }
+                                        },
+                                        "Case_For_Emails": {
+                                            "case": "Account",
+                                            "actions": {
+                                                "Set_Temporary_List_for_Email": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "temp_list",
+                                                        "value": "@split(replace(replace(replace(items('For_Each_Entity')?['properties']?['displayName'], '[', ''), ']', ''), '\"', ''), ',')"
+                                                    }
+                                                },
+                                                "For_Each_Email_Entity": {
+                                                    "foreach": "@variables('temp_list')",
+                                                    "actions": {
+                                                        "Condition_to_Check_Email_List_Contains_Current_Email_or_Not": {
+                                                            "actions": {},
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Append_Email_to_Emails": {
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "Emails",
+                                                                            "value": {
+                                                                                "type": "Email",
+                                                                                "value": "@items('For_Each_Email_Entity')"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "contains": [
+                                                                            "@variables('Emails')",
+                                                                            "@items('For_Each_Email_Entity')"
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Temporary_List_for_Email": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@items('For_Each_Entity')?['kind']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_General_Variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Get_Cyjax_API_Token": {
+                            "runAfter": {
+                                "Condition_To_Terminate_If_No_Entities_Available_To_Enrich": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('Cyjax-API-Key')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Condition_To_Terminate_If_No_Entities_Available_To_Enrich": {
+                            "actions": {
+                                "Terminate_As_Success_Due_To_No_Entities_Are_Available_For_Enrichment": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Cancelled"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@length(variables('IPs'))",
+                                            0
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@length(variables('Domains'))",
+                                            0
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@length(variables('Certificates'))",
+                                            0
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@length(variables('URLs'))",
+                                            0
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@length(variables('Emails'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_Each_IOC": {
+                            "foreach": "@variables('total_iocs')",
+                            "actions": {
+                                "HTTP_Call_to_Fetch_IOCs_Data": {
+                                    "type": "Http",
+                                    "inputs": {
+                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/indicator-of-compromise/enrichment",
+                                        "method": "GET",
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Get_Cyjax_API_Token')?['value']}"
+                                        },
+                                        "queries": {
+                                            "value": "@{items('For_Each_IOC')?['value']}"
+                                        }
+                                    },
+                                    "runtimeConfiguration": {
+                                        "contentTransfer": {
+                                            "transferMode": "Chunked"
+                                        }
+                                    }
+                                },
+                                "Switch_Case_for_API_Status_Codes_For_Cyjax_IOC_Data": {
+                                    "runAfter": {
+                                        "HTTP_Call_to_Fetch_IOCs_Data": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case_for_200_Status_Code": {
+                                            "case": 200,
+                                            "actions": {
+                                                "Parse_JSON_for_IOC_Response_For_200_Status_Code": {
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_Call_to_Fetch_IOCs_Data')",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_seen_timestamp": {
+                                                                    "type": "string"
+                                                                },
+                                                                "geoip": {},
+                                                                "asn": {},
+                                                                "sightings": {}
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Append_Cyjax_Data_To_Enrich_For_200_Status_Code": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_for_IOC_Response_For_200_Status_Code": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "comment_data",
+                                                        "value": "@setProperty(body('Parse_JSON_for_IOC_Response_For_200_Status_Code'), 'ioc_value', items('For_Each_IOC')?['value'])"
+                                                    }
+                                                },
+                                                "Set_API_Key_Invalid_Error_As_False_for_200": {
+                                                    "runAfter": {
+                                                        "Append_Cyjax_Data_To_Enrich_For_200_Status_Code": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "api_error",
+                                                        "value": false
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_for_404_Status_Code": {
+                                            "case": 404,
+                                            "actions": {
+                                                "Parse_JSON_for_IOC_Response_For_404_Status_Code": {
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_Call_to_Fetch_IOCs_Data')",
+                                                        "schema": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "reason": {
+                                                                    "type": "string"
+                                                                },
+                                                                "message": {
+                                                                    "type": "string"
+                                                                },
+                                                                "code": {
+                                                                    "type": "integer"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Append_Cyjax_Data_To_Enrich_For_404_Status_Code": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_for_IOC_Response_For_404_Status_Code": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "comment_data",
+                                                        "value": {
+                                                            "type": "@items('For_Each_IOC')?['type']",
+                                                            "ioc_value": "@items('For_Each_IOC')?['value']",
+                                                            "message": "@body('Parse_JSON_for_IOC_Response_For_404_Status_Code')?['message']",
+                                                            "status_code": "@body('Parse_JSON_for_IOC_Response_For_404_Status_Code')?['code']"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_API_Key_Invalid_Error_As_False_for_404": {
+                                                    "runAfter": {
+                                                        "Append_Cyjax_Data_To_Enrich_For_404_Status_Code": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "api_error",
+                                                        "value": false
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_for_401_Status_Code": {
+                                            "case": 401,
+                                            "actions": {
+                                                "Set_API_Key_Invalid_Error_As_True": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "api_error",
+                                                        "value": true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@outputs('HTTP_Call_to_Fetch_IOCs_Data')?['statusCode']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Combine_All_IOCs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Initialize_General_Variables": {
+                            "runAfter": {
+                                "Condition_To_Terminate_Execution_If_Comment_Limit_Already_Exceeded": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "api_version",
+                                        "type": "string",
+                                        "value": "v2"
+                                    },
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "[trim(parameters('CyjaxBaseUrl'))]"
+                                    },
+                                    {
+                                        "name": "IPs",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "Domains",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "Certificates",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "temp_list",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "URLs",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "Emails",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "total_iocs",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "comment_data",
+                                        "type": "array"
+                                    },
+                                    {
+                                        "name": "api_error",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            }
+                        },
+                        "Combine_All_IOCs": {
+                            "runAfter": {
+                                "Get_Cyjax_API_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "total_iocs",
+                                "value": "@union(variables('IPs'), variables('Domains'), variables('Certificates'), variables('URLs'), variables('Emails'))"
+                            }
+                        },
+                        "Condition_To_Terminate_Execution_If_Comment_Limit_Already_Exceeded": {
+                            "actions": {
+                                "Terminate_Due_To_Comment_Limit_Exhausted": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Cancelled"
+                                    }
+                                }
+                            },
+                            "runAfter": {},
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['object']?['properties']?['additionalData']?['commentsCount']",
+                                            100
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Execute_Sub_Playbook_If_Data_Exists": {
+                            "actions": {
+                                "CyjaxAddCommentToIncident": {
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "host": {
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('AddIncidentCommentPlaybookName')))]"
+                                            },
+                                            "triggerName": "manual"
+                                        },
+                                        "body": {
+                                            "incident_arm_id": "@triggerBody()?['object']?['id']",
+                                            "enrichment_data": "@variables('comment_data')",
+                                            "incident_comment_count": "@triggerBody()?['object']?['properties']?['additionalData']?['commentsCount']",
+                                            "parent_playbook": "Cyjax Enrichment"
+                                        }
+                                    }
+                                },
+                                "Condition_to_Terminate_as_Success_If_Playbook_Executes_Successfully": {
+                                    "actions": {},
+                                    "runAfter": {
+                                        "CyjaxAddCommentToIncident": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Terminate_Due_to_Failure_While_Executing_Sub_Playbook": {
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Failed",
+                                                    "runError": {
+                                                        "code": "@outputs('CyjaxAddCommentToIncident')?['statusCode']",
+                                                        "message": "@body('CyjaxAddCommentToIncident')"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('CyjaxAddCommentToIncident')?['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Terminate_Execution_If_API_Key_is_Invalid": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_Due_To_No_Data_Found": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Cancelled"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(variables('comment_data'))",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_Execution_If_API_Key_is_Invalid": {
+                            "actions": {
+                                "Terminate_Due_to_Invalid_API_Key": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "401",
+                                            "message": "Kindly Verify and Update Cyjax API Key or Key name of the KeyVault which contains Cyjax API Key."
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_IOC": [
+                                    "TimedOut",
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {}
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('api_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Keyvault-ConnectionName'))]",
+                                "connectionName": "[variables('Keyvault-ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {}
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "environment": "Production",
+                "hidden-SentinelTemplateName": "CyjaxIncidentEnrichment",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Keyvault-ConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Keyvault-ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Keyvault-ConnectionName')]",
+                "customParameterValues": {},
+                "parameterValues": {
+                    "token:TenantId": "[trim(parameters('TenantId'))]",
+                    "token:grantType": "code",
+                    "vaultName": "[trim(parameters('KeyVaultName'))]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                }
+            }
+        }
+    ]
+}

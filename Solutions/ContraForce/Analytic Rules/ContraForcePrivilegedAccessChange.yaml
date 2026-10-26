@@ -1,0 +1,60 @@
+id: 3f4bd2a1-7c58-4a83-9c2e-6d1f0a8b5c31
+name: ContraForce - Privileged access change
+description: |
+  'Identifies administrative access changes made in the ContraForce workspace: workspace role
+  assignments, changes and removals, organization role changes, member additions and removals,
+  and service provider (MSP) access grants or revocations. Review each change to confirm it was
+  expected and authorized. The affected member and the old and new roles are carried in the
+  event metadata.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ContraForceEvents
+    dataTypes:
+      - ContraForceEvents_CL
+queryFrequency: 5m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+  ContraForceEvents_CL
+  | where ingestion_time() > ago(5m)
+  | where ActivityType in ("WorkspaceRoleAssigned", "WorkspaceRoleChanged", "WorkspaceRoleRemoved", "OrganizationalRoleChanged", "MemberAdded", "MemberRemoved", "ServiceProviderAdded", "ServiceProviderRemoved")
+  | extend Meta = parse_json(Metadata)
+  | extend MemberEmail = tostring(Meta.MemberEmail),
+           MemberType = tostring(Meta.MemberType),
+           FromRole = tostring(Meta.FromRole),
+           ToRole = tostring(Meta.ToRole),
+           Members = tostring(Meta.Members)
+  | project TimeGenerated, EventId, CfWorkspaceId, ActivityType, ActivityAction,
+            ActorName, ActorEmail, TargetResourceType, TargetResourceId, TargetResourceName,
+            MemberEmail, MemberType, FromRole, ToRole, Members
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: 'ContraForce access change: {{ActivityType}} on {{TargetResourceName}}'
+  alertDescriptionFormat: '{{ActorName}} performed {{ActivityType}} on {{TargetResourceName}}. Member email, old and new roles are in the alert custom details.'
+customDetails:
+  EventId: EventId
+  ActorEmail: ActorEmail
+  MemberEmail: MemberEmail
+  FromRole: FromRole
+  ToRole: ToRole
+  CfWorkspaceId: CfWorkspaceId
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT2H
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - EventId
+version: 1.0.0
+kind: Scheduled

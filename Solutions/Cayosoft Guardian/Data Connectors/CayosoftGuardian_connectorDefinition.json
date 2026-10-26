@@ -1,0 +1,95 @@
+{
+  "id": "CayosoftGuardianConnector",
+  "kind": "Customizable",
+  "scope": "Connector",
+  "title": "Cayosoft Guardian Threat Alerts",
+  "publisher": "Cayosoft",
+  "descriptionMarkdown": "The Cayosoft Guardian data connector automatically ingests threat alerts from Cayosoft Guardian into Microsoft Sentinel. Cayosoft Guardian writes threat alerts to the Windows Event Log as Event ID 2. The Azure Monitor Agent (AMA) collects these events by using Data Collection Rules (DCRs) and sends the parsed data to the custom Log Analytics table named `CayosoftThreatAlerts_CL`. After the data is ingested, Microsoft Sentinel can use it for monitoring, analytics, incident creation, investigation, and automated response across your hybrid identity environment.",
+  "graphQueriesTableName": "CayosoftThreatAlerts_CL",
+  "graphQueries": [
+    {
+      "metricName": "Total Alerts Ingested",
+      "legend": "Cayosoft Events",
+      "baseQuery": "CayosoftThreatAlerts_CL | summarize count() by bin(TimeGenerated, 1h)"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "Retrieve all recent security alerts from Cayosoft Guardian",
+      "query": "CayosoftThreatAlerts_CL\n| order by TimeGenerated desc\n| take 10"
+    },
+    {
+      "description": "Summarize ingested alerts grouped by Severity",
+      "query": "CayosoftThreatAlerts_CL\n| summarize Count = count() by Severity\n| order by Count desc"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "CayosoftThreatAlerts_CL",
+      "lastDataReceivedQuery": "CayosoftThreatAlerts_CL | summarize Time = max(TimeGenerated) | where isnotnull(Time)"
+    }
+  ],
+  "connectivityCriteria": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "CayosoftThreatAlerts_CL\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": "1",
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "Read and write permissions are required for the Log Analytics workspace.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "read": true,
+          "write": true,
+          "delete": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Cayosoft Guardian Server",
+        "description": "Must be connected to Azure Arc or run as an Azure virtual machine, with the Azure Monitor Agent installed."
+      },
+      {
+        "name": "Data Collection Rules",
+        "description": "Read and write permissions for Data Collection Rules are required to associate the Data Collection Rule with the Azure Arc-enabled server or Azure virtual machine that runs Cayosoft Guardian."
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "1. Prerequisites and Infrastructure Setup",
+      "description": "Before configuring the integration, make sure the following requirements are met:\n- You have a Microsoft Sentinel workspace.\n- The Windows Server that hosts Cayosoft Guardian is connected to Azure Arc or runs as an Azure virtual machine.\n- The Azure Monitor Agent (AMA) is installed on the Cayosoft Guardian server."
+    },
+    {
+      "title": "2. Deploy the Data Collection Rule (DCR)",
+      "description": "Cayosoft Guardian streams threat alerts via the Azure Monitor Agent, which requires a Data Collection Rule (DCR) linked to your Arc-enabled server or Azure VM. This is a one-time deployment, separate from the solution install.\n\n1. Click the button below.\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCayosoft%2520Guardian%2FData%2520Connectors%2FCayosoftGuardian_DCRTemplate.json)\n2. Select your **Subscription**, **Resource Group**, and **Region**.\n3. Enter your **Workspace Name** (the Microsoft Sentinel-enabled Log Analytics workspace) and **Arc Machine Name** (the exact name of the Arc-enabled server or Azure VM running Cayosoft Guardian).\n4. Click **Review + Create**, then **Create**."
+    },
+    {
+      "title": "3. Configure Cayosoft Guardian Logging",
+      "description": "Enable the event log generation within the product:\n1. Open Cayosoft Guardian.\n2. Navigate to **Settings** > **Service Settings** > **Windows Event Log Settings**.\n3. Verify that **Windows Event Log for Alerts** is enabled. Cayosoft Guardian writes threat alerts to the Windows Event Log > Applications and Services Logs > Cayosoft Guardian Alerts"
+    },
+    {
+      "title": "4. Install the Workbook",
+      "description": "The Cayosoft Guardian solution includes a prebuilt workbook that visualizes threat alerts and incidents, including severity distribution, alerts by system type, alert trends over time, and recent incidents and alerts.\n1. In Microsoft Sentinel, go to **Content hub**.\n2. Search for **Cayosoft Guardian** and verify that the solution is installed. If it is not installed, install it.\n3. Go to **Workbooks** and select the **Templates** tab.\n4. Select **Cayosoft Guardian - Incidents Dashboard**, click **Save**, choose the Azure region where you want to save the workbook, and then click **View saved workbook**.\n5. The workbook is available under **My workbooks**. Optionally, pin it to an Azure dashboard for quick access."
+    },
+    {
+      "title": "5. Enable the Analytics Rules",
+      "description": "The Cayosoft Guardian solution also includes scheduled analytics rule templates that convert Cayosoft Guardian threat alerts into Microsoft Sentinel incidents.\n1. In Microsoft Sentinel, go to **Analytics**.\n2. Select the **Rule templates** tab.\n3. Locate the Cayosoft Guardian analytics rule templates, for example:\n\t- **Cayosoft Guardian - Cloud Application Security Threats**\n\t- **Cayosoft Guardian - Core Identity and Infrastructure Threats**\n4. Click **Create rule**, review the schedule, entity mapping, and incident settings, and then click **Review + Create**.\n5. Verify that the rule appears as **Enabled** on the **Active rules** tab. The analytics rules generate the `SecurityIncident` records used by the workbook's **Incidents & recent alerts** table."
+    },
+    {
+      "title": "6. Verify the Integration",
+      "description": "After configuring the connector, verify that Microsoft Sentinel is receiving Cayosoft Guardian threat alert data:\n1. In Microsoft Sentinel, open the Log Analytics workspace connected to your Microsoft Sentinel instance.\n2. Open **Logs**.\n3. Run the following query:```CayosoftThreatAlerts_CL | sort by TimeGenerated desc | take 50 ``` \n4. Confirm that new rows are available in the table.\nFor detailed information, step-by-step guides, and known issues, please refer to the <a href='https://support.cayosoft.com/hc/en-us/articles/46659066589325-Threat-Alerts-Directory' target='_blank'>official documentation</a>."
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+id: 87245d60-eefb-42dd-9748-cd1949c83a5e
+name: Privileged identities whose sign-ins are not protected by Conditional Access
+description: |
+  Identifies successful sign-ins by accounts with directory or PIM roles when
+  Conditional Access did not report success, including empty, not applied,
+  not enabled, or failure states. Review these events for missing policy
+  coverage and MFA enforcement.
+description-detailed: |
+  Joins privileged accounts from the Microsoft 365 Defender IdentityInfo
+  table (AssignedRoles / PrivilegedEntraPimRoles) against SigninLogs,
+  keeping only successful logons whose ConditionalAccessStatus is not
+  'success' (including empty/null, notApplied, notEnabled, or failure).
+  Review whether a policy intended to cover privileged roles is
+  misconfigured, out of scope, or disabled (compare with the
+  ConditionalAccessPolicyDisabled family of hunting queries in
+  Hunting Queries/AuditLogs), and prioritize accounts that also
+  authenticate without MFA (AuthenticationRequirement =
+  singleFactorAuthentication).
+  References:
+  - https://learn.microsoft.com/entra/identity/conditional-access/overview
+  - https://attack.mitre.org/techniques/T1078/004/
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - IdentityInfo
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  let timeframe = 30d;
+  let PrivilegedUsers = IdentityInfo
+  | where isnotempty(AssignedRoles) or isnotempty(PrivilegedEntraPimRoles)
+  | summarize arg_max(Timestamp, AccountUpn) by AccountObjectId;
+  SigninLogs
+  | where TimeGenerated > ago(timeframe)
+  | where ResultType == "0"
+  | extend ConditionalAccessStatus = coalesce(ConditionalAccessStatus, "notEvaluated")
+  | where ConditionalAccessStatus !~ "success"
+  | join kind=inner PrivilegedUsers on $left.UserId == $right.AccountObjectId
+  | extend
+      AccountName = tostring(split(UserPrincipalName, "@")[0]),
+      AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+  | summarize
+      SignInAttempts = count(),
+      FirstSeen = min(TimeGenerated),
+      LastSeen = max(TimeGenerated),
+      ConditionalAccessStatuses = make_set(ConditionalAccessStatus),
+      AuthRequirements = make_set(AuthenticationRequirement),
+      LastIP = tostring(arg_max(TimeGenerated, IPAddress))
+      by UserPrincipalName, AccountName, AccountUPNSuffix, UserId, AccountUpn, AppDisplayName
+  | project
+      UserPrincipalName, AccountName, AccountUPNSuffix, AccountUpn,
+      SignInAttempts, FirstSeen, LastSeen, ConditionalAccessStatuses,
+      AuthRequirements, LastIP, AppDisplayName
+  | sort by SignInAttempts desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: AadUserId
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: LastIP
+version: 1.0.3
+metadata:
+  source:
+    kind: Community
+  author:
+    name: d4rk-pri0r
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection", "Identity" ]

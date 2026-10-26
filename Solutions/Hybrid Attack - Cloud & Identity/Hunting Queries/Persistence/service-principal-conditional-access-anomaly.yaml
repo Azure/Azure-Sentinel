@@ -1,0 +1,47 @@
+id: 92076c80-49fd-4af0-9f9d-ea9dd1fa85c6
+name: Service principal Conditional Access anomaly
+description: |
+  This query hunts for successful service principal sign-ins with unexpected Conditional Access outcomes from new source context.
+description-detailed: |
+  This hunt is a fallback to native Entra service principal sign-in logs because Conditional Access status is not consistently available through ASIM. It identifies first-seen combinations of principal, IP, user agent, and anomalous Conditional Access outcomes.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADServicePrincipalSignInLogs
+tactics:
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1078.004
+  - T1550.001
+tags:
+  - Identity abuse
+  - Conditional Access
+  - Service principal
+  - Fallback
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let Baseline =
+    AADServicePrincipalSignInLogs
+    | where TimeGenerated between ((StartTime - 14d) .. StartTime)
+    | where ResultType in~ ("0", "Success")
+    | where ConditionalAccessStatus in~ ("notApplied", "failure")
+    | summarize by ServicePrincipalId, IPAddress, UserAgent, ConditionalAccessStatus;
+  AADServicePrincipalSignInLogs
+  | where TimeGenerated between (StartTime .. EndTime)
+  | where ResultType in~ ("0", "Success")
+  | where ConditionalAccessStatus in~ ("notApplied", "failure")
+  | join kind=leftanti Baseline on ServicePrincipalId, IPAddress, UserAgent, ConditionalAccessStatus
+  | project TimeGenerated, ServicePrincipalId, ServicePrincipalName, AppId, IPAddress, UserAgent, ConditionalAccessStatus, ResultType, CorrelationId
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: ServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0

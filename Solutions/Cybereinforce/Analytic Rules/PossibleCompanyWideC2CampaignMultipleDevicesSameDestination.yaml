@@ -1,0 +1,44 @@
+id: ec08477d-87a1-498d-8f34-72b8ec8f3758
+name: CTE - Possible Company-Wide C2 Campaign (Multiple Devices, Same Destination)
+description: |
+  Multiple distinct devices within the same tenant were blocked attempting to reach the same URL/domain within a 24-hour window. Isolated blocks are usually just one user's browsing; several independent devices converging on the same destination is a strong signal of a coordinated malware/C2 campaign spreading across the company (e.g. a phishing link opened by several employees, or malware propagating internally).
+severity: High
+requiredDataConnectors:
+  - connectorId: cybereinforce_cte
+    dataTypes:
+      - CybereinforceCTE_CL
+queryFrequency: 30m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - LateralMovement
+relevantTechniques:
+  - T1071
+  - T1570
+query: |
+  CybereinforceCTE_CL
+  | where EventType == "block.url"
+  | extend d = parse_json(Details)
+  | extend
+      DeviceId = tostring(d.deviceId),
+      HostName = iff(isnotempty(tostring(d.hostname)), tostring(d.hostname), strcat("cte-device-", substring(EntityId, 0, 8))),
+      Pattern = tostring(d.pattern),
+      Url = tostring(d.url),
+      IsIoc = tobool(d.ioc),
+      ClientIp = tostring(split(tostring(d.clientIp), ":")[0])
+  | summarize DeviceCount=dcount(DeviceId), AffectedHosts=make_set(HostName, 50), SampleIps=make_set(ClientIp, 20), AnyIoc=max(IsIoc), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by Pattern, Url, TenantId
+  | where DeviceCount >= 3
+  | extend ClientIp = tostring(SampleIps[0])
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.0.0
+kind: Scheduled

@@ -59,16 +59,16 @@ public class LogAnalyticsService : ILogAnalyticsService
             // Determine which DCR and stream to use based on log type
             var (dcrImmutableId, streamName) = GetDcrAndStreamForLogType(logType);
 
-            // Convert data to BinaryData for ingestion
-            var binaryData = BinaryData.FromObjectAsJson(dataList);
+            // Serialize each record individually so the SDK can auto-batch them into
+            // multiple sub-1MB requests as required by the Logs Ingestion API limit.
+            // Wrapping the entire list in a single BinaryData would bypass this batching
+            // and cause 413 (ContentLengthLimitExceeded) errors when the payload is large.
+            var logs = dataList.Select(item => BinaryData.FromObjectAsJson(item)).ToList();
 
-            // Send data using Logs Ingestion API
-            // Note: UploadAsync expects IEnumerable<BinaryData> where each item is a single log entry
-            // For batch upload, we use the entire array as one BinaryData
             var response = await _logsIngestionClient.UploadAsync(
                 ruleId: dcrImmutableId,
                 streamName: streamName,
-                logs: new[] { binaryData },
+                logs: logs,
                 cancellationToken: default);
 
             if (response.IsError)

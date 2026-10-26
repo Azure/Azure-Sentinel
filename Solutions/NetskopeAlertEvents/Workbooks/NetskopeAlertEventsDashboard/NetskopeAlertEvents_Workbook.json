@@ -1,0 +1,964 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Netskope Alerts & Events\n---\nComprehensive monitoring of Netskope Alerts & Events ingested via Netskope Log Streaming into `NetskopeAlertEvents_CL`. Use the filters below to scope by time range, severity, and application. Sections cover alert volume and severity, application & Shadow IT activity, DLP incidents, malware & threat detections, policy enforcement, top users, device posture, network context, and geographic distribution."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f0000000-0000-0000-0000-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "f0000000-0000-0000-0000-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "Severity",
+            "label": "Severity",
+            "type": 2,
+            "isRequired": false,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false,
+              "selectAllValue": "*"
+            },
+            "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(Severity)\n| distinct Severity = tolower(Severity)\n| order by Severity asc",
+            "value": [
+              "value::all"
+            ],
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "f0000000-0000-0000-0000-000000000003",
+            "version": "KqlParameterItem/1.0",
+            "name": "Application",
+            "label": "Application",
+            "type": 2,
+            "isRequired": false,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false,
+              "selectAllValue": "*"
+            },
+            "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(App)\n| summarize Count = count() by App\n| top 100 by Count\n| project App\n| order by App asc",
+            "value": [
+              "value::all"
+            ],
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Overview"
+      },
+      "name": "overview-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| where '*' in ({Application}) or App in ({Application})\n| summarize ['Total Events']=count(), ['Total Alerts']=countif(Alert =~ 'yes'), ['High Severity']=countif(Alert =~ 'yes' and tolower(Severity) in ('high','critical')), ['DLP Incidents']=countif(AlertType =~ 'DLP' or isnotempty(DlpIncidentId)), ['Malware Detections']=countif(isnotempty(MalwareType) or AlertType =~ 'Malware'), ['Blocked Actions']=countif(Action =~ 'block'), ['Unique Users']=dcount(User), ['Unique Apps']=dcount(App)\n| evaluate narrow()\n| project Metric = Column, Value = tolong(Value)",
+        "size": 4,
+        "title": "Summary",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Metric",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "blue"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumFractionDigits": 0,
+                "maximumSignificantDigits": 4
+              }
+            }
+          },
+          "showBorder": true,
+          "size": "auto"
+        }
+      },
+      "customWidth": "100",
+      "name": "summary-tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| where '*' in ({Application}) or App in ({Application})\n| summarize Events = count(), Alerts = countif(Alert =~ 'yes') by bin(TimeGenerated, {TimeRange:grain})\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Events & Alerts Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "customWidth": "100",
+      "name": "events-over-time"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Alerts"
+      },
+      "name": "alerts-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where Alert =~ 'yes'\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| summarize Alerts = count() by Severity = tolower(Severity)\n| order by Alerts desc",
+        "size": 0,
+        "title": "Alerts by Severity",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "alerts-by-severity"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where Alert =~ 'yes'\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| where isnotempty(AlertType)\n| summarize Alerts = count() by AlertType\n| order by Alerts desc\n| take 10",
+        "size": 0,
+        "title": "Alerts by Type",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "33",
+      "name": "alerts-by-type"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where Alert =~ 'yes'\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| summarize Alerts = count() by bin(TimeGenerated, {TimeRange:grain}), Severity = tolower(Severity)\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Alerts Over Time by Severity",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "customWidth": "34",
+      "name": "alerts-time-severity"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where Alert =~ 'yes'\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| where isnotempty(AlertName)\n| summarize Count = count(), Users = dcount(User), LastSeen = max(TimeGenerated) by AlertName, AlertType, Severity = tolower(Severity)\n| order by Count desc\n| take 25",
+        "size": 0,
+        "title": "Top Alerts",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Count",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "100",
+      "name": "top-alerts"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Applications & Shadow IT"
+      },
+      "name": "apps-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where '*' in ({Application}) or App in ({Application})\n| where isnotempty(App) and App != '-'\n| summarize Events = count() by App\n| order by Events desc\n| take 10",
+        "size": 0,
+        "title": "Events by Application (Top 10)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "events-by-application"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where '*' in ({Application}) or App in ({Application})\n| where isnotempty(Appcategory) and Appcategory != '-'\n| summarize Events = count() by Appcategory\n| order by Events desc\n| take 15",
+        "size": 0,
+        "title": "Events by Application Category",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "33",
+      "name": "events-by-appcategory"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where '*' in ({Application}) or App in ({Application})\n| where isnotempty(Activity) and Activity != '-'\n| summarize Events = count() by Activity\n| order by Events desc\n| take 15",
+        "size": 0,
+        "title": "Top Activities",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "34",
+      "name": "top-activities"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where '*' in ({Application}) or App in ({Application})\n| where isnotempty(App) and App != '-'\n| where tolower(Ccl) in ('low','poor') or Action =~ 'block'\n| summarize Events = count(), Users = dcount(User), Blocked = countif(Action =~ 'block'), LastSeen = max(TimeGenerated) by App, Appcategory, Ccl = tolower(Ccl)\n| order by Events desc\n| take 25",
+        "size": 0,
+        "title": "Risky / Low-Confidence Applications (Shadow IT)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Events",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            },
+            {
+              "columnMatch": "Blocked",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "100",
+      "name": "risky-apps"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## DLP Incidents"
+      },
+      "name": "dlp-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where AlertType =~ 'DLP' or isnotempty(DlpIncidentId)\n| summarize DLPIncidents = count() by bin(TimeGenerated, {TimeRange:grain})\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "DLP Incidents Trend",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart"
+      },
+      "customWidth": "50",
+      "name": "dlp-trend"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where AlertType =~ 'DLP' or isnotempty(DlpProfile)\n| where isnotempty(DlpProfile)\n| summarize Incidents = count() by DlpProfile\n| order by Incidents desc\n| take 10",
+        "size": 0,
+        "title": "DLP Incidents by Profile",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "dlp-by-profile"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where AlertType =~ 'DLP' or isnotempty(DlpIncidentId)\n| summarize Incidents = count(), DistinctIncidents = dcount(DlpIncidentId), Profiles = make_set(DlpProfile, 10), Apps = make_set(App, 10), LastSeen = max(TimeGenerated) by User\n| order by Incidents desc\n| take 20",
+        "size": 0,
+        "title": "Top DLP Users",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Incidents",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "dlp-top-users"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where AlertType =~ 'DLP' or isnotempty(DlpIncidentId)\n| where isnotempty(DlpRule)\n| summarize Incidents = count(), Files = dcount(DlpFile) by DlpRule, DlpRuleSeverity\n| order by Incidents desc\n| take 20",
+        "size": 0,
+        "title": "DLP Incidents by Rule",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Incidents",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "dlp-by-rule"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Malware & Threats"
+      },
+      "name": "threat-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(MalwareType) or AlertType =~ 'Malware' or isnotempty(ThreatType)\n| summarize Detections = count() by bin(TimeGenerated, {TimeRange:grain})\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Threat Detections Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "customWidth": "50",
+      "name": "threat-trend"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(MalwareType)\n| summarize Detections = count() by MalwareType\n| order by Detections desc\n| take 10",
+        "size": 0,
+        "title": "Detections by Malware Type",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "malware-by-type"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(MalwareType) or AlertType =~ 'Malware'\n| summarize Detections = count(), Users = dcount(User), Engines = make_set(DetectionEngine, 5), LastSeen = max(TimeGenerated) by MalwareType, MalwareSeverity, ThreatType\n| order by Detections desc\n| take 20",
+        "size": 0,
+        "title": "Top Malware / Threat Detections",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Detections",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "100",
+      "name": "top-malware"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Policy Enforcement"
+      },
+      "name": "policy-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(Action)\n| summarize Events = count() by Action = tolower(Action)\n| order by Events desc",
+        "size": 0,
+        "title": "Actions Breakdown",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "actions-breakdown"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where Action =~ 'block'\n| summarize Blocked = count() by bin(TimeGenerated, {TimeRange:grain})\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Blocked Events Over Time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "customWidth": "50",
+      "name": "blocked-over-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(Policy) and Policy != '-'\n| summarize Events = count(), Blocked = countif(Action =~ 'block'), Users = dcount(User) by Policy\n| order by Events desc\n| take 20",
+        "size": 0,
+        "title": "Top Policies",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Events",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            },
+            {
+              "columnMatch": "Blocked",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "100",
+      "name": "top-policies"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Users"
+      },
+      "name": "users-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| where isnotempty(User) and User != '-'\n| summarize Events = count(), Alerts = countif(Alert =~ 'yes'), HighSev = countif(Alert =~ 'yes' and tolower(Severity) in ('high','critical')), DLP = countif(AlertType =~ 'DLP' or isnotempty(DlpIncidentId)), Apps = dcount(App) by User\n| order by Events desc\n| take 25",
+        "size": 0,
+        "title": "Top Users",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Events",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            },
+            {
+              "columnMatch": "Alerts",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            },
+            {
+              "columnMatch": "HighSev",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "top-users"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where Alert =~ 'yes' and tolower(Severity) in ('high','critical')\n| where isnotempty(User) and User != '-'\n| summarize HighSeverityAlerts = count() by User\n| order by HighSeverityAlerts desc\n| take 10",
+        "size": 0,
+        "title": "Top Users by High-Severity Alerts",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "top-users-highsev"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Devices & Network"
+      },
+      "name": "device-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(DeviceClassification)\n| summarize Events = count() by DeviceClassification\n| order by Events desc",
+        "size": 0,
+        "title": "Events by Device Classification",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "33",
+      "name": "device-classification"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(Os)\n| summarize Events = count() by Os\n| order by Events desc\n| take 10",
+        "size": 0,
+        "title": "Events by Operating System",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "33",
+      "name": "os-distribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(AccessMethod)\n| summarize Events = count() by AccessMethod\n| order by Events desc",
+        "size": 0,
+        "title": "Events by Access Method",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "34",
+      "name": "access-method"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Advanced Analytics"
+      },
+      "name": "adv-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| where '*' in ({Application}) or App in ({Application})\n| where isnotempty(User) and User != '-'\n| summarize Events = count(), Alerts = countif(Alert =~ 'yes'),\n    High = countif(Alert =~ 'yes' and tolower(Severity) in ('high','critical')),\n    DLP = countif(AlertType =~ 'DLP' or isnotempty(DlpIncidentId)),\n    Malware = countif(isnotempty(MalwareType) or AlertType =~ 'Malware'),\n    Blocked = countif(Action =~ 'block'),\n    RiskyApps = dcountif(App, tolower(Ccl) in ('low','poor')),\n    Countries = dcount(SrcCountry) by User\n| extend RiskScore = High*5 + Malware*5 + DLP*3 + Blocked*1 + RiskyApps*2 + iff(Countries > 1, (Countries-1)*2, 0)\n| where RiskScore > 0\n| top 20 by RiskScore desc",
+        "size": 0,
+        "title": "User Risk Scoreboard",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "RiskScore",
+              "formatter": 18,
+              "formatOptions": {
+                "palette": "redGreen",
+                "compositeBarSettings": {
+                  "labelText": ""
+                }
+              },
+              "numberFormat": {
+                "unit": 17,
+                "options": {
+                  "maximumFractionDigits": 0
+                }
+              }
+            },
+            {
+              "columnMatch": "High",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            },
+            {
+              "columnMatch": "Malware",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            },
+            {
+              "columnMatch": "DLP",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            },
+            {
+              "columnMatch": "Blocked",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "orange"
+              }
+            },
+            {
+              "columnMatch": "Events",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "rowLimit": 20,
+          "filter": true,
+          "sortBy": [
+            {
+              "itemKey": "RiskScore",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "RiskScore",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "customWidth": "100",
+      "name": "user-risk-scoreboard"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where Alert =~ 'yes'\n| where '*' in ({Severity}) or tolower(Severity) in ({Severity})\n| extend H = hourofday(TimeGenerated), D = toint(dayofweek(TimeGenerated) / 1d)\n| extend Day = case(D==0,'0 Sun',D==1,'1 Mon',D==2,'2 Tue',D==3,'3 Wed',D==4,'4 Thu',D==5,'5 Fri','6 Sat')\n| summarize Count = count() by Day, H\n| evaluate pivot(H, sum(Count), Day)\n| sort by Day asc",
+        "size": 0,
+        "title": "Alert Heatmap by Day & Hour (UTC)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Day",
+              "formatter": 1
+            },
+            {
+              "columnMatch": "^[0-9]+$",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "100",
+      "name": "alert-heatmap"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## User Investigation\nClick a user in the table below to load their activity in the panels underneath."
+      },
+      "name": "invest-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(User) and User != '-'\n| summarize Events = count(), Alerts = countif(Alert =~ 'yes'), DLP = countif(AlertType =~ 'DLP' or isnotempty(DlpIncidentId)), LastSeen = max(TimeGenerated) by User\n| order by Alerts desc, Events desc\n| take 50",
+        "size": 0,
+        "title": "Select a user to investigate",
+        "exportFieldName": "User",
+        "exportParameterName": "SelectedUser",
+        "exportDefaultValue": "Not selected",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Alerts",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            },
+            {
+              "columnMatch": "Events",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "filter": true
+        }
+      },
+      "customWidth": "100",
+      "name": "invest-userlist"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where User == '{SelectedUser}'\n| summarize Events = count(), Alerts = countif(Alert =~ 'yes') by bin(TimeGenerated, {TimeRange:grain})\n| order by TimeGenerated asc",
+        "size": 0,
+        "title": "Activity timeline for {SelectedUser}",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "customWidth": "50",
+      "conditionalVisibility": {
+        "parameterName": "SelectedUser",
+        "comparison": "isNotEqualTo",
+        "value": "Not selected"
+      },
+      "name": "invest-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where User == '{SelectedUser}'\n| where isnotempty(App)\n| summarize Events = count(), Blocked = countif(Action =~ 'block') by App, Ccl = tolower(Ccl)\n| order by Events desc\n| take 15",
+        "size": 0,
+        "title": "Top applications for {SelectedUser}",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Events",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            },
+            {
+              "columnMatch": "Blocked",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "red"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "conditionalVisibility": {
+        "parameterName": "SelectedUser",
+        "comparison": "isNotEqualTo",
+        "value": "Not selected"
+      },
+      "name": "invest-apps"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where User == '{SelectedUser}'\n| where Alert =~ 'yes'\n| project TimeGenerated, Severity = tolower(Severity), AlertName, AlertType, App, Action, Policy, Userip, SrcCountry\n| order by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "title": "Recent alerts for {SelectedUser}",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Severity",
+              "formatter": 18,
+              "formatOptions": {
+                "thresholdsOptions": "colors",
+                "thresholdsGrid": [
+                  {
+                    "operator": "==",
+                    "thresholdValue": "critical",
+                    "representation": "red",
+                    "text": "{0}"
+                  },
+                  {
+                    "operator": "==",
+                    "thresholdValue": "high",
+                    "representation": "orange",
+                    "text": "{0}"
+                  },
+                  {
+                    "operator": "Default",
+                    "thresholdValue": null,
+                    "representation": "blue",
+                    "text": "{0}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "100",
+      "conditionalVisibility": {
+        "parameterName": "SelectedUser",
+        "comparison": "isNotEqualTo",
+        "value": "Not selected"
+      },
+      "name": "invest-alerts"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Geographic Distribution"
+      },
+      "name": "geo-header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(SrcCountry) and SrcCountry != '-'\n| summarize Events = count(), Alerts = countif(Alert =~ 'yes') by SrcCountry\n| order by Events desc\n| take 20",
+        "size": 0,
+        "title": "Activity by Source Country",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "geo-src-country"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetskopeAlertEvents_CL\n| where TimeGenerated {TimeRange}\n| where isnotempty(SrcCountry) and SrcCountry != '-'\n| where isnotempty(SrcLatitude) and isnotempty(SrcLongitude)\n| summarize Events = count() by SrcCountry, SrcLatitude, SrcLongitude\n| order by Events desc",
+        "size": 0,
+        "title": "Geo Map (Source)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "map",
+        "mapSettings": {
+          "locInfo": "LatLong",
+          "latitude": "SrcLatitude",
+          "longitude": "SrcLongitude",
+          "sizeSettings": "Events",
+          "sizeAggregation": "Sum",
+          "labelSettings": "SrcCountry",
+          "legendMetric": "Events",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "type": "heatmap",
+            "colorAggregation": "Sum",
+            "nodeColorField": "Events",
+            "heatmapPalette": "greenRed"
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "geo-map"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "sentinel-NetskopeAlertEventsWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -1,0 +1,54 @@
+id: fbbf3418-f1d8-4bd5-b7da-137a70af6bce
+name: CTE - Sudden Block Spike Detected
+description: |
+  A sudden spike in blocked URLs/domains on a single device may indicate an active phishing or malware campaign.
+severity: High
+requiredDataConnectors:
+  - connectorId: cybereinforce_cte
+    dataTypes:
+      - CybereinforceCTE_CL
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1189
+query: |
+  CybereinforceCTE_CL
+  | where EventType == "block.url"
+  | extend d = parse_json(Details)
+  | extend
+      DeviceId = tostring(d.deviceId),
+      HostName = iff(isnotempty(tostring(d.hostname)), tostring(d.hostname), strcat("cte-device-", substring(EntityId, 0, 8))),
+      DeviceUser = tostring(d.deviceUser),
+      DeviceOs = tostring(d.deviceOs),
+      DeviceVersion = tostring(d.deviceVersion),
+      RuleId = tostring(d.ruleId),
+      RuleName = iff(isnotempty(tostring(d.ruleName)), tostring(d.ruleName), "Pattern Match"),
+      Pattern = tostring(d.pattern),
+      Url = tostring(d.url),
+      Action = tostring(d.action),
+      IsIoc = tobool(d.ioc),
+      ClientIp = tostring(split(tostring(d.clientIp), ":")[0]),
+      ClientPort = tostring(split(tostring(d.clientIp), ":")[1]),
+      UserAgent = tostring(d.userAgent)
+  | summarize BlockCount=count(), SampleUrls=make_set(Url, 20), SampleIps=make_set(ClientIp, 20), LastHit=max(TimeGenerated) by bin(TimeGenerated, 10m), HostName, DeviceId, DeviceUser, DeviceOs, TenantId
+  | where BlockCount >= 15
+  | extend Url = tostring(SampleUrls[0]), ClientIp = tostring(SampleIps[0])
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.0.0
+kind: Scheduled

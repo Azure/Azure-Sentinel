@@ -31,7 +31,6 @@ class SemperisIOEMetadata:
             response = requests.get(
                 endpoint,
                 headers=headers,
-                verify=False,
                 timeout=30,
             )
             response.raise_for_status()

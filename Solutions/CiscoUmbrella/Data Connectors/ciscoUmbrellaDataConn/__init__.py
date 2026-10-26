@@ -56,7 +56,7 @@ def main(mytimer: func.TimerRequest) -> None:
     script_start_time = int(time.time())
     state_manager_cu = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
     
-    ts_from = state_manager_cu.get()
+    ts_from = sanitize_timestamp(state_manager_cu.get())
     ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
     if ts_from is not None:
         if (datetime.datetime.utcnow() - datetime.timedelta(days=3)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
@@ -191,6 +191,19 @@ def check_if_script_runs_too_long(script_start_time: int) -> bool:
         max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
         return duration > max_duration
 
+def sanitize_timestamp(value):
+    if value is None:
+        return None
+    value = value.replace('\x00', '').strip()
+    if not value:
+        logging.info('Invalid time marker found (null bytes). Resetting to default.')
+        return None
+    try:
+        datetime.datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%fZ')
+    except ValueError:
+        logging.info('Invalid time marker found: {}. Resetting to default.'.format(repr(value)))
+        return None
+    return value
 
 def parse_date_from(date_from: str) -> datetime.datetime:
     try:
@@ -320,6 +333,8 @@ class UmbrellaClient:
     @staticmethod
     def format_date(date_string, input_format, output_format):
         try:
+            if not date_string:
+                return ''
             date = datetime.datetime.strptime(date_string, input_format)
             date_string = date.strftime(output_format)
         except Exception:

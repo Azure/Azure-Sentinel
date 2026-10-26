@@ -21,6 +21,8 @@ from azure.identity import (
     ManagedIdentityCredential,
 )
 
+from .securityhub_filters import parse_securityhub_filters
+
 client_id = os.environ.get("ClientID")
 sentinel_customer_id = os.environ.get("WorkspaceID")
 sentinel_shared_key = os.environ.get("WorkspaceKey")
@@ -98,10 +100,8 @@ def main(mytimer: func.TimerRequest) -> None:
         aws_role_arn, aws_role_session_name, aws_region_name, token
     )
     securityhub_filters_dict = {}
-    logging.info("SecurityHubFilters : {0}".format(aws_securityhub_filters))
     if aws_securityhub_filters:
-        securityhub_filters = aws_securityhub_filters.replace("'", '"')
-        securityhub_filters_dict = eval(securityhub_filters)
+        securityhub_filters_dict = parse_securityhub_filters(aws_securityhub_filters)
 
     results = securityHubSession.getFindings(securityhub_filters_dict)
     fresh_events_after_this_time = securityHubSession.freshEventTimestampGenerator(

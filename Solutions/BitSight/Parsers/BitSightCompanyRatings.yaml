@@ -1,17 +1,18 @@
-id: 1280e2d5-9d9a-4455-8aec-3e340a3ffeb2
+﻿id: 1280e2d5-9d9a-4455-8aec-3e340a3ffeb2
 Function:
   Title: Parser for BitSightCompanyRatings
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '1.1.0'
+  LastUpdated: '2026-05-25'
 Category: Microsoft Sentinel Parser
 FunctionName: BitSightCompanyRatings
 FunctionAlias: BitSightCompanyRatings
 FunctionQuery: |
-    let CompanyRatings_view  = view () {
-        BitsightCompany_rating_details_CL
-        | extend
-                    EventVendor ="BitSight",
-                    EventProduct ="CompanyRating",
+    union isfuzzy=true
+        (
+            BitsightCompany_rating_details_CL
+            | extend
+                    EventVendor = "BitSight",
+                    EventProduct = "CompanyRating",
                     CompanyName = column_ifexists('Company_name', ''),
                     Beta = column_ifexists('beta', ''),
                     Category = column_ifexists('category', ''),
@@ -23,7 +24,7 @@ FunctionQuery: |
                     Order = column_ifexists('order', ''),
                     Percentile = column_ifexists('percentile', ''),
                     Rating = column_ifexists('rating', '')
-        | project
+            | project
                     TimeGenerated,
                     EventVendor,
                     EventProduct,
@@ -38,5 +39,29 @@ FunctionQuery: |
                     Order,
                     Percentile,
                     Rating
-    };
-    CompanyRatings_view
+        ),
+        (
+            BitSightCompanyRatingDetails_CL
+            | summarize arg_max(TimeGenerated, *) by CompanyGuid, RiskVectorLabel
+            | extend
+                    EventVendor = "BitSight",
+                    EventProduct = "CompanyRating"
+            | project
+                    TimeGenerated,
+                    EventVendor,
+                    EventProduct,
+                    CompanyName,
+                    CompanyGuid,
+                    RiskVectorSlug,
+                    RiskVectorLabel,
+                    RiskCategory,
+                    CategoryOrder,
+                    Rating,
+                    Grade,
+                    Percentile,
+                    GradeColor,
+                    RiskVectorOrder,
+                    DisplayUrl,
+                    Beta,
+                    ConnectorName
+        )

@@ -1,0 +1,127 @@
+id: 638d7a85-0c62-4f9d-9a90-937a7c565e1b
+name: WMI or remote admin execution on hybrid device followed by cloud sign-in
+description: |
+  This query hunts for suspicious remote execution on hybrid or Entra-joined devices that is followed by successful Entra sign-in activity by the same hybrid identity.
+description-detailed: |
+  This hunt targets WMI, WinRM, and PsExec-style execution paths on hybrid devices. It identifies suspicious child processes spawned from remote administration parents, then correlates the same hybrid identity to successful Entra non-interactive sign-ins within a short time window.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceInfo
+      - DeviceProcessEvents
+      - IdentityInfo
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - LateralMovement
+  - Execution
+  - ValidAccounts
+relevantTechniques:
+  - T1047
+  - T1021.006
+  - T1569.002
+  - T1078.004
+tags:
+  - Hybrid identity
+  - WMI
+  - Remote execution
+  - On-prem to cloud
+query: |
+  let StartTime = todatetime('{{StartTimeISO}}');
+  let EndTime = todatetime('{{EndTimeISO}}');
+  let BaselineStart = StartTime - 14d;
+  let BaselineEnd = EndTime + 1d;
+  // Parent and child process families used to model remote admin execution chains.
+  let RemoteParents = dynamic(["wmiprvse.exe", "wsmprovhost.exe", "psexesvc.exe", "winrs.exe"]);
+  let SuspiciousChildren = dynamic(["cmd.exe", "powershell.exe", "pwsh.exe", "net.exe", "net1.exe", "whoami.exe", "nltest.exe", "reg.exe", "certutil.exe", "rundll32.exe", "mshta.exe"]);
+  // Build latest hybrid identity keys for robust joins.
+  let HybridUsersRaw =
+    IdentityInfo
+    | extend Timestamp = column_ifexists('Timestamp', TimeGenerated)
+    | extend AccountUpn = coalesce(column_ifexists('AccountUpn', ''), column_ifexists('AccountUPN', ''))
+    | where Timestamp between (BaselineStart .. BaselineEnd)
+    | where column_ifexists('IdentityEnvironment', '') =~ "Hybrid" or (isnotempty(column_ifexists('AccountSID', '')) and isnotempty(AccountObjectId))
+    | project Timestamp, AccountObjectId, AccountUpn, AccountDomain, AccountName, BlastRadius
+    | summarize arg_max(Timestamp, *) by AccountObjectId
+    | extend UPNKey = tolower(AccountUpn),
+             SamKey = tolower(strcat(AccountDomain, "\\", AccountName));
+  // Normalize key variants into one joinable user key.
+  let HybridUsers =
+    union isfuzzy=true
+      (HybridUsersRaw | where isnotempty(UPNKey) | project UserKey = UPNKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius),
+      (HybridUsersRaw | where isnotempty(SamKey) | project UserKey = SamKey, HybridUPN = AccountUpn, HybridSam = strcat(AccountDomain, "\\", AccountName), BlastRadius);
+  // Keep latest hybrid or Entra-joined endpoint inventory.
+  let HybridDevicesRaw =
+    DeviceInfo
+    | where TimeGenerated between (BaselineStart .. BaselineEnd)
+    | project TimeGenerated, DeviceId, DeviceName, JoinType, IsAzureADJoined
+    | summarize arg_max(TimeGenerated, *) by DeviceId
+    | where IsAzureADJoined == true or tostring(JoinType) has_any ("Hybrid", "Azure AD", "Entra")
+    | project DeviceId, HybridDeviceName = DeviceName, JoinType;
+  let HybridDevices =
+    union isfuzzy=true
+      (HybridDevicesRaw | where isnotempty(DeviceId) | project DeviceJoinKey = tolower(DeviceId), HybridDeviceName, JoinType),
+      (HybridDevicesRaw | where isnotempty(HybridDeviceName) | project DeviceJoinKey = tolower(HybridDeviceName), HybridDeviceName, JoinType);
+  // Identify suspicious remote execution patterns on endpoints.
+  let RemoteExec =
+    _Im_ProcessEvent(starttime=StartTime, endtime=EndTime)
+    | where EventType =~ "ProcessCreated"
+    | extend ParentProcess = tolower(coalesce(ActingProcessFilename, ActingProcessFileOriginalName)),
+             ParentOriginal = tolower(ActingProcessFileOriginalName),
+             ChildProcess = tolower(coalesce(TargetProcessFilename, TargetProcessFileOriginalName)),
+             ChildCommandLine = tostring(TargetProcessCommandLine),
+             UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+             DeviceJoinKey = tolower(coalesce(DvcId, DvcHostname)),
+             SourceIP = tostring(DvcIpAddr)
+    | where ParentProcess in~ (RemoteParents) or ParentOriginal in~ (RemoteParents)
+    | where ChildProcess in~ (SuspiciousChildren)
+        or ChildCommandLine has_any (" -enc ", "sekurlsa", "lsass", " /node:", " -computername ", "invoke-command", "win32_process", "create ")
+    | where isnotempty(UserKey)
+    | where isnotempty(DeviceJoinKey)
+    | project ExecTime = TimeGenerated, DeviceJoinKey, UserKey, SourceIP,
+              ParentProcess, ChildProcess, ChildCommandLine;
+  // Gather successful cloud sign-ins for same identities.
+  let CloudUserSignins =
+    _Im_Authentication(starttime=StartTime, endtime=(EndTime + 1d))
+    | where EventResult in~ ("Success", "Partial")
+    | where EventProduct =~ "Microsoft Entra ID"
+    | where LogonProtocol has_any ("OAuth", "OpenID", "SAML")
+      or LogonMethod in~ ("Service Principal", "Managed Identity", "Username & Password", "Multi factor authentication", "Passwordless", "PKI")
+    | extend UserKey = tolower(coalesce(ActorUsername, TargetUsername)),
+             CloudIP = tostring(SrcIpAddr),
+             AppName = tostring(TargetAppName)
+    | where isnotempty(UserKey)
+    | project SigninTime = TimeGenerated, UserKey, CloudIP, AppName, CorrelationId = EventOriginalUid;
+  // Correlate remote exec to near-term cloud access by same hybrid identity.
+  RemoteExec
+  | join kind=inner HybridDevices on DeviceJoinKey
+  | join kind=innerunique HybridUsers on UserKey
+  | join kind=inner CloudUserSignins on UserKey
+  | where SigninTime between (ExecTime .. (ExecTime + 2h))
+  | summarize FirstCloudSignin = min(SigninTime),
+              LastCloudSignin = max(SigninTime),
+              CloudSigninCount = count(),
+              Apps = make_set(AppName, 10),
+              CloudIPs = make_set(CloudIP, 10),
+              CorrelationIds = make_set(CorrelationId, 10)
+    by ExecTime, HybridDeviceName, JoinType, SourceIP, ParentProcess,
+      ChildProcess, ChildCommandLine, HybridUPN, HybridSam,
+      BlastRadius
+    | extend Confidence = iff(BlastRadius =~ "high", "High", "Medium")
+  | extend TimeGenerated = ExecTime
+  | order by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HybridDeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: HybridUPN
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+version: 1.0.0

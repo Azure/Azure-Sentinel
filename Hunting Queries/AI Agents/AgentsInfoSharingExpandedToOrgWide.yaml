@@ -1,0 +1,58 @@
+id: dbdba9cc-d7a0-434d-9c3d-82d2203a79fd
+name: AI Agents - Sharing expanded to organization-wide
+description: |
+  Identifies existing AI agents that were restricted in the baseline snapshot and are now shared organization-wide. Prioritize agents with MCP servers or declared tools for review. Run within 2 days of a change to retain coverage.
+requiredDataConnectors: []
+tactics: []
+relevantTechniques: []
+query: |
+  let lookback = 14d;
+  let recent = 2d;
+  let IdentityIdtoUPN = materialize(
+      IdentityInfo
+      | extend ResolvedAccountUpn = tostring(column_ifexists("AccountUpn", column_ifexists("AccountUPN", ""))),
+               IdentityTimestamp = todatetime(column_ifexists("Timestamp", column_ifexists("TimeGenerated", datetime(null))))
+      | where IdentityTimestamp >= ago(lookback)
+      | where isnotempty(AccountObjectId) and isnotempty(ResolvedAccountUpn)
+      | summarize arg_max(IdentityTimestamp, ResolvedAccountUpn) by AccountObjectId
+      | project AccountObjectId = tostring(AccountObjectId), AccountUpn = ResolvedAccountUpn);
+  let CurrentState =
+      AgentsInfo
+      | where Timestamp > ago(recent)
+      | summarize arg_max(Timestamp, *) by AgentId
+      | where LifecycleStatus != "Deleted"
+      | where set_has_element(coalesce(SharedWith, dynamic([])), "*")
+      | extend McpServerCount = array_length(coalesce(McpServers, dynamic([]))),
+               DeclaredToolCount = array_length(coalesce(DeclaredTools, dynamic([])))
+      | project AgentId, Timestamp, Name, Platform, CreatedDateTime, Owners,
+                SharedWith, McpServerCount, DeclaredToolCount;
+  let BaselineState =
+      AgentsInfo
+      | where Timestamp between (ago(lookback) .. ago(recent))
+      | where LifecycleStatus != "Deleted"
+      | summarize arg_max(Timestamp, *) by AgentId
+      | where not(set_has_element(coalesce(SharedWith, dynamic([])), "*"))
+      | project AgentId, PreviousTimestamp = Timestamp, PreviousSharedWith = SharedWith;
+  CurrentState
+  | join kind=inner BaselineState on AgentId
+  | extend HasElevatedCapabilities = McpServerCount > 0 or DeclaredToolCount > 0
+  | extend OwnerIds = iff(array_length(coalesce(Owners, dynamic([]))) > 0, Owners, dynamic([""]))
+  | mv-expand OwnerId = OwnerIds to typeof(string)
+  | join kind=leftouter IdentityIdtoUPN on $left.OwnerId == $right.AccountObjectId
+  | project-rename OwnerUpn = AccountUpn
+  | extend OwnerAccountName = tostring(split(OwnerUpn, "@")[0]),
+           OwnerAccountUPNSuffix = tostring(split(OwnerUpn, "@")[1])
+  | project Timestamp, PreviousTimestamp, AgentId, Name, Platform, CreatedDateTime,
+           PreviousSharedWith, SharedWith, McpServerCount, DeclaredToolCount,
+           HasElevatedCapabilities, OwnerId, OwnerUpn, OwnerAccountName, OwnerAccountUPNSuffix
+  | sort by HasElevatedCapabilities desc, Timestamp desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: OwnerAccountName
+      - identifier: UPNSuffix
+        columnName: OwnerAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: OwnerId
+version: 1.0.0

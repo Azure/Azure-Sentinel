@@ -1,0 +1,70 @@
+id: 32cf350a-01f8-4c84-9e47-4302e275eda3
+name: OAuth application redirect URI modified
+description: Identifies modifications to OAuth application redirect URIs in Entra ID. Adding a redirect URI controlled by an attacker allows interception of OAuth authorization codes, enabling token theft from users who authenticate against the application.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - CredentialAccess
+relevantTechniques:
+  - T1528
+query: |
+  let timeframe = 1d;
+  AuditLogs
+  | where TimeGenerated >= ago(timeframe)
+  | where OperationName =~ "Update application"
+  | where Result =~ "success"
+  | mv-expand ModProp = TargetResources[0].modifiedProperties
+  | where tostring(ModProp.displayName) =~ "ReplyUrls"
+  | extend OldReplyUrls = tostring(ModProp.oldValue)
+  | extend NewReplyUrls = tostring(ModProp.newValue)
+  | extend AppName = tostring(TargetResources[0].displayName)
+  | extend AppId   = tostring(TargetResources[0].id)
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend AccountName      = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[0]), "")
+  | extend AccountUPNSuffix = iff(ActorUpn has "@",
+        tostring(split(ActorUpn, "@")[1]), "")
+  | project
+      TimeGenerated,
+      AppName,
+      AppId,
+      OldReplyUrls,
+      NewReplyUrls,
+      ActorUpn,
+      ActorApp,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

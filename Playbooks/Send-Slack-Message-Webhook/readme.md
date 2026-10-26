@@ -19,7 +19,7 @@ Slack application with:
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Send-Slack-Message-Webhook/incident-trigger/azuredeploy.json" target="_blank">
     <img src="https://aka.ms/deploytoazurebutton""/>
 </a>
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)]()
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)]()
 
 ## Post-deployment
 

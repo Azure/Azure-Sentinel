@@ -1,5 +1,25 @@
 # Changelog for imNetworkSession.yaml
 
+## Version 0.6.8
+
+- (2026-09-29) Add Zscaler Private Access (ZPA) Network Session data to NetworkSession schema - [PR #15184](https://github.com/Azure/Azure-Sentinel/pull/15184)
+
+## Version 0.6.7
+
+- (2026-09-22) Add AWS GuardDuty filtering parser to the Network Session unifying parser - [PR #14769](https://github.com/Azure/Azure-Sentinel/pull/14769)
+
+## Version 0.6.6
+
+- (2026-09-02) Added Gigamon V-Series Application Metadata Intelligence parser.
+
+## Version 0.6.4
+
+- (2026-06-26) Add Cisco FTD parser to NetworkSession schema - [PR #14569](https://github.com/Azure/Azure-Sentinel/pull/14569)
+
+## Version 0.6.3
+
+- (2026-03-30) Add Check Point - Smart Defense parser to NetworkSession schema - [PR #13950](https://github.com/Azure/Azure-Sentinel/pull/13950)
+
 ## Version 0.6.2
 
 - (2024-06-04) ASimNetworkSessionMicrosoftWindowsEventFirewall.yaml-43 - [PR #10581](https://github.com/Azure/Azure-Sentinel/pull/10581)
@@ -19,4 +39,3 @@
 ## Version 0.2
 
 - (2021-09-12) Dev/normalization/network v2 reboot - [PR #3000](https://github.com/Azure/Azure-Sentinel/pull/3000)
-

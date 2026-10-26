@@ -1,0 +1,98 @@
+# Filter field resolution rules
+#
+# Maps a filter field name (e.g. `DeviceVendor`, `EventID`) to the Sentinel table
+# it should be attributed to when seen in a query. Consumed by
+# `extract_filter_fields_from_query` in `map_solutions_connectors_tables.py`.
+#
+# Field name matching is case-insensitive.
+#
+# Resolution `type`s:
+#   direct   - field always attributes to a fixed `table`
+#   gated    - field attributes to `table` only if `table` is present in the query's tables
+#   priority - try each candidate in order; pick the first one present in the query's tables
+#   any_of   - pick any candidate that appears in the query's tables; if `prefer_local: true`,
+#              prefer tables that appear in the current sub-query before global tables
+#   prefix   - pick the first query table whose name matches a prefix from `prefix_groups`
+#
+# Optional `skip_flag` references a boolean in the calling context that, when set,
+# causes the field to be skipped entirely (used to ignore ASIM parser SETs).
+#
+# `prefix_groups` is keyed by tag and provides the actual prefix list. Tags are
+# referenced by `prefix_tag` in field definitions. Matching uses lower-case
+# `startswith` semantics.
+
+prefix_groups:
+  asim:
+    - asim
+    - _asim
+    - _im_
+
+fields:
+  DeviceVendor:       { type: direct, table: CommonSecurityLog }
+  DeviceProduct:      { type: direct, table: CommonSecurityLog }
+  DeviceEventClassID: { type: direct, table: CommonSecurityLog }
+
+  EventVendor:  { type: prefix, prefix_tag: asim, skip_flag: skip_asim_vendor_product }
+  EventProduct: { type: prefix, prefix_tag: asim, skip_flag: skip_asim_vendor_product }
+  EventType:    { type: prefix, prefix_tag: asim }
+
+  ResourceType:   { type: gated, table: AzureDiagnostics }
+  Category:       { type: gated, table: AzureDiagnostics }
+  Source:         { type: gated, table: Event }
+  EventLog:       { type: gated, table: Event }
+  Provider:       { type: gated, table: WindowsEvent }
+  Facility:       { type: gated, table: Syslog }
+  ProcessName:    { type: gated, table: Syslog }
+  ProcessID:      { type: gated, table: Syslog }
+  SyslogMessage:  { type: gated, table: Syslog }
+  EventName:      { type: gated, table: AWSCloudTrail }
+  OfficeWorkload: { type: gated, table: OfficeActivity }
+  RecordType:     { type: gated, table: OfficeActivity }
+
+  EventID:
+    type: priority
+    candidates: [WindowsEvent, SecurityEvent, Event]
+
+  ResourceProvider:
+    type: priority
+    candidates: [AzureDiagnostics, AzureActivity]
+
+  Resource:
+    type: priority
+    candidates: [AzureDiagnostics, AzureMetrics, AzureActivity]
+
+  ActionType:
+    type: any_of
+    prefer_local: true
+    candidates:
+      - DeviceEvents
+      - DeviceFileEvents
+      - DeviceProcessEvents
+      - DeviceNetworkEvents
+      - DeviceRegistryEvents
+      - DeviceLogonInfo
+      - DeviceInfo
+      - DeviceImageLoadEvents
+      - CloudAppEvents
+      - AlertEvidence
+      - AlertInfo
+      - EmailEvents
+      - EmailAttachmentInfo
+      - EmailUrlInfo
+      - IdentityLogonEvents
+      - IdentityQueryEvents
+      - IdentityDirectoryEvents
+
+  OperationName:
+    type: any_of
+    candidates:
+      - AuditLogs
+      - AzureActivity
+      - OfficeActivity
+      - SigninLogs
+      - AABorerrorlogs
+      - AADNonInteractiveUserSignInLogs
+      - AADServicePrincipalSignInLogs
+      - AADManagedIdentitySignInLogs
+      - AADRiskyUsers
+      - AADProvisioningLogs

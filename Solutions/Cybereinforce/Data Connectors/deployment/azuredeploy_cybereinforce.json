@@ -1,0 +1,305 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Cybeurope",
+    "comments": "Deploys Cybereinforce Threat Enforcement (CTE) data ingestion infrastructure for Microsoft Sentinel."
+  },
+  "parameters": {
+    "workspaceResourceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the Log Analytics workspace where Microsoft Sentinel is enabled."
+      }
+    },
+    "cybereinforceTenantId": {
+      "type": "string",
+      "metadata": {
+        "description": "Cybereinforce Tenant ID (from the Cybereinforce Admin portal, Integrations section)."
+      }
+    },
+    "cybereinforceMicrosoftToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "MicrosoftToken generated from the Cybereinforce Admin portal, Integrations section."
+      }
+    },
+    "pollingMinutes": {
+      "type": "int",
+      "defaultValue": 15,
+      "metadata": {
+        "description": "How often the Logic App polls Cybereinforce for new events."
+      }
+    },
+    "cybereinforceApiBase": {
+      "type": "string",
+      "defaultValue": "https://cybereinforce.com",
+      "metadata": {
+        "description": "Base URL of the Cybereinforce API. Leave default unless instructed otherwise."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    }
+  },
+  "variables": {
+    "workspaceName": "[last(split(parameters('workspaceResourceId'), '/'))]",
+    "tableName": "CybereinforceCTE_CL",
+    "streamName": "Custom-CybereinforceCTE",
+    "dceName": "[concat('cybereinforce-cte-dce-', uniqueString(resourceGroup().id))]",
+    "dcrName": "[concat('cybereinforce-cte-dcr-', uniqueString(resourceGroup().id))]",
+    "logicAppName": "[concat('cybereinforce-cte-sentinel-', uniqueString(resourceGroup().id))]",
+    "uamiName": "Cybereinforce-UAMI",
+    "monitorMetricsRoleId": "3913510d-42f4-4e42-8a64-420c390055eb"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(variables('workspaceName'), '/', variables('tableName'))]",
+      "properties": {
+        "plan": "Analytics",
+        "schema": {
+          "name": "[variables('tableName')]",
+          "columns": [
+            { "name": "TimeGenerated", "type": "DateTime" },
+            { "name": "TenantId", "type": "Guid" },
+            { "name": "EventType", "type": "String" },
+            { "name": "Severity", "type": "String" },
+            { "name": "Actor", "type": "String" },
+            { "name": "Entity", "type": "String" },
+            { "name": "EntityId", "type": "String" },
+            { "name": "Details", "type": "Dynamic" },
+            { "name": "Category", "type": "String" },
+            { "name": "Source", "type": "String" }
+          ]
+        },
+        "retentionInDays": 365,
+        "totalRetentionInDays": 365,
+        "tableSubType": "DataCollectionRuleBased"
+      }
+    },
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('uamiName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('location')]",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[variables('dcrName')]",
+      "location": "[parameters('location')]",
+      "kind": "Direct",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', variables('workspaceName'), variables('tableName'))]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]",
+        "streamDeclarations": {
+          "Custom-CybereinforceCTE": {
+            "columns": [
+              { "name": "TimeGenerated", "type": "datetime" },
+              { "name": "TenantId", "type": "string" },
+              { "name": "EventType", "type": "string" },
+              { "name": "Severity", "type": "string" },
+              { "name": "Actor", "type": "string" },
+              { "name": "Entity", "type": "string" },
+              { "name": "EntityId", "type": "string" },
+              { "name": "Details", "type": "dynamic" },
+              { "name": "Category", "type": "string" },
+              { "name": "Source", "type": "string" }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "name": "laDest",
+              "workspaceResourceId": "[parameters('workspaceResourceId')]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": ["Custom-CybereinforceCTE"],
+            "destinations": ["laDest"],
+            "transformKql": "source\n| extend TenantId=tostring(TenantId)\n| extend TenantIdGuid=toguid(strcat(substring(TenantId,0,8),'-',substring(TenantId,8,4),'-',substring(TenantId,12,4),'-',substring(TenantId,16,4),'-',substring(TenantId,20,12)))\n| project TimeGenerated=todatetime(TimeGenerated),\n         TenantId=TenantIdGuid,\n         EventType=tostring(EventType),\n         Severity=tostring(Severity),\n         Actor=tostring(Actor),\n         Entity=tostring(Entity),\n         EntityId=tostring(EntityId),\n         Details=todynamic(Details),\n         Category=tostring(Category),\n         Source=tostring(Source)",
+            "outputStream": "Custom-CybereinforceCTE_CL"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), variables('uamiName'), variables('monitorMetricsRoleId'))]",
+      "scope": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('monitorMetricsRoleId'))]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName')), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[variables('logicAppName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]",
+        "[extensionResourceId(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), variables('uamiName'), variables('monitorMetricsRoleId')))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "parameters": {
+          "cybereinforceApiBase": { "value": "[parameters('cybereinforceApiBase')]" },
+          "pollingMinutes": { "value": "[parameters('pollingMinutes')]" },
+          "cybereinforceTenantId": { "value": "[parameters('cybereinforceTenantId')]" },
+          "cybereinforceMicrosoftToken": { "value": "[parameters('cybereinforceMicrosoftToken')]" },
+          "dceLogsIngestionEndpoint": { "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2022-06-01').logsIngestion.endpoint]" },
+          "dcrImmutableId": { "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2023-03-11').immutableId]" },
+          "streamName": { "value": "[variables('streamName')]" },
+          "uamiResourceId": { "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('uamiName'))]" },
+          "$connections": { "value": {} }
+        },
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "frequency": "Minute",
+                "interval": "@parameters('pollingMinutes')"
+              }
+            }
+          },
+          "actions": {
+            "Get_Events_Window": {
+              "type": "Http",
+              "inputs": {
+                "uri": "@{concat(parameters('cybereinforceApiBase'), '/api/exportSecurityEventsSentinel?tid=', parameters('cybereinforceTenantId'), '&since=', encodeUriComponent(addMinutes(utcNow(), mul(-1, add(parameters('pollingMinutes'), 2)))))}",
+                "method": "GET",
+                "headers": {
+                  "x-cybe-token": "@{parameters('cybereinforceMicrosoftToken')}",
+                  "Accept": "application/json"
+                }
+              },
+              "runAfter": {}
+            },
+            "Parse_JSON_-_Export_Response": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Get_Events_Window')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "count": { "type": "integer" },
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "TimeGenerated": { "type": "string" },
+                          "TenantId": { "type": "string" },
+                          "EventType": { "type": "string" },
+                          "Severity": { "type": "string" },
+                          "Actor": { "type": "string" },
+                          "Entity": { "type": "string" },
+                          "EntityId": { "type": "string" },
+                          "Details": { "type": "object" },
+                          "Category": { "type": "string" },
+                          "Source": { "type": "string" }
+                        },
+                        "required": ["TimeGenerated", "TenantId", "EventType", "Severity", "Actor", "Entity", "EntityId", "Details", "Category", "Source"]
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": { "Get_Events_Window": ["Succeeded"] }
+            },
+            "Ingest_To_LogAnalytics": {
+              "type": "Http",
+              "inputs": {
+                "uri": "@{concat(parameters('dceLogsIngestionEndpoint'), '/dataCollectionRules/', parameters('dcrImmutableId'), '/streams/', parameters('streamName'), '?api-version=2023-01-01')}",
+                "method": "POST",
+                "headers": { "Content-Type": "application/json" },
+                "body": "@body('Parse_JSON_-_Export_Response')?['records']",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://monitor.azure.com/",
+                  "identity": "@{parameters('uamiResourceId')}"
+                }
+              },
+              "runAfter": { "Parse_JSON_-_Export_Response": ["Succeeded"] }
+            },
+            "Compose_Ingest_Response": {
+              "type": "Compose",
+              "inputs": {
+                "statusCode": "@outputs('Ingest_To_LogAnalytics')?['statusCode']",
+                "body": "@outputs('Ingest_To_LogAnalytics')?['body']",
+                "count": "@body('Parse_JSON_-_Export_Response')?['count']"
+              },
+              "runAfter": { "Ingest_To_LogAnalytics": ["Succeeded", "Failed"] }
+            }
+          },
+          "parameters": {
+            "cybereinforceApiBase": { "type": "String" },
+            "pollingMinutes": { "type": "Int" },
+            "cybereinforceTenantId": { "type": "String" },
+            "cybereinforceMicrosoftToken": { "type": "SecureString" },
+            "dceLogsIngestionEndpoint": { "type": "String" },
+            "dcrImmutableId": { "type": "String" },
+            "streamName": { "type": "String" },
+            "uamiResourceId": { "type": "String" },
+            "$connections": { "type": "Object", "defaultValue": {} }
+          },
+          "outputs": {}
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppName": {
+      "type": "string",
+      "value": "[variables('logicAppName')]"
+    },
+    "dataCollectionEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2022-06-01').logsIngestion.endpoint]"
+    },
+    "dcrImmutableId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2023-03-11').immutableId]"
+    }
+  }
+}

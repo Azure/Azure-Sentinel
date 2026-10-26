@@ -1,5 +1,13 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.4       | 28-09-2026                     | Removed the deprecated SentinelOne Azure Function **Data Connector** from the solution package |
+| 3.1.3       | 25-08-2026                     | Fixed the SentinelOne parser to restore ActivityType and CCF records while preserving SentinelOne V2 alerts |
+| 3.1.2       | 17-08-2026                     | Fix V2 parser type mismatch and fallback.   |
+| 3.1.1       | 10-08-2026                     | Advanced **SentinelOne V2 (via Codeless Connector Framework)** **Data Connector** from Public Preview to Global Availability and added the **AlertDescription** field to the alerts stream |
+| 3.1.0       | 01-07-2026                     | Added new **SentinelOne V2 (via Codeless Connector Framework)** **Data Connector** (ingests alerts via the GraphQL API) |
+| 3.0.10      | 03-06-2026                     | Updated CCP **Data Connector** to support multiple instances (multi-connection) for MSSP scenarios |
+| 3.0.9       | 14-04-2026                     | Deprecate SentinelOne (using Azure Function) |
+| 3.0.8       | 24-03-2026                     | Rename CCF solution to SentinelOne (via Codeless Connector Framework) |
 | 3.0.7       | 09-01-2026                     | Updated broken URL and bumped the SentinelOne solution version |
 | 3.0.6       | 10-02-2025                     | Advancing CCP **Data Connector** from Public preview to Global Availability.|
 | 3.0.5       | 20-01-2025                     | Updated "Sentinel One - Agent uninstalled from multiple hosts" **Analytic Rule** with  ActivityType  |

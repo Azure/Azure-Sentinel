@@ -1,0 +1,70 @@
+id: f15d8548-1af1-43d3-a726-1ffefb87b303
+name: Federated Identity Provider Added to Tenant
+description: |
+  Identifies federation configuration changes on Entra ID domains, a persistence technique (T1484.002) used by adversaries to hijack authentication via a rogue SAML IdP (Golden SAML / Midnight Blizzard style attacks).
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1484.002
+  - T1556
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let FederationEvents = materialize(
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName in ("Set domain authentication","Set federation settings on domain")
+  | where Result =~ "success"
+  | extend ActorUPN=tostring(InitiatedBy.user.userPrincipalName),
+           ActorIPAddress=tostring(InitiatedBy.user.ipAddress),
+           ActorId=tostring(InitiatedBy.user.id),
+           TargetDomain=tostring(TargetResources[0].displayName),
+           TargetDomainId=tostring(TargetResources[0].id)
+  | mv-expand Detail = AdditionalDetails
+  | extend DetailKey=tostring(Detail.key), DetailValue=tostring(Detail.value)
+  | summarize FederationTime=min(TimeGenerated),
+              OperationNames=make_set(OperationName),
+              ActorUPN=any(ActorUPN),
+              ActorIPAddress=any(ActorIPAddress),
+              ActorId=any(ActorId),
+              UserAgent=anyif(DetailValue, DetailKey == "User-Agent"),
+              EventCount=dcount(Id)
+            by TargetDomain, TargetDomainId);
+  let FederationActorIds = FederationEvents | where isnotempty(ActorId) | distinct ActorId;
+  FederationEvents
+  | join kind=leftouter (
+      SigninLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where UserId in (FederationActorIds)
+      | where RiskLevelAggregated in ("medium","high")
+      | extend RiskRank=case(RiskLevelAggregated =~ "high", 3, RiskLevelAggregated =~ "medium", 2, 1)
+      | summarize LastRiskySignIn=max(TimeGenerated),
+                  arg_max(RiskRank, RiskLevelAggregated, IPAddress)
+              by UserId
+      | project UserId, LastRiskySignIn, MaxRiskLevel=RiskLevelAggregated, RiskySignInIP=IPAddress
+  ) on $left.ActorId == $right.UserId
+  | extend IsPowerShell=UserAgent has_any ("PowerShell","python","curl","AADInternals")
+  | extend IsAnonymousActor=isempty(ActorUPN)
+  | extend SuspicionScore=toint(IsPowerShell)+toint(IsAnonymousActor)+toint(MaxRiskLevel in ("medium","high"))
+  | project FederationTime, TargetDomain, ActorUPN, ActorId, ActorIPAddress, OperationNames, EventCount,
+            UserAgent, IsPowerShell, IsAnonymousActor, ActorRisk=MaxRiskLevel, LastRiskySignIn, RiskySignInIP, SuspicionScore
+  | order by SuspicionScore desc, FederationTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: ActorId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIPAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RiskySignInIP
+version: 1.0.0

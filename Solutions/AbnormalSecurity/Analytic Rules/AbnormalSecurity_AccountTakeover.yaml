@@ -1,0 +1,60 @@
+id: da243bf4-382b-46b9-9b4d-ce6ffe9e7beb
+name: Abnormal Security - Account Takeover case opened
+description: |
+  'Creates an incident when Abnormal Security opens an Account Takeover (ATO) case,
+  indicating a mailbox or user account is suspected to be compromised. The ATO case
+  severity, status, and observed indicators are surfaced for triage.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: AbnormalSecurityPush
+    dataTypes:
+      - ABNORMAL_SECURITY_ATO_CASE_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+  - T1110
+query: |
+  ABNORMAL_SECURITY_ATO_CASE_CL
+  | where isnotempty(abx_body_abx_body_ato_case_id_s)
+  // Collapse to one row per ATO case (earliest event in the window) so repeated
+  // events for the same case do not raise duplicate alerts.
+  | summarize arg_min(TimeGenerated, *) by CaseId = abx_body_abx_body_ato_case_id_s
+  | extend
+      CompromisedAccount = abx_body_abx_body_compromised_account_s,
+      CaseSeverity = abx_body_abx_body_severity_s,
+      CaseStatus = abx_body_abx_body_status_s,
+      Indicators = abx_body_abx_body_indicators_s,
+      FirstDetected = abx_body_abx_body_first_detected_t
+  | project TimeGenerated, CompromisedAccount, CaseId, CaseSeverity, CaseStatus, Indicators, FirstDetected
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CompromisedAccount
+customDetails:
+  AtoCaseId: CaseId
+  CaseSeverity: CaseSeverity
+  CaseStatus: CaseStatus
+alertDetailsOverride:
+  alertDisplayNameFormat: "Abnormal Security: Account Takeover case for {{CompromisedAccount}}"
+  alertDescriptionFormat: "Abnormal Security opened ATO case {{CaseId}} (severity {{CaseSeverity}}) for the compromised account {{CompromisedAccount}}."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+suppressionDuration: PT5H
+suppressionEnabled: false
+version: 1.0.0
+kind: Scheduled

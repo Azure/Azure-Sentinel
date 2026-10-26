@@ -19,7 +19,7 @@ This Playbook will trigger immediately and inform Security teams by notifying th
 ## Deployment
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/AnalyticsHealth-Enterprise) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/AnalyticsHealth-Gov)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://aka.ms/AnalyticsHealth-Gov)
 
 ## Post Deployment Steps
 

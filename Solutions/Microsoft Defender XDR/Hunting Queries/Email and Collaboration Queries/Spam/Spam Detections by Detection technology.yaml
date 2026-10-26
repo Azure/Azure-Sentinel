@@ -16,60 +16,17 @@ relevantTechniques:
   - T1566
 query: |
   //This query visualises total emails with Spam detections over time summarizing the data daily by various Spam Detection technologies/controls in Microsoft Defender for Office 365.
-  let minTime = startofday(ago(30d)); // last 30 days by default, replace 30d with the desired period
+  //(v4) Single mv-expand over DetectionMethods.Spam replaces the previous 8-way union: less scan, and new spam techniques appear automatically.
+  let minTime = startofday(ago(30d));
   let maxTime = startofday(now());
-  let baseQuery = EmailEvents
+  EmailEvents
+  | where Timestamp >= minTime
+  | where OrgLevelPolicy != "Phishing simulation" and OrgLevelPolicy != "SecOps Mailbox"
   | where DetectionMethods has "Spam"
-  | where TimeGenerated >= minTime;
-  let ml=baseQuery
-  | where TimeGenerated >= minTime
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'Advanced filter'
-  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
-  | extend Details = "Advanced filter";
-  let gf=baseQuery
-  | where TimeGenerated >= minTime
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'General filter'
-  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
-  | extend Details = "General filter";
-  let bl=baseQuery
-  | where TimeGenerated >= minTime
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'BulkFilter'
-  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
-  | extend Details = "BulkFilter";
-  let mx=baseQuery
-  | where TimeGenerated >= minTime
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'Mixed analysis detection'
-  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
-  | extend Details = "Mixed analysis detection";
-  let frp=baseQuery
-  | where TimeGenerated >= minTime
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'Fingerprint matching'
-  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
-  | extend Details = "Fingerprint matching";
-  let umr=baseQuery
-  | where TimeGenerated >= minTime
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'URL malicious reputation'
-  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
-  | extend Details = "URL malicious reputation";
-  let dr=baseQuery
-  | where TimeGenerated >= minTime
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'Domain reputation'
-  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
-  | extend Details = "Domain reputation";
-  let ipr=baseQuery
-  | where TimeGenerated >= minTime
-  | project Timestamp,RecipientEmailAddress,NetworkMessageId, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) 
-  | where Spam has 'IP reputation' 
-  | make-series Count= count() default = 0 on Timestamp from minTime to maxTime step 1d 
-  | extend Details = "IP reputation";
-  union ml,gf,bl,mx,frp,umr,dr,ipr
-  | project Count, Details, Timestamp
-  | render timechart 
-version: 1.0.0
+  | extend Key = strcat(NetworkMessageId, '-', RecipientEmailAddress)
+  | summarize arg_max(Timestamp, *) by Key
+  | mv-expand Details = parse_json(DetectionMethods).Spam to typeof(string)
+  | where Timestamp < maxTime
+  | make-series Count = count() default = 0 on Timestamp from minTime to maxTime step 1d by Details
+  // | render timechart
+version: 1.1.0

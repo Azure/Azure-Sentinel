@@ -1,0 +1,56 @@
+id: f5567c93-91de-577a-b35e-c2807715493d
+name: Whisper Security - Tor Exit Node Communication
+description: |
+  Identifies network traffic communicating with known Tor exit nodes. While Tor usage may be legitimate in some environments, unexpected Tor communication can indicate data exfiltration, C2 tunneling, or policy violations.
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: WhisperSecurityConnector
+  dataTypes:
+  - WhisperThreatIntel_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- CommandAndControl
+relevantTechniques:
+- T1090
+query: |
+  // MITRE ATT&CK: T1090.003 - Proxy: Multi-hop Proxy
+  // Tactic: Command and Control
+  // Detects communication with Tor exit nodes using Whisper threat intelligence
+  let timeRange = 1d;
+  let torIndicators = WhisperThreatIntel_CL
+      | where TimeGenerated > ago(timeRange)
+      | where isTor == true
+      | project indicator, threatScore, threatLevel, feedNames, lastSeen;
+  let CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, SourceIP:string, DeviceProduct:string, DeviceAction:string, DeviceVendor:string, Activity:string)[]);
+  CommonSecurityLogSafe
+      | where TimeGenerated > ago(timeRange)
+      | where isnotempty(DestinationIP)
+      | join kind=inner (torIndicators) on $left.DestinationIP == $right.indicator
+      | extend SourceIP = SourceIP, DestinationIP = DestinationIP
+      | project TimeGenerated, SourceIP, DestinationIP, DeviceProduct, DeviceAction, DeviceVendor, Activity, threatScore, threatLevel, feedNames
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SourceIP
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: DestinationIP
+customDetails:
+  ThreatScore: threatScore
+  ThreatLevel: threatLevel
+  FeedNames: feedNames
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+version: 1.0.0
+kind: Scheduled

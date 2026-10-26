@@ -1,0 +1,127 @@
+id: 8972b513-12a2-4b46-8263-3f091d88a8bc
+name: Red Sift - Email with URL to previously unseen domain
+description: |
+  'Detects email forensics events containing one or more URLs whose domain has not been seen in the previous 14 days, which may indicate newly observed phishing infrastructure or suspicious delivery patterns.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: RedSiftPush
+    dataTypes:
+      - RedSiftEmailForensics_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  let lookback = 14d;
+  let recentWindow = 1h;
+  let historicalDomains = RedSiftEmailForensics_CL
+  | extend EmailUrls = todynamic(EmailUrls)
+  | where TimeGenerated between (ago(lookback) .. ago(recentWindow))
+  | where isnotempty(EmailUrls) and array_length(EmailUrls) > 0
+  | mv-expand Url = EmailUrls
+  | extend UrlString = tostring(Url.url_string)
+  | where isnotempty(UrlString)
+  | extend UrlDomain = tostring(parse_url(UrlString).Host)
+  | where isnotempty(UrlDomain)
+  | summarize by UrlDomain;
+  RedSiftEmailForensics_CL
+  | extend
+      EmailFrom = tostring(column_ifexists("EmailFrom", "")),
+      EmailSubject = tostring(column_ifexists("EmailSubject", "")),
+      EmailReturnPath = tostring(column_ifexists("EmailReturnPath", "")),
+      EmailMessageUid = tostring(column_ifexists("EmailMessageUid", "")),
+      SrcIp = tostring(column_ifexists("SrcIp", "")),
+      DstHostname = tostring(column_ifexists("DstHostname", "")),
+      Severity = tostring(column_ifexists("Severity", "")),
+      Message = tostring(column_ifexists("Message", "")),
+      CorrelationUid = tostring(column_ifexists("CorrelationUid", "")),
+      EmailUrls = todynamic(EmailUrls)
+  | where TimeGenerated >= ago(recentWindow)
+  | where isnotempty(EmailUrls) and array_length(EmailUrls) > 0
+  | mv-expand Url = EmailUrls
+  | extend UrlString = tostring(Url.url_string)
+  | where isnotempty(UrlString)
+  | extend UrlDomain = tostring(parse_url(UrlString).Host)
+  | where isnotempty(UrlDomain)
+  | join kind=leftanti (historicalDomains) on UrlDomain
+  | summarize
+      NewUrlDomains = make_set(UrlDomain, 50),
+      NewUrls = make_set(UrlString, 50),
+      NewDomainCount = dcount(UrlDomain),
+      UrlCount = dcount(UrlString),
+      RepresentativeUrlDomain = take_any(UrlDomain)
+      by TimeGenerated,
+      EmailFrom,
+      EmailSubject,
+      EmailReturnPath,
+      EmailMessageUid,
+      SrcIp,
+      DstHostname,
+      Severity,
+      Message,
+      CorrelationUid
+  | extend
+      NewUrlDomainList = strcat_array(NewUrlDomains, ", "),
+      NewUrlList = strcat_array(NewUrls, ", ")
+  | project
+      TimeGenerated,
+      EmailFrom,
+      EmailSubject,
+      EmailReturnPath,
+      EmailMessageUid,
+      SrcIp,
+      DstHostname,
+      RepresentativeUrlDomain,
+      NewDomainCount,
+      UrlCount,
+      NewUrlDomainList,
+      NewUrlList,
+      Severity,
+      Message,
+      CorrelationUid
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: EmailFrom
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: RepresentativeUrlDomain
+customDetails:
+  EmailSubject: EmailSubject
+  ReturnPath: EmailReturnPath
+  NewDomainCount: NewDomainCount
+  NewUrlDomainList: NewUrlDomainList
+  NewUrlList: NewUrlList
+  CorrelationUid: CorrelationUid
+alertDetailsOverride:
+  alertDisplayNameFormat: "RedSift - URL to new domain in email from {{EmailFrom}}"
+  alertDescriptionFormat: "Email from {{EmailFrom}} contains {{NewDomainCount}} previously unseen URL domain(s): {{NewUrlDomainList}}."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+      - DNS
+    groupByCustomDetails:
+      - EmailSubject
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+suppressionEnabled: false
+suppressionDuration: PT1H
+version: 1.0.0
+kind: Scheduled
