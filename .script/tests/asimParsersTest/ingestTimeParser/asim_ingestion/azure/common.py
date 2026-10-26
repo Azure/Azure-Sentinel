@@ -17,6 +17,11 @@ from typing import Any, Mapping, Protocol, Sequence
 import requests
 import yaml
 
+from asim_ingestion.fixtures.timestamps import (
+    parse_kusto_datetime_ticks,
+    ticks_to_kusto_datetime,
+)
+
 HARNESS_RESULT_VERSION = 1
 SNAPSHOT_VERSION = 1
 
@@ -41,10 +46,6 @@ DEFAULT_LOCATION = "eastus2euap"
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 RESOURCE_NAME_RE = re.compile(r"[^a-z0-9-]+")
-KUSTO_TIMESTAMP_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}Z$"
-)
-
 REPLAY_EXCLUDED_COLUMNS = {
     "_BilledSize",
     "_IsBillable",
@@ -94,6 +95,15 @@ class ValidationRunner(Protocol):
         source_snapshot: Mapping[str, Any],
         parser_document: Mapping[str, Any],
         query_time_document: Mapping[str, Any] | None,
+    ) -> Mapping[str, Any]:
+        raise NotImplementedError
+
+    def validate_parity(
+        self,
+        query_client: Any,
+        source_snapshot: Mapping[str, Any],
+        parser_document: Mapping[str, Any],
+        query_time_document: Mapping[str, Any],
     ) -> Mapping[str, Any]:
         raise NotImplementedError
 
@@ -169,11 +179,14 @@ def _require_identifier(value: str, field: str) -> str:
 
 
 def _validate_timestamp(value: str) -> str:
-    if not KUSTO_TIMESTAMP_RE.fullmatch(value):
-        raise ValueError(
-            f"Expected exact Kusto timestamp with seven digits: {value}"
+    try:
+        return ticks_to_kusto_datetime(
+            parse_kusto_datetime_ticks(value)
         )
-    return value
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Expected a valid Kusto timestamp: {value}"
+        ) from exc
 
 
 def _compact_json_bytes(value: Any) -> bytes:
@@ -253,97 +266,105 @@ def build_exact_timestamp_query(
     )
 
 
-def _normalize_query_columns(
-    columns: Sequence[Mapping[str, Any]],
-) -> list[dict[str, str]]:
-    schema: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for column in columns:
-        name = column.get("name")
-        column_type = column.get("type")
-        if not isinstance(name, str) or not isinstance(column_type, str):
-            raise HarnessError(
-                "query",
-                "Log Analytics returned an invalid column definition.",
-                details=column,
-            )
-        if name in seen:
-            raise HarnessError(
-                "query", f"Log Analytics returned duplicate column {name}."
-            )
-        seen.add(name)
-        schema.append(
-            {"name": name, "type": _normalize_dcr_type(column_type)}
-        )
-    return schema
-
-
-def build_source_snapshot(
+def build_fixture_snapshot(
     *,
     target_id: str,
     table_name: str,
     timestamps: Sequence[str],
-    query_table: Mapping[str, Any],
+    schema: Sequence[Mapping[str, str]],
+    fixture_rows: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
-    columns = query_table.get("columns")
-    raw_rows = query_table.get("rows")
-    if not isinstance(columns, list) or not isinstance(raw_rows, list):
+    normalized_schema: list[dict[str, str]] = [
+        {
+            "name": str(column["name"]),
+            "type": _normalize_dcr_type(str(column["type"])),
+        }
+        for column in schema
+    ]
+    known_names = {
+        column["name"] for column in normalized_schema
+    }
+    extra_names = [
+        str(name)
+        for row in fixture_rows
+        for name in row
+        if str(name) not in known_names
+        and str(name) not in REPLAY_EXCLUDED_COLUMNS
+    ]
+    for name in dict.fromkeys(extra_names):
+        values = [
+            row.get(name)
+            for row in fixture_rows
+            if row.get(name) is not None
+        ]
+        if values and all(isinstance(value, bool) for value in values):
+            column_type = "boolean"
+        elif values and all(
+            isinstance(value, int) and not isinstance(value, bool)
+            for value in values
+        ):
+            column_type = "long"
+        elif values and all(
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            for value in values
+        ):
+            column_type = "real"
+        elif values and all(
+            isinstance(value, (dict, list))
+            for value in values
+        ):
+            column_type = "dynamic"
+        else:
+            column_type = "string"
+        normalized_schema.append(
+            {"name": name, "type": column_type}
+        )
+        known_names.add(name)
+    column_names = [column["name"] for column in normalized_schema]
+    if len(column_names) != len(set(column_names)):
         raise HarnessError(
             "source-snapshot",
-            "Log Analytics query response must contain columns and rows.",
+            "Fixture schema contains duplicate columns.",
         )
-    query_schema = _normalize_query_columns(columns)
-    column_names = [column["name"] for column in query_schema]
-    if any(not isinstance(row, list) for row in raw_rows):
-        raise HarnessError(
-            "source-snapshot", "Query rows must be arrays."
-        )
-
-    included_schema = [
-        column
-        for column in query_schema
-        if column["name"] not in REPLAY_EXCLUDED_COLUMNS
-    ]
-    included_names = [column["name"] for column in included_schema]
     type_by_name = {
-        column["name"]: column["type"] for column in included_schema
+        column["name"]: column["type"]
+        for column in normalized_schema
     }
     timestamp_set = {_validate_timestamp(value) for value in timestamps}
-    rows: list[dict[str, Any]] = []
-    for row in raw_rows:
-        if len(row) != len(column_names):
-            raise HarnessError(
-                "source-snapshot",
-                "Query row length does not match the returned schema.",
-            )
-        source = dict(zip(column_names, row))
-        prepared = {
-            name: _json_safe_value(source.get(name), type_by_name[name])
-            for name in included_names
+    rows = [
+        {
+            name: _json_safe_value(row.get(name), type_by_name[name])
+            for name in column_names
         }
-        timestamp = prepared.get("TimeGenerated")
+        for row in fixture_rows
+    ]
+    for row in rows:
+        timestamp = row.get("TimeGenerated")
         if not isinstance(timestamp, str) or timestamp not in timestamp_set:
             raise HarnessError(
                 "source-snapshot",
-                "Query returned a row outside the exact timestamp set.",
+                "Fixture row is outside the exact timestamp set.",
                 details={"TimeGenerated": timestamp},
             )
-        rows.append(prepared)
-
     timestamp_hash = hashlib.sha256(
         "\n".join(sorted(timestamp_set)).encode("utf-8")
     ).hexdigest()
+    fixture_columns = {
+        str(name)
+        for row in fixture_rows
+        for name in row
+    }
     return {
         "version": SNAPSHOT_VERSION,
         "targetId": target_id,
         "sourceRawTable": table_name,
+        "authority": "prepared-fixture",
         "rowCount": len(rows),
         "timestampValues": sorted(timestamp_set),
         "timestampSetHash": f"sha256:{timestamp_hash}",
-        "excludedColumns": sorted(
-            set(column_names) & REPLAY_EXCLUDED_COLUMNS
-        ),
-        "schema": included_schema,
+        "excludedColumns": sorted(fixture_columns - set(column_names)),
+        "schema": normalized_schema,
         "rows": rows,
     }
 
@@ -391,6 +412,70 @@ def _query_timestamp_counts(
             )
         counts[_validate_timestamp(timestamp)] += 1
     return dict(counts)
+
+
+def build_observed_query_rows(
+    query_table: Mapping[str, Any],
+    *,
+    stage: str,
+) -> dict[str, Any]:
+    columns = query_table.get("columns")
+    raw_rows = query_table.get("rows")
+    if not isinstance(columns, list) or not isinstance(raw_rows, list):
+        raise HarnessError(
+            stage, "Log Analytics result must contain columns and rows."
+        )
+    schema: list[dict[str, str]] = []
+    column_names: list[str] = []
+    for column in columns:
+        if not isinstance(column, Mapping):
+            raise HarnessError(
+                stage, "Invalid Log Analytics column metadata."
+            )
+        name = column.get("name")
+        column_type = column.get("type")
+        if not isinstance(name, str) or not isinstance(column_type, str):
+            raise HarnessError(
+                stage, "Invalid Log Analytics column metadata."
+            )
+        if name in column_names:
+            raise HarnessError(
+                stage,
+                f"Log Analytics returned duplicate column {name}.",
+            )
+        column_names.append(name)
+        schema.append(
+            {
+                "name": name,
+                "type": _normalize_dcr_type(column_type),
+            }
+        )
+    type_by_name = {
+        column["name"]: column["type"] for column in schema
+    }
+    rows: list[dict[str, Any]] = []
+    for raw_row in raw_rows:
+        if (
+            not isinstance(raw_row, list)
+            or len(raw_row) != len(column_names)
+        ):
+            raise HarnessError(stage, "Invalid Log Analytics row shape.")
+        row = {
+            name: _json_safe_value(value, type_by_name[name])
+            for name, value in zip(column_names, raw_row)
+        }
+        timestamp = row.get("TimeGenerated")
+        if isinstance(timestamp, str):
+            row["TimeGenerated"] = _validate_timestamp(timestamp)
+        rows.append(row)
+    return {
+        "schema": schema,
+        "rows": rows,
+        "countsByTimestamp": _query_timestamp_counts(
+            query_table,
+            stage,
+        ),
+    }
 
 
 def build_upload_batches(

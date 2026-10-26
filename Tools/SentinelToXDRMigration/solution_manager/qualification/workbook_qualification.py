@@ -363,7 +363,8 @@ def _normalize_result(columns: list[dict[str, str]], rows: list[Any]) -> dict[st
     values = []
     for row in rows:
         if isinstance(row, dict):
-            if set(row) - {"@odata.type"} != set(names):
+            if {key for key in row if not (isinstance(key, str) and key.endswith("@odata.type"))
+                    or key in names} != set(names):
                 raise ValueError("query provider row keys differ from its schema")
             cells = [row[name] for name in names]
         elif isinstance(row, list) and len(row) == len(names):
