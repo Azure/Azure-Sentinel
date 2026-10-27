@@ -79,15 +79,10 @@ ParserQuery: |
           or Subject has_any (emailsubject_has_any)
       | where array_length(emailrecipient_has_any) == 0
           or RecipientEmailAddress has_any (emailrecipient_has_any)
-          or (gettype(column_ifexists("To", dynamic([]))) == "array"
-              and column_ifexists("To", dynamic([])) has_any (emailrecipient_has_any))
-          or (gettype(column_ifexists("Cc", dynamic([]))) == "array"
-              and column_ifexists("Cc", dynamic([])) has_any (emailrecipient_has_any))
+          or To has_any (emailrecipient_has_any)
+          or Cc has_any (emailrecipient_has_any)
       | extend
-          _remaining = iff(pack, pack_all(), dynamic({})),
-          _to = column_ifexists("To", dynamic([])),
-          _cc = column_ifexists("Cc", dynamic([])),
-          _bytes = tolong(column_ifexists("EmailSize", long(null))),
+          _bytes = tolong(EmailSize),
           _delivery = tolower(DeliveryAction),
           _destination = tolower(DeliveryLocation)
       | extend SrcIpAddr = case(
@@ -111,6 +106,8 @@ ParserQuery: |
           and (eventresult == "*" or _normalizedResult =~ eventresult)
       | extend _authentication = parse_json(AuthenticationDetails)
       | project-rename
+          EmailToRecipients = To,
+          EmailCCRecipients = Cc,
           EmailFromAddress = SenderFromAddress,
           EmailFromDomain = SenderFromDomain,
           EmailMailFromAddress = SenderMailFromAddress,
@@ -138,8 +135,8 @@ ParserQuery: |
           Dvc = "Microsoft Defender for Office 365",
           DvcEntityKey = "",
           AdditionalEntities = dynamic([]),
-          EmailToRecipients = iff(gettype(_to) == "array", _to, dynamic([])),
-          EmailCCRecipients = iff(gettype(_cc) == "array", _cc, dynamic([])),
+          EmailToRecipients = coalesce(EmailToRecipients, dynamic([])),
+          EmailCCRecipients = coalesce(EmailCCRecipients, dynamic([])),
           EmailSizeBytes = iff(_bytes >= 0, _bytes, long(null)),
           EmailFileCount = iff(AttachmentCount >= 0, AttachmentCount, int(null)),
           EmailUrlCount = iff(UrlCount >= 0, UrlCount, int(null)),
@@ -154,9 +151,7 @@ ParserQuery: |
           EmailDkimOriginalResult = tostring(_authentication.DKIM),
           EmailDmarcOriginalResult = tostring(_authentication.DMARC),
           EventMessage = case(isnull(TimeGenerated), "Missing source timestamp",
-              isempty(Dst), "Missing source recipient",
-              gettype(_to) !in ("array", "null"), "Invalid To container",
-              gettype(_cc) !in ("array", "null"), "Invalid Cc container", "")
+              isempty(Dst), "Missing source recipient", "")
       | extend
           EventResultDetails = case(ThreatOriginalCategory has "Malware", "MalwareDetected",
               ThreatOriginalCategory has "Phish", "PhishingDetected",
@@ -171,12 +166,20 @@ ParserQuery: |
           Src = SrcIpAddr,
           IpAddr = SrcIpAddr,
           Rule = RuleName,
-          AdditionalFields = bag_remove_keys(_remaining, dynamic([
-              "TimeGenerated","Type","SenderFromAddress","SenderFromDomain","SenderMailFromAddress",
-              "SenderMailFromDomain","RecipientEmailAddress","Subject","ReportId","EmailAction",
-              "DeliveryAction","DeliveryLocation","EmailActionPolicy","ThreatTypes","ThreatNames",
-              "ConfidenceLevel","SenderObjectId","SenderIPv4","SenderIPv6","EmailDirection",
-              "AuthenticationDetails","To","Cc","EmailSize","AttachmentCount","UrlCount","EmailLanguage"]))
+          AdditionalFields = iff(pack, bag_pack(
+              "AdditionalFields", AdditionalFields, "BulkComplaintLevel", BulkComplaintLevel,
+              "Connectors", Connectors, "Context", Context, "DetectionMethods", DetectionMethods,
+              "DistributionList", DistributionList, "EmailActionPolicyGuid", EmailActionPolicyGuid,
+              "EmailClusterId", EmailClusterId, "ExchangeTransportRule", ExchangeTransportRule,
+              "ForwardingInformation", ForwardingInformation, "InternetMessageId", InternetMessageId,
+              "IsFirstContact", IsFirstContact, "LastEventExecutionTime", LastEventExecutionTime,
+              "LatestDeliveryAction", LatestDeliveryAction, "LatestDeliveryLocation", LatestDeliveryLocation,
+              "NetworkMessageId", NetworkMessageId, "OrgLevelAction", OrgLevelAction,
+              "OrgLevelPolicy", OrgLevelPolicy, "RecipientDomain", RecipientDomain,
+              "RecipientObjectId", RecipientObjectId, "SenderDisplayName", SenderDisplayName,
+              "SourceSystem", SourceSystem, "TenantId", TenantId,
+              "ThreatClassification", ThreatClassification, "Timestamp", Timestamp,
+              "UserLevelAction", UserLevelAction, "UserLevelPolicy", UserLevelPolicy), dynamic({}))
       | project
           TimeGenerated, Type, EventVendor, EventProduct, EventSchema, EventSchemaVersion,
           EventType, EventCount, EventStartTime, EventEndTime, EventResult, EventResultDetails,
