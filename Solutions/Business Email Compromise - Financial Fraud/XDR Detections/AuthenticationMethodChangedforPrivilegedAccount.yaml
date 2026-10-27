@@ -1,0 +1,169 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - IdentityInfo
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - IdentityInfo
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - IdentityInfo
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: feb0a2fb-ae75-4343-8cbc-ed545f1da289
+    path: Analytic Rules/AuthenticationMethodChangedforPrivilegedAccount.yaml
+    version: 1.0.5
+    querySha256: ce0213b8802343091980703e14d39db981ba770401ae9ba70a068da9947fef2a
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=2h, lookback=14d; target frequency=PT2H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `TargetUserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `TargetUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query
+      column `InitiatingUserPrincipalName`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName_2 column `InitiatingUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 80207cb9579879aa24fde9adb68f8ca0295e91aba98c027b6017561cec1dcd74
+      targetQuerySha256: 8d2aa4beb699e8a1708b5edece1bc440351d4242da2178aec31b7b3682b1c1f0
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+    reviewDecisions:
+    - reason: catalog column mappings were not applied because table/alias scope is
+        ambiguous
+      decision: accepted
+      sourceDocumentSha256: 80207cb9579879aa24fde9adb68f8ca0295e91aba98c027b6017561cec1dcd74
+      targetQuerySha256: 8d2aa4beb699e8a1708b5edece1bc440351d4242da2178aec31b7b3682b1c1f0
+    acceptedReviewReasons:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+properties:
+  id: xdr-feb0a2fb-ae75-4343-8cbc-ed545f1da289
+  displayName: Authentication Method Changed for Privileged Account
+  status: disabled
+  queryCondition:
+    queryText: 'let VIPUsers = (IdentityInfo
+
+      | where AssignedRoles contains "Admin"
+
+      | summarize by tolower(AccountUpn));
+
+      AuditLogs
+
+      | where TimeGenerated > ago(2h)
+
+      | where Category =~ "UserManagement"
+
+      | where ActivityDisplayName =~ "User registered security info"
+
+      | where LoggedByService =~ "Authentication Methods"
+
+      | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+
+      | where tolower(TargetUserPrincipalName) in (VIPUsers)
+
+      | extend TargetAadUserId = tostring(TargetResources[0].id)
+
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+
+      | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+
+      | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]),
+      TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+
+      | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName,
+      "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName,
+      "@")[1])'
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: Authentication Method Changed for Privileged Account
+      description: '''Identifies authentication methods being changed for a privileged
+        account. This could be an indication of an attacker adding an auth method
+        to the account so they can have continued access.
+
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetAccountName
+          upnSuffixColumn: TargetAccountUPNSuffix
+        - id: account2
+          aadUserIdColumn: TargetAadUserId
+        - id: account3
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account4
+          aadUserIdColumn: InitiatingAadUserId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIPAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      customDetails:
+        AccountFullName: TargetUserPrincipalName
+        AccountFullName_2: InitiatingUserPrincipalName

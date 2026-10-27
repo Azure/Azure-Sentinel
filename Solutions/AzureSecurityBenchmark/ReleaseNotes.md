@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                         |
 |-------------|--------------------------------|----------------------------------------------------------------------------|
+| 3.2.2       | 20-10-2026                     | Added Defender XDR **Custom Detection** for Azure Security Benchmark Posture Changed and packaged with V3.1. |
 | 3.0.5       | 29-05-2026                     | Updated Azure Security Benchmark workbook and Analytic Rules.             |
 | 3.0.4       | 13-04-2026                     | Updated Azure Security Benchmark label and queries.             |
 | 3.0.3       | 10-09-2025                     | Removed the network map from the workbook.                      |

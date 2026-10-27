@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                              |
 |-------------|--------------------------------|-------------------------------------------------|
+| 3.2.2       | 20-10-2026                     | Added Defender XDR **Custom Detections** migrated from **Analytic Rules**. |
 | 3.2.1       | 02-10-2026                     | Removed Google Workspace DCR EventParameters post-processing transform. |
 | 3.2.0       | 28-09-2026                     | Added alias-based multi-tenant connection management to the Google Workspace CCF connector across all 22 activity pollers, including Gmail. |
 | 3.1.0       | 04-09-2026                     | Added Gmail activity log ingestion and updated the parser to support the standard GoogleWorkspaceReports table while retaining legacy custom tables |

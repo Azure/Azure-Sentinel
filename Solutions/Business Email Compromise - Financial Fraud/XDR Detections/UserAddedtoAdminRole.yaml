@@ -1,0 +1,136 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2a09f8cb-deb7-4c40-b08b-9137667f1c0b
+    path: Analytic Rules/UserAddedtoAdminRole.yaml
+    version: 1.0.4
+    querySha256: 8809fe8789c227278365129ed64758f727e51f1f9ae70ff9d87b0b7b4eea4845
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `TargetUserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `TargetUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query
+      column `InitiatingUserPrincipalName`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName_2 column `InitiatingUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: d2656ab9ef5de20fab8041c225a5b01eac092a4661fbebb183e5f10ea4c4e136
+      targetQuerySha256: 44e951f7f60afcececee4b53fd610deb4f637308f7491549023b8919b0a77aee
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-2a09f8cb-deb7-4c40-b08b-9137667f1c0b
+  displayName: User Added to Admin Role
+  status: disabled
+  queryCondition:
+    queryText: "AuditLogs\n  | where OperationName in (\"Add eligible member (permanent)\"\
+      , \"Add eligible member (eligible)\", \"Add member to role\")\n  | mv-apply\
+      \ TargetResource = TargetResources on\n  (\n      where TargetResource.type\
+      \ =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n\
+      \               props = TargetResource.modifiedProperties\n  )\n  | mv-apply\
+      \ Property = props on\n  (\n      where Property.displayName =~ \"Role.DisplayName\"\
+      \n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n  |\
+      \ where RoleName contains \"admin\"\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n\
+      \  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n\
+      \  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n\
+      \  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend\
+      \ InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend InitiatedBy\
+      \ = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)\n\
+      \  | extend TargetUserPrincipalName = iff(OperationName==\"Add member to role\"\
+      ,tostring(TargetResources[0].userPrincipalName),tostring(TargetResources[2].userPrincipalName))\n\
+      \  | extend TargetAadUserId = iff(OperationName==\"Add member to role\", tostring(TargetResources[0].id),\
+      \ tostring(TargetResources[2].id))\n  | extend AddedUser = TargetUserPrincipalName\n\
+      \  | extend TargetAccountName = tostring(split(TargetUserPrincipalName, \"@\"\
+      )[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, \"@\"\
+      )[1])\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName,\
+      \ \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName,\
+      \ \"@\")[1])\n  | project-reorder TimeGenerated, AddedUser, RoleName, InitiatedBy"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: User Added to Admin Role
+      description: "'Detects a user being added to a new privileged role. Monitor\
+        \ these additions to ensure the users are made eligible for these roles are\
+        \ intended to have these levels of access.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'"
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetAccountName
+          upnSuffixColumn: TargetAccountUPNSuffix
+        - id: account2
+          aadUserIdColumn: TargetAadUserId
+        - id: account3
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account4
+          aadUserIdColumn: InitiatingAadUserId
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: TargetUserPrincipalName
+        AccountFullName_2: InitiatingUserPrincipalName
