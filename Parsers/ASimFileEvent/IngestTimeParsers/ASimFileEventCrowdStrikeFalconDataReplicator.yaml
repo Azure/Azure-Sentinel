@@ -1,0 +1,139 @@
+Parser:
+  DisplayName: "Ingestion-time File Event ASIM parser for CrowdStrike Falcon Data Replicator"
+  Version: "0.1.0"
+  LastUpdated: "2026-10-27"
+Product:
+  Name: "CrowdStrike Falcon Data Replicator"
+Normalization:
+  Schema: "FileEvent"
+  Version: "1.0.0"
+Author: "Microsoft"
+Description: |
+  Normalizes CrowdStrike Falcon Data Replicator file operations from
+  CrowdStrike_File_Events_CL to ASimFileEventLogs during ingestion.
+ParserName: "ASimFileEventCrowdStrikeFalconDataReplicator"
+DCRType: "Standard"
+InputStream: "Custom-CrowdStrike_File_Events_CL"
+SourceRawTable: "CrowdStrike_File_Events_CL"
+TargetASIMTable: "ASimFileEventLogs"
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend Type = "CrowdStrike_File_Events_CL"
+  | extend EventType = case(
+      event_simpleName == "DirectoryCreate", "FolderCreated",
+      event_simpleName in ("NewExecutableRenamed", "RansomwareRenameFile"), "FileRenamed",
+      event_simpleName in ("CriticalFileAccessed", "RansomwareOpenFile"), "FileAccessed",
+      event_simpleName in ("CriticalFileModified", "AsepFileChange"), "FileModified",
+      event_simpleName in ("NewExecutableWritten", "NewScriptWritten", "RansomwareCreateFile"), "FileCreated",
+      "FileCreatedOrModified")
+  | extend AdditionalFields = pack(
+      "SourceAdditionalFields", AdditionalFields,
+      "CrowdStrike", pack(
+          "ContextTimeStamp", ContextTimeStamp, "name", name, "ConfigBuild", ConfigBuild,
+          "ClientId", ClientId, "Status", Status, "OriginalFilename", OriginalFilename,
+          "FileWrittenFlags", FileWrittenFlags, "OperationFlags", OperationFlags,
+          "IsOnRemovableDisk", IsOnRemovableDisk, "MinorFunction", MinorFunction,
+          "IsOnNetwork", IsOnNetwork, "FileIdentifier", FileIdentifier,
+          "TokenType", TokenType, "DiskParentDeviceInstanceId", DiskParentDeviceInstanceId,
+          "FileObject", FileObject, "IrpFlags", IrpFlags, "FileEcpBitmask", FileEcpBitmask,
+          "MajorFunction", MajorFunction, "TemporaryFileName", TemporaryFileName,
+          "VolumeSessionUUID", VolumeSessionUUID, "PatternId", PatternId,
+          "EventOrigin", EventOrigin, "MSOfficeSubType", MSOfficeSubType, "GID", GID,
+          "UnixMode", UnixMode, "USN", USN, "FileCategory", FileCategory,
+          "ShareAccess", ShareAccess, "DesiredAccess", DesiredAccess, "ELFSubType", ELFSubType,
+          "IsTransactedFile", IsTransactedFile, "MachOSubType", MachOSubType,
+          "VnodeModificationType", VnodeModificationType, "NewFileIdentifier", NewFileIdentifier,
+          "Options", Options, "Information", Information, "FileAttributes", FileAttributes,
+          "Tags", Tags, "FixedFileVersion", FixedFileVersion,
+          "HandleCreateAuthenticationId", HandleCreateAuthenticationId, "FileFlags", FileFlags,
+          "VnodeType", VnodeType, "ConfigStateHash", ConfigStateHash,
+          "ContextThreadId", ContextThreadId, "BoundingLimitCount", BoundingLimitCount,
+          "BoundingLimitDuration", BoundingLimitDuration, "Entitlements", Entitlements,
+          "EffectiveTransmissionClass", EffectiveTransmissionClass,
+          "OciContainerId", OciContainerId, "TreeId", TreeId))
+  | project-rename
+      EventOriginalType = event_simpleName,
+      EventOriginalUid = CrowdStrikeId,
+      EventOriginalResultDetails = Status,
+      DvcId = aid,
+      DvcIpAddr = aip,
+      DvcScopeId = cid,
+      ActorUsername = UserName,
+      ActorUserSid = FileOperatorSid,
+      ActorUserUid = UID,
+      ActorSessionId = AuthenticationId,
+      ActingProcessId = ContextProcessId,
+      ActingProcessName = ImageFileName,
+      ActingProcessCommandLine = CommandLine,
+      TargetFilePath = TargetFileName,
+      TargetFileDirectory = TargetDirectoryName,
+      TargetFileSize = Size,
+      TargetFileSHA256 = SHA256HashData,
+      SrcFilePath = SourceFileName
+  | extend
+      EventStartTime = iif(isnotnull((datetime(1970-01-01) + timestamp * 1ms)), (datetime(1970-01-01) + timestamp * 1ms), TimeGenerated),
+      DvcOs = case(event_platform == "Win", "Windows", event_platform == "Lin", "Linux",
+          event_platform == "Mac", "macOS", ""),
+      TargetFilePath = case(
+          isempty(TargetFilePath) and EventType == "FolderCreated", TargetFileDirectory,
+          isnotempty(TargetFilePath) and TargetFilePath !contains "/" and TargetFilePath !contains @"\"
+              and isnotempty(TargetFileDirectory),
+              strcat(TargetFileDirectory,
+                  iff(TargetFileDirectory endswith "/" or TargetFileDirectory endswith @"\", "",
+                      iff(event_platform in ("Lin", "Mac") or TargetFileDirectory startswith "/", "/", @"\")),
+                  TargetFilePath),
+          TargetFilePath),
+      ActorUserId = iif(isnotempty(ActorUserSid), ActorUserSid, ActorUserUid),
+      ActorUserIdType = case(isnotempty(ActorUserSid), "SID", isnotempty(ActorUserUid), "UID", ""),
+      ActorUsernameType = case(isempty(ActorUsername), "", ActorUsername startswith "CN=", "DN",
+          ActorUsername contains @"\", "Windows", ActorUsername contains "@", "UPN", "Simple"),
+      DvcIdType = iff(isnotempty(DvcId), "Other", "")
+  | extend
+      EventEndTime = EventStartTime,
+      EventUid = EventOriginalUid,
+      EventCount = int(1),
+      EventVendor = "CrowdStrike",
+      EventProduct = "Falcon Data Replicator",
+      EventSchema = "FileEvent",
+      EventSchemaVersion = "1.0.0",
+      EventResult = "NA",
+      EventSeverity = "Informational",
+      Dvc = iif(isnotempty(DvcId), DvcId, DvcIpAddr),
+      TargetFileName = tostring(split(replace(@"\\", "/", TargetFilePath), "/")[-1]),
+      SrcFileName = tostring(split(replace(@"\\", "/", SrcFilePath), "/")[-1]),
+      TargetFilePathType = case(isempty(TargetFilePath), "", TargetFilePath startswith @"\\", "Windows Share",
+          TargetFilePath startswith "/", "Unix", TargetFilePath contains @"\", "Windows Local",
+          TargetFilePath contains "://", "URL", "FileNameOnly"),
+      SrcFilePathType = case(isempty(SrcFilePath), "", SrcFilePath startswith @"\\", "Windows Share",
+          SrcFilePath startswith "/", "Unix", SrcFilePath contains @"\", "Windows Local",
+          SrcFilePath contains "://", "URL", ""),
+      HashType = iff(isnotempty(TargetFileSHA256), "SHA256", ""),
+      ActingApplicationEntityKey = "",
+      ActingProcessEntityKey = "",
+      ActorUserEntityKey = "",
+      ActorUserAdditionalIds = parse_json('[]'),
+      DvcEntityKey = "",
+      SrcFileEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetFileEntityKey = "",
+      AdditionalEntities = parse_json('[]')
+  | project
+      TimeGenerated, Type, EventStartTime, EventEndTime, EventCount, EventVendor, EventProduct,
+      EventSchema, EventSchemaVersion, EventType, EventResult, EventSeverity,
+      EventOriginalType, EventOriginalUid, EventUid, EventOriginalResultDetails,
+      Dvc, DvcId, DvcIdType, DvcIpAddr, DvcScopeId, DvcOs,
+      ActorUsername, ActorUsernameType, ActorUserId, ActorUserIdType, ActorUserSid, ActorUserUid,
+      ActorSessionId, ActingProcessId, ActingProcessName, ActingProcessCommandLine,
+      TargetFilePath, TargetFilePathType, TargetFileName, TargetFileDirectory, TargetFileSize, TargetFileSHA256,
+      SrcFilePath, SrcFilePathType, SrcFileName,
+      FilePath = TargetFilePath, FileName = TargetFileName, Hash = TargetFileSHA256, HashType,
+      User = ActorUsername, Process = ActingProcessName,
+      ActingApplicationEntityKey, ActingProcessEntityKey, ActorUserEntityKey, ActorUserAdditionalIds,
+      DvcEntityKey, SrcFileEntityKey, SrcSystemEntityKey, TargetApplicationEntityKey,
+      TargetFileEntityKey, AdditionalEntities, AdditionalFields
+Change:
+  Date: "2026-10-27"
+  Description: "Initial ingestion-time conversion from query-time parser 0.1.0, with nested source packing enabled and literal path replacements preserved."
