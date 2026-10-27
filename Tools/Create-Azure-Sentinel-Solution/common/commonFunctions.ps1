@@ -3343,7 +3343,9 @@ function GeneratePackage(
     $createUiDefinitionOutputPath = "$solutionFolder/createUiDefinition.json"
 
     try {
-        $baseMainTemplate | ConvertTo-Json -Depth $packageSerializationDepth | Out-File $mainTemplateOutputPath -Encoding utf8
+        $mainTemplateJson = $baseMainTemplate | ConvertTo-Json -Depth $packageSerializationDepth
+        $mainTemplateJson -replace '("defaultValue"\s*:\s*)\[\s*("(?:[^"\\]|\\.)*")\s*\]', '$1[$2]' |
+            Out-File $mainTemplateOutputPath -Encoding utf8
 
         # create testParameters json file which will be used for test case automation
         $testParametersOutputPath = "$solutionFolder/testParameters.json"
