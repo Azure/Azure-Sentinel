@@ -1,0 +1,94 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - Update
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 40702da1-ae8a-4e46-ac1f-9327ca6ef588
+    path: Analytic Rules/Conditional Access - A Conditional Access policy was disabled.yaml
+    version: 1.0.2
+    querySha256: 80e927dfbe4c873685a9c8435b4ccc5ffc420cdb2a701fe83cb62d4216e6f237
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.007
+    reviewScope:
+      sourceDocumentSha256: 3defb7763f603dc2eaad1bb3a996af63b6fbd0ab8ebfa17c0540f85b358a086c
+      targetQuerySha256: 7d45bde8020d3a4ecd7164d9f388f94a8d4040a906b38f1a54fcf733dba228bb
+properties:
+  id: xdr-40702da1-ae8a-4e46-ac1f-9327ca6ef588
+  displayName: Conditional Access - A Conditional Access policy was disabled
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // A Conditional Access policy was disabled.
+      AuditLogs
+      | where OperationName in ("Update conditional access policy")
+      | extend stateOld = extractjson("$.state", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+      | extend stateNew = extractjson("$.state", tostring(TargetResources[0].modifiedProperties[0].newValue))
+      | where stateOld == "enabled" and stateNew == "disabled"
+      | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+      | extend accountName = tostring(split(modifiedBy, "@")[0])
+      | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+      | project
+          TimeGenerated,
+          OperationName,
+          policy = TargetResources[0].displayName,
+          modifiedBy,
+          accountName,
+          upnSuffix,
+          result = Result,
+          stateOld,
+          stateNew
+      | order by TimeGenerated desc
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Conditional Access - A Conditional Access policy was disabled
+      description: A Conditional Access policy was disabled in Entra ID.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: accountName
+          upnSuffixColumn: upnSuffix
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.007

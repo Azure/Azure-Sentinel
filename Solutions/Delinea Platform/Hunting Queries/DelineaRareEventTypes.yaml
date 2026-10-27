@@ -1,0 +1,46 @@
+id: 634f4212-76e3-485e-a6cc-5b1929476ef8
+name: Delinea - Rare / first-seen event types
+description: |
+  Identifies Delinea Platform event types that appear in the recent window but were never seen during the
+  preceding baseline period, using a leftanti join against the baseline set - with no alerting threshold
+  applied. A brand-new event type can signal a newly enabled feature, a configuration change, or an
+  attacker exercising functionality the environment does not normally use. Pivot on the users and source
+  IPs associated with each first-seen event type to decide whether it is benign. Tune 'baseline' and
+  'recent' to your environment.
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1087
+  - T1518
+query: |
+  let baseline = 14d;
+  let recent = 1d;
+  let seenBefore = DelineaAuditEvents_CL
+      | where TimeGenerated between (ago(baseline) .. ago(recent))
+      | distinct EventType;
+  DelineaAuditEvents_CL
+  | where TimeGenerated > ago(recent)
+  | where isnotempty(EventType)
+  | join kind=leftanti (seenBefore) on EventType
+  | extend d = parse_json(RawData)
+  | extend SrcIP = tostring(d.source.host.network.ipAddress)
+  | summarize Events = count(),
+              DistinctUsers = dcount(User), Users = make_set(User, 20), Actor = take_any(User),
+              SrcIP = take_any(SrcIP),
+              FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated)
+          by EventType, Service
+  | sort by FirstSeen desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Actor
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+version: 1.0.0

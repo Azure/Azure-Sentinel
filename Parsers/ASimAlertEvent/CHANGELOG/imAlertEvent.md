@@ -1,5 +1,13 @@
 # Changelog for imAlertEvent.yaml
 
+## Version 0.2.2
+
+- (2026-10-08) Corrected the Bitdefender GravityZone, Microsoft Defender XDR, SentinelOne Singularity, and Google SecOps parser disable watchlist keys - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
+
+## Version 0.2.1
+
+- (2026-10-05) Normalize the ASIM schema version to 0.1.0 - [PR #15265](https://github.com/Azure/Azure-Sentinel/pull/15265)
+
 ## Version 0.2.0
 
 - (2026-09-11) Add the Wiz Cloud and Wiz Defend AlertEvent filtering parsers - [PR #15016](https://github.com/Azure/Azure-Sentinel/pull/15016)
