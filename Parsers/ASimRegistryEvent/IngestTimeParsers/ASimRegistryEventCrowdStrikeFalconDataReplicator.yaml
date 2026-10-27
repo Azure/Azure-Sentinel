@@ -1,0 +1,149 @@
+Parser:
+  DisplayName: "Ingestion-time Registry Event ASIM parser for CrowdStrike Falcon Data Replicator"
+  Version: "0.1.0"
+  LastUpdated: "2026-10-27"
+Product:
+  Name: "CrowdStrike Falcon Data Replicator"
+Normalization:
+  Schema: "RegistryEvent"
+  Version: "1.0.0"
+Author: "Microsoft"
+Description: |
+  Normalizes all CrowdStrike_Registry_Events_CL records to ASimRegistryEventLogs during ingestion, including registry value and key operations.
+  Preserves explicit packed fields and sets EventUid to an empty string as requested; identity loss and unresolved source-routing/target-projection requirements are documented in the accompanying reports.
+ParserName: "ASimRegistryEventCrowdStrikeFalconDataReplicator"
+DCRType: "Standard"
+InputStream: "Custom-CrowdStrike_Registry_Events_CL"
+SourceRawTable: "CrowdStrike_Registry_Events_CL"
+TargetASIMTable: "ASimRegistryEventLogs"
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend Type = "CrowdStrike_Registry_Events_CL"
+  | extend
+      RegistryKey = replace(@'\\REGISTRY\\USER', 'HKEY_USERS', replace(@'\\REGISTRY\\MACHINE', 'HKEY_LOCAL_MACHINE', RegObjectName))
+      , RegistryValueData = case(
+          isnotempty(RegStringValue), RegStringValue
+          , isnotempty(RegNumericValue), tostring(RegNumericValue)
+          , isnotempty(RegBinaryValue), RegBinaryValue
+          , ""
+      )
+  | extend
+      EventType = case(
+          RegOperationType == "1", "RegistryValueSet",
+          RegOperationType == "2", "RegistryValueDeleted",
+          RegOperationType == "3", "RegistryKeyCreated",
+          RegOperationType == "4", "RegistryKeyDeleted",
+          RegOperationType == "5", "RegistryValueSet",
+          RegOperationType == "6", "RegistryKeyCreated",
+          RegOperationType == "7", "RegistryKeyRenamed",
+          RegOperationType == "101", "RegistryValueSet",
+          RegOperationType == "102", "RegistryValueDeleted",
+          "")
+  | project-rename 
+      DvcIpAddr = aip
+      , DvcId = aid
+      , EventOriginalType = name
+      , EventOriginalUid = CrowdStrikeId
+      , EventProductVersion = ConfigBuild
+      , ActingProcessId = ContextProcessId
+      , RegistryValue = RegValueName
+      , ActorUsername = UserName
+      , EventSubType = event_simpleName
+      , EventOriginalSubType = RegOperationType
+  
+  // NOTE(DCR-LOSSY: X.2 EventUid) - Log Analytics _ItemId is unavailable during ingestion.
+  | extend EventUid = ""
+  | extend
+      RegistryValueType = case(
+          RegType == "0", "Reg_None",
+          RegType == "1", "Reg_Sz",
+          RegType == "2", "Reg_Expand_Sz",
+          RegType == "3", "Reg_Binary",
+          RegType == "4", "Reg_Dword",
+          RegType == "5", "Reg_Dword_Big_Endian",
+          RegType == "6", "Reg_Link",
+          RegType == "7", "Reg_Multi_Sz",
+          RegType == "8", "Reg_Resource_List",
+          RegType == "9", "Reg_Full_Resource_Descriptor",
+          RegType == "10", "Reg_Resource_Requirements_List",
+          RegType == "11", "Reg_Qword",
+          "")
+  | extend
+      EventStartTime = (datetime(1970-01-01) + (ContextTimeStamp * 1000) * 1ms)
+      , EventEndTime = (datetime(1970-01-01) + timestamp * 1ms)
+      , DvcIdType = "Other"
+      , DvcOs = case(
+          event_platform == "Win", "Windows"
+          , event_platform == "Mac", "Macintosh"
+          , event_platform == "Lin", "Linux"
+          , ""
+      )
+      , RegistryPreviousKey = iff(EventType == "RegistryKeyRenamed", RegistryKey, "")
+      , ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", "")
+      , AdditionalFields = pack(
+              "cid", cid
+              , "ConfigStateHash", ConfigStateHash
+              , "TreeId", TreeId
+              , "OciContainerId", OciContainerId
+              , "TokenType", TokenType
+              , "AuthenticationId", AuthenticationId
+              , "RegClassificationFlags", RegClassificationFlags
+              , "RegClassificationIndex", RegClassificationIndex
+              , "Entitlements", Entitlements
+              , "EffectiveTransmissionClass", EffectiveTransmissionClass
+              , "BoundingLimitCount", BoundingLimitCount
+              , "BoundingLimitDuration", BoundingLimitDuration
+              , "ContextThreadId", ContextThreadId
+          )
+  
+  | extend
+      EventCount = int(1)
+      , EventSchemaVersion = "1.0.0"
+      , EventSchema = "RegistryEvent"
+      , EventVendor = "CrowdStrike"
+      , EventProduct = "Falcon Data Replicator"
+      , EventResult = "Success"
+      , EventSeverity = "Informational"
+      , Dvc = DvcId
+      , User = iff(isnotempty(ActorUsername), ActorUsername, "")
+      , ParentProcessId = '' 
+  | project
+      TimeGenerated
+      , Type
+      , EventStartTime
+      , EventEndTime
+      , EventType
+      , EventResult
+      , EventSeverity
+      , EventCount
+      , EventSchema
+      , EventSchemaVersion
+      , EventVendor
+      , EventProduct
+      , EventOriginalType
+      , EventOriginalUid
+      , EventUid
+      , EventProductVersion
+      , DvcIpAddr
+      , DvcId
+      , DvcIdType
+      , DvcOs
+      , RegistryKey
+      , RegistryValue
+      , RegistryValueData
+      , RegistryValueType
+      , RegistryPreviousKey
+      , ActingProcessId
+      , ActorUsername
+      , ActorUsernameType
+      , AdditionalFields
+      , Dvc
+      , User
+      , EventSubType
+      , EventOriginalSubType
+      , ParentProcessId
+Change:
+  Date: "2026-10-27"
+  Description: "Initial ingestion-time conversion with local lookup maps and approved empty EventUid."
