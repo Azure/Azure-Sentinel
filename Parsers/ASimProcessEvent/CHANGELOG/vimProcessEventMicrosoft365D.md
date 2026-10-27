@@ -1,5 +1,9 @@
 # Changelog for vimProcessEventMicrosoft365D.yaml
 
+## Version 0.4.2
+
+- (2026-10-27) Normalized AdditionalFields to dynamic; DeviceProcessEvents carries it as a JSON string, while the ProcessEvent schema declares dynamic
+
 ## Version 0.4.1
 
 - (2026-05-01) Fix bug where TargetUserSessionId was not projected - [PR #14183](https://github.com/Azure/Azure-Sentinel/pull/14183)
