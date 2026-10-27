@@ -61,10 +61,20 @@ Most finding rules select actionable High or Critical findings with `IsAlertCand
 The profile rule selects `SourceStatus=VULNERABLE` and raises Medium severity alerts. These
 rules use the same finding-selection logic as the RedRays deployment template: they cover new or materially changed
 findings, plus baseline findings if you enable baseline alerting. Assessment findings do not
-establish that an attack occurred, and must not be interpreted as observed adversary behavior. The password assessment rule maps
-to CredentialAccess / T1110 (Brute Force), covering authorized password recovery without
-asserting an online or offline sub-technique. The broader assessment templates retain empty
-mappings pending agreement with Microsoft on a valid assessment-content classification.
+establish that an attack occurred, and must not be interpreted as observed adversary behavior.
+Each rule's ATT&CK mapping describes how an adversary could abuse the reported weakness:
+
+| Rule | Tactics | Techniques |
+|---|---|---|
+| Vulnerability Assessment | InitialAccess, PrivilegeEscalation | T1190, T1068 |
+| ABAP Code Security | InitialAccess, PrivilegeEscalation | T1190, T1068 |
+| Cloud Security | InitialAccess, PrivilegeEscalation | T1078 |
+| SoD | PrivilegeEscalation, Persistence | T1078 |
+| Profile Parameters | DefenseEvasion, CredentialAccess | T1562, T1110 |
+| Password Security | CredentialAccess | T1110 |
+
+The password mapping covers authorized password recovery without asserting an online or
+offline sub-technique.
 
 Finding rules provide Host, IP and URL entity mappings. If source links are relative, configure
 `redRaysPortalUrls` in each rule query, for example `dynamic({"<ProductInstanceId>": "https://redrays.example"})`.
