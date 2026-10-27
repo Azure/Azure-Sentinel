@@ -56,7 +56,7 @@ The **DECTRAX Solution for Microsoft Sentinel** delivers automated, high-fidelit
 |---|---|---|
 | **ARM Package Template** | `Package/mainTemplate.json` | Master ARM deployment template for Azure Marketplace / Content Hub. |
 | **Azure UI Definition** | `Package/createUiDefinition.json` | Azure Portal wizard definition with workspace validation and secret masking. |
-| **Solution Metadata** | `SolutionMetadata.json` | Package manifest defining Microsoft taxonomy domains, version (1.0.0), and publisher info. |
+| **Solution Metadata** | `SolutionMetadata.json` | Package manifest defining Microsoft taxonomy domains, version (3.0.0), and publisher info. |
 | **Data Connector** | `Data Connectors/DecTrax_CCF/` | Codeless Connector Framework (CCF) definition targeting `/api/attacks/recent`. |
 | **Analytic Rules** | `Analytic Rules/` | 4 high-fidelity alert rules with MITRE ATT&CK mappings. |
 | **Hunting Queries** | `Hunting Queries/` | Proactive threat hunting queries for brute-force and zero-day payloads. |
