@@ -1,0 +1,50 @@
+Parser:
+  DisplayName: 'Network Session ASIM parser for Fortinet FortiGate - ingestion-time normalization'
+  Version: '0.6.0'
+  LastUpdated: '2026-10-22'
+Product:
+  Name: 'Fortinet FortiGate'
+Normalization:
+  Schema: 'NetworkSession'
+  Version: '0.2.6'
+Author: 'Microsoft'
+Description: |
+  Normalizes Fortinet FortiGate NetworkSession events from CommonSecurityLog into ASimNetworkSessionLogs during ingestion.
+ParserName: 'ASimNetworkSessionFortinetFortiGate'
+DCRType: 'Standard'
+InputStream: 'Microsoft-CommonSecurityLog'
+SourceRawTable: 'CommonSecurityLog'
+TargetASIMTable: 'ASimNetworkSessionLogs'
+ParserFilterQuery: |
+  source
+  | where DeviceVendor == "Fortinet"
+      and DeviceProduct startswith "FortiGate"
+      and (DeviceEventCategory has "traffic" or AdditionalExtensions has "cat=traffic")
+  | where DeviceAction != "dns" and Activity !has "dns"
+ParserQuery: |
+  source
+  | extend Type="CommonSecurityLog"
+  | where DeviceVendor=="Fortinet" and DeviceProduct startswith "FortiGate" and(DeviceEventCategory has "traffic" or AdditionalExtensions has "cat=traffic")
+  | where DeviceAction !="dns" and Activity !has "dns"
+  | parse Activity with "traffic:forward " temp_DeviceAction:string
+  | extend DeviceAction=iif(isnotempty(DeviceAction),DeviceAction,temp_DeviceAction)
+  | extend DvcAction=case(DeviceAction=="accept","Allow",DeviceAction=="client-rst","Reset Source",DeviceAction=="close","",DeviceAction=="deny","Deny",DeviceAction=="ip-conn","",DeviceAction=="server-rst","Reset Destination",DeviceAction=="timeout","","")
+  | extend EventResult=case(DeviceAction=="accept","Success",DeviceAction=="client-rst","Failure",DeviceAction=="close","Success",DeviceAction=="deny","Failure",DeviceAction=="ip-conn","Failure",DeviceAction=="server-rst","Failure",DeviceAction=="timeout","Failure","")
+  | extend EventResultDetails=case(DeviceAction=="accept","",DeviceAction=="client-rst","",DeviceAction=="close","",DeviceAction=="deny","",DeviceAction=="ip-conn","IP connection error",DeviceAction=="server-rst","",DeviceAction=="timeout","","")
+  | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated,DeviceExternalID,Type,Computer,EventResult,EventResultDetails,DvcAction
+  | project-rename DstBytes=ReceivedBytes,DstInterfaceName=DeviceOutboundInterface,DstIpAddr=DestinationIP,DstPortNumber=DestinationPort,Dvc=Computer,EventMessage=Activity,EventOriginalSeverity=LogSeverity,EventProduct=DeviceProduct,EventProductVersion=DeviceVersion,SrcBytes=SentBytes,SrcInterfaceName=DeviceInboundInterface,SrcIpAddr=SourceIP,SrcPortNumber=SourcePort,DvcId=DeviceExternalID
+  | extend NetworkProtocolNumber=toint(Protocol)
+  | extend NetworkProtocol=case(NetworkProtocolNumber>=0 and NetworkProtocolNumber<=143,tostring(split("HOPOPT|ICMP|IGMP|GGP|IPv4|ST|TCP|CBT|EGP|IGP|BBN-RCC-MON|NVP-II|PUP|ARGUS (deprecated)|EMCON|XNET|CHAOS|UDP|MUX|DCN-MEAS|HMP|PRM|XNS-IDP|TRUNK-1|TRUNK-2|LEAF-1|LEAF-2|RDP|IRTP|ISO-TP4|NETBLT|MFE-NSP|MERIT-INP|DCCP|3PC|IDPR|XTP|DDP|IDPR-CMTP|TP++|IL|IPv6|SDRP|IPv6-Route|IPv6-Frag|IDRP|RSVP|GRE|DSR|BNA|ESP|AH|I-NLSP|SWIPE (deprecated)|NARP|MOBILE|TLSP|SKIP|IPv6-ICMP|IPv6-NoNxt|IPv6-Opts||CFTP||SAT-EXPAK|KRYPTOLAN|RVD|IPPC||SAT-MON|VISA|IPCV|CPNX|CPHB|WSN|PVP|BR-SAT-MON|SUN-ND|WB-MON|WB-EXPAK|ISO-IP|VMTP|SECURE-VMTP|VINES|IPTM|NSFNET-IGP|DGP|TCF|EIGRP|OSPFIGP|Sprite-RPC|LARP|MTP|AX.25|IPIP|MICP (deprecated)|SCC-SP|ETHERIP|ENCAP||GMTP|IFMP|PNNI|PIM|ARIS|SCPS|QNX|A/N|IPComp|SNP|Compaq-Peer|IPX-in-IP|VRRP|PGM||L2TP|DDX|IATP|STP|SRP|UTI|SMP|SM (deprecated)|PTP|ISIS over IPv4|FIRE|CRTP|CRUDP|SSCOPMCE|IPLT|SPS|PIPE|SCTP|FC|RSVP-E2E-IGNORE|Mobility Header|UDPLite|MPLS-in-IP|manet|HIP|Shim6|WESP|ROHC|Ethernet","|")[NetworkProtocolNumber]),NetworkProtocolNumber==255,"Reserved","")
+  | extend NetworkProtocol=case(NetworkProtocol !="",NetworkProtocol,"Unassigned")
+  | project-rename DvcOriginalAction=DeviceAction
+  | parse-kv AdditionalExtensions as(FTNTFGTstart:datetime,FTNTFGTsrcintfrole:string,FTNTFGTdstintfrole:string,FTNTFGTexternalID:string,FTNTFGTpolicyid:int,FTNTFGTdstcountry:string,FTNTFGTsrccountry:string,FTNTFGTcrscore:string,FTNTFGTduration:int,FTNTFGTsentpkt:long,FTNTFGTrcvdpkt:long,FTNTFGTutmaction:string,start:datetime,srcintfrole:string,dstintfrole:string,externalID:string,policyid:int,dstcountry:string,srccountry:string,crscore:string,duration:int,sentpkt:long,rcvdpkt:long,utmaction:string)with(pair_delimiter=';',kv_delimiter='=')
+  | extend EventStartTime=iif(isnotnull(FTNTFGTstart),FTNTFGTstart,start),SrcZone=iif(isnotempty(FTNTFGTsrcintfrole),FTNTFGTsrcintfrole,srcintfrole),DstZone=iif(isnotempty(FTNTFGTdstintfrole),FTNTFGTdstintfrole,dstintfrole),NetworkSessionId=iif(isnotempty(FTNTFGTexternalID),FTNTFGTexternalID,externalID),NetworkRuleNumber=iif(isnotnull(FTNTFGTpolicyid),FTNTFGTpolicyid,policyid),NetworkDuration=iif(isnotnull(FTNTFGTduration),FTNTFGTduration,duration),DstGeoCountry=iif(isnotempty(FTNTFGTdstcountry),FTNTFGTdstcountry,dstcountry),SrcGeoCountry=iif(isnotempty(FTNTFGTsrccountry),FTNTFGTsrccountry,srccountry),ThreatOriginalRiskLevel=iif(isnotempty(FTNTFGTcrscore),FTNTFGTcrscore,crscore),SrcPackets=iif(isnotnull(FTNTFGTsentpkt),FTNTFGTsentpkt,sentpkt),DstPackets=iif(isnotnull(FTNTFGTrcvdpkt),FTNTFGTrcvdpkt,rcvdpkt),_UtmAction=iif(isnotempty(FTNTFGTutmaction),FTNTFGTutmaction,utmaction)
+  | extend EventResult=case(_UtmAction=="allow","Success",EventResult),EventResultDetails=case(_UtmAction=="allow" and EventResult=="Success","",EventResultDetails)
+  | extend EventCount=int(1),EventSchema="NetworkSession",EventSchemaVersion="0.2.6",EventType="NetworkSession",EventVendor="Fortinet",EventProduct="Fortigate",DvcIdType="Other",NetworkBytes=DstBytes + SrcBytes,EventEndTime=TimeGenerated,EventStartTime=iif(isnotnull(EventStartTime),EventStartTime,TimeGenerated),NetworkProtocolVersion=case(DstIpAddr contains ".","IPv4",DstIpAddr contains ":","IPv6",""),NetworkPackets=DstPackets + SrcPackets
+  | extend EventSeverity=case(EventOriginalSeverity=="1","Informational",EventOriginalSeverity=="2","Informational",EventOriginalSeverity=="3","Informational",EventOriginalSeverity=="4","Low",EventOriginalSeverity=="5","Medium",EventOriginalSeverity=="6","High",EventOriginalSeverity=="7","High",EventOriginalSeverity=="8","High","")
+  | extend Src=SrcIpAddr,Dst=DstIpAddr,SessionId=NetworkSessionId,IpAddr=SrcIpAddr,Duration=NetworkDuration,Rule=tostring(NetworkRuleNumber)
+  | project EventMessage,DstIpAddr,DstPortNumber,DvcOriginalAction,SrcInterfaceName,DstInterfaceName,EventProduct,EventProductVersion,EventOriginalSeverity,DstBytes,SrcBytes,SrcIpAddr,SrcPortNumber,TimeGenerated,DvcId,Type,Dvc,EventResult,EventResultDetails,DvcAction,NetworkProtocol,EventStartTime,SrcZone,DstZone,NetworkSessionId,NetworkRuleNumber,NetworkDuration,DstGeoCountry,SrcGeoCountry,ThreatOriginalRiskLevel,SrcPackets,DstPackets,EventCount,EventSchema,EventSchemaVersion,EventType,EventVendor,DvcIdType,NetworkBytes,EventEndTime,NetworkProtocolVersion,NetworkPackets,EventSeverity,Src,Dst,SessionId,IpAddr,Duration,Rule
+  | project EventMessage, DstIpAddr, DstPortNumber, DvcOriginalAction, SrcInterfaceName, DstInterfaceName, EventProduct, EventProductVersion, EventOriginalSeverity, DstBytes, SrcBytes, SrcIpAddr, SrcPortNumber, TimeGenerated, DvcId, Type, Dvc, EventResult, EventResultDetails, DvcAction, NetworkProtocol, EventStartTime, SrcZone, DstZone, NetworkSessionId, NetworkRuleNumber, NetworkDuration, DstGeoCountry, SrcGeoCountry, ThreatOriginalRiskLevel, SrcPackets, DstPackets, EventCount, EventSchema, EventSchemaVersion, EventType, EventVendor, DvcIdType, NetworkBytes, EventEndTime, NetworkProtocolVersion, NetworkPackets, EventSeverity, Src, Dst, SessionId, IpAddr, Duration, Rule
+Change:
+  Date: '2026-10-22'
+  Description: 'Initial ingest-time parser targeting ASimNetworkSessionLogs.'
