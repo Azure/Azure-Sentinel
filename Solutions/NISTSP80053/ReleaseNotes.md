@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                            |
 |-------------|--------------------------------|-----------------------------------------------------------------------------------------------|
+| 3.2.2       | 22-10-2026                     | Added Defender XDR Custom Detection and Defender Workbook for NIST SP 800-53 R4               |
 | 3.0.4       | 31-08-2026                     | Fixed gov deploy to azure button and repackage                      |
 | 3.0.3       | 19-01-2026                     | EOP rebrand (updated minor link and link title changes)                      |
 | 3.0.2       | 23-09-2025                     | Updated the workbook with new links and fixed broken metrics.   |

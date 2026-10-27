@@ -42,12 +42,35 @@
         "type": "Microsoft.Common.DropDown",
         "label": "Workspace",
         "placeholder": "Select a workspace",
-        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "toolTip": "Defaults to the first Log Analytics workspace in the selected resource group. Pick another workspace from the same resource group if needed.",
         "constraints": {
-          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/'))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
           "required": true
         },
+        "visible": true,
+        "defaultValue": "[first(map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/'))), (item) => item.name))]"
+      },
+      {
+        "name": "workspaceLocation",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Workspace region",
+        "defaultValue": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+        "toolTip": "Filled automatically from the selected workspace. Change it only if you need to; Sentinel content, tables and the data collection rule must be in the workspace's region.",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z0-9]{1,64}$",
+          "validationMessage": "Enter an Azure region name such as eastus or westeurope (lowercase letters and digits, no spaces)."
+        },
         "visible": true
+      },
+      {
+        "name": "workspaceLocationWarning",
+        "type": "Microsoft.Common.InfoBox",
+        "visible": "[and(not(empty(basics('workspaceLocation'))), not(empty(first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location)))), not(equals(toLower(basics('workspaceLocation')), toLower(first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location))))))]",
+        "options": {
+          "icon": "Warning",
+          "text": "[concat('The selected workspace is in ', first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location)), '. Deploying to a different region may fail or leave the data connector unable to ingest data.')]"
+        }
       }
     ],
     "steps": [
@@ -110,7 +133,7 @@
                 "name": "analytic1-text",
                 "type": "Microsoft.Common.TextBlock",
                 "options": {
-                  "text": "Identifies unusually large NRD ingest volume that may indicate bulk registration campaigns."
+                  "text": "Identifies unusually large NRD ingest volume that may indicate bulk registration campaigns. The NRD feeds are polled once a day, so the rule compares the last 24 hours of distinct domains against the average of the previous seven daily loads and alerts only when the current load is at least 50% above that average and more than three standard deviations from it."
                 }
               }
             ]
@@ -124,7 +147,7 @@
                 "name": "analytic2-text",
                 "type": "Microsoft.Common.TextBlock",
                 "options": {
-                  "text": "Identifies high-confidence malware, phishing, and spam domains from WhoisFreaks threat feeds."
+                  "text": "Identifies high-confidence malware, phishing, and spam domains from WhoisFreaks threat feeds. The feed reports confidence as a decimal between 0 and 1; this rule alerts on domains with a confidence of 0.8 or higher."
                 }
               }
             ]
@@ -138,7 +161,7 @@
                 "name": "analytic3-text",
                 "type": "Microsoft.Common.TextBlock",
                 "options": {
-                  "text": "Identifies newly registered domains that are later observed in WhoisFreaks threat feeds."
+                  "text": "Identifies newly registered domains that are later observed in WhoisFreaks threat feeds. The rule runs hourly and matches threat rows ingested in the last hour against domains seen in the NRD feeds during the previous seven days, so each threat row is alerted on once."
                 }
               }
             ]
@@ -152,7 +175,7 @@
                 "name": "analytic4-text",
                 "type": "Microsoft.Common.TextBlock",
                 "options": {
-                  "text": "Identifies threat-listed domains that are currently parked and may be used for staging."
+                  "text": "Identifies threat-listed domains that are currently parked and may be used for staging. The feed reports parked state in the is_parked column as t or f."
                 }
               }
             ]
@@ -161,7 +184,7 @@
       }
     ],
     "outputs": {
-      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "workspace-location": "[if(empty(basics('workspaceLocation')), first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), concat('/resourcegroups/', toLower(resourceGroup().name), '/')),equals(filter.name,basics('workspace')))), (item) => item.location)), basics('workspaceLocation'))]",
       "location": "[location()]",
       "workspace": "[basics('workspace')]"
     }

@@ -13,6 +13,11 @@ _ALL_CATEGORIES_CONDITION = {"field": "category", "operator": "exists"}
 class UpwindCatalogClient(UpwindClient):
     """Client for the Upwind inventory catalog API."""
 
+    def __init__(self, config, time_budget=None):
+        super().__init__(config, time_budget)
+        # The catalog search endpoint accepts up to 200 items per page.
+        self.page_size = config.get("upwind_catalog_page_size", self.page_size)
+
     def _catalog_search_url(self) -> str:
         return (
             f"{self.api_base_url}/v2/organizations/{self.org_id}"

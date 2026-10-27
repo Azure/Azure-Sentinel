@@ -18,7 +18,7 @@ Microsoft Sentinel data connector that ingests data from **six Upwind API endpoi
 | Threat stories | `POST /v2/organizations/{orgId}/threats/stories/search` | Time-windowed | `UpwindThreatStories_CL` |
 | Configuration (posture) findings | `POST /v2/organizations/{orgId}/configurations/findings/search` | Time-windowed | `UpwindConfigurationFindings_CL` |
 
-Every dataset is time-windowed: each run pulls what was updated, seen, or first seen since the previous scheduled run, plus a 5-minute overlap. The window is derived from `UpwindCatalogSchedule` (the longest gap between runs plus 5 minutes, so 65 minutes for the hourly default), and the overlap just produces harmless duplicate rows. Because inventory assets are pulled by last update, the table holds a change history: query the current state of each asset with `UpwindCatalogAssets_CL | summarize arg_max(TimeGenerated, *) by AssetId`. Assets that don't change are re-ingested by a full catalog sync every 24 hours (app setting `UPWIND_FULL_SYNC_INTERVAL_HOURS`, `0` turns it off), which also gives a fresh install its initial inventory. The full sync only uses the time left after the other datasets, so in a large organization it spans several runs; its position is saved in the Function App's storage account (container `upwind-catalog-loader`) and each run resumes where the last one stopped. Pages are uploaded as they are fetched, so if a run hits the Upwind API rate limit or its time budget, everything fetched before that point is kept. The Upwind inventory API allows 600 catalog requests per minute per organization, shared by every API key in the org; the connector paces itself to 300 requests per minute by default (app setting `UPWIND_MAX_REQUESTS_PER_MINUTE`, `0` disables pacing) and, when rate limited, keeps retrying until the run's time budget (`UPWIND_RUN_TIME_BUDGET_SECONDS`, default 480) runs out. Each dataset gets at most an even share of the time left, so one unusually large dataset can't starve the others.
+Every dataset is time-windowed: each run pulls what was updated, seen, or first seen since the previous scheduled run, plus a 5-minute overlap. The window is derived from `UpwindCatalogSchedule` (the longest gap between runs plus 5 minutes, so 65 minutes for the hourly default), and the overlap just produces harmless duplicate rows. Because inventory assets are pulled by last update, the table holds a change history: query the current state of each asset with `UpwindCatalogAssets_CL | summarize arg_max(TimeGenerated, *) by AssetId`. Assets that don't change are re-ingested by a full catalog sync every 24 hours (app setting `UPWIND_FULL_SYNC_INTERVAL_HOURS`, `0` turns it off), which also gives a fresh install its initial inventory. The full sync only uses the time left after the other datasets, so in a large organization it spans several runs; its position is saved in the Function App's storage account (container `upwind-catalog-loader`) and each run resumes where the last one stopped. Pages are uploaded as they are fetched, so if a run hits the Upwind API rate limit or its time budget, everything fetched before that point is kept. The Upwind inventory API allows 600 catalog requests per minute per organization, shared by every API key in the org; the connector paces itself to 300 requests per minute by default (app setting `UPWIND_MAX_REQUESTS_PER_MINUTE`, `0` disables pacing) and, when rate limited, keeps retrying until the run's time budget (`UPWIND_RUN_TIME_BUDGET_SECONDS`, default 480) runs out. Each dataset gets at most an even share of the time left, so one unusually large dataset can't starve the others. Catalog and configuration findings requests fetch larger pages than the other datasets (`UPWIND_CATALOG_PAGE_SIZE`, default 200, and `UPWIND_CONFIG_FINDINGS_PAGE_SIZE`, default 1000, the maximum each endpoint accepts), so large organizations need far fewer requests; the other datasets use `UPWIND_PAGE_SIZE` (default 100).
 
 > **Note:** `title` and `type` are reserved/invalid column names for Log Analytics custom tables, so the four affected datasets (threat detections, threat events, threat stories, configuration findings) rename them to `title_text` and `event_type` before upload.
 
@@ -37,6 +37,7 @@ UpwindCatalogLoader/
 │   └── testParameters.json
 └── Data Connectors/
     ├── azuredeploy_UpwindCatalogLoader_API_FunctionApp.json  <- ARM deploy template
+    ├── azuredeploy_UpwindLogsLoader_API_FunctionApp.json     <- Identical copy for older installs (see below)
     ├── UpwindCatalogLoader_API_FunctionApp.json              <- Connector definition
     ├── UpwindLogsLoader.zip         <- Self-contained Function App package
     ├── host.json
@@ -60,6 +61,8 @@ UpwindCatalogLoader/
 Click the button below to deploy all required Azure resources (DCE, 6 custom tables, DCR with 6 streams, role assignment, storage, App Insights, Function App) in one step:
 
 [![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FUpwind%2FData%2520Connectors%2Fazuredeploy_UpwindCatalogLoader_API_FunctionApp.json)
+
+> **Older installs:** solution versions before 3.0.3 shipped an "Upwind Logs Loader" connector whose Deploy button goes through `https://aka.ms/sentinel-Upwind-azuredeploy` to `azuredeploy_UpwindLogsLoader_API_FunctionApp.json`. Updating the solution doesn't remove that connector, so the file is kept as an identical copy of `azuredeploy_UpwindCatalogLoader_API_FunctionApp.json`. Keep the two files in sync.
 
 ### Parameters
 
@@ -108,19 +111,19 @@ Click the button below to deploy all required Azure resources (DCE, 6 custom tab
 |---|---|---|
 | `TimeGenerated` | datetime | Ingestion time |
 | `id` | string | `id` |
-| `cve_id` | string | `cve_id` |
-| `severity` | string | `severity` |
-| `status` | string | `status` |
+| `cve_id` | string | `resource.cve_id` (or `vulnerability.nvd_cve_id`) |
+| `severity` | string | `vulnerability.nvd_cvss_v3_severity` |
+| `status` | string | `status`; `OPEN` when unset, since the API only returns active findings |
 | `first_seen_time` | datetime | `first_seen_time` |
 | `last_scan_time` | datetime | `last_scan_time` |
 | `resource` | dynamic | `resource` |
 | `package` | dynamic | `package` |
-| `fix` | dynamic | `fix` |
-| `fix_available` | string | `fix_available` |
-| `exploitable` | string | `exploitable` |
-| `internet_exposure` | string | `internet_exposure` |
+| `fix` | dynamic | `fixed_in_version` of the `OFFICIAL_FIX` entry in `remediation` |
+| `fix_available` | string | `true` when `remediation` has an official fix, else `false` |
+| `exploitable` | string | `vulnerability.exploitable` (`true`/`false`) |
+| `internet_exposure` | string | `resource.internet_exposure`, as JSON |
 | `source` | string | `source` |
-| `image_name` | string | `image_name` |
+| `image_name` | string | `image.name` |
 | `remediation` | dynamic | `remediation` |
 
 ### `UpwindThreatDetections_CL`
@@ -217,7 +220,7 @@ UpwindCatalogAssets_CL
 
 // Open critical/high vulnerabilities with an available fix
 UpwindVulnerabilityFindings_CL
-| where status == "open" and severity in ("critical", "high") and fix_available == "true"
+| where status =~ "open" and severity in~ ("critical", "high") and fix_available == "true"
 | project cve_id, severity, image_name, resource, fix
 | sort by severity asc
 

@@ -1,8 +1,8 @@
 id: 39f51672-8c63-4600-882a-5db8275f798f
 Function:
   Title: Parser for MRA Configuration Data Comparison
-  Version: '1.1.0'
-  LastUpdated: '2024-08-30'
+  Version: '1.1.1'
+  LastUpdated: '2026-10-07'
 Category: Microsoft Sentinel Parser
 FunctionName: MESCompareDataMRA
 FunctionAlias: MESCompareDataMRA
@@ -36,8 +36,8 @@ FunctionParams:
     Description: List of actors to exclude. Default value is "dynamic('')".
     Default: dynamic('')
 FunctionQuery: |
-  // Version:         1.1.0
-  // Last Updated:    30/08/2024
+  // Version:         1.1.1
+  // Last Updated:    07/10/2026
   //  
   // DESCRIPTION:
   // This parser is used to compare the data of a specific section of the Exchange Online Configuration. It will compare the data of a specific section between two dates and return the differences between them.
@@ -66,7 +66,9 @@ FunctionQuery: |
   // Parameters definition
   let _SectionCompare = SectionCompare;
   let _EnvList =EnvList;
-  let _TypeEnv = TypeEnv;
+  let _SectionList = split(_SectionCompare, ',');
+  let _configurationEnv = split(iff(isnull(_EnvList) or isempty(_EnvList) or tolower(_EnvList) == "all", "All", tostring(_EnvList)), ',');
+  let _TypeEnv = iff(isnull(TypeEnv) or isempty(TypeEnv), "On-Premises", TypeEnv);
   let _CurrentRole =CurrentRole;
   let _ExclusionsAcct = ExclusionsAcct;
   let _DateCompare = DateCompare;
@@ -84,8 +86,8 @@ FunctionQuery: |
           and CmdletResultValue.Name !contains "Deleg"
       | extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)
       | extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType == "User", "User", "RoleGroup")
-      | extend CustomRecipientWriteScope = iff (_TypeEnv=="On-Premises", tostring(CmdletResultValue.CustomRecipientWriteScope.Name), tostring(CmdletResultValue.CustomRecipientWriteScope))
-      | extend CustomConfigWriteScope = iff (_TypeEnv=="On-Premises",  tostring(CmdletResultValue.CustomConfigWriteScope.Name), tostring(CmdletResultValue.CustomConfigWriteScope))
+      | extend CustomRecipientWriteScope = iff (Source=="On-Premises", tostring(CmdletResultValue.CustomRecipientWriteScope.Name), tostring(CmdletResultValue.CustomRecipientWriteScope))
+      | extend CustomConfigWriteScope = iff (Source=="On-Premises",  tostring(CmdletResultValue.CustomConfigWriteScope.Name), tostring(CmdletResultValue.CustomConfigWriteScope))
       | extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)
       | extend RecipientWriteScope = tostring(CmdletResultValue.RecipientWriteScope)
       | extend ConfigWriteScope = tostring(CmdletResultValue.ConfigWriteScope)
@@ -103,8 +105,8 @@ FunctionQuery: |
           and CmdletResultValue.Name !contains "Deleg"
       | extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)
       | extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType == "User", "User", "RoleGroup")
-      | extend CustomRecipientWriteScope = iff (_TypeEnv=="On-Premises", tostring(CmdletResultValue.CustomRecipientWriteScope.Name), tostring(CmdletResultValue.CustomRecipientWriteScope.Name))
-      | extend CustomConfigWriteScope = iff (_TypeEnv=="On-Premises",  tostring(CmdletResultValue.CustomConfigWriteScope.Name), tostring(CmdletResultValue.CustomConfigWriteScope))
+      | extend CustomRecipientWriteScope = iff (Source=="On-Premises", tostring(CmdletResultValue.CustomRecipientWriteScope.Name), tostring(CmdletResultValue.CustomRecipientWriteScope))
+      | extend CustomConfigWriteScope = iff (Source=="On-Premises",  tostring(CmdletResultValue.CustomConfigWriteScope.Name), tostring(CmdletResultValue.CustomConfigWriteScope))
       | extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)
       | extend RecipientWriteScope = tostring(CmdletResultValue.RecipientWriteScope)
       | extend ConfigWriteScope = tostring(CmdletResultValue.ConfigWriteScope)
@@ -117,19 +119,22 @@ FunctionQuery: |
       ;
   let i=0;
   let allDataRange = 
-      ESIExchangeOnlineConfig_CL
+      union isfuzzy=true withsource=TableName ESIExchangeConfig_CL, ESIAPIExchangeOnPremisesConfig_CL, ESIExchangeOnlineConfig_CL, ESIAPIExchangeOnlineConfig_CL
+      | extend Source = iff(TableName contains "Online", "Online", "On-Premises")
+      | where _TypeEnv == "All" or Source == _TypeEnv
       | where TimeGenerated between (_DateCompareB .. _CurrentDateB)
-      | where ESIEnvironment_s == _EnvList
-      | where Section_s == "MRA"
+      | extend ScopedEnvironment = iff(_configurationEnv contains "All", "All", ESIEnvironment_s)
+      | where ScopedEnvironment in (_configurationEnv)
+      | where isempty(_SectionList[0]) or Section_s in (_SectionList)
       | extend CmdletResultValue = parse_json(rawData_s)
-      | project TimeGenerated,CmdletResultValue,WhenChanged = WhenChanged_t, WhenCreated=WhenCreated_t
+      | project TimeGenerated,Source,CmdletResultValue,WhenChanged = WhenChanged_t, WhenCreated=WhenCreated_t
       | where CmdletResultValue.Role contains _CurrentRole
           and CmdletResultValue.RoleAssigneeName !in (_ExclusionsAcct)
           and CmdletResultValue.Name !contains "Deleg"
       | extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)
       | extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType == "User", "User", "RoleGroup")
-      | extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)
-      | extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)
+      | extend CustomRecipientWriteScope = iff (Source=="On-Premises", tostring(CmdletResultValue.CustomRecipientWriteScope.Name), tostring(CmdletResultValue.CustomRecipientWriteScope))
+      | extend CustomConfigWriteScope = iff (Source=="On-Premises",  tostring(CmdletResultValue.CustomConfigWriteScope.Name), tostring(CmdletResultValue.CustomConfigWriteScope))
       | extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)
       | extend RecipientWriteScope = tostring(CmdletResultValue.RecipientWriteScope)
       | extend ConfigWriteScope = tostring(CmdletResultValue.ConfigWriteScope)
