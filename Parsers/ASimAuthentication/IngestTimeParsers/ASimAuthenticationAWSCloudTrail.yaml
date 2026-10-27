@@ -1,5 +1,3 @@
-# User-approved deviations are documented in the adjacent reports; workspace deployment has not been verified.
-# InputStream Microsoft-AWSCloudTrail is repository-backed and user-confirmed; DCRType remains Workspace.
 Parser:
   DisplayName: 'Authentication ASIM parser for AWS sign-in logs - ingestion-time normalization'
   Version: '0.2.2'
@@ -18,9 +16,125 @@ InputStream: 'Microsoft-AWSCloudTrail'
 SourceRawTable: 'AWSCloudTrail'
 TargetASIMTable: 'ASimAuthenticationEventLogs'
 ParserFilterQuery: |
-  source | where EventName == 'ConsoleLogin'
+  source
+  | where EventName == 'ConsoleLogin'
 ParserQuery: |
-  source | extend Type = "AWSCloudTrail"  | where EventName == 'ConsoleLogin' | extend EventUid = AwsEventId | project-rename EventOriginalResultDetails  = ErrorMessage, EventOriginalUid            = AwsEventId, EventProductVersion         = EventVersion, HttpUserAgent               = UserAgent, SrcIpAddr                   = SourceIpAddress, TargeCloudRegion            = AWSRegion, TargetOriginalUserType      = UserIdentityType, TargetUserScopeId           = UserIdentityAccountId | extend UserIdentityPrincipalid = case(TargetOriginalUserType == 'IdentityCenterUser',UserIdentityStoreArn,UserIdentityPrincipalid), UserIdentityUserName = case(TargetOriginalUserType == 'IdentityCenterUser',UserIdentityUserId,UserIdentityUserName) | extend Dvc                         = 'AWS', EventCount                  = int(1), EventEndTime                = TimeGenerated, EventProduct                = 'CloudTrail', EventResult                 = iff (ResponseElements has 'Success', 'Success', 'Failure'), EventSchema                 = 'Authentication', EventSchemaVersion          = '0.1.3', EventStartTime              = TimeGenerated, EventSubType                = 'Interactive', EventType                   = 'Logon', EventVendor                 = 'AWS', LogonMethod                 = iff (AdditionalEventData has '"MFAUsed": "Yes"', 'MFA',''), LogonProtocol               = 'HTTPS', SrcDeviceType               = iff (AdditionalEventData has '"MobileVersion":"Yes"', 'Mobile Device', 'Computer'), TargetUserId                = tostring(split(UserIdentityPrincipalid, ':')[0]), TargetUserIdType            = 'AWSId', TargetUsername              = case ( UserIdentityUserName   == "HIDDEN_DUE_TO_SECURITY_REASONS", "", TargetOriginalUserType == 'IAMUser'                       , UserIdentityUserName, TargetOriginalUserType == 'Root'                          , 'root', TargetOriginalUserType == 'AssumedRole'                   , tostring(split(UserIdentityArn, '/')[-1]), UserIdentityUserName ) | extend TargetUsernameType          = (case ( TargetUsername contains "@" , "UPN", TargetUsername contains "\\", "Windows", (TargetUsername has "CN=" or TargetUsername has "OU=" or TargetUsername has "DC="), "DN", isempty(TargetUsername), "", "Simple" )) | parse AdditionalEventData with * '"LoginTo":"' TargetUrl:string '"' * | extend EventOriginalDetails = case( EventOriginalResultDetails == 'No username found in supplied account', 'No such user', "") | extend TargetUserType = case( TargetOriginalUserType == 'Root', 'Admin', TargetOriginalUserType in ('IAMUser', 'FederatedUser'), 'Regular', TargetOriginalUserType in ('AssumedRole', 'Role'), 'Service', TargetOriginalUserType in ('Directory', 'Unknown'), 'Other', TargetOriginalUserType == 'AWSAccount', 'Guest', TargetOriginalUserType == 'AWSService', 'Application', "") | extend EventSeverity = iff(EventResult == 'Failure', 'Low','Informational'), LogonTarget=tostring(split(TargetUrl,'?')[0]),  TargetUserAWSId = TargetUserId  | extend Dst    = LogonTarget, Dvc    = EventVendor, IpAddr = SrcIpAddr, Src    = SrcIpAddr, User   = TargetUsername | project CidrIp, CipherSuite, ClientProvidedHostHeader, DestinationPort, Dst, Dvc, EventCount, EventEndTime, EventOriginalDetails, EventOriginalResultDetails, EventOriginalUid, EventProduct, EventProductVersion, EventResult, EventSchema, EventSchemaVersion, EventSeverity, EventStartTime, EventSubType, EventType, EventUid, EventVendor, HttpUserAgent, IpAddr, IpProtocol, LogonMethod, LogonProtocol, LogonTarget, SourcePort, Src, SrcDeviceType, SrcIpAddr, TargeCloudRegion, TargetOriginalUserType, TargetUrl, TargetUserAWSId, TargetUserId, TargetUserIdType, TargetUsername, TargetUsernameType, TargetUserScopeId, TargetUserType, TimeGenerated, TlsVersion, Type, User
+  source
+  | extend Type = "AWSCloudTrail"
+    | where EventName == 'ConsoleLogin'
+    | extend EventUid = AwsEventId
+    | project-rename
+        EventOriginalResultDetails  = ErrorMessage,
+        EventOriginalUid            = AwsEventId,
+        EventProductVersion         = EventVersion,
+        HttpUserAgent               = UserAgent,
+        SrcIpAddr                   = SourceIpAddress,
+        TargeCloudRegion            = AWSRegion,
+        TargetOriginalUserType      = UserIdentityType,
+        TargetUserScopeId           = UserIdentityAccountId
+    | extend UserIdentityPrincipalid = case(TargetOriginalUserType == 'IdentityCenterUser',UserIdentityStoreArn,UserIdentityPrincipalid),
+    UserIdentityUserName = case(TargetOriginalUserType == 'IdentityCenterUser',UserIdentityUserId,UserIdentityUserName)
+    | extend
+        Dvc                         = 'AWS',
+        EventCount                  = int(1),
+        EventEndTime                = TimeGenerated,
+        EventProduct                = 'CloudTrail',
+        EventResult                 = iff (ResponseElements has 'Success', 'Success', 'Failure'),
+        EventSchema                 = 'Authentication',
+        EventSchemaVersion          = '0.1.3',
+        EventStartTime              = TimeGenerated,
+        EventSubType                = 'Interactive',
+        EventType                   = 'Logon',
+        EventVendor                 = 'AWS',
+        LogonMethod                 = iff (AdditionalEventData has '"MFAUsed": "Yes"', 'MFA',''),
+        LogonProtocol               = 'HTTPS',
+        SrcDeviceType               = iff (AdditionalEventData has '"MobileVersion":"Yes"', 'Mobile Device', 'Computer'),
+        TargetUserId                = tostring(split(UserIdentityPrincipalid, ':')[0]),
+        TargetUserIdType            = 'AWSId',
+        TargetUsername              = case (
+              UserIdentityUserName   == "HIDDEN_DUE_TO_SECURITY_REASONS", "",
+              TargetOriginalUserType == 'IAMUser'                       , UserIdentityUserName,
+              TargetOriginalUserType == 'Root'                          , 'root',
+              TargetOriginalUserType == 'AssumedRole'                   , tostring(split(UserIdentityArn, '/')[-1]),
+              UserIdentityUserName
+          )
+    | extend
+        TargetUsernameType          = (case (
+          TargetUsername contains "@" , "UPN",
+          TargetUsername contains "\\", "Windows",
+          (TargetUsername has "CN=" or TargetUsername has "OU=" or TargetUsername has "DC="), "DN",
+          isempty(TargetUsername), "",
+          "Simple"
+      ))
+    | parse AdditionalEventData with * '"LoginTo":"' TargetUrl:string '"' *
+    | extend EventOriginalDetails = case(
+      EventOriginalResultDetails == 'No username found in supplied account', 'No such user',
+      "")
+    | extend TargetUserType = case(
+      TargetOriginalUserType == 'Root', 'Admin',
+      TargetOriginalUserType in ('IAMUser', 'FederatedUser'), 'Regular',
+      TargetOriginalUserType in ('AssumedRole', 'Role'), 'Service',
+      TargetOriginalUserType in ('Directory', 'Unknown'), 'Other',
+      TargetOriginalUserType == 'AWSAccount', 'Guest',
+      TargetOriginalUserType == 'AWSService', 'Application',
+      "")
+    | extend
+        EventSeverity = iff(EventResult == 'Failure', 'Low','Informational'),
+        LogonTarget=tostring(split(TargetUrl,'?')[0]),
+        TargetUserAWSId = TargetUserId
+      | extend
+          Dst    = LogonTarget,
+          Dvc    = EventVendor,
+          IpAddr = SrcIpAddr,
+          Src    = SrcIpAddr,
+          User   = TargetUsername
+      | project
+      CidrIp,
+      CipherSuite,
+      ClientProvidedHostHeader,
+      DestinationPort,
+      Dst,
+      Dvc,
+      EventCount,
+      EventEndTime,
+      EventOriginalDetails,
+      EventOriginalResultDetails,
+      EventOriginalUid,
+      EventProduct,
+      EventProductVersion,
+      EventResult,
+      EventSchema,
+      EventSchemaVersion,
+      EventSeverity,
+      EventStartTime,
+      EventSubType,
+      EventType,
+      EventUid,
+      EventVendor,
+      HttpUserAgent,
+      IpAddr,
+      IpProtocol,
+      LogonMethod,
+      LogonProtocol,
+      LogonTarget,
+      SourcePort,
+      Src,
+      SrcDeviceType,
+      SrcIpAddr,
+      TargeCloudRegion,
+      TargetOriginalUserType,
+      TargetUrl,
+      TargetUserAWSId,
+      TargetUserId,
+      TargetUserIdType,
+      TargetUsername,
+      TargetUsernameType,
+      TargetUserScopeId,
+      TargetUserType,
+      TimeGenerated,
+      TlsVersion,
+      Type,
+      User
 Change:
   Date: '2026-10-27'
-  Description: 'Initial ingestion-time conversion; EventUid and EventOriginalUid use AwsEventId by user instruction; unavailable billing fields remain excluded.'
+  Description: 'Initial ingest-time parser targeting ASimAuthenticationEventLogs.'
