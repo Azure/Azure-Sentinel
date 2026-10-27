@@ -1102,8 +1102,16 @@ def _build_package_selection_plan(
         write_json_artifact(root, structural_path, structural_report)
         if _sha256(structural_path.read_bytes()) != structural_hash:
             structural_hash = _sha256(structural_path.read_bytes())
-    elif structural_path.is_file() and _sha256(structural_path.read_bytes()) != structural_hash:
-        raise ValueError("current local structural-validation evidence changed after selection planning")
+    elif structural_path.is_file():
+        saved_structural_bytes = structural_path.read_bytes()
+        try:
+            saved_structural_report = json.loads(saved_structural_bytes)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("current local structural-validation evidence is invalid") from exc
+        if saved_structural_report != portable_artifact(root, structural_report):
+            raise ValueError("current local structural-validation evidence changed after selection planning")
+        # The reviewed plan binds exact stored bytes, including platform line endings.
+        structural_hash = _sha256(saved_structural_bytes)
 
     target, target_fingerprint = _current_target(root, state)
     source_provider = None

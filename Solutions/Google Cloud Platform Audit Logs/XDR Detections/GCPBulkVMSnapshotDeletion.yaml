@@ -1,0 +1,165 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPAuditLogsDefinition
+  dataTypes:
+  - GCPAuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPAuditLogs
+  requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+    - GCPAuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: dfdffdc7-929f-4c7e-8f48-30e5ffddb067
+    path: Analytic Rules/GCPBulkVMSnapshotDeletion.yaml
+    version: 1.0.0
+    querySha256: 5cc0a4acdc7db073bf94f549018168ccc5b614e1b624ba50427721243a64e7d9
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'ProjectId' column `ProjectId` requires runtime output-schema
+      binding verification
+    - customDetails 'SnapshotCount' column `SnapshotCount` requires runtime output-schema
+      binding verification
+    - customDetails 'SnapshotList' column `SnapshotList` requires runtime output-schema
+      binding verification
+    - customDetails 'FirstDeletion' column `FirstDeletion` requires runtime output-schema
+      binding verification
+    - customDetails 'LastDeletion' column `LastDeletion` requires runtime output-schema
+      binding verification
+    - customDetails 'DeletionTimeSpan' column `DeletionTimeSpan` requires runtime
+      output-schema binding verification
+    - customDetails 'CallerIPs' column `CallerIPs` requires runtime output-schema
+      binding verification
+    - customDetails 'UserAgent' column `UserAgent` requires runtime output-schema
+      binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `PrincipalEmail`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `PrincipalEmail` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - Impact
+    - DefenseEvasion
+    originalTechniques:
+    - T1485
+    - T1490
+    - T1562.001
+    reviewScope:
+      sourceDocumentSha256: 8202dbaef991cc02db2cba913c1a97e30293c270d4d9409a36d513364a3909a6
+      targetQuerySha256: 99e990674e87e677d060644da8ba03154340c7578faaf02f21215c3acec3cbe2
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PrincipalEmail
+      column: PrincipalEmail
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-dfdffdc7-929f-4c7e-8f48-30e5ffddb067
+  displayName: GCP Audit Logs - Detect Bulk VM Snapshot Deletion
+  status: disabled
+  queryCondition:
+    queryText: "// Update these thresholds if noisy in your environment\nlet SnapshotDeletionThreshold\
+      \ = 10;\nlet TimeWindow = 1m;\nGCPAuditLogs\n| where ServiceName == \"compute.googleapis.com\"\
+      \n| where MethodName has \"compute.snapshots.delete\"\n| where GCPResourceType\
+      \ == \"gce_snapshot\" and Severity == \"NOTICE\"\n| extend\n    AuthzInfoJson\
+      \ = parse_json(AuthorizationInfo),\n    RequestMetadataJson = parse_json(RequestMetadata),\n\
+      \    ResponseJson = parse_json(Response)\n| extend PermissionType = tostring(AuthzInfoJson[0].permissionType)\n\
+      | where PermissionType == \"ADMIN_WRITE\"\n| extend\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n\
+      \    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n  \
+      \  SnapshotName = extract(@\"snapshots/([^/]+)\", 1, GCPResourceName),\n   \
+      \ OperationType = tostring(ResponseJson.operationType),\n    OperationId = tostring(ResponseJson.id)\n\
+      | summarize\n    SnapshotCount = count(),\n    SnapshotList = make_set(SnapshotName,\
+      \ 100),\n    FirstDeletion = min(TimeGenerated),\n    LastDeletion = max(TimeGenerated),\n\
+      \    OperationIds = make_set(OperationId, 100),\n    CallerIPs = make_set(CallerIpAddress,\
+      \ 10)\n    by PrincipalEmail, ProjectId, UserAgent\n| where SnapshotCount >=\
+      \ SnapshotDeletionThreshold\n| extend DeletionTimeSpan = LastDeletion - FirstDeletion\n\
+      | where DeletionTimeSpan <= TimeWindow\n| extend\n    AccountName = tostring(split(PrincipalEmail,\
+      \ \"@\")[0]),\n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n\
+      | project\n    TimeGenerated = FirstDeletion,\n    PrincipalEmail,\n    ProjectId,\n\
+      \    SnapshotCount,\n    SnapshotList,\n    FirstDeletion,\n    LastDeletion,\n\
+      \    DeletionTimeSpan,\n    CallerIPs,\n    UserAgent,\n    OperationIds,\n\
+      \    AccountName,\n    AccountUPNSuffix"
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: GCP Audit Logs - Detect Bulk VM Snapshot Deletion
+      description: '''Detects bulk deletion of Google Cloud VM snapshots within a
+        short time period, which may indicate data destruction or defense evasion
+        activities.
+
+        VM snapshots are critical for backup and disaster recovery. Bulk deletion
+        of snapshots can prevent recovery from incidents and may indicate
+
+        malicious activity such as ransomware, data destruction, or an attempt to
+        cover tracks after a security breach.
+
+        Adversaries may delete snapshots to maximize damage, prevent forensic investigation,
+        or hinder recovery efforts.
+
+        This rule triggers when multiple snapshots are deleted by the same user within
+        a 1-minut'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ProjectId
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+        - technique: T1490
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.001
+      customDetails:
+        ProjectId: ProjectId
+        SnapshotCount: SnapshotCount
+        SnapshotList: SnapshotList
+        FirstDeletion: FirstDeletion
+        LastDeletion: LastDeletion
+        DeletionTimeSpan: DeletionTimeSpan
+        CallerIPs: CallerIPs
+        UserAgent: UserAgent
+        AccountFullName: PrincipalEmail
+status: Available
