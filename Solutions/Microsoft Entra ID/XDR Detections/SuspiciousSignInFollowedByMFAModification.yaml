@@ -1,0 +1,187 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - BehaviorAnalytics
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - BehaviorAnalytics
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - BehaviorAnalytics
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: aec77100-25c5-4254-a20a-8027ed92c46c
+    path: Analytic Rules/SuspiciousSignInFollowedByMFAModification.yaml
+    version: 1.0.1
+    querySha256: 9887febd1d13082860a65b2f586579d4cf0458823df0aca8719da236773a17d3
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `InitiatorUPN`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `InitiatorUPN` requires runtime
+      output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query
+      column `TargetUPN`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `TargetUPN` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - DefenseEvasion
+    originalTechniques:
+    - T1078.004
+    - T1556.006
+    reviewScope:
+      sourceDocumentSha256: 35ae68e1eb24837ec00030132e8efca6fdb9cd04486880b0ef6e38134ecfeb9c
+      targetQuerySha256: 7edf3607b6ba75cf627b5f409a83e2229075fa00c0ba46475289530153e4b60d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatorUPN
+      column: InitiatorUPN
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: TargetUPN
+      column: TargetUPN
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-aec77100-25c5-4254-a20a-8027ed92c46c
+  displayName: Suspicious Sign In Followed by MFA Modification
+  status: disabled
+  queryCondition:
+    queryText: 'let BehaviorAnalytics = BehaviorInfo
+
+      | extend UserPrincipalName = AccountUpn, UserName = tostring(split(AccountUpn,
+      "@")[0]), UsersInsights = parse_json("{}"), DevicesInsights = parse_json("{}"),
+      ActivityInsights = parse_json("{}"), InvestigationPriority = int(0), SourceIPAddress
+      = "", EventSource = ServiceSource, ActivityType = Categories, SourceDevice =
+      "";
+
+      let PriorityScore = 9;
+
+      BehaviorAnalytics
+
+      | where ActionType == "Sign-in"
+
+      | where InvestigationPriority > PriorityScore
+
+      | extend UserPrincipalName = tolower(UserPrincipalName)
+
+      | extend LogOnTime = TimeGenerated
+
+      | join kind=inner (AuditLogs
+
+      | where Category =~ "UserManagement"
+
+      | where OperationName in~ ("Admin registered security info", "Admin updated
+      security info", "Admin deleted security info", "User registered security info",
+      "User changed default security info", "User deleted security info","User registered
+      all required security info","User started security info registration")
+
+      | extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))
+
+      | extend InitiatorID = tostring(InitiatedBy.user.id)
+
+      | extend FromIP = tostring(InitiatedBy.user.ipAddress)
+
+      | extend TargetUPN = tolower(tostring(TargetResources[0].userPrincipalName))
+
+      | extend TargetId = tostring(TargetResources[0].id)
+
+      | extend MFAModTime = TimeGenerated
+
+      | where isnotempty(InitiatorUPN)) on $left.UserPrincipalName == $right.InitiatorUPN
+
+      | where MFAModTime between((LogOnTime-30m)..(LogOnTime+1h))
+
+      | extend InitiatorName = tostring(split(InitiatorUPN, "@")[0]), InitiatorUPNSuffix
+      = tostring(split(InitiatorUPN, "@")[1]), TargetName = tostring(split(TargetUPN,
+      "@")[0]), TargetUPNSuffix = tostring(split(TargetUPN, "@")[1])'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Suspicious Sign In Followed by MFA Modification
+      description: '''This query looks uses Microsoft Sentinel''s UEBA features to
+        look for suspicious logons followed by modifications to MFA settings by that
+        user.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatorName
+          upnSuffixColumn: InitiatorUPNSuffix
+        - id: account2
+          aadUserIdColumn: InitiatorID
+        - id: account3
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account4
+          aadUserIdColumn: TargetId
+        ips:
+        - id: ip1
+          addressColumn: FromIP
+        - id: ip2
+          addressColumn: SourceIPAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+        - technique: T1556
+          subTechniques:
+          - T1556.006
+      customDetails:
+        AccountFullName: InitiatorUPN
+        AccountFullName_2: TargetUPN
