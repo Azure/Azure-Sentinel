@@ -108,7 +108,6 @@ Daily snapshots let you query the latest findings within the retention period. A
 alone does not mean a system is clean: check source timestamps, scan coverage and export health.
 Profile check severity follows the integration's policy; custom profile parameters are unrated.
 Password findings show detected issues, but do not establish that a full password audit completed.
-See `Deployment/setup.json` for these details.
 
 The connector creates Analytics tables that use the workspace's default retention. Azure bills
 ingestion and retention to your subscription.
