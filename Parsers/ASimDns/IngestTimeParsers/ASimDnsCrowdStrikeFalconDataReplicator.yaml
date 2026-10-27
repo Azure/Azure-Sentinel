@@ -1,0 +1,182 @@
+Parser:
+  DisplayName: "Ingestion-time DNS ASIM parser for CrowdStrike Falcon Data Replicator"
+  Version: "0.1.0"
+  LastUpdated: "2026-10-27"
+Product:
+  Name: "CrowdStrike Falcon Data Replicator"
+Normalization:
+  Schema: "Dns"
+  Version: "1.0.0"
+Author: "Microsoft"
+Description: |
+  Normalizes DnsRequest and SuspiciousDnsRequest records from CrowdStrike_DNS_Events_CL
+  to ASimDnsActivityLogs during ingestion.
+ParserName: "ASimDnsCrowdStrikeFalconDataReplicator"
+DCRType: "Standard"
+InputStream: "Custom-CrowdStrike_DNS_Events_CL"
+SourceRawTable: "CrowdStrike_DNS_Events_CL"
+TargetASIMTable: "ASimDnsActivityLogs"
+ParserFilterQuery: |
+  source
+  | where event_simpleName in ("DnsRequest", "SuspiciousDnsRequest")
+ParserQuery: |
+  source
+  | extend Type = "CrowdStrike_DNS_Events_CL"
+  | where event_simpleName in ("DnsRequest", "SuspiciousDnsRequest")
+  | extend
+      EventStartTime = iif(isnotnull((datetime(1970-01-01) + timestamp * 1ms)), (datetime(1970-01-01) + timestamp * 1ms), TimeGenerated),
+      DnsQuery = replace(@"\.+$", "", DomainName),
+      DnsQueryType = toint(RequestType),
+      _QueryStatus = tolong(QueryStatus)
+  | extend DnsQueryTypeName = case(
+      DnsQueryType == 1, "A",
+      DnsQueryType == 2, "NS",
+      DnsQueryType == 5, "CNAME",
+      DnsQueryType == 6, "SOA",
+      DnsQueryType == 10, "NULL",
+      DnsQueryType == 12, "PTR",
+      DnsQueryType == 13, "HINFO",
+      DnsQueryType == 15, "MX",
+      DnsQueryType == 16, "TXT",
+      DnsQueryType == 17, "RP",
+      DnsQueryType == 18, "AFSDB",
+      DnsQueryType == 24, "SIG",
+      DnsQueryType == 25, "KEY",
+      DnsQueryType == 28, "AAAA",
+      DnsQueryType == 29, "LOC",
+      DnsQueryType == 33, "SRV",
+      DnsQueryType == 35, "NAPTR",
+      DnsQueryType == 36, "KX",
+      DnsQueryType == 37, "CERT",
+      DnsQueryType == 39, "DNAME",
+      DnsQueryType == 41, "OPT",
+      DnsQueryType == 43, "DS",
+      DnsQueryType == 44, "SSHFP",
+      DnsQueryType == 45, "IPSECKEY",
+      DnsQueryType == 46, "RRSIG",
+      DnsQueryType == 47, "NSEC",
+      DnsQueryType == 48, "DNSKEY",
+      DnsQueryType == 49, "DHCID",
+      DnsQueryType == 50, "NSEC3",
+      DnsQueryType == 51, "NSEC3PARAM",
+      DnsQueryType == 52, "TLSA",
+      DnsQueryType == 53, "SMIMEA",
+      DnsQueryType == 55, "HIP",
+      DnsQueryType == 59, "CDS",
+      DnsQueryType == 60, "CDNSKEY",
+      DnsQueryType == 61, "OPENPGPKEY",
+      DnsQueryType == 62, "CSYNC",
+      DnsQueryType == 63, "ZONEMD",
+      DnsQueryType == 64, "SVCB",
+      DnsQueryType == 65, "HTTPS",
+      DnsQueryType == 99, "SPF",
+      DnsQueryType == 108, "EUI48",
+      DnsQueryType == 109, "EUI64",
+      DnsQueryType == 249, "TKEY",
+      DnsQueryType == 250, "TSIG",
+      DnsQueryType == 251, "IXFR",
+      DnsQueryType == 252, "AXFR",
+      DnsQueryType == 253, "MAILB",
+      DnsQueryType == 254, "MAILA",
+      DnsQueryType == 255, "ANY",
+      DnsQueryType == 256, "URI",
+      DnsQueryType == 257, "CAA",
+      DnsQueryType == 258, "AVC",
+      DnsQueryType == 259, "DOA",
+      DnsQueryType == 260, "AMTRELAY",
+      "")
+  | extend
+      DnsQueryTypeName = case(
+          isnotempty(DnsQueryTypeName), DnsQueryTypeName,
+          (DnsQueryType >= 0 and DnsQueryType <= 65535), strcat("TYPE", DnsQueryType),
+          ""),
+      EventEndTime = EventStartTime,
+      EventCount = toint(1),
+      EventType = "Query",
+      EventSubType = iff(isnotempty(QueryStatus) or isnotempty(IP4Records)
+          or isnotempty(IP6Records) or isnotempty(CNAMERecords)
+          or isnotempty(FirstIP4Record) or isnotempty(FirstIP6Record), "response", "request"),
+      EventResult = case(_QueryStatus == 0, "Success",
+          isnotnull(_QueryStatus), "Failure", "NA"),
+      EventResultDetails = iff(_QueryStatus == 0, "NOERROR", "NA"),
+      DnsResponseCode = iff(_QueryStatus == 0, toint(0), int(null)),
+      DnsResponseName = replace(@"^;+|;+$", "", strcat_delim(";", IP4Records, IP6Records, CNAMERecords,
+          FirstIP4Record, FirstIP6Record)),
+      EventVendor = "CrowdStrike",
+      EventProduct = "Falcon Data Replicator",
+      EventSchema = "Dns",
+      EventSchemaVersion = "1.0.0",
+      EventSeverity = iff(event_simpleName == "SuspiciousDnsRequest", "Low", "Informational"),
+      EventUid = CrowdStrikeId,
+      DvcOs = case(event_platform == "Win", "Windows", event_platform == "Lin", "Linux",
+          event_platform == "Mac", "macOS", event_platform),
+      DvcIdType = iff(isnotempty(aid), "Other", ""),
+      SrcDvcIdType = iff(isnotempty(aid), "Other", ""),
+      Dvc = iif(isnotempty(aid), aid, aip),
+      Src = aid,
+      Dst = RespondingDnsServer,
+      SrcUsernameType = case(isempty(UserName), "", UserName contains "\\", "Windows",
+          UserName contains "@", "UPN", "Simple"),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      DstSystemEntityKey = "",
+      SrcProcessEntityKey = "",
+      SrcUserEntityKey = "",
+      SrcUserAdditionalIds = parse_json('[]'),
+      AdditionalEntities = parse_json('[]'),
+      AdditionalFields = pack(
+              "ContextTimeStamp", ContextTimeStamp,
+              "ConfigBuild", ConfigBuild,
+              "ConfigStateHash", ConfigStateHash,
+              "ContextProcessId", ContextProcessId,
+              "ContextThreadId", ContextThreadId,
+              "BoundingLimitCount", BoundingLimitCount,
+              "BoundingLimitDuration", BoundingLimitDuration,
+              "Entitlements", Entitlements,
+              "EffectiveTransmissionClass", EffectiveTransmissionClass,
+              "OciContainerId", OciContainerId,
+              "TreeId", TreeId,
+              "RequestType", RequestType,
+              "IP4Records", IP4Records,
+              "IP6Records", IP6Records,
+              "CNAMERecords", CNAMERecords,
+              "FirstIP4Record", FirstIP4Record,
+              "FirstIP6Record", FirstIP6Record,
+              "DnsRequestCount", DnsRequestCount,
+              "DualRequest", DualRequest,
+              "DnsResponseType", DnsResponseType,
+              "EventOrigin", EventOrigin,
+              "QueryStatus", QueryStatus,
+              "OriginalAdditionalFields", AdditionalFields)
+  | project-rename
+      EventOriginalType = event_simpleName,
+      EventOriginalSubType = name,
+      EventOriginalUid = CrowdStrikeId,
+      EventOriginalResultDetails = QueryStatus,
+      DvcIpAddr = aip,
+      DvcId = aid,
+      DvcScopeId = cid,
+      SrcUsername = UserName,
+      DvcInterface = InterfaceIndex,
+      DstIpAddr = RespondingDnsServer
+  | extend
+      Domain = DnsQuery,
+      DnsResponseCodeName = EventResultDetails,
+      User = SrcUsername,
+      SrcDvcId = DvcId,
+      SrcDvcScopeId = DvcScopeId,
+      DvcInterface = tostring(DvcInterface)
+  | project
+      TimeGenerated, EventStartTime, EventEndTime, EventCount,
+      EventType, EventSubType, EventResult, EventResultDetails, EventOriginalType,
+      EventOriginalSubType, EventOriginalUid, EventUid, EventOriginalResultDetails,
+      EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventSeverity,
+      Dvc, DvcIpAddr, DvcId, DvcIdType, DvcScopeId, DvcOs, DvcInterface,
+      Src, SrcDvcId, SrcDvcIdType, SrcDvcScopeId, SrcUsername, SrcUsernameType, User,
+      Dst, DstIpAddr, DnsQuery, Domain, DnsQueryType, DnsQueryTypeName,
+      DnsResponseName, DnsResponseCode, DnsResponseCodeName,
+      DvcEntityKey, SrcSystemEntityKey, DstSystemEntityKey, SrcProcessEntityKey,
+      SrcUserEntityKey, SrcUserAdditionalIds, AdditionalEntities, AdditionalFields
+Change:
+  Date: "2026-10-27"
+  Description: "Initial ingestion-time conversion from query-time parser 0.1.0, with packing enabled and query-type lookup inlined."
