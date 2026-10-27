@@ -1,8 +1,12 @@
 # Changelog for imAuthentication.yaml
 
+## Version 0.3.26
+
+- (2026-10-27) Add the Salesforce Real-Time Event Monitoring Authentication filtering parser. - [PR #15437](https://github.com/Azure/Azure-Sentinel/pull/15437)
+
 ## Version 0.3.25
 
-- (2026-10-26) Add the Salesforce Real-Time Event Monitoring Authentication filtering parser. - [PR #15437](https://github.com/Azure/Azure-Sentinel/pull/15437)
+- (2026-10-23) Add the CrowdStrike Falcon Data Replicator Authentication filtering parser and forward all supported filtering and pack parameters. - [PR #15415](https://github.com/Azure/Azure-Sentinel/pull/15415)
 
 ## Version 0.3.24
 

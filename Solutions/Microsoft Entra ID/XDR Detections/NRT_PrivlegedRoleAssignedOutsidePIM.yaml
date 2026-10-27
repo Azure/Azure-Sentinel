@@ -1,0 +1,137 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 14f6da04-2f96-44ee-9210-9ccc1be6401e
+    path: Analytic Rules/NRT_PrivlegedRoleAssignedOutsidePIM.yaml
+    version: 1.0.3
+    querySha256: ace48ed75eca781d37b18d9d73ed6e0847ce388be4d31f642173f5d088c0d7b6
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `TargetUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore
+      entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `TargetUserPrincipalName` requires runtime output-schema
+      binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore
+      entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `InitiatingUserPrincipalName` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values
+      are unverified and the service drops all custom details if exceeded
+    informational:
+    - 'Schedule assessment: source kind=NRT; target frequency=PT0S (Continuous); single-table Continuous
+      (NRT) execution is supported in Defender XDR. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 7ad398c01d7f30b898680a39f75d3f6b61a9204ccce8522d9ae9a0f41374b2b2
+      targetQuerySha256: e61e3e9e9196ce41f64c569e12a019457c9fb595b61df3bd4bdab0f470ab5658
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+  targetQuerySha256: e61e3e9e9196ce41f64c569e12a019457c9fb595b61df3bd4bdab0f470ab5658
+properties:
+  id: xdr-14f6da04-2f96-44ee-9210-9ccc1be6401e
+  displayName: NRT Privileged Role Assigned Outside PIM
+  status: disabled
+  queryCondition:
+    queryText: "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where OperationName has \"Add member\
+      \ to role outside of PIM\"\n        or (LoggedByService =~ \"Core Directory\" and OperationName\
+      \ =~ \"Add member to role\" and Identity != \"MS-PIM\" and Identity != \"MS-PIM-Fairfax\")\n| mv-apply\
+      \ TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"User\"\n      |\
+      \ extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName)\n  )\n| extend InitiatingAppName\
+      \ = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n\
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId\
+      \ = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress),\
+      \ InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]),\
+      \ TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend InitiatedByName\
+      \ = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])"
+  schedule:
+    frequency: PT0S
+  detectionAction:
+    alertTemplate:
+      title: NRT Privileged Role Assigned Outside PIM
+      description: '''Identifies a privileged role being assigned to a user outside of PIM
+
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'''
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account2
+          nameColumn: InitiatedByName
+          upnSuffixColumn: InitiatedByUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: TargetUserPrincipalName
+        AccountFullName_2: InitiatingUserPrincipalName
+queryText: "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where OperationName has \"Add member\
+  \ to role outside of PIM\"\n        or (LoggedByService =~ \"Core Directory\" and OperationName =~ \"\
+  Add member to role\" and Identity != \"MS-PIM\" and Identity != \"MS-PIM-Fairfax\")\n| mv-apply TargetResource\
+  \ = TargetResources on\n  (\n      where TargetResource.type =~ \"User\"\n      | extend TargetUserPrincipalName\
+  \ = tostring(TargetResource.userPrincipalName)\n  )\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n\
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName\
+  \ = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n\
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress,\
+  \ InitiatedBy.app.ipAddress))\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]),\
+  \ TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]),\
+  \ InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])"
