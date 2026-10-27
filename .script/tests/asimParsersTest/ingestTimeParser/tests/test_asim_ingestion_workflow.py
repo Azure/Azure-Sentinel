@@ -1236,9 +1236,16 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_untrusted_pr_content_is_pinned_to_event_head_sha(self):
+    def test_comparison_refs_are_pinned_to_event_shas(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
+        self.assertEqual(
+            2,
+            workflow.count(
+                "BASE_SHA: "
+                "${{ github.event.pull_request.base.sha }}"
+            ),
+        )
         self.assertEqual(
             2,
             workflow.count(
@@ -1255,23 +1262,69 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertEqual(
             2,
             workflow.count(
-                'if [ "$fetched_sha" != "$PR_HEAD_SHA" ]; then'
+                'if [ "$fetched_base_sha" != "$BASE_SHA" ]; then'
             ),
         )
         self.assertEqual(
             2,
             workflow.count(
-                '"$pr_data_dir" "$PR_HEAD_SHA"'
+                'if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"+$BASE_SHA:$trusted_base_ref"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"+refs/pull/$PR_NUMBER/head:$pr_head_ref"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"$pr_data_dir" "$pr_head_ref"'
             ),
         )
 
-    def test_trusted_helper_package_is_restored_from_master(self):
+    def test_checkout_fetches_only_targeted_history(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertEqual(3, workflow.count("fetch-depth: 1"))
+        self.assertNotIn("fetch-depth: 0", workflow)
+        self.assertEqual(
+            2,
+            workflow.count(
+                "for depth in 1 32 128 512 2048 8192; do"
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count("--filter=blob:none"),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                'git merge-base "$trusted_base_ref" "$pr_head_ref"'
+            ),
+        )
+        self.assertNotIn("+refs/heads/*", workflow)
+        self.assertNotIn("+refs/tags/*", workflow)
+
+    def test_trusted_helper_package_is_restored_from_pinned_base(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
         self.assertEqual(
-            3,
-            workflow.count("git archive origin/master"),
+            2,
+            workflow.count(
+                'git archive "$ASIM_TRUSTED_BASE_REF"'
+            ),
         )
+        self.assertEqual(1, workflow.count("git archive HEAD"))
+        self.assertNotIn("git archive origin/master", workflow)
         self.assertGreaterEqual(
             workflow.count(
                 ".script/tests/asimParsersTest/ingestTimeParser"
