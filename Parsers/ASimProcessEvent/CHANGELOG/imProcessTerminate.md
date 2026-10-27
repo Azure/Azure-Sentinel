@@ -1,5 +1,9 @@
 # Changelog for imProcessTerminate.yaml
 
+## Version 0.1.3
+
+- (2026-08-28) Top-level parser consistency fixes - [PR #14763](https://github.com/Azure/Azure-Sentinel/pull/14763)
+
 ## Version 0.1.2
 
 - (2022-05-01) Adding params to D4IoT  - [PR #4748](https://github.com/Azure/Azure-Sentinel/pull/4748)

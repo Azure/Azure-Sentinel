@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.1       | 05-10-2026                     | Changed boolean playbook parameters to `"true"`/`"false"` strings so they can be set when deploying from Content Hub. |
 | 3.2.0       | 21-07-2026                     | Breaking change: updated data imports to use DCE/DCR instead of deprecated Data Collector API. See readme.md for migration instructions. |
 | 3.1.3       | 06-03-2026                     | Deprecated `RFI-Playbook-Alert-Importer-LAW-Sentinel` in preparation for Microsoft Defender Portal. Added Analytic Rule that will handle incident creation.|
 | 3.1.2       | 29-04-2025                     | Removed `Get Risky User` action from **Playbooks** due to Recorded Future can act as a authority on compromise.|

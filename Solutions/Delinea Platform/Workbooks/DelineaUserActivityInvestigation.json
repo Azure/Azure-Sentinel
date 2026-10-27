@@ -1,0 +1,188 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Delinea Platform — User Activity Investigation\n\nSelect a user to review their full activity across the Delinea Platform (`DelineaAuditEvents_CL`): authentication, secret access, source IPs and event timeline. Use this during incident response to answer \"what did this account do?\"."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "44444444-0001-0001-0001-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          },
+          {
+            "id": "44444444-0001-0001-0001-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "User",
+            "label": "User",
+            "type": 2,
+            "isRequired": true,
+            "query": "DelineaAuditEvents_CL | extend Actor = tostring(parse_json(RawData).actor.name) | where isnotempty(Actor) | distinct Actor | sort by Actor asc",
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend Actor = tostring(d.actor.name), SourceIP = tostring(d.source.host.network.ipAddress) | where Actor == '{User}' | summarize TotalEvents = count(), DistinctSecrets = dcount(SecretId), SourceIPs = dcount(SourceIP), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) | project Metrics = pack_array('Total events', 'Distinct secrets', 'Source IPs', 'First seen', 'Last seen'), Values = pack_array(tostring(TotalEvents), tostring(DistinctSecrets), tostring(SourceIPs), tostring(FirstSeen), tostring(LastSeen)) | mv-expand Metric = Metrics to typeof(string), Value = Values to typeof(string) | project Metric, Value",
+        "size": 3,
+        "title": "Activity summary for {User}",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Metric",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 0
+              }
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "user-summary"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend Actor = tostring(d.actor.name), ServiceType = tostring(d.service.type) | where Actor == '{User}' | summarize Count = count() by bin(TimeGenerated, 1h), ServiceType",
+        "size": 0,
+        "title": "Activity timeline by service",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart",
+        "chartSettings": {
+          "group": "ServiceType"
+        }
+      },
+      "name": "user-timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend Actor = tostring(d.actor.name), EventName = tostring(d.eventType.name) | where Actor == '{User}' | summarize Count = count() by EventName | sort by Count desc",
+        "size": 1,
+        "title": "Event types",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "user-eventtypes"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend Actor = tostring(d.actor.name), ServiceType = tostring(d.service.type), EventName = tostring(d.eventType.name) | where Actor == '{User}' and (ServiceType == 'Secret Server' or EventName has 'Vault') and isnotempty(SecretId) | summarize Accesses = count(), LastAccess = max(TimeGenerated) by Secret = SecretId | sort by Accesses desc",
+        "size": 0,
+        "title": "Secrets accessed by {User}",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "user-secrets"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend Actor = tostring(d.actor.name), SourceIP = tostring(d.source.host.network.ipAddress), OS = tostring(d.source.host.client.operatingSystem) | where Actor == '{User}' and isnotempty(SourceIP) | summarize Events = count(), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), OperatingSystems = make_set(OS, 10) by SourceIP | sort by Events desc",
+        "size": 0,
+        "title": "Source IP addresses used by {User}",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "user-ips"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend Actor = tostring(d.actor.name), EventName = tostring(d.eventType.name), attrs = d.additionalAttributes | where Actor == '{User}' and EventName has 'MfaAuthentication' | extend MfaResult = tostring(attrs.MfaResult[0]), Factors = tostring(attrs.Factors[0]), Reason = tostring(attrs.FailReason[0]) | project TimeGenerated, MfaResult, Factors, FailReason = Reason | sort by TimeGenerated desc | take 100",
+        "size": 0,
+        "title": "MFA history for {User}",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "user-mfa"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "DelineaAuditEvents_CL | extend d = parse_json(RawData) | extend Actor = tostring(d.actor.name), EventName = tostring(d.eventType.name), SourceIP = tostring(d.source.host.network.ipAddress), Message = tostring(d.displayMessage) | where Actor == '{User}' | project TimeGenerated, EventName, Level, Message, SourceIP, Secret = SecretId | sort by TimeGenerated desc | take 250",
+        "size": 0,
+        "title": "Raw event timeline for {User}",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "user-raw"
+    }
+  ],
+  "fromTemplateId": "sentinel-DelineaUserActivityInvestigation",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

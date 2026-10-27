@@ -1,0 +1,297 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "a1f5cb7c-6bcb-4b62-9c68-4d5f43ce1e2a",
+            "version": "KqlParameterItem/1.0",
+            "name": "Subscription",
+            "label": "Subscription",
+            "type": 6,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "includeAll": true,
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "value": [
+              "value::all"
+            ]
+          },
+          {
+            "id": "b2c69411-8db3-4c9f-9d3b-0e2f7b8a11d4",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Workspace",
+            "type": 5,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces' | project id",
+            "crossComponentResources": [
+              "{Subscription}"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "includeAll": true,
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resourcegraph/resources",
+            "value": [
+              "value::all"
+            ]
+          },
+          {
+            "id": "c3d18422-91e4-4daf-8e4c-1f308c9b22e5",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Uniqkey Security Events\n\nActivity from the Uniqkey password management platform: authentication, credential usage, sharing, policy changes and platform threat detections. Scope every panel with the time range and workspace filters above."
+      },
+      "name": "header"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "UniqkeyEvents_CL\n| summarize Value = count() by Title = Category\n| sort by Value desc",
+        "size": 4,
+        "title": "Events by category",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Title",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": true
+        }
+      },
+      "name": "category-tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "UniqkeyEvents_CL\n| summarize Events = count() by bin(TimeGenerated, {TimeRange:grain}), Category",
+        "size": 0,
+        "title": "Event volume over time",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "timechart"
+      },
+      "name": "volume-over-time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "UniqkeyEvents_CL\n| where Category == \"authentication\" and isnotempty(SrcIpAddr)\n| summarize SignIns = count(), Users = dcount(ActorEmail) by SrcIpAddr\n| extend GeoInfo = geo_info_from_ip_address(SrcIpAddr)\n| extend City = tostring(GeoInfo.city), Country = tostring(GeoInfo.country), latitude = todouble(GeoInfo.latitude), longitude = todouble(GeoInfo.longitude)\n| where isnotnull(latitude) and isnotnull(longitude)\n| project SrcIpAddr, City, Country, SignIns, Users, latitude, longitude",
+        "size": 0,
+        "title": "Sign-in locations",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "map",
+        "mapSettings": {
+          "locInfo": "LatLong",
+          "latitude": "latitude",
+          "longitude": "longitude",
+          "sizeSettings": "SignIns",
+          "sizeAggregation": "Sum",
+          "labelSettings": "City",
+          "legendMetric": "SignIns",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "nodeColorField": "SignIns",
+            "colorAggregation": "Sum",
+            "type": "heatmap",
+            "heatmapPalette": "coldHot"
+          }
+        }
+      },
+      "name": "signin-map"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "UniqkeyEvents_CL\n| where isnotempty(ClientSystem)\n| summarize Events = count() by ClientSystem",
+        "size": 0,
+        "title": "Events by client system",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "client-systems"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "UniqkeyEvents_CL\n| where isnotempty(ActorEmail)\n| summarize Events = count() by ActorEmail\n| top 10 by Events",
+        "size": 0,
+        "title": "Top 10 most active users",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "top-users"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "UniqkeyEvents_CL\n| where Category == \"data_export\"\n| project TimeGenerated, ActorEmail, ActorType, Action, TargetType, TargetName, ClientSystem, SrcIpAddr\n| sort by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "title": "Recent data exports",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "customWidth": "50",
+      "name": "recent-exports"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "UniqkeyEvents_CL\n| where Category == \"threat_detection\"\n| project TimeGenerated, ActorEmail, ActorType, Action, TargetType, TargetName\n| sort by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "title": "Platform threat detections",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "customWidth": "50",
+      "name": "recent-threats"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "<div style=\"margin-top:24px;padding-top:12px;border-top:1px solid #d0d0d0;color:#777;font-size:12px\"><strong>Uniqkey</strong> - Microsoft Sentinel content from the Uniqkey solution. Events are polled from the Uniqkey SIEM feed and stored in the UniqkeyEvents_CL table. Note that Uniqkey audits successful sign-ins only.</div>"
+      },
+      "name": "footer"
+    }
+  ],
+  "fallbackResourceIds": [
+    "Azure Monitor"
+  ],
+  "fromTemplateId": "sentinel-UniqkeyWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -1,17 +1,159 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "SpyCloud MDE Automation Playbook",
+    "description": "Automates Microsoft Defender for Endpoint response actions - machine isolation, machine tagging and IOC submission - when SpyCloud breach data identifies a compromised machine.",
+    "prerequisites": "Create an App in App registration and provide permissions and create a client secret",
+    "lastUpdateTime": "2026-08-29T00:00:00.000Z",
+    "entities": [
+      "host",
+      "ip",
+      "url"
+    ],
+    "tags": [],
+    "support": {
+      "tier": "community",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "SpyCloud"
+    }
+  },
   "parameters": {
     "PlaybookName": {
       "defaultValue": "SpyCloud_MDE_Automation",
       "type": "string"
+    },
+    "Workspace_Name": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace where Microsoft Sentinel is enabled. Used to build the incident path for the optional 'Create incident in Microsoft Sentinel' action."
+      }
+    },
+    "Isolate_Machine": {
+      "type": "string",
+      "defaultValue": "false",
+      "allowedValues": [
+        "true",
+        "false"
+      ],
+      "metadata": {
+        "description": "Enable automatic machine isolation in Microsoft Defender for Endpoint."
+      }
+    },
+    "Machine_Tag_Value": {
+      "type": "string",
+      "metadata": {
+        "description": "Tag applied to affected machines in Defender for Endpoint. Leave blank to skip tagging."
+      }
+    },
+    "Save_IOCs_Defender": {
+      "type": "string",
+      "defaultValue": "false",
+      "allowedValues": [
+        "true",
+        "false"
+      ],
+      "metadata": {
+        "description": "Submit breach-derived indicators to Defender Threat Intelligence."
+      }
+    },
+    "IOC_Expiration_Days": {
+      "type": "int",
+      "defaultValue": 30,
+      "metadata": {
+        "description": "Days before a submitted IOC expires in Defender."
+      }
+    },
+    "Spycloud_Defender_DCE_Endpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Data Collection Endpoint logs-ingestion URL for the playbook log table."
+      }
+    },
+    "Spycloud_Defender_DCE_Immutable_ID": {
+      "type": "string",
+      "metadata": {
+        "description": "Immutable ID of the data collection rule for the playbook log table."
+      }
+    },
+    "TenantID": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft Entra tenant ID of the app registration."
+      }
+    },
+    "ClientID": {
+      "type": "string",
+      "metadata": {
+        "description": "Application (client) ID of the app registration."
+      }
+    },
+    "Client_Secret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Client secret of the app registration."
+      }
+    },
+    "Ingestion_Table_Name": {
+      "type": "string",
+      "defaultValue": "Spycloud_MDE_LogsV2_CL",
+      "metadata": {
+        "description": "Custom Log Analytics table for playbook execution logs."
+      }
+    },
+    "create_incident_in_sentinel": {
+      "type": "string",
+      "defaultValue": "false",
+      "allowedValues": [
+        "true",
+        "false"
+      ],
+      "metadata": {
+        "description": "Create a Microsoft Sentinel incident from the playbook."
+      }
+    },
+    "Defender_IOC_Action_Type": {
+      "type": "string",
+      "defaultValue": "Alert",
+      "metadata": {
+        "description": "IOC action in Defender: Alert | Warn | Block | Audit | AlertAndBlock | BlockAndRemediate | Allowed."
+      }
+    },
+    "notification_email": {
+      "type": "string",
+      "metadata": {
+        "description": "Notification email address(es); semicolon-separated for multiple recipients."
+      }
+    },
+    "Sentinel_Workspace_Resource_Id": {
+      "type": "string",
+      "metadata": {
+        "description": "Full resource ID of the Microsoft Sentinel workspace, e.g. /subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.OperationalInsights/workspaces/<name>"
+      }
+    },
+    "MalwareIncidentTitle": {
+      "type": "string",
+      "defaultValue": "SpyCloud infostealer malware credential exposure",
+      "metadata": {
+        "description": "Title of incidents raised by AR_malware_25. Microsoft Sentinel sets the incident title from the analytic rule's display name; change only if you renamed the rule."
+      }
+    },
+    "Automation_Rule_Order": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "Execution order of the automation rule (lower = higher priority)."
+      }
     }
   },
   "variables": {
     "loginUrl": "[environment().authentication.loginEndpoint]",
     "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
     "Office365V1": "[concat('office365-', parameters('PlaybookName'))]",
-    "WDATPConnection": "[concat('wdatp-', parameters('PlaybookName'))]"
+    "WDATPConnection": "[concat('wdatp-', parameters('PlaybookName'))]",
+    "mdeAutomationRuleName": "[guid('SpyCloud-MDE-Rule', parameters('Sentinel_Workspace_Resource_Id'))]"
   },
   "resources": [
     {
@@ -170,6 +312,49 @@
             "For_each": {
               "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
               "actions": {
+                "Reset_machine_isolated": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "machine_isolated",
+                    "value": false
+                  }
+                },
+                "Reset_machine_tag_added": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "machine_tag_added",
+                    "value": false
+                  },
+                  "runAfter": {
+                    "Reset_machine_isolated": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Reset_is_machine_active": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "is_machine_active",
+                    "value": false
+                  },
+                  "runAfter": {
+                    "Reset_machine_tag_added": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Reset_is_last_sees_satisfied": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "is_last_sees_satisfied",
+                    "value": false
+                  },
+                  "runAfter": {
+                    "Reset_is_machine_active": [
+                      "Succeeded"
+                    ]
+                  }
+                },
                 "Machines_-_Get_single_machine": {
                   "runAfter": {
                     "Set_host_name": [
@@ -184,7 +369,7 @@
                       }
                     },
                     "method": "get",
-                    "path": "/api/machines/@variables('host_name')"
+                    "path": "/api/machines/@{items('For_each')?['HostName']}"
                   }
                 },
                 "GetAccessToken": {
@@ -257,6 +442,11 @@
                   "inputs": {
                     "name": "host_name",
                     "value": "@item()?['HostName']"
+                  },
+                  "runAfter": {
+                    "Reset_is_last_sees_satisfied": [
+                      "Succeeded"
+                    ]
                   }
                 },
                 "Check_Create_Sentinel_Incident": {
@@ -271,7 +461,7 @@
                         },
                         "method": "put",
                         "body": {
-                          "title": "Spycloud MDE Alert - Machine Comprised @{variables('host_name')}",
+                          "title": "Spycloud MDE Alert - Machine Comprised @{items('For_each')?['HostName']}",
                           "severity": "High",
                           "status": "Active",
                           "description": "The Incident is created from Spycloud MDE Automation Playbook"
@@ -510,8 +700,8 @@
                     "method": "post",
                     "body": {
                       "To": "@parameters('notification_email')",
-                      "Subject": "@{variables('host_name')} - Security Risk",
-                      "Body": "<p class=\"editor-paragraph\">Security notification! This is automated email sent by Microsoft Sentinel SpyCloud Automation!</p><br><p class=\"editor-paragraph\">For Host @{variables('host_name')} the following actions were taken</p><br><p class=\"editor-paragraph\">Machine Tag Added : @{variables('machine_tag_added')},</p><p class=\"editor-paragraph\">Machine Tag Value : @{parameters('Machine_Tag_Value')},</p><p class=\"editor-paragraph\">Machine Isolated: @{variables('machine_isolated')}</p>",
+                      "Subject": "@{items('For_each')?['HostName']} - Security Risk",
+                      "Body": "<p class=\"editor-paragraph\">Security notification! This is automated email sent by Microsoft Sentinel SpyCloud Automation!</p><br><p class=\"editor-paragraph\">For Host @{items('For_each')?['HostName']} the following actions were taken</p><br><p class=\"editor-paragraph\">Machine Tag Added : @{variables('machine_tag_added')},</p><p class=\"editor-paragraph\">Machine Tag Value : @{parameters('Machine_Tag_Value')},</p><p class=\"editor-paragraph\">Machine Isolated: @{variables('machine_isolated')}</p>",
                       "Importance": "Normal"
                     },
                     "path": "/v2/Mail"
@@ -523,13 +713,23 @@
                   "Succeeded"
                 ]
               },
-              "type": "Foreach"
+              "type": "Foreach",
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
             },
             "Variables_Section": {
               "runAfter": {},
               "type": "InitializeVariable",
               "inputs": {
                 "variables": [
+                  {
+                    "name": "loginUrl",
+                    "type": "string",
+                    "value": "[variables('loginUrl')]"
+                  },
                   {
                     "name": "log_ingestion_api",
                     "type": "string",
@@ -701,7 +901,12 @@
                       "Succeeded"
                     ]
                   },
-                  "type": "Foreach"
+                  "type": "Foreach",
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 1
+                    }
+                  }
                 },
                 "For_each_IPs_in_incident": {
                   "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
@@ -737,7 +942,12 @@
                       "Succeeded"
                     ]
                   },
-                  "type": "Foreach"
+                  "type": "Foreach",
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 1
+                    }
+                  }
                 },
                 "For_each_Url_in_incident": {
                   "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
@@ -773,7 +983,12 @@
                       "Succeeded"
                     ]
                   },
-                  "type": "Foreach"
+                  "type": "Foreach",
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 1
+                    }
+                  }
                 },
                 "Auth_MDE": {
                   "runAfter": {
@@ -928,7 +1143,12 @@
                   "Succeeded"
                 ]
               },
-              "type": "Foreach"
+              "type": "Foreach",
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              }
             }
           },
           "outputs": {}
@@ -957,8 +1177,90 @@
                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
               }
             }
+          },
+          "Isolate_Machine": {
+            "value": "[bool(parameters('Isolate_Machine'))]"
+          },
+          "Machine_Tag_Value": {
+            "value": "[parameters('Machine_Tag_Value')]"
+          },
+          "Save_IOCs_Defender": {
+            "value": "[bool(parameters('Save_IOCs_Defender'))]"
+          },
+          "IOC_Expiration_Days": {
+            "value": "[parameters('IOC_Expiration_Days')]"
+          },
+          "Spycloud_Defender_DCE_Endpoint": {
+            "value": "[parameters('Spycloud_Defender_DCE_Endpoint')]"
+          },
+          "Spycloud_Defender_DCE_Immutable_ID": {
+            "value": "[parameters('Spycloud_Defender_DCE_Immutable_ID')]"
+          },
+          "TenantID": {
+            "value": "[parameters('TenantID')]"
+          },
+          "ClientID": {
+            "value": "[parameters('ClientID')]"
+          },
+          "Client_Secret": {
+            "value": "[parameters('Client_Secret')]"
+          },
+          "Ingestion_Table_Name": {
+            "value": "[parameters('Ingestion_Table_Name')]"
+          },
+          "create_incident_in_sentinel": {
+            "value": "[bool(parameters('create_incident_in_sentinel'))]"
+          },
+          "Workspace_Name": {
+            "value": "[parameters('Workspace_Name')]"
+          },
+          "Defender_IOC_Action_Type": {
+            "value": "[parameters('Defender_IOC_Action_Type')]"
+          },
+          "notification_email": {
+            "value": "[parameters('notification_email')]"
           }
         }
+      }
+    },
+    {
+      "type": "Microsoft.SecurityInsights/automationRules",
+      "name": "[variables('mdeAutomationRuleName')]",
+      "scope": "[parameters('Sentinel_Workspace_Resource_Id')]",
+      "apiVersion": "2023-02-01-preview",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "displayName": "SpyCloud - Isolate compromised device on malware exposure",
+        "order": "[parameters('Automation_Rule_Order')]",
+        "triggeringLogic": {
+          "isEnabled": true,
+          "triggersOn": "Incidents",
+          "triggersWhen": "Created",
+          "conditions": [
+            {
+              "conditionType": "Property",
+              "conditionProperties": {
+                "propertyName": "IncidentTitle",
+                "operator": "Contains",
+                "propertyValues": [
+                  "[parameters('MalwareIncidentTitle')]"
+                ]
+              }
+            }
+          ]
+        },
+        "actions": [
+          {
+            "order": 1,
+            "actionType": "RunPlaybook",
+            "actionConfiguration": {
+              "logicAppResourceId": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+              "tenantId": "[subscription().tenantId]"
+            }
+          }
+        ]
       }
     }
   ]

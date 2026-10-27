@@ -1,0 +1,48 @@
+id: 29231a10-e272-4854-b191-a2d2db4279fa
+name: Delinea - Failed operations
+description: |
+  Surfaces every failed, denied, or errored operation across all Delinea Platform services over the
+  lookback window, with no alerting threshold applied. Failures are identified from failed MFA / password
+  factors, any login fail reason, or an event name / message containing failed / error / denied /
+  unauthorized. Unlike the 'Failed authentication spike' rule (auth only, above a tuned threshold) this
+  hunting query is service-wide and shows everything, so an analyst can spot scattered authorization
+  failures, repeated errors against a resource, or low-and-slow access attempts.
+requiredDataConnectors:
+  - connectorId: DelineaPlatformConnector
+    dataTypes:
+      - DelineaAuditEvents_CL
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let lookback = 24h;
+  DelineaAuditEvents_CL
+  | where TimeGenerated > ago(lookback)
+  | extend d = parse_json(RawData)
+  | extend Attr = d.additionalAttributes
+  | extend EventName = tostring(coalesce(d.eventType.name, d.eventType.internalName)),
+           Msg = tostring(d.displayMessage),
+           RawSrcIP = tostring(d.source.host.network.ipAddress)
+  // The attributes bag carries either scalars or single element arrays depending on
+  // the reporting service, so both shapes are read - see ASimAuditEventDelineaPlatform.
+  | extend MfaResult = tostring(coalesce(Attr.MfaResult[0], Attr.MfaResult)),
+           FactorPassword = tostring(coalesce(Attr.FactorPassword[0], Attr.FactorPassword)),
+           FailReason = tostring(coalesce(Attr.FailReason[0], Attr.FailReason))
+  | where MfaResult =~ "Failed" or FactorPassword =~ "Failed" or isnotempty(FailReason)
+      or EventName has_any ("Failed", "Failure", "Error", "Denied", "Unauthorized", "Rejected")
+      or Msg has_any ("failed", "failure", "denied", "unauthorized", "rejected", "error")
+  // '0.0.0.0' is the placeholder reported for events that have no network origin.
+  | extend SrcIP = iff(RawSrcIP in ("", "0.0.0.0"), "", RawSrcIP)
+  | project TimeGenerated, User, Service, EventName, Level, Msg, FailReason, SrcIP
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: User
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIP
+version: 1.1.0

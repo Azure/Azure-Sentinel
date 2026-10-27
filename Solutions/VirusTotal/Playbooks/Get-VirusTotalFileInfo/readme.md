@@ -5,27 +5,69 @@ This playbook processes each File Hash entity to query VirusTotal for detailed f
 
 ## Prerequisites
 - Obtain a VirusTotal API key by registering with the VirusTotal community. [Register here](https://www.virustotal.com/gui/join-us)
+- For the Logs Ingestion API playbooks to deploy successfully, the log analytics workspace and the resource group need to be in the same region.
+- The identity deploying a Logs Ingestion API playbook must be able to create Log Analytics tables, Data Collection Endpoints, Data Collection Rules, and role assignments.
 
 ## Quick Deployment
-**Deploy with Incident Trigger** (Recommended)
+### Logs Ingestion API playbooks
+
+These playbooks write VirusTotal file information to the `VirusTotalFileInfo_CL` table through the Logs Ingestion API, instead of the older `VTFileInfo_CL` table. Each template creates the custom table, a Data Collection Endpoint (DCE), a Data Collection Rule (DCR), and the DCR role assignment required by the playbook's managed identity. No Log Analytics Data Collector API connection or workspace key is required.
+
+#### Data stored in `VirusTotalFileInfo_CL`
+
+The Logs Ingestion API playbooks create a limited set of dedicated, queryable columns. The complete VirusTotal response is retained in `RawData`, so fields that are not listed below are still available for investigation.
+
+| Column | Description |
+| --- | --- |
+| `TimeGenerated` | Time when the record is ingested into Log Analytics. |
+| `FileHash` | File hash entity processed by the playbook. |
+| `FileHashAlgorithm` | Algorithm associated with the processed file hash, such as SHA256, SHA1, or MD5. |
+| `VirusTotalId` | VirusTotal identifier for the file report. |
+| `Reputation` | VirusTotal reputation score. |
+| `LastAnalysisStats` | VirusTotal last-analysis statistics, stored as a string. |
+| `RawData` | Complete VirusTotal response, serialized as JSON; any fields not represented by the dedicated columns are retained here. |
+
+**FileHash Enrichment - Virus Total Report - Incident Triggered using Log Ingestion API** (Recommended)
 
 Deploy this playbook and attach it to an **automation rule** to ensure it runs automatically whenever an incident is created.
 
 [Learn more about automation rules](https://docs.microsoft.com/azure/sentinel/automate-incident-handling-with-automation-rules#creating-and-managing-automation-rules)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Fincident-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Fincident-trigger%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Fincident-trigger-logingestionapi%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Fincident-trigger-logingestionapi%2Fazuredeploy.json)
+
+**FileHash Enrichment - Virus Total Report - Alert Triggered using Log Ingestion API**
+
+Deploy this playbook to process alert FileHash entities. Attach it to an **automation rule** and ensure the analytics rule maps the file hash entity. This variant also requires the playbook's managed identity to have the **Log Analytics Reader** role on the workspace.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Falert-trigger-logingestionapi%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Falert-trigger-logingestionapi%2Fazuredeploy.json)
+
+Provide the following values during deployment:
+
+- **Workspace Name**: Name of the Log Analytics workspace. The workspace must be in the deployment resource group.
+- **Workspace Resource ID**: Full Azure resource ID of that workspace.
+- **Workspace Location**: Azure region of that workspace; the DCE and DCR are created in this region.
+- **Data Collection Endpoint Name**: Name for the DCE. The default is `dce-VirusTotalFileInfo`.
+- **Data Collection Rule Name**: Name for the DCR. The default is `dcr-VirusTotalFileInfo`.
+
+### Connector-based playbooks
+
+The following variants use the existing connector-based ingestion implementation.
+
+**Deploy with Incident Trigger**
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Fincident-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Fincident-trigger%2Fazuredeploy.json)
 
 **Deploy with Alert Trigger**
 
 Deploy this playbook to run manually on alerts or attach it to an **analytics rule** to execute automatically when an alert is generated.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Falert-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Falert-trigger%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Falert-trigger%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVirusTotal%2FPlaybooks%2FGet-VirusTotalFileInfo%2Falert-trigger%2Fazuredeploy.json)
 
 ## Post Deployment Instructions
 
 **1. Authorize Connections**
 
-After deployment, authorize all connections:
+After deployment, authorize the Microsoft Sentinel and VirusTotal connections. Logs ingestion uses the playbook's managed identity and does not require a separate API connection authorization:
 
 1. Click the Microsoft Sentinel connection resource
 2. Click edit API connection

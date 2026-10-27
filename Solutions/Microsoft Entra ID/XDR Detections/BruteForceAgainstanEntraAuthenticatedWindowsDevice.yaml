@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+    - Anomalies
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3fbc20a4-04c4-464e-8fcb-6667f53e4987
+    path: Analytic Rules/BruteForceAgainstanEntraAuthenticatedWindowsDevice.yaml
+    version: 2.0.3
+    querySha256: 48d224fca63ebfd66a26516ad964d67d5fe994a13a479265db166eb973a1da28
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserPrincipalName` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 982aab0a23834fb25537b6cf433075446eac8eca99931dc2cb7cd13bd4f5f385
+      targetQuerySha256: b9f8f72a34ea18671d7fb2bc6fd086c79c94ef2980ebe3d642c98651119e253e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-3fbc20a4-04c4-464e-8fcb-6667f53e4987
+  displayName: Brute force attack against an Entra-authenticated Windows device
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let authenticationWindow = 20m;
+      let sensitivity = 2.5;
+      SigninLogs
+      | where AppDisplayName =~ "Windows Sign In"
+      | extend FailureOrSuccess = iff(ResultType in ("0", "50125", "50140", "70043", "70044"), "Success", "Failure")
+      | summarize FailureCount = countif(FailureOrSuccess=="Failure"), SuccessCount = countif(FailureOrSuccess=="Success"), IPAddresses = make_set(IPAddress,1000)
+                                by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName
+      | extend FailureSuccessDiff = FailureCount - SuccessCount
+      | where FailureSuccessDiff > 0
+      | sort by UserPrincipalName asc, TimeGenerated asc
+      | serialize
+      | summarize Diff = make_list(FailureSuccessDiff, 10000), TimeStamp = make_list(TimeGenerated, 10000) by UserDisplayName, UserPrincipalName//, tostring(IPAddresses)
+      | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(Diff, sensitivity, -1, 'linefit')
+      | mv-expand Diff to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)
+      | where Anomalies > 0
+      | summarize by UserDisplayName, UserPrincipalName, Anomalies, Score, Baseline, FailureToSuccessDiff = Diff
+      | join kind=leftouter (
+            SigninLogs
+            | where AppDisplayName =~ "Windows Sign In"
+            | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+            | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+            | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
+            | summarize StartTime = min(TimeGenerated),
+                        EndTime = max(TimeGenerated),
+                        IPAddresses = make_set(IPAddress,100),
+                        OS = make_set(OS,20),
+                        Browser = make_set(Browser,20),
+                        City = make_set(City,100),
+                        ResultType = make_set(ResultType,100)
+                    by UserDisplayName, UserPrincipalName, UserId, AppDisplayName
+        ) on UserDisplayName, UserPrincipalName
+      | project-away UserDisplayName1, UserPrincipalName1
+      | extend IPAddressFirst = tostring(IPAddresses[0])
+      | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Brute force attack against an Entra-authenticated Windows device
+      description: '''Identifies evidence of brute force activity against Windows devices authenticated via Entra ID (including
+        Entra-joined, hybrid-joined, and Windows 365 Cloud PCs) by detecting multiple authentication failures followed by
+        a successful authentication within a defined time window.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: UserId
+        ips:
+        - id: ip1
+          addressColumn: IPAddressFirst
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110

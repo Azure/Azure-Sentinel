@@ -1,0 +1,323 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for Alibaba Cloud ActionTrail
+  Version: '0.1.1'
+  LastUpdated: Sep 14, 2026
+Product:
+  Name: Alibaba Cloud ActionTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Alibaba Cloud ActionTrail Documentation
+  Link: https://www.alibabacloud.com/help/en/actiontrail
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports filtering and normalizing Alibaba Cloud ActionTrail control-plane audit activity to the ASIM Audit Event normalized schema, adding filtering parameters for improved query performance.
+Exceptions:
+- Field: DvcDomain
+  Warning: Missing recommended field
+  Exception: Dvc is the flat literal "ActionTrail" source doesn't report this.
+- Field: DvcHostname
+  Warning: Missing recommended field
+  Exception: Source doesn't report this.
+- Field: DvcIpAddr
+  Warning: Missing recommended field
+  Exception: Source doesn't report this.
+- Field: NewValue
+  Warning: Missing recommended field
+  Exception: Source doesn't report this.
+- Field: TargetIpAddr
+  Warning: Missing recommended field
+  Exception: Source doesn't report this.
+ParserName: vimAuditEventAlibabaCloudActionTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AlibabaCloudActionTrail
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // Control-plane activity across all Alibaba Cloud services
+  // Two exclusions:
+  // * eventType == "AliyunServiceEvent", Alibaba's own service-linked roles
+  //   (AliyunServiceRoleFor*) and *.aliyuncs.com system principals acting on the tenant's
+  //   behalf.
+  // * serviceName in ("Ims","CloudSSO","Ram"), covered by the UserManagement parser.
+  let vimAuditEventAlibabaCloudActionTrail = (
+      starttime: datetime = datetime(null)
+      , endtime: datetime = datetime(null)
+      , srcipaddr_has_any_prefix: dynamic = dynamic([])
+      , eventtype_in: dynamic = dynamic([])
+      , eventresult: string = '*'
+      , actorusername_has_any: dynamic = dynamic([])
+      , operation_has_any: dynamic = dynamic([])
+      , object_has_any: dynamic = dynamic([])
+      , newvalue_has_any: dynamic = dynamic([]) // NewValue is not populated by this source, accepted for unifying-parser compatibility.
+      , disabled: bool = false
+      , pack: bool = false
+  ) {
+      AliCloudActionTrailLogs_CL
+      | where not(disabled)
+      | where isnotempty(eventName)
+      | where eventType != "AliyunServiceEvent"
+      | where serviceName !in ("Ims", "CloudSSO", "Ram")
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+      | where array_length(operation_has_any) == 0 or eventName has_any (operation_has_any)
+      | where array_length(srcipaddr_has_any_prefix) == 0
+          or has_any_ipv4_prefix(sourceIpAddress, srcipaddr_has_any_prefix)
+          or ipv6_is_in_any_range(sourceIpAddress, srcipaddr_has_any_prefix)
+      | where array_length(newvalue_has_any) == 0 // NewValue not available in source
+      | extend
+          _ErrorCode = trim(@'"', errorCode)
+          , _ActorUsername = tostring(userIdentity.userName)
+          , _ResourceNameFirst = tostring(split(resourceName, ";")[0])
+      | extend
+          _EventResult = iff(isempty(_ErrorCode) and isempty(errorMessage), "Success", "Failure")
+          , _EventType = case(
+              eventName startswith "Terminate", "Terminate"
+              , eventName startswith "Create" or eventName startswith "Add" or eventName startswith "Register"
+                  or eventName startswith "Allocate" or eventName startswith "Insert" or eventName startswith "New"
+                  or eventName startswith "Upload" or eventName startswith "Copy" or eventName startswith "Clone"
+                  or eventName startswith "Generate" or eventName startswith "Provision",
+                  "Create"
+              , eventName startswith "Delete" or eventName startswith "Remove" or eventName startswith "Release"
+                  or eventName startswith "Deregister" or eventName startswith "Cancel" or eventName startswith "Drop"
+                  or eventName startswith "Uninstall" or eventName startswith "Deprovision",
+                  "Delete"
+              , eventName startswith "Describe" or eventName startswith "List" or eventName startswith "Get"
+                  or eventName startswith "Query" or eventName startswith "Check" or eventName startswith "Download"
+                  or eventName startswith "Export" or eventName startswith "Search" or eventName startswith "Fetch"
+                  or eventName startswith "Discover" or eventName startswith "Recognize" or eventName startswith "Preview"
+                  or eventName startswith "Validate" or eventName startswith "Diagnose" or eventName startswith "Count",
+                  "Read"
+              , eventName startswith "Modify" or eventName startswith "Update" or eventName startswith "Set"
+                  or eventName startswith "Change" or eventName startswith "Attach" or eventName startswith "Detach"
+                  or eventName startswith "Tag" or eventName startswith "Untag" or eventName startswith "Config"
+                  or eventName startswith "Associate" or eventName startswith "Disassociate" or eventName startswith "Move"
+                  or eventName startswith "Grant" or eventName startswith "Revoke" or eventName startswith "Authorize"
+                  or eventName startswith "Put" or eventName startswith "Upsert" or eventName startswith "Write"
+                  or eventName startswith "Save" or eventName startswith "Apply" or eventName startswith "Bind"
+                  or eventName startswith "Unbind" or eventName startswith "Import" or eventName startswith "Scale"
+                  or eventName startswith "Resize" or eventName startswith "Renew" or eventName startswith "Upgrade"
+                  or eventName startswith "Downgrade" or eventName startswith "Migrate" or eventName startswith "Sync"
+                  or eventName startswith "Rename" or eventName startswith "Operate" or eventName startswith "Handle"
+                  or eventName startswith "Complete" or eventName startswith "Confirm" or eventName startswith "Approve"
+                  or eventName startswith "Reject" or eventName startswith "Join" or eventName startswith "Leave"
+                  or eventName startswith "Mount" or eventName startswith "Rollback" or eventName startswith "Repair",
+                  "Set"
+              , eventName startswith "Enable" or eventName startswith "Open", "Enable"
+              , eventName startswith "Disable" or eventName startswith "Close", "Disable"
+              , eventName startswith "Run" or eventName startswith "Invoke" or eventName startswith "Execute", "Execute"
+              , eventName startswith "Start" or eventName startswith "Restart" or eventName startswith "Reboot", "Start"
+              , eventName startswith "Stop" or eventName startswith "Suspend" or eventName startswith "Pause", "Stop"
+              , eventName startswith "Install" or eventName startswith "Deploy", "Install"
+              , eventName startswith "Init", "Initialize"
+              , eventName startswith "Clear" or eventName startswith "Reset" or eventName startswith "Purge", "Clear"
+              , eventRW == "Read", "Read"
+              , "Other"
+          )
+          , _Object = case(isnotempty(_ResourceNameFirst), _ResourceNameFirst, isnotempty(serviceName), serviceName, "Not Applicable")
+      | where array_length(eventtype_in) == 0 or _EventType in (eventtype_in)
+      | where eventresult == '*' or eventresult == _EventResult
+      | where array_length(actorusername_has_any) == 0 or _ActorUsername has_any (actorusername_has_any)
+      | where array_length(object_has_any) == 0 or _Object has_any (object_has_any)
+      | extend
+          _ActorUserType = tostring(userIdentity.type)
+          , _ActorUserId = tostring(userIdentity.principalId)
+          , _ResourceTypeFirst = tostring(split(resourceType, ";")[0])
+          // sourceIPAddress can be an IP or an Alibaba hostname.
+          , _SrcIsIp = ipv4_is_match(sourceIpAddress, "0.0.0.0/0") or ipv6_is_match(sourceIpAddress, "::/0")
+          , _EventSourceHasDot = eventSource has "."
+      | extend
+          // ActionTrail resource types are ACS::<Namespace>::<Kind>, e.g. ACS::ECS::Instance.
+          _AcsNamespace = tostring(split(_ResourceTypeFirst, "::")[1])
+          , _AcsKind = tostring(split(_ResourceTypeFirst, "::")[2])
+      | extend
+          EventCount = int(1)
+          , EventStartTime = TimeGenerated
+          , EventEndTime = TimeGenerated
+          , EventVendor = "Alibaba Cloud"
+          , EventProduct = "ActionTrail"
+          , EventSchema = "AuditEvent"
+          , EventSchemaVersion = "1.0.0"
+          , EventResult = _EventResult
+          , EventResultDetails = _ErrorCode
+          , EventOriginalResultDetails = errorMessage
+          , EventMessage = errorMessage
+          , EventSeverity = iff(isnotempty(_ErrorCode) or isnotempty(errorMessage), "Low", "Informational")
+          , EventOriginalSubType = eventCategory
+          , EventUid = _ItemId
+          , EventType = _EventType
+          , Dvc = "ActionTrail"
+          , DvcAction = eventRW
+          , TargetFQDN = iff(_EventSourceHasDot, eventSource, "")
+          , TargetHostname = iff(_EventSourceHasDot, tostring(split(eventSource, ".")[0]), "")
+          , TargetDomain = iff(_EventSourceHasDot, substring(eventSource, indexof(eventSource, ".") + 1), "")
+          , TargetDomainType = iff(_EventSourceHasDot, "FQDN", "")
+          , Object = _Object
+          // referencedResources is the structured form of resourceName/resourceType, keyed by ACS type:
+          // {"ACS::ECS::Disk": ["d-2ze7e8..."]}.
+          , ObjectId = tostring(referencedResources[tostring(bag_keys(referencedResources)[0])][0])
+          , ObjectType = case(
+              isempty(_ResourceTypeFirst), "Other"
+              , _AcsNamespace in ("RAM", "CloudSSO", "IMS"), "Directory Service Object"
+              , _AcsKind in ("Policy", "Rule", "ControlPolicy", "AccessConfiguration"), "Policy Rule"
+              , _AcsNamespace == "SLS", "Event Log"
+              , _AcsKind in ("Service", "Function", "Application"), "Service"
+              , _AcsKind in ("Job", "Task", "ScheduledTask"), "Scheduled Task"
+              , "Cloud Resource"
+          )
+          , OriginalObjectType = _ResourceTypeFirst
+          , ActorUserId = _ActorUserId
+          , ActorUserIdType = iff(isnotempty(_ActorUserId), "Other", "")
+          , ActorUsername = _ActorUsername
+          , ActorUsernameType = iff(isnotempty(_ActorUsername), "Simple", "")
+          , ActorUserType = case(
+              _ActorUserType == "ram-user", "Regular"
+              , _ActorUserType == "root-account", "Admin"
+              , _ActorUserType == "system", "System"
+              , _ActorUserType == "assumed-role", "Service"
+              , _ActorUserType in ("cloudsso-user", "saml-user", "oidc-user"), "Regular"
+              , "Other"
+          )
+          , ActorOriginalUserType = _ActorUserType
+          , ActorScopeId = tostring(userIdentity.accountId)
+          // assumed-role principalIds are "<roleId>:<sessionName>"
+          , ActorSessionId = iff(_ActorUserId contains ":", tostring(split(_ActorUserId, ":")[1]), "")
+          , TargetAppName = serviceName
+          , TargetAppType = iff(isnotempty(serviceName), "Service", "")
+          , SrcIpAddr = iff(_SrcIsIp, sourceIpAddress, "")
+          , SrcFQDN = iff(not(_SrcIsIp) and sourceIpAddress has ".", sourceIpAddress, "")
+      | extend
+          Application = TargetAppName
+          , Dst = coalesce(TargetFQDN, TargetAppName)
+          , IpAddr = SrcIpAddr
+          , Src = SrcIpAddr
+          , User = ActorUsername
+      | project-rename
+          Operation = eventName
+          , EventOriginalUid = eventId
+          , EventOriginalType = eventType
+          , EventProductVersion = eventVersion
+          , HttpUserAgent = userAgent
+      | extend
+          AdditionalFields = iff(
+              pack
+              , pack(
+                  "eventSource", eventSource
+                  , "eventRW", eventRW
+                  , "requestId", requestId
+                  , "requestParameters", requestParameters
+                  , "requestParameterJson", requestParameterJson
+                  , "responseElements", responseElements
+                  , "additionalEventData", additionalEventData
+                  , "referencedResources", referencedResources
+                  , "eventAttributes", eventAttributes
+                  , "apiVersion", apiVersion
+                  , "isGlobal", isGlobal
+                  , "acsRegion", acsRegion
+                  , "actorAccessKeyId", tostring(userIdentity.accessKeyId)
+                  , "resourceName", resourceName
+                  , "resourceType", resourceType
+              )
+              , dynamic(null)
+          )
+      | project
+          TimeGenerated
+          , EventCount
+          , EventStartTime
+          , EventEndTime
+          , EventType
+          , EventResult
+          , EventResultDetails
+          , EventSeverity
+          , EventProduct
+          , EventVendor
+          , EventSchema
+          , EventSchemaVersion
+          , EventUid
+          , EventOriginalUid
+          , EventOriginalType
+          , EventOriginalSubType
+          , EventOriginalResultDetails
+          , EventMessage
+          , EventProductVersion
+          , Dvc
+          , DvcAction
+          , Operation
+          , Object
+          , ObjectId
+          , ObjectType
+          , OriginalObjectType
+          , ActorUserId
+          , ActorUserIdType
+          , ActorUsername
+          , ActorUsernameType
+          , ActorUserType
+          , ActorOriginalUserType
+          , ActorScopeId
+          , ActorSessionId
+          , TargetAppName
+          , TargetAppType
+          , TargetFQDN
+          , TargetHostname
+          , TargetDomain
+          , TargetDomainType
+          , Application
+          , Dst
+          , SrcIpAddr
+          , SrcFQDN
+          , Src
+          , IpAddr
+          , User
+          , HttpUserAgent
+          , AdditionalFields
+          , Type
+  };
+  vimAuditEventAlibabaCloudActionTrail(
+      starttime=starttime,
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      eventtype_in=eventtype_in,
+      eventresult=eventresult,
+      actorusername_has_any=actorusername_has_any,
+      operation_has_any=operation_has_any,
+      object_has_any=object_has_any,
+      newvalue_has_any=newvalue_has_any,
+      disabled=disabled,
+      pack=pack)

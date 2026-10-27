@@ -1,0 +1,75 @@
+id: f2cd0583-da5f-4edc-a4ad-1a237643c228
+name: Netcraft Takedown - Waiting for customer
+description: |
+  Identifies Netcraft Takedown records where action is waiting on the customer
+  (`EventType == "takedown"` and `ActionRequired` is not `no`).
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: NetcraftIntegrationGatewayDefinition
+    dataTypes:
+      - NetcraftTakedown_CL
+queryFrequency: 15m
+queryPeriod: 4h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+  - DefenseEvasion
+relevantTechniques:
+  - T1583
+query: |
+  NetcraftTakedown_Unique
+  | where IngestedAt > ago(15m)
+  | where EventType == "takedown"
+  | where isnotempty(ActionRequired) and ActionRequired != "no"
+  | extend
+      ThreatUrl = iff(Threat matches regex @"(?i)^https?://", Threat, ""),
+      ThreatIp = iff(isnotempty(parse_ipv4(Threat)) or isnotempty(parse_ipv6(Threat)), Threat, "")
+  | extend
+      ThreatDomain = iff(isempty(ThreatUrl) and isempty(ThreatIp) and Threat !has "@" and Threat matches regex @"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", Threat, "")
+  | project
+      TimeGenerated,
+      EventId,
+      Subject,
+      TakedownId,
+      GroupId,
+      AttackType,
+      Threat,
+      ThreatUrl,
+      ThreatIp,
+      ThreatDomain,
+      Status,
+      ActionRequired,
+      IsAuthorized,
+      IsEscalated,
+      IsMaliciousDomain,
+      IsMaliciousHostname
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ThreatUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ThreatIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: ThreatDomain
+customDetails:
+  GroupId: GroupId
+  AttackType: AttackType
+  IsAuthorized: IsAuthorized
+  IsEscalated: IsEscalated
+  IsMaliciousDomain: IsMaliciousDomain
+  IsMaliciousHostname: IsMaliciousHostname
+  Threat: Threat
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Netcraft Takedown waiting - {{TakedownId}}"
+  alertDescriptionFormat: "Takedown {{TakedownId}} waiting for customer ({{ActionRequired}}). Status: {{Status}}."
+kind: Scheduled
+version: 1.0.0

@@ -13,7 +13,6 @@ from azure.core.exceptions import ResourceNotFoundError
 from .infoblox_exception import InfobloxException
 from .logger import applogger
 from . import consts
-from .sentinel import post_data
 from random import randrange
 
 
@@ -518,7 +517,7 @@ class Utils:
             raise InfobloxException()
 
     def handle_failed_indicators(self, indicator_list, response_json):
-        """Handle failed indicators by writing them to a new file or ingesting them into a log table.
+        """Handle failed indicators by writing them to a new file for later inspection.
 
         Args:
             indicator_list (list): List of indicators.
@@ -529,7 +528,6 @@ class Utils:
             record_indexes = [error.get("recordIndex") for error in response_json["errors"]]
             failed_indicators = [indicator_list[index] for index in record_indexes]
 
-            # LOGIC TO WRITE FAILED INDICATORS IN NEW FILE
             if self.azure_function_name == consts.INDICATOR_FUNCTION_NAME:
                 applogger.info(
                     self.log_format.format(
@@ -545,19 +543,6 @@ class Utils:
                     consts.CONN_STRING, failed_file_name, consts.FILE_SHARE_NAME_DATA
                 )
                 self.post_checkpoint_data(failed_indicator_file_obj, failed_indicators, dump_flag=True)
-            elif self.azure_function_name == consts.FAILED_INDICATOR_FUNCTION_NAME:
-                applogger.info(
-                    self.log_format.format(
-                        consts.LOGS_STARTS_WITH,
-                        __method_name,
-                        self.azure_function_name,
-                        "Ingesting Failed Indicators to Log Table.",
-                    )
-                )
-                post_data(
-                    body=json.dumps(failed_indicators, ensure_ascii=False),
-                    log_type=consts.FAILED_INDICATORS_TABLE_NAME,
-                )
         except KeyError as keyerror:
             applogger.error(
                 self.log_format.format(

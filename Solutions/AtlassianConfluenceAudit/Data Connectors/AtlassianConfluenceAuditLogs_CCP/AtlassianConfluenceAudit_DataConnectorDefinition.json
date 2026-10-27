@@ -10,28 +10,28 @@
       "title": "Atlassian Confluence Audit (via Codeless Connector Framework)",
       "publisher": "Microsoft",
       "descriptionMarkdown": "The [Atlassian Confluence](https://www.atlassian.com/software/confluence) Audit data connector provides the capability to ingest [Confluence Audit Records](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) events into Microsoft Sentinel through the REST API. Refer to [API documentation](https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/) for more information. The connector provides ability to get events which helps to examine potential security risks, analyze your team's use of collaboration, diagnose configuration problems and more.",
-      "graphQueriesTableName": "ConfluenceAuditLogs_CL",
+      "graphQueriesTableName": "ConfluenceAuditLogs",
       "graphQueries": [
         {
           "metricName": "Total data received",
           "legend": "Confluence Audit Events",
-          "baseQuery": "{{graphQueriesTableName}}"
+          "baseQuery": "ConfluenceAuditLogs"
         }
       ],
       "sampleQueries": [
         {
           "description": "All Atlassian Confluence Audit logs",
-          "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc"
+          "query": "ConfluenceAuditLogs\n| sort by TimeGenerated desc"
         },
         {
           "description": "Events by Category",
-          "query": "{{graphQueriesTableName}}\n | summarize count() by Category"
+          "query": "ConfluenceAuditLogs\n | summarize count() by Category"
         }
       ],
       "dataTypes": [
         {
-          "name": "{{graphQueriesTableName}}",
-          "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+          "name": "ConfluenceAuditLogs",
+          "lastDataReceivedQuery": "ConfluenceAuditLogs | summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
         }
       ],
       "connectivityCriteria": [
@@ -61,45 +61,76 @@
         "customs": [
           {
             "name": "Atlassian Confluence API access",
-            "description": "Permission of [Administer Confluence](https://developer.atlassian.com/cloud/confluence/rest/v1/intro/#auth) is required to get access to the Confluence Audit logs API. See [Confluence API documentation](https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-audit/#api-wiki-rest-api-audit-get) to learn more about the audit API."
+            "description": "The account requires the [Confluence Administrator global permission](https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-audit/#api-wiki-rest-api-audit-get). Scoped API tokens also require the `read:audit-log:confluence` scope."
           }
         ]
       },
       "instructionSteps": [
         {
-          "title": "Connect to Atlassian Confluence API to start collecting audit logs in Microsoft Sentinel",
-          "description": "To enable the Atlassian Confluence connector for Microsoft Sentinel, click to add an organization, fill the form with the Confluence environment credentials and click to Connect. \n Follow [these steps](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/) to create an API token.\n ",
+          "title": "Connect Atlassian Confluence to Microsoft Sentinel",
+          "description": "Add one connection per Atlassian Confluence site. Follow the [Atlassian API token instructions](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/) to create an API token.",
           "instructions": [
             {
               "type": "DataConnectorsGrid",
               "parameters": {
                 "mapping": [
                   {
-                    "columnName": "Atlassian Confluence organization URL",
-                    "columnValue": "properties.request.apiEndpoint"
+                    "columnName": "Connection Alias",
+                    "columnValue": "properties.addOnAttributes.friendlyName"
+                  },
+                  {
+                    "columnName": "Confluence API Base Path",
+                    "columnValue": "properties.addOnAttributes.apiUrl"
+                  },
+                  {
+                    "columnName": "Data Type",
+                    "columnValue": "properties.addOnAttributes.dataType"
                   }
                 ],
                 "menuItems": [
                   "DeleteConnector"
-                ]
+                ],
+                "isMultiSelect": true
               }
             },
             {
               "type": "ContextPane",
               "parameters": {
                 "isPrimary": true,
-                "label": "Add organization",
-                "title": "Add organization",
-                "subtitle": "Add Atlassian Confluence organization",
+                "label": "Add Connection",
+                "title": "Add Atlassian Confluence Connection",
+                "subtitle": "Connect to an Atlassian Confluence site to ingest audit logs",
                 "contextPaneType": "DataConnectorsContextPane",
                 "instructionSteps": [
                   {
+                    "title": "Connection Details",
+                    "description": "Enter the details for this Atlassian Confluence connection.",
                     "instructions": [
                       {
                         "type": "Textbox",
                         "parameters": {
-                          "label": "Atlassian Confluence organization URL",
-                          "placeholder": "<your-domain>.atlassian.net",
+                          "label": "Connection Alias",
+                          "placeholder": "e.g. Contoso Production",
+                          "type": "text",
+                          "name": "friendlyName",
+                          "validations": {
+                            "required": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Enter a unique alias to identify this Atlassian connection. **Important:** Use a different alias for each connection. To update an existing connection, delete it and recreate it with the same alias.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
+                        "type": "Textbox",
+                        "parameters": {
+                          "label": "Atlassian Confluence API Base Path",
+                          "placeholder": "<tenant>.atlassian.net",
                           "type": "text",
                           "name": "confluenceorganizationurl",
                           "validations": {
@@ -108,10 +139,18 @@
                         }
                       },
                       {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "For an unscoped token, enter `<tenant>.atlassian.net`. For a scoped token, get the Cloud ID from `https://<tenant>.atlassian.net/_edge/tenant_info`, then enter `api.atlassian.com/ex/confluence/<cloudId>`. Do not include `https://` or a trailing slash.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
                         "type": "Textbox",
                         "parameters": {
-                          "label": "User Name",
-                          "placeholder": "User Name (e.g., user@example.com)",
+                          "label": "Atlassian Account Email",
+                          "placeholder": "user@example.com",
                           "type": "text",
                           "name": "userid",
                           "validations": {
@@ -120,10 +159,18 @@
                         }
                       },
                       {
+                        "type": "InfoMessage",
+                        "parameters": {
+                          "text": "Enter the exact email address of the Atlassian account that created the API token.",
+                          "visible": true,
+                          "inline": true
+                        }
+                      },
+                      {
                         "type": "Textbox",
                         "parameters": {
                           "label": "API Token",
-                          "placeholder": "API Token",
+                          "placeholder": "Enter your Atlassian API token",
                           "type": "password",
                           "name": "apikey",
                           "validations": {

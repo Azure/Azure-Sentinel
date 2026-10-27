@@ -1,4 +1,157 @@
 $jsonConversionDepth = 50
+
+function Assert-SolutionName {
+    param(
+        [Parameter(Mandatory = $true)][string]$SolutionName,
+        [Parameter(Mandatory = $true)][string]$SelectedSolutionName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SolutionName) -or
+        $SolutionName -in @('.', '..') -or
+        $SolutionName -match '[/\\:]' -or
+        -not [string]::Equals(
+            $SolutionName,
+            $SelectedSolutionName,
+            [System.StringComparison]::OrdinalIgnoreCase
+        )) {
+        throw "Solution Data Name must match the selected solution folder and must not be a path."
+    }
+}
+
+function Assert-NoSolutionContentSymlinks {
+    param([Parameter(Mandatory = $true)][string]$SolutionRoot)
+
+    $root = [System.IO.Path]::GetFullPath($SolutionRoot)
+    foreach ($item in Get-ChildItem -LiteralPath $root -Force -Recurse -ErrorAction Stop) {
+        $relative = [System.IO.Path]::GetRelativePath($root, $item.FullName)
+        $parts = $relative.Split([System.IO.Path]::DirectorySeparatorChar)
+        if ($parts | Where-Object {
+            $_.ToLowerInvariant() -in @('package', 'logs', 'reports', 'evidence') -or
+            $_.ToLowerInvariant() -eq '.env' -or $_.ToLowerInvariant().StartsWith('.env.')
+        }) {
+            continue
+        }
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Solution content symlink paths are not supported: $($item.FullName)"
+        }
+    }
+}
+
+function Resolve-SolutionContentPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$SolutionRoot,
+        [Parameter(Mandatory = $true)][string]$SolutionName,
+        [Parameter(Mandatory = $true)][string]$ContentPath,
+        [switch]$RequireFile
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ContentPath) -or
+        $ContentPath -match '\A[A-Za-z][A-Za-z0-9+.-]*:' -or
+        $ContentPath -match '(^|[\\/])\.{1,2}([\\/]|$)') {
+        throw "Solution content path must be a local, relative path without traversal: $ContentPath"
+    }
+    $normalized = $ContentPath.Replace('\', '/')
+    if ($normalized.StartsWith('/') -or $normalized.Contains('//')) {
+        throw "Solution content path must be a local, relative path without traversal: $ContentPath"
+    }
+    $parts = $normalized.Split('/')
+    if ($parts -contains '') {
+        throw "Solution content path must be a local, relative path without traversal: $ContentPath"
+    }
+    if ($parts[0] -ceq 'Solutions') {
+        if ($parts.Count -lt 3 -or $parts[1] -cne $SolutionName) {
+            throw "Repository-relative content path must name the selected solution: $ContentPath"
+        }
+        $normalized = $parts[2..($parts.Count - 1)] -join '/'
+    }
+
+    $root = [System.IO.Path]::GetFullPath($SolutionRoot).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+    $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction Stop
+    if (($rootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Solution content root must not be a symlink: $root"
+    }
+    $fullPath = [System.IO.Path]::GetFullPath((Join-Path $root $normalized))
+    $prefix = $root + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $fullPath.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Solution content path resolves outside the selected solution: $ContentPath"
+    }
+
+    $relative = $fullPath.Substring($prefix.Length)
+    $current = $root
+    foreach ($segment in $relative.Split([System.IO.Path]::DirectorySeparatorChar)) {
+        $current = Join-Path $current $segment
+        if (Test-Path -LiteralPath $current) {
+            $item = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+            if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Solution content symlink paths are not supported: $current"
+            }
+        }
+    }
+    if ($RequireFile -and -not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+        throw "Referenced solution content is not a local file: $ContentPath"
+    }
+    [PSCustomObject]@{
+        FullPath = $fullPath.Replace('\', '/')
+        RelativePath = $relative.Replace('\', '/')
+    }
+}
+
+function Convert-SolutionDataContentArrays {
+    param([Parameter(Mandatory = $true)]$Content)
+
+    $encodedArrayNames = @(
+        'parsers', 'data connectors', 'dataconnectors', 'playbooks', 'workbooks',
+        'analytic rules', 'analytics rules', 'hunting queries', 'watchlists',
+        'summary rules', 'summaryrules', 'xdr detections', 'custom detections', 'xdr workbooks',
+        'savedsearches'
+    )
+    foreach ($property in $Content.PSObject.Properties) {
+        $propertyName = $property.Name.ToLowerInvariant()
+        $value = $property.Value
+        if ($value -is [string] -and $propertyName -in $encodedArrayNames) {
+            try {
+                $value = ConvertFrom-Json -InputObject $value -NoEnumerate -ErrorAction Stop
+            }
+            catch {
+                throw "Solution Data content array '$($property.Name)' must be a JSON-encoded array."
+            }
+            if ($value -isnot [array]) {
+                throw "Solution Data content array '$($property.Name)' must be a JSON-encoded array."
+            }
+            $property.Value = $value
+        }
+        if ($value -is [array] -and $propertyName -notin @(
+            'dependentdomainsolutionids', 'staticdataconnectorids',
+            'xdr detections', 'custom detections'
+        )) {
+            foreach ($reference in $value) {
+                if ($reference -isnot [string] -or [string]::IsNullOrWhiteSpace($reference)) {
+                    throw "Solution Data content array '$($property.Name)' must contain only non-empty path strings."
+                }
+            }
+        }
+    }
+    return $Content
+}
+
+function Assert-NoOperationalContent {
+    param([Parameter(Mandatory = $true)]$Content)
+    $Content = Convert-SolutionDataContentArrays -Content $Content
+    foreach ($property in $Content.PSObject.Properties) {
+        $references = $property.Value
+        if ($references -is [array]) {
+            foreach ($reference in $references) {
+                if ($reference -is [string] -and $reference -match '(?i)(^|[\\/])(Logs|Reports|Evidence)([\\/]|$)') {
+                    throw "Solution content arrays must not include Logs, Reports or Evidence."
+                }
+            }
+        }
+    }
+}
+
 $mainTemplateArtifact = [PSCustomObject]@{
     name = "DefaultTemplate";
     type = "Template"
@@ -10,6 +163,31 @@ $baseCreateUiDefinitionPath = "$PSScriptRoot/templating/baseCreateUiDefinition.j
 
 $global:baseMainTemplate = Get-Content -Raw $baseMainTemplatePath | Out-String | ConvertFrom-Json
 $global:baseCreateUiDefinition = Get-Content -Raw $baseCreateUiDefinitionPath | Out-String | ConvertFrom-Json
+. "$PSScriptRoot/customDetections.ps1"
+. "$PSScriptRoot/defenderWorkbooks.ps1"
+. "$PSScriptRoot/contentDeploymentParameters.ps1"
+$script:baseSolutionResourceSelection = (Get-Command Get-SolutionResourceSelection).ScriptBlock
+
+function Get-SolutionResourceSelection {
+    param([psobject]$Resource)
+    if ($Resource.type -eq 'Microsoft.Resources/deployments') {
+        $inner = $Resource.properties.template
+        $workbook = $inner.resources.workbook
+        if ($inner.languageVersion -eq '2.0' -and
+            $inner.imports.MicrosoftSecurity.provider -eq 'MicrosoftSecurity' -and
+            $inner.imports.MicrosoftSecurity.version -eq '1.0.0' -and
+            $workbook.import -eq 'MicrosoftSecurity' -and
+            $workbook.type -eq 'Microsoft.Security/workbooks@2026-06-01-preview' -and
+            @($inner.resources.PSObject.Properties).Count -eq 1) {
+            return 'DeployDefenderWorkbook'
+        }
+    }
+    return (& $script:baseSolutionResourceSelection -Resource $Resource)
+}
+
+. "$PSScriptRoot/customerUsageAttribution.ps1"
+. "$PSScriptRoot/versionPolicy.ps1"
+$v31VersionPolicy = $null
 
 # Content Counters - (for adding numbering to each item)
 $global:analyticRuleCounter = 1
@@ -37,6 +215,7 @@ $ContentKindDict.Add("Playbook", "pl")
 $ContentKindDict.Add("PlaybookTemplate", "plt")
 $ContentKindDict.Add("Workbook", "wb")
 $ContentKindDict.Add("WorkbookTemplate", "wbt")
+$ContentKindDict.Add("DefenderWorkbook", "dwb")
 $ContentKindDict.Add("Watchlist", "wl")
 $ContentKindDict.Add("WatchlistTemplate", "wlt")
 $ContentKindDict.Add("Notebook", "nb")
@@ -49,30 +228,21 @@ $ContentKindDict.Add("Standalone", "sa")
 $ContentKindDict.Add("SummaryRule", "sr")
 
 function ReadFileContent($filePath) {
-    try {
-        # Case-insensitive file existence check
-        $parentDir = Split-Path -Path $filePath -Parent
-        $fileName = [System.IO.Path]::GetFileName($filePath)
-        $actualFile = Get-ChildItem -Path $parentDir -Filter "*" | Where-Object { $_.Name -ieq $fileName }
-        if ($null -eq $actualFile) {
-            Write-Host "filePath $filePath (not found, case-insensitive check)"
-            return $null
-        }
-        $filePath = $actualFile.FullName
-        $content = Get-Content -Raw -Path $filePath
-        if ($null -eq $content) {
-            Write-Host "Error in reading file $filePath"
-            return $null;
-        }
-        else {
-            $fileContent = $content | ConvertFrom-Json;
-            return $fileContent;
-        }
+    $parentDir = Split-Path -Path $filePath -Parent
+    $fileName = [System.IO.Path]::GetFileName($filePath)
+    $matches = @(
+        Get-ChildItem -LiteralPath $parentDir -File -Force -ErrorAction Stop |
+            Where-Object { $_.Name -ieq $fileName }
+    )
+    if ($matches.Count -eq 0) {
+        Write-Host "filePath $filePath (not found, case-insensitive check)"
+        return $null
     }
-    catch {
-        Write-Host "Error occured in ReadFileContent. Error details : $_" -ForegroundColor Red
-        return $null;
+    if ($matches.Count -gt 1) {
+        throw "Ambiguous case-insensitive file path: $filePath"
     }
+    $content = Get-Content -LiteralPath $matches[0].FullName -Raw -ErrorAction Stop
+    return $content | ConvertFrom-Json -ErrorAction Stop
 }
 
 function handleEmptyInstructionProperties ($inputObj) {
@@ -436,6 +606,42 @@ function updateDescriptionCount($counter, $emplaceString, $replaceString, $count
     }
 }
 
+function Update-XdrDescriptionCount([int]$Count) {
+    if ($Count -le 0) { return }
+
+    # Target only the generated count paragraph, before substituting author-supplied text.
+    # XDR follows analytics (or the preceding nonempty category), ahead of hunting.
+    $pattern = '(\{\{SolutionDescription\}\}\r?\n\r?\n)(?<before>(?:\*\*(?:Data Connectors|Parsers|Workbooks|Analytic Rules):\*\* \d+(?:, )?)*)(?<after>[^\r\n]*)'
+    $global:baseCreateUiDefinition.parameters.config.basics.description = [regex]::Replace(
+        $global:baseCreateUiDefinition.parameters.config.basics.description,
+        $pattern,
+        [System.Text.RegularExpressions.MatchEvaluator]{
+            param($match)
+            $counts = @(
+                $match.Groups['before'].Value.TrimEnd(', '),
+                "**XDR Detections:** $Count",
+                $match.Groups['after'].Value.TrimEnd(', ')
+            ) | Where-Object { $_ -ne '' }
+            return $match.Groups[1].Value + ($counts -join ', ')
+        }
+    )
+}
+
+function Update-DefenderWorkbookDescriptionCount([int]$Count) {
+    if ($Count -le 0) { return }
+    $pattern = '(\{\{SolutionDescription\}\}\r?\n\r?\n)(?<counts>[^\r\n]*)'
+    $global:baseCreateUiDefinition.parameters.config.basics.description = [regex]::Replace(
+        $global:baseCreateUiDefinition.parameters.config.basics.description,
+        $pattern,
+        [System.Text.RegularExpressions.MatchEvaluator]{
+            param($match)
+            $counts = @($match.Groups['counts'].Value.TrimEnd(', '), "**XDR Workbooks:** $Count") |
+                Where-Object { $_ -ne '' }
+            return $match.Groups[1].Value + ($counts -join ', ')
+        }
+    )
+}
+
 function GetContentSchemaVersion($defaultPackageVersion, $dataInputVersion) {
     # DEPENDING OF VERSION WE SHOULD SET THE CONTENTSCHEMAVERSION
     if ($null -eq $defaultPackageVersion -and $null -eq $dataInputVersion) {
@@ -729,7 +935,7 @@ function GetWorkbookDataMetadata($file, $isPipelineRun, $contentResourceDetails,
         }
         catch {
             Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
-            break;
+            throw
         }
 
         if ($dependencies.source -and $dependencies.source.kind -and ($dependencies.source.kind -eq "Community" -or $dependencies.source.kind -eq "Standalone")) {
@@ -748,7 +954,7 @@ function GetWorkbookDataMetadata($file, $isPipelineRun, $contentResourceDetails,
     }
     catch {
         Write-Host "Failed to serialize $file" -ForegroundColor Red
-        break;
+        throw
     }
     $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$global:workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
     #creating parameters in mainTemplate
@@ -834,10 +1040,11 @@ function GetWorkbookDataMetadata($file, $isPipelineRun, $contentResourceDetails,
         }
         catch {
             Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
-            break;
+            throw
         }
 
         $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $dependencies.title; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
+        Assert-V31ReleaseVersion -Version "$($dependencies.version)" -ContentKind Workbook -ContentPath $file
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workbookVersion$global:workbookCounter" -NotePropertyValue "$($dependencies.version)"
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workbookContentId$global:workbookCounter" -NotePropertyValue "$($dependencies.workbookKey)"
         $global:baseMainTemplate.parameters | Add-Member -MemberType NoteProperty -Name $workbookNameParameterName -Value $workbookNameParameter
@@ -1001,7 +1208,7 @@ function GetPlaybookDataMetadata($file, $contentToImport, $contentResourceDetail
     $playbookName = $(if ($playbookData.parameters.PlaybookName) { $playbookData.parameters.PlaybookName.defaultValue }elseif ($playbookData.parameters."Playbook Name") { $playbookData.parameters."Playbook Name".defaultValue })
 
     $fileName = Split-path -Parent $file | Split-Path -leaf
-    if ($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger" -or $fileName.ToLower() -eq "entity-trigger") { 
+    if ($fileName.ToLower() -eq "incident-trigger" -or $fileName.ToLower() -eq "alert-trigger" -or $fileName.ToLower() -eq "entity-trigger" -or $fileName.ToLower() -eq "incident-trigger-logingestionapi" -or $fileName.ToLower() -eq "alert-trigger-logingestionapi") { 
         $parentPath = Split-Path $file -Parent; 
         $fileName = (Split-Path $parentPath -Parent | Split-Path -leaf) + "-" + $fileName; 
     }
@@ -1506,6 +1713,7 @@ function GetPlaybookDataMetadata($file, $contentToImport, $contentResourceDetail
     }
 
     if ($contentToImport.TemplateSpec) {
+        Assert-V31ReleaseVersion -Version $playbookVersion -ContentKind $(if ($IsLogicAppsCustomConnector) { 'LogicAppsCustomConnector' } elseif ($IsFunctionAppResource) { 'AzureFunction' } else { 'Playbook' }) -ContentPath $file
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "playbookVersion$global:playbookCounter" -NotePropertyValue $playbookVersion
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "playbookContentId$global:playbookCounter" -NotePropertyValue $fileName
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_playbookContentId$global:playbookCounter" -NotePropertyValue "[variables('playbookContentId$global:playbookCounter')]"
@@ -1721,6 +1929,7 @@ function GetPlaybookDataMetadata($file, $contentToImport, $contentResourceDetail
         $global:baseMainTemplate.resources += $playbookTemplateSpecContent;
     }
     else {
+        Register-SolutionResourceKind -Resources $playbookResources -Kind Playbook
         $global:baseMainTemplate.resources += $playbookResources;
     }
 
@@ -1809,7 +2018,7 @@ function GetDataConnectorMetadata($file, $contentResourceDetails, $dataFileMetad
     }
     catch {
         Write-Host "Failed to deserialize $file" -ForegroundColor Red
-        break;
+        throw
     }
 
     $hasStaticDataConnectorIdsProperty = [bool]($contentToImport.PSObject.Properties.Name.tolower() -match 'staticdataconnectorids') ? $true : $false
@@ -1874,6 +2083,7 @@ function GetDataConnectorMetadata($file, $contentResourceDetails, $dataFileMetad
         }
 
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$global:connectorCounter" -NotePropertyValue (($null -ne $templateSpecConnectorData.metadata) ? "$($templateSpecConnectorData.metadata.version)" : "1.0.0")
+        Assert-V31ReleaseVersion -Version $global:baseMainTemplate.variables."dataConnectorVersion$global:connectorCounter" -ContentKind DataConnector -ContentPath $file
         if (!$contentToImport.TemplateSpec) {
             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "parentId" -NotePropertyValue $global:solutionId
             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parentId" -NotePropertyValue "[variables('parentId')]"
@@ -2259,7 +2469,7 @@ function GetHuntingDataMetadata($file, $rawData, $contentResourceDetails) {
     }
     catch {
         Write-Host "Failed to deserialize $file" -ForegroundColor Red
-        break;
+        throw
     }
 
     $fileName = Split-Path $file -leafbase;
@@ -2271,6 +2481,7 @@ function GetHuntingDataMetadata($file, $rawData, $contentResourceDetails) {
     }
 
     $calculatedHuntingQueryVersion = ($null -ne $yaml.version) ? "$($yaml.version)" : "1.0.0"
+    Assert-V31ReleaseVersion -Version $calculatedHuntingQueryVersion -ContentKind HuntingQuery -ContentPath $file
 
     $objHuntingQueryVariables = [pscustomobject]@{}
     $objHuntingQueryVariables | Add-Member -NotePropertyName "huntingQueryVersion$global:huntingQueryCounter" -NotePropertyValue "$calculatedHuntingQueryVersion"
@@ -2510,6 +2721,7 @@ function GetHuntingDataMetadata($file, $rawData, $contentResourceDetails) {
             return;
         }
         else {
+            Register-SolutionResourceKind -Resources $huntingQueryObj -Kind HuntingQuery
             $global:baseMainTemplate.resources[$(getQueryResourceLocation)].resources += $huntingQueryObj
         }
     }
@@ -2590,7 +2802,7 @@ function GenerateAlertRule($file, $contentResourceDetails) {
     }
     catch {
         Write-Host "Failed to deserialize $file, Error Details: $_" -ForegroundColor Red
-        break;
+        throw
     }
 
     if ($yaml.metadata -and $yaml.metadata.source -and $yaml.metadata.source.kind -and ($yaml.metadata.source.kind -eq "Community" -or $yaml.metadata.source.kind -eq "Standalone")) {
@@ -2598,6 +2810,7 @@ function GenerateAlertRule($file, $contentResourceDetails) {
     }
 
     $calculatedAnalyticRuleVersion = ($null -ne $yaml.version) ? "$($yaml.version)" : "1.0.0"
+    Assert-V31ReleaseVersion -Version $calculatedAnalyticRuleVersion -ContentKind AnalyticsRule -ContentPath $file
     $objAnalyticRulesVariables = [pscustomobject]@{}
     $objAnalyticRulesVariables | Add-Member -NotePropertyName "analyticRuleVersion$global:analyticRuleCounter" -NotePropertyValue "$calculatedAnalyticRuleVersion"
 
@@ -2735,6 +2948,22 @@ function GenerateAlertRule($file, $contentResourceDetails) {
             }
             elseif ($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2) {
                 $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
+            }
+            elseif ($yamlField -eq "customDetails" -and $null -ne $alertRule.customDetails) {
+                if ($alertRule.customDetails -is [System.Collections.IDictionary]) {
+                    foreach ($detailKey in @($alertRule.customDetails.Keys)) {
+                        if ($detailKey -like '*id' -and $alertRule.customDetails[$detailKey] -is [string] -and -not $alertRule.customDetails[$detailKey].StartsWith('[')) {
+                            $alertRule.customDetails[$detailKey] = ConvertTo-CustomDetectionArmLiteral -Value $alertRule.customDetails[$detailKey]
+                        }
+                    }
+                }
+                else {
+                    foreach ($detail in $alertRule.customDetails.PSObject.Properties) {
+                        if ($detail.Name -like '*id' -and $detail.Value -is [string] -and -not $detail.Value.StartsWith('[')) {
+                            $detail.Value = ConvertTo-CustomDetectionArmLiteral -Value $detail.Value
+                        }
+                    }
+                }
             }
         }
     }
@@ -2881,6 +3110,7 @@ function GenerateAlertRule($file, $contentResourceDetails) {
 }
 
 function GenerateWatchList($json, $isPipelineRun, $watchListFileName) {
+    Assert-V31ReleaseVersion -Version $contentToImport.Version -ContentKind Watchlist -ContentPath $watchListFileName
     $watchlistData = $json.resources[0]
 
     $watchlistName = $watchlistData.properties.displayName;
@@ -2948,6 +3178,12 @@ function GenerateWatchList($json, $isPipelineRun, $watchListFileName) {
 
     # Replace watchlist resource id
     $watchlistData.name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('watchlist$global:watchlistCounter-id'))]"
+    if ($watchlistData.PSObject.Properties['kind'] -and [string]::IsNullOrWhiteSpace([string]$watchlistData.kind)) {
+        $watchlistData.PSObject.Properties.Remove('kind')
+    }
+    if ($watchlistData.properties -and $watchlistData.properties.PSObject.Properties['labels'] -and @($watchlistData.properties.labels).Count -eq 0) {
+        $watchlistData.properties.PSObject.Properties.Remove('labels')
+    }
 
     # Handle MainTemplate Resource
     $global:baseMainTemplate.resources += $watchlistData #Assume 1 watchlist per template
@@ -3012,11 +3248,21 @@ function RunArmTtkOnPackage {
     if ($isPipelineRun -eq $false) {
         #downloading and running arm-ttk on generated solution
         $armTtkFolder = "$PSScriptRoot/../arm-ttk"
+        $moduleManifest = Join-Path $PSScriptRoot "../tmp/arm-ttk/arm-ttk.psd1"
         if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
-            Write-Output "Missing arm-ttk validations. Downloading module..."
-            & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
+            if (Test-Path -Path $moduleManifest -PathType Leaf) {
+                Import-Module $moduleManifest
+            }
+            else {
+                Write-Output "Missing arm-ttk validations. Downloading module..."
+                & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
+            }
         }
+        $global:LASTEXITCODE = 0
         & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM-TTK validation failed for solution '$solutionName' (exit code $LASTEXITCODE)."
+        }
     }
 }
 
@@ -3033,13 +3279,33 @@ function CheckJsonIsValid($solutionFolderBasePath) {
                 Write-Host "File $filePath is a valid Json file!"
             }
             else {
-                Write-Host "File $filePath is Not a valid Json file!"
+                Write-Host "File $filePath is Not a valid Json file!" -ForegroundColor Red
+                throw "File $filePath is Not a valid Json file!"
             }
         }
     }
 }
 
-function GeneratePackage($solutionName, $contentToImport, $calculatedBuildPipelinePackageVersion = '') {
+function GeneratePackage(
+    $solutionName,
+    $contentToImport,
+    $calculatedBuildPipelinePackageVersion = '',
+    [bool]$IncludeXdrDetections = $false,
+    [string]$SolutionMetadataPath,
+    [switch]$SkipAttributionLookup
+) {
+    Assert-V31SolutionVersion -SolutionName $solutionName -Version $contentToImport.Version -CalculatedVersion $calculatedBuildPipelinePackageVersion
+    Assert-V31VersionChecksPassed
+    $packageSerializationDepth = $jsonConversionDepth
+    if ($IncludeXdrDetections) {
+        $xdrDetectionCount = Add-XdrCustomDetectionsToSolution -SolutionName $solutionName -ContentToImport $contentToImport -Template $global:baseMainTemplate
+        Update-XdrDescriptionCount -Count $xdrDetectionCount
+        $defenderWorkbookCount = Add-XdrDefenderWorkbooksToSolution -SolutionName $solutionName -ContentToImport $contentToImport -Template $global:baseMainTemplate
+        if ($defenderWorkbookCount -gt 0) { $packageSerializationDepth = 100 }
+        Update-DefenderWorkbookDescriptionCount -Count $defenderWorkbookCount
+        Add-SolutionContentDeploymentParameters -Template $global:baseMainTemplate -UiDefinition $global:baseCreateUiDefinition
+    }
+
     if ($contentToImport.Description) {
         $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", $contentToImport.Description
             
@@ -3080,6 +3346,11 @@ function GeneratePackage($solutionName, $contentToImport, $calculatedBuildPipeli
     $baseMainTemplate.metadata.author = $(if ($contentToImport.Author) { $contentToImport.Author } else { "" })
     $baseMainTemplate.metadata.comments = $baseMainTemplate.metadata.comments -replace "{{SolutionName}}", $solutionName
 
+    if ($IncludeXdrDetections) {
+        # Resolve required attribution after content/version preparation, before any package output.
+        Add-CustomerUsageAttribution -SolutionMetadataPath $SolutionMetadataPath -Template $global:baseMainTemplate -WarnIfMissing ($xdrDetectionCount -gt 0 -or $defenderWorkbookCount -gt 0) -SkipAttributionLookup:$SkipAttributionLookup
+    }
+
     $repoRoot = $(git rev-parse --show-toplevel)
     $solutionFolderName = $solutionName
     $solutionFolder = "$repoRoot/Solutions/$solutionFolderName"
@@ -3094,15 +3365,19 @@ function GeneratePackage($solutionName, $contentToImport, $calculatedBuildPipeli
     $createUiDefinitionOutputPath = "$solutionFolder/createUiDefinition.json"
 
     try {
-        $baseMainTemplate | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $mainTemplateOutputPath -Encoding utf8
+        $mainTemplateJson = $baseMainTemplate | ConvertTo-Json -Depth $packageSerializationDepth
+        if ($IncludeXdrDetections -and $xdrDetectionCount -gt 0) {
+            $mainTemplateJson = ConvertTo-CustomDetectionTemplateJson -Json $mainTemplateJson
+        }
+        $mainTemplateJson | Out-File $mainTemplateOutputPath -Encoding utf8
 
         # create testParameters json file which will be used for test case automation
         $testParametersOutputPath = "$solutionFolder/testParameters.json"
-        $baseMainTemplate.parameters | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $testParametersOutputPath -Encoding utf8
+        $baseMainTemplate.parameters | ConvertTo-Json -Depth $packageSerializationDepth | Out-File $testParametersOutputPath -Encoding utf8
     }
     catch {
         Write-Host "Failed to write output file $mainTemplateOutputPath" -ForegroundColor Red
-        break;
+        throw
     }
 
     try {
@@ -3118,11 +3393,11 @@ function GeneratePackage($solutionName, $contentToImport, $calculatedBuildPipeli
             # when there is no content then create ui fails as step is null
             $global:baseCreateUiDefinition.parameters.steps = @(@{}) # [{}]
         }
-        $global:baseCreateUiDefinition | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $createUiDefinitionOutputPath -Encoding utf8
+        $global:baseCreateUiDefinition | ConvertTo-Json -Depth $packageSerializationDepth | Out-File $createUiDefinitionOutputPath -Encoding utf8
     }
     catch {
         Write-Host "Failed to write output file $createUiDefinitionOutputPath" -ForegroundColor Red
-        break;
+        throw
     }
         
     if ($calculatedBuildPipelinePackageVersion -eq '') {
@@ -3243,7 +3518,7 @@ function global:returnContentResources ($item) {
     }
     catch {
         Write-Host "Expected Version information is coming as null. Please correct the version number accordingly: $($_.Exception.Message)" -ForegroundColor Red
-        break;
+        throw
     }
 }
 
@@ -3479,6 +3754,7 @@ function addTemplateSpecParserResource($content, $yaml, $isyaml, $contentResourc
             )
         }
     }
+    Register-SolutionResourceKind -Resources $parserObj -Kind Parser
     $global:baseMainTemplate.resources += $parserObj
 
     $parserMetadata = [PSCustomObject]@{
@@ -3551,7 +3827,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
         }
         catch {
             Write-Host "Failed to deserialize while converting the Saved Search Function from Yaml $file" -ForegroundColor Red
-            break;
+            throw
         }
     }
     elseif ($file -match "(\.json)$") {
@@ -3579,6 +3855,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
         }
         catch {
             Write-Host "Failed to deserialize JSON parser file $file" -ForegroundColor Red
+            throw
         }
     }
     
@@ -3598,6 +3875,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
 
     # Use File Name as Parser Name
     $global:parserVersion = ($null -ne $yaml -and $yaml.Count -gt 0) ? ($null -eq $yaml.Function.Version ? "1.0.0" : $yaml.Function.Version) : "1.0.0"
+    Assert-V31ReleaseVersion -Version $global:parserVersion -ContentKind Parser -ContentPath $file
 
     # create object with multiple values in it for a single parser resource
     $objParserVariables | Add-Member -NotePropertyName "parserVersion$global:parserCounter" -NotePropertyValue $global:parserVersion
@@ -3650,6 +3928,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
             return;
         }
         else {
+            Register-SolutionResourceKind -Resources $parserObj -Kind Parser
             $global:baseMainTemplate.resources[$queryLocation].resources += $parserObj
         }
     }
