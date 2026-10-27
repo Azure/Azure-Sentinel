@@ -1,0 +1,161 @@
+# User-approved deviations are documented in the adjacent reports; workspace deployment has not been verified.
+# InputStream Microsoft-AWSCloudTrail is repository-backed and user-confirmed; DCRType remains Workspace.
+Parser:
+  DisplayName: 'User Management ASIM parser for AWS Cloud Trail - ingestion-time normalization'
+  Version: '0.1.0'
+  LastUpdated: '2026-10-24'
+Product:
+  Name: 'AWS Cloud Trail'
+Normalization:
+  Schema: 'UserManagement'
+  Version: '0.1.2'
+Author: 'Microsoft'
+Description: |
+  Normalizes AWS Cloud Trail UserManagement events from AWSCloudTrail into ASimUserManagementActivityLogs during ingestion. EventUid is populated directly from AwsEventId, matching the query-time parser.
+  Duplicate IAM UntagUser lookup entries are treated as an upstream bug with user approval; the scalar mapping produces one row per matching input event.
+ParserName: 'ASimUserManagementAWSCloudTrail'
+DCRType: 'Workspace'
+InputStream: 'Microsoft-AWSCloudTrail'
+SourceRawTable: 'AWSCloudTrail'
+TargetASIMTable: 'ASimUserManagementActivityLogs'
+ParserFilterQuery: |
+  source
+  | where (EventSource == "iam.amazonaws.com" and EventName in ("AddUserToGroup", "AttachGroupPolicy", "AttachUserPolicy", "ChangePassword", "CreateGroup", "CreateLoginProfile", "CreateUser", "DeleteGroup", "DeleteGroupPolicy", "DeleteLoginProfile", "DeleteRole", "DeleteUser", "DeleteUserPolicy", "DetachGroupPolicy", "DetachRolePolicy", "DetachUserPolicy", "EnableMFADevice", "GetGroup", "GetGroupPolicy", "GetLoginProfile", "GetMFADevice", "GetRole", "GetUser", "ListAttachedGroupPolicies", "ListAttachedRolePolicies", "ListAttachedUserPolicies", "ListGroups", "ListGroupsForUser", "ListMFADevices", "ListRoles", "ListUsers", "PutGroupPolicy", "PutRolePolicy", "PutUserPolicy", "RemoveUserFromGroup", "TagRole", "TagUser", "UntagUser", "UpdateGroup", "UpdateLoginProfile", "UpdateRole", "UpdateRoleDescription", "UpdateSigningCertificate", "UpdateSSHPublicKey", "UpdateUser", "UploadSigningCertificate", "UploadSSHPublicKey")) or (EventSource == "cognito-idp.amazonaws.com" and EventName in ("AddCustomAttributes", "AdminAddUserToGroup", "AdminConfirmSignUp", "AdminCreateUser", "AdminDeleteUser", "AdminDeleteUserAttributes", "AdminDisableProviderForUser", "AdminDisableUser", "AdminEnableUser", "AdminForgetDevice", "AdminGetDevice", "AdminGetUser", "AdminLinkUserAuthEvents", "AdminListDevices", "AdminListGroupsForUser", "AdminListUserAuthEvents", "AdminRemoveUserFromGroup", "AdminResetUserPassword", "AdminSetUserMFAPreference", "AdminSetUserPassword", "AdminSetUserSettings", "AdminUpdateDeviceStatus", "AdminUpdateUserAttributes", "ChangePassword", "CompleteWebAuthnRegistration", "ConfirmSignUp", "CreateGroup", "CreateUserPool", "DeleteGroup", "DeleteUser", "DeleteUserAttributes", "DeleteUserPool", "DeleteWebAuthnCredential", "DescribeUserPool", "GetGroup", "GetUser", "GetUserPoolMfaConfig", "ListGroups", "ListIdentityProviders", "ListResourceServers", "ListTerms", "ListUserPools", "ListUsers", "ListUsersInGroup", "SetUserPoolMfaConfig", "SignUp", "UpdateGroup", "UpdateUserAttributes", "UpdateUserPool"))
+ParserQuery: |
+  source
+  | extend Type = "AWSCloudTrail"
+  | where EventSource in ("iam.amazonaws.com", "cognito-idp.amazonaws.com")
+  | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+  | extend EventType = case(
+      EventSource == "iam.amazonaws.com", case(
+          EventName == "AddUserToGroup", "UserAddedToGroup",
+          EventName in ("AttachGroupPolicy", "DeleteGroupPolicy", "DetachGroupPolicy", "PutGroupPolicy", "UpdateGroup"), "GroupModified",
+          EventName in ("AttachUserPolicy", "CreateLoginProfile", "DeleteLoginProfile", "DeleteUserPolicy", "DetachRolePolicy", "DetachUserPolicy", "EnableMFADevice", "PutRolePolicy", "PutUserPolicy", "TagRole", "TagUser", "UntagUser", "UpdateRole", "UpdateRoleDescription", "UpdateUser", "UploadSigningCertificate", "UploadSSHPublicKey"), "UserModified",
+          EventName in ("ChangePassword", "UpdateLoginProfile", "UpdateSigningCertificate", "UpdateSSHPublicKey"), "PasswordChanged",
+          EventName == "CreateGroup", "GroupCreated",
+          EventName == "CreateUser", "UserCreated",
+          EventName == "DeleteGroup", "GroupDeleted",
+          EventName in ("DeleteRole", "DeleteUser"), "UserDeleted",
+          EventName in ("GetGroup", "GetGroupPolicy", "ListAttachedGroupPolicies"), "GroupRead",
+          EventName in ("GetLoginProfile", "GetMFADevice", "GetRole", "GetUser", "ListAttachedRolePolicies", "ListAttachedUserPolicies", "ListGroupsForUser", "ListMFADevices", "ListRoles", "ListUsers"), "UserRead",
+          EventName == "ListGroups", "GroupEnumerated",
+          EventName == "RemoveUserFromGroup", "UserRemovedFromGroup",
+          ""),
+      EventSource == "cognito-idp.amazonaws.com", case(
+      EventName in ("AddCustomAttributes", "SetUserPoolMfaConfig", "UpdateGroup", "UpdateUserPool"), "GroupModified",
+      EventName == "AdminAddUserToGroup", "UserAddedToGroup",
+      EventName in ("AdminConfirmSignUp", "AdminEnableUser"), "UserEnabled",
+      EventName in ("AdminCreateUser", "ConfirmSignUp", "SignUp"), "UserCreated",
+      EventName in ("AdminDeleteUser", "DeleteUser"), "UserDeleted",
+      EventName in ("AdminDeleteUserAttributes", "AdminForgetDevice", "AdminLinkUserAuthEvents", "AdminSetUserMFAPreference", "AdminSetUserSettings", "AdminUpdateDeviceStatus", "AdminUpdateUserAttributes", "CompleteWebAuthnRegistration", "DeleteUserAttributes", "DeleteWebAuthnCredential", "UpdateUserAttributes"), "UserModified",
+      EventName in ("AdminDisableProviderForUser", "AdminDisableUser"), "UserDisabled",
+      EventName in ("AdminGetDevice", "AdminGetUser", "AdminListDevices", "AdminListGroupsForUser", "AdminListUserAuthEvents", "GetUser"), "UserRead",
+      EventName == "AdminRemoveUserFromGroup", "UserRemovedFromGroup",
+      EventName == "AdminResetUserPassword", "PasswordReset",
+      EventName in ("AdminSetUserPassword", "ChangePassword"), "PasswordChanged",
+      EventName in ("CreateGroup", "CreateUserPool"), "GroupCreated",
+      EventName in ("DeleteGroup", "DeleteUserPool"), "GroupDeleted",
+      EventName in ("DescribeUserPool", "GetGroup", "GetUserPoolMfaConfig", "ListGroups", "ListIdentityProviders", "ListResourceServers", "ListTerms"), "GroupRead",
+      EventName in ("ListUserPools", "ListUsers", "ListUsersInGroup"), "GroupEnumerated",
+      ""),
+      "")
+  | where isnotempty(EventType)
+  | extend
+      TargetUserId = iff(EventSource == "iam.amazonaws.com", iif(isnotempty(tostring(ResponseElements.user.userId)), tostring(ResponseElements.user.userId), tostring(ResponseElements.role.roleId)), ""),
+      TargetUsername = iff(EventSource == "iam.amazonaws.com", iif(isnotempty(tostring(RequestParameters.userName)), tostring(RequestParameters.userName), tostring(RequestParameters.roleName)), tostring(RequestParameters.username)),
+      GroupId = iff(EventSource == "iam.amazonaws.com", tostring(ResponseElements.group.groupName), tostring(RequestParameters.userPoolId)),
+      GroupName = iff(EventSource == "iam.amazonaws.com", tostring(RequestParameters.groupName), iif(isnotempty(tostring(RequestParameters.poolName)), tostring(RequestParameters.poolName), tostring(RequestParameters.groupName)))
+  | extend
+      TargetUserIdType = case(TargetUserId startswith "AROA", "AWSIAMRoleId", TargetUserId startswith "AIDA", "AWSIAMUserId", ""),
+      GroupOriginalType = iff(EventSource == "iam.amazonaws.com", iff(isempty(GroupName), "", "IAM Group"), case(isnotempty(tostring(RequestParameters.groupName)), "UserPool Group", isnotempty(GroupId), "UserPool", ""))
+  | extend AdditionalData = iff(EventSource == "iam.amazonaws.com", pack("TargetUserARN", iif(isnotempty(tostring(ResponseElements.user.arn)), tostring(ResponseElements.user.arn), tostring(ResponseElements.role.arn)), "GroupARN", tostring(ResponseElements.group.arn)), pack("UserPoolId", tostring(RequestParameters.UserPoolId)))
+  | extend
+          Type = "AWSCloudTrail",
+          EventCount = int(1),
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          EventSeverity = "Informational",
+          EventSchema = "UserManagement",
+          EventSchemaVersion = "0.1.2",
+          EventVendor = "AWS",
+          EventProduct = "CloudTrail",
+          Dvc = "CloudTrail",
+          EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure"),
+          EventMessage = ErrorMessage
+      | extend TargetUserScope = case(EventSource == "cognito-idp.amazonaws.com", "Cognito User Pools", EventSource == "iam.amazonaws.com", "IAM", "")
+      | project-rename
+          EventOriginalSubType = EventTypeName,
+          EventOriginalType = EventName,
+          EventUid = AwsEventId,
+          EventOriginalResultDetails = ErrorMessage,
+          EventProductVersion = EventVersion
+      | project-rename
+          ActorUserId = UserIdentityAccountId,
+          ActorUsername = UserIdentityUserName,
+          ActorOriginalUserType = UserIdentityType,
+          HttpUserAgent = UserAgent
+      | extend
+          ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+          ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+          SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, "")
+      | extend
+          TargetUsernameType = iff(isempty(TargetUsername), "", "Simple"),
+          GroupIdType = iff(isempty(GroupId), "", "Simple"),
+          GroupNameType = iff(isempty(GroupName), "", "Simple")
+      | extend AdditionalFields = pack(
+          "ActorAccessKeyId", UserIdentityAccessKeyId,
+          "AWSRegion", AWSRegion,
+          "APIVersion", APIVersion,
+          "ManagementEvent", ManagementEvent,
+          "ReadOnly", ReadOnly,
+          "RequestParameters", RequestParameters,
+          "ResponseElements", ResponseElements
+      )
+      | extend AdditionalFields = bag_merge(AdditionalFields, AdditionalData)
+
+      | extend
+          User = ActorUsername,
+          IpAddr = SrcIpAddr
+      | project
+          TimeGenerated,
+          Type,
+          EventCount,
+          EventStartTime,
+          EventEndTime,
+          EventSeverity,
+          EventSchema,
+          EventSchemaVersion,
+          EventVendor,
+          EventProduct,
+          TargetUserScope,
+          Dvc,
+          EventResult,
+          EventMessage,
+          EventType,
+          EventOriginalSubType,
+          EventOriginalType,
+          EventUid,
+          EventOriginalResultDetails,
+          EventProductVersion,
+          ActorUserId,
+          ActorUsername,
+          ActorOriginalUserType,
+          HttpUserAgent,
+          ActorUserIdType,
+          ActorUsernameType,
+          SrcIpAddr,
+          TargetUserId,
+          TargetUsername,
+          TargetUserIdType,
+          GroupId,
+          GroupName,
+          TargetUsernameType,
+          GroupIdType,
+          GroupNameType,
+          GroupOriginalType,
+          User,
+          IpAddr,
+          AdditionalFields
+Change:
+  Date: '2026-10-24'
+  Description: 'Initial ingestion-time conversion; EventUid restored from AwsEventId; approved upstream IAM UntagUser duplicate-entry fix; preserve reported platform limitations.'
