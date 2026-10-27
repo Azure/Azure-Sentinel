@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.2.3 | 22-10-2026 | Removed unsupported AWS S3 **Custom Detection** (`SuspiciousAccessOfBECRelatedDocumentsInAWSS3Buckets.yaml`). |
+| 3.2.2       | 20-10-2026                     | Migrated **Analytic Rules** to **Microsoft Defender XDR Custom Detections**  |
 | 3.0.10       | 10-11-2025                     | Update in **Analytical Rule** alert description                                          |
 | 3.0.9       | 05-06-2024                     | **Analytical Rule** description updated                                          |
 | 3.0.8       | 04-04-2024                     | Updated **Entity Mappings**                                                     |

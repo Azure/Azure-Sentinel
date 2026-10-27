@@ -1,0 +1,93 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - Update
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ccca6b88-a7b6-41c9-9be2-fc3daeb65b26
+    path: Analytic Rules/Conditional Access - A Conditional Access policy was updated.yaml
+    version: 1.0.2
+    querySha256: f28cf02aa4cfc7cf82412696b7d809763d9f58a5334350b9758e6ecf98d6a8bf
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: 259f48bd75a55682e6b487dec7479e040ab8479ae3fa5bb2bc00ea1e624da1a1
+      targetQuerySha256: 6339b991755a2429d07ba82d876263274df29c43da8f688b8d02d80f7daf6145
+properties:
+  id: xdr-ccca6b88-a7b6-41c9-9be2-fc3daeb65b26
+  displayName: Conditional Access - A Conditional Access policy was updated
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // A Conditional Access policy was updated.
+      AuditLogs
+      | where OperationName == "Update conditional access policy"
+      | extend
+          policy = tostring(TargetResources[0].displayName),
+          modifiedBy = tostring(InitiatedBy.user.userPrincipalName),
+          oldPolicy = tostring(TargetResources[0].modifiedProperties[0].oldValue),
+          newPolicy = tostring(TargetResources[0].modifiedProperties[0].newValue)
+      | extend
+          accountName = tostring(split(modifiedBy, "@")[0]),
+          upnSuffix = tostring(split(modifiedBy, "@")[1])
+      | project
+          TimeGenerated,
+          OperationName,
+          policy,
+          modifiedBy,
+          accountName,
+          upnSuffix,
+          oldPolicy,
+          newPolicy,
+          Result
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Conditional Access - A Conditional Access policy was updated
+      description: A Conditional Access policy was updated in Entra ID.
+      severity: informational
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: accountName
+          upnSuffixColumn: upnSuffix
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562

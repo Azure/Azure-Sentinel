@@ -2949,6 +2949,22 @@ function GenerateAlertRule($file, $contentResourceDetails) {
             elseif ($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2) {
                 $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
             }
+            elseif ($yamlField -eq "customDetails" -and $null -ne $alertRule.customDetails) {
+                if ($alertRule.customDetails -is [System.Collections.IDictionary]) {
+                    foreach ($detailKey in @($alertRule.customDetails.Keys)) {
+                        if ($detailKey -like '*id' -and $alertRule.customDetails[$detailKey] -is [string] -and -not $alertRule.customDetails[$detailKey].StartsWith('[')) {
+                            $alertRule.customDetails[$detailKey] = ConvertTo-CustomDetectionArmLiteral -Value $alertRule.customDetails[$detailKey]
+                        }
+                    }
+                }
+                else {
+                    foreach ($detail in $alertRule.customDetails.PSObject.Properties) {
+                        if ($detail.Name -like '*id' -and $detail.Value -is [string] -and -not $detail.Value.StartsWith('[')) {
+                            $detail.Value = ConvertTo-CustomDetectionArmLiteral -Value $detail.Value
+                        }
+                    }
+                }
+            }
         }
     }
     # Create Alert Rule Resource Object
@@ -3162,6 +3178,12 @@ function GenerateWatchList($json, $isPipelineRun, $watchListFileName) {
 
     # Replace watchlist resource id
     $watchlistData.name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('watchlist$global:watchlistCounter-id'))]"
+    if ($watchlistData.PSObject.Properties['kind'] -and [string]::IsNullOrWhiteSpace([string]$watchlistData.kind)) {
+        $watchlistData.PSObject.Properties.Remove('kind')
+    }
+    if ($watchlistData.properties -and $watchlistData.properties.PSObject.Properties['labels'] -and @($watchlistData.properties.labels).Count -eq 0) {
+        $watchlistData.properties.PSObject.Properties.Remove('labels')
+    }
 
     # Handle MainTemplate Resource
     $global:baseMainTemplate.resources += $watchlistData #Assume 1 watchlist per template
@@ -3344,6 +3366,10 @@ function GeneratePackage(
 
     try {
         $mainTemplateJson = $baseMainTemplate | ConvertTo-Json -Depth $packageSerializationDepth
+        if ($IncludeXdrDetections -and $xdrDetectionCount -gt 0) {
+            $mainTemplateJson = ConvertTo-CustomDetectionTemplateJson -Json $mainTemplateJson
+        }
+
         $mainTemplateJson -replace '("defaultValue"\s*:\s*)\[\s*("(?:[^"\\]|\\.)*")\s*\]', '$1[$2]' |
             Out-File $mainTemplateOutputPath -Encoding utf8
 
