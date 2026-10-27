@@ -66,11 +66,10 @@ KQL_RULES = (
         "KQL033",
         "IP utility",
         re.compile(
-            r"\b(ipv4_is_in_range|ipv4_is_match|ipv4_is_private|parse_ipv4|"
-            r"parse_ipv6|ipv6_is_match|ipv4_netmask_suffix)\s*\(",
+            r"\b(ipv6_is_match|ipv4_netmask_suffix)\s*\(",
             re.I,
         ),
-        "The IP utility is not supported by DCR transformations.",
+        "This IP utility is not supported by DCR transformations.",
     ),
     KqlRule("KQL034", "url_decode", re.compile(r"\burl_decode\s*\(", re.I), "No exact DCR equivalent is available."),
     KqlRule("KQL035", "toscalar", re.compile(r"\btoscalar\s*\(", re.I), "Subqueries are not supported by the parser contract."),

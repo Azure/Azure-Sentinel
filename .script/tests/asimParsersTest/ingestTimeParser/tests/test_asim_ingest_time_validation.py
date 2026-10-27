@@ -820,6 +820,55 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertIn("KQL031", codes)
         self.assertIn("KQL041", codes)
 
+    def test_allows_supported_ip_utility_functions(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_query=(
+                    'source\n| where EventType == "Login"\n'
+                    "| extend ParsedIpv4 = parse_ipv4(SourceIp),\n"
+                    "    ParsedIpv6 = parse_ipv6(SourceIp),\n"
+                    '    Ipv4Match = ipv4_is_match(SourceIp, "10.0.0.0/8"),\n'
+                    '    Ipv4InRange = ipv4_is_in_range(SourceIp, "10.0.0.0/8"),\n'
+                    "    Ipv4IsPrivate = ipv4_is_private(SourceIp),\n"
+                    '    EventVendor = "Contoso", EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, ParsedIpv4, "
+                    "ParsedIpv6, Ipv4Match, Ipv4InRange, Ipv4IsPrivate, "
+                    "EventVendor, EventProduct"
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_rejects_unsupported_ip_utility_functions(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_query=(
+                    'source\n| where EventType == "Login"\n'
+                    '| extend Ipv6Match = ipv6_is_match(SourceIp, "::1"),\n'
+                    "    NetmaskSuffix = ipv4_netmask_suffix(SourceIp),\n"
+                    '    EventVendor = "Contoso", EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, Ipv6Match, "
+                    "NetmaskSuffix, EventVendor, EventProduct"
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        findings = [
+            finding
+            for finding in result["findings"]
+            if finding["code"] == "KQL033"
+        ]
+        self.assertEqual(2, len(findings), result["findings"])
+
     def test_allows_supported_scalar_let_statement(self):
         query = (
             "let selectedType = 'Login';\n"

@@ -1,0 +1,164 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 70fc7201-f28e-4ba7-b9ea-c04b96701f13
+    path: Analytic Rules/NRT_UseraddedtoPrivilgedGroups.yaml
+    version: 1.0.7
+    querySha256: 076ff32fe8563671a1e1ba5397efda4a9840d05df9e2a2b7d07e281fb129be2a
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore
+      entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName` requires runtime
+      output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `TargetUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore
+      entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `TargetUserPrincipalName` requires runtime output-schema
+      binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values
+      are unverified and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries
+      only the first tactic and its compatible techniques; this classification loss is not validated parity.
+      Direct Graph deployment requires a single tactic.
+    - 'Schedule assessment: source kind=NRT; target frequency=PT0S (Continuous); single-table Continuous
+      (NRT) execution is supported in Defender XDR. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1098
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 2a7c37db49605984f5b6cbe1eff232ec0bfb61800924dd1653b4f207986b7d5f
+      targetQuerySha256: d0462a5039fd7d995b1908b1ffb6c9f279c1e5d69c9e46485fc3500ee8551664
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+  targetQuerySha256: d0462a5039fd7d995b1908b1ffb6c9f279c1e5d69c9e46485fc3500ee8551664
+properties:
+  id: xdr-70fc7201-f28e-4ba7-b9ea-c04b96701f13
+  displayName: NRT User added to Microsoft Entra ID Privileged Groups
+  status: disabled
+  queryCondition:
+    queryText: "let OperationList = dynamic([\"Add member to role\",\"Add eligible member to role\"]);\n\
+      let PrivilegedGroups = dynamic([\"UserAccountAdmins\",\"PrivilegedRoleAdmins\",\"TenantAdmins\"\
+      ,\"PrivilegedAuthenticationAdmins\"]);\nAuditLogs\n| where Category =~ \"RoleManagement\"\n| where\
+      \ OperationName in~ (OperationList)\n| mv-apply TargetResource = TargetResources on\n  (\n     \
+      \ where TargetResource.type =~ \"User\"\n      | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),\n\
+      \               modProps = TargetResource.modifiedProperties\n  )\n| mv-apply Property = modProps\
+      \ on\n  (\n      where Property.displayName =~ \"Role.WellKnownObjectName\"\n      | extend DisplayName\
+      \ = trim('\"',tostring(Property.displayName)),\n               GroupName = trim('\"',tostring(Property.newValue))\n\
+      \  )\n| extend InitiatingAppId = tostring(InitiatedBy.app.appId)\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n\
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend\
+      \ InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName)\n| extend InitiatingUserPrincipalName\
+      \ = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n\
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress,\
+      \ InitiatedBy.app.ipAddress))\n| extend InitiatingUserRoles = InitiatedBy.user.roles\n| where GroupName\
+      \ in~ (PrivilegedGroups)\n\n\n| project TimeGenerated, AADOperationType, Category, OperationName,\
+      \ AADTenantId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppId,\
+      \ InitiatingAppServicePrincipalId, InitiatingIpAddress, InitiatingUserRoles, DisplayName, GroupName,\
+      \ TargetUserPrincipalName\n| extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]),\
+      \ InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n| extend TargetName\
+      \ = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])"
+  schedule:
+    frequency: PT0S
+  detectionAction:
+    alertTemplate:
+      title: NRT User added to Microsoft Entra ID Privileged Groups
+      description: '''This will alert when a user is added to any of the Privileged Groups.
+
+        For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.
+
+        For Administrator role permissions in Microsoft Entra ID please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatedByName
+          upnSuffixColumn: InitiatedByUPNSuffix
+        - id: account2
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+        - technique: T1078
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+        - technique: T1078
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName
+        AccountFullName_2: TargetUserPrincipalName
+queryText: "let OperationList = dynamic([\"Add member to role\",\"Add eligible member to role\"]);\nlet\
+  \ PrivilegedGroups = dynamic([\"UserAccountAdmins\",\"PrivilegedRoleAdmins\",\"TenantAdmins\",\"PrivilegedAuthenticationAdmins\"\
+  ]);\nAuditLogs\n| where Category =~ \"RoleManagement\"\n| where OperationName in~ (OperationList)\n\
+  | mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"User\"\n \
+  \     | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),\n             \
+  \  modProps = TargetResource.modifiedProperties\n  )\n| mv-apply Property = modProps on\n  (\n     \
+  \ where Property.displayName =~ \"Role.WellKnownObjectName\"\n      | extend DisplayName = trim('\"\
+  ',tostring(Property.displayName)),\n               GroupName = trim('\"',tostring(Property.newValue))\n\
+  \  )\n| extend InitiatingAppId = tostring(InitiatedBy.app.appId)\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n\
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingAppServicePrincipalName\
+  \ = tostring(InitiatedBy.app.servicePrincipalName)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n\
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress),\
+  \ InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatingUserRoles = InitiatedBy.user.roles\n\
+  | where GroupName in~ (PrivilegedGroups)\n\n\n| project TimeGenerated, AADOperationType, Category, OperationName,\
+  \ AADTenantId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppId,\
+  \ InitiatingAppServicePrincipalId, InitiatingIpAddress, InitiatingUserRoles, DisplayName, GroupName,\
+  \ TargetUserPrincipalName\n| extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]),\
+  \ InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n| extend TargetName\
+  \ = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])"

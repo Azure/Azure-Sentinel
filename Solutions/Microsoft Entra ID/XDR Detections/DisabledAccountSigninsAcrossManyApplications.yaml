@@ -1,0 +1,139 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+    - AADNonInteractiveUserSignInLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 75ea5c39-93e5-489b-b1e1-68fa6c9d2d04
+    path: Analytic Rules/DisabledAccountSigninsAcrossManyApplications.yaml
+    version: 1.0.4
+    querySha256: 1eeebbac8af6c7e039e8e9cc120d02537654089b110e7062a8b7602db3f13a55
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `UserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 1fccf12e54449c3baa492cdfb6e92af3ccbd835f6dfc4b3cabb7c4dc8412d0ba
+      targetQuerySha256: ee74db39b4cae6c588e00dc81772c4f85effd7ee0499c69b5fed57a41a0e9be0
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 1fccf12e54449c3baa492cdfb6e92af3ccbd835f6dfc4b3cabb7c4dc8412d0ba
+      targetQuerySha256: ee74db39b4cae6c588e00dc81772c4f85effd7ee0499c69b5fed57a41a0e9be0
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-75ea5c39-93e5-489b-b1e1-68fa6c9d2d04
+  displayName: Attempts to sign in to disabled accounts
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 3;
+
+      let aadFunc = (tableName:string){
+
+      table(tableName)
+
+      | where ResultType == "50057"
+
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), applicationCount
+      = dcount(AppDisplayName),
+
+      applicationSet = make_set(AppDisplayName), count() by UserPrincipalName, IPAddress,
+      Type
+
+      | where applicationCount >= threshold
+
+      | extend Name = tostring(split(UserPrincipalName,''@'',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,''@'',1)[0])
+
+      };
+
+      let aadSignin = aadFunc("SigninLogs");
+
+      let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+
+      union isfuzzy=true aadSignin, aadNonInt'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Attempts to sign in to disabled accounts
+      description: '''Identifies failed attempts to sign in to disabled accounts across
+        multiple Azure Applications.
+
+        Default threshold for Azure Applications attempted to sign in to is 3.
+
+        References: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+
+        50057 - User account is disabled. The account has been disabled by an administrator.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountFullName: UserPrincipalName
