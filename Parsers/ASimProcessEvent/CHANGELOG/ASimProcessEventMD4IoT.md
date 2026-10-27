@@ -2,7 +2,7 @@
 
 ## Version 0.1.2
 
-- (2026-10-27) Corrected TargetProcessName (and the Process alias) to a string: the Commandline fallback returned a dynamic, where the ProcessEvent schema declares string
+- (2026-10-27) Corrected TargetProcessName (and the Process alias) to a string: the Commandline fallback returned a dynamic, where the ProcessEvent schema declares string - [PR #15445](https://github.com/Azure/Azure-Sentinel/pull/15445)
 
 ## Version 0.1.1
 

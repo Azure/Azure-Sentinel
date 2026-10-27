@@ -2,7 +2,7 @@
 
 ## Version 0.3.2
 
-- (2026-10-27) Normalized AdditionalFields to dynamic; DeviceProcessEvents carries it as a JSON string, while the ProcessEvent schema declares dynamic
+- (2026-10-27) Normalized AdditionalFields to dynamic; DeviceProcessEvents carries it as a JSON string, while the ProcessEvent schema declares dynamic - [PR #15445](https://github.com/Azure/Azure-Sentinel/pull/15445)
 
 ## Version 0.3.1
 
