@@ -48,6 +48,7 @@ BeforeAll {
 
         $expression = [regex]::Replace($Expression, "todouble\('\{(\w+)\}'\)", '$1')
         $expression = [regex]::Replace($expression, '\{(\w+)\}', '$1')
+        $expression = $expression.Replace('sum(Quantity)', 'Quantity')
         $numeric = [regex]::Replace($expression, "\['([^']+)'\]|[A-Za-z_][A-Za-z0-9_]*", {
             param($match)
             $key = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Value }
@@ -121,6 +122,46 @@ Describe 'AzureSentinelCost offline calculation regressions' {
         $expression = Get-QueryExpression -Query $query -Pattern '(?<expression>sizeOther\s*\*\s*(?:\{Price\}|[0-9.]+))'
         $actual = Invoke-WorkbookArithmetic -Expression $expression -Bindings @{ sizeOther = 12.0; Price = $Price }
         $actual | Should -Be (12.0 * $Price)
+    }
+
+    It 'normalizes six-hour ingestion and savings to a full daily rate in <ItemName>' -ForEach @(
+        @{
+            ItemName = 'WorkspaceAvgDailyBillableIngestion'
+            Pattern = "summarize \['Avg Daily Billable Ingestion'\] = (?<expression>[^|;]+)"
+            Expected = 24.0
+        }
+        @{
+            ItemName = 'WorkspaceEstDailyIngestionCost'
+            Pattern = "project \['Est. Daily Ingestion Cost'\] = (?<expression>[^|;]+)"
+            Expected = 48.0
+        }
+        @{
+            ItemName = 'FreeSentinelDataAvgPerDay'
+            Pattern = "summarize \['Average Free Data Per Day'\] = (?<expression>[^|;]+)"
+            Expected = 24.0
+        }
+        @{
+            ItemName = 'FreeSentinelDataAvgDailySavings'
+            Pattern = "project \['Avg Daily Free Data Savings'\] = (?<expression>[^|;]+)"
+            Expected = 48.0
+        }
+    ) {
+        $query = Get-WorkbookQuery -ItemName $ItemName
+        $expression = Get-QueryExpression -Query $query -Pattern $Pattern
+        $days = 0.25
+        if ($query -match "let (?:selectedDays|periodDays) = max_of\(datetime_diff\('second', \{TimeRange:end\}, \{TimeRange:start\}\) / 86400\.0, (?<minimum>[0-9.]+)\);") {
+            $days = [math]::Max($days, [double]$Matches['minimum'])
+        }
+        $actual = Invoke-WorkbookArithmetic -Expression $expression -Bindings @{
+            Quantity = 6.0 * 1024.0
+            BillableGB = 6.0
+            FreeGB = 6.0
+            selectedDays = $days
+            periodDays = $days
+            Price = 2.0
+        }
+        $actual | Should -Be $Expected
+        $query | Should -Match 'let (?:selectedDays|periodDays) = \(\{TimeRange:end\} - \{TimeRange:start\}\) / 1d;'
     }
 
     It 'normalizes a <Label> Data Lake bucket by its actual covered days' -ForEach @(
