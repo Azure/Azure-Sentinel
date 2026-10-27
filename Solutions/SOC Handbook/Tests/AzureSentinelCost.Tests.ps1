@@ -305,6 +305,38 @@ Describe 'AzureSentinelCost offline calculation regressions' {
         $parameters[0].name | Should -Be 'TotalDfSP2Licenses'
     }
 
+    It 'excludes the selected end from Defender eligible totals in <ItemName>' -ForEach @(
+        @{ ItemName = 'DfSP2IngestionSize current' }
+        @{ ItemName = 'DfSP2CapacityDetailCurrent' }
+    ) {
+        $query = Get-WorkbookQuery -ItemName $ItemName
+        $start = [datetimeoffset]'2026-10-01T00:00:00Z'
+        $end = [datetimeoffset]'2026-10-02T00:00:00Z'
+        $records = @(
+            @{ TimeGenerated = [datetimeoffset]'2026-10-01T12:00:00Z'; Quantity = 100.0 }
+            @{ TimeGenerated = $end; Quantity = 900.0 }
+        )
+        if ($query.Contains('TimeGenerated between ({TimeRange:start} .. {TimeRange:end})')) {
+            $selected = $records | Where-Object { $_.TimeGenerated -ge $start -and $_.TimeGenerated -le $end }
+        }
+        elseif ($query.Contains('TimeGenerated >= {TimeRange:start} and TimeGenerated < {TimeRange:end}')) {
+            $selected = $records | Where-Object { $_.TimeGenerated -ge $start -and $_.TimeGenerated -lt $end }
+        }
+        else {
+            throw 'Unexpected selected-time predicate in the eligibility query.'
+        }
+        $expression = Get-QueryExpression -Query $query -Pattern 'summarize (?:EligibleGB|TableSizeGB) = (?<expression>sum\(Quantity\) / 1024\.0)'
+        $actual = Invoke-WorkbookArithmetic -Expression $expression -Bindings @{
+            Quantity = [double](($selected | Measure-Object -Property Quantity -Sum).Sum)
+        }
+        $actual | Should -Be (100.0 / 1024.0)
+    }
+
+    It 'uses the same exclusive selected end throughout the workbook' {
+        [regex]::Matches($script:workbookText, 'TimeGenerated\s+between\s+\(\{TimeRange:start\}\s*\.\.\s*\{TimeRange:end\}\)').Count |
+            Should -Be 0
+    }
+
     It 'scans retained history independently of the global time selection in <ItemName>' -ForEach @(
         @{ ItemName = 'AverageDailyRetentionCost' }
         @{ ItemName = 'RetentionCostForTimeRange' }
