@@ -1,0 +1,191 @@
+Parser:
+  DisplayName: "Ingestion-time Audit Event ASIM parser for CrowdStrike Falcon Data Replicator"
+  Version: "0.1.0"
+  LastUpdated: "2026-10-27"
+Product:
+  Name: "CrowdStrike Falcon Data Replicator"
+Normalization:
+  Schema: "AuditEvent"
+  Version: "1.0.0"
+Author: "Microsoft"
+Description: |
+  Normalizes CrowdStrike_Audit_Events_CL to ASimAuditEventLogs during ingestion.
+ParserName: "_ASim_AuditEvent_CrowdStrikeFalconDataReplicator"
+DCRType: "Standard"
+InputStream: "Custom-CrowdStrike_Audit_Events_CL"
+SourceRawTable: "CrowdStrike_Audit_Events_CL"
+TargetASIMTable: "ASimAuditEventLogs"
+ParserFilterQuery: |
+  source
+  | where isnotempty(event_simpleName)
+ParserQuery: |
+  source
+  | extend Type = "CrowdStrike_Audit_Events_CL"
+  | where isnotempty(event_simpleName)
+  | extend EventType=case(
+  event_simpleName in ("FirewallDeleteRule","NetShareDelete","VolumeSnapshotDeleted","FileDeleteInfo"),"Delete",
+  event_simpleName in ("FirewallSetRule","FirewallChangeOption","ConfigStateUpdate","CriticalEnvironmentVariableChanged","HostnameChanged","ActiveDirectoryAccountLocked","ActiveDirectoryAccountUnlocked","ActiveDirectoryAccountPasswordUpdate","ActiveDirectoryAccountDepartmentUpdate","ActiveDirectoryAccountNameUpdate","ActiveDirectoryAccountOuUpdate","NetShareSecurityModify","DcUsbDeviceWhitelisted","FileRenameInfo"),"Set",
+  event_simpleName in ("FirewallEnabled","MemoryScanEnabled","ActiveDirectoryAccountEnabled"),"Enable",
+  event_simpleName in ("FirewallDisabled","ActiveDirectoryAccountDisabled"),"Disable",
+  event_simpleName in ("FileVaultStatus","FileOpenInfo"),"Read",
+  event_simpleName in ("ActiveDirectoryAccountCreated","NetShareAdd","VolumeSnapshotCreated","IOServiceRegister","FileCreateInfo"),"Create",
+  event_simpleName == "EventLogCleared","Clear",
+  event_simpleName in ("DcUsbDeviceDisconnected","DcBluetoothDeviceDisconnected","ProvisioningEnded","SmbClientShareClosedEtw"),"Stop",
+  event_simpleName in ("DcBluetoothDeviceConnected","ProvisioningStarted","LfoUploadStart","SmbClientShareOpenedEtw","SmbServerShareOpenedEtw","IoSessionConnected"),"Start",
+  event_simpleName in ("ManifestDownloadComplete","InstallBundleDownloadComplete","InstallServiceDownloadComplete","OsfmDownloadComplete"),"Other",
+  "Other"),
+  ObjectType=case(
+  event_simpleName in ("FirewallDeleteRule","FirewallSetRule","DcUsbDeviceWhitelisted"),"Policy Rule",
+  event_simpleName in ("FirewallChangeOption","FirewallEnabled","FirewallDisabled","ConfigStateUpdate","CriticalEnvironmentVariableChanged","HostnameChanged","MemoryScanEnabled","FileVaultStatus"),"Configuration Atom",
+  event_simpleName in ("ActiveDirectoryAccountCreated","ActiveDirectoryAccountEnabled","ActiveDirectoryAccountDisabled","ActiveDirectoryAccountLocked","ActiveDirectoryAccountUnlocked","ActiveDirectoryAccountPasswordUpdate","ActiveDirectoryAccountDepartmentUpdate","ActiveDirectoryAccountNameUpdate","ActiveDirectoryAccountOuUpdate"),"Directory Service Object",
+  event_simpleName in ("NetShareAdd","NetShareDelete","NetShareSecurityModify","VolumeSnapshotCreated","VolumeSnapshotDeleted","DcUsbDeviceDisconnected","DcBluetoothDeviceConnected","DcBluetoothDeviceDisconnected","ManifestDownloadComplete","InstallBundleDownloadComplete","InstallServiceDownloadComplete","OsfmDownloadComplete","LfoUploadStart","FileCreateInfo","FileDeleteInfo","FileRenameInfo","FileOpenInfo","SmbClientShareOpenedEtw","SmbClientShareClosedEtw","SmbServerShareOpenedEtw","IoSessionConnected"),"Other",
+  event_simpleName == "EventLogCleared","Event Log",
+  event_simpleName in ("IOServiceRegister","ProvisioningStarted","ProvisioningEnded"),"Service",
+  "Other"),
+  ObjectCategory=case(
+  event_simpleName in ("FirewallDeleteRule","FirewallSetRule"),"FirewallRule",
+  event_simpleName == "FirewallChangeOption","FirewallOption",
+  event_simpleName in ("FirewallEnabled","FirewallDisabled"),"Firewall",
+  event_simpleName == "ConfigStateUpdate","Configuration",
+  event_simpleName == "CriticalEnvironmentVariableChanged","EnvironmentVariable",
+  event_simpleName == "HostnameChanged","Hostname",
+  event_simpleName == "MemoryScanEnabled","MemoryScan",
+  event_simpleName == "FileVaultStatus","FileVault",
+  event_simpleName in ("ActiveDirectoryAccountCreated","ActiveDirectoryAccountEnabled","ActiveDirectoryAccountDisabled","ActiveDirectoryAccountLocked","ActiveDirectoryAccountUnlocked","ActiveDirectoryAccountPasswordUpdate","ActiveDirectoryAccountDepartmentUpdate","ActiveDirectoryAccountNameUpdate","ActiveDirectoryAccountOuUpdate"),"Account",
+  event_simpleName in ("NetShareAdd","NetShareDelete","NetShareSecurityModify"),"Share",
+  event_simpleName == "EventLogCleared","EventLog",
+  event_simpleName in ("VolumeSnapshotCreated","VolumeSnapshotDeleted"),"VolumeSnapshot",
+  event_simpleName in ("DcUsbDeviceWhitelisted","DcUsbDeviceDisconnected"),"UsbDevice",
+  event_simpleName in ("DcBluetoothDeviceConnected","DcBluetoothDeviceDisconnected"),"BluetoothDevice",
+  event_simpleName == "IOServiceRegister","IOService",
+  event_simpleName in ("ProvisioningStarted","ProvisioningEnded"),"Provisioning",
+  event_simpleName == "ManifestDownloadComplete","ManifestDownload",
+  event_simpleName == "InstallBundleDownloadComplete","InstallBundleDownload",
+  event_simpleName == "InstallServiceDownloadComplete","InstallServiceDownload",
+  event_simpleName == "OsfmDownloadComplete","OsfmDownload",
+  event_simpleName == "LfoUploadStart","Upload",
+  event_simpleName in ("FileCreateInfo","FileDeleteInfo","FileRenameInfo","FileOpenInfo"),"File",
+  event_simpleName in ("SmbClientShareOpenedEtw","SmbClientShareClosedEtw","SmbServerShareOpenedEtw"),"SmbShare",
+  event_simpleName == "IoSessionConnected","IoSession",
+  "Unclassified")
+  | extend _Host=iif(isnotempty(ComputerName),ComputerName,tostring(AdditionalFields.ComputerName)),
+  _LocalIp=tostring(AdditionalFields.LocalAddressIP4),
+  _RemoteIp=iif(isnotempty(RemoteAddressIP4),RemoteAddressIP4,RemoteAddressIP6),
+  _EventTime=iif(isnotnull((datetime(1970-01-01) + timestamp * 1ms)),(datetime(1970-01-01) + timestamp * 1ms),TimeGenerated)
+  | extend _Hostname=tostring(split(_Host,".")[0]),
+  _SrcHostname=tostring(split(iif(isnotempty(ClientComputerName),ClientComputerName,SmbClientName),".")[0])
+  | extend DvcHostname=iff(_Hostname matches regex @"^[a-zA-Z0-9-]{1,61}$",_Hostname,""),
+  DvcDomain=iff(_Host contains ".",substring(_Host,indexof(_Host,".")+1),""),
+  DvcFQDN=iff(_Host contains ".",_Host,""),
+  DvcIpAddr=iif(isnotempty(_LocalIp),_LocalIp,aip),
+  SrcHostname=iff(_SrcHostname matches regex @"^[a-zA-Z0-9-]{1,61}$",_SrcHostname,""),
+  SrcFQDN=iff(iif(isnotempty(ClientComputerName),ClientComputerName,SmbClientName) contains ".",iif(isnotempty(ClientComputerName),ClientComputerName,SmbClientName),""),
+  SrcDomain=iff(iif(isnotempty(ClientComputerName),ClientComputerName,SmbClientName) contains ".",substring(iif(isnotempty(ClientComputerName),ClientComputerName,SmbClientName),indexof(iif(isnotempty(ClientComputerName),ClientComputerName,SmbClientName),".")+1),""),
+  ActorUsernameType=case(isempty(UserName),"",UserName contains "\\","Windows",UserName contains "@","UPN","Simple"),
+  DvcOs=case(event_platform == "Win","Windows",event_platform == "Mac","macOS",event_platform == "Lin","Linux",""),
+  EventResult=case(tolower(Status) in ("success","succeeded"),"Success",tolower(Status) in ("failure","failed"),"Failure","NA")
+  | extend Object=case(
+  ObjectCategory == "FirewallRule",iif(isnotempty(FirewallRule),FirewallRule,FirewallRuleId),
+  ObjectCategory == "FirewallOption",FirewallOption,
+  ObjectCategory == "EnvironmentVariable",EnvironmentVariableName,
+  ObjectCategory == "Account",iif(isnotempty(SamAccountName),SamAccountName,iif(isnotempty(AccountObjectSid),AccountObjectSid,AccountObjectGuid)),
+  ObjectCategory in ("Share","SmbShare"),iif(isnotempty(SharePath),SharePath,iif(isnotempty(ShareName),ShareName,SmbShareName)),
+  ObjectCategory == "File",iif(isnotempty(SourceFileName),SourceFileName,TargetFileName),
+  ObjectCategory == "VolumeSnapshot",iif(isnotempty(VolumeSnapshotName),VolumeSnapshotName,VolumeName),
+  ObjectCategory == "UsbDevice",iif(isnotempty(DeviceInstanceId),DeviceInstanceId,iif(isnotempty(DeviceSerialNumber),DeviceSerialNumber,DeviceProduct)),
+  ObjectCategory == "BluetoothDevice",iif(isnotempty(BluetoothDeviceAddress),BluetoothDeviceAddress,DeviceInstanceId),
+  ObjectCategory == "IOService",iif(isnotempty(IOServiceName),IOServiceName,IOServicePath),
+  ObjectCategory == "Upload",UploadId,
+  ObjectCategory == "IoSession",SessionId,
+  ObjectCategory == "Unclassified","",
+  ObjectCategory),
+  ObjectId=case(
+  ObjectCategory == "FirewallRule",FirewallRuleId,
+  ObjectCategory == "Account",iif(isnotempty(AccountObjectGuid),AccountObjectGuid,AccountObjectSid),
+  ObjectCategory in ("UsbDevice","BluetoothDevice"),DeviceInstanceId,
+  ""),
+  NewValue=case(
+  event_simpleName == "FirewallChangeOption",iif(isnotempty(FirewallOptionStringValue),FirewallOptionStringValue,FirewallOptionNumericValue),
+  event_simpleName == "CriticalEnvironmentVariableChanged",EnvironmentVariableValue,
+  event_simpleName == "ConfigStateUpdate",ConfigStateData,
+  event_simpleName == "FileRenameInfo",TargetFileName,
+  event_simpleName == "ActiveDirectoryAccountDepartmentUpdate",ActiveDirectoryDepartment,
+  event_simpleName == "ActiveDirectoryAccountOuUpdate",ActiveDirectoryOuDn,
+  event_simpleName == "ActiveDirectoryAccountNameUpdate",SamAccountName,
+  event_simpleName == "NetShareSecurityModify",ShareData,
+  event_simpleName == "FileVaultStatus" and isnotnull(FileVaultIsEnabled),tostring(FileVaultIsEnabled),
+  event_simpleName in ("FirewallEnabled","MemoryScanEnabled","ActiveDirectoryAccountEnabled"),"true",
+  event_simpleName in ("FirewallDisabled","ActiveDirectoryAccountDisabled"),"false",
+  event_simpleName == "HostnameChanged",_Host,
+  "")
+  | extend _Packed=pack(
+  "timestamp",timestamp,"aip",aip,"aid",aid,"UserName",UserName,"event_platform",event_platform,
+  "ContextTimeStamp",ContextTimeStamp,"name",name,"ConfigBuild",ConfigBuild,"CrowdStrikeId",CrowdStrikeId,
+  "ConfigStateHash",ConfigStateHash,"ContextProcessId",ContextProcessId,"ContextThreadId",ContextThreadId,
+  "BoundingLimitCount",BoundingLimitCount,"BoundingLimitDuration",BoundingLimitDuration,"Entitlements",Entitlements,
+  "EffectiveTransmissionClass",EffectiveTransmissionClass,"cid",cid,"OciContainerId",OciContainerId,
+  "TreeId",TreeId,"VolumeSnapshotName",VolumeSnapshotName,"SmbShareName",SmbShareName,"ShareName",ShareName,
+  "UploadId",UploadId,"SessionId",SessionId,"ComputerName",ComputerName,"FirewallRule",FirewallRule,
+  "FirewallRuleId",FirewallRuleId,"FirewallOption",FirewallOption,"SourceFileName",SourceFileName,
+  "TargetFileName",TargetFileName,"DeviceVendorId",DeviceVendorId,"DeviceProductId",DeviceProductId,
+  "DeviceSerialNumber",DeviceSerialNumber,"BluetoothDeviceAddress",BluetoothDeviceAddress,
+  "EnvironmentVariableName",EnvironmentVariableName,"SamAccountName",SamAccountName,
+  "FirewallOptionNumericValue",FirewallOptionNumericValue,"FirewallOptionStringValue",FirewallOptionStringValue,
+  "FileVaultIsEnabled",FileVaultIsEnabled,"EnvironmentVariableValue",EnvironmentVariableValue,
+  "ConfigStateData",ConfigStateData,"ActiveDirectoryOuDn",ActiveDirectoryOuDn,
+  "ActiveDirectoryDepartment",ActiveDirectoryDepartment,"SHA256HashData",SHA256HashData,"CommandLine",CommandLine,
+  "VolumeName",VolumeName,"VolumeDriveLetter",VolumeDriveLetter,"TokenType",TokenType,"InterfaceGuid",InterfaceGuid,
+  "RpcClientProcessId",RpcClientProcessId,"InterfaceVersion",InterfaceVersion,"RpcClientThreadId",RpcClientThreadId,
+  "AuthenticationId",AuthenticationId,"ImageFileName",ImageFileName,"RpcOpNum",RpcOpNum,
+  "RpcNestingLevel",RpcNestingLevel,"ClientComputerName",ClientComputerName,"DomainName",DomainName,
+  "RemoteAddressIP6",RemoteAddressIP6,"RemoteAddressIP4",RemoteAddressIP4,"SmbClientName",SmbClientName,
+  "AgentLoadFlags",AgentLoadFlags,"ProvisioningDuration",ProvisioningDuration,"Status",Status,
+  "ErrorText",ErrorText,"CloudErrorCode",CloudErrorCode,"SharePath",SharePath,"ShareMaxCount",ShareMaxCount,
+  "ShareRemark",ShareRemark,"ShareData",ShareData,"IntelTDTEnabled",IntelTDTEnabled,
+  "FalconServiceState",FalconServiceState,"LfoUploadFlags",LfoUploadFlags,"AttemptNumber",AttemptNumber,
+  "Size",Size,"Tags",Tags,"CloudRequestId",CloudRequestId,"LocalSession",LocalSession,
+  "IOServiceClass",IOServiceClass,"IOServicePath",IOServicePath,"IOServiceProperties",IOServiceProperties,
+  "IOServiceName",IOServiceName,"Protocol",Protocol,"ChannelDiffStatusList",ChannelDiffStatusList,
+  "AccountDomain",AccountDomain,"AccountObjectGuid",AccountObjectGuid,"AccountObjectSid",AccountObjectSid,
+  "TotalCount",TotalCount,"ErrorCode",ErrorCode,"EventOrigin",EventOrigin,"AddressFamily",AddressFamily,
+  "BluetoothDeviceType",BluetoothDeviceType,"DeviceTimeStamp",DeviceTimeStamp,"DeviceInstanceId",DeviceInstanceId,
+  "BluetoothDeviceAddressType",BluetoothDeviceAddressType,"DeviceVersion",DeviceVersion,
+  "DeviceDescriptorSetHash",DeviceDescriptorSetHash,"DeviceManufacturer",DeviceManufacturer,
+  "DeviceProduct",DeviceProduct,"DeviceUserSid",DeviceUserSid,"DeviceUserAuthenticationId",DeviceUserAuthenticationId,
+  "FirewallProfile",FirewallProfile,"ShareAccess",ShareAccess,"DesiredAccess",DesiredAccess,"GID",GID,
+  "UID",UID,"UnixMode",UnixMode,"OriginalAdditionalFields",AdditionalFields)
+  | project-rename Operation=event_simpleName,DvcId=aid,DvcScopeId=cid,ActorUsername=UserName,
+  ActorSessionId=AuthenticationId,ActingAppId=ContextProcessId,ActingAppName=ImageFileName,
+  EventOriginalUid=CrowdStrikeId,EventMessage=ErrorText
+  | extend Dvc=iif(isnotempty(_Host),_Host,iif(isnotempty(DvcId),DvcId,DvcIpAddr)),DvcIdType=iff(isnotempty(DvcId),"Other",""),
+  DvcDomainType=iff(isnotempty(DvcDomain),"FQDN",""),
+  SrcIpAddr=_RemoteIp,SrcDomainType=iff(isnotempty(SrcDomain),"FQDN",""),
+  Src=iif(isnotempty(SrcFQDN),SrcFQDN,iif(isnotempty(SrcHostname),SrcHostname,_RemoteIp)),
+  ActingAppType=iff(isnotempty(ActingAppId) or isnotempty(ActingAppName),"Process",""),
+  EventOriginalResultDetails=iif(isnotempty(Status),Status,iif(isnotempty(ErrorCode),ErrorCode,CloudErrorCode)),
+  EventStartTime=_EventTime,EventEndTime=_EventTime,
+  EventCount=int(1),EventSchema="AuditEvent",EventSchemaVersion="1.0.0",
+  EventVendor="CrowdStrike",EventProduct="Falcon Data Replicator",EventSeverity="Informational",
+  TargetHostname=DvcHostname,TargetFQDN=DvcFQDN,TargetDomain=DvcDomain,
+  TargetDomainType=iff(isnotempty(DvcDomain),"FQDN",""),TargetIpAddr=DvcIpAddr,
+  TargetDvcId=DvcId,TargetDvcIdType=iff(isnotempty(DvcId),"Other",""),TargetDvcOs=DvcOs,
+  TargetDvcScopeId=DvcScopeId,OriginalObjectType=ObjectCategory,
+  ActorUserEntityKey="",SrcSystemEntityKey="",TargetSystemEntityKey="",DvcEntityKey="",
+  ActingApplicationEntityKey="",TargetApplicationEntityKey="",
+  ActorUserAdditionalIds=parse_json('[]'),AdditionalEntities=parse_json('[]')
+  | extend User=ActorUsername,IpAddr=SrcIpAddr,Value=NewValue,Dst=Dvc
+  | project TimeGenerated,Type,EventStartTime,EventEndTime,EventCount,EventType,EventResult,
+  EventSchema,EventSchemaVersion,EventVendor,EventProduct,EventSeverity,
+  EventOriginalUid,EventOriginalResultDetails,EventMessage,Operation,
+  Object,ObjectId,ObjectType,OriginalObjectType,NewValue,Value,
+  Dvc,DvcId,DvcIdType,DvcScopeId,DvcHostname,DvcFQDN,DvcDomain,DvcDomainType,DvcIpAddr,DvcOs,
+  ActorUsername,ActorUsernameType,ActorSessionId,User,ActingAppId,ActingAppName,ActingAppType,
+  Src,SrcIpAddr,SrcHostname,SrcFQDN,SrcDomain,SrcDomainType,IpAddr,
+  TargetHostname,TargetFQDN,TargetDomain,TargetDomainType,TargetIpAddr,
+  TargetDvcId,TargetDvcIdType,TargetDvcOs,TargetDvcScopeId,Dst,
+  ActorUserEntityKey,SrcSystemEntityKey,TargetSystemEntityKey,DvcEntityKey,
+  ActingApplicationEntityKey,TargetApplicationEntityKey,ActorUserAdditionalIds,AdditionalEntities,
+  AdditionalFields=_Packed
+Change:
+  Date: "2026-10-27"
+  Description: "Initial ingestion-time conversion from query-time parser 0.1.0 with source packing enabled."
