@@ -1,0 +1,112 @@
+Parser:
+  DisplayName: "Ingestion-time User Management ASIM parser for CrowdStrike Falcon Data Replicator"
+  Version: "0.1.0"
+  LastUpdated: "2026-10-27"
+Product:
+  Name: "CrowdStrike Falcon Data Replicator"
+Normalization:
+  Schema: "UserManagement"
+  Version: "1.0.0"
+Author: "Microsoft"
+Description: |
+  Normalizes account creation, deletion, and group-membership events from CrowdStrike_User_Events_CL to ASimUserManagementActivityLogs during ingestion.
+  Preserves explicit packed fields, username/SID semantics, and source event identifiers; unresolved typed-source routing and native target projection requirements are documented in the accompanying YAML report.
+ParserName: "ASimUserManagementCrowdStrikeFalconDataReplicator"
+DCRType: "Standard"
+InputStream: "Custom-CrowdStrike_User_Events_CL"
+SourceRawTable: "CrowdStrike_User_Events_CL"
+TargetASIMTable: "ASimUserManagementActivityLogs"
+ParserFilterQuery: |
+  source
+  | where event_simpleName in ("UserAccountCreated", "UserAccountDeleted", "UserAccountAddedToGroup")
+ParserQuery: |
+  source
+  | extend Type = "CrowdStrike_User_Events_CL"
+  | where event_simpleName in ("UserAccountCreated", "UserAccountDeleted", "UserAccountAddedToGroup")
+  | extend
+      EventType = case(
+          event_simpleName == "UserAccountCreated", "UserCreated",
+          event_simpleName == "UserAccountDeleted", "UserDeleted",
+          "UserAddedToGroup"),
+      EventStartTime = iif(isnotnull((datetime(1970-01-01) + timestamp * 1ms)), (datetime(1970-01-01) + timestamp * 1ms), TimeGenerated),
+      TargetUsernameType = case(
+          isempty(UserName), "",
+          UserName startswith "CN=", "DN",
+          UserName contains "@", "UPN",
+          UserName contains "\\", "Windows",
+          "Simple"),
+      TargetUserId = iff(DomainSid startswith "S-1-" and isnotnull(tolong(UserRid)), strcat(DomainSid, "-", UserRid), ""),
+      GroupId = iff(event_simpleName == "UserAccountAddedToGroup" and DomainSid startswith "S-1-" and isnotnull(tolong(GroupRid)), strcat(DomainSid, "-", GroupRid), ""),
+      DvcOs = case(event_platform == "Win", "Windows", event_platform == "Mac", "macOS", event_platform == "Lin", "Linux", ""),
+      AdditionalFields = pack(
+          "SourceAdditionalFields", AdditionalFields,
+          "name", name,
+          "ConfigBuild", ConfigBuild,
+          "ConfigStateHash", ConfigStateHash,
+          "ContextTimeStamp", ContextTimeStamp,
+          "ContextProcessId", ContextProcessId,
+          "ContextThreadId", ContextThreadId,
+          "BoundingLimitCount", BoundingLimitCount,
+          "BoundingLimitDuration", BoundingLimitDuration,
+          "Entitlements", Entitlements,
+          "EffectiveTransmissionClass", EffectiveTransmissionClass,
+          "OciContainerId", OciContainerId,
+          "TreeId", TreeId,
+          "UserRid", UserRid,
+          "GroupRid", GroupRid,
+          "InterfaceVersion", InterfaceVersion,
+          "RpcClientThreadId", RpcClientThreadId,
+          "RpcOpNum", RpcOpNum,
+          "InterfaceGuid", InterfaceGuid,
+          "RpcClientProcessId", RpcClientProcessId,
+          "RpcNestingLevel", RpcNestingLevel,
+          "event_platform", event_platform)
+  | project-rename
+      EventOriginalType = event_simpleName,
+      EventOriginalUid = CrowdStrikeId,
+      TargetUsername = UserName,
+      TargetUserScopeId = DomainSid,
+      DvcIpAddr = aip,
+      DvcId = aid,
+      DvcScopeId = cid
+  | extend
+      EventEndTime = EventStartTime,
+      EventCount = int(1),
+      EventResult = "Success",
+      EventSeverity = "Informational",
+      EventVendor = "CrowdStrike",
+      EventProduct = "Falcon Data Replicator",
+      EventSchema = "UserManagement",
+      EventSchemaVersion = "1.0.0",
+      EventUid = EventOriginalUid,
+      Dvc = iif(isnotempty(DvcId), DvcId, DvcIpAddr),
+      DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+      TargetUserIdType = iff(isnotempty(TargetUserId), "SID", ""),
+      TargetUserSid = TargetUserId,
+      GroupIdType = iff(isnotempty(GroupId), "SID", ""),
+      ActorUsername = "",
+      ActorUsernameType = "",
+      ActingApplicationEntityKey = "",
+      ActorUserEntityKey = "",
+      ActorUserAdditionalIds = parse_json('[]'),
+      TargetUserEntityKey = "",
+      TargetUserAdditionalIds = parse_json('[]'),
+      SrcSystemEntityKey = "",
+      DvcEntityKey = "",
+      AdditionalEntities = parse_json('[]')
+  | extend User = ActorUsername
+  | project
+      TimeGenerated, Type,
+      EventStartTime, EventEndTime, EventCount, EventType, EventResult,
+      EventSeverity, EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+      EventOriginalType, EventOriginalUid, EventUid,
+      Dvc, DvcIpAddr, DvcId, DvcIdType, DvcScopeId, DvcOs,
+      ActorUsername, ActorUsernameType, User,
+      TargetUsername, TargetUsernameType, TargetUserId, TargetUserIdType,
+      TargetUserSid, TargetUserScopeId, GroupId, GroupIdType,
+      ActingApplicationEntityKey, ActorUserEntityKey, ActorUserAdditionalIds,
+      TargetUserEntityKey, TargetUserAdditionalIds, SrcSystemEntityKey,
+      DvcEntityKey, AdditionalEntities, AdditionalFields
+Change:
+  Date: "2026-10-27"
+  Description: "Initial ingestion-time conversion preserving the three-event filter, explicit packing, and source normalization semantics."
