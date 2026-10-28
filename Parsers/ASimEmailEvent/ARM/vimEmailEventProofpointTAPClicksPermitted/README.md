@@ -3,7 +3,7 @@
 ARM template for ASIM EmailEvent schema parser for Proofpoint Targeted Attack Protection.
 
 Filters and normalizes ProofPointTAPClicksPermittedV2_CL URL Defense click records
-as EmailEvent inspection activity without inferring email delivery or HTTP success.
+as EmailInteraction activity without inferring email delivery or HTTP success.
 Time filters use clickTime, falling back to TimeGenerated when clickTime is absent.
 IPv4-prefix filters use the clicker's IP, and recipient filters use the source recipient.
 Header From, subject, and delivery location are not supplied, so their filters can

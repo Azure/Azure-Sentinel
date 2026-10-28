@@ -1,5 +1,10 @@
 # Changelog for ASimEmailEventProofpointTAPClicksPermitted.yaml
 
+## Version 0.1.1
+
+- (2026-10-28) Classify permitted URL clicks as EmailInteraction using the new EmailEvent event type - [PR #15483](https://github.com/Azure/Azure-Sentinel/pull/15483)
+- Preserve clicksPermitted as the original event type, all existing mappings, and one normalized event per source row.
+
 ## Version 0.1.0
 
 - (2026-10-28) Added Proofpoint TAP permitted-click normalization as EmailEvent inspection activity - [PR #15483](https://github.com/Azure/Azure-Sentinel/pull/15483)

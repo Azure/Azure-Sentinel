@@ -3,7 +3,7 @@
 ARM template for ASIM EmailEvent schema parser for Proofpoint Targeted Attack Protection.
 
 Normalizes ProofPointTAPClicksPermittedV2_CL URL Defense click records as EmailEvent
-inspection activity, preserving one event per source row. Permitting a click does
+interaction activity (EmailInteraction), preserving one event per source row. Permitting a click does
 not establish email delivery or HTTP success, so EventResult and DvcAction are NA.
 Event time uses clickTime, falling back to TimeGenerated when clickTime is absent.
 SrcIpAddr is the clicker's external IP; the email sender's IP is retained only
