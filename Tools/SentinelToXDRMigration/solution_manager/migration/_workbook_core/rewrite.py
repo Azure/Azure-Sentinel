@@ -67,6 +67,15 @@ _UNIFIED_HEALTH_PREFIX = f"""let {_UNIFIED_HEALTH_ALIAS} = union isfuzzy=true
 ),
 SentinelHealth;
 """
+_NORMALIZED_SOC_HEALTH_ALIAS = "__SentinelXdrNormalizedSocHealth"
+_NORMALIZED_SOC_HEALTH_PREFIX = f"""let {_NORMALIZED_SOC_HEALTH_ALIAS} = SOCHealth
+    | extend
+        SentinelResourceId = ResourceId,
+        SentinelResourceName = ResourceName,
+        SentinelResourceType = ResourceType,
+        SentinelResourceKind = ResourceKind,
+        ExtendedProperties = AdditionalFields;
+"""
 
 
 def _segments(kql: str) -> List[Tuple[str, str]]:
@@ -140,31 +149,41 @@ def _find_identifiers(kql: str, names: set) -> set:
 
 
 def _rewrite_sentinel_health_source(kql: str, tables: List[str]) -> Tuple[str, Optional[dict]]:
-    """Expand SentinelHealth into a normalized SOCHealth/SentinelHealth source."""
+    """Normalize explicit SOCHealth sources or expand SentinelHealth-only queries."""
     if "SentinelHealth" not in tables:
         return kql, None
-    if kql.startswith(_UNIFIED_HEALTH_PREFIX):
-        return kql, {
-            "kind": "health-source-union",
-            "before": "SentinelHealth",
-            "after": "SOCHealth, SentinelHealth",
-            "count": 1,
-            "source": "deterministic",
-            "reason": "Read health events from Defender XDR and Microsoft Sentinel",
-        }
-    if _find_identifiers(kql, {_UNIFIED_HEALTH_ALIAS}):
+    normalized = kql.startswith(_NORMALIZED_SOC_HEALTH_PREFIX) or (
+        "SOCHealth" in tables and not kql.startswith(_UNIFIED_HEALTH_PREFIX)
+    )
+    if normalized:
+        # Keep native columns and branch filters when both sources are already explicit.
+        prefix = _NORMALIZED_SOC_HEALTH_PREFIX
+        alias, source = _NORMALIZED_SOC_HEALTH_ALIAS, "SOCHealth"
+        kind = "health-source-normalization"
+        after = alias
+        reason = "Normalize existing Defender XDR health without adding another source"
+    else:
+        prefix = _UNIFIED_HEALTH_PREFIX
+        alias, source = _UNIFIED_HEALTH_ALIAS, "SentinelHealth"
+        kind = "health-source-union"
+        after = "SOCHealth, SentinelHealth"
+        reason = "Read health events from Defender XDR and Microsoft Sentinel"
+    replay = kql.startswith(prefix)
+    if not replay and _find_identifiers(kql, {_UNIFIED_HEALTH_ALIAS, _NORMALIZED_SOC_HEALTH_ALIAS}):
         return kql, None
-    converted, counts = _apply_renames(kql, {"SentinelHealth": _UNIFIED_HEALTH_ALIAS})
-    count = counts.get("SentinelHealth", 0)
+    tail = kql[len(prefix):] if replay else kql
+    token = alias if replay else source
+    converted, counts = _apply_renames(tail, {token: alias})
+    count = counts.get(token, 0)
     if not count:
         return kql, None
-    return _UNIFIED_HEALTH_PREFIX + converted, {
-        "kind": "health-source-union",
-        "before": "SentinelHealth",
-        "after": "SOCHealth, SentinelHealth",
+    return prefix + converted, {
+        "kind": kind,
+        "before": source,
+        "after": after,
         "count": count,
         "source": "deterministic",
-        "reason": "Read health events from Defender XDR and Microsoft Sentinel",
+        "reason": reason,
     }
 
 
@@ -721,20 +740,22 @@ def rewrite(kql: str, tables: Optional[List[str]],
     # Apply table + column renames in one whole-identifier pass.
     rename_map = {**col_renames, **table_renames}
     converted, counts = _apply_renames(converted, rename_map)
-    health_alias_collision = (
-        "SentinelHealth" in tables
-        and not converted.startswith(_UNIFIED_HEALTH_PREFIX)
-        and bool(_find_identifiers(converted, {_UNIFIED_HEALTH_ALIAS}))
+    health_alias_collisions = (
+        _find_identifiers(converted, {_UNIFIED_HEALTH_ALIAS, _NORMALIZED_SOC_HEALTH_ALIAS})
+        if "SentinelHealth" in tables
+        and not converted.startswith((_UNIFIED_HEALTH_PREFIX, _NORMALIZED_SOC_HEALTH_PREFIX))
+        else set()
     )
     converted, health_diff = _rewrite_sentinel_health_source(converted, tables)
     if health_diff:
+        target_tables.extend(table_renames.get(table, table) for table in tables)
         target_tables.extend(["SOCHealth", "SentinelHealth"])
-    elif health_alias_collision:
-        flags.append({
+    elif health_alias_collisions:
+        flags.extend({
             "kind": "health-source-alias-collision",
-            "name": _UNIFIED_HEALTH_ALIAS,
-            "reason": "Query already defines the reserved unified health alias; manual review required.",
-        })
+            "name": alias,
+            "reason": "Query already defines a reserved health alias; manual review required.",
+        } for alias in sorted(health_alias_collisions))
 
     # Drop redundant duplicate group-by keys (AH rejects duplicate output columns).
     converted, dup_keys = _dedupe_summarize_keys(converted)
