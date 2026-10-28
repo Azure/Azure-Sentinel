@@ -5,8 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import sys
+import tempfile
+import unittest
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sentinel_xdr_migration.decision_manifest import (
     ALLOWED_DECISION_SCOPES,
@@ -315,3 +320,34 @@ def test_build_solution_report_includes_decision_manifest_summary(tmp_path: Path
     assert summary["count"] == summary["decisionCount"]
     assert len(summary["manifestSha256"]) == 64
     assert "rule_review" in summary["scopes"]
+
+
+def test_decision_manifest_includes_sanitized_overrides(tmp_path: Path) -> None:
+    sol = _write_sample_solution(tmp_path)
+    _write_workflow_state(sol, include_private_context=True)
+
+    manifest = build_sanitized_decision_manifest(sol)
+    assert "overrides" in manifest
+    overrides = manifest["overrides"]
+    assert isinstance(overrides, list)
+    assert len(overrides) >= 3
+
+    override_types = {o["overrideType"] for o in overrides}
+    assert "waiver" in override_types
+    assert "manual_edit" in override_types
+    assert "rejection" in override_types
+
+    for ov in overrides:
+        assert set(ov.keys()) >= {"itemId", "overrideType", "reason", "timestampUtc"}
+        assert ov["overrideType"] in {"waiver", "manual_edit", "rejection"}
+        assert "analyst@contoso.com" not in ov["reason"]
+        assert "ws-private-lab" not in ov["reason"]
+
+    verify_sanitized_decision_manifest(manifest)
+
+
+class TestDecisionManifestUnittest(unittest.TestCase):
+    def test_decision_manifest_sanitized_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_decision_manifest_includes_sanitized_overrides(Path(tmp))
+

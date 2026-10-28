@@ -456,6 +456,106 @@ def _normalize_report_data(report_data: dict[str, Any] | None) -> dict[str, Any]
         else None
     )
 
+    raw_verified_rules = raw.get("kqlRuntimeVerifiedRules")
+    kql_runtime_verified_rules: list[dict[str, Any]] = []
+    if isinstance(raw_verified_rules, list):
+        for vr in raw_verified_rules:
+            if not isinstance(vr, dict):
+                continue
+            rid = sanitize_decision_text(str(vr.get("id") or "")).strip()
+            qsha = sanitize_decision_text(str(vr.get("querySha256") or "")).strip().lower()
+            if not rid or not qsha:
+                continue
+            vr_entry: dict[str, Any] = {
+                "id": rid,
+                "querySha256": qsha,
+                "status": str(vr.get("status") or "PASS").strip().upper(),
+            }
+            orig_id = sanitize_decision_text(str(vr.get("originalRuleId") or "")).strip()
+            if orig_id and orig_id != "[REDACTED]":
+                vr_entry["originalRuleId"] = orig_id
+            file_rel = sanitize_decision_text(str(vr.get("file") or "")).strip()
+            if file_rel and file_rel != "[REDACTED]":
+                vr_entry["file"] = file_rel
+            kql_runtime_verified_rules.append(vr_entry)
+
+    run_number_raw = raw.get("runNumber")
+    try:
+        run_number = max(1, int(run_number_raw)) if run_number_raw is not None else 1
+    except (TypeError, ValueError):
+        run_number = 1
+
+    pr_number_raw = raw.get("prNumber")
+    try:
+        pr_number: int | None = int(pr_number_raw) if pr_number_raw is not None else None
+    except (TypeError, ValueError):
+        pr_number = None
+
+    first_pass_raw = raw.get("firstPassPassed")
+    if isinstance(first_pass_raw, bool):
+        first_pass_passed = first_pass_raw
+    else:
+        first_pass_passed = bool(run_number == 1 and summary_counts.get("fail", 0) == 0)
+
+    raw_stage_ts = raw.get("stageTimestamps")
+    stage_ts_map = raw_stage_ts if isinstance(raw_stage_ts, dict) else {}
+
+    def _clean_ts(val_in: Any) -> str | None:
+        if isinstance(val_in, str) and val_in.strip():
+            return val_in.strip()
+        return None
+
+    stage_timestamps: dict[str, str | None] = {
+        "convertingStartedAtUtc": _clean_ts(stage_ts_map.get("convertingStartedAtUtc")),
+        "convertingCompletedAtUtc": _clean_ts(stage_ts_map.get("convertingCompletedAtUtc")),
+        "validationCompletedAtUtc": _clean_ts(stage_ts_map.get("validationCompletedAtUtc")),
+        "qualificationCompletedAtUtc": _clean_ts(stage_ts_map.get("qualificationCompletedAtUtc")),
+        "packagedAtUtc": _clean_ts(stage_ts_map.get("packagedAtUtc")),
+    }
+
+    overall_verdict_raw = str(raw.get("overallVerdict") or "").strip()
+    if not overall_verdict_raw:
+        overall_verdict_raw = (
+            qualification_status if qualification_status != "Not Run" else validation_status
+        )
+
+    verdict_raw = str(raw.get("verdict") or "").strip()
+    if verdict_raw in {"Qualified", "Conditionally Qualified", "Validated", "Partially Validated", "Failed"}:
+        verdict = verdict_raw
+    elif overall_verdict_raw in {"Validation Failed", "Qualification Failed", "Not Run"}:
+        verdict = "Failed"
+    elif overall_verdict_raw in {"Qualified", "Conditionally Qualified", "Validated", "Partially Validated"}:
+        verdict = overall_verdict_raw
+    else:
+        verdict = "Failed"
+
+    raw_verdict_reasons = raw.get("verdictReasons")
+    if isinstance(raw_verdict_reasons, list):
+        verdict_reasons = [
+            sanitize_decision_text(str(item)).strip()
+            for item in raw_verdict_reasons
+            if item is not None and str(item).strip()
+        ]
+    else:
+        verdict_reasons = []
+        for chk in checks:
+            st = _normalize_status(chk.get("status"), bool(chk.get("applicable", True)))
+            if st in {"FAIL", "SKIPPED", "WAIVED_WITH_AUTHOR_EVIDENCE", "HUMAN_REVIEW_REQUIRED"}:
+                exc = chk.get("authorException")
+                r_txt = ""
+                if st == "WAIVED_WITH_AUTHOR_EVIDENCE" and isinstance(exc, dict):
+                    r_txt = str(exc.get("reason") or exc.get("authorJustification") or "").strip()
+                if not r_txt:
+                    r_txt = str(chk.get("whyPassedOrFailed") or chk.get("whatWeObserved") or "").strip()
+                verdict_reasons.append(f"{chk.get('id', 'CHECK')} ({st}): {r_txt}")
+
+    raw_op_hash = str(raw.get("operatorHash") or "").strip().lower()
+    operator_hash = raw_op_hash if re.fullmatch(r"[0-9a-f]{16}", raw_op_hash) else None
+    workflow_profile = str(
+        raw.get("workflowProfile")
+        or ("qualification" if qualification_status != "Not Run" else "validation")
+    ).strip()
+
     return {
         "schemaVersion": str(raw.get("schemaVersion") or SCHEMA_VERSION),
         "solutionName": str(raw.get("solutionName") or "Unknown Solution"),
@@ -463,10 +563,20 @@ def _normalize_report_data(report_data: dict[str, Any] | None) -> dict[str, Any]
         "solutionVersion": str(raw.get("solutionVersion") or "0.0.0"),
         "previousVersion": previous_version,
         "isMigration": is_migration,
+        "workflowProfile": workflow_profile,
+        "operatorHash": operator_hash,
+        "runNumber": run_number,
+        "prNumber": pr_number,
+        "firstPassPassed": first_pass_passed,
+        "stageTimestamps": stage_timestamps,
         "generatedAtUtc": generated_at,
         "validationStatus": validation_status,
         "qualificationStatus": qualification_status,
         "migrationStatus": migration_status,
+        "overallVerdict": overall_verdict_raw,
+        "verdict": verdict,
+        "verdictReasons": verdict_reasons,
+        "kqlRuntimeVerifiedRules": kql_runtime_verified_rules,
         "detectedContentTypes": detected_content_types,
         "summaryCounts": summary_counts,
         "checks": checks,

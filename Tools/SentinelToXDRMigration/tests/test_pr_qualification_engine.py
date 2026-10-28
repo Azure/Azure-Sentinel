@@ -5,9 +5,14 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
+import tempfile
 from typing import Any
+import unittest
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from solution_manager.qualification.pr_applicability import (
     BUILTIN_CHECK_CATALOG,
@@ -954,4 +959,154 @@ def test_direct_override_blocks_validation_and_unapproved_human_review(tmp_path:
     assert res["checksById"]["QUAL-HR-01"]["status"] == "HUMAN_REVIEW_REQUIRED"
 
 
+def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: Path) -> None:
+    """Verify kqlRuntimeVerifiedRules projection, QUAL-RUNTIME-01 evaluation, and VAL-CI-01 static KQL override."""
+    sol = tmp_path / "RuntimeVerifiedSol"
+    _build_base_package(
+        sol,
+        version="3.2.2",
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/Rule1.yaml"],
+            "XDR Detections": ["XDR Detections/Rule1.yaml"],
+        },
+    )
+    ar_path = sol / "Analytic Rules" / "Rule1.yaml"
+    rule_id = "6e76fd9d-8104-41eb-bad3-26054a3ad5f0"
+    ar_sha = _build_valid_analytic_rule(ar_path, rule_id=rule_id)
+    xdr_path = sol / "XDR Detections" / "Rule1.yaml"
+    _build_valid_xdr_detection(
+        xdr_path,
+        source_rule_id=rule_id,
+        source_rule_path="Analytic Rules/Rule1.yaml",
+        source_rule_sha256=ar_sha,
+    )
+    _write_json(
+        sol / "Sample Data" / "Tables" / "AzureDiagnostics_mock.json",
+        [
+            {
+                "TimeGenerated": "2026-10-19T12:00:00Z",
+                "ResourceType": "PUBLICIPADDRESSES",
+                "Category": "DDoSMitigationReports",
+                "destPublicIpAddress_s": "198.51.100.10",
+                "sourcePublicIpAddress_s": "203.0.113.99",
+            }
+        ],
+    )
 
+    ar_doc = yaml.safe_load(ar_path.read_text(encoding="utf-8"))
+    ar_query_sha = hashlib.sha256(str(ar_doc["query"]).strip().encode("utf-8")).hexdigest()
+    xdr_doc = yaml.safe_load(xdr_path.read_text(encoding="utf-8"))
+    xdr_raw_q = xdr_doc.get("query") or ((xdr_doc.get("properties") or {}).get("queryCondition") or {}).get("queryText")
+    xdr_query_sha = hashlib.sha256(str(xdr_raw_q).strip().encode("utf-8")).hexdigest()
+
+    qual_ev = _build_live_qualification_evidence()
+    qual_ev["runtimeKql"] = {"status": "passed", "passed": True}
+    qual_ev["ciChecks"] = {
+        "passed": False,
+        "reason": "Static KQL analyzer reported KS107/KS141",
+        "kqlStaticErrors": [
+            {
+                "id": f"xdr-{rule_id}",
+                "originalRuleId": rule_id,
+                "code": "KS107",
+                "querySha256": xdr_query_sha,
+            },
+            {
+                "id": rule_id,
+                "code": "KS141",
+                "querySha256": ar_query_sha,
+            },
+        ],
+    }
+    wf_state = {
+        "workflowProfile": "qualification",
+        "operatorHash": "abcdef0123456789",
+        "stages": {
+            "conversion": {
+                "startedAt": "2026-10-19T10:00:00Z",
+                "completedAt": "2026-10-19T10:05:00Z",
+            },
+            "validation": {
+                "attempts": 1,
+                "completedAt": "2026-10-19T10:10:00Z",
+            },
+            "alertParity": {
+                "status": "passed",
+                "completedAt": "2026-10-19T10:25:00Z",
+            },
+            "packaging": {
+                "completedAt": "2026-10-19T10:30:00Z",
+            },
+        },
+    }
+
+    res = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev,
+        pr_number=4242,
+        run_number=1,
+    )
+
+    # Todo #5 assertions
+    verified = res["kqlRuntimeVerifiedRules"]
+    assert len(verified) == 2
+    verified_ids = {v["id"]: v for v in verified}
+    assert rule_id in verified_ids
+    assert verified_ids[rule_id]["querySha256"] == ar_query_sha
+    assert verified_ids[rule_id]["status"] == "PASS"
+    assert f"xdr-{rule_id}" in verified_ids
+    assert verified_ids[f"xdr-{rule_id}"]["querySha256"] == xdr_query_sha
+    assert verified_ids[f"xdr-{rule_id}"]["originalRuleId"] == rule_id
+
+    assert res["checksById"]["VAL-CI-01"]["status"] == "PASS"
+    assert "kqlRuntimeVerifiedRules" in res["checksById"]["VAL-CI-01"]["whatWeObserved"]
+    assert "kqlRuntimeVerifiedRules" in res["checksById"]["VAL-CI-01"]["whyPassedOrFailed"]
+    assert res["checksById"]["QUAL-RUNTIME-01"]["status"] == "PASS"
+
+    # Todo #6 assertions
+    assert res["runNumber"] == 1
+    assert res["prNumber"] == 4242
+    assert res["firstPassPassed"] is True
+    assert res["operatorHash"] == "abcdef0123456789"
+    assert res["workflowProfile"] == "qualification"
+    assert res["stageTimestamps"] == {
+        "convertingStartedAtUtc": "2026-10-19T10:00:00Z",
+        "convertingCompletedAtUtc": "2026-10-19T10:05:00Z",
+        "validationCompletedAtUtc": "2026-10-19T10:10:00Z",
+        "qualificationCompletedAtUtc": "2026-10-19T10:25:00Z",
+        "packagedAtUtc": "2026-10-19T10:30:00Z",
+    }
+    assert res["verdict"] == "Qualified"
+    assert isinstance(res["verdictReasons"], list)
+
+    # Ensure SYN* syntax errors are never overridden in VAL-CI-01
+    qual_ev_syn = dict(qual_ev)
+    qual_ev_syn["ciChecks"] = {
+        "passed": False,
+        "reason": "Syntax error SYN001",
+        "kqlStaticErrors": [
+            {
+                "id": rule_id,
+                "code": "SYN001",
+                "querySha256": ar_query_sha,
+            }
+        ],
+    }
+    res_syn = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_syn,
+        run_number=2,
+    )
+    assert res_syn["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+    assert res_syn["firstPassPassed"] is False
+    assert res_syn["verdict"] == "Failed"
+    assert any(r.startswith("VAL-CI-01 (FAIL):") for r in res_syn["verdictReasons"])
+
+
+class TestPrQualificationEngineUnittest(unittest.TestCase):
+    def test_kql_runtime_verified_rules_and_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_kql_runtime_verified_rules_projection_and_val_ci_01_override(Path(tmp))

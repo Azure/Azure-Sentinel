@@ -405,9 +405,46 @@ class WorkflowTests(unittest.TestCase):
     def test_profile_selection_is_required(self) -> None:
         with self.assertRaisesRegex(ValueError, "profile selection is required"):
             initialize_workflow(self.solution, workflow_profile=None)
-        defaulted = initialize_workflow(self.solution)
-        self.assertEqual("authoring", defaulted["context"]["workflowProfile"])
+        with self.assertRaisesRegex(ValueError, "qualification requires a locked target context"):
+            initialize_workflow(self.solution)
+        defaulted = initialize_workflow(self.solution, **self._qualification_args())
+        self.assertEqual("qualification", defaulted["context"]["workflowProfile"])
         self.assertTrue(defaulted["context"]["profileSelectionConfirmed"])
+
+    def test_operator_hash_recorded_and_validated(self) -> None:
+        import os
+        import subprocess
+        from solution_manager.core.workflow import resolve_operator_hash
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "GITHUB_ACTOR": "Alice.Example",
+                "GIT_AUTHOR_EMAIL": "",
+                "GIT_COMMITTER_EMAIL": "",
+            },
+            clear=False,
+        ):
+            expected = hashlib.sha256(b"alice.example").hexdigest()[:16]
+            self.assertEqual(expected, resolve_operator_hash())
+            created = initialize_workflow(self.solution, workflow_profile="authoring")
+            self.assertEqual(expected, created["operatorHash"])
+            self.assertEqual(expected, created["context"]["operatorHash"])
+            self.assertRegex(created["operatorHash"], r"^[0-9a-f]{16}$")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "GITHUB_ACTOR": "",
+                "GIT_AUTHOR_EMAIL": "",
+                "GIT_COMMITTER_EMAIL": "",
+            },
+            clear=False,
+        ), mock.patch(
+            "solution_manager.core.workflow.subprocess.run",
+            return_value=subprocess.CompletedProcess(["git"], 1, "", ""),
+        ):
+            self.assertEqual("0000000000000000", resolve_operator_hash())
 
     def test_initialize_creates_resumable_state(self) -> None:
         created = initialize_workflow(

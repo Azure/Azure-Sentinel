@@ -145,16 +145,30 @@ jobs:
             }
 
             // Build machine-readable npf-meta block for PR body and step summary
+            const currentBody = context.payload.pull_request?.body || '';
+            const metaRegex = /<!--\s*npf-meta:\s*(\{.*?\})\s*-->/s;
+            let priorSyncObserved = false;
+            const existingMetaMatch = currentBody.match(metaRegex);
+            if (existingMetaMatch) {
+              try {
+                const parsedMeta = JSON.parse(existingMetaMatch[1]);
+                if (parsedMeta && parsedMeta.synchronizePushObserved === true) {
+                  priorSyncObserved = true;
+                }
+              } catch (_err) {
+                // Ignore malformed prior metadata block
+              }
+            }
+            const synchronizePushObserved = priorSyncObserved || (context.payload.action === 'synchronize');
             const npfMeta = {
               solutionCount: solutionDetails.length,
               solutions: solutionDetails.map(s => s.name),
               publisherTiers: [...publisherTiers],
-              npfModes
+              npfModes,
+              synchronizePushObserved
             };
             const metaComment = `<!-- npf-meta: ${JSON.stringify(npfMeta)} -->`;
 
-            const currentBody = context.payload.pull_request?.body || '';
-            const metaRegex = /<!--\s*npf-meta:\s*\{.*?\}\s*-->/s;
             let updatedBody = currentBody;
             if (metaRegex.test(currentBody)) {
               updatedBody = currentBody.replace(metaRegex, metaComment);

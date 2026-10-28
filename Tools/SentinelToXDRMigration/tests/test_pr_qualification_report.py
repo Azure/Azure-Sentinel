@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import sys
+import tempfile
 from typing import Any
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from solution_manager.reporting.pr_qualification_report import (
     HTML_REPORT_FILENAME,
     MARKDOWN_SUMMARY_FILENAME,
+    _normalize_report_data,
     render_pr_qualification_html,
     render_pr_qualification_markdown,
     write_pr_qualification_reports,
@@ -509,4 +516,58 @@ def test_relative_path_rebasing_with_output_dir_and_solution_root(tmp_path: Path
     assert "(./evidence/workbook-arg-sku-limitation.md)" in md_out
 
 
+def test_write_pr_qualification_reports_preserves_npf_metrics_and_runtime_verified_rules(tmp_path: Path) -> None:
+    report_data = _sample_report_data(
+        workflowProfile="qualification",
+        operatorHash="0123456789abcdef",
+        runNumber=1,
+        prNumber=9876,
+        firstPassPassed=True,
+        stageTimestamps={
+            "convertingStartedAtUtc": "2026-10-19T10:00:00Z",
+            "convertingCompletedAtUtc": "2026-10-19T10:05:00Z",
+            "validationCompletedAtUtc": "2026-10-19T10:10:00Z",
+            "qualificationCompletedAtUtc": "2026-10-19T10:20:00Z",
+            "packagedAtUtc": "2026-10-19T10:25:00Z",
+        },
+        overallVerdict="Conditionally Qualified",
+        verdict="Conditionally Qualified",
+        verdictReasons=[
+            "VAL-CI-002 (WAIVED_WITH_AUTHOR_EVIDENCE): Known upstream table rename tracked in #404."
+        ],
+        kqlRuntimeVerifiedRules=[
+            {
+                "id": "xdr-rule-001",
+                "originalRuleId": "rule-001",
+                "file": "XDR Detections/Rule1.yaml",
+                "querySha256": "a" * 64,
+                "status": "PASS",
+            }
+        ],
+    )
+    saved = _normalize_report_data(report_data)
+    paths = write_pr_qualification_reports(report_data, tmp_path / "npf-metrics-out")
+    assert paths["html"].is_file()
+    assert paths["markdown"].is_file()
 
+    assert saved["workflowProfile"] == "qualification"
+    assert saved["operatorHash"] == "0123456789abcdef"
+    assert saved["runNumber"] == 1
+    assert saved["prNumber"] == 9876
+    assert saved["firstPassPassed"] is True
+    assert saved["stageTimestamps"]["convertingStartedAtUtc"] == "2026-10-19T10:00:00Z"
+    assert saved["stageTimestamps"]["packagedAtUtc"] == "2026-10-19T10:25:00Z"
+    assert saved["verdict"] == "Conditionally Qualified"
+    assert saved["verdictReasons"] == [
+        "VAL-CI-002 (WAIVED_WITH_AUTHOR_EVIDENCE): Known upstream table rename tracked in #404."
+    ]
+    assert len(saved["kqlRuntimeVerifiedRules"]) == 1
+    assert saved["kqlRuntimeVerifiedRules"][0]["id"] == "xdr-rule-001"
+    assert saved["kqlRuntimeVerifiedRules"][0]["originalRuleId"] == "rule-001"
+    assert saved["kqlRuntimeVerifiedRules"][0]["querySha256"] == "a" * 64
+
+
+class TestPrQualificationReportUnittest(unittest.TestCase):
+    def test_write_pr_qualification_reports_npf_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_write_pr_qualification_reports_preserves_npf_metrics_and_runtime_verified_rules(Path(tmp))

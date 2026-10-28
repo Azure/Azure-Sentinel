@@ -8,7 +8,8 @@ Follow that canonical workflow and use the repository CLI and PowerShell
 entry points directly. Do not replace deterministic conversion, validation,
 packaging, deployment, or parity logic with model-generated approximations.
 
-Default to `authoring`. Ask before optional lab `qualification`; it is not
-required for ISV publishing. Use V3.1 through `package-v3-1` for Sentinel and
-XDR solution packages. Resume from `workflow-state.json`, preserve disabled
-detections, and request explicit approval before writes.
+Default to `qualification`, with `--workflow-profile authoring` available as an
+explicit offline/ISV fallback when no live lab is available. Use V3.1 through
+`package-v3-1` for Sentinel and XDR solution packages. Resume from
+`workflow-state.json`, preserve disabled detections, and request explicit
+approval before writes.

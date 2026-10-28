@@ -12,7 +12,7 @@ import urllib.request
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
 
@@ -83,6 +83,116 @@ def _error_message(response: dict[str, Any]) -> str:
     if isinstance(error, dict):
         return str(error.get("message") or error.get("code") or error)
     return str(error or response)
+
+
+STREAMING_COMPILER_ERROR_CODES = (
+    "HuntingRuleQueryStreamingNotSupported",
+    "KqlCompilationFailed",
+)
+
+_STREAMING_COMPILER_PHRASES = (
+    "huntingrulequerystreamingnotsupported",
+    "kqlcompilationfailed",
+    "streaming not supported",
+    "not supported in streaming",
+    "unsupported streaming",
+    "streaming table",
+    "streaming query",
+    "dynamic literal",
+    "dynamic literals",
+    "runtime-only",
+    "runtime only",
+    "kql compilation",
+    "query compilation failed",
+    "compilation failed",
+)
+
+
+def classify_streaming_compiler_error(
+    status_code: int,
+    payload: Any,
+    *,
+    rule_id: str | None = None,
+    detection: str | None = None,
+) -> dict[str, Any] | None:
+    if int(status_code) < 400:
+        return None
+
+    codes: list[str] = []
+    messages: list[str] = []
+    resolved_rule_id = rule_id
+    resolved_detection = detection
+
+    def _collect(node: Any) -> None:
+        nonlocal resolved_rule_id, resolved_detection
+        if isinstance(node, dict):
+            if not resolved_rule_id and node.get("ruleId"):
+                resolved_rule_id = str(node["ruleId"])
+            if not resolved_detection and node.get("detection"):
+                resolved_detection = str(node["detection"])
+            code_val = node.get("code") or node.get("errorCode")
+            if code_val:
+                codes.append(str(code_val).strip())
+            msg_val = node.get("message") or node.get("errorMessage")
+            if msg_val:
+                messages.append(str(msg_val).strip())
+            for key in ("error", "innerError", "innererror", "details", "response"):
+                if key in node:
+                    _collect(node[key])
+        elif isinstance(node, list):
+            for item in node:
+                _collect(item)
+        elif isinstance(node, str) and node.strip():
+            messages.append(node.strip())
+
+    _collect(payload)
+    combined_text = " | ".join(codes + messages)
+    lower_text = combined_text.lower()
+    lower_codes = {code.lower(): code for code in codes}
+
+    matched_code: str | None = None
+    for canonical in STREAMING_COMPILER_ERROR_CODES:
+        if canonical.lower() in lower_codes or canonical.lower() in lower_text:
+            matched_code = canonical
+            break
+
+    if matched_code is None:
+        if any(phrase in lower_text for phrase in _STREAMING_COMPILER_PHRASES):
+            non_generic = next(
+                (
+                    code
+                    for code in codes
+                    if code.lower() not in {"badrequest", "invalidargument", "unknown", "error"}
+                ),
+                None,
+            )
+            if non_generic:
+                matched_code = non_generic
+            elif "streaming" in lower_text:
+                matched_code = "HuntingRuleQueryStreamingNotSupported"
+            else:
+                matched_code = "KqlCompilationFailed"
+
+    if matched_code is None:
+        return None
+
+    message = (
+        messages[0]
+        if messages
+        else (_error_message(payload) if isinstance(payload, dict) else str(payload))
+    )
+    diagnostic: dict[str, Any] = {
+        "checkId": "E2E-Q02",
+        "errorCode": matched_code,
+        "statusCode": int(status_code),
+        "message": message,
+        "ruleId": str(resolved_rule_id or ""),
+        "stage": "enablement",
+        "streamingCompilerError": True,
+    }
+    if resolved_detection:
+        diagnostic["detection"] = str(resolved_detection)
+    return diagnostic
 
 
 def _load_pairs(
@@ -226,12 +336,27 @@ def _validate_marked_payload(payload_path: str | Path, marker: str) -> None:
         )
 
 
+def _is_graph_detection_disabled(graph: Any) -> tuple[bool, bool]:
+    if not isinstance(graph, dict):
+        return False, False
+    is_enabled_val = graph.get("isEnabled") if "isEnabled" in graph else None
+    status_val = str(graph.get("status") or "").strip().lower()
+    is_enabled = (is_enabled_val is True) or (status_val == "enabled")
+    if is_enabled:
+        return True, False
+    is_disabled = (is_enabled_val is False) or (status_val == "disabled")
+    if "isEnabled" not in graph and not status_val:
+        is_disabled = True
+    return False, is_disabled
+
+
 def _read_rule_states(
     pairs: list[dict[str, Any]],
     workspace_resource_id: str,
     arm_token: str,
     graph_token: str,
-) -> None:
+) -> list[dict[str, Any]]:
+    states: list[dict[str, Any]] = []
     for pair in pairs:
         sentinel_status, sentinel = _arm_request(
             "GET",
@@ -253,13 +378,25 @@ def _read_rule_states(
                 f"{_error_message(graph)}"
             )
         sentinel_enabled = bool((sentinel.get("properties") or {}).get("enabled"))
-        graph_enabled = str(graph.get("status") or "").lower() == "enabled"
-        if sentinel_enabled or graph_enabled:
+        graph_enabled, graph_disabled = _is_graph_detection_disabled(graph)
+        if sentinel_enabled or graph_enabled or not graph_disabled:
             raise RuntimeError(
                 f"{pair['detection']}: parity validation requires both rules to "
                 "be disabled before start"
             )
         pair["sentinelResource"] = sentinel
+        pair["initialDisabled"] = True
+        states.append(
+            {
+                "detection": pair["detection"],
+                "analyticRuleId": pair["analyticRuleId"],
+                "customDetectionId": pair["customDetectionId"],
+                "sentinelEnabled": False,
+                "xdrEnabled": False,
+                "initialDisabled": True,
+            }
+        )
+    return states
 
 
 def _set_pair_enabled(
@@ -318,10 +455,30 @@ def _set_pair_enabled(
         "PATCH",
         f"{DEPLOYMENT_ENDPOINT}/{graph_id}",
         graph_token,
-        {"status": "enabled" if enabled else "disabled"},
+        {
+            "isEnabled": enabled,
+            "status": "enabled" if enabled else "disabled",
+        },
     )
     if status != 200:
-        errors.append(f"Custom Detection: {_error_message(response)}")
+        compiler_diag = (
+            classify_streaming_compiler_error(
+                status,
+                response,
+                rule_id=str(pair.get("customDetectionId") or ""),
+                detection=str(pair.get("detection") or ""),
+            )
+            if enabled
+            else None
+        )
+        if compiler_diag is not None:
+            pair.setdefault("e2eQ02Diagnostics", []).append(compiler_diag)
+            errors.append(
+                f"Custom Detection (E2E-Q02 {compiler_diag['errorCode']}): "
+                f"{compiler_diag['message']}"
+            )
+        else:
+            errors.append(f"Custom Detection: {_error_message(response)}")
     return errors
 
 
@@ -338,18 +495,80 @@ def _disable_all(
         state_dir,
         tenant_id=target.get("tenantId"),
     )
+    workspace_resource_id = (
+        state.get("workspaceResourceId")
+        or target.get("workspaceResourceId")
+        or ""
+    )
+    rules = list(state.get("rules") or [])
     results: list[dict[str, Any]] = []
-    for pair in state.get("rules") or []:
-        errors = _set_pair_enabled(
-            pair, state["workspaceResourceId"], arm, graph, False
+    readback_candidates: list[dict[str, Any]] = []
+    receipt_by_detection: dict[str, dict[str, Any]] = {}
+    for pair in rules:
+        errors = list(
+            _set_pair_enabled(
+                pair, workspace_resource_id, arm, graph, False
+            )
         )
-        results.append(
-            {
-                "detection": pair["detection"],
-                "disabled": not errors,
-                "errors": errors,
-            }
+        can_readback = bool(
+            not errors
+            and pair.get("analyticRuleId")
+            and pair.get("customDetectionId")
         )
+        receipt = {
+            "detection": pair["detection"],
+            "initialDisabled": bool(pair.get("initialDisabled", True)),
+            "disabled": not errors,
+            "returnedToDisabled": not errors,
+            "errors": errors,
+        }
+        results.append(receipt)
+        receipt_by_detection[pair["detection"]] = receipt
+        if can_readback:
+            readback_candidates.append(pair)
+
+    if readback_candidates:
+        try:
+            _read_rule_states(readback_candidates, workspace_resource_id, arm, graph)
+        except Exception as exc:
+            exc_msg = str(exc)
+            matched_any = False
+            for pair in readback_candidates:
+                det = pair["detection"]
+                if det in exc_msg or len(readback_candidates) == 1:
+                    matched_any = True
+                    receipt = receipt_by_detection[det]
+                    receipt["errors"].append(f"Readback: {exc_msg}")
+                    receipt["disabled"] = False
+                    receipt["returnedToDisabled"] = False
+            if not matched_any:
+                for pair in readback_candidates:
+                    receipt = receipt_by_detection[pair["detection"]]
+                    receipt["errors"].append(f"Readback: {exc_msg}")
+                    receipt["disabled"] = False
+                    receipt["returnedToDisabled"] = False
+
+    for pair in rules:
+        pair["returnedToDisabled"] = bool(
+            receipt_by_detection[pair["detection"]]["returnedToDisabled"]
+        )
+
+    initial_disabled = bool(rules) and all(
+        bool(pair.get("initialDisabled", True)) for pair in rules
+    )
+    returned_to_disabled = bool(results) and all(
+        bool(item.get("returnedToDisabled")) for item in results
+    )
+    tk_q11_passed = bool(initial_disabled and returned_to_disabled)
+    lifecycle = dict(state.get("alertLifecycle") or {})
+    lifecycle["initialDisabled"] = initial_disabled
+    lifecycle["returnedToDisabled"] = returned_to_disabled
+    lifecycle["tkQ11Passed"] = tk_q11_passed
+    lifecycle["tkQ11Verified"] = tk_q11_passed
+    if state.get("e2eQ02Diagnostics") and "e2eQ02Diagnostics" not in lifecycle:
+        lifecycle["e2eQ02Diagnostics"] = list(state["e2eQ02Diagnostics"])
+    state["alertLifecycle"] = lifecycle
+    state["tkQ11Passed"] = tk_q11_passed
     return results
 
 
@@ -482,6 +701,11 @@ def start_alert_parity(
     arm_token = _arm_token(state_dir)
     graph_token = _deployment_token(state_dir, tenant_id=target["tenantId"])
     _read_rule_states(pairs, workspace_resource_id, arm_token, graph_token)
+    for pair in pairs:
+        pair.setdefault("initialDisabled", True)
+    initial_disabled = bool(pairs) and all(
+        bool(pair.get("initialDisabled", True)) for pair in pairs
+    )
     started_at = _utc_now()
     state = {
         "runId": str(uuid.uuid4()),
@@ -495,17 +719,32 @@ def start_alert_parity(
         "qualificationScope": qualification_scope,
         "contract": str(Path(contract).expanduser().resolve()),
         "payload": str(Path(payload).expanduser().resolve()),
+        "initialDisabled": initial_disabled,
+        "alertLifecycle": {
+            "initialDisabled": initial_disabled,
+            "returnedToDisabled": None,
+            "tkQ11Passed": None,
+            "tkQ11Verified": None,
+            "e2eQ02Diagnostics": [],
+        },
+        "e2eQ02Diagnostics": [],
         "rules": pairs,
     }
     write_json_artifact(root, state_path, state)
 
     enabled: list[dict[str, Any]] = []
+    need_rollback = True
     try:
         for pair in pairs:
             errors = _set_pair_enabled(
                 pair, workspace_resource_id, arm_token, graph_token, True
             )
             enabled.append({"detection": pair["detection"], "errors": errors})
+            if pair.get("e2eQ02Diagnostics"):
+                state["e2eQ02Diagnostics"].extend(pair["e2eQ02Diagnostics"])
+                state["alertLifecycle"]["e2eQ02Diagnostics"] = list(
+                    state["e2eQ02Diagnostics"]
+                )
             if errors:
                 raise RuntimeError(
                     f"{pair['detection']}: failed to enable parity rules: "
@@ -525,11 +764,14 @@ def start_alert_parity(
             for pair in pairs
         ]
         write_json_artifact(root, state_path, state)
+        need_rollback = False
         return {
             "status": state["status"],
             "runId": state["runId"],
             "statePath": str(state_path),
             "rulesEnabled": len(pairs),
+            "initialDisabled": initial_disabled,
+            "alertLifecycle": state["alertLifecycle"],
             "ingestion": ingestion,
             "capturePlan": state["capturePlan"],
             "nextCommand": (
@@ -539,14 +781,56 @@ def start_alert_parity(
         }
     except Exception:
         state["status"] = "failed"
-        state["cleanup"] = _disable_all(
-            state,
-            arm_token=arm_token,
-            graph_token=graph_token,
-            state_dir=state_dir,
-        )
-        write_json_artifact(root, state_path, state)
         raise
+    finally:
+        if need_rollback:
+            state["status"] = "failed"
+            raw_cleanup = _disable_all(
+                state,
+                arm_token=arm_token,
+                graph_token=graph_token,
+                state_dir=state_dir,
+            )
+            cleanup, _, _ = _normalize_cleanup_and_lifecycle(state, raw_cleanup)
+            state["cleanup"] = cleanup
+            write_json_artifact(root, state_path, state)
+
+
+def _normalize_cleanup_and_lifecycle(
+    state: dict[str, Any],
+    cleanup: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any], bool]:
+    rules = list(state.get("rules") or [])
+    initial_disabled = bool(
+        (state.get("alertLifecycle") or {}).get(
+            "initialDisabled",
+            bool(rules) and all(bool(pair.get("initialDisabled", True)) for pair in rules),
+        )
+    )
+    for item in cleanup:
+        if "initialDisabled" not in item:
+            item["initialDisabled"] = initial_disabled
+        if "returnedToDisabled" not in item:
+            item["returnedToDisabled"] = bool(item.get("disabled"))
+    returned_to_disabled = bool(cleanup) and all(
+        bool(item.get("disabled")) and bool(item.get("returnedToDisabled"))
+        for item in cleanup
+    )
+    tk_q11_passed = bool(initial_disabled and returned_to_disabled)
+    lifecycle = dict(state.get("alertLifecycle") or {})
+    lifecycle["initialDisabled"] = initial_disabled
+    lifecycle["returnedToDisabled"] = returned_to_disabled
+    lifecycle["tkQ11Passed"] = tk_q11_passed
+    lifecycle["tkQ11Verified"] = tk_q11_passed
+    if state.get("e2eQ02Diagnostics") is not None:
+        lifecycle["e2eQ02Diagnostics"] = list(state.get("e2eQ02Diagnostics") or [])
+    else:
+        lifecycle.setdefault("e2eQ02Diagnostics", [])
+    state["alertLifecycle"] = lifecycle
+    state["tkQ11Passed"] = tk_q11_passed
+    state["initialDisabled"] = initial_disabled
+    state["returnedToDisabled"] = returned_to_disabled
+    return cleanup, lifecycle, tk_q11_passed
 
 
 def start_alert_parity_batch(
@@ -555,6 +839,7 @@ def start_alert_parity_batch(
     workspace_resource_id: str | None = None,
     plan_path: str | Path,
     state_dir: str | Path | None = None,
+    raise_on_compiler_error: bool = False,
 ) -> dict[str, Any]:
     target = require_locked_target(
         solution,
@@ -627,6 +912,11 @@ def start_alert_parity_batch(
     arm_token = _arm_token(state_dir)
     graph_token = _deployment_token(state_dir, tenant_id=target["tenantId"])
     _read_rule_states(pairs, workspace_resource_id, arm_token, graph_token)
+    for pair in pairs:
+        pair.setdefault("initialDisabled", True)
+    initial_disabled = bool(pairs) and all(
+        bool(pair.get("initialDisabled", True)) for pair in pairs
+    )
     started_at = _utc_now()
     state = {
         "runId": str(uuid.uuid4()),
@@ -643,20 +933,23 @@ def start_alert_parity_batch(
             for detection, fixture in fixture_by_detection.items()
         },
         "qualificationScope": qualification_scope,
+        "initialDisabled": initial_disabled,
+        "alertLifecycle": {
+            "initialDisabled": initial_disabled,
+            "returnedToDisabled": None,
+            "tkQ11Passed": None,
+            "tkQ11Verified": None,
+            "e2eQ02Diagnostics": [],
+        },
+        "e2eQ02Diagnostics": [],
         "rules": pairs,
     }
     write_json_artifact(root, state_path, state)
 
+    batch_result: dict[str, Any] = {}
+    need_rollback = True
+    enabled_count = 0
     try:
-        for pair in pairs:
-            errors = _set_pair_enabled(
-                pair, workspace_resource_id, arm_token, graph_token, True
-            )
-            if errors:
-                raise RuntimeError(
-                    f"{pair['detection']}: failed to enable parity rules: "
-                    f"{'; '.join(errors)}"
-                )
         ingestions = []
         for pair in pairs:
             fixture = fixture_by_detection[pair["detection"]]
@@ -666,9 +959,48 @@ def start_alert_parity_batch(
                     "result": _ingest(fixture["contract"], fixture["payload"]),
                 }
             )
+        state["ingestions"] = ingestions
+
+        for pair in pairs:
+            errors = _set_pair_enabled(
+                pair, workspace_resource_id, arm_token, graph_token, True
+            )
+            if errors:
+                pair_diags = list(pair.get("e2eQ02Diagnostics") or [])
+                if pair_diags:
+                    state["e2eQ02Diagnostics"].extend(pair_diags)
+                    state["alertLifecycle"]["e2eQ02Diagnostics"] = list(
+                        state["e2eQ02Diagnostics"]
+                    )
+                    state["status"] = "failed"
+                    state["error"] = (
+                        f"{pair['detection']}: failed to enable parity rules: "
+                        f"{'; '.join(errors)}"
+                    )
+                    if raise_on_compiler_error:
+                        raise RuntimeError(state["error"])
+                    batch_result.update(
+                        {
+                            "status": "failed",
+                            "runId": state["runId"],
+                            "statePath": str(state_path),
+                            "rulesEnabled": enabled_count,
+                            "fixturesIngested": len(ingestions),
+                            "ingestions": ingestions,
+                            "initialDisabled": initial_disabled,
+                            "e2eQ02Diagnostics": list(state["e2eQ02Diagnostics"]),
+                            "error": state["error"],
+                        }
+                    )
+                    return batch_result
+                raise RuntimeError(
+                    f"{pair['detection']}: failed to enable parity rules: "
+                    f"{'; '.join(errors)}"
+                )
+            enabled_count += 1
+
         state["status"] = "awaiting-alerts"
         state["enabledAt"] = _utc_now()
-        state["ingestions"] = ingestions
         state["capturePlan"] = [
             {
                 "detection": pair["detection"],
@@ -689,6 +1021,7 @@ def start_alert_parity_batch(
             for pair in pairs
         ]
         write_json_artifact(root, state_path, state)
+        need_rollback = False
         return {
             "status": state["status"],
             "runId": state["runId"],
@@ -696,6 +1029,9 @@ def start_alert_parity_batch(
             "rulesEnabled": len(pairs),
             "fixturesIngested": len(ingestions),
             "ingestions": ingestions,
+            "initialDisabled": initial_disabled,
+            "alertLifecycle": state["alertLifecycle"],
+            "e2eQ02Diagnostics": list(state.get("e2eQ02Diagnostics") or []),
             "capturePlan": state["capturePlan"],
             "nextCommand": (
                 "sentinel-xdr-migration complete-alert-parity "
@@ -704,14 +1040,26 @@ def start_alert_parity_batch(
         }
     except Exception:
         state["status"] = "failed"
-        state["cleanup"] = _disable_all(
-            state,
-            arm_token=arm_token,
-            graph_token=graph_token,
-            state_dir=state_dir,
-        )
-        write_json_artifact(root, state_path, state)
         raise
+    finally:
+        if need_rollback:
+            state["status"] = "failed"
+            raw_cleanup = _disable_all(
+                state,
+                arm_token=arm_token,
+                graph_token=graph_token,
+                state_dir=state_dir,
+            )
+            cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
+                state, raw_cleanup
+            )
+            state["cleanup"] = cleanup
+            write_json_artifact(root, state_path, state)
+            if batch_result:
+                batch_result["cleanup"] = cleanup
+                batch_result["returnedToDisabled"] = lifecycle["returnedToDisabled"]
+                batch_result["tkQ11Passed"] = tk_q11_passed
+                batch_result["alertLifecycle"] = lifecycle
 
 
 def _canonical(value: Any) -> str:
@@ -874,7 +1222,10 @@ def complete_alert_parity(
         else:
             comparison_error = str(exc)
     finally:
-        cleanup = _disable_all(state, state_dir=state_dir)
+        raw_cleanup = _disable_all(state, state_dir=state_dir)
+        cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
+            state, raw_cleanup
+        )
 
     cleanup_ok = all(item["disabled"] for item in cleanup)
     passed = (
@@ -906,6 +1257,133 @@ def complete_alert_parity(
         ),
         "comparisons": comparisons,
         "qualificationScope": verified_scope or state.get("qualificationScope"),
+        "initialDisabled": lifecycle["initialDisabled"],
+        "returnedToDisabled": lifecycle["returnedToDisabled"],
+        "tkQ11Passed": tk_q11_passed,
+        "alertLifecycle": lifecycle,
+        "e2eQ02Diagnostics": list(lifecycle.get("e2eQ02Diagnostics") or []),
+        "cleanup": cleanup,
+    }
+    report_path = artifact_path(root, REPORT_FILE_NAME, create_parent=True)
+    report["reportPath"] = str(report_path)
+    write_json_artifact(root, report_path, report)
+    state["status"] = "completed" if passed else "failed"
+    state["completedAt"] = report["completedAt"]
+    state["reportPath"] = str(report_path)
+    state["cleanup"] = cleanup
+    write_json_artifact(root, state_path, state)
+    return report
+
+
+def poll_alert_parity_batch(
+    solution: str | Path,
+    *,
+    results: dict[str, Any] | list[dict[str, Any]] | None = None,
+    results_path: str | Path | None = None,
+    poll_fn: Callable[[dict[str, Any]], dict[str, Any] | list[dict[str, Any]] | None] | None = None,
+    timeout_expired: bool = False,
+    finalize: bool = True,
+    state_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    root = Path(solution).expanduser().resolve()
+    state_path = migrate_legacy_artifact(root, STATE_FILE_NAME)
+    if not state_path.exists():
+        raise ValueError("no alert parity state exists for this solution")
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    if state.get("status") != "awaiting-alerts":
+        raise ValueError(f"alert parity run is not active: {state.get('status')}")
+    target = require_locked_target(root)
+    if (state.get("target") or {}).get("workspaceResourceId", "").lower() != target[
+        "workspaceResourceId"
+    ].lower():
+        raise ValueError("alert parity state does not match the locked target")
+
+    comparison_error: str | None = None
+    scope_error: str | None = None
+    verified_scope: dict[str, Any] | None = None
+    comparisons: list[dict[str, Any]] = []
+    cleanup: list[dict[str, Any]] = []
+    lifecycle: dict[str, Any] = dict(state.get("alertLifecycle") or {})
+    tk_q11_passed = False
+    should_disable = bool(finalize or timeout_expired)
+    try:
+        verified_scope = _verify_qualification_scope(root, state)
+        if timeout_expired:
+            raise TimeoutError("alert parity batch polling timed out")
+        raw = results
+        if raw is None and results_path is not None:
+            raw = json.loads(
+                Path(results_path).expanduser().read_text(encoding="utf-8-sig")
+            )
+        if raw is None and poll_fn is not None:
+            raw = poll_fn(state)
+        if raw is None and not finalize:
+            should_disable = False
+            return {
+                "status": "awaiting-alerts",
+                "runId": state["runId"],
+                "statePath": str(state_path),
+            }
+        expected = {pair["detection"] for pair in state["rules"]}
+        comparisons = compare_alert_captures(
+            expected,
+            raw,
+            expected_match_keys=set(state.get("expectedMatchKeys") or []),
+            expected_match_keys_by_detection={
+                detection: set(keys)
+                for detection, keys in (
+                    state.get("expectedMatchKeysByDetection") or {}
+                ).items()
+            },
+        )
+    except Exception as exc:
+        should_disable = True
+        if verified_scope is None:
+            scope_error = str(exc)
+        else:
+            comparison_error = str(exc)
+    finally:
+        if should_disable:
+            raw_cleanup = _disable_all(state, state_dir=state_dir)
+            cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
+                state, raw_cleanup
+            )
+
+    cleanup_ok = bool(cleanup) and all(item["disabled"] for item in cleanup)
+    passed = (
+        comparison_error is None
+        and scope_error is None
+        and bool(comparisons)
+        and all(item["passed"] for item in comparisons)
+        and cleanup_ok
+    )
+    report = {
+        "runId": state["runId"],
+        "status": "passed" if passed else "failed",
+        "completedAt": _utc_now(),
+        "solution": str(root),
+        "scenarioMarker": state.get("scenarioMarker"),
+        "fixtures": state.get("fixtures") or [],
+        "strictParity": True,
+        "comparisonError": comparison_error,
+        "scopeVerificationError": scope_error,
+        "qualificationScopeVerified": verified_scope is not None and scope_error is None,
+        "selectionPlanSha256": (
+            verified_scope.get("planSha256") if verified_scope else None
+        ),
+        "testedDetectionPaths": (
+            verified_scope.get("selectedDetectionPaths") if verified_scope else []
+        ),
+        "testedSourceIds": (
+            verified_scope.get("selectedSourceIds") if verified_scope else []
+        ),
+        "comparisons": comparisons,
+        "qualificationScope": verified_scope or state.get("qualificationScope"),
+        "initialDisabled": lifecycle.get("initialDisabled", True),
+        "returnedToDisabled": lifecycle.get("returnedToDisabled", False),
+        "tkQ11Passed": tk_q11_passed,
+        "alertLifecycle": lifecycle,
+        "e2eQ02Diagnostics": list(lifecycle.get("e2eQ02Diagnostics") or []),
         "cleanup": cleanup,
     }
     report_path = artifact_path(root, REPORT_FILE_NAME, create_parent=True)
@@ -932,15 +1410,33 @@ def abort_alert_parity(
         "workspaceResourceId"
     ].lower():
         raise ValueError("alert parity state does not match the locked target")
-    cleanup = _disable_all(state, state_dir=state_dir)
-    success = all(item["disabled"] for item in cleanup)
-    state["status"] = "aborted" if success else "cleanup-failed"
-    state["abortedAt"] = _utc_now()
-    state["cleanup"] = cleanup
-    write_json_artifact(root, state_path, state)
+    cleanup: list[dict[str, Any]] = []
+    lifecycle: dict[str, Any] = {}
+    tk_q11_passed = False
+    try:
+        raw_cleanup = _disable_all(state, state_dir=state_dir)
+        cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
+            state, raw_cleanup
+        )
+    finally:
+        success = bool(cleanup) and all(item.get("disabled") for item in cleanup)
+        state["status"] = "aborted" if success else "cleanup-failed"
+        state["abortedAt"] = _utc_now()
+        state["cleanup"] = cleanup
+        write_json_artifact(root, state_path, state)
     return {
         "status": state["status"],
         "runId": state["runId"],
+        "initialDisabled": lifecycle.get("initialDisabled", True),
+        "returnedToDisabled": lifecycle.get("returnedToDisabled", False),
+        "tkQ11Passed": tk_q11_passed,
+        "alertLifecycle": lifecycle,
         "cleanup": cleanup,
         "statePath": str(state_path),
     }
+
+
+def abort_alert_parity_batch(
+    solution: str | Path, *, state_dir: str | Path | None = None
+) -> dict[str, Any]:
+    return abort_alert_parity(solution, state_dir=state_dir)

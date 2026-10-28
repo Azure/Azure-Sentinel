@@ -386,11 +386,24 @@ def deploy_solution(
             provenance_verified = None
             if success:
                 verify_status, verified = _graph_request("GET", item_url, token)
-                deployed_status = (
+                raw_status = (
                     str(verified.get("status") or "").lower()
                     if isinstance(verified, dict)
                     else ""
                 )
+                is_enabled_val = (
+                    verified.get("isEnabled")
+                    if isinstance(verified, dict)
+                    else None
+                )
+                if is_enabled_val is True:
+                    deployed_status = "enabled"
+                elif raw_status:
+                    deployed_status = raw_status
+                elif is_enabled_val is False:
+                    deployed_status = "disabled"
+                else:
+                    deployed_status = ""
                 projected_tactics = (
                     ((payload.get("detectionAction") or {}).get("alertTemplate") or {}).get(
                         "tactics"
@@ -429,6 +442,7 @@ def deploy_solution(
                         "tacticProjectionVerified": tactic_projection_verified,
                         "contentProvenanceVerified": provenance_verified,
                     }
+            initial_disabled = bool(success and deployed_status == "disabled")
             results.append(
                 {
                     "file": str(path),
@@ -437,6 +451,8 @@ def deploy_solution(
                     "statusCode": response_status,
                     "success": success,
                     "deployedStatus": deployed_status,
+                    "initialDisabled": initial_disabled,
+                    "readbackVerified": initial_disabled,
                     "tacticProjection": tactic_projection,
                     "tacticProjectionVerified": tactic_projection_verified,
                     "contentProvenanceVerified": provenance_verified,
@@ -451,6 +467,8 @@ def deploy_solution(
                     "operation": "failed",
                     "statusCode": 0,
                     "success": False,
+                    "initialDisabled": False,
+                    "readbackVerified": False,
                     "error": {"message": str(exc)},
                 }
             )
@@ -462,6 +480,7 @@ def deploy_solution(
         "total": len(results),
         "succeeded": sum(result["success"] for result in results),
         "failed": sum(not result["success"] for result in results),
+        "initialDisabled": bool(results) and all(bool(result.get("initialDisabled")) for result in results),
         "results": results,
     }
     if applied_selection is not None:

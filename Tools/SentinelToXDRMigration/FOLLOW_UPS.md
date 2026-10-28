@@ -145,12 +145,21 @@ themselves establish a toolkit fix is required.
   `oauth2PermissionGrants@v1.0` when `ThreatHunting.Read.All` or
   `CustomDetection.ReadWrite.All` is missing.
 
+- **Flip default workflow profile from `authoring` to `qualification`.**
+  Switched the default `--workflow-profile` in `solution_manager/cli.py`,
+  `initialize_workflow` in `solution_manager/core/workflow.py`,
+  `Tools/SentinelToXDRMigration/agent-workflows/end-to-end-migration.md`, and
+  agent adapters (`AGENTS.md`, `CLAUDE.md`, `.github`, `.claude`, `.cursor`, and
+  `.windsurf`) from `authoring` to `qualification`, preserving
+  `--workflow-profile authoring` as an explicit offline/ISV fallback when no
+  live lab is available.
+
 ## Candidate follow-ups
 
-- **Flip default workflow profile from `authoring` to `qualification` after live
-  lab sign-off.** `evaluate_qualification_promotion_gate` now verifies all 5
-  qualification stages end-to-end; once signed off against a live lab run,
-  switch the default profile in `workflow-init` and agent adapters.
+- [x] **Flip default workflow profile from `authoring` to `qualification` after live
+  lab sign-off.** Completed: `workflow-init`, `initialize_workflow`, canonical
+  workflow docs, and all agent adapters now default to `qualification` with
+  `authoring` preserved as an explicit offline/ISV fallback.
 
 Any future environment write remains separately gated by explicit approval
 immediately before the exact operation. No cloud action is authorized by this

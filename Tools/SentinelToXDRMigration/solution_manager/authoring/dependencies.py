@@ -40,7 +40,7 @@ TABLE_WORKLOADS = {
     **{table: "sentinel" for table in (
         "Syslog", "SecurityAlert", "SecurityIncident", "SecurityEvent", "WindowsEvent", "Event",
         "AzureActivity", "AzureDiagnostics", "CommonSecurityLog", "SigninLogs", "AuditLogs",
-        "OfficeActivity", "AWSCloudTrail", "AWSGuardDuty",
+        "OfficeActivity", "PowerBIActivity", "PowerPlatformAdminActivity", "AWSCloudTrail", "AWSGuardDuty",
     )},
 }
 

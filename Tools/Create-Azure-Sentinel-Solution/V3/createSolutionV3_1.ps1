@@ -70,6 +70,9 @@ if ($PSCmdlet.ParameterSetName -eq "Local") {
         -IncludeXdrDetections $true `
         -EnforceV31Versions $true `
         -SkipAttributionLookup:$SkipAttributionLookup
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
     return
 }
 
@@ -130,7 +133,7 @@ try {
         $contentResourceDetails = returnContentResources $calculatedPackageVersion
         if ($null -eq $contentResourceDetails) {
             Write-Error "Not able to identify content resource details based on Version. Please verify if Version in data input file is correct!"
-            return
+            exit 1
         }
 
         $ccpDict = @()
