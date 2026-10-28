@@ -2,7 +2,7 @@
 
 ## Version 1.0.2
 
-- (2026-10-28) Registered the filtering Proofpoint TAP permitted-click inspection parser and forwarded all EmailEvent parameters, packing, and watchlist disable controls.
+- (2026-10-28) Registered the filtering Proofpoint TAP permitted-click inspection parser and forwarded all EmailEvent parameters, packing, and watchlist disable controls - [PR #15480](https://github.com/Azure/Azure-Sentinel/pull/15480)
 
 ## Version 1.0.1
 
