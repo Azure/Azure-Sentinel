@@ -1,0 +1,88 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureFirewall
+  dataTypes:
+  - AZFWIdpsSignature
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes: []
+  requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes:
+    - AZFWIdpsSignature
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c3ffdbe6-2e62-4984-9e80-933ed90b2f6a
+    path: Analytic Rules/Azure Firewall - DDoS attack detected.yaml
+    version: 1.0.1
+    querySha256: 2dd117489fa033963e0581f815d31dd3a86a6e3208732ff3e50f0c4321267665
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=24h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1498
+    reviewScope:
+      sourceDocumentSha256: f0dd16f9ca8f4a03eb6d14602daee2d66438bd11863e8c53608b443de1f08935
+      targetQuerySha256: ff1e7cc503b04d3e25fea4a31882fdf8aba9dfad9edde7d7bb909b515f27c5b2
+properties:
+  id: xdr-c3ffdbe6-2e62-4984-9e80-933ed90b2f6a
+  displayName: DDoS attack detected
+  status: disabled
+  queryCondition:
+    queryText: "let TimeWindow   = 90d;\nlet HitThreshold = 10;\nlet MinSeverity \
+      \ = 2;\nlet EnableCategoryFilter    = true;\nlet EnableDescriptionFilter = false;\n\
+      let EnableActionFilter      = false;\nlet CategoriesOfInterest = dynamic([\n\
+      \    \"Attempted Denial of Service\",\n    \"Denial of Service\",\n    \"Detection\
+      \ of a Denial of Service Attack\"\n]);\nlet DescriptionsOfInterest = dynamic([\n\
+      \    \"attempted-dos\",\n    \"successful-dos\",\n    \"denial-of-service\"\n\
+      ]);\nlet MatchActions = dynamic([\"Deny\", \"alert\"]);\nAZFWIdpsSignature\n\
+      | where TimeGenerated >= ago(TimeWindow)\n| where Severity >= MinSeverity\n\
+      | where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))\n\
+      | where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))\n\
+      | where (EnableActionFilter == false) or (Action in~ (MatchActions))\n| summarize\n\
+      \    StartTime   = min(TimeGenerated),\n    EndTime     = max(TimeGenerated),\n\
+      \    TotalHits   = count(),\n    MaxSeverity = max(Severity),\n    Actions \
+      \    = make_set(Action, 5),\n    Signatures  = make_set(SignatureId, 20),\n\
+      \    Description = make_set(substring(tostring(Description), 0, 120), 3)\n \
+      \   by SourceIp, ThreatCategory = Category\n| where TotalHits >= HitThreshold\n\
+      | project\n    StartTime,\n    EndTime,\n    SourceIp,\n    ThreatCategory,\n\
+      \    TotalHits,\n    MaxSeverity,\n    Actions,\n    Signatures,\n    Description\n\
+      | order by MaxSeverity desc, TotalHits desc"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: DDoS attack detected
+      description: Identifies DDoS attack in Azure Firewall IDPS logs.
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1498

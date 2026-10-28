@@ -159,9 +159,25 @@ def _validate_filter_consistency(
     parser_stages = split_pipeline(parser_statements[-1])
     if not filter_stages or filter_stages[0].casefold() != "source":
         return
+    filter_has_where = any(
+        _pipeline_operator(stage) == "where"
+        for stage in filter_stages[1:]
+    )
+    parser_has_where = any(
+        _pipeline_operator(stage) == "where"
+        for stage in parser_stages[1:]
+    )
+    if parser_has_where and not filter_has_where:
+        findings.append(
+            Finding(
+                "FILTER004",
+                "ParserFilterQuery",
+                "ParserFilterQuery must contain a where stage when ParserQuery contains one.",
+            )
+        )
     if len(filter_stages) == 1:
         return
-    if not any(_pipeline_operator(stage) == "where" for stage in filter_stages[1:]):
+    if not filter_has_where:
         findings.append(
             Finding(
                 "FILTER001",
