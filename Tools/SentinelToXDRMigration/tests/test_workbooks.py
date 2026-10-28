@@ -219,6 +219,52 @@ def test_ambiguous_type_column_references_remain_review_findings(query):
                for flag in result["flags"])
 
 
+def test_sentinel_health_rewrite_adds_normalized_fuzzy_union_and_replays():
+    query = (
+        'SentinelHealth | where SentinelResourceType == "Automation rule" '
+        '| project SentinelResourceId, ExtendedProperties, Label="SentinelHealth" '
+        '// SentinelHealth documentation\n'
+    )
+
+    result = rewrite.rewrite(query, ["SentinelHealth"])
+
+    assert result["deterministic"] is True
+    assert result["targetTables"] == ["SOCHealth", "SentinelHealth"]
+    assert result["convertedKql"].startswith(
+        "let __SentinelXdrUnifiedHealth = union isfuzzy=true\n"
+    )
+    assert "SentinelResourceId = ResourceId" in result["convertedKql"]
+    assert "ExtendedProperties = AdditionalFields" in result["convertedKql"]
+    assert (
+        '__SentinelXdrUnifiedHealth | where SentinelResourceType == "Automation rule"'
+        in result["convertedKql"]
+    )
+    assert 'Label="SentinelHealth"' in result["convertedKql"]
+    assert "// SentinelHealth documentation" in result["convertedKql"]
+    assert result["diff"] == [{
+        "kind": "health-source-union",
+        "before": "SentinelHealth",
+        "after": "SOCHealth, SentinelHealth",
+        "count": 1,
+        "source": "deterministic",
+        "reason": "Read health events from Defender XDR and Microsoft Sentinel",
+    }]
+    assert rewrite.rewrite(result["convertedKql"], ["SentinelHealth"]) == result
+
+
+def test_sentinel_health_rewrite_fails_closed_on_reserved_alias_collision():
+    query = (
+        "let __SentinelXdrUnifiedHealth = SentinelHealth | take 1; "
+        "__SentinelXdrUnifiedHealth | count"
+    )
+
+    result = rewrite.rewrite(query, ["SentinelHealth"])
+
+    assert result["deterministic"] is False
+    assert result["convertedKql"] == query
+    assert any(flag["kind"] == "health-source-alias-collision" for flag in result["flags"])
+
+
 def test_endpoint_type_conversion_passes_lineage_replay_and_validation(solution):
     relative = "Workbooks/nested/fixture.json"
     source_path = solution / relative

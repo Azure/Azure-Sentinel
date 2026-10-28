@@ -193,6 +193,22 @@ def test_strict_recognizers_and_native_source_shapes(solution, query, tables):
     assert native.import_native_workbook(solution, SOURCE, plan)["validation"]["invalid"] == 0
 
 
+def test_soc_health_uses_mtp_workload_and_live_schema(solution):
+    write_source_query(solution, "SOCHealth | project ResourceId, AdditionalFields | take 1")
+
+    plan = reviewed(solution)
+
+    assert plan["queries"][0]["tables"] == ["SOCHealth"]
+    assert plan["queries"][0]["blockers"] == []
+    assert plan["requiredWorkloads"] == [{"workload": "mtp", "dataTypes": ["SOCHealth"]}]
+    schemas = json.loads(
+        (Path(__file__).parents[1]
+         / "solution_manager/migration/_workbook_core/data/ah_schema_catalog.json").read_text()
+    )
+    assert schemas["SOCHealth"]["ResourceId"] == "string"
+    assert schemas["SOCHealth"]["AdditionalFields"] == "dynamic"
+
+
 @pytest.mark.parametrize("query,tables", [
     ("_Im_Authentication | take 1", []),
     ("_ASim_Authentication() | take 1", []),

@@ -54,6 +54,19 @@ ASIM_REWRITE_ENABLED = True
 from . import mapping_catalog, dynamic_casts, asim_functions
 
 _TIER_RANK = {"1to1": 0, "renamed": 1, "merged": 1, "unknown": 2, "blocked": 3}
+_UNIFIED_HEALTH_ALIAS = "__SentinelXdrUnifiedHealth"
+_UNIFIED_HEALTH_PREFIX = f"""let {_UNIFIED_HEALTH_ALIAS} = union isfuzzy=true
+(
+    SOCHealth
+    | project-rename
+        SentinelResourceId = ResourceId,
+        SentinelResourceName = ResourceName,
+        SentinelResourceType = ResourceType,
+        SentinelResourceKind = ResourceKind,
+        ExtendedProperties = AdditionalFields
+),
+SentinelHealth;
+"""
 
 
 def _segments(kql: str) -> List[Tuple[str, str]]:
@@ -124,6 +137,35 @@ def _find_identifiers(kql: str, names: set) -> set:
         if kind == "code":
             found.update(m.group(1) for m in pat.finditer(text))
     return found
+
+
+def _rewrite_sentinel_health_source(kql: str, tables: List[str]) -> Tuple[str, Optional[dict]]:
+    """Expand SentinelHealth into a normalized SOCHealth/SentinelHealth source."""
+    if "SentinelHealth" not in tables:
+        return kql, None
+    if kql.startswith(_UNIFIED_HEALTH_PREFIX):
+        return kql, {
+            "kind": "health-source-union",
+            "before": "SentinelHealth",
+            "after": "SOCHealth, SentinelHealth",
+            "count": 1,
+            "source": "deterministic",
+            "reason": "Read health events from Defender XDR and Microsoft Sentinel",
+        }
+    if _find_identifiers(kql, {_UNIFIED_HEALTH_ALIAS}):
+        return kql, None
+    converted, counts = _apply_renames(kql, {"SentinelHealth": _UNIFIED_HEALTH_ALIAS})
+    count = counts.get("SentinelHealth", 0)
+    if not count:
+        return kql, None
+    return _UNIFIED_HEALTH_PREFIX + converted, {
+        "kind": "health-source-union",
+        "before": "SentinelHealth",
+        "after": "SOCHealth, SentinelHealth",
+        "count": count,
+        "source": "deterministic",
+        "reason": "Read health events from Defender XDR and Microsoft Sentinel",
+    }
 
 
 def _type_column_rewrite(kql: str, eligible_tables: set[str]) -> Tuple[str, bool, List[str]]:
@@ -679,6 +721,20 @@ def rewrite(kql: str, tables: Optional[List[str]],
     # Apply table + column renames in one whole-identifier pass.
     rename_map = {**col_renames, **table_renames}
     converted, counts = _apply_renames(converted, rename_map)
+    health_alias_collision = (
+        "SentinelHealth" in tables
+        and not converted.startswith(_UNIFIED_HEALTH_PREFIX)
+        and bool(_find_identifiers(converted, {_UNIFIED_HEALTH_ALIAS}))
+    )
+    converted, health_diff = _rewrite_sentinel_health_source(converted, tables)
+    if health_diff:
+        target_tables.extend(["SOCHealth", "SentinelHealth"])
+    elif health_alias_collision:
+        flags.append({
+            "kind": "health-source-alias-collision",
+            "name": _UNIFIED_HEALTH_ALIAS,
+            "reason": "Query already defines the reserved unified health alias; manual review required.",
+        })
 
     # Drop redundant duplicate group-by keys (AH rejects duplicate output columns).
     converted, dup_keys = _dedupe_summarize_keys(converted)
@@ -710,6 +766,8 @@ def rewrite(kql: str, tables: Optional[List[str]],
         })
     diff.extend(cast_diffs)
     diff.extend(int_diffs)
+    if health_diff:
+        diff.append(health_diff)
 
     # ASIM unifying-parser function calls (_Im_WebSession(...), _Im_NetworkSession(...),
     # etc.) don't resolve in AH; swap them for the AH-native ASim<Schema>Logs table,
@@ -762,11 +820,13 @@ def rewrite(kql: str, tables: Optional[List[str]],
     # asim_functions.py) did not block `deterministic`, letting AH's silent-bind-to-
     # wrong-table behavior masquerade as a passing static bind. See batch_xdr.py's
     # matching [ASIM-FIX 2026-08-02] guard and mcp/tests/test_asim_functions.py.
-    has_review_flag = any(f["kind"] in ("la-only-column", "removed-column",
-                                        "asim-function-unrewritten") for f in flags)
+    has_review_flag = any(f["kind"] in (
+        "la-only-column", "removed-column", "asim-function-unrewritten",
+        "health-source-alias-collision",
+    ) for f in flags)
     deterministic = bool(tables) and overall == "1to1" and not has_review_flag
 
-    return {
+    result = {
         "convertedKql": converted,
         "diff": diff,
         "renamedTables": table_renames,
@@ -776,3 +836,6 @@ def rewrite(kql: str, tables: Optional[List[str]],
         "overallTier": overall,
         "deterministic": deterministic,
     }
+    if target_tables:
+        result["targetTables"] = sorted(set(target_tables))
+    return result

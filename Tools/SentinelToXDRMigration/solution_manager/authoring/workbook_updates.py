@@ -11,8 +11,11 @@ from pathlib import Path
 import sys
 
 from solution_manager.migration._workbook_core import workbook
-from solution_manager.authoring.dependencies import dependency_validation_errors
-from solution_manager.authoring.dependencies import TABLE_WORKLOADS
+from solution_manager.authoring.dependencies import (
+    CONNECTOR_OPTIONAL_SENTINEL_TABLES,
+    TABLE_WORKLOADS,
+    dependency_validation_errors,
+)
 from solution_manager.migration.catalog import query_table_references
 from solution_manager.migration._workbook_core import mapping_catalog
 from solution_manager.authoring.native_workbooks import _payload, _canonical_payload_sha256, _query
@@ -122,9 +125,17 @@ def _queries(document, provenance, baseline):
         if not set(tables) <= declared | inherited:
             raise ValueError("Current query tables are outside historical reviewed dependencies: "
                              + ", ".join(sorted(set(tables) - declared - inherited)))
-        if not native and not (set(tables) & sentinel) <= connectors:
+        connector_required = (
+            set(tables) & sentinel
+        ) - CONNECTOR_OPTIONAL_SENTINEL_TABLES
+        if not native and not connector_required <= connectors:
             raise ValueError("Current Sentinel query tables require historical explicit connector coverage.")
-        if inherited - declared and not (inherited & sentinel & connectors):
+        inherited_connector_required = (
+            inherited & sentinel
+        ) - CONNECTOR_OPTIONAL_SENTINEL_TABLES
+        if inherited - declared and inherited_connector_required and not (
+            inherited_connector_required & connectors
+        ):
             raise ValueError("Inherited hybrid lineage requires historical explicit Sentinel connector coverage.")
         used.update(lineage["workspaceFunctions"])
         queries.append({
