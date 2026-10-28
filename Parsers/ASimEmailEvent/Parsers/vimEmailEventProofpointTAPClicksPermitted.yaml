@@ -1,0 +1,160 @@
+Parser:
+  Title: ASIM Email Event filtering parser for Proofpoint TAP permitted clicks
+  Version: '0.1.0'
+  LastUpdated: Oct 28, 2026
+Product:
+  Name: Proofpoint Targeted Attack Protection
+Normalization:
+  Schema: EmailEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Email Event Schema
+  Link: https://aka.ms/ASimEmailEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Proofpoint TAP SIEM API
+  Link: https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API
+Description: |
+  Filters and normalizes ProofPointTAPClicksPermittedV2_CL URL Defense click records
+  as EmailEvent inspection activity without inferring email delivery or HTTP success.
+  Time filters use clickTime, falling back to TimeGenerated when clickTime is absent.
+  IPv4-prefix filters use the clicker's IP, and recipient filters use the source recipient.
+  Header From, subject, and delivery location are not supplied, so their filters can
+  match only when empty. Direction is Unknown and EventResult is NA.
+  Normalization and optional packing are identical to the parameterless parser.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: vimEmailEventProofpointTAPClicksPermitted
+EquivalentBuiltInParser: _Im_EmailEvent_ProofpointTAPClicksPermitted
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailfromaddress_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailrecipient_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailsubject_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildirection_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildeliverylocation_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      ipaddr_has_any_prefix:dynamic=dynamic([]),
+      emailfromaddress_has_any:dynamic=dynamic([]),
+      emailrecipient_has_any:dynamic=dynamic([]),
+      emailsubject_has_any:dynamic=dynamic([]),
+      emaildirection_in:dynamic=dynamic([]),
+      emaildeliverylocation_in:dynamic=dynamic([]),
+      eventresult:string="*",
+      disabled:bool=false,
+      pack:bool=false
+  ) {
+      ProofPointTAPClicksPermittedV2_CL
+      | where not(disabled)
+      | where isnull(starttime)
+          or clickTime >= starttime
+          or (isnull(clickTime) and TimeGenerated >= starttime)
+      | where isnull(endtime)
+          or clickTime <= endtime
+          or (isnull(clickTime) and TimeGenerated <= endtime)
+      | where array_length(ipaddr_has_any_prefix) == 0
+          or has_any_ipv4_prefix(clickIP, ipaddr_has_any_prefix)
+      | where array_length(emailrecipient_has_any) == 0
+          or recipient has_any (emailrecipient_has_any)
+      | where array_length(emaildirection_in) == 0
+          or "Unknown" in~ (emaildirection_in)
+      | where eventresult == "*" or eventresult =~ "NA"
+      // This source does not supply header From, subject, or delivery location.
+      | where array_length(emailfromaddress_has_any) == 0
+      | where array_length(emailsubject_has_any) == 0
+      | where array_length(emaildeliverylocation_in) == 0
+      | project-rename
+          EventOriginalUid=id,
+          Dst=recipient,
+          EmailMailFromAddress=sender,
+          SrcIpAddr=clickIP,
+          ThreatId=threatID,
+          ThreatOriginalCategory=classification,
+          ThreatFirstReportedTime=threatTime,
+          EventReportUrl=threatURL
+      | extend
+          EventVendor="Proofpoint",
+          EventProduct="TAP",
+          EventSchema="EmailEvent",
+          EventSchemaVersion="1.0.0",
+          EventType="EmailInspection",
+          EventOriginalType="clicksPermitted",
+          EventCount=int(1),
+          EventStartTime=coalesce(clickTime, TimeGenerated),
+          EventResult="NA",
+          DvcOriginalAction="Permitted",
+          DvcAction="NA",
+          DvcEntityKey="",
+          EmailDirection="Unknown",
+          EmailUrls=iff(isempty(url), dynamic([]), pack_array(url)),
+          AdditionalEntities=dynamic([]),
+          AdditionalFields=iff(pack, bag_pack(
+              "CampaignId", campaignId,
+              "MessageGuid", GUID,
+              "MessageId", messageID,
+              "SenderIpAddr", senderIP,
+              "ThreatStatus", threatStatus,
+              "UserAgent", userAgent), dynamic({}))
+      | extend
+          EventEndTime=EventStartTime,
+          Dvc=EventProduct,
+          Src=SrcIpAddr,
+          IpAddr=SrcIpAddr,
+          EmailMailFromDomain=tostring(split(EmailMailFromAddress, "@")[1]),
+          ThreatCategory=case(
+              ThreatOriginalCategory =~ "malware", "Malware",
+              ThreatOriginalCategory in~ ("phish", "phishing"), "Phishing",
+              ThreatOriginalCategory =~ "spam", "Spam",
+              ""),
+          ThreatIsActive=case(
+              threatStatus =~ "active", true,
+              threatStatus in~ ("cleared", "falsepositive"), false,
+              bool(null)),
+          ThreatField=iff(isnotempty(url), "EmailUrls", ""),
+          EventResultDetails=case(
+              ThreatOriginalCategory =~ "malware", "MalwareDetected",
+              ThreatOriginalCategory in~ ("phish", "phishing"), "PhishingDetected",
+              isnotempty(ThreatOriginalCategory), "Other",
+              "")
+      | project
+          TimeGenerated, Type,
+          EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+          EventType, EventOriginalType, EventCount, EventStartTime, EventEndTime,
+          EventResult, EventResultDetails, EventOriginalUid, EventReportUrl,
+          Dvc, DvcOriginalAction, DvcAction, DvcEntityKey,
+          Src, SrcIpAddr, IpAddr, Dst,
+          EmailMailFromAddress, EmailMailFromDomain, EmailDirection, EmailUrls,
+          ThreatId, ThreatOriginalCategory, ThreatCategory, ThreatIsActive,
+          ThreatFirstReportedTime, ThreatField,
+          AdditionalEntities, AdditionalFields
+  };
+  parser(starttime=starttime, endtime=endtime, ipaddr_has_any_prefix=ipaddr_has_any_prefix, emailfromaddress_has_any=emailfromaddress_has_any, emailrecipient_has_any=emailrecipient_has_any, emailsubject_has_any=emailsubject_has_any, emaildirection_in=emaildirection_in, emaildeliverylocation_in=emaildeliverylocation_in, eventresult=eventresult, disabled=disabled, pack=pack)

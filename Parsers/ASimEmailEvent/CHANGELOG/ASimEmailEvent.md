@@ -1,5 +1,9 @@
 # Changelog for ASimEmailEvent.yaml
 
+## Version 1.0.2
+
+- (2026-10-28) Registered the Proofpoint TAP permitted-click inspection parser with pack forwarding and watchlist disable controls.
+
 ## Version 1.0.1
 
 - (2026-10-21) Registered the Proofpoint POD message inspection parser with pack forwarding and watchlist disable controls - [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409)
