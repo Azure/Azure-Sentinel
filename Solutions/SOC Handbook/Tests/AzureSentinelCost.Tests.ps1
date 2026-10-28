@@ -49,6 +49,7 @@ BeforeAll {
         $expression = [regex]::Replace($Expression, "todouble\('\{(\w+)\}'\)", '$1')
         $expression = [regex]::Replace($expression, '\{(\w+)\}', '$1')
         $expression = $expression.Replace('sum(Quantity)', 'Quantity')
+        $expression = $expression.Replace('sum(CoveredQuantity)', 'CoveredQuantity')
         $numeric = [regex]::Replace($expression, "\['([^']+)'\]|[A-Za-z_][A-Za-z0-9_]*", {
             param($match)
             $key = if ($match.Groups[1].Success) { $match.Groups[1].Value } else { $match.Value }
@@ -77,6 +78,79 @@ BeforeAll {
             throw 'The query must declare its eligible table set.'
         }
         @($match.Groups[1].Value | ConvertFrom-Json)
+    }
+
+    function Get-FixtureTimeGrain {
+        param([string]$Query, [timespan]$Duration)
+
+        $terms = (Get-QueryExpression -Query $Query -Pattern 'let timeGrain = case\((?<expression>[^;]+)\);') -split ',\s*'
+        $secondsPerUnit = @{ m = 60; h = 3600; d = 86400 }
+        $grain = $terms[-1]
+        for ($index = 0; $index -lt $terms.Count - 1; $index += 2) {
+            if ($terms[$index] -notmatch '^selectedDuration <= (\d+)([mhd])$') {
+                throw "Unexpected time-grain condition: $($terms[$index])"
+            }
+            if ($Duration.TotalSeconds -le [double]$Matches[1] * $secondsPerUnit[$Matches[2]]) {
+                $grain = $terms[$index + 1]
+                break
+            }
+        }
+        if ($grain -notmatch '^(\d+)([mhd])$') {
+            throw "Unexpected time grain: $grain"
+        }
+        [timespan]::FromSeconds([double]$Matches[1] * $secondsPerUnit[$Matches[2]])
+    }
+
+    function Get-FixtureUsageTrend {
+        param(
+            [string]$ItemName,
+            [object[]]$Records,
+            [datetimeoffset]$Start,
+            [datetimeoffset]$End
+        )
+
+        $content = $script:workbookItems[$ItemName].content
+        $query = $content.query
+        $grain = Get-FixtureTimeGrain -Query $query -Duration ($End - $Start)
+        $scanStart = $Start
+        if ($query.Contains('TimeGenerated >= bin(selectedStart, 1h)')) {
+            $scanStart = $Start.AddTicks(-($Start.UtcTicks % [timespan]::TicksPerHour))
+        }
+        if ($content.timeContextFromParameter -eq 'TimeRange') {
+            $scanStart = $Start
+        }
+        $clipsSource = $query.Contains('CoveredQuantity = Quantity * ((min_of(EndTime, selectedEnd) - max_of(StartTime, selectedStart)) / (EndTime - StartTime))')
+        $eligibleTables = if ($query.Contains('DataType in (eligibleTables)')) { Get-EligibleTables -Query $query }
+        $bins = @{}
+        foreach ($record in $Records) {
+            if ($record.TimeGenerated -lt $scanStart -or $record.TimeGenerated -ge $End -or
+                ($query.Contains('IsBillable == true') -and -not $record.IsBillable) -or
+                ($eligibleTables -and $record.DataType -notin $eligibleTables)) {
+                continue
+            }
+            $quantity = $record.Quantity
+            if ($clipsSource) {
+                $coveredStart = if ($record.StartTime -gt $Start) { $record.StartTime } else { $Start }
+                $coveredEnd = if ($record.EndTime -lt $End) { $record.EndTime } else { $End }
+                $quantity *= ($coveredEnd - $coveredStart).Ticks / ($record.EndTime - $record.StartTime).Ticks
+            }
+            $bucketTicks = $record.TimeGenerated.UtcTicks - ($record.TimeGenerated.UtcTicks % $grain.Ticks)
+            $bins[$bucketTicks] += $quantity
+        }
+        $expression = Get-QueryExpression -Query $query -Pattern "summarize \['(?:Mirrored Volume Size|Ingestion Size)'\] = (?<expression>[^|]+) by bin"
+        foreach ($bucketTicks in $bins.Keys | Sort-Object) {
+            $bucket = [datetimeoffset]::new($bucketTicks, [timespan]::Zero)
+            $coveredStart = if ($bucket -gt $Start) { $bucket } else { $Start }
+            $coveredEnd = if ($bucket.Add($grain) -lt $End) { $bucket.Add($grain) } else { $End }
+            [pscustomobject]@{
+                TimeGenerated = $bucket
+                CoveredDays = ($coveredEnd - $coveredStart).TotalDays
+                IngestionGB = Invoke-WorkbookArithmetic -Expression $expression -Bindings @{
+                    Quantity = $bins[$bucketTicks]
+                    CoveredQuantity = $bins[$bucketTicks]
+                }
+            }
+        }
     }
 
     function Get-FixtureGrantUsed {
@@ -112,6 +186,90 @@ BeforeAll {
 }
 
 Describe 'AzureSentinelCost offline calculation regressions' {
+    It 'never presents hourly Usage as sub-hour measurements in <ItemName>' -ForEach @(
+        @{ ItemName = 'WorkspaceBillableIngestionSizeTrend' }
+        @{ ItemName = 'DataLakeMirroredVolumeTrend' }
+        @{ ItemName = 'FreeDataVsBillableDataDaily' }
+        @{ ItemName = 'E5DailyIngestionVsGrant' }
+        @{ ItemName = 'DfSP2DailyIngestionVsGrant' }
+    ) {
+        $query = Get-WorkbookQuery -ItemName $ItemName
+        foreach ($duration in @('00:05:00', '01:00:00', '04:00:00', '1.00:00:00', '7.00:00:00', '31.00:00:00', '90.00:00:00', '100.00:00:00')) {
+            (Get-FixtureTimeGrain -Query $query -Duration $duration).TotalHours | Should -BeGreaterOrEqual 1
+        }
+    }
+
+    Context '<ItemName> hourly Usage source intervals' -ForEach @(
+        @{ ItemName = 'DataLakeMirroredVolumeTrend'; DataType = 'SecurityEvent'; Licenses = 1.0 }
+        @{ ItemName = 'E5DailyIngestionVsGrant'; DataType = 'SigninLogs'; Licenses = 100.0 }
+        @{ ItemName = 'DfSP2DailyIngestionVsGrant'; DataType = 'SecurityEvent'; Licenses = 1.0 }
+    ) {
+        It 'preserves a 10 GB/day source rate for <Label>' -ForEach @(
+            @{ Label = 'one aligned hour'; Start = '2026-10-01T10:00:00Z'; End = '2026-10-01T11:00:00Z' }
+            @{ Label = 'five minutes inside an hour'; Start = '2026-10-01T10:10:00Z'; End = '2026-10-01T10:15:00Z' }
+            @{ Label = 'fifteen minutes crossing an hour'; Start = '2026-10-01T10:55:00Z'; End = '2026-10-01T11:10:00Z' }
+            @{ Label = 'two partial hourly edges'; Start = '2026-10-01T10:15:00Z'; End = '2026-10-01T11:30:00Z' }
+            @{ Label = 'a UTC midnight crossing'; Start = '2026-10-01T23:55:00Z'; End = '2026-10-02T00:10:00Z' }
+            @{ Label = 'partial six-hour buckets'; Start = '2026-10-01T04:15:00Z'; End = '2026-10-03T02:45:00Z' }
+        ) {
+            $query = Get-WorkbookQuery -ItemName $ItemName
+            $startTime = [datetimeoffset]$Start
+            $endTime = [datetimeoffset]$End
+            $firstHour = $startTime.AddTicks(-($startTime.UtcTicks % [timespan]::TicksPerHour))
+            $records = @(
+                for ($hour = $firstHour.AddHours(-1); $hour -le $endTime.AddHours(1); $hour = $hour.AddHours(1)) {
+                    @{
+                        TimeGenerated = $hour
+                        StartTime = $hour
+                        EndTime = $hour.AddHours(1)
+                        Quantity = 10.0 * 1024.0 / 24.0
+                        IsBillable = $true
+                        DataType = $DataType
+                    }
+                }
+            )
+            $rows = @(Get-FixtureUsageTrend -ItemName $ItemName -Records $records -Start $startTime -End $endTime)
+            $rows.Count | Should -BeGreaterThan 0
+            $totalGB = [double](($rows | Measure-Object -Property IngestionGB -Sum).Sum)
+            [math]::Abs($totalGB - 10.0 * ($endTime - $startTime).TotalDays) | Should -BeLessThan 0.00000001
+            foreach ($row in $rows) {
+                if ($ItemName -eq 'DataLakeMirroredVolumeTrend') {
+                    $expression = Get-QueryExpression -Query $query -Pattern "extend \['Retained Raw Log Size'\] = (?<expression>[^|;]+)"
+                    $retainedGB = Invoke-WorkbookArithmetic -Expression $expression -Bindings @{
+                        'Mirrored Volume Size' = $row.IngestionGB
+                        CoveredDays = $row.CoveredDays
+                        chargeableDays = 270.0
+                    }
+                    [math]::Abs($retainedGB - 2700.0) | Should -BeLessThan 0.00000001
+                }
+                else {
+                    $expression = Get-QueryExpression -Query $query -Pattern '(?<expression>licenseCount \* [0-9.]+ / 1024\.0 \* CoveredDays)'
+                    $grantGB = Invoke-WorkbookArithmetic -Expression $expression -Bindings @{
+                        licenseCount = $Licenses
+                        CoveredDays = $row.CoveredDays
+                    }
+                    [math]::Abs($grantGB - 500.0 / 1024.0 * $row.IngestionGB / 10.0) | Should -BeLessThan 0.00000001
+                }
+                [math]::Abs($row.IngestionGB / $row.CoveredDays - 10.0) | Should -BeLessThan 0.00000001
+            }
+        }
+
+        It 'includes the first overlapping source hour without an implicit selected-time filter' {
+            $content = $script:workbookItems[$ItemName].content
+            $content.PSObject.Properties.Name | Should -Not -Contain 'timeContextFromParameter'
+            $content.timeContext.durationMs | Should -Be 0
+            $content.query | Should -Match 'TimeGenerated >= bin\(selectedStart, 1h\) and TimeGenerated < selectedEnd'
+            $content.query | Should -Match 'EndTime > selectedStart'
+            $content.query | Should -Match 'min_of\(EndTime, selectedEnd\) - max_of\(StartTime, selectedStart\)'
+            $content.query | Should -Match 'sum\(CoveredQuantity\)'
+        }
+
+        It 'does not invent a data point for empty Usage' {
+            @(Get-FixtureUsageTrend -ItemName $ItemName -Records @() `
+                -Start '2026-10-01T10:10:00Z' -End '2026-10-01T10:15:00Z').Count | Should -Be 0
+        }
+    }
+
     It 'uses the selected ingestion price <Price> for Other data' -ForEach @(
         @{ Price = 0.0 }
         @{ Price = 2.0 }
@@ -191,7 +349,7 @@ Describe 'AzureSentinelCost offline calculation regressions' {
         $query = Get-WorkbookQuery -ItemName 'DataLakeMirroredVolumeTrend'
         $query | Should -Match 'min_of\(TimeGenerated \+ timeGrain, selectedEnd\)'
         $query | Should -Match 'max_of\(TimeGenerated, selectedStart\)'
-        $query | Should -Match 'TimeGenerated >= selectedStart and TimeGenerated < selectedEnd'
+        $query | Should -Match 'TimeGenerated >= bin\(selectedStart, 1h\) and TimeGenerated < selectedEnd'
         $query | Should -Match "project TimeGenerated, \['Mirrored Volume Size'\], \['Retained Raw Log Size'\], \['Billed Compressed Log Size'\]"
     }
 
