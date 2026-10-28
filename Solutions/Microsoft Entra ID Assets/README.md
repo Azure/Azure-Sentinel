@@ -1,19 +1,18 @@
 # Microsoft Entra ID Assets
 
-This solution contains the legacy data-lake connector, the preview **Entra ID Assets
-(via MS Graph)** connector for Azure Log Analytics, and one shared schema-normalization
+This solution contains the legacy data-lake connector, **Microsoft Entra ID Assets
+(Preview)** for Azure Log Analytics, and one shared schema-normalization
 parser. Deprecation applies to the legacy connector, not to the solution.
 
-> **Draft preview:** The new connector retains isolated `EntraCombinedV5Test` resource
-> identities and `V5_CL` custom tables for validation. These are not onboarded Microsoft
-> standard tables. Production naming, release readiness, and coordinated publication
-> of the replacement and deprecation notice require maintainer review. No retirement
-> date or automatic cutover is established by this draft.
+> **Draft preview:** The new connector references the onboarded Microsoft-managed
+> Entra tables. Release readiness and coordinated publication of the replacement
+> and deprecation notice require maintainer review. No retirement date or automatic
+> cutover is established by this draft.
 
 ## Set up the Graph connector
 
 1. Install the solution in a Microsoft Sentinel-enabled Log Analytics workspace and
-   open **Entra ID Assets (via MS Graph)**.
+   open **Microsoft Entra ID Assets (Preview)**.
 2. In the workspace's deployment tenant, register a single-tenant Microsoft Entra app.
    No redirect URI is required. Copy its Application (client) ID, not its Object ID.
 3. Add Microsoft Graph **application** permissions and grant administrator consent:
@@ -33,20 +32,27 @@ parser. Deprecation applies to the legacy connector, not to the solution.
 The connector supports multiple named connections. It uses 23 pollers: 17 weekly
 snapshot paths and six hourly asset changefeeds.
 
-| Dataset | Custom table | Collection |
+| Dataset | System table | Collection |
 | --- | --- | --- |
-| Applications | `EntraApplicationsV5_CL` | Weekly snapshot; hourly changes |
-| Devices | `EntraDevicesV5_CL` | Weekly snapshot; hourly changes |
-| Groups | `EntraGroupsV5_CL` | Weekly snapshot; hourly changes |
-| Organizational contacts | `EntraOrgContactsV5_CL` | Weekly snapshot; hourly changes |
-| Service principals | `EntraServicePrincipalsV5_CL` | Weekly snapshot; hourly changes |
-| Users | `EntraUsersV5_CL` | Weekly snapshot; hourly changes |
-| Organizations | `EntraOrganizationsV5_CL` | Weekly snapshot |
-| Transitive group user memberships | `EntraGroupMembershipsV5_CL` | Weekly snapshot |
-| Direct members | `EntraMembersV5_CL` | Weekly snapshot |
-| Owners | `EntraOwnersV5_CL` | Weekly snapshot |
-| Sponsors | `EntraSponsorsV5_CL` | Weekly snapshot |
-| Eligible members | `EntraEligibleMembersV5_CL` | Weekly snapshot |
+| Applications | `EntraApplications` | Weekly snapshot; hourly changes |
+| Devices | `EntraDevices` | Weekly snapshot; hourly changes |
+| Groups | `EntraGroups` | Weekly snapshot; hourly changes |
+| Organizational contacts | `EntraOrgContacts` | Weekly snapshot; hourly changes |
+| Service principals | `EntraServicePrincipals` | Weekly snapshot; hourly changes |
+| Users | `EntraUsers` | Weekly snapshot; hourly changes |
+| Organizations | `EntraOrganizations` | Weekly snapshot |
+| Transitive group user memberships | `EntraGroupMemberships` | Weekly snapshot |
+| Direct members | `EntraMembers` | Weekly snapshot |
+| Owners | `EntraOwners` | Weekly snapshot |
+| Sponsors | `EntraSponsors` | Weekly snapshot |
+| Eligible members | `EntraEligibleMembers` | Weekly snapshot |
+
+Use the table names above in queries and poller data types. The DCR routes raw Graph
+custom input streams to standard output streams such as `Microsoft-EntraApplications`.
+Custom input stream declarations describe the Graph payload; they are not custom
+workspace tables. No custom table creation resources are included.
+The new connector's internal ID is `MicrosoftEntraIDAssetsCCF`; the legacy connector's
+existing ID remains unchanged.
 
 ### Collection limitations
 
@@ -65,18 +71,18 @@ snapshot paths and six hourly asset changefeeds.
 - Sponsors, transitive memberships, and eligibility snapshots can take days in large
   tenants. The connector's five-day estimate is not a maximum or SLA. Early rows do
   not establish snapshot completion.
-- Complete V5 ingestion and live parser execution have not been established by this
+- Complete end-to-end ingestion and live parser execution have not been established by this
   draft. Validate in a nonproduction workspace before planning a production cutover.
 
 ## Schema normalization
 
-**Microsoft Entra ID Assets - Schema Normalization** installs the single function
+**Parser for Microsoft Entra ID Assets** installs the single function
 `EntraAssetsNormalize(T:(*))`. It accepts a queryable asset or relationship table and
 converts legacy camelCase fields to the PascalCase names and types used by the new
 connector. It also accepts existing PascalCase input.
 
 ```kusto
-EntraUsersV5_CL
+EntraUsers
 | invoke EntraAssetsNormalize()
 | project Id, DisplayName, AADTenantId, AccountEnabled
 ```
