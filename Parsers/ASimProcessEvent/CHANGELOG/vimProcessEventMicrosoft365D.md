@@ -1,8 +1,9 @@
 # Changelog for vimProcessEventMicrosoft365D.yaml
 
-## Version 0.4.2
+## Version 0.5.0
 
 - (2026-10-27) Normalized AdditionalFields to dynamic; DeviceProcessEvents carries it as a JSON string, while the ProcessEvent schema declares dynamic - [PR #15445](https://github.com/Azure/Azure-Sentinel/pull/15445)
+- (2026-10-27) Added missing actorusername_has filter - [PR #15445](https://github.com/Azure/Azure-Sentinel/pull/15445)
 
 ## Version 0.4.1
 
