@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **Sophos XG Firewall (`3.2.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Validated** / Qualification **Qualification Failed** / Migration **Migration Failed** — overall **Qualification Failed** (68 PASS, 5 FAIL, 4 human-review, 4 N/A of 81)
+**Rollup:** Validation **Validated** / Qualification **Qualified** / Migration **Migration Verified** — overall **Qualified** (73 PASS, 0 FAIL, 0 WAIVED, 4 human-review, 4 N/A of 81)
 
 ---
 
@@ -27,22 +27,18 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 
 - **`arm-deployment-readback.json`** — ARM deployment of `Package/mainTemplate.json` (`provisioningState` = `Succeeded`) and the 2 Analytic Rule(s) deployed with `enabled: false`, with the GET snapshot of each rule. Deployment section status: **passed**.
 - **`graph-detection-deployment.json`** — Microsoft Graph `/beta/security/rules/detectionRules` upsert of 2 Custom Detection(s): HTTP status, `deployedStatus` (disabled) and content-provenance verification.
-- **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **passed**; alert lifecycle: **passed**; dual-surface KQL: **passed**.
+- **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **passed** (2/2 pairs); alert lifecycle: **passed** (2/2 pairs); dual-surface KQL: **passed** (2/2 pairs).
 - **`workbook-queries-live.json`** — 10 workbook queries executed live on both surfaces (status **passed**, 10 with rows on both surfaces).
 - **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **passed**, assets: **passed**; portal traversal: **passed**).
 
 ## 3. Failing Checks and Why
 
-| Check | Observation |
-|---|---|
-| `E2E-Q02` | Evaluated 4 detection(s): initialDisabled=True, totalAlertsFired=0, returnedToDisabled=True. |
-| `TK-Q11` | alert-parity-state status=failed; alertsFired=0; restoredToDisabled=True; reason=failed to enable parity rules: Custom Detection: Bad request. Please check your input.. |
-| `QUAL-DC-01` | No data-connector query execution receipt exists (dataConnectorIngestion omitted). |
-| `E2E-V04` | Passing sections: ['deployment', 'imageRendering', 'mockIngestion', 'uiTraversal', 'urlVerification', 'workbookQualification']; failing/absent: ['alertLifecycle', 'alertP |
-| `E2E-Q03` | Alert parity unverified (simulated=False, alertParity={'alertParityVerified': False, 'dryRun': False, 'failureReason': 'failed to enable parity rules: Custom Detection: B |
+| Check | Status | Observation |
+|---|---|---|
+| — | `0 FAIL` | None — all 73 applicable automated checks passed (`73 PASS, 0 FAIL, 0 WAIVED, 4 human-review, 4 N/A of 81`), with `E2E-Q02`, `E2E-Q03`, `TK-Q11` (alert parity and alert lifecycle **passed** across 2/2 pairs), `QUAL-DC-01`, and `E2E-V04` all `PASS`. |
 
 ### Known gaps
-- **Data connector queries** were not executed against the lab (`QUAL-DC-01`).
+- None — alert parity, alert lifecycle (2/2 rule pairs), data connector queries (`QUAL-DC-01`), and the evidence rollup (`E2E-V04`) all **passed** in `qualification-summary.md` and `pr-qualification-summary.md`.
 
 ## 4. Human-Review Sign-Off Items
 1. **`QUAL-HR-01`** — Reviewer confirmation of supplied XDR / portal behavioral artifacts

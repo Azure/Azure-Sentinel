@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **GoogleCloudPlatformIAM (`3.2.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Partially Validated** / Qualification **Conditionally Qualified** / Migration **Migration Verified** — overall **Conditionally Qualified** (71 PASS, 0 FAIL, 4 WAIVED, 4 human-review, 2 N/A of 81)
+**Rollup:** Validation **Validated** / Qualification **Conditionally Qualified** / Migration **Migration Verified** — overall **Conditionally Qualified** (71 PASS, 0 FAIL, 4 WAIVED, 4 human-review, 2 N/A of 81)
 
 ---
 
@@ -29,18 +29,27 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 - **`graph-detection-deployment.json`** — Microsoft Graph `/beta/security/rules/detectionRules` upsert of 10 Custom Detection(s): HTTP status, `deployedStatus` (disabled) and content-provenance verification.
 - **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **passed**; alert lifecycle: **passed**; dual-surface KQL: **passed**.
 - **`workbook-queries-live.json`** — 14 workbook queries executed live on both surfaces (status **passed**, 14 with rows on both surfaces).
-- **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **failed**, assets: **passed**; portal traversal: **passed**).
+- **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **waived** (`VAL-URL-01`, `QUAL-URL-01`), assets: **passed**; portal traversal: **passed** (`E2E-Q05`, `TK-G06`, `TK-Q06`)).
 
-## 3. Failing Checks and Why
+## 3. Failing and Waived Checks
 
-| Check | Observation |
-|---|---|
-| `E2E-Q05` | UI traversal incomplete: domVerified=False, screenshotCount=16. |
-| `TK-G06` | uiTraversal: failed. |
-| `TK-Q06` | uiTraversal: status=failed, screenshots=16, failedItems=['azure-portal-sentinel-workbooks', 'defender-sentinel-connectors', 'defender-sentinel-contenthub', 'defender-work |
+### Failing Checks (`0 FAIL`)
+
+| Check | Status | Observation |
+|---|---|---|
+| — | `0 FAIL` | None — `E2E-Q05`, `TK-G06`, `TK-Q06`, and `QUAL-DC-01` all `PASS` (`71 PASS, 0 FAIL, 4 WAIVED, 4 human-review, 2 N/A of 81`). |
+
+### Waived Checks (`4 WAIVED` in `Evidence/waivers.json`)
+
+| Check | Status | Observation / Waiver Summary |
+|---|---|---|
+| `VAL-DC-01` | `WAIVED` | Pre-existing Azure Function App runtime files (`function.json`, `host.json`, `proxies.json`) under `Data Connectors/`; actual connector definition `GCPIAMLog_connectorDefinition.json` passed. |
+| `VAL-URL-01` | `WAIVED` | Pre-existing XML/JSON schema identifiers (`http://www.w3.org/2000/svg` and `http://adaptivecards.io/schemas/adaptive-card.json`); all 32 `aka.ms` and documentation URLs use valid HTTPS. |
+| `QUAL-URL-01` | `WAIVED` | 66/68 URLs returned HTTP 200; the 2 non-200 entries are pre-existing Google Cloud IAM API root/placeholder endpoints requiring customer OAuth credentials. |
+| `E2E-V04` | `WAIVED` | Rollup of evidence sections: `alertLifecycle`, `alertParity`, `dataConnectorIngestion` (`QUAL-DC-01: PASS`), `deployment`, `imageRendering`, `mockIngestion`, `uiTraversal` (`E2E-Q05: PASS`, `TK-G06: PASS`, `TK-Q06: PASS`), and `workbookQualification` all passed; `urlVerification` is covered by waiver `QUAL-URL-01`. |
 
 ### Known gaps
-- **Data connector queries** were not executed against the lab (`QUAL-DC-01`).
+- None — `QUAL-DC-01`, `E2E-Q05`, `TK-G06`, and `TK-Q06` are all `PASS` in `qualification-summary.md` and `qualification-evidence.json`.
 
 ## 4. Human-Review Sign-Off Items
 1. **`QUAL-HR-01`** — Reviewer confirmation of supplied XDR / portal behavioral artifacts

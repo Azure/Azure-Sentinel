@@ -2,7 +2,7 @@
 
 This folder holds the qualification evidence and PR verification reports for **Salesforce Service Cloud (`3.7.2`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR. Every statement below is derived from the run artifacts; where something was not achieved it is reported as such.
 
-**Rollup:** Validation **Partially Validated** / Qualification **Conditionally Qualified** / Migration **Migration Verified** — overall **Conditionally Qualified** (69 PASS, 0 FAIL, 4 human-review, 4 N/A of 81)
+**Rollup:** Validation **Validated** / Qualification **Conditionally Qualified** / Migration **Migration Verified** — overall **Conditionally Qualified** (69 PASS, 0 FAIL, 4 WAIVED, 4 human-review, 4 N/A of 81)
 
 ---
 
@@ -29,16 +29,27 @@ Open **`Evidence/pr-qualification/qualification-report.html`** in a browser (or 
 - **`graph-detection-deployment.json`** — Microsoft Graph `/beta/security/rules/detectionRules` upsert of 3 Custom Detection(s): HTTP status, `deployedStatus` (disabled) and content-provenance verification.
 - **`alert-parity-live.json`** — the exact Analytic Rule and Custom Detection queries executed on Log Analytics and Defender Advanced Hunting against the ingested mock data (row-level comparison), the per-detection runtime validation results, the mock ingestion summary, and the outcome of the alert-parity attempt. Alert parity: **passed**; alert lifecycle: **passed**; dual-surface KQL: **passed**.
 - **`workbook-queries-live.json`** — 11 workbook queries executed live on both surfaces (status **passed**, 11 with rows on both surfaces).
-- **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **failed**, assets: **passed**; portal traversal: **passed**).
+- **`url-and-asset-verification.json`** — URL/asset verification written by the UI agents (URLs: **waived** (`VAL-URL-01`, `QUAL-URL-01`), assets: **passed**; portal traversal: **passed**).
 
-## 3. Failing Checks and Why
+## 3. Failing and Waived Checks
 
-| Check | Observation |
-|---|---|
-| — | none |
+### Failing Checks (`0 FAIL`)
+
+| Check | Status | Observation |
+|---|---|---|
+| — | `0 FAIL` | None — `QUAL-DC-01` is `PASS` (`3/3` connector queries passed) and 4 checks are waived (`69 PASS, 0 FAIL, 4 WAIVED, 4 human-review, 4 N/A of 81`). |
+
+### Waived Checks (`4 WAIVED` in `Evidence/waivers.json`)
+
+| Check | Status | Observation / Waiver Summary |
+|---|---|---|
+| `VAL-URL-01` | `WAIVED` | Pre-existing JSON `$schema` identifiers (`http://schema.management.azure.com/...` and `http://json.schemastore.org/proxies`) in unchanged Azure Function connector files; all 23 `aka.ms` and documentation URLs use valid HTTPS. |
+| `VAL-DC-01` | `WAIVED` | Pre-existing Azure Function App runtime files (`host.json`, `proxies.json`, `function.json`) under `Data Connectors/`; actual Sentinel Data Connector definitions passed. |
+| `QUAL-URL-01` | `WAIVED` | 26/28 URLs returned HTTP 200; the 2 non-200 entries are a customer tenant placeholder (`https://your-domain.my.salesforce.com`) and an upstream marketing URL behind CDN bot protection. |
+| `E2E-V04` | `WAIVED` | Rollup of evidence sections: `alertLifecycle`, `alertParity` (3/3 pairs), `dataConnectorIngestion` (`QUAL-DC-01: PASS`, 3/3 connector queries), `deployment`, `imageRendering`, `mockIngestion`, `uiTraversal` (10/10 pages), and `workbookQualification` (11/11 queries) all passed; `urlVerification` is covered by waiver `QUAL-URL-01`. |
 
 ### Known gaps
-- **Data connector queries** were not executed against the lab (`QUAL-DC-01`).
+- None — `QUAL-DC-01` is `PASS` (`3/3` connector queries verified in `qualification-summary.md` and `qualification-evidence.json`).
 
 ## 4. Human-Review Sign-Off Items
 1. **`QUAL-HR-01`** — Reviewer confirmation of supplied XDR / portal behavioral artifacts
