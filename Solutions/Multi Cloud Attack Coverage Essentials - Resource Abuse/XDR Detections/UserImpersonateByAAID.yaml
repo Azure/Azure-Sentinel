@@ -1,0 +1,125 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AzureActiveDirectoryIdentityProtection
+  dataTypes:
+  - SecurityAlert (IPC)
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertInfo
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+    - SecurityAlert (IPC)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 11c3d541-5fa5-49df-8218-d1c98584473b
+    path: Analytic Rules/UserImpersonateByAAID.yaml
+    version: 1.0.0
+    querySha256: 1d31b24cadf7a9ca0e2342868a856093a07fac5b364845451a4609d0a2094a0c
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert
+      query to AlertInfo/AlertEvidence schema.'
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AWSUser' column `UserIdentityArn` requires runtime output-schema
+      binding verification
+    - customDetails 'AlertIp' column `ipAddress` requires runtime output-schema binding
+      verification
+    - customDetails 'AlertName' column `Title` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert
+      query to AlertInfo/AlertEvidence schema.'
+    notes:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert
+      query to AlertInfo/AlertEvidence schema.'
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1134
+    reviewScope:
+      sourceDocumentSha256: d8119a1c950ad7358fda94db20ce6159aea889f1cd6b2be302027de83966e519
+      targetQuerySha256: 0c3ddce2d46bbe303e1bfa95cba3626343ed4d56a1a9326d726367cd712b8d12
+properties:
+  id: xdr-11c3d541-5fa5-49df-8218-d1c98584473b
+  displayName: User impersonation by Identity Protection alerts
+  status: disabled
+  queryCondition:
+    queryText: "// Retrieve SecurityAlerts generated within the last day\n AlertInfo\
+      \ | join kind=leftouter AlertEvidence on AlertId\n // Filter alerts for Azure\
+      \ Active Directory Identity Protection and High severity\n | where ServiceSource\
+      \ has \"Azure Active Directory Identity Protection\"\n | where Severity == \"\
+      High\"\n // Extract IP address entities from the 'Entities' field\n | extend\
+      \ ipAddress = extract(@'\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b', 0, AdditionalFields)\n\
+      \ // Filter out alerts without IP address entities\n | where isnotempty(ipAddress)\n\
+      \ // Summarize entities per unique combination of attributes\n | summarize make_set(AdditionalFields)\n\
+      \     by\n     AlertTime = Timestamp,\n     ipAddress,\n     Title,\n     ServiceSource,\n\
+      \     Severity\n // Perform an inner join with AWS CloudTrail events\n | join\
+      \ kind=inner (\n     AWSCloudTrail\n     | where isempty(ErrorMessage)\n   \
+      \  | extend UserType = tostring(parse_json(RequestParameters).userType)\n  \
+      \   | where EventName in~ (\"CreateRole\", \"DeleteRole\", \"CreateUser\", \"\
+      CreateAccessKey\", \"DeleteAccessKey\", \"CreateGroup\", \"AddUserToGroup\"\
+      , \"ChangePassword\", \"DeleteGroup\", \"DeleteUser\", \"RemoveUserFromGroup\"\
+      , \"CreateVirtualMFADevice\", \"DeleteLoginProfile\")\n     | summarize\n  \
+      \       make_set(RequestParameters),\n         make_set(ResponseElements)\n\
+      \         by\n         SourceIpAddress,\n         UserIdentityArn,\n       \
+      \  UserIdentityType,\n         EventName,\n         EventTime = TimeGenerated\n\
+      \     )\n     on $left.ipAddress == $right.SourceIpAddress\n // Filter results\
+      \ based on temporal correlation\n | where AlertTime between ((EventTime - 1h)\
+      \ .. (EventTime + 1h))"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: User impersonation by Identity Protection alerts
+      description: '''This detection focuses on identifying user-related events involving
+        IAM roles, groups, user access, and password changes. It examines instances
+        where the user''s IP address matches and alerts generated by Identity Protection
+        share the same IP address. The analysis occurs within a time window of 1 hour,
+        helping to flag potential cases of user impersonation.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1134
+      customDetails:
+        AWSUser: UserIdentityArn
+        AlertIp: ipAddress
+        AlertName: Title

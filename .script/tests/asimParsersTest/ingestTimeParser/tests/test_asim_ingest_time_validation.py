@@ -127,7 +127,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                 "| project TimeGenerated, EventType, "
                 "EventVendor, EventProduct"
             )
-        return {
+        document = {
             "Parser": {
                 "DisplayName": f"{product} ingestion-time parser",
                 "Version": "1.0.0",
@@ -142,7 +142,6 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "Description": f"Normalizes {source_table} into {target_table}.",
             "ParserName": parser_name,
             "DCRType": dcr_type,
-            "InputStream": input_stream,
             "SourceRawTable": source_table,
             "TargetASIMTable": target_table,
             "ParserFilterQuery": parser_filter_query,
@@ -152,6 +151,9 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                 "Description": "Initial ingestion-time parser.",
             },
         }
+        if input_stream is not None:
+            document["InputStream"] = input_stream
+        return document
 
     def parser_query_with_length(self, length):
         prefix = (
@@ -722,7 +724,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "META012", {finding["code"] for finding in result["findings"]}
         )
 
-    def test_rejects_standard_parser_without_input_stream(self):
+    def test_rejects_standard_parser_with_none_input_stream(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -735,11 +737,47 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "META008", {finding["code"] for finding in result["findings"]}
         )
 
+    def test_rejects_standard_parser_without_input_stream(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(input_stream=None),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("META008", codes)
+        self.assertNotIn("META001", codes)
+
     def test_standard_parser_allows_connector_specific_input_stream(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
             self.ingest_parser(input_stream="Custom-Bogus_CL"),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_workspace_parser_accepts_missing_input_stream(self):
+        self.write_fixture(
+            "Legacy",
+            "Legacy",
+            "Authentication",
+            "Legacy_CL",
+        )
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationLegacy.yaml",
+            self.ingest_parser(
+                parser_name="ASimAuthenticationLegacy",
+                product="Legacy",
+                source_table="Legacy_CL",
+                dcr_type="Workspace",
+                input_stream=None,
+            ),
         )
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
@@ -769,7 +807,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         self.assertTrue(result["valid"], result["findings"])
 
-    def test_workspace_parser_rejects_non_none_input_stream(self):
+    def test_workspace_parser_accepts_declared_input_stream(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -781,9 +819,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
-        self.assertIn(
-            "SOURCE001", {finding["code"] for finding in result["findings"]}
-        )
+        self.assertTrue(result["valid"], result["findings"])
 
     def test_rejects_filter_stage_missing_from_parser_query(self):
         ingest_path = self.write_yaml(
@@ -801,6 +837,58 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertIn(
             "FILTER002", {finding["code"] for finding in result["findings"]}
         )
+
+    def test_requires_filter_where_when_parser_has_where(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(parser_filter_query="source"),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertIn(
+            "FILTER004", {finding["code"] for finding in result["findings"]}
+        )
+
+    def test_allows_filter_with_one_of_multiple_parser_wheres(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_query=(
+                    'source\n| where EventType == "Login"\n'
+                    '| where EventResult == "Success"\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, EventResult, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_allows_pass_through_filter_when_parser_has_no_where(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query="source",
+                parser_query=(
+                    'source\n| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
 
     def test_rejects_unsupported_kql_construct(self):
         ingest_path = self.write_yaml(

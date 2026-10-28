@@ -1,0 +1,173 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PowerPlatformAdmin
+  dataTypes:
+  - PowerPlatformAdminActivity
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - PowerPlatformAdminActivity
+  requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+    - PowerPlatformAdminActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 943acfa0-9285-4eb0-a9c0-42e36177ef19
+    path: Analytic Rules/Power Apps - Bulk sharing of Power Apps to newly created guest users.yaml
+    version: 3.2.0
+    querySha256: 62da7762064739895751f9ef9b6ed9dbc77ecb0ada6e21495db580e0685da546
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'PowerAppsApp' column `AppId` requires runtime output-schema binding verification
+    - CloudApplication.InstanceName value is retained as customDetails.PowerAppsApp from query column `AppId`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.PowerAppsApp column `AppId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - ResourceDevelopment
+    - InitialAccess
+    - LateralMovement
+    originalTechniques:
+    - T1587
+    - T1566
+    - T1534
+    reviewScope:
+      sourceDocumentSha256: 44efd5b7a8300a8586e814e887c9150a61891f5d843e18b04c9ad23af6ee3865
+      targetQuerySha256: 090367b96ef6536967f58550139d1001f611a492275e53333622640869b7e3d3
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: AppId
+      column: AppId
+      status: runtime-binding-pending
+      customDetailKey: PowerAppsApp
+properties:
+  id: xdr-943acfa0-9285-4eb0-a9c0-42e36177ef19
+  displayName: Power Apps - Bulk sharing of Power Apps to newly created guest users
+  status: disabled
+  queryCondition:
+    queryText: |-
+      ////////////
+      // threshold = If the number of unique accounts that a power app is shared with is greater than
+      // threshold than it'll trigger an alert. A threshold of 5 is good to start with.
+      // However, if this is giving too many false positives, please adjust the threshold.
+      ////////////
+      let threshold = 5;
+      ////////////
+      // Please replace the allowed_domains with a list of domains of your partners/sibling orgs
+      // with whom you generally share power apps with. This will allow us to filter
+      // legitimate bulk sharing attempts. Avoid using domains such as gmail, outlook, etc.
+      ///////////
+      let allowed_domains = pack_array("contoso.com");
+      let query_frequency = 1h;
+      let query_lookback = 14d;
+      PowerPlatformAdminActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where EventOriginalType == "PowerAppPermissionEdited"
+      | extend Properties = tostring(PropertyCollection)
+      | extend AppId = extract(@'"powerplatform.analytics.resource.power_app.id","Value":"([^"]+)"', 1, Properties)
+      | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+      | extend TargetPrincipalId = extract(@'"targetuser.id","Value":"([^"]+)"', 1, Properties)
+      | join kind=leftouter (
+          AuditLogs
+          | where ActivityDateTime >= ago(query_lookback)
+          | where SourceSystem =~ "Azure AD" and OperationName == "Invite external user"
+          | where Result =~ "success"
+          | extend InvitedOrgEmail = tostring(parse_json(AdditionalDetails[5])['value'])
+          | extend InvitedOrgDomain = tostring(split(InvitedOrgEmail, "@")[1])
+          | where not(InvitedOrgDomain has_any(allowed_domains))
+          | extend
+              InvitedById = tostring(parse_json(InitiatedBy)['user']['id']),
+              InvitedByUPN = tostring(parse_json(InitiatedBy)['user']['userPrincipalName']),
+              InvitedEmail = tostring(parse_json(TargetResources[0])['userPrincipalName']),
+              InvitedId = tostring(parse_json(TargetResources[0])['id'])
+          | summarize by InvitedById, InvitedByUPN, InvitedEmail, InvitedId, InvitedOrgDomain)
+          on $left.TargetPrincipalId == $right.InvitedId
+      | where isnotempty(InvitedId)
+      | summarize
+          StartTime = min(TimeGenerated),
+          EndTime = max(TimeGenerated),
+          TargetedUsersCount=dcount(TargetPrincipalId),
+          TargetedObjectIds = make_set(TargetPrincipalId, 1000),
+          InvitedDomains = make_set(InvitedOrgDomain, 1000),
+          InvitedEmailAddresses = make_set(InvitedEmail, 1000)
+          by AppId, InvitedById, InvitedByUPN
+      | extend
+          PowerAppsEntityId = 27593,
+          AccountName = tostring(split(InvitedByUPN, '@')[0]),
+          UPNSuffix = tostring(split(InvitedByUPN, '@')[1])
+      | project
+          StartTime,
+          EndTime,
+          InvitedByUPN,
+          InvitedById,
+          InvitedDomains,
+          InvitedEmailAddresses,
+          TargetedUsersCount,
+          TargetedObjectIds,
+          AppId,
+          PowerAppsEntityId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Power Apps - Bulk sharing of Power Apps to newly created guest users
+      description: Identifies unusual bulk sharing, based on a predefined threshold in the query, of Power Apps to newly created
+        Microsoft Entra guest users.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: PowerAppsEntityId
+      tactics:
+      - tactic: ResourceDevelopment
+        techniques:
+        - technique: T1587
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1534
+      customDetails:
+        PowerAppsApp: AppId

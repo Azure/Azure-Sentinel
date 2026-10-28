@@ -1,0 +1,153 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dynamics365Finance
+  dataTypes:
+  - FinanceOperationsActivity_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - FinanceOperationsActivity_CL
+  requiredDataConnectors:
+  - connectorId: Dynamics365Finance
+    dataTypes:
+    - FinanceOperationsActivity_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: dccbdb5b-2ce7-4931-bfbe-f1ad6523ee64
+    path: Analytic Rules/F&O - Bank account change following network alias reassignment.yaml
+    version: 3.2.0
+    querySha256: 764ede453c308c7e8d3af14fd0125c534b01d7562b8aa015f94276f5f6c349ed
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=1d; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `AliasChangedBy`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `AliasChangedBy` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `Username`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `Username` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - LateralMovement
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1556
+    - T0859
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: a8a4e0287bb11358186081717658d7daeaa4af63134ebe11a725d2ab88f7bab3
+      targetQuerySha256: 541bb656031a33f47acc3cfa1ba1ea0d20665be32c6c9b77cca6a48f7db05c7d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AliasChangedBy
+      column: AliasChangedBy
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: Username
+      column: Username
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-dccbdb5b-2ce7-4931-bfbe-f1ad6523ee64
+  displayName: F&O - Bank account change following network alias reassignment
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 15m;
+      FinanceOperationsActivity_CL
+      | where LogType == "Update" and TableName == "UserInfo"
+      | extend UserId = tostring(parse_json(tostring(FormattedData.["03::id"])).NewData)
+      | extend NetworkAlias = parse_json(tostring(FormattedData.networkAlias))
+      | extend
+          CurrentAlias = tostring(NetworkAlias.NewData),
+          PreviousAlias = tostring(NetworkAlias.OldData)
+      | where CurrentAlias != PreviousAlias
+      | extend
+          AliasUpdated = LogCreatedDateTime,
+          AliasChangedBy = Username
+      | join kind=inner(FinanceOperationsActivity_CL
+          | where TimeGenerated >= ago (query_frequency)
+          | where LogType == "Update" and TableName == "BankAccountTable"
+          | extend AccountId = tostring(parse_json(tostring(FormattedData.AccountID)).NewData)
+          | extend AccountNum = parse_json(tostring(FormattedData.AccountNum))
+          | extend
+              CurrentAccountNum = tostring(AccountNum.NewData),
+              OldAccountNum = tostring(AccountNum.OldData)
+          | where CurrentAccountNum != OldAccountNum
+          | extend BankUpdated = LogCreatedDateTime)
+          on $left.UserId == $right.Username
+      | where BankUpdated > AliasUpdated
+      | extend
+          FinOpsAppId = 32780,
+          AccountName = tostring(split(CurrentAlias, "@")[0]),
+          UPNSuffix = tostring(split(CurrentAlias, "@")[1])
+      | project
+          AliasUpdated,
+          AliasChangedBy,
+          Username,
+          AccountId,
+          CurrentAccountNum,
+          OldAccountNum,
+          CurrentAlias,
+          PreviousAlias,
+          FinOpsAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: F&O - Bank account change following network alias reassignment
+      description: Identifies changes to user accounts where the network alias was modified to a new value. Shortly afterwards,
+        the updated alias is used to update a bank account number.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1556
+      - tactic: LateralMovement
+        techniques:
+        - technique: T0859
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountFullName: AliasChangedBy
+        AccountFullName_2: Username

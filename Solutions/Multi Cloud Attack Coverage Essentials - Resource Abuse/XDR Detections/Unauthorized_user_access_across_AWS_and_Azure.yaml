@@ -1,0 +1,145 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AWSS3
+  dataTypes:
+  - AWSGuardDuty
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSGuardDuty
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AWSS3
+    dataTypes:
+    - AWSGuardDuty
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 60f31001-018a-42bf-8045-a92e1f361b7b
+    path: Analytic Rules/Unauthorized_user_access_across_AWS_and_Azure.yaml
+    version: 1.0.4
+    querySha256: a98a3cf51a70dd2b3b3f4a8efe9e0602a7ef47c989d655545ba817bc5632b756
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AWSAlertUserName' column `AWSAlertUserNameEntity` requires runtime output-schema binding verification
+    - customDetails 'AWSArn' column `Arn` requires runtime output-schema binding verification
+    - customDetails 'AWSresourceType' column `AWSresourceType` requires runtime output-schema binding verification
+    - customDetails 'AWSInstanceType' column `InstanceType` requires runtime output-schema binding verification
+    - customDetails 'AWSAPICallName' column `APICallName` requires runtime output-schema binding verification
+    - customDetails 'AWSAPICallCount' column `APICallCount` requires runtime output-schema binding verification
+    - customDetails 'AzureUserAgent' column `UserAgent` requires runtime output-schema binding verification
+    - customDetails 'AzureUser' column `UserPrincipalName` requires runtime output-schema binding verification
+    - customDetails 'AzureClientAppUsed' column `ClientAppUsed` requires runtime output-schema binding verification
+    - customDetails 'AzConditionalAccess' column `ConditionalAccessStatus` requires runtime output-schema binding verification
+    - customDetails 'AzureOperationName' column `OperationName` requires runtime output-schema binding verification
+    - customDetails 'AzureRiskDetail' column `RiskDetail` requires runtime output-schema binding verification
+    - customDetails 'AzAuthRequirement' column `AuthenticationRequirement` requires runtime output-schema binding verification
+    - customDetails 'alertSeverity' column `Severity` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AzureUser from query column `UserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AzureUser column `UserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - Exfiltration
+    - Discovery
+    originalTechniques:
+    - T1557
+    - T1110
+    - T1110.003
+    - T1110.004
+    - T1212
+    - T1048
+    - T1087
+    - T1580
+    reviewScope:
+      sourceDocumentSha256: 4299a08f8c5f7f194f7f7bfe98b226f511440fd1e8063cc755ef4a1f72230c0b
+      targetQuerySha256: 5d44915cec79684853c678e974d0bd63d7c471ea799f364e51421e3abd83a14c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AzureUser
+properties:
+  id: xdr-60f31001-018a-42bf-8045-a92e1f361b7b
+  displayName: Unauthorized user access across AWS and Azure
+  status: disabled
+  queryCondition:
+    queryText: "// Define a variable 'AwsAlert' to collect Unauthorized user access alerts from AWS GuardDuty table\nlet AwsAlert = materialize (\n    AWSGuardDuty\n    | where ActivityType has_any (\"UnauthorizedAccess:IAMUser/TorIPCaller\", \"UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom\",\n    \"UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS\", \"UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.InsideAWS\",\n    \"UnauthorizedAccess:IAMUser/ConsoleLoginSuccess.B\",\"UnauthorizedAccess:IAMUser/MaliciousIPCaller\")\n    | extend\n        AWSAlertId = Id,\n        AWSAlertTitle = Title,\n        AWSAlertDescription = Description,\n        AWSresourceType = tostring(parse_json(ResourceDetails).resourceType),\n        AWSNetworkEntity = tostring(parse_json(ServiceDetails).action.awsApiCallAction.remoteIpDetails.ipAddressV4),\n        AWSAlertUserNameEntity = tostring(parse_json(ResourceDetails).accessKeyDetails.userName),\n        InstanceType = tostring(parse_json(ResourceDetails).instanceDetails.instanceType),\n\
+      \        AWSTargetingService = parse_json(ServiceDetails).additionalInfo.apiCalls,\n        AWSAlertTime = TimeCreated,\n        AWSAlertLink= tostring(strcat('https://us-east-1.console.aws.amazon.com/guardduty/home?region=us-east-1#/findings?macros=current&fId=',Id)),\n        Severity =\n  case (\n    Severity >= 7.0, \"High\",\n    Severity between (4.0 .. 6.9), \"Medium\",\n    Severity between (1.0 .. 3.9), \"Low\",\n    \"Unknown\")\n    | mv-apply AIPCall = AWSTargetingService on\n        (\n        where AIPCall has \"name\"\n        | extend APICallName = tostring(AIPCall.name), APICallCount = tostring(AIPCall[\"count\"])\n        )\n    | distinct\n        AWSAlertTime,\n        ActivityType,\n        Severity,\n        AWSAlertId,\n        AWSAlertTitle,\n        AWSAlertDescription,\n        AWSAlertLink,\n        Arn,\n        AWSresourceType,\n        AWSNetworkEntity,\n        AWSAlertUserNameEntity,\n        InstanceType,\n        APICallName,\n        APICallCount\n\
+      \    );\n    // Define a variable 'Azure_sigin' to collect Azure portal Signing activity from SigninLogs Table\n    let Azure_sigin = materialize (SigninLogs\n        | where AppDisplayName == \"Azure Portal\"\n        | where isnotempty(OriginalRequestId)\n        | summarize\n            totalAzureLoginEventId = dcount(OriginalRequestId),\n            AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0),\n            AzureSuccessfulEventsCount = dcountif(OriginalRequestId, ResultType == 0),\n            AzureSetOfFailedEvents = makeset(iff(ResultType != 0, OriginalRequestId, \"\"), 5),\n            AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, \"\"), 5)\n        by\n            IPAddress,\n            UserPrincipalName,\n            bin(TimeGenerated, 1min),\n            UserAgent,\n            ConditionalAccessStatus,\n            OperationName,\n            RiskDetail,\n            AuthenticationRequirement,\n            ClientAppUsed\n\
+      \        // Extracting the name and UPN suffix from UserPrincipalName\n        | extend\n            Name = tostring(split(UserPrincipalName, \"@\")[0]),\n            UPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n    );\n    // Join 'AwsAlert' and 'Azure_sigin' on the AWS Network Entity and Azure IP Address\n    AwsAlert\n    | join kind=inner Azure_sigin on $left.AWSNetworkEntity == $right.IPAddress"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Unauthorized user access across AWS and Azure
+      description: '''This detection compiles and correlates unauthorized user access alerts originating from AWS GuardDuty with Azure portal sign-in activities. It focuses on AWS GuardDuty alerts related to unauthorized user access, specifically targeting network IP associations tied to activities such as logins from malicious IP addresses or instance credential exfiltration attempts. The ditection leverages these common network IP advisories to detect and pinpoint unauthorized users attempting to access both AWS and Azure resources.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1557
+        - technique: T1110
+          subTechniques:
+          - T1110.003
+          - T1110.004
+        - technique: T1212
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1048
+      - tactic: Discovery
+        techniques:
+        - technique: T1087
+        - technique: T1580
+      customDetails:
+        AWSAlertUserName: AWSAlertUserNameEntity
+        AWSArn: Arn
+        AWSresourceType: AWSresourceType
+        AWSInstanceType: InstanceType
+        AWSAPICallName: APICallName
+        AWSAPICallCount: APICallCount
+        AzureUserAgent: UserAgent
+        AzureUser: UserPrincipalName
+        AzureClientAppUsed: ClientAppUsed
+        AzConditionalAccess: ConditionalAccessStatus
+        AzureOperationName: OperationName
+        AzureRiskDetail: RiskDetail
+        AzAuthRequirement: AuthenticationRequirement
+        alertSeverity: Severity
