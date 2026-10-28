@@ -1,3 +1,7 @@
+<!-- Draft change pending version confirmation and package regeneration: add the preview
+Entra ID Assets (via MS Graph) connector and EntraAssetsNormalize parser, and deprecate
+the legacy connector tile with migration guidance. Proposed minor version: 3.5.0. -->
+
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                      |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------------------------|
 | 3.4.0       | 20-07-2026                     | Re-added EntraEligibleMembers table (Preview) now that backend ingestion is deployed to all regions |
