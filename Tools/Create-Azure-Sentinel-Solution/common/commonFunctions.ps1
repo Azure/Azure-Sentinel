@@ -2949,6 +2949,22 @@ function GenerateAlertRule($file, $contentResourceDetails) {
             elseif ($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2) {
                 $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
             }
+            elseif ($yamlField -eq "customDetails" -and $null -ne $alertRule.customDetails) {
+                if ($alertRule.customDetails -is [System.Collections.IDictionary]) {
+                    foreach ($detailKey in @($alertRule.customDetails.Keys)) {
+                        if ($detailKey -like '*id' -and $alertRule.customDetails[$detailKey] -is [string] -and -not $alertRule.customDetails[$detailKey].StartsWith('[')) {
+                            $alertRule.customDetails[$detailKey] = ConvertTo-CustomDetectionArmLiteral -Value $alertRule.customDetails[$detailKey]
+                        }
+                    }
+                }
+                else {
+                    foreach ($detail in $alertRule.customDetails.PSObject.Properties) {
+                        if ($detail.Name -like '*id' -and $detail.Value -is [string] -and -not $detail.Value.StartsWith('[')) {
+                            $detail.Value = ConvertTo-CustomDetectionArmLiteral -Value $detail.Value
+                        }
+                    }
+                }
+            }
         }
     }
     # Create Alert Rule Resource Object
@@ -3162,6 +3178,12 @@ function GenerateWatchList($json, $isPipelineRun, $watchListFileName) {
 
     # Replace watchlist resource id
     $watchlistData.name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('watchlist$global:watchlistCounter-id'))]"
+    if ($watchlistData.PSObject.Properties['kind'] -and [string]::IsNullOrWhiteSpace([string]$watchlistData.kind)) {
+        $watchlistData.PSObject.Properties.Remove('kind')
+    }
+    if ($watchlistData.properties -and $watchlistData.properties.PSObject.Properties['labels'] -and @($watchlistData.properties.labels).Count -eq 0) {
+        $watchlistData.properties.PSObject.Properties.Remove('labels')
+    }
 
     # Handle MainTemplate Resource
     $global:baseMainTemplate.resources += $watchlistData #Assume 1 watchlist per template
@@ -3226,18 +3248,20 @@ function RunArmTtkOnPackage {
     if ($isPipelineRun -eq $false) {
         #downloading and running arm-ttk on generated solution
         $armTtkFolder = "$PSScriptRoot/../arm-ttk"
-        try {
-            if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
+        $moduleManifest = Join-Path $PSScriptRoot "../tmp/arm-ttk/arm-ttk.psd1"
+        if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
+            if (Test-Path -Path $moduleManifest -PathType Leaf) {
+                Import-Module $moduleManifest
+            }
+            else {
                 Write-Output "Missing arm-ttk validations. Downloading module..."
                 & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
             }
-            & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
         }
-        catch {
-            Write-Host "Warning: ARM-TTK check encountered an error: $_" -ForegroundColor Yellow
-        }
-        finally {
-            $global:LASTEXITCODE = 0
+        $global:LASTEXITCODE = 0
+        & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM-TTK validation failed for solution '$solutionName' (exit code $LASTEXITCODE)."
         }
     }
 }
@@ -3341,7 +3365,11 @@ function GeneratePackage(
     $createUiDefinitionOutputPath = "$solutionFolder/createUiDefinition.json"
 
     try {
-        $baseMainTemplate | ConvertTo-Json -Depth $packageSerializationDepth | Out-File $mainTemplateOutputPath -Encoding utf8
+        $mainTemplateJson = $baseMainTemplate | ConvertTo-Json -Depth $packageSerializationDepth
+        if ($IncludeXdrDetections -and $xdrDetectionCount -gt 0) {
+            $mainTemplateJson = ConvertTo-CustomDetectionTemplateJson -Json $mainTemplateJson
+        }
+        $mainTemplateJson | Out-File $mainTemplateOutputPath -Encoding utf8
 
         # create testParameters json file which will be used for test case automation
         $testParametersOutputPath = "$solutionFolder/testParameters.json"

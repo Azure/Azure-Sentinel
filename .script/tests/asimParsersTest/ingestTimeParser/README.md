@@ -58,16 +58,23 @@ discover target
 ```
 
 Parser validation does not depend on raw-table replay. QTP source replay is
-optional: if its table, DCR, upload, or visibility stage fails, the report
-records a warning and blocks QTP/parity without failing the required parser
-validation stages.
+optional. If its table or DCR cannot be established, the report records a
+warning and blocks QTP/parity without failing the required parser validation
+stages. Once the raw DCR exists, upload or visibility failures fail the target;
+QTP execution and parity also fail the target when they run and fail.
+
+`qtpSourceReplay` persists the latest `observedSchema`, `observedRows`, and
+`observedCountsByTimestamp` from raw-table visibility checks. These remain
+available in `validation-result.json` when visibility detects unexpected,
+duplicate, or incomplete rows.
 
 QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
 `itp_rows` under `outputValidation`. It derives `intersect_schema` from shared
-column names and records both QTP and ITP types. A shared-column type mismatch
-fails schema parity. When shared types are consistent, it filters both row
-sets into `qtp_rows_filtered` and `itp_rows_filtered` and runs the typed
-duplicate-aware row comparison across that shared schema.
+column names, excluding the platform-managed `Type` column, and records both
+QTP and ITP types. A shared-column type mismatch fails schema parity. When
+shared types are consistent, it filters both row sets into
+`qtp_rows_filtered` and `itp_rows_filtered` and runs the typed duplicate-aware
+row comparison across that shared schema.
 
 ## Tests
 

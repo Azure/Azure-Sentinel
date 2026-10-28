@@ -1,0 +1,132 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PowerAutomate
+  dataTypes:
+  - PowerAutomateActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - PowerAutomateActivity
+  requiredDataConnectors:
+  - connectorId: PowerAutomate
+    dataTypes:
+    - PowerAutomateActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 56cb646e-56a0-4f0e-8866-9bc1dd15da78
+    path: Analytic Rules/Power Automate - Unusual bulk deletion of flow resources.yaml
+    version: 3.2.0
+    querySha256: 05cc91d3378bac0eeb31552869f72632ac3cc56fdbcc55dc4309e3f219300256
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'DeletedFlowCount' column `DeletedFlowCount` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Impact
+    - DefenseEvasion
+    originalTechniques:
+    - T1485
+    - T0828
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: ab2144caaf194a8a086c4fb17bd9cc049dad95075874c699645ecd1768bed4d7
+      targetQuerySha256: 9396200b25152674bc4b69262126ca2a56c985ddf9f1ae9cc62e5f02feb05005
+properties:
+  id: xdr-56cb646e-56a0-4f0e-8866-9bc1dd15da78
+  displayName: Power Automate - Unusual bulk deletion of flow resources
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // minThreshold: Minimum number of apps to be deleted to be considered an anomaly;
+      // This is to prevent one-off isolated delete flow to be considered outlier.
+      // The Min Threshold can be reduced or increased according to the traffic in the organization.
+      let minThreshold=10;
+      let interval = 1h;
+      let startTime = ago(14d);
+      let endTime = now();
+      let query_frequency = 1h;
+      let flow_deletion_events = PowerAutomateActivity
+          | where TimeGenerated >= startTime
+          | where EventOriginalType =~ "DeleteFlow"
+          | extend IngestionTimeGenerated = TimeGenerated;
+      flow_deletion_events
+      | make-series DeletedFlowCount=count() on IngestionTimeGenerated from startTime to endTime step interval by ActorName, UserUpn, ActorUserId
+      | extend(Anomalies, AnomalyScore, ExpectedUsage) = series_decompose_anomalies(DeletedFlowCount)
+      | mv-expand
+          DeletedFlowCount to typeof(double),
+          IngestionTimeGenerated to typeof(datetime),
+          Anomalies to typeof(double),
+          AnomalyScore to typeof(double),
+          ExpectedUsage to typeof(long)
+      | where IngestionTimeGenerated >= ago(query_frequency)
+      | where Anomalies != 0 and DeletedFlowCount >= minThreshold
+      | lookup (flow_deletion_events
+          | where IngestionTimeGenerated >= ago(query_frequency))
+          on ActorName, UserUpn, ActorUserId
+      | extend
+          AccountName = tostring(split(ActorName, "@")[0]),
+          UPNSuffix = tostring(split(ActorName, "@")[1]),
+          PowerAutomateAppId = 27592
+      | project
+          TimeGenerated,
+          ActorName,
+          DeletedFlowCount,
+          ExpectedUsage,
+          Anomalies,
+          AnomalyScore,
+          AccountName,
+          UPNSuffix,
+          PowerAutomateAppId,
+          UserUpn,
+          ActorUserId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Power Automate - Unusual bulk deletion of flow resources
+      description: Identifies bulk deletion of Power Automate flows that exceed a predefined threshold defined in the query
+        and deviate from activity patterns observed in the last 14 days.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: PowerAutomateAppId
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+        - technique: T0828
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+      customDetails:
+        DeletedFlowCount: DeletedFlowCount

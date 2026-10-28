@@ -511,7 +511,10 @@ class AzureMonitorClient:
                 raise HarnessError(
                     stage,
                     "Exact timestamp query returned unexpected timestamps.",
-                    details={"unexpected": unexpected},
+                    details={
+                        "unexpected": unexpected,
+                        "observedQueryTable": query_table,
+                    },
                 )
             observed_counts = {
                 timestamp: raw_observed_counts.get(timestamp, 0)
@@ -530,7 +533,10 @@ class AzureMonitorClient:
                     stage,
                     "Exact timestamp slice contains more rows than "
                     "expected for one or more timestamps.",
-                    details={"overages": overages},
+                    details={
+                        "overages": overages,
+                        "observedQueryTable": query_table,
+                    },
                 )
             if observed_counts == expected_counts:
                 if stable_once:
@@ -546,6 +552,7 @@ class AzureMonitorClient:
                     details={
                         "expectedCounts": expected_counts,
                         "observedCounts": observed_counts,
+                        "observedQueryTable": query_table,
                     },
                 )
             delay = self.poll_delays[

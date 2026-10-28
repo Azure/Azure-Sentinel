@@ -356,7 +356,45 @@ class ReportTests(unittest.TestCase):
         )
         summary = WORKFLOW.render_summary(report)
         self.assertIn("ASIM ingestion validation", summary)
-        self.assertIn("| parity |", summary)
+        expected_order = [
+            "discovery",
+            "counterpart",
+            "template",
+            "fixture",
+            "filtering",
+            "parserDcr",
+            "parserIngestion",
+            "schema",
+            "data",
+            "rawDcr",
+            "rawIngestion",
+            "qtpExecution",
+            "parity",
+            "cleanup",
+        ]
+        self.assertEqual(expected_order, list(report["stages"]))
+        summary_labels = [
+            "discovery",
+            "counterpart",
+            "template",
+            "fixture",
+            "filtering",
+            "parserDcr",
+            "parserIngestion",
+            "schema",
+            "data",
+            "*rawDcr",
+            "*rawIngestion",
+            "*qtpExecution",
+            "*parity",
+            "cleanup",
+        ]
+        positions = [
+            summary.index(f"| {label} |")
+            for label in summary_labels
+        ]
+        self.assertEqual(sorted(positions), positions)
+        self.assertIn("\\* Optional QTP replay stage.", summary)
 
     def test_failure_remains_failed_when_not_required(self):
         validation = self.base_validation()
@@ -375,6 +413,132 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(report["enforcementRequired"])
         self.assertEqual(
             "failed", report["stages"]["parity"]["status"]
+        )
+
+    def test_parity_summary_exposes_row_counts_and_columns(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["error"] = {
+            "stage": "parity",
+            "message": (
+                "Query-time and ingestion-time outputs differ."
+            ),
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "failed",
+            "schema": {
+                "status": "passed",
+                "missingInIngestTime": [],
+                "ignoredAdditionalIngestTime": [],
+                "typeMismatches": [],
+            },
+            "rows": {
+                "status": "failed",
+                "queryTimeRowCount": 10,
+                "ingestTimeRowCount": 10,
+                "missingRowCount": 10,
+                "extraRowCount": 10,
+                "duplicateCountDifferences": [],
+                "missingExamples": [],
+                "extraExamples": [],
+                "columnDiagnostics": {
+                    "keyColumns": [
+                        "EventOriginalUid",
+                        "TimeGenerated",
+                    ],
+                    "mismatches": [
+                        {
+                            "key": ["id", "timestamp"],
+                            "differences": [
+                                {
+                                    "column": "Type",
+                                    "expected": "Source",
+                                    "actual": "Target",
+                                }
+                            ],
+                        }
+                    ],
+                },
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            (
+                "10 QTP row(s) missing from ITP output; "
+                "10 extra ITP row(s). Differing column(s): Type."
+            ),
+            report["stages"]["parity"]["detail"],
+        )
+
+    def test_parity_summary_infers_columns_from_row_examples(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["error"] = {
+            "stage": "parity",
+            "message": (
+                "Query-time and ingestion-time outputs differ."
+            ),
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "failed",
+            "schema": {
+                "status": "passed",
+                "missingInIngestTime": [],
+                "ignoredAdditionalIngestTime": [],
+                "typeMismatches": [],
+            },
+            "rows": {
+                "status": "failed",
+                "queryTimeRowCount": 10,
+                "ingestTimeRowCount": 10,
+                "missingRowCount": 10,
+                "extraRowCount": 10,
+                "duplicateCountDifferences": [],
+                "missingExamples": [
+                    {
+                        "count": 1,
+                        "row": [
+                            {
+                                "column": "TimeGenerated",
+                                "type": "datetime",
+                                "value": "timestamp",
+                            },
+                            {
+                                "column": "Type",
+                                "type": "string",
+                                "value": "Source",
+                            },
+                        ],
+                    }
+                ],
+                "extraExamples": [
+                    {
+                        "count": 1,
+                        "row": [
+                            {
+                                "column": "TimeGenerated",
+                                "type": "datetime",
+                                "value": "timestamp",
+                            },
+                            {
+                                "column": "Type",
+                                "type": "string",
+                                "value": "Target",
+                            },
+                        ],
+                    }
+                ],
+                "columnDiagnostics": None,
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertIn(
+            "Differing column(s): Type.",
+            report["stages"]["parity"]["detail"],
         )
 
     def test_failure_is_blocking_when_required(self):
@@ -653,11 +817,15 @@ class ReportTests(unittest.TestCase):
         }
         validation["outputValidation"]["queryTimeExecution"] = {
             "status": "blocked",
-            "detail": "Skipped because QTP source replay failed.",
+            "detail": (
+                "Skipped because QTP raw DCR creation failed."
+            ),
         }
         validation["outputValidation"]["parity"] = {
             "status": "blocked",
-            "detail": "Skipped because QTP source replay failed.",
+            "detail": (
+                "Skipped because QTP raw DCR creation failed."
+            ),
         }
 
         report = self.build(validation)
@@ -685,14 +853,14 @@ class ReportTests(unittest.TestCase):
             report["stages"]["qtpExecution"]["status"],
         )
         self.assertEqual(
-            "Skipped because QTP source replay failed.",
+            "Skipped because QTP raw DCR creation failed.",
             report["stages"]["qtpExecution"]["detail"],
         )
         self.assertEqual(
             "blocked", report["stages"]["parity"]["status"]
         )
         self.assertEqual(
-            "Skipped because QTP source replay failed.",
+            "Skipped because QTP raw DCR creation failed.",
             report["stages"]["parity"]["detail"],
         )
         output = io.StringIO()
@@ -703,6 +871,66 @@ class ReportTests(unittest.TestCase):
             output.getvalue(),
         )
         self.assertIn("InvalidStream", output.getvalue())
+
+    def test_qtp_raw_ingestion_failure_fails_overall(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = {"resourceId": "/raw"}
+        validation["rawUpload"] = [{"status": "accepted"}]
+        validation["qtpSourceReplay"] = {
+            "status": "failed",
+            "inputStream": "Custom-Contoso_CL",
+            "error": {
+                "stage": "raw-visibility",
+                "message": "Exact timestamp rows were duplicated.",
+            },
+            "observedSchema": [
+                {"name": "TimeGenerated", "type": "datetime"}
+            ],
+            "observedRows": [
+                {"TimeGenerated": "timestamp"},
+                {"TimeGenerated": "timestamp"},
+            ],
+            "observedCountsByTimestamp": {"timestamp": 2},
+        }
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": "Blocked by QTP raw ingestion failure.",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": "Blocked by QTP raw ingestion failure.",
+        }
+        validation["error"] = {
+            "stage": "raw-visibility",
+            "message": "Exact timestamp rows were duplicated.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("failed", report["status"])
+        self.assertTrue(report["requiredFailure"])
+        self.assertEqual(
+            "passed", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertEqual(
+            "failed", report["stages"]["rawIngestion"]["status"]
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["parity"]["status"]
+        )
+        self.assertEqual(
+            2,
+            len(
+                report["stages"]["rawIngestion"]["evidence"][
+                    "qtpSourceReplay"
+                ]["observedRows"]
+            ),
+        )
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()
@@ -1008,9 +1236,16 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_untrusted_pr_content_is_pinned_to_event_head_sha(self):
+    def test_comparison_refs_are_pinned_to_event_shas(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
+        self.assertEqual(
+            2,
+            workflow.count(
+                "BASE_SHA: "
+                "${{ github.event.pull_request.base.sha }}"
+            ),
+        )
         self.assertEqual(
             2,
             workflow.count(
@@ -1027,23 +1262,69 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertEqual(
             2,
             workflow.count(
-                'if [ "$fetched_sha" != "$PR_HEAD_SHA" ]; then'
+                'if [ "$fetched_base_sha" != "$BASE_SHA" ]; then'
             ),
         )
         self.assertEqual(
             2,
             workflow.count(
-                '"$pr_data_dir" "$PR_HEAD_SHA"'
+                'if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"+$BASE_SHA:$trusted_base_ref"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"+refs/pull/$PR_NUMBER/head:$pr_head_ref"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"$pr_data_dir" "$pr_head_ref"'
             ),
         )
 
-    def test_trusted_helper_package_is_restored_from_master(self):
+    def test_checkout_fetches_only_targeted_history(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertEqual(3, workflow.count("fetch-depth: 1"))
+        self.assertNotIn("fetch-depth: 0", workflow)
+        self.assertEqual(
+            2,
+            workflow.count(
+                "for depth in 1 32 128 512 2048 8192; do"
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count("--filter=blob:none"),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                'git merge-base "$trusted_base_ref" "$pr_head_ref"'
+            ),
+        )
+        self.assertNotIn("+refs/heads/*", workflow)
+        self.assertNotIn("+refs/tags/*", workflow)
+
+    def test_trusted_helper_package_is_restored_from_pinned_base(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
         self.assertEqual(
-            3,
-            workflow.count("git archive origin/master"),
+            2,
+            workflow.count(
+                'git archive "$ASIM_TRUSTED_BASE_REF"'
+            ),
         )
+        self.assertEqual(1, workflow.count("git archive HEAD"))
+        self.assertNotIn("git archive origin/master", workflow)
         self.assertGreaterEqual(
             workflow.count(
                 ".script/tests/asimParsersTest/ingestTimeParser"

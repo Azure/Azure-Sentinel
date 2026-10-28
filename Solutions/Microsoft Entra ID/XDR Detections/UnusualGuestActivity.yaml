@@ -1,0 +1,142 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+  - SigninLogs
+  - AADNonInteractiveUserSignInLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - SigninLogs
+    - AADNonInteractiveUserSignInLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+    - SigninLogs
+    - AADNonInteractiveUserSignInLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: acc4c247-aaf7-494b-b5da-17f18863878a
+    path: Analytic Rules/UnusualGuestActivity.yaml
+    version: 1.0.3
+    querySha256: 3e7a0ca4eb2fdec717ef5d598b673c53d31f30c6613ee2ade82ea8984cdb3033
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InvitedUser`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `InvitedUser` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `InitiatingUserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `InitiatingUserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    - Discovery
+    originalTechniques:
+    - T1078.004
+    - T1136.003
+    - T1087.004
+    reviewScope:
+      sourceDocumentSha256: 6486eaad3026991638917b1fb96d40344cbd4e2a0ef02a34629c3e1e7cd6db6e
+      targetQuerySha256: 33bc7f5330754bec1f8858648d43596e75c394c7c86b43c3fe661008a4dc0a54
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InvitedUser
+      column: InvitedUser
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 6486eaad3026991638917b1fb96d40344cbd4e2a0ef02a34629c3e1e7cd6db6e
+      targetQuerySha256: 33bc7f5330754bec1f8858648d43596e75c394c7c86b43c3fe661008a4dc0a54
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-acc4c247-aaf7-494b-b5da-17f18863878a
+  displayName: External guest invitation followed by Microsoft Entra ID PowerShell signin
+  status: disabled
+  queryCondition:
+    queryText: "let queryfrequency = 1h;\nlet queryperiod = 1d;\nAuditLogs\n| where TimeGenerated > ago(queryperiod)\n| where OperationName in (\"Invite external user\", \"Bulk invite users - started (bulk)\", \"Invite external user with reset invitation status\")\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatedBy = iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName)\n// Uncomment the following line to filter events where the inviting user was a guest user\n//| where InitiatedBy has_any (\"live.com#\", \"#EXT#\")\n| mv-apply TargetResource\
+      \ = TargetResources on\n  (\n      where TargetResource.type =~ \"User\"\n      | extend InvitedUser = tostring(TargetResource.userPrincipalName)\n  )\n| mv-expand UserToCompare = pack_array(InitiatedBy, InvitedUser) to typeof(string)\n| where UserToCompare has_any (\"live.com#\", \"#EXT#\")\n| extend\n    parsedUser = replace_string(tolower(iff(UserToCompare startswith \"live.com#\", tostring(split(UserToCompare, \"#\")[1]), tostring(split(UserToCompare, \"#EXT#\")[0]))), \"@\", \"_\"),\n    InvitationTime = TimeGenerated\n| join (\n    (union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs)\n    | where TimeGenerated > ago(queryfrequency)\n    | where UserType != \"Member\"\n    | where AppId has_any                       // This web may contain a list of these apps: https://msshells.net/\n        (\"1b730954-1685-4b74-9bfd-dac224a7b894\",// Azure Active Directory PowerShell\n         \"04b07795-8ddb-461a-bbee-02f9e1bf7b46\",// Microsoft Azure CLI\n         \"1950a258-227b-4e31-a9cf-717495945fc2\"\
+      ,// Microsoft Azure PowerShell\n         \"a0c73c16-a7e3-4564-9a95-2bdf47383716\",// Microsoft Exchange Online Remote PowerShell\n         \"fb78d390-0c51-40cd-8e17-fdbfab77341b\",// Microsoft Exchange REST API Based Powershell\n         \"d1ddf0e4-d672-4dae-b554-9d5bdfd93547\",// Microsoft Intune PowerShell\n         \"9bc3ab49-b65d-410a-85ad-de819febfddc\",// Microsoft SharePoint Online Management Shell\n         \"12128f48-ec9e-42f0-b203-ea49fb6af367\",// MS Teams Powershell Cmdlets\n         \"23d8f6bd-1eb0-4cc2-a08c-7bf525c67bcd\",// Power BI PowerShell\n         \"31359c7f-bd7e-475c-86db-fdb8c937548e\",// PnP Management Shell\n         \"90f610bf-206d-4950-b61d-37fa6fd1b224\",// Aadrm Admin Powershell\n         \"14d82eec-204b-4c2f-b7e8-296a70dab67e\",// Microsoft Graph PowerShell\n         \"9cee029c-6210-4654-90bb-17e6e9d36617\" // Power Platform CLI - pac\"\n        )\n    | summarize arg_min(TimeGenerated, *) by UserPrincipalName\n    | extend\n        parsedUser = replace_string(UserPrincipalName,\
+      \ \"@\", \"_\"),\n        SigninTime = TimeGenerated\n    )\n    on parsedUser\n| project InvitationTime, InitiatedBy, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, OperationName, InvitedUser, SigninTime, SigninCategory = Category1, SigninUserPrincipalName = UserPrincipalName, AppDisplayName, ResourceDisplayName, UserAgent, InvitationAdditionalDetails = AdditionalDetails, InvitationTargetResources = TargetResources\n| extend InvitedUserName = tostring(split(InvitedUser,'@',0)[0]), InvitedUserUPNSuffix = tostring(split(InvitedUser,'@',1)[0]),\n         InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: External guest invitation followed by Microsoft Entra ID PowerShell signin
+      description: '''By default guests have capability to invite more external guest users, guests also can do suspicious Microsoft Entra ID enumeration. This detection look at guest users, who have been invited or have invited recently, who also are logging via various PowerShell CLI.
+
+        Ref : ''https://danielchronlund.com/2021/11/18/scary-azure-ad-tenant-enumeration-using-regular-b2b-guest-accounts/'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InvitedUserName
+          upnSuffixColumn: InvitedUserUPNSuffix
+        - id: account2
+          nameColumn: InitiatedByName
+          upnSuffixColumn: InitiatedByUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+        - technique: T1136
+          subTechniques:
+          - T1136.003
+      - tactic: Discovery
+        techniques:
+        - technique: T1087
+          subTechniques:
+          - T1087.004
+      customDetails:
+        AccountFullName: InvitedUser
+        AccountFullName_2: InitiatingUserPrincipalName

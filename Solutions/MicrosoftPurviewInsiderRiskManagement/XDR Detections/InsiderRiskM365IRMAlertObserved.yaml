@@ -1,0 +1,87 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: OfficeATP
+  dataTypes:
+  - SecurityAlert (Office 365)
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertInfo
+    - AlertEvidence
+  requiredDataConnectors:
+  - connectorId: OfficeATP
+    dataTypes:
+    - SecurityAlert (Office 365)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 69660e65-0e5c-4700-8b99-5caf59786606
+    path: Analytic Rules/InsiderRiskM365IRMAlertObserved.yaml
+    version: 1.1.3
+    querySha256: 01d1c5a74a78c7a2ffaad4e9a0061b3b5b1c4bf46dc5b6818a5d061d10fd5b1c
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    - 'Schedule assessment: source frequency=6h, lookback=6h; target frequency=PT6H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    notes:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204
+    reviewScope:
+      sourceDocumentSha256: fe2800c37be9c600ebc50d0885831952337b51f40ae4aa4be6ea131c5cc98081
+      targetQuerySha256: 0d5cc3c685fecdaceda7975d0483c397790efb07922ed597a02afa273307f5af
+    supplementalEntityDetails:
+      status: preserved
+      details:
+      - sourceColumn: UserPrincipalName
+        targetKey: AccountFullName
+        status: preserved
+properties:
+  id: xdr-69660e65-0e5c-4700-8b99-5caf59786606
+  displayName: Insider Risk_Microsoft Purview Insider Risk Management Alert Observed
+  status: disabled
+  queryCondition:
+    queryText: "let UserAlerts = AlertInfo\n| where Timestamp > ago(7d)\n| join kind=inner (\n    AlertEvidence\n    | where Timestamp > ago(7d)\n    | where EntityType in~ (\"User\", \"Account\") or isnotempty(AccountUpn) or isnotempty(AccountName)\n    | extend ParsedFields = todynamic(AdditionalFields)\n    | extend Name = iff(isnotempty(AccountName), AccountName, tostring(ParsedFields.Name)),\n             UPNSuffix = iff(isnotempty(AccountDomain), AccountDomain, tostring(ParsedFields.UPNSuffix))\n    | extend UserPrincipalName = iff(isnotempty(AccountUpn), AccountUpn, iff(isnotempty(Name) and isnotempty(UPNSuffix), strcat(Name, \"@\", UPNSuffix), \"\"))\n    | where isnotempty(UserPrincipalName)\n    | project AlertId, Name, UPNSuffix, UserPrincipalName\n) on AlertId;\nUserAlerts\n| where Timestamp > ago(6h)\n| where ServiceSource in~ (\"Microsoft 365 Insider Risk Management\", \"Microsoft Purview Insider Risk Management\")\n| summarize arg_max(Timestamp, *) by AlertId\n| join kind=inner\
+      \ (\n    UserAlerts\n    | where ServiceSource !in~ (\"Microsoft 365 Insider Risk Management\", \"Microsoft Purview Insider Risk Management\")\n    | summarize arg_max(Timestamp, *) by AlertId\n    | project\n        UserPrincipalName,\n        AlertName1 = Title,\n        ServiceSource,\n        AttackTechniques\n) on UserPrincipalName\n| project\n    Timestamp,\n    AlertId,\n    Name,\n    UPNSuffix,\n    UserPrincipalName,\n    AlertName1,\n    ServiceSource,\n    AttackTechniques,\n    Category,\n    DetectionSource"
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: Insider Risk_Microsoft Purview Insider Risk Management Alert Observed
+      description: '''This alert is triggered when a Microsoft Purview Insider Risk Management alert is recieved in Microsoft Sentinel via the Microsoft Purview Insider Risk Management Connector. The alert extracts usernames from security alerts to provide UserPrincipalName, Alert Name, Reporting Product Name, Status, Alert Link, Previous Alerts Links, Time Generated. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information, see [Learn about insider risk management](https://docs.microsoft.com/microsoft-365/compliance/insider-risk-management)'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204
+      customDetails:
+        AccountFullName: UserPrincipalName

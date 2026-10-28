@@ -1,0 +1,212 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f80d951a-eddc-4171-b9d0-d616bb83efdc
+    path: Analytic Rules/AdminPromoAfterRoleMgmtAppPermissionGrant.yaml
+    version: 1.1.0
+    querySha256: bb2e1d5f93f85b2d2de3e4912d4fe40b361b05419457c115d16443014657377b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=2h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Target`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Target` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `PermissionGrant_InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName_2 column `PermissionGrant_InitiatingUserPrincipalName` requires runtime output-schema
+      binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_3 from query column `RoleAssignment_InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName_3 column `RoleAssignment_InitiatingUserPrincipalName` requires runtime output-schema
+      binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    - Persistence
+    originalTechniques:
+    - T1098.003
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 04e49ce728b070aa8a3210534c4817e4e32f54d0463f062a6b96173e671fc403
+      targetQuerySha256: b2ac277c3e33d2495fc72a623d412018c2c7f23e180f77811703f533a0d82301
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Target
+      column: Target
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: PermissionGrant_InitiatingUserPrincipalName
+      column: PermissionGrant_InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+    - entityType: Account
+      entityIndex: 5
+      identifier: FullName
+      sourceColumn: RoleAssignment_InitiatingUserPrincipalName
+      column: RoleAssignment_InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_3
+properties:
+  id: xdr-f80d951a-eddc-4171-b9d0-d616bb83efdc
+  displayName: Admin promotion after Role Management Application Permission Grant
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      let query_period = 2h;
+      AuditLogs
+      | where TimeGenerated > ago(query_period)
+      | where Category =~ "ApplicationManagement" and LoggedByService =~ "Core Directory"
+      | where OperationName =~ "Add app role assignment to service principal"
+      | mv-expand TargetResource = TargetResources
+      | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
+      | where tostring(modifiedProperty["displayName"]) == "AppRole.Value"
+      | extend PermissionGrant = tostring(modifiedProperty["newValue"])
+      | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
+      | mv-apply modifiedProperty = TargetResource["modifiedProperties"] on (
+          summarize modifiedProperties = make_bag(
+              bag_pack(tostring(modifiedProperty["displayName"]),
+                  bag_pack("oldValue", trim(@'[\"\s]+', tostring(modifiedProperty["oldValue"])),
+                      "newValue", trim(@'[\"\s]+', tostring(modifiedProperty["newValue"])))), 100)
+      )
+      | project
+          PermissionGrant_TimeGenerated = TimeGenerated,
+          PermissionGrant_OperationName = OperationName,
+          PermissionGrant_Result = Result,
+          PermissionGrant,
+          AppDisplayName = tostring(modifiedProperties["ServicePrincipal.DisplayName"]["newValue"]),
+          AppServicePrincipalId = tostring(modifiedProperties["ServicePrincipal.ObjectID"]["newValue"]),
+          PermissionGrant_InitiatedBy = InitiatedBy,
+          PermissionGrant_TargetResources = TargetResources,
+          PermissionGrant_AdditionalDetails = AdditionalDetails,
+          PermissionGrant_CorrelationId = CorrelationId
+      | join kind=inner (
+          AuditLogs
+          | where TimeGenerated > ago(query_frequency)
+          | where Category =~ "RoleManagement" and LoggedByService =~ "Core Directory" and AADOperationType =~ "Assign"
+          | where isnotempty(InitiatedBy["app"])
+          | mv-expand TargetResource = TargetResources
+          | mv-expand modifiedProperty = TargetResource["modifiedProperties"]
+          | where tostring(modifiedProperty["displayName"]) in ("Role.DisplayName", "RoleDefinition.DisplayName")
+          | extend RoleAssignment = tostring(modifiedProperty["newValue"])
+          | where RoleAssignment contains "Admin"
+          | project
+              RoleAssignment_TimeGenerated = TimeGenerated,
+              RoleAssignment_OperationName = OperationName,
+              RoleAssignment_Result = Result,
+              RoleAssignment,
+              TargetType = tostring(TargetResources[0]["type"]),
+              Target = iff(isnotempty(TargetResources[0]["displayName"]), tostring(TargetResources[0]["displayName"]), tolower(TargetResources[0]["userPrincipalName"])),
+              TargetId = tostring(TargetResources[0]["id"]),
+              RoleAssignment_InitiatedBy = InitiatedBy,
+              RoleAssignment_TargetResources = TargetResources,
+              RoleAssignment_AdditionalDetails = AdditionalDetails,
+              RoleAssignment_CorrelationId = CorrelationId,
+              AppServicePrincipalId = tostring(InitiatedBy["app"]["servicePrincipalId"])
+          ) on AppServicePrincipalId
+      | where PermissionGrant_TimeGenerated < RoleAssignment_TimeGenerated
+      | extend
+          TargetName = tostring(split(Target, "@")[0]),
+          TargetUPNSuffix = tostring(split(Target, "@")[1])
+      | project PermissionGrant_TimeGenerated, PermissionGrant_OperationName, PermissionGrant_Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, PermissionGrant_InitiatedBy, PermissionGrant_TargetResources, PermissionGrant_AdditionalDetails, PermissionGrant_CorrelationId,
+      RoleAssignment_TimeGenerated, RoleAssignment_OperationName, RoleAssignment_Result, RoleAssignment, TargetType, Target, TargetName, TargetUPNSuffix, TargetId, RoleAssignment_InitiatedBy, RoleAssignment_TargetResources, RoleAssignment_AdditionalDetails, RoleAssignment_CorrelationId
+      | extend PermissionGrant_InitiatingUserPrincipalName = tostring(PermissionGrant_InitiatedBy.user.userPrincipalName)
+      | extend PermissionGrant_InitiatingAadUserId = tostring(PermissionGrant_InitiatedBy.user.id)
+      | extend PermissionGrant_InitiatingIpAddress = tostring(iff(isnotempty(PermissionGrant_InitiatedBy.user.ipAddress), PermissionGrant_InitiatedBy.user.ipAddress, PermissionGrant_InitiatedBy.app.ipAddress))
+      | extend PermissionGrant_InitiatingAccountName = tostring(split(PermissionGrant_InitiatingUserPrincipalName, "@")[0]), PermissionGrant_InitiatingAccountUPNSuffix = tostring(split(PermissionGrant_InitiatingUserPrincipalName, "@")[1])
+      | extend RoleAssignment_InitiatingUserPrincipalName = tostring(RoleAssignment_InitiatedBy.user.userPrincipalName)
+      | extend RoleAssignment_InitiatingAadUserId = tostring(RoleAssignment_InitiatedBy.user.id)
+      | extend RoleAssignment_InitiatingIpAddress = tostring(iff(isnotempty(RoleAssignment_InitiatedBy.user.ipAddress), RoleAssignment_InitiatedBy.user.ipAddress, RoleAssignment_InitiatedBy.app.ipAddress))
+      | extend RoleAssignment_InitiatingAccountName = tostring(split(RoleAssignment_InitiatingUserPrincipalName, "@")[0]),  RoleAssignment_InitiatingAccountUPNSuffix = tostring(split(RoleAssignment_InitiatingUserPrincipalName, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Admin promotion after Role Management Application Permission Grant
+      description: |-
+        'This rule looks for a service principal being granted the Microsoft Graph RoleManagement.ReadWrite.Directory (application) permission before being used to add an Microsoft Entra ID object or user account to an Admin directory role (i.e. Global Administrators).
+        This is a known attack path that is usually abused when a service principal already has the AppRoleAssignment.ReadWrite.All permission granted. This permission allows an app to manage permission grants for application permissions to any API.
+        A service principal can promote itself or other service principals to admin roles (i.e. Global A
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AppDisplayName
+          aadUserIdColumn: AppServicePrincipalId
+        - id: account2
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account3
+          nameColumn: PermissionGrant_InitiatingAccountName
+          upnSuffixColumn: PermissionGrant_InitiatingAccountUPNSuffix
+        - id: account4
+          aadUserIdColumn: PermissionGrant_InitiatingAadUserId
+        - id: account5
+          nameColumn: RoleAssignment_InitiatingAccountName
+          upnSuffixColumn: RoleAssignment_InitiatingAccountUPNSuffix
+        - id: account6
+          aadUserIdColumn: RoleAssignment_InitiatingAadUserId
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: Target
+        AccountFullName_2: PermissionGrant_InitiatingUserPrincipalName
+        AccountFullName_3: RoleAssignment_InitiatingUserPrincipalName
