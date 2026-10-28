@@ -159,30 +159,53 @@ def _validate_filter_consistency(
     parser_stages = split_pipeline(parser_statements[-1])
     if not filter_stages or filter_stages[0].casefold() != "source":
         return
-    if len(filter_stages) == 1:
-        return
-    if not any(_pipeline_operator(stage) == "where" for stage in filter_stages[1:]):
-        findings.append(
-            Finding(
-                "FILTER001",
-                "ParserFilterQuery",
-                "A non-pass-through filter must contain at least one where stage.",
-            )
-        )
-    search_index = 1
-    for filter_stage in filter_stages[1:]:
-        try:
-            found_index = parser_stages.index(filter_stage, search_index)
-        except ValueError:
+    if len(filter_stages) > 1:
+        if not any(
+            _pipeline_operator(stage) == "where"
+            for stage in filter_stages[1:]
+        ):
             findings.append(
                 Finding(
-                    "FILTER002",
+                    "FILTER001",
                     "ParserFilterQuery",
-                    "Every filter stage must appear in ParserQuery in the same order.",
+                    "A non-pass-through filter must contain at least one where stage.",
                 )
             )
-            return
-        search_index = found_index + 1
+        search_index = 1
+        for filter_stage in filter_stages[1:]:
+            try:
+                found_index = parser_stages.index(
+                    filter_stage, search_index
+                )
+            except ValueError:
+                findings.append(
+                    Finding(
+                        "FILTER002",
+                        "ParserFilterQuery",
+                        "Every filter stage must appear in ParserQuery in the same order.",
+                    )
+                )
+                return
+            search_index = found_index + 1
+
+    filter_where_stages = [
+        stage
+        for stage in filter_stages[1:]
+        if _pipeline_operator(stage) == "where"
+    ]
+    parser_where_stages = [
+        stage
+        for stage in parser_stages[1:]
+        if _pipeline_operator(stage) == "where"
+    ]
+    if filter_where_stages != parser_where_stages:
+        findings.append(
+            Finding(
+                "FILTER004",
+                "ParserFilterQuery",
+                "Every where stage in ParserQuery must appear in ParserFilterQuery in the same order.",
+            )
+        )
 
 
 def _validate_dcr_metadata(
