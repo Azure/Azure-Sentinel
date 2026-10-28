@@ -735,7 +735,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         }
                         else {
                             Write-Error "Failed to create or update 'auth' parameter."
-                            throw "Failed to create or update 'auth' parameter."
                         }
 
                         $hasAppId = [bool](($armResource.properties.auth).PSobject.Properties.name -match "appId")
