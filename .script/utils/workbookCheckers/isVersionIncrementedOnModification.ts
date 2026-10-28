@@ -1,11 +1,12 @@
 import { GetDiffFiles, GetPRDetails } from "../gitHubWrapper.js";
 import { WorkbookMetadata } from "../workbookMetadata.js";
-import { simpleGit, SimpleGit } from 'simple-git';
+import gitP, { SimpleGit } from 'simple-git';
 import { WorkbookValidationError } from "../validationError.js";
 import { ExitCode } from "../exitCode.js";
 
 const workingDir:string = process.cwd();
-const git: SimpleGit = simpleGit(workingDir);
+const git: SimpleGit = gitP(workingDir);
+
 const fileTypeSuffixes = [".json"];
 const filePathFolderPrefixes = ["Workbooks"];
 const fileKinds = ["Modified"];
