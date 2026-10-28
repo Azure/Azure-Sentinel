@@ -2,7 +2,7 @@
 
 ## Version 0.1.2
 
-- (2026-10-28) Set EventVendor and EventProduct explicitly to Fortinet and FortiGate.
+- (2026-10-28) Set EventVendor and EventProduct explicitly to Fortinet and FortiGate - [PR #15475](https://github.com/Azure/Azure-Sentinel/pull/15475)
 
 ## Version 0.1.1
 

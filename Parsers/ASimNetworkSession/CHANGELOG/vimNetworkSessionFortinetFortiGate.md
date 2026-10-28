@@ -2,7 +2,7 @@
 
 ## Version 0.6.1
 
-- (2026-10-28) Remove the source-derived EventProduct assignment and standardize it to FortiGate.
+- (2026-10-28) Remove the source-derived EventProduct assignment and standardize it to FortiGate - [PR #15475](https://github.com/Azure/Azure-Sentinel/pull/15475)
 
 ## Version 0.6.0
 
