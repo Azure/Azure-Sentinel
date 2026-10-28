@@ -266,10 +266,14 @@ foreach ($job in $runView.jobs) {
         $job.name -like "Static template validation (*" -or
         $job.name -like "Ingested data validation (*"
     )
+    $isUnsuccessfulConclusion = (
+        $job.conclusion -and
+        $job.conclusion -notin @("success", "skipped")
+    )
     $downloadLog = (
         $job.name -eq "Discover ASIM ingestion validation targets" -or
         $job.name -eq "ASIM ingestion-time parser validation report" -or
-        $job.conclusion -in @("failure", "cancelled") -or
+        $isUnsuccessfulConclusion -or
         ($IncludeSuccessfulTargetLogs -and $isTargetJob)
     )
     if ($downloadLog -and $job.databaseId) {
@@ -391,8 +395,9 @@ foreach ($targetId in $targetIds) {
 
     $reportPath = $reportFiles |
         Where-Object {
-            (Read-JsonFile -Path $_.FullName).correlation.targetId -eq
-                $targetId
+            $reportDocument = Read-JsonFile -Path $_.FullName
+            ($reportDocument.targetId -eq $targetId) -or
+            ($reportDocument.correlation.targetId -eq $targetId)
         } |
         Select-Object -First 1 -ExpandProperty FullName
     $report = if ($reportPath) {
