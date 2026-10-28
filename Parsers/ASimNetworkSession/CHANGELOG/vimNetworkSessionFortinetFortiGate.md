@@ -1,5 +1,9 @@
 # Changelog for vimNetworkSessionFortinetFortiGate.yaml
 
+## Version 0.6.1
+
+- (2026-10-28) Remove the source-derived EventProduct assignment and standardize it to FortiGate.
+
 ## Version 0.6.0
 
 - (2025-12-11) Fix field name inconsistency in Fortigate parsers for ASim tables - [PR #12927](https://github.com/Azure/Azure-Sentinel/pull/12927)
@@ -23,4 +27,3 @@
 ## Version 0.2
 
 - (2022-06-26) Updated Fortinet FortiGate ASIM parser - [PR #5441](https://github.com/Azure/Azure-Sentinel/pull/5441)
-
