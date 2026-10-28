@@ -2,7 +2,7 @@
 
 ## Version 0.2.1
 
-- (2026-10-27) Corrected TargetProcessName (and the Process alias) to a string: the Commandline fallback returned a dynamic, where the ProcessEvent schema declares string - [PR #15445](https://github.com/Azure/Azure-Sentinel/pull/15445)
+- (2026-10-27) Removed unreferenced parser in favor of split ProcessCreate/ProcessTerminate variants - [PR #15445](https://github.com/Azure/Azure-Sentinel/pull/15445)
 
 ## Version 0.2.0
 
