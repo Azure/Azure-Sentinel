@@ -1,5 +1,9 @@
 # Changelog for imEmailEvent.yaml
 
+## Version 1.0.3
+
+- (2026-10-28) Registered the filtering Proofpoint TAP permitted-click inspection parser and forwarded all EmailEvent parameters, packing, and watchlist disable controls.
+
 ## Version 1.0.2
 
 - (2026-10-26) Add Microsoft Defender for Office 365 EmailEvents support - [PR #15430](https://github.com/Azure/Azure-Sentinel/pull/15430)
