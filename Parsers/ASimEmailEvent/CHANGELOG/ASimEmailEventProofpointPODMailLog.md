@@ -2,7 +2,7 @@
 
 ## Version 0.1.2
 
-- (2026-10-27) Add the ingestion-time EmailEvent parser and source-table-specific fixture for Proofpoint POD MailLog - [PR #15463](https://github.com/Azure/Azure-Sentinel/pull/15463)
+- (2026-10-28) Add the ingestion-time EmailEvent parser and source-table-specific fixture for Proofpoint POD MailLog - [PR #15463](https://github.com/Azure/Azure-Sentinel/pull/15463)
 - (2026-10-24) Normalize mailbox-form relay hosts and identify relay-less local delivery destinations - [PR #15410](https://github.com/Azure/Azure-Sentinel/pull/15410)
 - Extract the host from relay values such as `pps@localhost`; use the reporting device as destination only when `sm.mailer=local` and no relay endpoint is available.
 
