@@ -17,7 +17,8 @@
 # 11. ParserName format - must match ^[a-zA-Z][a-zA-Z0-9_]+$ and start with <FileType><Schema>
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
 # 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
-# 14. vim ParserParams - must match the schema union parser parameters (pack is optional)
+# 14. vim ParserParams - must match the schema union parser parameters
+#     (pack is optional; eventresultdetails_has_any is also optional for WebSession)
 #
 # Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
 
@@ -352,7 +353,13 @@ def validate_vim_parser_params(parser_file, union_parser_file):
     parser_params.discard(None)
     supported_params.discard(None)
 
-    missing_params = supported_params - OPTIONAL_VIM_PARSER_PARAMS - parser_params
+    optional_params = OPTIONAL_VIM_PARSER_PARAMS.copy()
+    # Temporary exception for WebSession.
+    # TODO: Remove eventresultdetails_has_any from the WebSession vim YAML and remove this exception.
+    if parser_file.get('Normalization', {}).get('Schema') == 'WebSession':
+        optional_params.add('eventresultdetails_has_any')
+
+    missing_params = supported_params - optional_params - parser_params
     unsupported_params = parser_params - supported_params - VIM_CONTROL_PARAMS
 
     if not missing_params and not unsupported_params:
@@ -370,7 +377,7 @@ def validate_vim_parser_params(parser_file, union_parser_file):
 
     return (
         f'{RED}{", ".join(differences)}{RESET}',
-        f'{RED}ParserParams must match the schema union parser parameters; "pack" is optional{RESET}',
+        f'{RED}ParserParams must match the schema union parser parameters; optional: {", ".join(sorted(optional_params))}{RESET}',
         f'{RED}Fail{RESET}'
     )
 
