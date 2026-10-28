@@ -1,0 +1,90 @@
+Parser:
+  DisplayName: 'Ingestion-time Email Event ASIM parser for Proofpoint POD MailLog'
+  Version: '0.1.2'
+  LastUpdated: '2026-10-27'
+Product:
+  Name: 'Proofpoint POD MailLog'
+Normalization:
+  Schema: 'EmailEvent'
+  Version: '1.0.0'
+Author: 'Proofpoint'
+Description: |
+  Normalizes SMTP receipt and delivery records from ProofpointPODMailLog_CL
+  into ASimEmailEventLogs during ingestion. Envelope recipients remain in
+  AdditionalFields rather than header recipient fields.
+ParserName: 'ASimEmailEventProofpointPODMailLog'
+DCRType: 'Standard'
+InputStream: 'Custom-ProofpointPODMailLog_CL'
+SourceRawTable: 'ProofpointPODMailLog_CL'
+TargetASIMTable: 'ASimEmailEventLogs'
+ParserFilterQuery: |
+  source
+  | where isnotempty(tostring(sm.qid)) and (bag_has_key(sm, "from") or array_length(sm["to"]) > 0)
+ParserQuery: |
+  source
+  | where isnotempty(tostring(sm.qid)) and (bag_has_key(sm, "from") or array_length(sm["to"]) > 0)
+  | extend Type = "ProofpointPODMailLog_CL"
+  | extend
+      IsDelivery = iif(isnotnull(array_length(sm["to"])), array_length(sm["to"]), 0) > 0,
+      Relay = tostring(sm.relay),
+      Dvc = iif(isnotempty(tostring(pps.agent)), tostring(pps.agent), tostring(metadata.origin.data.agent)),
+      EventStartTime = iif(isnotnull(eventTime), eventTime, TimeGenerated),
+      EmailMailFromAddress = replace(@"^([<>\s])+|([<>\s])+$", "", tostring(sm["from"])),
+      EmailSizeBytes = tolong(sm.sizeBytes),
+      Dsn = tostring(sm.dsn),
+      DeliveryStatus = tostring(sm.stat)
+  | parse Relay with RelayHost " [" RelayIp "]" *
+  | extend
+      EmailMailFromAddress = iff(EmailMailFromAddress contains "@", EmailMailFromAddress, ""),
+      RelayHost = replace(@"(\.)+$", "", tostring(split(iif(isnotempty(RelayHost), RelayHost, Relay), "@")[-1])),
+      RelayIp = iff(isnotnull(parse_ipv4(RelayIp)) or isnotempty(parse_ipv6(RelayIp)), RelayIp, ""),
+      EventResult = case(Dsn startswith "2.", "Success", Dsn startswith "4." or Dsn startswith "5.", "Failure", "NA"),
+      EmailProtocolName = case(tostring(sm.proto) =~ "SMTP" or tolower(tostring(sm.mailer)) in ("smtp", "esmtp"), "SMTP", ""),
+      EventSubType = iff(IsDelivery, "EmailSent", "EmailReceived")
+  | extend
+      SrcIpAddr = iff(IsDelivery, "", RelayIp),
+      DstIpAddr = iff(IsDelivery, RelayIp, ""),
+      Src = iff(IsDelivery, Dvc, iif(isnotempty(RelayIp), RelayIp, RelayHost)),
+      Dst = iff(IsDelivery, iif(isnotempty(RelayIp), RelayIp, iif(isnotempty(RelayHost), RelayHost, iff(tostring(sm.mailer) =~ "local", Dvc, ""))), Dvc),
+      SrcFQDN = iff(not(IsDelivery) and RelayHost contains ".", RelayHost, ""),
+      SrcHostname = iff(IsDelivery, tostring(split(Dvc, ".")[0]), tostring(split(RelayHost, ".")[0])),
+      SrcDomain = iff(IsDelivery, substring(Dvc, indexof(Dvc, ".") + 1), substring(RelayHost, indexof(RelayHost, ".") + 1)),
+      DvcHostname = tostring(split(Dvc, ".")[0]),
+      DvcDomain = iff(Dvc contains ".", substring(Dvc, indexof(Dvc, ".") + 1), ""),
+      DvcFQDN = iff(Dvc contains ".", Dvc, ""),
+      EmailMailFromDomain = iff(EmailMailFromAddress contains "@", tostring(split(EmailMailFromAddress, "@")[1]), ""),
+      DvcAction = iff(IsDelivery and EventResult == "Success" and DeliveryStatus startswith "Sent", "Delivered", "NA")
+  | extend
+      SrcFQDN = iff(IsDelivery, DvcFQDN, SrcFQDN),
+      SrcDomain = iff(iff(IsDelivery, Dvc, RelayHost) contains ".", SrcDomain, ""),
+      DvcDomainType = iff(isnotempty(DvcDomain), "FQDN", ""),
+      EventEndTime = EventStartTime,
+      EventCount = int(1),
+      EventVendor = "Proofpoint",
+      EventProduct = "POD MailLog",
+      EventSchema = "EmailEvent",
+      EventSchemaVersion = "1.0.0",
+      EventType = "EmailDelivery",
+      EventOriginalType = "maillog",
+      EmailDirection = "Unknown",
+      EventOriginalResultDetails = strcat(Dsn, iff(isnotempty(Dsn) and isnotempty(DeliveryStatus), "; ", ""), DeliveryStatus),
+      EventOriginalUid = tostring(id),
+      DvcEntityKey = "",
+      AdditionalEntities = parse_json('[]'),
+      AdditionalFields = pack("sm", sm, "tls", tls, "pps", pps, "metadata", metadata)
+  | extend
+      EventUid = iff(isnotempty(EventOriginalUid), strcat("ProofpointPODMailLog_CL:", EventOriginalUid), ""),
+      SrcDomainType = iff(isnotempty(SrcDomain), "FQDN", ""), IpAddr = SrcIpAddr
+  | project-rename EventMessage = data
+  | project
+      TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+      EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+      EventType, EventSubType, EventOriginalType, EventResult,
+      EventOriginalResultDetails, EventOriginalUid, EventUid, EventMessage,
+      Dvc, DvcHostname, DvcDomain, DvcDomainType, DvcFQDN, DvcAction, DvcEntityKey,
+      Src, SrcIpAddr, SrcHostname, SrcDomain, SrcDomainType, SrcFQDN, Dst, DstIpAddr, IpAddr,
+      EmailMailFromAddress, EmailMailFromDomain, EmailSizeBytes, EmailProtocolName, EmailDirection,
+      AdditionalFields, AdditionalEntities
+Change:
+  Date: '2026-10-27'
+  Description: 'Initial ingestion-time conversion from query-time version 0.1.2.'
