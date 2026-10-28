@@ -1,0 +1,100 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureActivity
+  requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+    - AzureActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: fa2658fe-3714-4c55-bb12-2b7275c628e8
+    path: Analytic Rules/Threat_Essentials_TimeSeriesAnomaly_Mass_Cloud_Resource_Deletions.yaml
+    version: 1.0.2
+    querySha256: 5e18c680550a1d2acd418dab400d4e38e550e01498b68a06723f56dab4420261
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+    reviewScope:
+      sourceDocumentSha256: 9d555a612a6457b6bd8e304f34a9336cddffd220245cee95c138ec06c0031b5d
+      targetQuerySha256: 1aa4c60b52ff4d46b60050e9de2b5c5d1d845fb89d889399fe48f8573f37b5d7
+properties:
+  id: xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8
+  displayName: Threat Essentials - Mass Cloud resource deletions Time Series Anomaly
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let starttime = 14d;
+      let endtime = 1d;
+      let timeframe = 1h;
+      let TotalEventsThreshold = 25;
+      let TimeSeriesData =
+      AzureActivity
+      | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+      | where OperationNameValue endswith "delete"
+      | project TimeGenerated, Caller
+      | make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller;
+      let TimeSeriesAlerts = materialize(TimeSeriesData
+      | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit')
+      | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+      | where anomalies > 0
+      | project Caller, TimeGenerated, Total, baseline, anomalies, score
+      | where Total > TotalEventsThreshold and baseline > 0 );
+      TimeSeriesAlerts
+      | where TimeGenerated > (ago(endtime))
+      | project TimeGenerated, Caller
+      | join kind = inner (AzureActivity
+      | where TimeGenerated > (ago(endtime))
+      | where OperationNameValue endswith "delete"
+      | summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller
+      | extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),"")
+      | extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),"")
+      | extend AadUserId = iif(Caller !has '@',Caller,"")
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Threat Essentials - Mass Cloud resource deletions Time Series Anomaly
+      description: |-
+        'This query generates baseline pattern of cloud resource deletions by an user and generated anomaly when any unusual spike is detected.
+        These anomalies from unusual or privileged users could be an indication of cloud infrastructure take-down by an adversary '
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+          aadUserIdColumn: AadUserId
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485

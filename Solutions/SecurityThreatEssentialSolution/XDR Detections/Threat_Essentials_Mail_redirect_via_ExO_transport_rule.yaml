@@ -1,0 +1,113 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+    - Operation
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d7c575b2-84f5-48cb-92c5-70d7e8246284
+    path: Analytic Rules/Threat_Essentials_Mail_redirect_via_ExO_transport_rule.yaml
+    version: 1.0.2
+    querySha256: 2e281e225e45a728d46833e373637148c6b480c584aaae955ba68b448e8b2a76
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Collection
+    - Exfiltration
+    originalTechniques:
+    - T1114
+    - T1020
+    reviewScope:
+      sourceDocumentSha256: e813d5e5d59a3f03b9b44534bba603800a88bd9e572778f43b512b00f6feb398
+      targetQuerySha256: 53cfdcb95ac888f4ff0d11051564846ba366991f3ca8f88b27c6095981415b96
+properties:
+  id: xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284
+  displayName: Threat Essentials - Mail redirect via ExO transport rule
+  status: disabled
+  queryCondition:
+    queryText: |-
+      OfficeActivity
+      | where OfficeWorkload == "Exchange"
+      | where Operation in~ ("New-TransportRule", "Set-TransportRule")
+      | extend p = parse_json(Parameters)
+      | extend RuleName = case(
+        Operation =~ "Set-TransportRule", tostring(OfficeObjectId),
+        Operation =~ "New-TransportRule", tostring(p[1].Value),
+        "Unknown"
+        )
+      | mvexpand p
+      | where (p.Name =~ "BlindCopyTo" or p.Name =~ "RedirectMessageTo") and isnotempty(p.Value)
+      | extend RedirectTo = p.Value
+      | extend ClientIPOnly = case(
+        ClientIP has "." and ClientIP has ":", tostring(split(ClientIP,":")[0]),
+        ClientIP has "." and ClientIP has "-", tostring(split(ClientIP,"-")[0]),
+        ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+        ClientIP
+        )
+      | extend Port = case(
+        ClientIP has "." and ClientIP has ":", (split(ClientIP,":")[1]),
+        ClientIP has "." and ClientIP has "-", (split(ClientIP,"-")[1]),
+        ClientIP has "[" and ClientIP has ":", tostring(split(ClientIP,"]:")[1]),
+        ClientIP has "[" and ClientIP has "-", tostring(split(ClientIP,"]-")[1]),
+        ClientIP
+        )
+      | extend ClientIP = ClientIPOnly
+      | project TimeGenerated, RedirectTo, ClientIP, Port, UserId, Operation, RuleName
+      | extend Name=split(UserId, "@")[0], UPNSuffix=split(UserId, "@")[1]
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Threat Essentials - Mail redirect via ExO transport rule
+      description: |-
+        'Identifies when Exchange Online transport rule configured to forward emails.
+        This could be an adversary mailbox configured to collect mail from multiple user accounts.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1114
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020
