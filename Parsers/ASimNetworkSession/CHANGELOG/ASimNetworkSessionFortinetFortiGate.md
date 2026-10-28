@@ -2,7 +2,7 @@
 
 ## Version 0.6.2
 
-- (2026-10-28) Align emitted EventSchemaVersion with Normalization.Version 0.2.6.
+- (2026-10-28) Align emitted EventSchemaVersion with Normalization.Version 0.2.6 - [PR #15478](https://github.com/Azure/Azure-Sentinel/pull/15478)
 
 ## Version 0.6.1
 

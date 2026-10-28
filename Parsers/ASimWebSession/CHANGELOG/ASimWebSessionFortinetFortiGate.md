@@ -2,7 +2,7 @@
 
 ## Version 0.3.1
 
-- (2026-10-28) Standardize EventProduct casing to FortiGate.
+- (2026-10-28) Standardize EventProduct casing to FortiGate - [PR #15478](https://github.com/Azure/Azure-Sentinel/pull/15478)
 
 ## Version 0.2.0
 
