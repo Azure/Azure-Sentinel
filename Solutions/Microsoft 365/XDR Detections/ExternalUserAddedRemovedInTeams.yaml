@@ -1,0 +1,195 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (Teams)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (Teams)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: bff093b2-500e-4ae5-bb49-a5b1423cbd5b
+    path: Analytic Rules/ExternalUserAddedRemovedInTeams.yaml
+    version: 2.1.3
+    querySha256: 5263621a620269f5471bc7049215edf03585b34af1c80b2044fd3afef63ca4fa
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `MemberAdded_Removed`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `MemberAdded_Removed` requires
+      runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query
+      column `UserWhoAdded`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `UserWhoAdded` requires
+      runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_3 from query
+      column `UserWhoDeleted`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_3 column `UserWhoDeleted` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1136
+    reviewScope:
+      sourceDocumentSha256: be1a6db59b6e2d345008c12bb86cac3d2a643edc0ec284440407621992be87ae
+      targetQuerySha256: 0b6623104fbcdf9b2daf56d977a24ee1bd96d4ef84681e0fe13b1c60faf8e6d5
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query;
+        native 4-hour XDR lookback relies on Defender XDR alert deduplication across
+        hourly runs.
+      sourceDocumentSha256: be1a6db59b6e2d345008c12bb86cac3d2a643edc0ec284440407621992be87ae
+      targetQuerySha256: 0b6623104fbcdf9b2daf56d977a24ee1bd96d4ef84681e0fe13b1c60faf8e6d5
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: MemberAdded_Removed
+      column: MemberAdded_Removed
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: UserWhoAdded
+      column: UserWhoAdded
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: UserWhoDeleted
+      column: UserWhoDeleted
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_3
+properties:
+  id: xdr-bff093b2-500e-4ae5-bb49-a5b1423cbd5b
+  displayName: External user added and removed in short timeframe
+  status: disabled
+  queryCondition:
+    queryText: 'let TeamsAddDel = (Op:string){
+
+      OfficeActivity
+
+      | where OfficeWorkload =~ "MicrosoftTeams"
+
+      | where Operation == Op
+
+      | where Members has ("#EXT#")
+
+      | mv-expand Members
+
+      | extend UPN = tostring(Members.UPN)
+
+      | where UPN has ("#EXT#")
+
+      | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIP
+
+      };
+
+      let TeamsAdd = TeamsAddDel("MemberAdded")
+
+      | project TimeAdded=TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded
+      = UserId, TeamName, ClientIP;
+
+      let TeamsDel = TeamsAddDel("MemberRemoved")
+
+      | project TimeDeleted=TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted
+      = UserId, TeamName, ClientIP;
+
+      TeamsAdd
+
+      | join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved
+
+      | where TimeDeleted > TimeAdded
+
+      | project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded,
+      UserWhoDeleted, TeamName, ClientIP
+
+      | extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed,
+      "@")[0]), MemberAdded_RemovedAccountUPNSuffix = tostring(split(MemberAdded_Removed,
+      "@")[1])
+
+      | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, "@")[0]), UserWhoAddedAccountUPNSuffix
+      = tostring(split(UserWhoAdded, "@")[1])
+
+      | extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, "@")[0]),
+      UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, "@")[1])'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: External user added and removed in short timeframe
+      description: '''This detection flags the occurrences of external user accounts
+        that are added to a Team and then removed within one hour.'''
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: MemberAdded_RemovedAccountName
+          upnSuffixColumn: MemberAdded_RemovedAccountUPNSuffix
+        - id: account2
+          nameColumn: UserWhoAddedAccountName
+          upnSuffixColumn: UserWhoAddedAccountUPNSuffix
+        - id: account3
+          nameColumn: UserWhoDeletedAccountName
+          upnSuffixColumn: UserWhoDeletedAccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1136
+      customDetails:
+        AccountFullName: MemberAdded_Removed
+        AccountFullName_2: UserWhoAdded
+        AccountFullName_3: UserWhoDeleted
