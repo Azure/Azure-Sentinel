@@ -1,0 +1,104 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - NetworkAccessTrafficLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - NetworkAccessTraffic
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - NetworkAccessTrafficLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f6a8d6a5-3e9f-47c8-a8d5-1b2b9d3b7d6a
+    path: Analytic Rules/SWG - Abnormal Port to Protocol.yaml
+    version: 1.0.4
+    querySha256: 8660ebb58ac641e69164b78639a1b01c90313662b7833a6d0e501d08c71c1d2d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 8d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=8d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Exfiltration
+    - CommandAndControl
+    originalTechniques:
+    - T1571
+    reviewScope:
+      sourceDocumentSha256: 732f30f9bb3a73df7a944bbc196dbb16257c8a58f6dee7c72331406bed9e7b7d
+      targetQuerySha256: 5e6b729c8f40dd977a80c6eb55b4f79a4891157d3a05fac2b804daa190690377
+properties:
+  id: xdr-f6a8d6a5-3e9f-47c8-a8d5-1b2b9d3b7d6a
+  displayName: GSA - Detect Protocol Changes for Destination Ports
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let LearningPeriod = 7d;
+      let RunTime = 1d;
+      let StartLearningPeriod = ago(LearningPeriod + RunTime);
+      let EndRunTime = ago(RunTime);
+      let LearningPortToProtocol =
+        NetworkAccessTraffic
+        | where TimeGenerated between (StartLearningPeriod .. EndRunTime)
+        | where isnotempty(DestinationPort)
+        | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = TransportProtocol, SourceIp, DestinationFqdn;
+      let AlertTimePortToProtocol =
+        NetworkAccessTraffic
+        | where TimeGenerated between (EndRunTime .. now())
+        | where isnotempty(DestinationPort)
+        | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = TransportProtocol, SourceIp, DestinationFqdn;
+      AlertTimePortToProtocol
+        | join kind=leftouter (LearningPortToProtocol) on $left.AlertTimeDstPort == $right.LearningTimeDstPort and $left.SourceIp == $right.SourceIp and $left.DestinationFqdn == $right.DestinationFqdn
+        | where isnotempty(LearningTimeProtocol) and isnotempty(AlertTimeProtocol) and LearningTimeProtocol != AlertTimeProtocol
+        | project AlertTimeDstPort, AlertTimeProtocol, LearningTimeProtocol, SourceIp, DestinationFqdn
+        | extend IPCustomEntity = SourceIp, FqdnCustomEntity = DestinationFqdn
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GSA - Detect Protocol Changes for Destination Ports
+      description: |-
+        Identifies changes in the protocol used for specific destination ports, comparing the current runtime with a learned baseline.
+        This can indicate potential protocol misuse or configuration changes.
+        Configurable Parameters:
+        - Learning period: The time range to establish the baseline. Default is set to 7 days.
+        - Run time: The time range for current analysis. Default is set to 1 day.
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+        urls:
+        - id: url1
+          addressColumn: FqdnCustomEntity
+      tactics:
+      - tactic: DefenseEvasion
+      - tactic: Exfiltration
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1571

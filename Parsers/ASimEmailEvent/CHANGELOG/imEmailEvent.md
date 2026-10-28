@@ -1,5 +1,9 @@
 # Changelog for imEmailEvent.yaml
 
+## Version 1.0.2
+
+- (2026-10-26) Add Microsoft Defender for Office 365 EmailEvents support - [PR #15430](https://github.com/Azure/Azure-Sentinel/pull/15430)
+
 ## Version 1.0.1
 
 - (2026-10-21) Registered the filtering Proofpoint POD message inspection parser with filter forwarding and watchlist disable controls - [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409)
