@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -172,7 +173,11 @@ def _validate_filter_consistency(
                 )
             )
         search_index = 1
-        for filter_stage in filter_stages[1:]:
+        for filter_stage in (
+            stage
+            for stage in filter_stages[1:]
+            if _pipeline_operator(stage) != "where"
+        ):
             try:
                 found_index = parser_stages.index(
                     filter_stage, search_index
@@ -182,7 +187,7 @@ def _validate_filter_consistency(
                     Finding(
                         "FILTER002",
                         "ParserFilterQuery",
-                        "Every filter stage must appear in ParserQuery in the same order.",
+                        "Every non-where filter stage must appear in ParserQuery in the same order.",
                     )
                 )
                 return
@@ -198,12 +203,12 @@ def _validate_filter_consistency(
         for stage in parser_stages[1:]
         if _pipeline_operator(stage) == "where"
     ]
-    if filter_where_stages != parser_where_stages:
+    if Counter(filter_where_stages) != Counter(parser_where_stages):
         findings.append(
             Finding(
                 "FILTER004",
                 "ParserFilterQuery",
-                "Every where stage in ParserQuery must appear in ParserFilterQuery in the same order.",
+                "ParserFilterQuery must contain the same where stages as ParserQuery; order does not matter.",
             )
         )
 

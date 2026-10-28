@@ -64,10 +64,11 @@ stages. Once the raw DCR exists, upload or visibility failures fail the target;
 QTP execution and parity also fail the target when they run and fail.
 
 Static validation requires `ParserFilterQuery` to preserve the parser's complete
-row-selection logic. Every filter stage must occur in `ParserQuery` in the same
-order, and every `where` stage in `ParserQuery` must also occur in
-`ParserFilterQuery` in the same order. A pass-through `source` filter is valid
-only when `ParserQuery` contains no `where` stage.
+row-selection logic. Every non-`where` filter prerequisite stage must occur in
+`ParserQuery` in the same order. `ParserFilterQuery` and `ParserQuery` must
+contain the same `where` stages, including duplicate counts, but the `where`
+stage order may differ. A pass-through `source` filter is valid only when
+`ParserQuery` contains no `where` stage.
 
 `qtpSourceReplay` persists the latest `observedSchema`, `observedRows`, and
 `observedCountsByTimestamp` from raw-table visibility checks. These remain

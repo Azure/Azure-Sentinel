@@ -785,7 +785,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "SOURCE001", {finding["code"] for finding in result["findings"]}
         )
 
-    def test_rejects_filter_stage_missing_from_parser_query(self):
+    def test_rejects_filter_where_missing_from_parser_query(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -793,6 +793,25 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                 parser_filter_query=(
                     'source\n| where EventType == "Logout"'
                 )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertIn(
+            "FILTER004", {finding["code"] for finding in result["findings"]}
+        )
+
+    def test_rejects_non_where_filter_stage_missing_from_parser_query(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    "source\n"
+                    "| extend SelectedType = tostring(EventType)\n"
+                    '| where EventType == "Login"'
+                ),
             ),
         )
 
@@ -880,6 +899,30 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                     '| extend EventVendor = "Contoso", '
                     'EventProduct = "Contoso"\n'
                     "| project TimeGenerated, EventType, SelectedType, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_allows_matching_where_stages_in_different_order(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    'source\n| where EventResult == "Success"\n'
+                    '| where EventType == "Login"'
+                ),
+                parser_query=(
+                    'source\n| where EventType == "Login"\n'
+                    '| where EventResult == "Success"\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, EventResult, "
                     "EventVendor, EventProduct"
                 ),
             ),
