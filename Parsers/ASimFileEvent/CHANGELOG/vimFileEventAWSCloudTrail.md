@@ -1,7 +1,7 @@
 # Changelog for vimFileEventAWSCloudTrail.yaml
 
 ## Version 0.1.1
-- (2026-10-28) Align emitted EventSchemaVersion with Normalization.Version 0.2.2.
+- (2026-10-28) Align emitted EventSchemaVersion with Normalization.Version 0.2.2 - [PR #15477](https://github.com/Azure/Azure-Sentinel/pull/15477)
 
 ## Version 0.1.0
 - (2026-02-04) [ASIM] FileEvent - AWSCloudTrail (New Parser) [PR #13569](https://github.com/Azure/Azure-Sentinel/pull/13569)
