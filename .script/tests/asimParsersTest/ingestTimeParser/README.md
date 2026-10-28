@@ -67,6 +67,10 @@ Static validation requires `ParserFilterQuery` to contain a `where` stage when
 `ParserQuery` contains one. This is a presence check only; it does not require
 all parser `where` stages to be copied into the filter query.
 
+`Standard` parsers must declare a non-`none` `InputStream`. `Workspace`
+parsers may omit `InputStream` or declare it. Any declared non-`none` stream
+must use the supported stream-name format.
+
 `qtpSourceReplay` persists the latest `observedSchema`, `observedRows`, and
 `observedCountsByTimestamp` from raw-table visibility checks. These remain
 available in `validation-result.json` when visibility detects unexpected,
