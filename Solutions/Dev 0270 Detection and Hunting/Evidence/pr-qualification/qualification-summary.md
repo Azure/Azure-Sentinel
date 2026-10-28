@@ -4,7 +4,7 @@
 - **Version:** `3.2.3` (Previous: `3.0.1`)
 - **Qualification Mode:** Migration + Qualification
 - **Detected Content Types:** `solution-package`, `analytic-rules`, `xdr-detections`, `logos`, `sample-data`
-- **Generated (UTC):** `2026-10-28T09:46:55Z`
+- **Generated (UTC):** `2026-10-28T09:52:54Z`
 - **Interactive Full Report:** [qualification-report.html](qualification-report.html)
 
 ## Executive Rollup Status
