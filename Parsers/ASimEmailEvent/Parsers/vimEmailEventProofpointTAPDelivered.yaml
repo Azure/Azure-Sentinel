@@ -1,5 +1,5 @@
 Parser:
-  Title: Email Event ASIM parser for Proofpoint TAP
+  Title: Email Event ASIM filtering parser for Proofpoint TAP delivered messages
   Version: '0.1.0'
   LastUpdated: Oct 29, 2026
 Product:
@@ -15,11 +15,38 @@ References:
 - Title: Proofpoint TAP SIEM API
   Link: https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API
 Description: |
-  Normalizes Proofpoint TAP messages-delivered events from ProofPointTAPMessagesDeliveredV2_CL to ASIM EmailEvent.
+  Filters and normalizes Proofpoint TAP messages-delivered events from ProofPointTAPMessagesDeliveredV2_CL to ASIM EmailEvent.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
-ParserName: ASimEmailEventProofpointTAP
-EquivalentBuiltInParser: _ASim_EmailEvent_ProofpointTAP
+ParserName: vimEmailEventProofpointTAPDelivered
+EquivalentBuiltInParser: _Im_EmailEvent_ProofpointTAPDelivered
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailfromaddress_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailrecipient_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailsubject_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildirection_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildeliverylocation_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
@@ -27,7 +54,19 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let parser = (disabled:bool = false, pack:bool = false) {
+  let parser = (
+      starttime:datetime = datetime(null),
+      endtime:datetime = datetime(null),
+      ipaddr_has_any_prefix:dynamic = dynamic([]),
+      emailfromaddress_has_any:dynamic = dynamic([]),
+      emailrecipient_has_any:dynamic = dynamic([]),
+      emailsubject_has_any:dynamic = dynamic([]),
+      emaildirection_in:dynamic = dynamic([]),
+      emaildeliverylocation_in:dynamic = dynamic([]),
+      eventresult:string = "*",
+      disabled:bool = false,
+      pack:bool = false
+  ) {
       let Address = (value:dynamic) {
           let text = iff(gettype(value) == "array",
               iff(array_length(value) == 1, tostring(value[0]), ""), tostring(value));
@@ -39,13 +78,27 @@ ParserQuery: |
       };
       ProofPointTAPMessagesDeliveredV2_CL
       | where not(disabled)
+      | where isnull(starttime) or messageTime >= starttime or (isnull(messageTime) and TimeGenerated >= starttime)
+      | where isnull(endtime) or messageTime <= endtime or (isnull(messageTime) and TimeGenerated <= endtime)
+      | where eventresult == "*" or eventresult == "Success"
+      | where array_length(emaildirection_in) == 0 or set_has_element(emaildirection_in, "Unknown")
+      // Delivery does not establish whether the message reached Inbox, Junk, or another folder.
+      | where array_length(emaildeliverylocation_in) == 0
+      | where array_length(ipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(senderIP, ipaddr_has_any_prefix)
+      | where array_length(emailsubject_has_any) == 0 or subject has_any (emailsubject_has_any)
       | extend
           EmailFromAddress = coalesce(Address(fromAddress), Address(headerFrom)),
           EmailReplyToAddress = coalesce(Address(replyToAddress), Address(headerReplyTo)),
           EmailMailFromAddress = Address(sender),
           EmailToRecipients = Addresses(toAddresses),
           EmailCCRecipients = Addresses(ccAddresses),
-          EnvelopeRecipients = Addresses(recipient),
+          EnvelopeRecipients = Addresses(recipient)
+      | where array_length(emailfromaddress_has_any) == 0 or EmailFromAddress has_any (emailfromaddress_has_any)
+      | where array_length(emailrecipient_has_any) == 0
+          or EmailToRecipients has_any (emailrecipient_has_any)
+          or EmailCCRecipients has_any (emailrecipient_has_any)
+          or EnvelopeRecipients has_any (emailrecipient_has_any)
+      | extend
           // Only a single threat can populate scalar fields without losing multi-threat context.
           Threat = case(gettype(threatsInfoMap) == "dictionary", threatsInfoMap,
               array_length(threatsInfoMap) == 1, threatsInfoMap[0], dynamic(null)),
@@ -123,4 +176,9 @@ ParserQuery: |
           ThreatId, ThreatName, ThreatCategory, ThreatOriginalCategory, ThreatFirstReportedTime,
           ThreatIsActive, AdditionalFields
   };
-  parser(disabled=disabled, pack=pack)
+  parser(
+      starttime=starttime, endtime=endtime, ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      emailfromaddress_has_any=emailfromaddress_has_any, emailrecipient_has_any=emailrecipient_has_any,
+      emailsubject_has_any=emailsubject_has_any, emaildirection_in=emaildirection_in,
+      emaildeliverylocation_in=emaildeliverylocation_in, eventresult=eventresult,
+      disabled=disabled, pack=pack)
