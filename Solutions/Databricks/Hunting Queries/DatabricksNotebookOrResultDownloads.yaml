@@ -1,0 +1,31 @@
+id: 8c1b3d5f-7e9a-4f2c-a1d6-3b5e7c9f0a12
+name: Databricks - Notebook exports and large result downloads
+description: |
+  Lists notebook exports and downloads of query or notebook results in the last 7 days, by user. A spike in exports or downloads by one user, or exports from a user who does not normally perform them, can indicate data exfiltration.
+requiredDataConnectors:
+  - connectorId: DatabricksAuditLogs
+    dataTypes:
+      - DatabricksAudit_CL
+tactics:
+  - Exfiltration
+  - Collection
+relevantTechniques:
+  - T1567
+  - T1530
+query: |
+  DatabricksAudit_CL
+  | where TimeGenerated > ago(7d)
+  | where ActionName in ("downloadLargeResults", "downloadPreviewResults", "downloadQueryResult", "exportNotebook", "workspaceExport", "exportDirectory")
+  | summarize Downloads = count(), Actions = make_set(ActionName, 10), Paths = make_set(tostring(RequestParams.path), 20), FirstSeen = min(EventTime), LastSeen = max(EventTime)
+      by UserEmail, SourceIPAddress, WorkspaceId
+  | order by Downloads desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+version: 1.0.0
