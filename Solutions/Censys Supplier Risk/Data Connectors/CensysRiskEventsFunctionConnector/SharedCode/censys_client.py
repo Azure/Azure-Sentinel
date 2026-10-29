@@ -26,8 +26,13 @@ class CensysClient:
         self.session.headers.update({
             "Authorization": f"Bearer {api_token}",
             "Accept": "application/json",
-            "User-Agent": consts.USER_AGENT,
+            "User-Agent": f"{consts.USER_AGENT_PRODUCT}/{consts.CONNECTOR_VERSION}",
         })
+
+    @staticmethod
+    def _request_headers() -> Dict[str, str]:
+        """Headers that change with every request: the current epoch time in seconds."""
+        return {"ts": str(int(time.time()))}
 
     def _check_budget(self) -> None:
         """Stop the run when the time budget is used up, so that no new API call is started."""
@@ -53,7 +58,8 @@ class CensysClient:
         for attempt in range(1, consts.MAX_RETRIES + 1):
             self._check_budget()
             try:
-                resp = self.session.get(url, params=params, timeout=self._timeout())
+                resp = self.session.get(url, params=params, headers=self._request_headers(),
+                                        timeout=self._timeout())
             except requests.RequestException as err:
                 applogger.warning(f"{consts.LOG_PREFIX} get_page: request error (attempt {attempt}): {err}")
                 self._wait(min(2 ** attempt, 60))

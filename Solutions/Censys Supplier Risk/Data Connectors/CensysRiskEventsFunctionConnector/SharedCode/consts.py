@@ -8,7 +8,7 @@ SUPPLIERS_PAGE_SIZE = 100
 RISKS_PATH = "/v1/supplychains/default/risks"
 RISKS_PAGE_SIZE = 100
 CONNECTOR_VERSION = "1.0.0"
-USER_AGENT = f"MicrosoftSentinel-CensysSR/{CONNECTOR_VERSION}"
+USER_AGENT_PRODUCT = "CensysSRMSSentinel"
 
 # Names in SupplierNames and RiskNames are separated by an asterisk, so a name can contain a comma. At most
 # MAX_SUPPLIER_IDS ids are sent in one request: the supplier_ids parameter is part of the URL, and the API rejected

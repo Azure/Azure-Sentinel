@@ -808,10 +808,10 @@
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
-                "description": "Creates one incident per supplier risk instance that is opened, or reopened, with CRITICAL or HIGH severity. Alerts are grouped by RiskInstanceId, so further events of the same risk instance within 24 hours are added to the same incident while it is open.\nAlert severity follows the Censys severity: CRITICAL maps to High and HIGH to Medium.\nBy default the rule alerts only on new CRITICAL and HIGH risks. The query holds commented lines to follow the whole life of a risk instead (reopened events of any severity and resolved events), see the comments in the query.",
+                "description": "Creates one incident per supplier risk instance that is opened, or reopened, with CRITICAL or HIGH severity. Alerts are grouped by RiskInstanceId, so further events of the same risk instance within 24 hours are added to the same incident while it is open.\nAlert severity follows the Censys severity: CRITICAL and HIGH map to High, MEDIUM to Medium and LOW to Low. Resolved events follow the same mapping, and any other severity is Informational.\nBy default the rule alerts only on new CRITICAL and HIGH risks. The query holds commented lines to follow the whole life of a risk instead (reopened events of any severity and resolved events), see the comments in the query.",
                 "displayName": "Censys SR - Risk State Change",
                 "enabled": false,
-                "query": "// New events are selected by the time they reached Sentinel (IngestedAt), not by the Censys insert time,\n// so a delay between Censys and the connector can never make an event fall between two runs.\n// Each run covers 60 minutes that end 5 minutes ago, and consecutive runs are contiguous, so no event is alerted twice.\n//\n// OPTIONAL - follow the whole life of a risk instance (reopened events of any severity, and resolved events of risks that\n// were alerted before). To use it, uncomment the two \"let\" lines below, comment out the line \"Default\" in the query, uncomment\n// the line \"Full lifecycle\", and in the rule settings set the query period to 7 days and the incident grouping look-back to 7 days.\n// let Alertable = materialize(CensysRiskEvents | where ChangeType == \"reopened\" or (ChangeType == \"opened\" and Severity in (\"CRITICAL\", \"HIGH\")));\n// let TrackedRisks = Alertable | distinct RiskInstanceId;\nCensysRiskEvents\n| where IngestedAt between (ago(65m) .. ago(5m))\n// Default: opened or reopened risks with CRITICAL or HIGH severity\n| where ChangeType in (\"opened\", \"reopened\") and Severity in (\"CRITICAL\", \"HIGH\")\n// Full lifecycle (needs the optional \"let\" lines above):\n// | where (ChangeType == \"reopened\" or (ChangeType == \"opened\" and Severity in (\"CRITICAL\", \"HIGH\"))) or (ChangeType == \"resolved\" and RiskInstanceId in (TrackedRisks))\n//\n// Optional filters: remove the leading // of a line to use it. Each line narrows the alerts further, and several lines can be combined.\n// Do not remove or change the IngestedAt window above, it keeps every event alerted exactly once.\n// | where Confidence >= 0.8                           // only findings with a confidence of 80% or more\n// | where Severity == \"CRITICAL\"                      // only CRITICAL risks (Censys severities: CRITICAL, HIGH, MEDIUM, LOW)\n// | where ChangeType == \"opened\"                      // only newly opened risks, skip reopened risks\n// | where RapidResponse == true                       // only actively exploited (rapid response) risks\n// | where RiskCategory == \"VULNERABILITY\"             // VULNERABILITY, MISCONFIGURATION, EXPOSURE or THREAT\n// | where SupplierDisplayName in (\"OpenAI\", \"Harvey\") // only these suppliers\n// | where CveId != \"\"                                 // only risks that have a CVE id\n// | where RiskName has \"Log4Shell\"                    // only risks whose name contains this text\n// | where AssetType == \"host\"                         // asset type: host or web\n| extend SentinelSeverity = case(\n    ChangeType == \"resolved\", \"Informational\",\n    Severity == \"CRITICAL\", \"High\",\n    Severity == \"HIGH\", \"Medium\",\n    Severity == \"MEDIUM\", \"Low\",\n    \"Informational\")\n| project TimeGenerated, IngestedAt, EventId, InsertedAt, OccurredAt, ChangeType, RiskInstanceId, Severity, SentinelSeverity,\n    RiskCategory, RiskName, Description, CveId, RapidResponse, SupplierDisplayName,\n    AssetName, AssetHostname, AssetIp, ServicePort, ServiceProtocol, Evidence, ResolveTime, ResolveReason, PlatformUrl\n",
+                "query": "// New events are selected by the time they reached Sentinel (IngestedAt), not by the Censys insert time,\n// so a delay between Censys and the connector can never make an event fall between two runs.\n// Each run covers 60 minutes that end 5 minutes ago, and consecutive runs are contiguous, so no event is alerted twice.\n//\n// OPTIONAL - follow the whole life of a risk instance (reopened events of any severity, and resolved events of risks that\n// were alerted before). To use it, uncomment the two \"let\" lines below, comment out the line \"Default\" in the query, uncomment\n// the line \"Full lifecycle\", and in the rule settings set the query period to 7 days and the incident grouping look-back to 7 days.\n// let Alertable = materialize(CensysRiskEvents | where ChangeType == \"reopened\" or (ChangeType == \"opened\" and Severity in (\"CRITICAL\", \"HIGH\")));\n// let TrackedRisks = Alertable | distinct RiskInstanceId;\nCensysRiskEvents\n| where IngestedAt between (ago(65m) .. ago(5m))\n// Default: opened or reopened risks with CRITICAL or HIGH severity\n| where ChangeType in (\"opened\", \"reopened\") and Severity in (\"CRITICAL\", \"HIGH\")\n// Full lifecycle (needs the optional \"let\" lines above):\n// | where (ChangeType == \"reopened\" or (ChangeType == \"opened\" and Severity in (\"CRITICAL\", \"HIGH\"))) or (ChangeType == \"resolved\" and RiskInstanceId in (TrackedRisks))\n//\n// Optional filters: remove the leading // of a line to use it. Each line narrows the alerts further, and several lines can be combined.\n// Do not remove or change the IngestedAt window above, it keeps every event alerted exactly once.\n// | where Confidence >= 0.8                           // only findings with a confidence of 80% or more\n// | where Severity == \"CRITICAL\"                      // only CRITICAL risks (Censys severities: CRITICAL, HIGH, MEDIUM, LOW)\n// | where ChangeType == \"opened\"                      // only newly opened risks, skip reopened risks\n// | where RapidResponse == true                       // only actively exploited (rapid response) risks\n// | where RiskCategory == \"VULNERABILITY\"             // VULNERABILITY, MISCONFIGURATION, EXPOSURE or THREAT\n// | where SupplierDisplayName in (\"OpenAI\", \"Harvey\") // only these suppliers\n// | where CveId != \"\"                                 // only risks that have a CVE id\n// | where RiskName has \"Log4Shell\"                    // only risks whose name contains this text\n// | where AssetType == \"host\"                         // asset type: host or web\n| extend SentinelSeverity = case(\n    Severity in (\"CRITICAL\", \"HIGH\"), \"High\",\n    Severity == \"MEDIUM\", \"Medium\",\n    Severity == \"LOW\", \"Low\",\n    \"Informational\")\n| project TimeGenerated, IngestedAt, EventId, InsertedAt, OccurredAt, ChangeType, RiskInstanceId, Severity, SentinelSeverity,\n    RiskCategory, RiskName, Description, CveId, RapidResponse, SupplierDisplayName,\n    AssetName, AssetHostname, AssetIp, ServicePort, ServiceProtocol, Evidence, ResolveTime, ResolveReason, PlatformUrl\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P1D",
                 "severity": "Medium",
@@ -822,10 +822,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
+                    "connectorId": "CensysSRRiskEventsFunction",
                     "dataTypes": [
                       "CensysRiskEvents_CL"
-                    ],
-                    "connectorId": "CensysSRRiskEventsFunction"
+                    ]
                   }
                 ],
                 "tactics": [
@@ -839,8 +839,8 @@
                     "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "identifier": "HostName",
-                        "columnName": "AssetHostname"
+                        "columnName": "AssetHostname",
+                        "identifier": "HostName"
                       }
                     ]
                   },
@@ -848,8 +848,8 @@
                     "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "AssetIp"
+                        "columnName": "AssetIp",
+                        "identifier": "Address"
                       }
                     ]
                   },
@@ -857,8 +857,8 @@
                     "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "identifier": "Url",
-                        "columnName": "PlatformUrl"
+                        "columnName": "PlatformUrl",
+                        "identifier": "Url"
                       }
                     ]
                   }
@@ -867,37 +867,37 @@
                   "aggregationKind": "AlertPerResult"
                 },
                 "customDetails": {
-                  "RiskCategory": "RiskCategory",
-                  "CveId": "CveId",
-                  "RiskInstanceId": "RiskInstanceId",
-                  "ResolveTime": "ResolveTime",
-                  "ChangeType": "ChangeType",
                   "CensysSeverity": "Severity",
-                  "ResolveReason": "ResolveReason",
+                  "RapidResponse": "RapidResponse",
+                  "RiskInstanceId": "[if(true(), 'RiskInstanceId', 'RiskInstanceId')]",
                   "Evidence": "Evidence",
+                  "RiskCategory": "RiskCategory",
                   "Supplier": "SupplierDisplayName",
-                  "RapidResponse": "RapidResponse"
+                  "ResolveTime": "ResolveTime",
+                  "CveId": "[if(true(), 'CveId', 'CveId')]",
+                  "ChangeType": "ChangeType",
+                  "ResolveReason": "ResolveReason"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Censys: {{ChangeType}} risk - {{RiskName}} ({{SupplierDisplayName}})",
-                  "alertSeverityColumnName": "SentinelSeverity",
-                  "alertDescriptionFormat": "{{Description}} Asset: {{AssetName}}. Open in Censys: {{PlatformUrl}}",
                   "alertDynamicProperties": [
                     {
                       "alertProperty": "AlertLink",
                       "value": "PlatformUrl"
                     }
-                  ]
+                  ],
+                  "alertSeverityColumnName": "SentinelSeverity",
+                  "alertDisplayNameFormat": "Censys: {{ChangeType}} risk - {{RiskName}} ({{SupplierDisplayName}})",
+                  "alertDescriptionFormat": "{{Description}} Asset: {{AssetName}}. Open in Censys: {{PlatformUrl}}"
                 },
                 "incidentConfiguration": {
                   "groupingConfiguration": {
                     "enabled": true,
-                    "reopenClosedIncident": false,
                     "matchingMethod": "Selected",
+                    "lookbackDuration": "P1D",
                     "groupByCustomDetails": [
                       "RiskInstanceId"
                     ],
-                    "lookbackDuration": "P1D"
+                    "reopenClosedIncident": false
                   },
                   "createIncident": true
                 }
