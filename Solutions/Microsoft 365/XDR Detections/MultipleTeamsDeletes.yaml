@@ -1,0 +1,99 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (Teams)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (Teams)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 173f8699-6af5-484a-8b06-8c47ba89b380
+    path: Analytic Rules/MultipleTeamsDeletes.yaml
+    version: 2.0.4
+    querySha256: 2c3ccaabb7c535be595508068351237a0943b2a5cf4e425a8bbd3a66c4cad74a
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserId`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+    - T1489
+    reviewScope:
+      sourceDocumentSha256: 0ea81f1faefb224f01dffdd2848392c062794322ae922e63418203ef01a1e7dd
+      targetQuerySha256: 5325b5720b4bae49983a98704c7edb845e38e3a020eb4b6cf0a9177eb64025ff
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-173f8699-6af5-484a-8b06-8c47ba89b380
+  displayName: Multiple Teams deleted by a single user
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Adjust this value to change how many Teams should be deleted before including
+      let max_delete_count = 3;
+      // Adjust this value to change the timewindow the query runs over
+        OfficeActivity
+      | where OfficeWorkload =~ "MicrosoftTeams"
+      | where Operation =~ "TeamDeleted"
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(TeamName, 1000) by UserId
+      | where array_length(DeletedTeams) > max_delete_count
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Multiple Teams deleted by a single user
+      description: |-
+        'This detection flags the occurrences of deleting multiple teams within an hour.
+        This data is a part of Office 365 Connector in Microsoft Sentinel.'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+        - technique: T1489
+      customDetails:
+        AccountFullName: UserId

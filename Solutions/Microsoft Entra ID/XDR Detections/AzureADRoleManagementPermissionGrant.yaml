@@ -1,0 +1,146 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1ff56009-db01-4615-8211-d4fda21da02d
+    path: Analytic Rules/AzureADRoleManagementPermissionGrant.yaml
+    version: 1.1.1
+    querySha256: e394f129535ef1880f034f444c95cae097e303056131ff14ebf142a7ced9f982
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=2h, lookback=2h; target frequency=PT2H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - Impact
+    originalTechniques:
+    - T1098.003
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 3e7fc1ce7121552c99b2cb9dcf5072ed804dcf81a20ce6efc432af774db01515
+      targetQuerySha256: 3e489b92109a9baf7e16b7ed3be85aafd3de980500b6fe6de3a7ef8020411e4f
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-1ff56009-db01-4615-8211-d4fda21da02d
+  displayName: Microsoft Entra ID Role Management Permission Grant
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AuditLogs
+      | where Category =~ "ApplicationManagement" and LoggedByService =~ "Core Directory" and OperationName in~ ("Add delegated permission grant", "Add app role assignment to service principal")
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type =~ "ServicePrincipal" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)
+            | extend props = TargetResource.modifiedProperties
+        )
+      | mv-apply Property = props on
+        (
+            where Property.displayName in~ ("AppRole.Value","DelegatedPermissionGrant.Scope")
+            | extend DisplayName = tostring(Property.displayName), PermissionGrant = trim('"',tostring(Property.newValue))
+        )
+      | where PermissionGrant has "RoleManagement.ReadWrite.Directory"
+      | mv-apply Property = props on
+        (
+            where Property.displayName =~ "ServicePrincipal.DisplayName"
+            | extend TargetAppDisplayName = trim('"',tostring(Property.newValue))
+        )
+      | mv-apply Property = props on
+        (
+            where Property.displayName =~ "ServicePrincipal.ObjectID"
+            | extend TargetAppServicePrincipalId = trim('"',tostring(Property.newValue))
+        )
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | project TimeGenerated, OperationName, Result, PermissionGrant, TargetAppDisplayName, TargetAppServicePrincipalId, InitiatingAppName, InitiatingAppServicePrincipalId,
+      InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIpAddress, TargetResources, AdditionalDetails, CorrelationId
+      | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: Microsoft Entra ID Role Management Permission Grant
+      description: |-
+        'Identifies when the Microsoft Graph RoleManagement.ReadWrite.Directory (Delegated or Application) permission is granted to a service principal.
+        This permission allows an application to read and manage the role-based access control (RBAC) settings for your company's directory.
+        An adversary could use this permission to add an Microsoft Entra ID object to an Admin directory role and escalate privileges.
+        Ref : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions
+        Ref : https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetAppDisplayName
+          aadUserIdColumn: TargetAppServicePrincipalId
+        - id: account2
+          nameColumn: InitiatingAppName
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        - id: account3
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account4
+          aadUserIdColumn: InitiatingAadUserId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: Impact
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName

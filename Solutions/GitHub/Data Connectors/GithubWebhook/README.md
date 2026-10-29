@@ -1,6 +1,8 @@
 # Ingest GitHub events into sentinel through Webhook dataconnector
 Author: Prathibha Tadikamalla
 
+> **Azure Government Cloud:** This V1 connector is **not supported** in Azure Government Cloud. Use [GitHub (using Webhooks) V2](../GithubWebhookV2/README.md#azure-public-cloud-and-azure-government) instead. V2 is also the recommended replacement for existing V1 deployments; follow the [V1-to-V2 migration instructions](../GithubWebhookV2/README.md#migrating-from-v1).
+
  The Azure function based github dataconnector using webhook pushes all the github subscribed events into Sentinel. All these events will be placed into the table called "githubscanaudit_CL". As of now the solution has 3 parsers based on the below events:
   *	[Code Scanning Alert](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#code_scanning_alert)
   *	[Repository Vulnerability Alert (Dependabot)](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#repository_vulnerability_alert)
@@ -12,9 +14,8 @@ Following are the configuration steps to deploy Function App.
 ## **Pre-requisites**
 
 ## Configuration Steps to Deploy Function App
-1. Click on Deploy to Azure (For both Commercial & Azure GOV)  
+1. Click on Deploy to Azure (Azure public cloud only).
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-GitHubwebhookAPI-azuredeploy)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/sentinel-GitHubwebhookAPI-azuredeploy-gov)
   
 
 2. Select the preferred **Subscription**, **Resource Group** and **Location**  
