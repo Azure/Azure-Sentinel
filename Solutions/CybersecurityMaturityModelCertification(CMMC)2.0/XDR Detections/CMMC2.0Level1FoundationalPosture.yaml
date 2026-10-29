@@ -23,7 +23,7 @@ contentProvenance:
     id: fb127436-e5c4-4e31-85a8-d3507128dd09
     path: Analytic Rules/CMMC2.0Level1FoundationalPosture.yaml
     version: 1.0.1
-    querySha256: 01c00478cb51acf6b6c26df83a72a98c210c32b71577b670da83bf5fd6e5278f
+    querySha256: 5d1c7ed305a1457e45067b63f010a3235335ac6806eec941b6366ea70e71cfb3
     schedule:
       queryFrequency: 1d
       queryPeriod: 7d
@@ -47,8 +47,8 @@ contentProvenance:
     originalTechniques:
     - T1082
     reviewScope:
-      sourceDocumentSha256: a7d1521061ef44c9ea687837e3eb08d7465db679a48dda4ae5599e27c74059b8
-      targetQuerySha256: 9f1581a59d0471dfaf1a6d05ff65e1e7f1f0491bb711c4954a34bb6b32bc8f95
+      sourceDocumentSha256: 144c005de4fcddd86fec72663c33ed55ddb943a4be0b8151631a7aa717e25369
+      targetQuerySha256: 182cf2d67e48bdec2bd1e5204ae989ab5c246bbc1ac57b61c294f529f4668160
 properties:
   id: xdr-fb127436-e5c4-4e31-85a8-d3507128dd09
   displayName: CMMC 2.0 Level 1 (Foundational) Readiness Posture
@@ -64,15 +64,19 @@ properties:
 
       | summarize arg_max(TimeGenerated, *) by RecommendationName, AssessedResourceId, Level
 
-      | extend DeviceName = tostring(split(AssessedResourceId, "/")[-1])
+      | extend DeviceName = extract(@"(?i)/providers/[^/]+/(?:virtualmachines|machines)/([^/]+)$", 1, tostring(AssessedResourceId))
 
-      | summarize Failed=countif(State=="Failed"),Passed=countif(State=="Passed"),Total=countif(State=="Passed" or State == "Failed"), DeviceName=take_any(DeviceName) by Level
+      | summarize Failed=countif(State=="Failed"),Passed=countif(State=="Passed"),Total=countif(State=="Passed" or State == "Failed"), AffectedHosts=make_set_if(DeviceName, State=="Failed" and isnotempty(DeviceName)) by Level
 
-      |extend PassedControlsPercentage = (Passed/todouble(Total))*100
+      | extend PassedControlsPercentage = (Passed/todouble(Total))*100
 
       | where PassedControlsPercentage < 70
 
       //Adjust Either Passed Thresholds within Organizational Needs
+
+      | mv-expand DeviceName = AffectedHosts
+
+      | extend DeviceName = tostring(DeviceName)
 
       | extend RemediationLink = strcat(''https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22'')
 
