@@ -1,30 +1,56 @@
 id: d890d753-96fe-4439-9103-b75040758924
 Function:
   Title: Parser for File events
-  Version: '1.0.0'
-  LastUpdated: '2026-01-01'
+  Version: '1.1.0'
+  LastUpdated: '2026-10-26'
 Category: Microsoft Sentinel Parser
 FunctionName: FilewallM365FileEvent
 FunctionAlias: FilewallM365FileEvent
 FunctionQuery: |
+  // One row per SharePoint, OneDrive or Teams file Filewall processed. ThreatVerdict and
+  // EventSeverity follow what a Filewall engine found, not the block alone (see
+  // FilewallM365ExchangeEvent for the verdicts).
+  // The original and sanitized hashes are kept apart: OriginalFile* is the file the user uploaded,
+  // the one to look for elsewhere; SanitizedFile* is the copy Filewall put in its place, empty when
+  // there is none. TargetFileHashSha1/Sha256 are the file in place now: the sanitized copy if
+  // there is one, else the original.
   FilewallFile_CL
-  | extend 
-          EventStartTime = TimeGenerated, 
+  | extend IngestionTime = ingestion_time()
+  | extend report_url = column_ifexists('report_url', '')
+  | extend FileStatus = tolower(status), FileReason = tolower(block_reason)
+  | extend ThreatVerdict = case(
+          FileReason == "antivirus", "Malicious",
+          FileReason in ("static_analysis", "type_validation"), "Suspicious",
+          FileReason == "cdr_init_failed" or FileStatus == "failed", "ProcessingFailed",
+          FileStatus in ("not_supported", "not_sanitized"), "NotSanitized",
+          FileReason == "cdr", "Unsanitizable",
+          FileReason in ("file_policy", "size_limitation", "encryption_filter"), "PolicyBlocked",
+          FileStatus == "blocked", "Blocked",
+          FileStatus in ("succeed", "sanitized"), "Sanitized",
+          "Unknown")
+  | extend
+          EventStartTime = TimeGenerated,
           EventEndTime = TimeGenerated,
           EventOriginalType = tostring(event_type),
           EventType = case(status =~ "blocked", "FileBlocked", status =~ "succeed", "FileModified", status =~ "failed", "FileError", "FileEvent"),
           EventResult = case(status =~ "blocked", 'Blocked', status =~ "failed", "Failure", status =~ "succeed", "Success", "NA"),
           EventOriginalResultDetails = coalesce(block_reason, state, summary),
-          EventSeverity = case(status =~ "blocked", "High", status =~ "failed", "Medium", "Informational"),
+          EventSeverity = case(ThreatVerdict == "Malicious", "High", ThreatVerdict == "Suspicious", "Medium", ThreatVerdict in ("ProcessingFailed", "NotSanitized", "Unsanitizable", "Blocked"), "Low", "Informational"),
           EventVendor = "ODI-X",
           EventProduct = "Filewall for Microsoft 365",
           TargetFileName = name,
           TargetFilePath = path,
+          TargetFileDirectory = iff(isnotempty(name) and path endswith strcat("/", name), substring(path, 0, strlen(path) - strlen(name) - 1), ""),
           TargetFilePathType = application,
           TargetFileExtension = file_type,
           TargetFileSize = tolong(size),
           TargetFileHashSha1 = coalesce(new_sha1, original_sha1),
           TargetFileHashSha256 = coalesce(new_sha256, original_sha256),
+          OriginalFileSha256 = tolower(original_sha256),
+          OriginalFileSha1 = tolower(original_sha1),
+          SanitizedFileSha256 = tolower(new_sha256),
+          SanitizedFileSha1 = tolower(new_sha1),
+          EventReportUrl = report_url,
           ActorUsername = owner,
           ActorUserType = "Regular",
           User = owner,
@@ -33,4 +59,4 @@ FunctionQuery: |
           EventSchema = "FileEvent",
           EventSchemaVersion = "0.2.2",
           EventCount = int(1)
-  | project TimeGenerated, EventStartTime, EventEndTime, EventType, EventOriginalType, EventResult, EventOriginalResultDetails, EventSeverity, EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventCount, Dvc, DvcHostname, ActorUsername, ActorUserType, User, TargetFileName, TargetFilePath, TargetFilePathType, TargetFileExtension, TargetFileSize, TargetFileHashSha1, TargetFileHashSha256, application, event_id, timestamp, status, state, policy_id, policy_name, block_reason, summary, drive_name, site_name, new_sha1, original_sha1, new_sha256, original_sha256, version
+  | project TimeGenerated, IngestionTime, EventStartTime, EventEndTime, EventType, EventOriginalType, EventResult, EventOriginalResultDetails, EventSeverity, ThreatVerdict, EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventCount, Dvc, DvcHostname, ActorUsername, ActorUserType, User, TargetFileName, TargetFilePath, TargetFileDirectory, TargetFilePathType, TargetFileExtension, TargetFileSize, TargetFileHashSha1, TargetFileHashSha256, OriginalFileSha256, OriginalFileSha1, SanitizedFileSha256, SanitizedFileSha1, EventReportUrl, application, event_id, timestamp, status, state, policy_id, policy_name, block_reason, summary, drive_name, site_name, new_sha1, original_sha1, new_sha256, original_sha256, version

@@ -6,7 +6,7 @@
     "config": {
       "isWizard": false,
       "basics": {
-        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/filewall-logo.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Filewall%20for%20Microsoft%20365/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nFilewall for Microsoft 365 solution installs a Codeless (CCF/CLv2) connector that ingests Filewall activity logs for Exchange, SharePoint, OneDrive and Teams into custom tables. It also installs parsers, analytics rules and a workbook for visibility.\n\n**Data Connectors:** 1, **Parsers:** 2, **Workbooks:** 1, **Analytic Rules:** 2\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/filewall-logo.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Filewall%20for%20Microsoft%20365/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nFilewall for Microsoft 365 solution installs a Codeless (CCF/CLv2) connector that ingests Filewall activity logs for Exchange, SharePoint, OneDrive and Teams into custom tables. It also installs parsers, a workbook, analytics rules that alert on malicious and suspicious files by verdict, and rules and hunting queries that correlate Filewall file hashes with Microsoft Defender for Endpoint device file events.\n\n**Data Connectors:** 1, **Parsers:** 3, **Workbooks:** 1, **Analytic Rules:** 3, **Hunting Queries:** 1\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
         "subscription": {
           "resourceProviders": [
             "Microsoft.OperationsManagement/solutions",
@@ -51,6 +51,47 @@
       }
     ],
     "steps": [
+      {
+        "name": "contentSelection",
+        "label": "Content selection",
+        "elements": [
+          {
+            "name": "DeployAnalyticsRule",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "DeployAnalyticsRule",
+            "defaultValue": true,
+            "toolTip": "Deploy the Microsoft Sentinel analytic rules carried by this solution (ContentKind AnalyticsRule and its AnalyticsRuleTemplate registration face)."
+          },
+          {
+            "name": "DeployWorkbook",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "DeployWorkbook",
+            "defaultValue": true,
+            "toolTip": "Deploy the Microsoft Sentinel workbook content and its Content Hub registration carried by this solution (ContentKind Workbook and WorkbookTemplate)."
+          },
+          {
+            "name": "DeployDataConnector",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "DeployDataConnector",
+            "defaultValue": true,
+            "toolTip": "Deploy the data connectors carried by this solution, together with their metadata and catalog entries (ContentKind DataConnector, ResourceDataConnector and DataType)."
+          },
+          {
+            "name": "DeployHuntingQuery",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "DeployHuntingQuery",
+            "defaultValue": true,
+            "toolTip": "Deploy the Microsoft Sentinel hunting queries carried by this solution."
+          },
+          {
+            "name": "DeployParser",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "DeployParser",
+            "defaultValue": true,
+            "toolTip": "Deploy the parsers and their registrations carried by this solution."
+          }
+        ]
+      },
       {
         "name": "dataconnectors",
         "label": "Data Connectors",
@@ -146,13 +187,13 @@
           {
             "name": "analytic1",
             "type": "Microsoft.Common.Section",
-            "label": "Filewall - Blocked emails",
+            "label": "Filewall - Malicious or suspicious email attachment blocked",
             "elements": [
               {
                 "name": "analytic1-text",
                 "type": "Microsoft.Common.TextBlock",
                 "options": {
-                  "text": "Identifies emails blocked by Filewall for Microsoft 365 (Exchange)."
+                  "text": "Identifies attachments in inbound email that Filewall for Microsoft 365 blocked because an antivirus engine found malware (High severity), or because static analysis flagged the file or its content does not match its file type (Medium severity).\nAttachments blocked only by a policy rule (file type, size or encryption) and attachments sanitized by CDR are not malware verdicts and do not raise this alert; they stay available in the FilewallM365EmailAttachmentEvent parser.\nThe alert maps the recipient, the message and the original file hashes, so Microsoft Defender XDR can correlate it with other evidence for the same file or user, and it links to the message in the Filewall console."
                 }
               }
             ]
@@ -160,13 +201,65 @@
           {
             "name": "analytic2",
             "type": "Microsoft.Common.Section",
-            "label": "Filewall - Blocked files",
+            "label": "Filewall - Malicious or suspicious file blocked in SharePoint, OneDrive or Teams",
             "elements": [
               {
                 "name": "analytic2-text",
                 "type": "Microsoft.Common.TextBlock",
                 "options": {
-                  "text": "Identifies files blocked by Filewall for Microsoft 365 (SharePoint/OneDrive/Teams)."
+                  "text": "Identifies SharePoint, OneDrive and Teams files that Filewall for Microsoft 365 blocked because an antivirus engine found malware (High severity), or because static analysis flagged the file or its content does not match its file type (Medium severity).\nFiles blocked only by a policy rule (file type, size or encryption) and files sanitized by CDR are not malware verdicts and do not raise this alert; they stay available in the FilewallM365FileEvent parser.\nThe alert maps the file owner, the file and its original hashes, so Microsoft Defender XDR can correlate it with other evidence for the same file or user, and it links to the file in the Filewall console."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Filewall - File Filewall blocked as malicious or suspicious seen on a device",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Correlates files that Filewall for Microsoft 365 blocked as malicious or suspicious, in email attachments or in SharePoint, OneDrive and Teams, with Microsoft Defender for Endpoint file events.\nA match means the original file reached a device by another path after Filewall blocked it, for example a direct download, a removable drive, another mail flow or a copy released from quarantine.\nThe match is on the original file hash Filewall recorded; the sanitized hash is kept in the custom details. Requires the Microsoft Defender XDR connector to stream DeviceFileEvents into the workspace."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "Filewall - Original of a file Filewall sanitized seen on a device",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Finds devices holding the original, unsanitized copy of a file that Filewall for Microsoft 365 sanitized, in inbound email or in SharePoint, OneDrive and Teams.\nFilewall removed active content from these files before delivering them, so a device with the original hash got the file another way: a direct download, a removable drive, another mail flow or a copy released from Filewall.\nSanitizing is a policy action, not a malware verdict, so this is a hunting query rather than an alert. The sanitized hash is shown next to the original, and the report link opens the item in the Filewall console. Requires the Microsoft Defender XDR connector to stream DeviceFileEvents into the workspace. This hunting query depends on FilewallM365 MicrosoftThreatProtection data connector (FilewallExchange_CL FilewallFile_CL DeviceFileEvents Parser or Table)"
                 }
               }
             ]
@@ -177,7 +270,12 @@
     "outputs": {
       "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
       "location": "[location()]",
-      "workspace": "[basics('workspace')]"
+      "workspace": "[basics('workspace')]",
+      "DeployAnalyticsRule": "[steps('contentSelection').DeployAnalyticsRule]",
+      "DeployWorkbook": "[steps('contentSelection').DeployWorkbook]",
+      "DeployDataConnector": "[steps('contentSelection').DeployDataConnector]",
+      "DeployHuntingQuery": "[steps('contentSelection').DeployHuntingQuery]",
+      "DeployParser": "[steps('contentSelection').DeployParser]"
     }
   }
 }
