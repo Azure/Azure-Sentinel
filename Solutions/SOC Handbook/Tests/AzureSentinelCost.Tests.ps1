@@ -183,9 +183,128 @@ BeforeAll {
         }
         $total
     }
+
+    function Get-FixtureTierUsage {
+        param([object[]]$Records, [datetimeoffset]$Now)
+
+        $query = Get-WorkbookQuery -ItemName 'CommitmentTierUsageContext'
+        if ($query -notmatch 'Usage\s*\|\s*where TimeGenerated >= historyProbeStart and TimeGenerated < now\(\)\s*\|\s*where IsBillable == true\s*\|\s*summarize TotalBilledMB = sumif\(Quantity, TimeGenerated >= reviewStart\), FirstObserved = min\(TimeGenerated\)') {
+            throw 'Tier volume and history must use billable Usage aggregates.'
+        }
+        $reviewDays = [double](Get-QueryExpression -Query $query -Pattern 'let reviewDays = (?<expression>[0-9.]+);')
+        $reviewStart = $Now.AddDays(-[double](Get-QueryExpression -Query $query -Pattern 'let reviewStart = ago\((?<expression>[0-9.]+)d\);'))
+        $probeStart = $Now.AddDays(-[double](Get-QueryExpression -Query $query -Pattern 'let historyProbeStart = ago\((?<expression>[0-9.]+)d\);'))
+        $selected = @($Records | Where-Object {
+            $_.IsBillable -and $_.TimeGenerated -ge $probeStart -and $_.TimeGenerated -lt $Now
+        })
+        $firstObserved = ($selected | Sort-Object TimeGenerated | Select-Object -First 1).TimeGenerated
+        $observedDays = if ($null -eq $firstObserved) { 0.0 } else {
+            [math]::Min($reviewDays, [math]::Truncate(($Now - $firstObserved).TotalSeconds) / 86400.0)
+        }
+        $daysRemaining = [int][math]::Ceiling([math]::Max($reviewDays - $observedDays, 0.0))
+        $totalMB = 0.0
+        foreach ($record in $selected | Where-Object { $_.TimeGenerated -ge $reviewStart }) {
+            $totalMB += $record.Quantity
+        }
+        $averageDailyGB = if ($daysRemaining -eq 0) {
+            $expression = Get-QueryExpression -Query $query -Pattern 'AvgDailyGB = iif\(DaysRemaining == 0, (?<expression>[^,]+), real\(null\)\)'
+            Invoke-WorkbookArithmetic -Expression $expression -Bindings @{ TotalBilledMB = $totalMB; reviewDays = $reviewDays }
+        }
+        [pscustomobject]@{
+            DaysRemaining = $daysRemaining
+            AverageDailyGB = $averageDailyGB
+        }
+    }
 }
 
 Describe 'AzureSentinelCost offline calculation regressions' {
+    It 'excludes billable records from <ItemName> volumes and savings' -ForEach @(
+        @{ ItemName = 'FreeSentinelDataAvgPerDay'; Pattern = "\['Average Free Data Per Day'\] = (?<expression>[^|;]+)"; Expected = 2.0 }
+        @{ ItemName = 'FreeSentinelDataAvgDailySavings'; Pattern = "\['Avg Daily Free Data Savings'\] = (?<expression>[^|;]+)"; Expected = 4.0 }
+        @{ ItemName = 'FreeSentinelDataPeriod'; Pattern = "\['Free Data'\] = (?<expression>[^|;]+)"; Expected = 2.0 }
+        @{ ItemName = 'FreeSentinelDataSavingsPeriod'; Pattern = "\['Estimated Free Data Savings'\] = (?<expression>[^|;]+)"; Expected = 4.0 }
+        @{ ItemName = 'FreeSentinelDataDetail'; Pattern = 'TableSizeGB = (?<expression>[^|;]+?) by DataType'; Expected = 2.0 }
+        @{ ItemName = 'FreeDataVsBillableDataDaily'; Pattern = "\['Free Data Size'\] = (?<expression>[^|;]+?) by bin"; Expected = 2.0 }
+    ) {
+        $query = Get-WorkbookQuery -ItemName $ItemName
+        $start = [datetimeoffset]'2026-10-01T00:00:00Z'
+        $end = $start.AddDays(1)
+        $records = @(
+            @{ TimeGenerated = $start.AddHours(12); Quantity = 1024.0; IsBillable = $true; DataType = 'SecurityAlert' }
+            @{ TimeGenerated = $start.AddHours(12); Quantity = 2048.0; IsBillable = $false; DataType = 'SecurityAlert' }
+            @{ TimeGenerated = $start.AddHours(12); Quantity = 4096.0; IsBillable = $false; DataType = 'NotEligible' }
+            @{ TimeGenerated = $start.AddHours(-1); Quantity = 8192.0; IsBillable = $false; DataType = 'SecurityAlert' }
+            @{ TimeGenerated = $end; Quantity = 8192.0; IsBillable = $false; DataType = 'SecurityAlert' }
+        )
+        $freeTypes = (Get-QueryExpression -Query $query -Pattern 'let freeTypes = dynamic\((?<expression>\[[^\]]+\])\);') | ConvertFrom-Json
+        $selected = @($records | Where-Object {
+            $_.TimeGenerated -ge $start -and $_.TimeGenerated -lt $end -and $_.DataType -in $freeTypes -and
+            (-not $query.Contains('IsBillable == false') -or $_.IsBillable -eq $false)
+        })
+        $expression = Get-QueryExpression -Query $query -Pattern $Pattern
+        (Invoke-WorkbookArithmetic -Expression $expression -Bindings @{
+            Quantity = [double](($selected | Measure-Object -Property Quantity -Sum).Sum)
+            FreeGB = [double](($selected | Measure-Object -Property Quantity -Sum).Sum) / 1024.0
+            periodDays = ($end - $start).TotalDays
+            Price = 2.0
+        }) | Should -Be $Expected
+        $query.IndexOf('| where IsBillable == false') | Should -BeGreaterThan $query.IndexOf('Usage')
+        $query.IndexOf('| where IsBillable == false') | Should -BeLessThan $query.IndexOf('| summarize')
+    }
+
+    It 'calculates <AverageGB> GB/day from billable Usage without counting probe-only or out-of-range volume' -ForEach @(
+        @{ AverageGB = 0.0 }
+        @{ AverageGB = 20.0 }
+        @{ AverageGB = 50.0 }
+        @{ AverageGB = 100.0 }
+        @{ AverageGB = 5000.0 }
+        @{ AverageGB = 5001.0 }
+    ) {
+        $now = [datetimeoffset]'2026-10-29T12:00:00Z'
+        $records = @(
+            @{ TimeGenerated = $now.AddDays(-31.5); Quantity = 1e9; IsBillable = $true }
+            @{ TimeGenerated = $now.AddDays(-15); Quantity = $AverageGB * 31.0 * 1024.0; IsBillable = $true }
+            @{ TimeGenerated = $now.AddDays(-2); Quantity = 1e9; IsBillable = $false }
+            @{ TimeGenerated = $now.AddDays(-33); Quantity = 1e9; IsBillable = $true }
+            @{ TimeGenerated = $now; Quantity = 1e9; IsBillable = $true }
+        )
+        $actual = Get-FixtureTierUsage -Records $records -Now $now
+        $actual.DaysRemaining | Should -Be 0
+        $actual.AverageDailyGB | Should -Be $AverageGB
+    }
+
+    It 'preserves the 31-day readiness gate for <Label>' -ForEach @(
+        @{ Label = 'no history'; BillableAge = $null; ExpectedDays = 31 }
+        @{ Label = 'ten days of billable history'; BillableAge = 10.0; ExpectedDays = 21 }
+        @{ Label = 'a fractional final day'; BillableAge = 30.5; ExpectedDays = 1 }
+        @{ Label = 'exactly 31 days of billable history'; BillableAge = 31.0; ExpectedDays = 0 }
+    ) {
+        $now = [datetimeoffset]'2026-10-29T12:00:00Z'
+        $records = @(
+            @{ TimeGenerated = $now.AddDays(-31.5); Quantity = 1024.0; IsBillable = $false }
+            @{ TimeGenerated = $now.AddDays(-33); Quantity = 1024.0; IsBillable = $true }
+            if ($null -ne $BillableAge) {
+                @{ TimeGenerated = $now.AddDays(-$BillableAge); Quantity = 1024.0; IsBillable = $true }
+            }
+        )
+        $actual = Get-FixtureTierUsage -Records $records -Now $now
+        $actual.DaysRemaining | Should -Be $ExpectedDays
+        if ($ExpectedDays -gt 0) {
+            $actual.AverageDailyGB | Should -BeNullOrEmpty
+        }
+        else {
+            $actual.AverageDailyGB | Should -Be (1.0 / 31.0)
+        }
+    }
+
+    It 'keeps the tier query independent of the selected time range and avoids raw event scans' {
+        $content = $script:workbookItems['CommitmentTierUsageContext'].content
+        $content.PSObject.Properties.Name | Should -Not -Contain 'timeContextFromParameter'
+        $content.timeContext.durationMs | Should -Be 0
+        $content.query | Should -Not -Match '\bunion\b|\b_BilledSize\b|\b_IsBillable\b'
+        $content.query | Should -Match "project Current = currentTier, Suggested = suggestedTier, Status = alignmentStatus, \['Avg daily GB'\] = round\(AvgDailyGB, 2\)"
+    }
+
     It 'never presents hourly Usage as sub-hour measurements in <ItemName>' -ForEach @(
         @{ ItemName = 'WorkspaceBillableIngestionSizeTrend' }
         @{ ItemName = 'DataLakeMirroredVolumeTrend' }
