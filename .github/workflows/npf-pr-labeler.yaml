@@ -250,14 +250,53 @@ jobs:
               return;
             }
 
+            const highestStage = npfModes.includes('Qualification')
+              ? 'Qualification'
+              : (npfModes.includes('Validation') ? 'Validation' : 'Migration');
+
+            let commitPasses = Number(context.payload.pull_request?.commits || 0);
+            if (!commitPasses || commitPasses < 1) {
+              try {
+                const prCommits = await github.paginate(github.rest.pulls.listCommits, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  per_page: 100
+                });
+                commitPasses = Math.max(1, prCommits.length);
+              } catch (_) {
+                commitPasses = 1;
+              }
+            }
+            const solCount = Math.max(1, solutionDetails.length);
+            const passesPerSolution = Number((commitPasses / solCount).toFixed(2));
+
             // Build machine-readable npf-meta block for PR body and step summary
             const currentBody = context.payload.pull_request?.body || '';
             const metaRegex = /<!--\s*npf-meta:\s*(\{.*?\})\s*-->/s;
+            let priorSyncObserved = false;
+            const existingMetaMatch = currentBody.match(metaRegex);
+            if (existingMetaMatch) {
+              try {
+                const parsedMeta = JSON.parse(existingMetaMatch[1]);
+                if (parsedMeta && parsedMeta.synchronizePushObserved === true) {
+                  priorSyncObserved = true;
+                }
+              } catch (_err) {
+                // Ignore malformed prior metadata block
+              }
+            }
+            const synchronizePushObserved = priorSyncObserved || (context.payload.action === 'synchronize');
             const npfMeta = {
               solutionCount: solutionDetails.length,
               solutions: solutionDetails.map(s => s.name),
               publisherTiers: [...publisherTiers],
-              npfModes
+              npfModes,
+              highestStage,
+              commitPasses,
+              passesPerSolution,
+              verdicts,
+              synchronizePushObserved
             };
             const metaComment = `<!-- npf-meta: ${JSON.stringify(npfMeta)} -->`;
 
