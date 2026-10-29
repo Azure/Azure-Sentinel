@@ -2,7 +2,7 @@
 
 ## Version 1.0.3
 
-- (2026-10-29) Register the filtering Proofpoint TAP messages-delivered parser
+- (2026-10-29) Register the filtering Proofpoint TAP messages-delivered parser - [PR #15500](https://github.com/Azure/Azure-Sentinel/pull/15500)
 
 ## Version 1.0.2
 
