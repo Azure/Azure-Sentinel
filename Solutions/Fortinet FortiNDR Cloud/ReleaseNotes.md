@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                            |
 |-------------|--------------------------------|-------------------------------------------------------------------------------|
+| 3.2.2       | 29-10-2026                     | Added Defender XDR **Custom Detection** and **XDR Workbook** support and repackaged with V3.1. |
 | 3.1.1       | 24-08-2026                     | Adding Analytic Rule to comply with MISA requirements                         |
 | 3.1.0       | 26-05-2026                     | Updated to use LogIngestion instead of the deprecated HTTP Data Collector API |
 | 3.0.3       | 05-05-2025                     | Use Flex Consumption plan to hold Data Connector                              |

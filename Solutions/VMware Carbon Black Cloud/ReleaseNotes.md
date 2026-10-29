@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                        |
 |-------------|--------------------------------|-----------------------------------------------------------|
+| 3.2.2       | 29-10-2026                     | Migrated 2 **Analytic Rules** (`CriticalThreatDetected`, `KnownMalwareDetected`) and 1 **Workbook** (`VMwareCarbonBlack`) to Microsoft Defender XDR and updated the solution package to V3.1. |
 | 3.0.10      | 03-08-2026                     | Fixed broken **Deploy to Azure Gov** button link in **Data Connector** and **Playbooks** |
 | 3.0.9       | 12-07-2026                     | Fixed type mismatch in **Data Connector** |
 | 3.0.8       | 24-03-2026                     | Deprecate to VMware Carbon Black Cloud (using Azure Function) |
