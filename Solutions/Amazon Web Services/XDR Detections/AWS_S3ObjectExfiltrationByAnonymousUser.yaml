@@ -1,0 +1,88 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 15d3bf4e-8708-41c8-a836-8b0aa5be730e
+    path: Analytic Rules/AWS_S3ObjectExfiltrationByAnonymousUser.yaml
+    version: 1.0.1
+    querySha256: 4a33cbca31d71df7812e5786880840e7e6b60b437618f3826ed15788674618d2
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Collection
+    originalTechniques:
+    - T1530
+    reviewScope:
+      sourceDocumentSha256: e4ebaac7ae08dd241d101cec8c6091bcfbb9f6d23a9d54ea1000728504a7ca65
+      targetQuerySha256: 0cb448c587eed8d614f7d834d44ea8bd00d1fc1d7c314ccb20759ce680a2f269
+properties:
+  id: xdr-15d3bf4e-8708-41c8-a836-8b0aa5be730e
+  displayName: AWSCloudTrail - S3 Object Exfiltration from Anonymous User
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where ((UserIdentityAccountId =~ @'ANONYMOUS_PRINCIPAL' or UserIdentityPrincipalid == "Anonymous") and EventName == 'GetObject')
+      | extend
+         BucketName = parse_json(RequestParameters).bucketName,
+         ObjectKey = parse_json(RequestParameters).key
+      | extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, ":") + 1)
+      | extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - S3 Object Exfiltration from Anonymous User
+      description: |-
+        Detects S3 GetObject activity performed by anonymous principals, which can indicate unauthorized object access
+        and potential data exfiltration from public or misconfigured buckets.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UpnSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1530
+      customDetails:
+        BucketName: BucketName
+        ObjectKey: ObjectKey

@@ -1,0 +1,1056 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "parameters": [
+          {
+            "id": "36a4172e-0e49-4884-b2a2-2281528a2ff4",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 2592000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "4e1b6539-9788-43e2-a283-4891f33f1677",
+            "version": "KqlParameterItem/1.0",
+            "name": "Operations",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OfficeActivity\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint')\r\n| summarize Count = count() by Operation\r\n| order by Count desc, Operation asc\r\n| project Value = Operation, Label = strcat(Operation, ' - ', Count)",
+            "value": null,
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          },
+          {
+            "id": "e2b700d7-d218-47db-9521-52176ed43005",
+            "version": "KqlParameterItem/1.0",
+            "name": "Users",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OfficeActivity\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint')\r\n|  where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| summarize Count = count() by UserId\r\n| order by Count desc, UserId asc\r\n| project Value = UserId, Label = strcat(UserId, ' - ', Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters - 1"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## **General overview**"
+      },
+      "name": "text - 0"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint');\r\ndata\r\n| summarize Count = count() by OfficeWorkload\r\n| join kind = fullouter (datatable(OfficeWorkload:string)['OneDrive', 'SharePoint']) on OfficeWorkload\r\n| project OfficeWorkload = iff(OfficeWorkload == '', OfficeWorkload1, OfficeWorkload), Count = iff(OfficeWorkload == '', 0, Count)\r\n| join kind = inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by OfficeWorkload)\r\n    on OfficeWorkload\r\n| project-away OfficeWorkload1, TimeGenerated\r\n| extend OfficeWorkload = OfficeWorkload\r\n| union (\r\n    data \r\n    | summarize Count = count() \r\n    | extend jkey = 1\r\n    | join kind=inner (data\r\n        | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n        | extend jkey = 1) on jkey\r\n    | extend OfficeWorkload = 'All', OfficeWorkloads = '*'    \r\n)\r\n| order by Count desc\r\n| take 10\r\n",
+        "size": 4,
+        "exportFieldName": "OfficeWorkload",
+        "exportParameterName": "SelectedWorkload",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "OfficeWorkload",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "min": 0,
+              "palette": "coldHot",
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 10"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## **Operation Summary**"
+      },
+      "name": "text - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\");\r\nlet appData = data\r\n| summarize TotalCount = count() by Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation\r\n    | project-away TimeGenerated) on Operation\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by UserId , Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation, UserId\r\n    | project-away TimeGenerated) on Operation, UserId\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, UserId, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Operation\r\n| project Id, Name = UserId, Type = 'UserId', ['Operations Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Operation, Type = 'Operation', ['Operations Count'] = TotalCount,  Trend)\r\n| order by ['Operations Count'] desc, Name asc",
+        "size": 1,
+        "exportParameterName": "OperationDetail",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "showAnalytics": true,
+        "showExportToExcel": true,
+        "exportToExcelOptions": "visible",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Operations Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "orange",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "min": 0,
+                "palette": "gray",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        }
+      },
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Amount = count() by Operation, bin_at(TimeGenerated, 1d, now()) \r\n| sort by Amount ",
+        "size": 1,
+        "exportDefaultValue": "*",
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "Activities over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "linechart"
+      },
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by Site_Url, UserId, Operation, TimeGenerated",
+        "size": 0,
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "Sites",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by ClientIP , UserId, Operation, bin(TimeGenerated, 1d)",
+        "size": 0,
+        "showAnalytics": true,
+        "exportToExcelOptions": "visible",
+        "title": "IP addresses",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "query - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by Site_Url, UserId, Operation, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+        "size": 1,
+        "exportToExcelOptions": "visible",
+        "title": "Site details",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by ClientIP , UserId, Operation, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+        "size": 1,
+        "exportToExcelOptions": "visible",
+        "title": "IP Address details",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 7"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## **File Operations**"
+      },
+      "name": "text - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where Operation contains \"file\"\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\");\r\nlet appData = data\r\n| summarize TotalCount = count() by Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation\r\n    | project-away TimeGenerated) on Operation\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by SourceFileExtension , Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation, SourceFileExtension\r\n    | project-away TimeGenerated) on Operation, SourceFileExtension\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, SourceFileExtension, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Operation\r\n| project Id, Name = SourceFileExtension, Type = 'SourceFileExtension', ['Operations Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Operation, Type = 'Operation', ['Operations Count'] = TotalCount,  Trend)\r\n| order by ['Operations Count'] desc, Name asc",
+        "size": 0,
+        "exportParameterName": "FileOperations",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "exportToExcelOptions": "visible",
+        "title": "File Operations",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Operations Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 10,
+              "formatOptions": {
+                "min": 0,
+                "palette": "greenDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        }
+      },
+      "name": "query - 8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({FileOperations});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'SourceFileExtension' and SourceFileExtension == details.Name)\r\n| summarize Number = count() by SourceFileName, SourceFileExtension, UserId, Operation, DestinationFileName, DestinationFileExtension, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SourceFileName",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SourceFileExtension",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "UserId",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Operation",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DestinationFileName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DestinationFileExtension",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Number",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "lightBlue",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "name": "query - 9"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-SharePointAndOneDrive",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "xdrMetadata": {
+    "contentId": "db284054-834a-5f59-bebf-e4e0cde1758d",
+    "instanceId": "ce78b8d9-6e6a-52c3-bbfd-0830db844d25",
+    "version": "3.2.2",
+    "schemaVersion": "1.0.0",
+    "displayName": "SharePoint & OneDrive"
+  },
+  "contentProvenance": {
+    "source": {
+      "path": "Workbooks/SharePointAndOneDrive.json",
+      "sha256": "d58b9ac79fead4add17ca8169413b625c346e3919ccb568c1ccce2599e96f0f7",
+      "contentId": "sentinel-SharePointAndOneDrive",
+      "originalMetadataVersion": null
+    },
+    "conversion": {
+      "tool": "sentinel-xdr-migration",
+      "version": "0.1.0",
+      "reviewRequired": false,
+      "queries": [
+        {
+          "sourcePath": "/items/0/content/parameters/1/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "0277797541f85769d0cef761248fb966faf77129a39093d9c39341cd23ce6b40"
+          },
+          "conversion": {
+            "sourceId": "/items/0/content/parameters/1/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OfficeActivity\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint')\r\n| summarize Count = count() by Operation\r\n| order by Count desc, Operation asc\r\n| project Value = Operation, Label = strcat(Operation, ' - ', Count)",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/0/content/parameters/1/query",
+          "sourceSha256": "0277797541f85769d0cef761248fb966faf77129a39093d9c39341cd23ce6b40",
+          "targetSha256": "0277797541f85769d0cef761248fb966faf77129a39093d9c39341cd23ce6b40"
+        },
+        {
+          "sourcePath": "/items/0/content/parameters/2/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "ce15811cd647ca5826d9fa2cc24ea66f6dcbe595dc139445582f0201f726d61a"
+          },
+          "conversion": {
+            "sourceId": "/items/0/content/parameters/2/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OfficeActivity\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint')\r\n|  where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| summarize Count = count() by UserId\r\n| order by Count desc, UserId asc\r\n| project Value = UserId, Label = strcat(UserId, ' - ', Count)",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/0/content/parameters/2/query",
+          "sourceSha256": "ce15811cd647ca5826d9fa2cc24ea66f6dcbe595dc139445582f0201f726d61a",
+          "targetSha256": "ce15811cd647ca5826d9fa2cc24ea66f6dcbe595dc139445582f0201f726d61a"
+        },
+        {
+          "sourcePath": "/items/2/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "1f7670dd11906ce335d1e1b2029194158e62542d401b8c78c2941af20c921667"
+          },
+          "conversion": {
+            "sourceId": "/items/2/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint');\r\ndata\r\n| summarize Count = count() by OfficeWorkload\r\n| join kind = fullouter (datatable(OfficeWorkload:string)['OneDrive', 'SharePoint']) on OfficeWorkload\r\n| project OfficeWorkload = iff(OfficeWorkload == '', OfficeWorkload1, OfficeWorkload), Count = iff(OfficeWorkload == '', 0, Count)\r\n| join kind = inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by OfficeWorkload)\r\n    on OfficeWorkload\r\n| project-away OfficeWorkload1, TimeGenerated\r\n| extend OfficeWorkload = OfficeWorkload\r\n| union (\r\n    data \r\n    | summarize Count = count() \r\n    | extend jkey = 1\r\n    | join kind=inner (data\r\n        | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n        | extend jkey = 1) on jkey\r\n    | extend OfficeWorkload = 'All', OfficeWorkloads = '*'    \r\n)\r\n| order by Count desc\r\n| take 10\r\n",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/2/content/query",
+          "sourceSha256": "1f7670dd11906ce335d1e1b2029194158e62542d401b8c78c2941af20c921667",
+          "targetSha256": "1f7670dd11906ce335d1e1b2029194158e62542d401b8c78c2941af20c921667"
+        },
+        {
+          "sourcePath": "/items/4/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "1d1aa1188079b0766f46d1266ebe8aa5e68efe676a0daab9e6a297407adc8359"
+          },
+          "conversion": {
+            "sourceId": "/items/4/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\");\r\nlet appData = data\r\n| summarize TotalCount = count() by Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation\r\n    | project-away TimeGenerated) on Operation\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by UserId , Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation, UserId\r\n    | project-away TimeGenerated) on Operation, UserId\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, UserId, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Operation\r\n| project Id, Name = UserId, Type = 'UserId', ['Operations Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Operation, Type = 'Operation', ['Operations Count'] = TotalCount,  Trend)\r\n| order by ['Operations Count'] desc, Name asc",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/4/content/query",
+          "sourceSha256": "1d1aa1188079b0766f46d1266ebe8aa5e68efe676a0daab9e6a297407adc8359",
+          "targetSha256": "1d1aa1188079b0766f46d1266ebe8aa5e68efe676a0daab9e6a297407adc8359"
+        },
+        {
+          "sourcePath": "/items/5/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "bde6c34d1f9ea5894bbd4dd4d5f6258b451a7d281d08429e0579217bf56ce71b"
+          },
+          "conversion": {
+            "sourceId": "/items/5/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({OperationDetail});\r\nOfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Amount = count() by Operation, bin_at(TimeGenerated, 1d, now()) \r\n| sort by Amount ",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/5/content/query",
+          "sourceSha256": "bde6c34d1f9ea5894bbd4dd4d5f6258b451a7d281d08429e0579217bf56ce71b",
+          "targetSha256": "bde6c34d1f9ea5894bbd4dd4d5f6258b451a7d281d08429e0579217bf56ce71b"
+        },
+        {
+          "sourcePath": "/items/6/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "cee2df5d343a9e014bc9c46b1fb03a535de6df10f3156078c30364490363f1b2"
+          },
+          "conversion": {
+            "sourceId": "/items/6/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by Site_Url, UserId, Operation, TimeGenerated",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/6/content/query",
+          "sourceSha256": "cee2df5d343a9e014bc9c46b1fb03a535de6df10f3156078c30364490363f1b2",
+          "targetSha256": "cee2df5d343a9e014bc9c46b1fb03a535de6df10f3156078c30364490363f1b2"
+        },
+        {
+          "sourcePath": "/items/7/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "02cb1287a22361ef46d38bbb3c7c473c2223bc6c25a453d890e9ea77175a2a12"
+          },
+          "conversion": {
+            "sourceId": "/items/7/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by ClientIP , UserId, Operation, bin(TimeGenerated, 1d)",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/7/content/query",
+          "sourceSha256": "02cb1287a22361ef46d38bbb3c7c473c2223bc6c25a453d890e9ea77175a2a12",
+          "targetSha256": "02cb1287a22361ef46d38bbb3c7c473c2223bc6c25a453d890e9ea77175a2a12"
+        },
+        {
+          "sourcePath": "/items/8/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "690ff76b000255d5b67995044257c233e0eac7a926dbd68368d3e9afe623bf17"
+          },
+          "conversion": {
+            "sourceId": "/items/8/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by Site_Url, UserId, Operation, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/8/content/query",
+          "sourceSha256": "690ff76b000255d5b67995044257c233e0eac7a926dbd68368d3e9afe623bf17",
+          "targetSha256": "690ff76b000255d5b67995044257c233e0eac7a926dbd68368d3e9afe623bf17"
+        },
+        {
+          "sourcePath": "/items/9/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "9c0f7370323a6af981f5a9cb68a64ad96663fc8ee84fd856f951742853ddce77"
+          },
+          "conversion": {
+            "sourceId": "/items/9/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({OperationDetail});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'UserId' and UserId == details.Name)\r\n| summarize Number = count() by ClientIP , UserId, Operation, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/9/content/query",
+          "sourceSha256": "9c0f7370323a6af981f5a9cb68a64ad96663fc8ee84fd856f951742853ddce77",
+          "targetSha256": "9c0f7370323a6af981f5a9cb68a64ad96663fc8ee84fd856f951742853ddce77"
+        },
+        {
+          "sourcePath": "/items/11/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "1934a912add4d05c9817b2cf84dbb1d135739c56cae47231f417610f2a6bfdc8"
+          },
+          "conversion": {
+            "sourceId": "/items/11/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = OfficeActivity\r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where Operation contains \"file\"\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\");\r\nlet appData = data\r\n| summarize TotalCount = count() by Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation\r\n    | project-away TimeGenerated) on Operation\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by SourceFileExtension , Operation\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Operation, SourceFileExtension\r\n    | project-away TimeGenerated) on Operation, SourceFileExtension\r\n| order by TotalCount desc, Operation asc\r\n| project Operation, SourceFileExtension, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Operation\r\n| project Id, Name = SourceFileExtension, Type = 'SourceFileExtension', ['Operations Count'] = TotalCount, Trend,  ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Operation, Type = 'Operation', ['Operations Count'] = TotalCount,  Trend)\r\n| order by ['Operations Count'] desc, Name asc",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/11/content/query",
+          "sourceSha256": "1934a912add4d05c9817b2cf84dbb1d135739c56cae47231f417610f2a6bfdc8",
+          "targetSha256": "1934a912add4d05c9817b2cf84dbb1d135739c56cae47231f417610f2a6bfdc8"
+        },
+        {
+          "sourcePath": "/items/12/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "sentinel-xdr-migration-20261025",
+            "planSha256": "df5bbd10dc937083c91b775eff6652e55f44caf4410829d3365acae75cfaf328",
+            "decision": "accept",
+            "querySha256": "aff01d55f61bc91b50bcb67f3cdd17c174ea6754da9c67ab327915dcdf88e926"
+          },
+          "conversion": {
+            "sourceId": "/items/12/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({FileOperations});\r\nOfficeActivity \r\n| where \"{Operations:lable}\"==\"All\" or Operation in ({Operations})\r\n| where \"{Users:lable}\"==\"All\" or UserId in ({Users})\r\n| where OfficeWorkload in ('OneDrive', 'SharePoint') and (\"{SelectedWorkload}\"==\"All\" or OfficeWorkload==\"{SelectedWorkload}\")\r\n| where Site_Url != '' \r\n| where details.Type == '*' or (details.Type == 'Operation' and Operation == details.Name) or (details.Type == 'SourceFileExtension' and SourceFileExtension == details.Name)\r\n| summarize Number = count() by SourceFileName, SourceFileExtension, UserId, Operation, DestinationFileName, DestinationFileExtension, bin(TimeGenerated, 1d)\r\n| order by Number, TimeGenerated",
+            "resolvedTables": [
+              "OfficeActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OfficeActivity",
+                "ahTable": "OfficeActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 148,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/12/content/query",
+          "sourceSha256": "aff01d55f61bc91b50bcb67f3cdd17c174ea6754da9c67ab327915dcdf88e926",
+          "targetSha256": "aff01d55f61bc91b50bcb67f3cdd17c174ea6754da9c67ab327915dcdf88e926"
+        }
+      ]
+    },
+    "requiredWorkloads": [
+      {
+        "workload": "sentinel",
+        "dataTypes": [
+          "OfficeActivity"
+        ]
+      }
+    ],
+    "requiredDataConnectors": [
+      {
+        "connectorId": "Office365",
+        "dataTypes": [
+          "OfficeActivity"
+        ]
+      }
+    ],
+    "dependencyReviewRequired": false
+  }
+}

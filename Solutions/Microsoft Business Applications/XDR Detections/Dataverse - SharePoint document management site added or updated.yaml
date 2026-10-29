@@ -1,0 +1,137 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c4c3510a-0ee0-4561-9835-47882ffa7f46
+    path: Analytic Rules/Dataverse - SharePoint document management site added or updated.yaml
+    version: 3.2.0
+    querySha256: bdffaf6c8a5b44980cb49f2e946f0a83e4f847a28230c243dcd39f63b34a8678
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName_2 from query column `SharePointUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName_2 column `SharePointUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+    - T1537
+    reviewScope:
+      sourceDocumentSha256: 9638e72255a62e06a89ff85ea513cd630a35386ab1fd58f0d15893e20b896f65
+      targetQuerySha256: 6353ba01546d71e72981f78e3a122c2639fe6dee97b7f1e202156955b760c98f
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+    - entityType: CloudApplication
+      entityIndex: 4
+      identifier: InstanceName
+      sourceColumn: SharePointUrl
+      column: SharePointUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName_2
+properties:
+  id: xdr-c4c3510a-0ee0-4561-9835-47882ffa7f46
+  displayName: Dataverse - SharePoint document management site added or updated
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message in ("Create", "Update") and EntityName == "sharepointsite"
+      | mv-expand Fields
+      | where Fields.Name == "absoluteurl"
+      | extend
+          SharePointAppId = int(20892),
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1]),
+          SharePointUrl = tostring(Fields.Value)
+      | project
+          TimeGenerated,
+          UserId,
+          ClientIp,
+          Message,
+          SharePointUrl,
+          InstanceUrl,
+          CloudAppId,
+          SharePointAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - SharePoint document management site added or updated
+      description: Identifies modifications of SharePoint document management integration. Document management allows storage
+        of data located externally to Dataverse. Combine this analytics rule with the MSBizApps-Add-SharePointSite-To-Watchlist
+        Playbook to automatically update the Dataverse-SharePointSites watchlist. This watchlist can be used to correlate
+        events between Dataverse and SharePoint when using the Office 365 data connector.
+      severity: informational
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        - id: cloudApplication2
+          appIdColumn: SharePointAppId
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+        - technique: T1537
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl
+        CloudApplicationInstanceName_2: SharePointUrl

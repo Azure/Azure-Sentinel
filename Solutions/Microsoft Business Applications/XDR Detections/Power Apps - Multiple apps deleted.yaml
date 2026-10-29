@@ -1,0 +1,125 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PowerPlatformAdmin
+  dataTypes:
+  - PowerPlatformAdminActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - PowerPlatformAdminActivity
+  requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+    - PowerPlatformAdminActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ed88638d-8627-4c20-ba08-67c13807a9b1
+    path: Analytic Rules/Power Apps - Multiple apps deleted.yaml
+    version: 3.2.0
+    querySha256: 4d80b1eabfc1c374f1dbfd175537fc23cba6fb7038284d675d3f398411da00ea
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EnvironmentsImpacted' column `Environments` requires runtime output-schema binding verification
+    - customDetails 'AppsDeleted' column `Apps` requires runtime output-schema binding verification
+    - customDetails 'AppDeleteCount' column `AppCount` requires runtime output-schema binding verification
+    - customDetails 'EnvironmentsCount' column `EnvCount` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+    - T0826
+    reviewScope:
+      sourceDocumentSha256: 4f221b28bc9a5bb8bd335b8180901e5749a42f4e29576d8236179f689dd3137f
+      targetQuerySha256: 3a89386c06fb47cfdf4366cb2ddd3d4526668da3b9783ddaecc5d8add78407c3
+properties:
+  id: xdr-ed88638d-8627-4c20-ba08-67c13807a9b1
+  displayName: Power Apps - Multiple apps deleted
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let total_app_mass_delete_threshold = 25;
+      let cross_environment_delete_threshold = 10;
+      let query_frequency = 1h;
+      let app_delete_events = materialize(
+          PowerPlatformAdminActivity
+          | where TimeGenerated >= ago (query_frequency)
+          | where EventOriginalType == "DeletePowerApp"
+          | extend Properties = tostring(PropertyCollection)
+          | extend AppId = extract(@'"powerplatform.analytics.resource.power_app.id","Value":"([^"]+)"', 1, Properties)
+          | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+          | extend EnvironmentId = extract(@'"powerplatform.analytics.resource.environment.id","Value":"([^"]+)"', 1, Properties)
+          );
+      app_delete_events
+      | summarize AppCount = count(), EnvCount = dcount(EnvironmentId) by ActorName
+      | where AppCount >= total_app_mass_delete_threshold or EnvCount >= cross_environment_delete_threshold
+      | join kind=inner app_delete_events on ActorName
+      | summarize
+          Apps = make_set(AppId, 1000),
+          Environments = make_set(EnvironmentId, 1000),
+          StartTime = min(TimeGenerated)
+          by AppCount, EnvCount, ActorName
+      | extend
+          PowerAppsEntityId = 27593,
+          DataverseId = 32780,
+          AccountName = tostring(split(ActorName, '@')[0]),
+          UPNSuffix = tostring(split(ActorName, '@')[1])
+      | project
+          StartTime,
+          ActorName,
+          AppCount,
+          Apps,
+          EnvCount,
+          Environments,
+          PowerAppsEntityId,
+          DataverseId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Power Apps - Multiple apps deleted
+      description: Identifies mass delete activity where multiple Power Apps are deleted, matching a predefined threshold
+        of total apps deleted or app delete events across multiple Power Platform environments.
+      severity: medium
+      entityMappings:
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: PowerAppsEntityId
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+        - technique: T0826
+      customDetails:
+        EnvironmentsImpacted: Environments
+        AppsDeleted: Apps
+        AppDeleteCount: AppCount
+        EnvironmentsCount: EnvCount
