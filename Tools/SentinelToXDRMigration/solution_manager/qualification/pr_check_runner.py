@@ -3493,6 +3493,14 @@ def run_pr_qualification_checks(
         pr_number=pr_number,
         run_number=run_number,
     )
+    stages_map = wf_state.get("stages") if isinstance(wf_state.get("stages"), Mapping) else {}
+    val_stage_map = stages_map.get("validation") if isinstance(stages_map.get("validation"), Mapping) else {}
+    val_attempts = val_stage_map.get("attempts")
+    passes_per_solution = (
+        max(1, int(val_attempts))
+        if isinstance(val_attempts, int) and val_attempts >= 1
+        else resolved_run_number
+    )
     first_pass_passed = bool(resolved_run_number == 1 and summary_counts.get("fail", 0) == 0)
     stage_timestamps = _extract_stage_timestamps(wf_state)
     operator_hash = _resolve_operator_hash(root, wf_state)
@@ -3515,6 +3523,7 @@ def run_pr_qualification_checks(
         "workflowProfile": workflow_profile,
         "operatorHash": operator_hash,
         "runNumber": resolved_run_number,
+        "passesPerSolution": passes_per_solution,
         "prNumber": resolved_pr_number,
         "firstPassPassed": first_pass_passed,
         "stageTimestamps": stage_timestamps,

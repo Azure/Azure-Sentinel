@@ -44,15 +44,137 @@ jobs:
               }
             }
 
-            const hasXdrContent = activePaths.some(p =>
-              /^Solutions\/[^/]+\/(XDR Detections|XDR Workbooks)\//.test(p)
+            const existing = new Set(
+              (context.payload.pull_request?.labels || []).map(l => l.name)
             );
+            const headSha = context.payload.pull_request?.head?.sha;
+            const baseSha = context.payload.pull_request?.base?.sha;
+
+            async function fetchFileText(repoPath) {
+              for (const ref of [headSha, baseSha].filter(Boolean)) {
+                try {
+                  const resp = await github.rest.repos.getContent({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    path: repoPath,
+                    ref
+                  });
+                  if (resp.data && resp.data.content) {
+                    return Buffer.from(resp.data.content, 'base64').toString('utf8');
+                  }
+                } catch (_) {
+                  // Try fallback ref
+                }
+              }
+              return null;
+            }
+
+            async function pathExistsAtHead(repoPath) {
+              for (const ref of [headSha, baseSha].filter(Boolean)) {
+                try {
+                  const resp = await github.rest.repos.getContent({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    path: repoPath,
+                    ref
+                  });
+                  if (resp.data) {
+                    return true;
+                  }
+                } catch (_) {
+                  // Try fallback ref
+                }
+              }
+              return false;
+            }
+
+            let hasXdrContent = activePaths.some(p =>
+              /^Solutions\/[^/]+\/(XDR Detections|XDR Workbooks)\//.test(p)
+            ) || existing.has('XDR');
+
+            if (!hasXdrContent) {
+              for (const sol of solutionNames) {
+                const touchesPackage = activePaths.some(
+                  p => p === `Solutions/${sol}/Package/mainTemplate.json` || p.startsWith(`Solutions/${sol}/Package/`)
+                );
+                if (touchesPackage) {
+                  const hasXdrDet = await pathExistsAtHead(`Solutions/${sol}/XDR Detections`);
+                  const hasXdrWb = !hasXdrDet && (await pathExistsAtHead(`Solutions/${sol}/XDR Workbooks`));
+                  if (hasXdrDet || hasXdrWb) {
+                    hasXdrContent = true;
+                    break;
+                  }
+                }
+              }
+            }
+
             const hasValidationEvidence = activePaths.some(p =>
               /^Solutions\/[^/]+\/Evidence\/(pr-qualification\/(pr-qualification-result\.json|qualification-report\.html|qualification-summary\.md)|workflow-state\.json|decision-manifest\.json|[^/]+\/evidence\.json)$/.test(p)
             );
-            const hasQualificationEvidence = activePaths.some(p =>
+            let hasQualificationEvidence = activePaths.some(p =>
               /^Solutions\/[^/]+\/Evidence\/(qualification-evidence\.json|receipts\/(alert-parity-live|workbook-queries-live|arm-deployment-readback|graph-detection-deployment)\.json)$/.test(p)
             );
+
+            const verdicts = {};
+            for (const sol of [...solutionNames].sort()) {
+              const qualResultCandidates = activePaths.filter(
+                p =>
+                  p === `Solutions/${sol}/Evidence/pr-qualification/pr-qualification-result.json` ||
+                  p === `Solutions/${sol}/Evidence/pr-qualification-result.json`
+              );
+              let solVerdict = null;
+              for (const cand of qualResultCandidates) {
+                const rawJson = await fetchFileText(cand);
+                if (!rawJson) continue;
+                try {
+                  const parsed = JSON.parse(rawJson.replace(/^\uFEFF/, ''));
+                  const modeVal = String(parsed?.mode || parsed?.workflowProfile || '').trim().toLowerCase();
+                  const qualStatus = String(parsed?.qualificationStatus || '').trim();
+                  const verdictVal = String(parsed?.verdict || parsed?.overallVerdict || '').trim();
+                  if (
+                    modeVal === 'qualification' ||
+                    modeVal === 'full' ||
+                    qualStatus === 'Qualified' ||
+                    qualStatus === 'Conditionally Qualified' ||
+                    verdictVal === 'Qualified' ||
+                    verdictVal === 'Conditionally Qualified'
+                  ) {
+                    hasQualificationEvidence = true;
+                  }
+                  if (verdictVal) {
+                    solVerdict = verdictVal;
+                    break;
+                  }
+                } catch (_) {
+                  // Ignore parse errors
+                }
+              }
+
+              const summaryCandidates = activePaths.filter(
+                p =>
+                  p === `Solutions/${sol}/Evidence/pr-qualification/qualification-summary.md` ||
+                  p === `Solutions/${sol}/Evidence/qualification-summary.md`
+              );
+              for (const cand of summaryCandidates) {
+                const mdText = await fetchFileText(cand);
+                if (!mdText) continue;
+                if (/\bConditionally Qualified\b/i.test(mdText)) {
+                  hasQualificationEvidence = true;
+                  if (!solVerdict) solVerdict = 'Conditionally Qualified';
+                } else if (/\bQualified\b/i.test(mdText)) {
+                  hasQualificationEvidence = true;
+                  if (!solVerdict) solVerdict = 'Qualified';
+                } else if (!solVerdict && /\bPartially Validated\b/i.test(mdText)) {
+                  solVerdict = 'Partially Validated';
+                } else if (!solVerdict && /\bValidated\b/i.test(mdText)) {
+                  solVerdict = 'Validated';
+                }
+              }
+
+              if (solVerdict) {
+                verdicts[sol] = solVerdict;
+              }
+            }
 
             const desired = new Set();
             const npfModes = [];
@@ -74,30 +196,12 @@ jobs:
             }
 
             // Determine 1P Solution / ISV Solution / Community Solution from SolutionMetadata.json
-            const headSha = context.payload.pull_request?.head?.sha;
-            const baseSha = context.payload.pull_request?.base?.sha;
             const publisherTiers = new Set();
             const solutionDetails = [];
 
             for (const sol of [...solutionNames].sort()) {
               const metaPath = `Solutions/${sol}/SolutionMetadata.json`;
-              let metaText = null;
-              for (const ref of [headSha, baseSha].filter(Boolean)) {
-                try {
-                  const resp = await github.rest.repos.getContent({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    path: metaPath,
-                    ref
-                  });
-                  if (resp.data && resp.data.content) {
-                    metaText = Buffer.from(resp.data.content, 'base64').toString('utf8');
-                    break;
-                  }
-                } catch (_) {
-                  // Try fallback ref
-                }
-              }
+              const metaText = await fetchFileText(metaPath);
               let tierLabel = 'Unknown';
               if (metaText) {
                 try {
@@ -127,9 +231,6 @@ jobs:
               return;
             }
 
-            const existing = new Set(
-              (context.payload.pull_request?.labels || []).map(l => l.name)
-            );
             const labelsToAdd = [...desired].filter(l => !existing.has(l));
 
             if (labelsToAdd.length > 0) {
@@ -143,6 +244,32 @@ jobs:
             } else {
               core.info(`All applicable labels already present: ${[...desired].join(', ')}`);
             }
+
+            if (npfModes.length === 0) {
+              core.info('PR has no NPF modes (Migration/Validation/Qualification); skipping npf-meta block.');
+              return;
+            }
+
+            const highestStage = npfModes.includes('Qualification')
+              ? 'Qualification'
+              : (npfModes.includes('Validation') ? 'Validation' : 'Migration');
+
+            let commitPasses = Number(context.payload.pull_request?.commits || 0);
+            if (!commitPasses || commitPasses < 1) {
+              try {
+                const prCommits = await github.paginate(github.rest.pulls.listCommits, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  per_page: 100
+                });
+                commitPasses = Math.max(1, prCommits.length);
+              } catch (_) {
+                commitPasses = 1;
+              }
+            }
+            const solCount = Math.max(1, solutionDetails.length);
+            const passesPerSolution = Number((commitPasses / solCount).toFixed(2));
 
             // Build machine-readable npf-meta block for PR body and step summary
             const currentBody = context.payload.pull_request?.body || '';
@@ -165,6 +292,10 @@ jobs:
               solutions: solutionDetails.map(s => s.name),
               publisherTiers: [...publisherTiers],
               npfModes,
+              highestStage,
+              commitPasses,
+              passesPerSolution,
+              verdicts,
               synchronizePushObserved
             };
             const metaComment = `<!-- npf-meta: ${JSON.stringify(npfMeta)} -->`;

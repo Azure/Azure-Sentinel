@@ -485,6 +485,16 @@ def _normalize_report_data(report_data: dict[str, Any] | None) -> dict[str, Any]
     except (TypeError, ValueError):
         run_number = 1
 
+    passes_per_solution_raw = raw.get("passesPerSolution")
+    try:
+        passes_per_solution = (
+            max(1, int(passes_per_solution_raw))
+            if passes_per_solution_raw is not None
+            else run_number
+        )
+    except (TypeError, ValueError):
+        passes_per_solution = run_number
+
     pr_number_raw = raw.get("prNumber")
     try:
         pr_number: int | None = int(pr_number_raw) if pr_number_raw is not None else None
@@ -566,6 +576,7 @@ def _normalize_report_data(report_data: dict[str, Any] | None) -> dict[str, Any]
         "workflowProfile": workflow_profile,
         "operatorHash": operator_hash,
         "runNumber": run_number,
+        "passesPerSolution": passes_per_solution,
         "prNumber": pr_number,
         "firstPassPassed": first_pass_passed,
         "stageTimestamps": stage_timestamps,

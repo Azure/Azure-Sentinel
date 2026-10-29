@@ -1067,6 +1067,7 @@ def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: 
 
     # Todo #6 assertions
     assert res["runNumber"] == 1
+    assert res["passesPerSolution"] == 1
     assert res["prNumber"] == 4242
     assert res["firstPassPassed"] is True
     assert res["operatorHash"] == "abcdef0123456789"

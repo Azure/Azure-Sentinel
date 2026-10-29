@@ -521,6 +521,7 @@ def test_write_pr_qualification_reports_preserves_npf_metrics_and_runtime_verifi
         workflowProfile="qualification",
         operatorHash="0123456789abcdef",
         runNumber=1,
+        passesPerSolution=2,
         prNumber=9876,
         firstPassPassed=True,
         stageTimestamps={
@@ -553,6 +554,7 @@ def test_write_pr_qualification_reports_preserves_npf_metrics_and_runtime_verifi
     assert saved["workflowProfile"] == "qualification"
     assert saved["operatorHash"] == "0123456789abcdef"
     assert saved["runNumber"] == 1
+    assert saved["passesPerSolution"] == 2
     assert saved["prNumber"] == 9876
     assert saved["firstPassPassed"] is True
     assert saved["stageTimestamps"]["convertingStartedAtUtc"] == "2026-10-19T10:00:00Z"
