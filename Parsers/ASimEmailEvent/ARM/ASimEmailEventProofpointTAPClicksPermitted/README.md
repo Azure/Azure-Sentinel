@@ -6,6 +6,8 @@ Normalizes ProofPointTAPClicksPermittedV2_CL URL Defense click records as EmailE
 interaction activity (EmailInteraction), preserving one event per source row. Permitting a click does
 not establish email delivery or HTTP success, so EventResult and DvcAction are NA.
 Event time uses clickTime, falling back to TimeGenerated when clickTime is absent.
+EventOriginalUid preserves the optional source id when available and remains empty
+when the id column is absent.
 SrcIpAddr is the clicker's external IP; the email sender's IP is retained only
 in AdditionalFields. The recipient maps to Dst, not to an inferred clicker identity
 or message-header recipient. Header From, subject, and delivery location are unavailable.

@@ -9,6 +9,8 @@ IPv4-prefix filters use the clicker's IP, and recipient filters use the source r
 Header From, subject, and delivery location are not supplied, so their filters can
 match only when empty. Direction is Unknown and EventResult is NA.
 Normalization and optional packing are identical to the parameterless parser.
+EventOriginalUid preserves the optional source id when available and remains empty
+when the id column is absent.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 
