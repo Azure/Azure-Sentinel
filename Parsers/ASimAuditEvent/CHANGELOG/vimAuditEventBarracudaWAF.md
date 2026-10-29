@@ -1,5 +1,13 @@
 # Changelog for vimAuditEventBarracudaWAF.yaml
 
+## Version 0.2.3
+
+- (2026-10-10) Exclude SESSION_TIMEOUT events now normalized by the Authentication parser. - [PR #15298](https://github.com/Azure/Azure-Sentinel/pull/15298)
+- Align the declared and output schema version with 1.0.0; use an explicit normalized output projection and add the required entity placeholders.
+- Support actorusername_has_any and object_has_any with early native-column filters.
+- Document accepted missing-field warnings in the YAML Exceptions section.
+- Populate EventUid from _ItemId when available, leaving exported records without an ingestion ID empty.
+
 ## Version 0.2.2
 
 - (2026-10-05) Normalize the ASIM schema version to 0.1.0 - [PR #15265](https://github.com/Azure/Azure-Sentinel/pull/15265)

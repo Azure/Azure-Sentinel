@@ -1,0 +1,137 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - Syslog
+    - VMwareESXi
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4cdcd5d8-89df-4076-a917-bc50abb9f2ab
+    path: Analytic Rules/ESXiDormantVMStarted.yaml
+    version: 1.0.3
+    querySha256: 25ae2caa4569145ae41c1ab331a0de1082d882383a1b435d3c5fb65e34b21622
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    reviewScope:
+      sourceDocumentSha256: 38e1aff2cd6fd8ac2ef2c40e75edbdebbc28ca112323936956918f1dc6c402f5
+      targetQuerySha256: 0810471db9bd7df4ce57911dc0c07786575f548447f10d9db2a548d52824ddc0
+properties:
+  id: xdr-4cdcd5d8-89df-4076-a917-bc50abb9f2ab
+  displayName: VMware ESXi - Dormant VM started
+  status: disabled
+  queryCondition:
+    queryText: 'let vm_p_off =
+
+      VMwareESXi
+
+      | where TimeGenerated > ago(14d)
+
+      | where SyslogMessage has (''VmPoweredOffEvent'')
+
+      | extend DstHostname = extract(@''\[\d+\]\s+\[(.*?)\s+on'', 1, SyslogMessage)
+
+      | summarize LastPowerOffTime=max(TimeGenerated) by DstHostname
+
+      | where datetime_diff(''day'',datetime(now),LastPowerOffTime) >= 20;
+
+      let vm_p_on =
+
+      VMwareESXi
+
+      | where TimeGenerated > ago(14d)
+
+      | where SyslogMessage has (''VmPoweredOnEvent'')
+
+      | extend DstHostname = extract(@''\[\d+\]\s+\[(.*?)\s+on'', 1, SyslogMessage)
+
+      | summarize LastPowerOnTime=max(TimeGenerated) by DstHostname
+
+      | where datetime_diff(''day'',datetime(now),LastPowerOnTime) >= 20;
+
+      let off_vms =
+
+      vm_p_on
+
+      | join (vm_p_off) on DstHostname
+
+      | where LastPowerOffTime > LastPowerOnTime
+
+      | summarize p_off_vm = make_set(DstHostname,200)
+
+      | extend k=1;
+
+      VMwareESXi
+
+      | where TimeGenerated between (ago(24h) .. datetime(now))
+
+      | where SyslogMessage has (''VmPoweredOnEvent'')
+
+      | extend DstHostname = extract(@''\[\d+\]\s+\[(.*?)\s+on'', 1, SyslogMessage)
+
+      | extend k=1
+
+      | join (off_vms) on k
+
+      | where p_off_vm !has DstHostname
+
+      | summarize rec_p_on = make_set(DstHostname,200)
+
+      | extend hostname = iff(array_length(rec_p_on) > 0, rec_p_on[0], "")
+
+      | extend NTDomain = tostring(split(hostname, ''\\'', 1)[0]), HostName = tostring(split(hostname,
+      ''.'', 0)[0])
+
+      | where array_length(rec_p_on) > 0
+
+      | project-away rec_p_on, hostname'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: VMware ESXi - Dormant VM started
+      description: '''Detects when dormant VM was started.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          ntDomainColumn: NTDomain
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
