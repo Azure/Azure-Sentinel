@@ -24,48 +24,108 @@ relevantTechniques:
   - T1543.003
 query: |
   let LookupTime = 14d;
-  let WhiteList = pack_array(
-  "svchost.exe",
-  "mssense.exe",
-  "msmpeng.exe",
-  "searchindexer.exe",
-  "microsoftedgeupdate.exe"
+  let WhiteList = dynamic([
+      "svchost.exe",
+      "mssense.exe",
+      "msmpeng.exe",
+      "searchindexer.exe",
+      "microsoftedgeupdate.exe"
+  ]);
+  let ServiceEvents = materialize(
+      DeviceProcessEvents
+      | where TimeGenerated >= ago(LookupTime)
+      | where InitiatingProcessParentFileName =~ "services.exe"
+      | where InitiatingProcessFileName !in~ (WhiteList)
+      | project
+          DeviceName,
+          ServiceProcess = InitiatingProcessFileName,
+          ServiceProcessSHA1 = InitiatingProcessSHA1,
+          ServiceProcessCmdline = InitiatingProcessCommandLine,
+          ServiceProcessID = InitiatingProcessId,
+          ServiceProcessCreationTime = InitiatingProcessCreationTime,
+          ServiceProcessUser = InitiatingProcessAccountName,
+          StartedChildProcess = FileName,
+          StartedChildProcessCmdline = ProcessCommandLine
   );
-  let GetServices = materialize (
-  DeviceProcessEvents
-  | where TimeGenerated > ago(LookupTime)
-  | where InitiatingProcessParentFileName contains "services.exe"
-  | where InitiatingProcessFileName !in~(WhiteList)
-  | project TimeGenerated, DeviceName, StartedChildProcess = FileName, StartedChildProcessSHA1 = SHA1, StartedChildProcessCmdline = ProcessCommandLine, ServiceProcessSHA1 = InitiatingProcessSHA1, ServiceProcess = InitiatingProcessFileName, ServiceProcessCmdline = InitiatingProcessCommandLine, ServiceProcessID = InitiatingProcessId, ServiceProcessCreationTime = InitiatingProcessCreationTime, ServiceProcessUser = InitiatingProcessAccountName
-  );
-  GetServices
-  | summarize count() by ServiceProcess, DeviceName
-  | where count_ < 6 
-  | join kind = inner GetServices on ServiceProcess, DeviceName 
-  | join kind = leftouter ( 
-  DeviceNetworkEvents 
-  | where TimeGenerated > ago(LookupTime)
-  | where InitiatingProcessParentFileName contains "services.exe"
-  | where InitiatingProcessFileName !in~(WhiteList)
-  | project TimeGenerated, DeviceName, ServiceProcessSHA1 = InitiatingProcessSHA1, ServiceProcess = InitiatingProcessFileName, ServiceProcessCmdline = InitiatingProcessCommandLine, ServiceProcessID = InitiatingProcessId, ServiceProcessCreationTime = InitiatingProcessCreationTime, ServiceProcessUser = InitiatingProcessAccountName, NetworkAction = ActionType, RemoteIP, RemoteUrl
-  ) on DeviceName, ServiceProcess, ServiceProcessCmdline, ServiceProcessCreationTime, ServiceProcessID, ServiceProcessUser, ServiceProcessSHA1
-  | join kind = leftouter (
-  DeviceFileEvents
-  | where TimeGenerated > ago(LookupTime)
-  | where InitiatingProcessParentFileName contains "services.exe"
-  | where InitiatingProcessFileName !in~(WhiteList)
-  | project TimeGenerated, DeviceName, ServiceProcessSHA1 = InitiatingProcessSHA1, ServiceProcess = InitiatingProcessFileName, ServiceProcessCmdline = InitiatingProcessCommandLine, ServiceProcessID = InitiatingProcessId, ServiceProcessCreationTime = InitiatingProcessCreationTime, ServiceProcessUser = InitiatingProcessAccountName, FileAction = ActionType, ModifiedFile = FileName, ModifiedFileSHA1 = SHA1, ModifiedFilePath = FolderPath
-  ) on DeviceName, ServiceProcess, ServiceProcessCmdline, ServiceProcessCreationTime, ServiceProcessID, ServiceProcessUser, ServiceProcessSHA1
-  | join kind = leftouter (
-  DeviceImageLoadEvents
-  | where TimeGenerated > ago(LookupTime)
-  | where InitiatingProcessParentFileName contains "services.exe"
-  | where InitiatingProcessFileName !in~(WhiteList)
-  | project TimeGenerated, DeviceName, ServiceProcessSHA1 = InitiatingProcessSHA1, ServiceProcess = InitiatingProcessFileName, ServiceProcessCmdline = InitiatingProcessCommandLine, ServiceProcessID = InitiatingProcessId, ServiceProcessCreationTime = InitiatingProcessCreationTime, ServiceProcessUser = InitiatingProcessAccountName, LoadedDLL = FileName, LoadedDLLSHA1 = SHA1, LoadedDLLPath = FolderPath
-  ) on DeviceName, ServiceProcess, ServiceProcessCmdline, ServiceProcessCreationTime, ServiceProcessID, ServiceProcessUser, ServiceProcessSHA1
-  | summarize ConnectedAddresses = make_set(RemoteIP, 100000), ConnectedUrls = make_set(RemoteUrl, 100000), FilesModified = make_set(ModifiedFile, 100000),FileModFolderPath = make_set(ModifiedFilePath, 100000),FileModHA1s = make_set(ModifiedFileSHA1, 100000), ChildProcesses = make_set(StartedChildProcess, 100000), ChildCommandlines = make_set(StartedChildProcessCmdline, 100000), DLLsLoaded = make_set(LoadedDLL, 100000), DLLSHA1 = make_set(LoadedDLLSHA1, 100000) by DeviceName, ServiceProcess, ServiceProcessCmdline, ServiceProcessCreationTime, ServiceProcessID, ServiceProcessUser, ServiceProcessSHA1
-  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
-  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+  let RareServices =
+      ServiceEvents
+      | summarize hint.strategy=shuffle ExecutionCount = count() by DeviceName, ServiceProcess
+      | where ExecutionCount < 6;
+  let RareInstances =
+      ServiceEvents
+      | join kind=inner hint.strategy=shuffle (RareServices) on DeviceName, ServiceProcess
+      | summarize hint.strategy=shuffle
+          ChildProcesses = make_set(StartedChildProcess, 1000),
+          ChildCommandlines = make_set(StartedChildProcessCmdline, 1000)
+        by
+          DeviceName,
+          ServiceProcess,
+          ServiceProcessSHA1,
+          ServiceProcessCmdline,
+          ServiceProcessID,
+          ServiceProcessCreationTime,
+          ServiceProcessUser;
+  let NetworkEvents =
+      DeviceNetworkEvents
+      | where TimeGenerated >= ago(LookupTime)
+      | where InitiatingProcessParentFileName =~ "services.exe"
+      | where InitiatingProcessFileName !in~ (WhiteList)
+      | summarize hint.strategy=shuffle
+          ConnectedAddresses = make_set(RemoteIP, 1000),
+          ConnectedUrls = make_set(RemoteUrl, 1000)
+        by
+          DeviceName,
+          ServiceProcess = InitiatingProcessFileName,
+          ServiceProcessSHA1 = InitiatingProcessSHA1,
+          ServiceProcessCmdline = InitiatingProcessCommandLine,
+          ServiceProcessID = InitiatingProcessId,
+          ServiceProcessCreationTime = InitiatingProcessCreationTime,
+          ServiceProcessUser = InitiatingProcessAccountName;
+  let FileEvents =
+      DeviceFileEvents
+      | where TimeGenerated >= ago(LookupTime)
+      | where InitiatingProcessParentFileName =~ "services.exe"
+      | where InitiatingProcessFileName !in~ (WhiteList)
+      | summarize hint.strategy=shuffle
+          FilesModified = make_set(FileName, 1000),
+          FileModFolderPath = make_set(FolderPath, 1000),
+          FileModHA1s = make_set(SHA1, 1000)
+        by
+          DeviceName,
+          ServiceProcess = InitiatingProcessFileName,
+          ServiceProcessSHA1 = InitiatingProcessSHA1,
+          ServiceProcessCmdline = InitiatingProcessCommandLine,
+          ServiceProcessID = InitiatingProcessId,
+          ServiceProcessCreationTime = InitiatingProcessCreationTime,
+          ServiceProcessUser = InitiatingProcessAccountName;
+  let ImageLoadEvents =
+      DeviceImageLoadEvents
+      | where TimeGenerated >= ago(LookupTime)
+      | where InitiatingProcessParentFileName =~ "services.exe"
+      | where InitiatingProcessFileName !in~ (WhiteList)
+      | summarize hint.strategy=shuffle
+          DLLsLoaded = make_set(FileName, 1000),
+          DLLSHA1 = make_set(SHA1, 1000)
+        by
+          DeviceName,
+          ServiceProcess = InitiatingProcessFileName,
+          ServiceProcessSHA1 = InitiatingProcessSHA1,
+          ServiceProcessCmdline = InitiatingProcessCommandLine,
+          ServiceProcessID = InitiatingProcessId,
+          ServiceProcessCreationTime = InitiatingProcessCreationTime,
+          ServiceProcessUser = InitiatingProcessAccountName;
+  RareInstances
+  | join kind=leftouter hint.strategy=shuffle (
+      NetworkEvents
+  ) on DeviceName, ServiceProcess, ServiceProcessSHA1, ServiceProcessCmdline, ServiceProcessID, ServiceProcessCreationTime, ServiceProcessUser
+  | join kind=leftouter hint.strategy=shuffle (
+      FileEvents
+  ) on DeviceName, ServiceProcess, ServiceProcessSHA1, ServiceProcessCmdline, ServiceProcessID, ServiceProcessCreationTime, ServiceProcessUser
+  | join kind=leftouter hint.strategy=shuffle (
+      ImageLoadEvents
+  ) on DeviceName, ServiceProcess, ServiceProcessSHA1, ServiceProcessCmdline, ServiceProcessID, ServiceProcessCreationTime, ServiceProcessUser
+  | extend HostName = iff(DeviceName has ".", tostring(split(DeviceName, ".")[0]), DeviceName)
+  | extend DnsDomain = iff(DeviceName has ".", substring(DeviceName, indexof(DeviceName, ".") + 1), "")
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -81,5 +141,5 @@ entityMappings:
         columnName: ServiceProcessID
       - identifier: CommandLine
         columnName: ServiceProcessCmdline
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled
