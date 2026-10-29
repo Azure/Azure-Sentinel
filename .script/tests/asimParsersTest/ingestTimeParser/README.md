@@ -76,6 +76,14 @@ must use the supported stream-name format.
 available in `validation-result.json` when visibility detects unexpected,
 duplicate, or incomplete rows.
 
+Exact-row visibility timeouts include `expectedCounts`, the last successful
+`observedCounts`, `missingTimestamps` (timestamps with fewer rows than expected),
+and `observedQueryTable` in the error details, including when the shared deadline
+expires between polls or during settling. Before any successful observation,
+the observed counts are empty and the query table is null. Shared-deadline
+errors retain their original stage and message; query failures remain unchanged.
+These diagnostics do not resolve the underlying canary ingestion timeout.
+
 QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
 `itp_rows` under `outputValidation`. It derives `intersect_schema` from shared
 column names, excluding the platform-managed `Type` column, and records both

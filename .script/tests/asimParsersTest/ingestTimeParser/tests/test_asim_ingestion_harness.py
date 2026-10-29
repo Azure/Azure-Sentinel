@@ -349,6 +349,211 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual(1, len(table["rows"]))
         self.assertEqual([5], clock.sleeps)
 
+    def test_wait_for_rows_deadline_preserves_latest_observation(self):
+        first = "2026-10-16T19:55:00.1234567Z"
+        second = "2026-10-16T19:54:59.1234567Z"
+        third = "2026-10-16T19:54:58.1234567Z"
+        filtered = "2026-10-16T19:54:57.1234567Z"
+        columns = [{"name": "TimeGenerated", "type": "datetime"}]
+        latest_table = query_payload(columns, [[first], [second]])["tables"][0]
+        expected = {first: 1, second: 2, third: 1, filtered: 0}
+        harness, session, clock = self.harness(
+            [
+                FakeResponse(200, query_payload(columns, [])),
+                FakeResponse(200, {"tables": [latest_table]}),
+            ],
+            deadline=3,
+        )
+
+        with self.assertRaises(HARNESS.HarnessError) as caught:
+            harness.wait_for_exact_rows(
+                "Contoso_CL", list(expected), expected,
+                stage="target-visibility",
+            )
+
+        self.assertEqual("query", caught.exception.stage)
+        self.assertEqual(
+            "Validation deadline expired.", str(caught.exception)
+        )
+        self.assertIsNone(caught.exception.status_code)
+        self.assertEqual(
+            {
+                "expectedCounts": expected,
+                "observedCounts": {first: 1, second: 1, third: 0, filtered: 0},
+                "missingTimestamps": [second, third],
+                "observedQueryTable": latest_table,
+            },
+            caught.exception.details,
+        )
+        self.assertEqual([1, 2], clock.sleeps)
+        self.assertEqual(2, len(session.calls))
+        self.assertEqual(2, len(harness.request_attempts))
+
+    def test_wait_for_rows_deadline_before_first_query(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        harness, session, _ = self.harness([], deadline=0)
+
+        with self.assertRaises(HARNESS.HarnessError) as caught:
+            harness.wait_for_exact_rows(
+                "Contoso_CL", [timestamp], {timestamp: 1},
+                stage="target-visibility",
+            )
+
+        self.assertEqual(
+            {
+                "expectedCounts": {timestamp: 1},
+                "observedCounts": {},
+                "missingTimestamps": [timestamp],
+                "observedQueryTable": None,
+            },
+            caught.exception.details,
+        )
+        self.assertEqual([], session.calls)
+
+    def test_wait_for_rows_deadline_during_settling(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        payload = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}],
+            [[timestamp]],
+        )
+        harness, session, _ = self.harness(
+            [FakeResponse(200, payload)], deadline=1,
+        )
+
+        with self.assertRaises(HARNESS.HarnessError) as caught:
+            harness.wait_for_exact_rows(
+                "Contoso_CL", [timestamp], {timestamp: 1},
+                stage="target-visibility",
+            )
+
+        self.assertEqual(
+            {timestamp: 1}, caught.exception.details["observedCounts"]
+        )
+        self.assertEqual([], caught.exception.details["missingTimestamps"])
+        self.assertEqual(
+            payload["tables"][0],
+            caught.exception.details["observedQueryTable"],
+        )
+        self.assertEqual(1, len(session.calls))
+
+    def test_wait_for_rows_deadline_after_final_response(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        payload = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}], [],
+        )
+        for rows in ([], [[timestamp]]):
+            with self.subTest(rows=rows):
+                payload["tables"][0]["rows"] = rows
+                harness, _, clock = self.harness([], deadline=1)
+
+                def final_response(method, url, kwargs):
+                    clock.value = 1
+                    return FakeResponse(200, payload)
+
+                harness.session.responses.append(final_response)
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.wait_for_exact_rows(
+                        "Contoso_CL", [timestamp], {timestamp: 1},
+                        stage="target-visibility",
+                    )
+
+                self.assertEqual(
+                    [timestamp] if not rows else [],
+                    caught.exception.details["missingTimestamps"],
+                )
+                self.assertEqual(
+                    {timestamp: len(rows)},
+                    caught.exception.details["observedCounts"],
+                )
+                self.assertEqual(
+                    payload["tables"][0],
+                    caught.exception.details["observedQueryTable"],
+                )
+                self.assertEqual(
+                    "Timed out waiting for exact table rows."
+                    if not rows else "Validation deadline expired.",
+                    str(caught.exception),
+                )
+
+    def test_wait_for_rows_preserves_query_errors_at_deadline(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        for status, payload, message in (
+            (
+                400,
+                {"error": {"code": "BadArgumentError"}},
+                "POST failed with HTTP 400.",
+            ),
+            (
+                403,
+                {"error": {"code": "Forbidden"}},
+                "POST failed with HTTP 403.",
+            ),
+            (
+                200,
+                {"tables": []},
+                "Log Analytics returned no result table.",
+            ),
+        ):
+            with self.subTest(status=status):
+                harness, _, clock = self.harness(
+                    [
+                        FakeResponse(
+                            200,
+                            query_payload(
+                                [{"name": "TimeGenerated", "type": "datetime"}],
+                                [],
+                            ),
+                        ),
+                    ],
+                    deadline=2,
+                )
+
+                def query_error(method, url, kwargs):
+                    clock.value = 2
+                    return FakeResponse(status, payload)
+
+                harness.session.responses.append(query_error)
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.wait_for_exact_rows(
+                        "Contoso_CL", [timestamp], {timestamp: 1},
+                        stage="target-visibility",
+                    )
+
+                self.assertEqual("query", caught.exception.stage)
+                self.assertEqual(message, str(caught.exception))
+                self.assertEqual(
+                    status if status != 200 else None,
+                    caught.exception.status_code,
+                )
+                self.assertEqual(
+                    payload if status != 200 else None,
+                    caught.exception.details,
+                )
+
+    def test_wait_for_rows_enriches_deadline_error_without_replacing_it(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        harness, _, _ = self.harness([])
+        cause = requests.Timeout("query transport timed out")
+        error = HARNESS.HarnessError(
+            "deadline", "Validation deadline expired."
+        )
+        error.__cause__ = cause
+        with unittest.mock.patch.object(
+            harness, "query_exact_rows", side_effect=error,
+        ):
+            with self.assertRaises(HARNESS.HarnessError) as caught:
+                harness.wait_for_exact_rows(
+                    "Contoso_CL", [timestamp], {timestamp: 1},
+                    stage="target-visibility",
+                )
+
+        self.assertIs(error, caught.exception)
+        self.assertIs(cause, caught.exception.__cause__)
+        self.assertEqual("deadline", caught.exception.stage)
+        self.assertEqual(
+            {timestamp: 1}, caught.exception.details["expectedCounts"]
+        )
+
     def test_wait_for_rows_fails_on_contamination(self):
         harness, _, _ = self.harness(
             [
