@@ -1,0 +1,160 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceFileEvents
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mde
+    dataTypes:
+    - DeviceFileEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - DeviceFileEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d6f04915-4471-4cb3-b163-a8b72997cf72
+    path: Analytic Rules/FileHashEntity_DeviceFileEvents_Updated.yaml
+    version: 1.0.4
+    querySha256: 0b97811a1b52247c96b670b753a3a5ec6cc206447cb02561fe773fd665451781
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.4
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'converter cannot map FileHash.Algorithm/Value: requires a query-proven constant
+      SHA1 or SHA256 algorithm and an available hash value column; MD5, unknown algorithms
+      and linked file/process references are not inferred'
+    - FileHash.Value value is retained as customDetails.FileHashValue from query column
+      `FileHashValue`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.FileHashValue column `FileHashValue` requires runtime
+      output-schema binding verification
+    - FileHash.Algorithm value is retained as customDetails.FileHashAlgorithm from
+      query column `FileHashType`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.FileHashAlgorithm column `FileHashType` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: aabebcf8a5acdf85903ec5fa444831d2604197b4683aa3ecf2d587963fa5e95f
+      targetQuerySha256: 9b5e24520c0948a68d58cab5368bc98fb82636c78afc19557b121f656cf6b23f
+    supplementalEntityDetails:
+    - entityType: FileHash
+      entityIndex: 2
+      identifier: Value
+      sourceColumn: FileHashValue
+      column: FileHashValue
+      status: runtime-binding-pending
+      customDetailKey: FileHashValue
+    - entityType: FileHash
+      entityIndex: 2
+      identifier: Algorithm
+      sourceColumn: FileHashType
+      column: FileHashType
+      status: runtime-binding-pending
+      customDetailKey: FileHashAlgorithm
+properties:
+  id: xdr-d6f04915-4471-4cb3-b163-a8b72997cf72
+  displayName: TI Map File Hash to DeviceFileEvents Event
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceFileEvents_\
+      \ = (union\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where\
+      \ isnotempty(SHA1) | extend FileHashValue = SHA1),\n(DeviceFileEvents | where\
+      \ TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA256) | extend FileHashValue\
+      \ = SHA256));\nlet Hashes = DeviceFileEvents_ | distinct FileHashValue;\nThreatIntelIndicators\n\
+      //extract key part of kv pair\n      | extend IndicatorType = replace(@\"\\\
+      [|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n      | where\
+      \ IndicatorType == \"file\"\n      | extend FileHashType = replace(\"'\", \"\
+      \", substring(ObservableKey, indexof(ObservableKey, \"hashes.\") + 7, strlen(ObservableKey)\
+      \ - indexof(ObservableKey, \"hashes.\") - 7))\n      | extend FileHashValue\
+      \ = ObservableValue\n      | extend IndicatorId = tostring(split(Id, \"--\"\
+      )[2])\n| where isnotempty(FileHashValue)\n| where TimeGenerated > ago(ioc_lookBack)\n\
+      //  | where FileHashValue in (Hashes)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated,\
+      \ *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n\
+      | extend Description = tostring(parse_json(Data).description)\n| where Description\
+      \ !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\
+      \n  | project-reorder *, FileHashType, FileHashValue, Type\n| join kind=innerunique\
+      \ (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue\n| where\
+      \ TimeGenerated < ValidUntil\n| summarize TimeGenerated = arg_max(TimeGenerated,\
+      \ *) by  IndicatorId, DeviceId\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames\
+      \ = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames,\
+      \ IndicatorId, FileHashValue, FileHashType, ValidUntil, Confidence, ActionType,\
+      \ DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName,\
+      \ RequestAccountSid, MachineGroup\n| extend timestamp = TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map File Hash to DeviceFileEvents Event
+      description: '''Identifies a match in DeviceFileEvents Event data from any FileHash
+        IOC from TI'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: RequestAccountName
+          sidColumn: RequestAccountSid
+          ntDomainColumn: RequestAccountDomain
+        hosts:
+        - id: host1
+          nameColumn: DeviceName
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        FileHashValue: FileHashValue
+        FileHashAlgorithm: FileHashType

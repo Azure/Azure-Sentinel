@@ -1,0 +1,199 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PaloAltoNetworks
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 432996e9-8a93-4407-985f-13707b318a0b
+    path: Analytic Rules/FileHashEntity_CommonSecurityLog.yaml
+    version: 1.3.10
+    querySha256: 3aec567ff772f3a133aa7b0cc7cfc7a61fe173517040b6a641f941c393d902c5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.3.10
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `DeviceName`
+      is provisionally represented by hosts.nameColumn `HostName`; confirm that this
+      column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - 'converter cannot map FileHash.Algorithm/Value: requires a query-proven constant
+      SHA1 or SHA256 algorithm and an available hash value column; MD5, unknown algorithms
+      and linked file/process references are not inferred'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `SourceUserName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `SourceUserName` requires
+      runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column
+      `DeviceName`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `DeviceName` requires runtime
+      output-schema binding verification
+    - FileHash.Value value is retained as customDetails.FileHashValue from query column
+      `FileHashValue`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.FileHashValue column `FileHashValue` requires runtime
+      output-schema binding verification
+    - FileHash.Algorithm value is retained as customDetails.FileHashAlgorithm from
+      query column `FileHashType`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.FileHashAlgorithm column `FileHashType` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 248897b5866d2ea071227842944676c77ae9d562db3637b25aacc9cf009682ce
+      targetQuerySha256: afdd4025f1ac3da4281632ad3cf9ae83c6c226cf118aed2e159ecb39cc99e75e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: SourceUserName
+      column: SourceUserName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: DeviceName
+      column: DeviceName
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    - entityType: FileHash
+      entityIndex: 5
+      identifier: Value
+      sourceColumn: FileHashValue
+      column: FileHashValue
+      status: runtime-binding-pending
+      customDetailKey: FileHashValue
+    - entityType: FileHash
+      entityIndex: 5
+      identifier: Algorithm
+      sourceColumn: FileHashType
+      column: FileHashType
+      status: runtime-binding-pending
+      customDetailKey: FileHashAlgorithm
+properties:
+  id: xdr-432996e9-8a93-4407-985f-13707b318a0b
+  displayName: TI Map File Hash to CommonSecurityLog Event
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet fileHashIndicators\
+      \ = ThreatIntelIndicators\n//extract key part of kv pair\n| extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n| where IndicatorType == \"file\"\n| extend FileHashType = replace(\"\
+      '\", \"\", substring(ObservableKey, indexof(ObservableKey, \"hashes.\") + 7,\
+      \ strlen(ObservableKey) - indexof(ObservableKey, \"hashes.\") - 7))\n| extend\
+      \ FileHashValue = toupper(ObservableValue)\n| extend IndicatorId = tostring(split(Id,\
+      \ \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue,\
+      \ \"\")\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil\
+      \ > now() or isempty(ValidUntil));\n// Handle matches against both lower case\
+      \ and uppercase versions of the hash:\n(fileHashIndicators | extend  FileHashValue\
+      \ = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue\
+      \ = toupper(FileHashValue)))\n| project-reorder *, FileHashType, FileHashValue,\
+      \ Type\n// using innerunique to keep perf fast and result set low, we only need\
+      \ one match to indicate potential malicious activity that needs to be investigated\n\
+      |  join kind=innerunique (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n\
+      \  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue\
+      \ == $right.FileHash\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n\
+      | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated,\
+      \ *) by IndicatorId, FileHashValue\n| extend Description = tostring(parse_json(Data).description)\n\
+      | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames\
+      \ = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames,\
+      \ Id, ValidUntil, Confidence,\nSourceIP, SourcePort, DestinationIP, DestinationPort,\
+      \ SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName,\
+      \ DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType,\
+      \ Url\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain\
+      \ = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n\
+      | extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName,\
+      \ '@', 1)[0])\n| extend timestamp = CommonSecurityLog_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map File Hash to CommonSecurityLog Event
+      description: '''Identifies a match in CommonSecurityLog Event data from any
+        FileHash IOC from TI'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountFullName: SourceUserName
+        HostFullName: DeviceName
+        FileHashValue: FileHashValue
+        FileHashAlgorithm: FileHashType

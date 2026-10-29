@@ -1,0 +1,163 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Syslog
+  dataTypes:
+  - Syslog
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+    - Syslog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: cd19434e-10f2-4e2f-b3c1-ce6f08ac5357
+    path: Analytic Rules/DomainEntity_Syslog.yaml
+    version: 1.4.7
+    querySha256: 6c74249376ca27b99bca1f55a1dbdbe86da7bfd141b80da612583f27b07aad76
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.4.7
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer`
+      is provisionally represented by hosts.nameColumn `HostName`; confirm that this
+      column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column
+      `Computer`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema
+      binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 114d8ae34a0fe39deebcbdc8aa600ba0b497c329691f278b49313b353094143b
+      targetQuerySha256: e34e44da55f621ab3432d20f8e76cff1f07ec81f572d0164ac0bc82396be83bc
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+properties:
+  id: xdr-cd19434e-10f2-4e2f-b3c1-ce6f08ac5357
+  displayName: TI Map Domain entity to Syslog
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;  // Define the time range to look back for syslog\
+      \ data (1 hour)\nlet ioc_lookBack = 14d;  // Define the time range to look back\
+      \ for threat intelligence indicators (14 days)\n// Create a list of top-level\
+      \ domains (TLDs) from the threat feed for later validation\nlet list_tlds =\
+      \ ThreatIntelIndicators\n | where TimeGenerated > ago(ioc_lookBack)\n | summarize\
+      \ LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n | where IsActive and\
+      \ (ValidUntil > now() or isempty(ValidUntil))\n | extend IndicatorType = replace(@\"\
+      \\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n | where\
+      \ IndicatorType == \"domain-name\"\n | extend DomainName = tolower(ObservableValue)\n\
+      \ | extend parts = split(DomainName, '.')\n | extend tld = parts[(array_length(parts)-1)]\n\
+      \ | summarize count() by tostring(tld)\n | summarize make_list(tld);\n// Fetch\
+      \ the latest active domain indicators from the threat intelligence data within\
+      \ the specified time range\nlet Domain_Indicators = ThreatIntelIndicators\n\
+      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"domain-name\"\n| extend DomainName\
+      \ = tolower(ObservableValue)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      \ | where TimeGenerated >= ago(ioc_lookBack)\n | summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n | where IsActive and\
+      \ (ValidUntil > now() or isempty(ValidUntil))\n | extend IndicatorId = tostring(split(Id,\
+      \ \"--\")[2])\n | extend Url = iff(ObservableKey == \"url:value\", ObservableValue,\
+      \ \"\");\n// Join the threat intelligence indicators with syslog data on matching\
+      \ domain entities\nDomain_Indicators\n| project-reorder *, IsActive, Tags, TrafficLightProtocolLevel,\
+      \ DomainName, Type\n | join kind=innerunique (\n   Syslog\n   | where TimeGenerated\
+      \ > ago(dt_lookBack)\n   // Extract domain patterns from syslog messages\n \
+      \  | extend domain = extract(\"(([a-z0-9]+(-[a-z0-9]+)*\\\\.)+[a-z]{2,})\",1,\
+      \ tolower(SyslogMessage))\n   | where isnotempty(domain)\n   | extend parts\
+      \ = split(domain, '.')\n   // Split out the top-level domain (TLD)\n   | extend\
+      \ tld = parts[(array_length(parts)-1)]\n   // Validate parsed domain by checking\
+      \ if the TLD is in the list of TLDs in our threat feed\n   | where tld in~ (list_tlds)\n\
+      \   | extend Syslog_TimeGenerated = TimeGenerated\n ) on $left.DomainName==$right.domain\n\
+      \ | where Syslog_TimeGenerated < ValidUntil\n // Retrieve the latest syslog\
+      \ timestamp for each indicator and domain combination\n | summarize Syslog_TimeGenerated\
+      \ = arg_max(Syslog_TimeGenerated, *) by IndicatorId, domain\n // Select the\
+      \ desired columns for the final result set\n | extend ActivityGroupNames = extract(@\"\
+      ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n | extend Description\
+      \ = tostring(parse_json(Data).description)\n | project Syslog_TimeGenerated,\
+      \ Description, ActivityGroupNames, Id, ValidUntil, Confidence, SyslogMessage,\
+      \ Computer, ProcessName, domain, HostIP, Type, DomainName, Url\n // Extract\
+      \ the hostname from the Computer field\n | extend HostName = tostring(split(Computer,\
+      \ '.', 0)[0])\n // Extract the DNS domain from the Computer field\n | extend\
+      \ DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1),\
+      \ '.'))\n // Assign the Syslog_TimeGenerated value to the timestamp field\n\
+      \ | extend timestamp = Syslog_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Domain entity to Syslog
+      description: Identifies a match in Syslog table from any Domain IOC from TI
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: HostIP
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        HostFullName: Computer
