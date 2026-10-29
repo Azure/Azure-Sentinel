@@ -1,0 +1,131 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - TMApexOneEvent
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b463b952-67b8-11ec-90d6-0242ac120003
+    path: Analytic Rules/TMApexOneDvcAccessPermissionWasChanged.yaml
+    version: 1.0.2
+    querySha256: 86cde187ba9055908192f78e933a4841396ffb4830a709146e9ec5c07c853f53
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: d13cf48ac84fedc42e6d692892b9d09435b39196fd7e3f933c97bf0bd23f2f1e
+      targetQuerySha256: bc9cfe73189c17febbb08adcb1f7f0ff46e342d87eb1322aed9a1e881f5cbfe1
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: d13cf48ac84fedc42e6d692892b9d09435b39196fd7e3f933c97bf0bd23f2f1e
+      targetQuerySha256: bc9cfe73189c17febbb08adcb1f7f0ff46e342d87eb1322aed9a1e881f5cbfe1
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-b463b952-67b8-11ec-90d6-0242ac120003
+  displayName: ApexOne - Device access permissions was changed
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 1;
+      TMApexOneEvent
+      | where EventMessage has "Device access"
+      | extend DeviceCustomNumber3 = coalesce(
+                                        column_ifexists("FieldDeviceCustomNumber3", long(null)),
+                                        DeviceCustomNumber3,
+                                        long(null)
+                                    )
+      | extend Permission = case(
+                                  DeviceCustomNumber3 == "0", "Modify",
+                                  DeviceCustomNumber3 == "1", "Read and execute",
+                                  DeviceCustomNumber3 == "2", "Read",
+                                  DeviceCustomNumber3 == "3", "List device content only",
+                                  DeviceCustomNumber3 == "4", "Block",
+                                  "unknown"
+                            )
+      | summarize Permissions = make_set(Permission), TimeGenerated = max(TimeGenerated), SrcIpAddr = take_any(SrcIpAddr), DstDvcHostname = take_any(DstDvcHostname) by DstUserName
+      | extend PermissionCount = array_length(Permissions)
+      | where PermissionCount > threshold
+      | extend AccountCustomEntity = DstUserName, IPCustomEntity = SrcIpAddr, HostCustomEntity = DstDvcHostname
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: ApexOne - Device access permissions was changed
+      description: '''Query shows device access permissions was changed.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity

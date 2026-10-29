@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                             |
 |-------------|--------------------------------|------------------------------------------------|
+| 3.2.2       | 28-10-2026                     | Migrated **Analytic Rules** and **Workbooks** to Defender XDR and repackaged with V3.1. |
 | 3.0.2       | 20-01-2025                     | Removed Custom Entity mappings from **Analytic rules**          |
 | 3.0.1       | 31-12-2024                     | Removed Deprecated **Data connector**          |
-| 3.0.0       | 01-08-2024                     | Update **Parser** as part of Syslog migration  |
-|             |                                | Deprecating data connectors                    |
+| 3.0.0       | 01-08-2024                     | Update **Parser** as part of Syslog migration and deprecate **Data connectors** |

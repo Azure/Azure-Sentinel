@@ -1,0 +1,100 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - ThreatIntelligenceIndicator
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7241740a-5280-4b74-820a-862312d721a8
+    path: Analytic Rules/GitLab_MaliciousIP.yaml
+    version: 1.0.4
+    querySha256: 0ccee527ddb5582e49a954748b0ebc5ee9cfe2e961f8c2c8e33ad59562756185
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 0b85785e9b97f58f522e35b97a44ac0bdc453e5b0aa993b9cd256246995d9bd9
+      targetQuerySha256: 8f2a3446e73b3bec6f368da732888797689cdb5a4919aeef7d133efdc78c3502
+properties:
+  id: xdr-7241740a-5280-4b74-820a-862312d721a8
+  displayName: GitLab - TI - Connection from Malicious IP
+  status: disabled
+  queryCondition:
+    queryText: |-
+      ThreatIntelligenceIndicator
+      | where Action == true
+      // Picking up only IOCs that contain the entities we want
+      | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+      // Taking the first non-empty value based on potential IOC match availability
+      | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+      | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+      | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+      //Exclude local addresses using ipv4_is_private operator
+      |where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+      | join (GitLabAccess) on $left.TI_ipEntity == $right.IPAddress
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TimeGenerated = EventTime, TI_ipEntity, IPAddress, URI
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GitLab - TI - Connection from Malicious IP
+      description: '''This query correlates Threat Intelligence data from Microsoft Sentinel with GitLab NGINX Access Logs
+        (available in GitLab CE as well) to identify access from potentially TI-flagged IPs.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078

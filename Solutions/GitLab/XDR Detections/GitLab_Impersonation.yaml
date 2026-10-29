@@ -1,0 +1,113 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0f4f16a2-b464-4c10-9a42-993da3e15a40
+    path: Analytic Rules/GitLab_Impersonation.yaml
+    version: 1.0.2
+    querySha256: 29d2ee2d810f489700f1f2cfdf4ff2f33959e32b000ec27d87ca8ff5e8431188
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `EntityName`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `EntityName` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `TargetDetails`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `TargetDetails` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 4d3d036510778111c905dce9a9340904763fa074e5b5f418aee80d127986ff9f
+      targetQuerySha256: 766b7fadd956cb1bfc50915f66b7b9fbd1eeae045f82eccf684c895712e04d77
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: EntityName
+      column: EntityName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 4
+      identifier: FullName
+      sourceColumn: TargetDetails
+      column: TargetDetails
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40
+  displayName: GitLab - User Impersonation
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let impersonationStart = (GitLabAudit
+      | where CustomMessage == 'Started Impersonation');
+      let impersonationStop = (GitLabAudit
+      | where CustomMessage == 'Stopped Impersonation');
+      impersonationStart
+      | join kind=inner impersonationStop on $left.TargetID == $right.TargetID and $left.AuthorID == $right.AuthorID
+      | where EventTime1 > EventTime
+      | project TimeGenerated, AuthorID, AuthorName, TargetID, TargetDetails, IPStart = IPAddress, IPStop = IPAddress1, ImpStartTime = EventTime, ImpStopTime = EventTime1, EntityName
+      | join kind=inner (GitLabAudit | project ActionTime = EventTime, AuthorName, Action, CustomMessage) on $left.TargetDetails == $right.AuthorName
+      | where ImpStartTime < ActionTime and ActionTime < ImpStopTime
+      | project TimeGenerated, AuthorID, AuthorName, TargetID, TargetDetails, IPStart, IPStop, ImpStartTime, ImpStopTime, ActionTime, Action, CustomMessage, EntityName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GitLab - User Impersonation
+      description: '''This queries GitLab Audit Logs for user impersonation. A malicious operator or a compromised admin account
+        could leverage the impersonation feature of GitLab to change code or repository settings bypassing usual processes.
+        This hunting queries allows you to track the audit actions done under impersonation.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPStart
+        - id: ip2
+          addressColumn: IPStop
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountFullName: EntityName
+        AccountFullName_2: TargetDetails

@@ -1,0 +1,116 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSEGEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: dfdb9a73-4335-4bb4-b29b-eb713bce61a6
+    path: Analytic Rules/CiscoSEGMultipleSuspiciousEmails.yaml
+    version: 1.0.3
+    querySha256: c94e324d534e46943f0c7c2d08592094d865922eca154584601bca69e366dc1f
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 919260a1f8d5008b1606a7f8409414ef1d73c0a031fd173e0923d8d8fb8e1cc1
+      targetQuerySha256: 9b2de839dd429967352279ac6731a0a2facb0ffe353e3a8a74ab0d90db6990a1
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 919260a1f8d5008b1606a7f8409414ef1d73c0a031fd173e0923d8d8fb8e1cc1
+      targetQuerySha256: 9b2de839dd429967352279ac6731a0a2facb0ffe353e3a8a74ab0d90db6990a1
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-dfdb9a73-4335-4bb4-b29b-eb713bce61a6
+  displayName: Cisco SEG - Multiple suspiciuos attachments received
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let r_threshold = 5;
+      CiscoSEGEvent
+      | where NetworkDirection =~ 'Incoming'
+      | where isnotempty(EventMessage)
+      | where strlen(EventMessage) < 20
+      | summarize rec = make_set(DstUserName), TimeGenerated = max(TimeGenerated), SrcUserName = take_any(SrcUserName), SourceIP = take_any(SourceIP), DvcIpAddr = take_any(DvcIpAddr) by EventMessage, bin(TimeGenerated, 10m)
+      | where array_length(rec) > r_threshold
+      | extend AccountCustomEntity = tostring(rec[0]), IPCustomEntity = coalesce(SourceIP, DvcIpAddr), rec = strcat_array(rec, ', ')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco SEG - Multiple suspiciuos attachments received
+      description: '''Detects possibly phishing emails.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      customDetails:
+        AccountName: AccountCustomEntity

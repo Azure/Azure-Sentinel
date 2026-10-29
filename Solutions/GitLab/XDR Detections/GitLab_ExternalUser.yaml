@@ -1,0 +1,111 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c1544d8f-cbbd-4e35-8d32-5b9312279833
+    path: Analytic Rules/GitLab_ExternalUser.yaml
+    version: 1.0.1
+    querySha256: 93e91f4898d732448fdfee1e5dfb6db7d03ac43cf0f5b80ba0e8f4e32b55569c
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `User`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `User` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `AuthorName`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `AuthorName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1136
+    reviewScope:
+      sourceDocumentSha256: 92e0381e6e76ae606f4aff405957dc7caeddc18c7ea11257f233576344ae3d18
+      targetQuerySha256: 16802ee8f6d356cac347d4a2bf8eba3ebbb2970db955a9fefb2aeebc49e52152
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: User
+      column: User
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: AuthorName
+      column: AuthorName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833
+  displayName: GitLab - External User Added to GitLab
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // List of allow-listed domains
+      let allowedDomain = pack_array("mydomain.com");
+      GitLabAudit()
+      | where AddAction == "user"
+      | project AuthorName, IPAddress, User = EntityName
+      | join (GitLabApp
+      | where UserAdded == 1
+      | parse kind=regex Message with "User \"" User "\"" EmailAddress " was created"
+      | project tostring(User), EmailAddress = substring(EmailAddress,2,strlen(EmailAddress)-3)) on User
+      | project  AuthorName, IPAddress, User, EmailAddress, DomainName = tostring(extract("@(.*)$", 1, EmailAddress))
+      | where allowedDomain !contains DomainName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GitLab - External User Added to GitLab
+      description: '''This queries GitLab Application logs to list external user accounts (i.e.: account not in allow-listed
+        domains) which have been added to GitLab users.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1136
+      customDetails:
+        AccountFullName: User
+        AccountFullName_2: AuthorName
+        DnsDomainName: DomainName

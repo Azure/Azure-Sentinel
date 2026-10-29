@@ -1,0 +1,81 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 57b1634b-531d-4eab-a456-8b855887428f
+    path: Analytic Rules/GitLab_SignInBurst.yaml
+    version: 1.0.1
+    querySha256: 553c44307c542c1a1591990ec7a187905085d708df4bba2db83846b4e2f9b95e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 6abb32da0209142a8fa42582003f0627c17aa87f196701ec57f3a7687611863f
+      targetQuerySha256: 9164bf6dbff31b90130f60b1afc4e33654870274a348beb1669971daa3e54e72
+properties:
+  id: xdr-57b1634b-531d-4eab-a456-8b855887428f
+  displayName: GitLab - SSO - Sign-Ins Burst
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let locationCountMin = 1;
+      let appRegistrationName = "GitLab";
+      SigninLogs
+      | where AppDisplayName == appRegistrationName
+      | where ResultType == 0
+      | where Location != ""
+      | summarize CountOfLocations = dcount(Location), Locations = make_set(Location) by User = Identity, UserPrincipalName, AADUserId = UserId
+      | where CountOfLocations > locationCountMin
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GitLab - SSO - Sign-Ins Burst
+      description: '''This query relies on Microsoft Entra ID sign-in activity when Microsoft Entra ID is used for SSO with
+        GitLab to highlights GitLab accounts associated with multiple authentications from different geographical locations
+        in a short space of time.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          aadUserIdColumn: AADUserId
+          nameColumn: User
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110

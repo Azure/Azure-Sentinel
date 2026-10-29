@@ -1,0 +1,97 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4d6d8b0e-6d9a-4857-a141-f5d89393cddb
+    path: Analytic Rules/GitLab_PAT_Repo.yaml
+    version: 1.0.1
+    querySha256: 788a09469ba5bb7a2d543e431f79d67376567fd12799247cdc0a3f3716212d78
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column `AuthorName`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AuthorName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Collection
+    originalTechniques:
+    - T1213
+    reviewScope:
+      sourceDocumentSha256: 694a4f047a1773a0a1ea74a19039e59a3516189423fb87a9480e04f75ba63edd
+      targetQuerySha256: b1d5d9de201801e6e88a08e327bf7691049814782dc8c849ee545f86c125f641
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AuthorName
+      column: AuthorName
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb
+  displayName: GitLab - Personal Access Tokens creation over time
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // l_min_tokens_created - minimum tokens created per repository per user per day to consider
+      let l_min_tokens_created = 0;
+      let interval = 1d;
+      GitLabAudit()
+      | where TargetType == "PersonalAccessToken"
+      | project Severity, TimeGenerated = bin(todatetime(EventTime),1d), AuthorName, IPAddress = tostring(IPAddress), Repository = EntityName, Action, TargetType
+      | summarize total = count() by Repository, TimeGenerated, AuthorName, IPAddress
+      | where total >= l_min_tokens_created
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GitLab - Personal Access Tokens creation over time
+      description: "'This queries GitLab Audit Logs for access tokens. Attacker can exfiltrate data from you GitLab repository\
+        \ after gaining access to it by generating or hijacking access tokens. \nThis hunting queries allows you to track\
+        \ the personal access tokens creation for each of your repositories. \nThe visualization allow you to quickly identify\
+        \ anomalies/excessive creation, to further investigate repo access & permissions.'"
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1213
+      customDetails:
+        AccountName: AuthorName

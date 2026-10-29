@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSEGEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f8ba18c4-81e3-4db0-8f85-4989f2ed2ade
+    path: Analytic Rules/CiscoSEGUnexpectedAttachment.yaml
+    version: 1.0.3
+    querySha256: 7c7f5135bcaab10d73aa31f94aa321f341c59cf5c888e170c6ef76b02a3a2b6f
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name output column `AccountCustomEntity` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: fc5fa58f5d7216bf53668ce19d228b4b50e82f8879975dec34e9c90cf05c5232
+      targetQuerySha256: cf263b0dd2dd2ed07c18f7c16f219c44f39951c99ad079bc3f1ecc8f71db9e9f
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: fc5fa58f5d7216bf53668ce19d228b4b50e82f8879975dec34e9c90cf05c5232
+      targetQuerySha256: cf263b0dd2dd2ed07c18f7c16f219c44f39951c99ad079bc3f1ecc8f71db9e9f
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-f8ba18c4-81e3-4db0-8f85-4989f2ed2ade
+  displayName: Cisco SEG - Unexpected attachment
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CiscoSEGEvent
+      | where NetworkDirection =~ 'Incoming'
+      | where tostring(AdditionalFields) has 'ESAAttachmentDetails'
+      | extend attachment = replace_string(tostring(extract(@'"ESAAttachmentDetails":"{(.*?):', 1, tostring(AdditionalFields))), "'", "")
+      | where attachment endswith '.ps1' or attachment endswith '.lnk' or attachment endswith '.exe'
+      | extend AccountCustomEntity = DstUserName, IPCustomEntity = coalesce(SourceIP, DvcIpAddr)
+      | project-away AdditionalFields
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco SEG - Unexpected attachment
+      description: '''Detects possibly malicious attachments.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566

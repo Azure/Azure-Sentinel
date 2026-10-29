@@ -1,0 +1,164 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads: &id001
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - SymantecEndpointProtection
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: fa0ab69c-7124-4f62-acdd-61017cf6ce89
+    path: Analytic Rules/ExcessiveBlockedTrafficGeneratedbyUser.yaml
+    version: 1.0.3
+    querySha256: 4a0830699bcfc4dfd21950a1c969b6fa185f9e9bac1f36763241a46c2febcc22
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads: *id001
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - 'Best-effort entity mapping requires review: source Host.FullName column `ServerName` is provisionally represented by
+      hosts.nameColumn `ServerName`; confirm that this column is the intended host identifier. The original value is also
+      retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserName`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserName` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `ServerName`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `ServerName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - CommandAndControl
+    - LateralMovement
+    originalTechniques:
+    - T1041
+    - T1132
+    - T1001
+    - T1021
+    reviewScope:
+      sourceDocumentSha256: 98923a556ebf20cf105118d224412b28708068d9c65eaa4b3b5703bf27e4a5e3
+      targetQuerySha256: db474d142acc85425c415137d36acc2d3d19824c8369de8e91bac5df0316814d
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 98923a556ebf20cf105118d224412b28708068d9c65eaa4b3b5703bf27e4a5e3
+      targetQuerySha256: db474d142acc85425c415137d36acc2d3d19824c8369de8e91bac5df0316814d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserName
+      column: UserName
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 4
+      identifier: FullName
+      sourceColumn: ServerName
+      column: ServerName
+      status: available
+      customDetailKey: HostFullName
+properties:
+  id: xdr-fa0ab69c-7124-4f62-acdd-61017cf6ce89
+  displayName: Excessive Blocked Traffic Events Generated by User
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 15;
+
+      let NoteableEvents = SymantecEndpointProtection
+
+      | where LogType == "Agent Traffic Logs"
+
+      | where Action =~ "Blocked"
+
+      | summarize TotalBlockedEvents = count() by UserName
+
+      | where TotalBlockedEvents > threshold;
+
+      SymantecEndpointProtection
+
+      | where LogType =~ "Agent Traffic Logs"
+
+      | where Action =~ "Blocked"
+
+      | join kind=inner (NoteableEvents) on UserName
+
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Total = count() by UserName, RuleName,
+      ServerName, LocalHostIpAddr, LocalPortNumber, TrafficDirection, RemoteHostIpAddr, RemotePortNumber, ApplicationName'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Excessive Blocked Traffic Events Generated by User
+      description: '''Creates an incident when a Symantec Endpoint Proection agent detects excessive amounts of blocked traffic
+        generated by a single user.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: LocalHostIpAddr
+        - id: ip2
+          addressColumn: RemoteHostIpAddr
+        hosts:
+        - id: host1
+          nameColumn: ServerName
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1041
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1132
+        - technique: T1001
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1021
+      customDetails:
+        AccountFullName: UserName
+        HostFullName: ServerName

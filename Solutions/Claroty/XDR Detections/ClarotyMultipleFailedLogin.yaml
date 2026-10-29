@@ -1,0 +1,146 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ClarotyEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4b5bb3fc-c690-4f54-9a74-016213d699b4
+    path: Analytic Rules/ClarotyMultipleFailedLogin.yaml
+    version: 1.0.4
+    querySha256: cacb1c58bbe6acd0ac66e44039259c210c943f87ca5e86b6b14996c9b76b7b2b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - InitialAccess
+    originalTechniques:
+    - T1110
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: df99b1e30edd5416903713c0584399d501617edb97e869a26c4a22d0ea63f538
+      targetQuerySha256: 949b56ded43a98efe07ec11f28edb147cfad23a9f27276d5bd6b0a57ca6c6f5c
+    reviewDecisions:
+    - reason: 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm
+        that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+      decision: accepted
+      sourceDocumentSha256: df99b1e30edd5416903713c0584399d501617edb97e869a26c4a22d0ea63f538
+      targetQuerySha256: 949b56ded43a98efe07ec11f28edb147cfad23a9f27276d5bd6b0a57ca6c6f5c
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: df99b1e30edd5416903713c0584399d501617edb97e869a26c4a22d0ea63f538
+      targetQuerySha256: 949b56ded43a98efe07ec11f28edb147cfad23a9f27276d5bd6b0a57ca6c6f5c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4
+  displayName: Claroty - Multiple failed logins by user
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 5;
+
+      ClarotyEvent
+
+      | where EventType has ''Login to SRA''
+
+      | where EventType !has ''succeeded''
+
+      | extend SrcUsername = trim('' '', tostring(extract(@''User\s(.*?)\sfailed'', 1, EventMessage)))
+
+      | where isnotempty(SrcUsername)
+
+      | summarize FailedLogins = count() by SrcUsername, bin(TimeGenerated, 5m)
+
+      | where FailedLogins > threshold
+
+      | extend AccountCustomEntity = SrcUsername'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Claroty - Multiple failed logins by user
+      description: Detects multiple failed logins by the same user in Claroty SRA event logs. The rule looks for failed Login
+        to SRA events, extracts the source username from the event message, and alerts when a user exceeds 5 failed logins
+        within 5 minutes.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+      customDetails:
+        AccountName: AccountCustomEntity

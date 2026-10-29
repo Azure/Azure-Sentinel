@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSEGEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: df5c34dd-e1e6-4e07-90b1-4309ebfe754c
+    path: Analytic Rules/CiscoSEGDLPViolation.yaml
+    version: 1.0.3
+    querySha256: d19867097e865b740f07fe9bc79e9d2fd5ccde5b843839cd3e7042b154a30258
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name output column `AccountCustomEntity` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1030
+    reviewScope:
+      sourceDocumentSha256: 6b4812404dccd1c705fd237093d71fc0f1b25ea600039ea1f0597f4a13b22ed5
+      targetQuerySha256: 42257e8223337b7a8505262d1419bc28521df8fa75bb5b4b8b948b7e7dca7904
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 6b4812404dccd1c705fd237093d71fc0f1b25ea600039ea1f0597f4a13b22ed5
+      targetQuerySha256: 42257e8223337b7a8505262d1419bc28521df8fa75bb5b4b8b948b7e7dca7904
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-df5c34dd-e1e6-4e07-90b1-4309ebfe754c
+  displayName: Cisco SEG - DLP policy violation
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CiscoSEGEvent
+      | where NetworkDirection =~ 'Outgoing'
+      | where tostring(AdditionalFields) has 'ESADLPVerdict'
+      | extend dlp_verdict = extract(@'ESADLPVerdict":"(NOT_EVALUATED|NO TRIGGER|VIOLATION|NO VIOLATION)"', 1, tostring(AdditionalFields))
+      | where dlp_verdict =~ 'VIOLATION'
+      | extend AccountCustomEntity = SrcUserName, IPCustomEntity = coalesce(SourceIP, DvcIpAddr)
+      | project-away AdditionalFields
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco SEG - DLP policy violation
+      description: '''Detects DLP policy violation.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1030

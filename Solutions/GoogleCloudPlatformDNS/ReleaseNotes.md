@@ -1,5 +1,6 @@
- **Version** | **Date Modified (DD-MM-YYYY)**| **ChangeHistory**                                                                         |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |------------|-------------------------------|-------------------------------------------------------------------------------------------|
+| 3.2.2      | 28-10-2026                    | Added Defender XDR analytics detections and workbooks for Google Cloud Platform DNS.      |
 | 3.0.5      | 29-07-2025                    | Removed Deprecated **Data Connector**. | 
 | 3.0.4      | 26-06-2025                    | Moving **CCF Connector** - *Google Cloud Platform DNS* from Public preview to GA.         |
 | 3.0.3      | 09-05-2025                    | Implemented Standard table Functionality to **CCF Connector** - *Google Cloud Platform DNS*.   |

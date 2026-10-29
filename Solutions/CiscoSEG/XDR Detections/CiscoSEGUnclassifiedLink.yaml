@@ -1,0 +1,110 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSEGEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9cb4a02d-3708-42ba-b33b-0fdd360ce4b6
+    path: Analytic Rules/CiscoSEGUnclassifiedLink.yaml
+    version: 1.0.3
+    querySha256: 28f6b59b254af349d95aa7769599716d43c9cac2191476e94afecdf91d90573a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name output column `AccountCustomEntity` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: c832259269f39fcbf0ac8fc7545c464dc8fcd3a357dc24b8b7f7c2ff51f24ae8
+      targetQuerySha256: 109b508d5096be37ff52fdea048723a64370dc72143faf114bc2f4d03c982f88
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: c832259269f39fcbf0ac8fc7545c464dc8fcd3a357dc24b8b7f7c2ff51f24ae8
+      targetQuerySha256: 109b508d5096be37ff52fdea048723a64370dc72143faf114bc2f4d03c982f88
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-9cb4a02d-3708-42ba-b33b-0fdd360ce4b6
+  displayName: Cisco SEG - Unexpected link
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let u_cat = dynamic(['Unclassified']);
+      CiscoSEGEvent
+      | where NetworkDirection =~ 'Incoming'
+      | where tostring(AdditionalFields) has 'ESAURLDetails'
+      | extend link_cat = extract(@"'Category': '(.*?)'", 1, tostring(AdditionalFields))
+      | where link_cat in~ (u_cat)
+      | extend AccountCustomEntity = DstUserName, IPCustomEntity = coalesce(SourceIP, DvcIpAddr)
+      | project-away AdditionalFields
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco SEG - Unexpected link
+      description: '''Detects mails with suspicious links.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566

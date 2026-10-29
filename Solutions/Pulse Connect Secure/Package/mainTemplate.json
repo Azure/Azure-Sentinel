@@ -35,13 +35,48 @@
       "metadata": {
         "description": "Name for the workbook"
       }
+    },
+    "DeployAnalyticsRule": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel analytic rules carried by this solution (ContentKind AnalyticsRule and its AnalyticsRuleTemplate registration face)."
+      }
+    },
+    "DeployWorkbook": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel workbook content and its Content Hub registration carried by this solution (ContentKind Workbook and WorkbookTemplate)."
+      }
+    },
+    "DeployDefenderWorkbook": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy Defender Workbooks and their Content Hub registrations independently of Microsoft Sentinel DeployWorkbook. Candidate provider contract requires approved lab installation, readback and update verification."
+      }
+    },
+    "DeployCustomDetection": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy the XDR-native custom detection resources and their Content Hub registrations (ContentKind CustomDetection and CustomDetectionTemplate). Independent of DeployAnalyticsRule: both kinds can be selected together. Existing analytic-rule instances are not disabled or removed. CD enabled or disabled status is controlled separately from this deployment switch."
+      }
+    },
+    "DeployParser": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the parsers and their registrations carried by this solution."
+      }
     }
   },
   "variables": {
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Pulse Connect Secure",
-    "_solutionVersion": "3.0.4",
+    "_solutionVersion": "3.2.2",
     "solutionId": "azuresentinel.azure-sentinel-solution-pulseconnectsecure",
     "_solutionId": "[variables('solutionId')]",
     "parserObject1": {
@@ -84,7 +119,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "PulseConnectSecure Data Parser with template version 3.0.4",
+        "description": "PulseConnectSecure Data Parser with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -93,7 +128,7 @@
           "resources": [
             {
               "name": "[variables('parserObject1')._parserName1]",
-              "apiVersion": "2022-10-01",
+              "apiVersion": "2025-07-01",
               "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -101,7 +136,7 @@
                 "displayName": "PulseConnectSecure",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "PulseConnectSecure",
-                "query": "let datasource = union isfuzzy=true  (datatable(Source: string)[]), (_GetWatchlist('ASimSourceType') | where SearchKey == 'PulseConnectSecure' | project Source);\nlet forwarder_host_names = dynamic([\"datasource\", \"datasource2\"]);\nSyslog\n| where CollectorHostName in (forwarder_host_names) or Computer in (forwarder_host_names) or CollectorHostName in (datasource) or Computer in (datasource) \n| where Facility == \"local7\"\n// Version 8.0R7 and below using the Standard format\n| extend Parser = extract_all(@'^(\\d{4}\\-\\d{2}-\\d{2})\\s(\\d{2}\\:\\d{2}:\\d{2})\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s\\[(\\S+)\\]\\s(.*)\\((.*)?\\)\\[(.*)\\]\\s\\-\\s(.*)',dynamic([1,2,3,4,5,6,7,8,9,10]),SyslogMessage)\n| mv-expand Parser\n| extend LogTime = todatetime(strcat(tostring(Parser[0]),'T',tostring(Parser[1]))), \n    Node = tostring(Parser[3]), \n    Source_IP = tostring(Parser[5]), \n    User = tostring(Parser[6]), \n    Realm = tostring(Parser[7]), \n    EventID = tostring(Parser[8]), \n    Messages = tostring(Parser[9])\n| project-away Parser\n// The section below is for parsing WebTrends Enhanced Log Format (WELF) logs.  If you are NOT using WELF, then keep this section commented out otherwise uncomment each line to use\n// Version 8.0R7 and above using the WELF format\n//| extend User = extract(@'user=(\\S+)',1,SyslogMessage),\n//    EventID = extract(@'id=(\\S+)',1,SyslogMessage),\n//    Pri = extract(@'pri=(\\S+)',1,SyslogMessage),\n//    Node = extract(@'vpn=\\\"(\\S+)\\\"',1,SyslogMessage),\n//    Realm = extract(@'realm=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Roles = extract(@'roles=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Type = extract(@'type=(\\S+)',1,SyslogMessage),\n//    Messages = extract(@'msg=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Source_IP = extract(@'fw=([\\d\\.]+)',1,SyslogMessage)\n",
+                "query": "let datasource = union isfuzzy=true  (datatable(Source: string)[]), (_GetWatchlist('ASimSourceType') | where SearchKey == 'PulseConnectSecure' | project Source);\nlet forwarder_host_names = dynamic([\"datasource\", \"datasource2\"]);\nSyslog\n| where CollectorHostName in (forwarder_host_names) or Computer in (forwarder_host_names) or CollectorHostName in (datasource) or Computer in (datasource) \n| where Facility == \"local7\"\n// Version 8.0R7 and below using the Standard format\n| extend Parser = extract_all(@'^(\\d\u007b4\u007d\\-\\d\u007b2\u007d-\\d\u007b2\u007d)\\s(\\d\u007b2\u007d\\:\\d\u007b2\u007d:\\d\u007b2\u007d)\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s\\[(\\S+)\\]\\s(.*)\\((.*)?\\)\\[(.*)\\]\\s\\-\\s(.*)',dynamic([1,2,3,4,5,6,7,8,9,10]),SyslogMessage)\n| mv-expand Parser\n| extend LogTime = todatetime(strcat(tostring(Parser[0]),'T',tostring(Parser[1]))), \n    Node = tostring(Parser[3]), \n    Source_IP = tostring(Parser[5]), \n    User = tostring(Parser[6]), \n    Realm = tostring(Parser[7]), \n    EventID = tostring(Parser[8]), \n    Messages = tostring(Parser[9])\n| project-away Parser\n// The section below is for parsing WebTrends Enhanced Log Format (WELF) logs.  If you are NOT using WELF, then keep this section commented out otherwise uncomment each line to use\n// Version 8.0R7 and above using the WELF format\n//| extend User = extract(@'user=(\\S+)',1,SyslogMessage),\n//    EventID = extract(@'id=(\\S+)',1,SyslogMessage),\n//    Pri = extract(@'pri=(\\S+)',1,SyslogMessage),\n//    Node = extract(@'vpn=\\\"(\\S+)\\\"',1,SyslogMessage),\n//    Realm = extract(@'realm=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Roles = extract(@'roles=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Type = extract(@'type=(\\S+)',1,SyslogMessage),\n//    Messages = extract(@'msg=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Source_IP = extract(@'fw=([\\d\\.]+)',1,SyslogMessage)\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -154,11 +189,12 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.1.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.1.0')))]",
         "version": "[variables('parserObject1').parserVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
-      "apiVersion": "2022-10-01",
+      "apiVersion": "2025-07-01",
       "name": "[variables('parserObject1')._parserName1]",
       "location": "[parameters('workspace-location')]",
       "properties": {
@@ -166,7 +202,7 @@
         "displayName": "PulseConnectSecure",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "PulseConnectSecure",
-        "query": "let datasource = union isfuzzy=true  (datatable(Source: string)[]), (_GetWatchlist('ASimSourceType') | where SearchKey == 'PulseConnectSecure' | project Source);\nlet forwarder_host_names = dynamic([\"datasource\", \"datasource2\"]);\nSyslog\n| where CollectorHostName in (forwarder_host_names) or Computer in (forwarder_host_names) or CollectorHostName in (datasource) or Computer in (datasource) \n| where Facility == \"local7\"\n// Version 8.0R7 and below using the Standard format\n| extend Parser = extract_all(@'^(\\d{4}\\-\\d{2}-\\d{2})\\s(\\d{2}\\:\\d{2}:\\d{2})\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s\\[(\\S+)\\]\\s(.*)\\((.*)?\\)\\[(.*)\\]\\s\\-\\s(.*)',dynamic([1,2,3,4,5,6,7,8,9,10]),SyslogMessage)\n| mv-expand Parser\n| extend LogTime = todatetime(strcat(tostring(Parser[0]),'T',tostring(Parser[1]))), \n    Node = tostring(Parser[3]), \n    Source_IP = tostring(Parser[5]), \n    User = tostring(Parser[6]), \n    Realm = tostring(Parser[7]), \n    EventID = tostring(Parser[8]), \n    Messages = tostring(Parser[9])\n| project-away Parser\n// The section below is for parsing WebTrends Enhanced Log Format (WELF) logs.  If you are NOT using WELF, then keep this section commented out otherwise uncomment each line to use\n// Version 8.0R7 and above using the WELF format\n//| extend User = extract(@'user=(\\S+)',1,SyslogMessage),\n//    EventID = extract(@'id=(\\S+)',1,SyslogMessage),\n//    Pri = extract(@'pri=(\\S+)',1,SyslogMessage),\n//    Node = extract(@'vpn=\\\"(\\S+)\\\"',1,SyslogMessage),\n//    Realm = extract(@'realm=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Roles = extract(@'roles=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Type = extract(@'type=(\\S+)',1,SyslogMessage),\n//    Messages = extract(@'msg=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Source_IP = extract(@'fw=([\\d\\.]+)',1,SyslogMessage)\n",
+        "query": "let datasource = union isfuzzy=true  (datatable(Source: string)[]), (_GetWatchlist('ASimSourceType') | where SearchKey == 'PulseConnectSecure' | project Source);\nlet forwarder_host_names = dynamic([\"datasource\", \"datasource2\"]);\nSyslog\n| where CollectorHostName in (forwarder_host_names) or Computer in (forwarder_host_names) or CollectorHostName in (datasource) or Computer in (datasource) \n| where Facility == \"local7\"\n// Version 8.0R7 and below using the Standard format\n| extend Parser = extract_all(@'^(\\d\u007b4\u007d\\-\\d\u007b2\u007d-\\d\u007b2\u007d)\\s(\\d\u007b2\u007d\\:\\d\u007b2\u007d:\\d\u007b2\u007d)\\s(\\S+)\\s(\\S+)\\s(\\S+)\\s\\[(\\S+)\\]\\s(.*)\\((.*)?\\)\\[(.*)\\]\\s\\-\\s(.*)',dynamic([1,2,3,4,5,6,7,8,9,10]),SyslogMessage)\n| mv-expand Parser\n| extend LogTime = todatetime(strcat(tostring(Parser[0]),'T',tostring(Parser[1]))), \n    Node = tostring(Parser[3]), \n    Source_IP = tostring(Parser[5]), \n    User = tostring(Parser[6]), \n    Realm = tostring(Parser[7]), \n    EventID = tostring(Parser[8]), \n    Messages = tostring(Parser[9])\n| project-away Parser\n// The section below is for parsing WebTrends Enhanced Log Format (WELF) logs.  If you are NOT using WELF, then keep this section commented out otherwise uncomment each line to use\n// Version 8.0R7 and above using the WELF format\n//| extend User = extract(@'user=(\\S+)',1,SyslogMessage),\n//    EventID = extract(@'id=(\\S+)',1,SyslogMessage),\n//    Pri = extract(@'pri=(\\S+)',1,SyslogMessage),\n//    Node = extract(@'vpn=\\\"(\\S+)\\\"',1,SyslogMessage),\n//    Realm = extract(@'realm=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Roles = extract(@'roles=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Type = extract(@'type=(\\S+)',1,SyslogMessage),\n//    Messages = extract(@'msg=\\\"([\\w\\s\\:\\.]+)\\\"',1,SyslogMessage),\n//    Source_IP = extract(@'fw=([\\d\\.]+)',1,SyslogMessage)\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -175,7 +211,8 @@
             "value": ""
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -205,7 +242,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -216,7 +254,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "PulseConnectSecure Workbook with template version 3.0.4",
+        "description": "PulseConnectSecure Workbook with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -234,7 +272,7 @@
               },
               "properties": {
                 "displayName": "[parameters('workbook1-name')]",
-                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"parameters\":[{\"id\":\"91698dfb-6494-47f8-8789-44d47c9bb60a\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"label\":\"Time Range\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":2419200000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":300000},{\"durationMs\":900000},{\"durationMs\":1800000},{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000},{\"durationMs\":2419200000},{\"durationMs\":2592000000},{\"durationMs\":5184000000},{\"durationMs\":7776000000}],\"allowCustom\":true},\"resourceType\":\"microsoft.insights/components\"},{\"id\":\"96ede67e-4a1d-4207-9771-a286c41203f7\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"VPNDevice\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"PulseConnectSecure\\r\\n| distinct tostring(Computer)\",\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"]},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"label\":\"VPN Device\"}],\"style\":\"above\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| summarize dcount(User) by Computer, bin(TimeGenerated, {TimeRange:grain})\\r\\n\",\"size\":0,\"title\":\"Distinct User Login by VPN Device\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"name\":\"query - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| where User !endswith \\\"$\\\" and User !~ \\\"SYSTEM\\\"\\r\\n| summarize count() by LoginResults, bin(TimeGenerated, {TimeRange:grain})\\r\\n\",\"size\":0,\"title\":\"User Login Events by Time\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"chartSettings\":{\"seriesLabelSettings\":[{\"seriesName\":\"succeeded\",\"color\":\"green\"},{\"seriesName\":\"failed\",\"color\":\"red\"}]}},\"customWidth\":\"50\",\"name\":\"query - 11 - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where LoginResults == \\\"failed\\\"\\r\\n| where User !endswith \\\"$\\\" and User !~ \\\"SYSTEM\\\"\\r\\n| summarize count() by User, Source_IP\\r\\n| top 10 by count_\\r\\n\",\"size\":0,\"title\":\"Top 10 Failed Login by User\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":{\"formatters\":[{\"columnMatch\":\"count_\",\"formatter\":3,\"formatOptions\":{\"palette\":\"coldHot\"}}],\"labelSettings\":[{\"columnId\":\"User\",\"label\":\"VPN User\"},{\"columnId\":\"Source_IP\",\"label\":\"Client IP\"},{\"columnId\":\"count_\",\"label\":\"Total\"}]}},\"customWidth\":\"50\",\"name\":\"query - 11 - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where LoginResults == \\\"failed\\\"\\r\\n| where User !endswith \\\"$\\\" and User !~ \\\"SYSTEM\\\"\\r\\n| summarize count() by Realm, bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"title\":\"Top 10 Failed Login by User Realm\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"customWidth\":\"50\",\"name\":\"query - 11 - Copy - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| where LoginResults == \\\"failed\\\"\\r\\n| where User !endswith \\\"$\\\" and User != \\\"SYSTEM\\\"\\r\\n| summarize count() by Computer, bin(TimeGenerated, {TimeRange:grain})\\r\\n| top 10 by count_\\r\\n\",\"size\":0,\"title\":\"Top 10 Failed Login by VPN Device\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"customWidth\":\"50\",\"name\":\"query - 11 - Copy - Copy - Copy\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| where Messages has \\\"Host Checker\\\"\\r\\n| extend OS = case(Messages has \\\"Mac\\\", \\\"Mac OSX\\\", Messages has \\\"Windows\\\", \\\"Windows\\\",\\\"Other\\\")\\r\\n| summarize count() by OS\",\"size\":0,\"title\":\"Client Device Usage\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"customWidth\":\"50\",\"name\":\"query - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| summarize ADPrimaryAuthSuccess = countif(Messages has \\\"Primary authentication successful\\\"), ADPrimaryAuthFailed = countif(Messages has \\\"Primary authentication failed\\\"), ADsecondaryAuthSuccess =countif(Messages has \\\"Secondary authentication successful\\\"), ADSecondaryAuthFailed = countif(Messages has \\\"Secondary authentication failed\\\")\",\"size\":0,\"title\":\"Active Directory Authentication Status\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"unstackedbar\"},\"customWidth\":\"50\",\"name\":\"query - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| where Messages has \\\"User Accounts modified\\\"\\r\\n| summarize UserAdded = countif(Messages has \\\"Added with username\\\"), UserRemoved = countif(Messages has \\\"Removed username\\\")\\r\\n\",\"size\":0,\"title\":\"User Modification Status by Count\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"unstackedbar\"},\"customWidth\":\"50\",\"name\":\"query - 9\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in ({VPNDevice}) or '*' in ({VPNDevice})\\r\\n| where Messages contains \\\"Radius Accounting\\\"\\r\\n| summarize ['Auth Success'] = countif(Messages has \\\"Failed to send radius\\\"), ['Auth Failed']=countif(Messages has \\\"Successfully sent radius\\\") by bin(TimeGenerated, {TimeRange:grain})\",\"size\":0,\"title\":\"RADIUS Authentication Result by Time\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"},\"customWidth\":\"50\",\"name\":\"query - 10\"}],\"fromTemplateId\":\"sentinel-PulseConnectSecure\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "serializedData": "\u007b\"version\":\"Notebook/1.0\",\"items\":[\u007b\"type\":9,\"content\":\u007b\"version\":\"KqlParameterItem/1.0\",\"parameters\":[\u007b\"id\":\"91698dfb-6494-47f8-8789-44d47c9bb60a\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"label\":\"Time Range\",\"type\":4,\"isRequired\":true,\"value\":\u007b\"durationMs\":2419200000\u007d,\"typeSettings\":\u007b\"selectableValues\":[\u007b\"durationMs\":300000\u007d,\u007b\"durationMs\":900000\u007d,\u007b\"durationMs\":1800000\u007d,\u007b\"durationMs\":3600000\u007d,\u007b\"durationMs\":14400000\u007d,\u007b\"durationMs\":43200000\u007d,\u007b\"durationMs\":86400000\u007d,\u007b\"durationMs\":172800000\u007d,\u007b\"durationMs\":259200000\u007d,\u007b\"durationMs\":604800000\u007d,\u007b\"durationMs\":1209600000\u007d,\u007b\"durationMs\":2419200000\u007d,\u007b\"durationMs\":2592000000\u007d,\u007b\"durationMs\":5184000000\u007d,\u007b\"durationMs\":7776000000\u007d],\"allowCustom\":true\u007d,\"resourceType\":\"microsoft.insights/components\"\u007d,\u007b\"id\":\"96ede67e-4a1d-4207-9771-a286c41203f7\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"VPNDevice\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"PulseConnectSecure\\r\\n| distinct tostring(Computer)\",\"typeSettings\":\u007b\"additionalResourceOptions\":[\"value::all\"]\u007d,\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"label\":\"VPN Device\"\u007d],\"style\":\"above\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"\u007d,\"name\":\"parameters - 1\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| summarize dcount(User) by Computer, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\\r\\n\",\"size\":0,\"title\":\"Distinct User Login by VPN Device\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"\u007d,\"name\":\"query - 2\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| where User !endswith \\\"$\\\" and User !~ \\\"SYSTEM\\\"\\r\\n| summarize count() by LoginResults, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\\r\\n\",\"size\":0,\"title\":\"User Login Events by Time\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"chartSettings\":\u007b\"seriesLabelSettings\":[\u007b\"seriesName\":\"succeeded\",\"color\":\"green\"\u007d,\u007b\"seriesName\":\"failed\",\"color\":\"red\"\u007d]\u007d\u007d,\"customWidth\":\"50\",\"name\":\"query - 11 - Copy\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where LoginResults == \\\"failed\\\"\\r\\n| where User !endswith \\\"$\\\" and User !~ \\\"SYSTEM\\\"\\r\\n| summarize count() by User, Source_IP\\r\\n| top 10 by count_\\r\\n\",\"size\":0,\"title\":\"Top 10 Failed Login by User\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"table\",\"gridSettings\":\u007b\"formatters\":[\u007b\"columnMatch\":\"count_\",\"formatter\":3,\"formatOptions\":\u007b\"palette\":\"coldHot\"\u007d\u007d],\"labelSettings\":[\u007b\"columnId\":\"User\",\"label\":\"VPN User\"\u007d,\u007b\"columnId\":\"Source_IP\",\"label\":\"Client IP\"\u007d,\u007b\"columnId\":\"count_\",\"label\":\"Total\"\u007d]\u007d\u007d,\"customWidth\":\"50\",\"name\":\"query - 11 - Copy - Copy\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where LoginResults == \\\"failed\\\"\\r\\n| where User !endswith \\\"$\\\" and User !~ \\\"SYSTEM\\\"\\r\\n| summarize count() by Realm, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\",\"size\":0,\"title\":\"Top 10 Failed Login by User Realm\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"\u007d,\"customWidth\":\"50\",\"name\":\"query - 11 - Copy - Copy - Copy\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| extend LoginResults = extract(\\\"^Login (failed|succeeded)\\\", 1, Messages)\\r\\n| where isnotempty(LoginResults)\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| where LoginResults == \\\"failed\\\"\\r\\n| where User !endswith \\\"$\\\" and User != \\\"SYSTEM\\\"\\r\\n| summarize count() by Computer, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\\r\\n| top 10 by count_\\r\\n\",\"size\":0,\"title\":\"Top 10 Failed Login by VPN Device\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"\u007d,\"customWidth\":\"50\",\"name\":\"query - 11 - Copy - Copy - Copy\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| where Messages has \\\"Host Checker\\\"\\r\\n| extend OS = case(Messages has \\\"Mac\\\", \\\"Mac OSX\\\", Messages has \\\"Windows\\\", \\\"Windows\\\",\\\"Other\\\")\\r\\n| summarize count() by OS\",\"size\":0,\"title\":\"Client Device Usage\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"\u007d,\"customWidth\":\"50\",\"name\":\"query - 7\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| summarize ADPrimaryAuthSuccess = countif(Messages has \\\"Primary authentication successful\\\"), ADPrimaryAuthFailed = countif(Messages has \\\"Primary authentication failed\\\"), ADsecondaryAuthSuccess =countif(Messages has \\\"Secondary authentication successful\\\"), ADSecondaryAuthFailed = countif(Messages has \\\"Secondary authentication failed\\\")\",\"size\":0,\"title\":\"Active Directory Authentication Status\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"unstackedbar\"\u007d,\"customWidth\":\"50\",\"name\":\"query - 8\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| where Messages has \\\"User Accounts modified\\\"\\r\\n| summarize UserAdded = countif(Messages has \\\"Added with username\\\"), UserRemoved = countif(Messages has \\\"Removed username\\\")\\r\\n\",\"size\":0,\"title\":\"User Modification Status by Count\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"unstackedbar\"\u007d,\"customWidth\":\"50\",\"name\":\"query - 9\"\u007d,\u007b\"type\":3,\"content\":\u007b\"version\":\"KqlItem/1.0\",\"query\":\"PulseConnectSecure\\r\\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\\r\\n| where Messages contains \\\"Radius Accounting\\\"\\r\\n| summarize ['Auth Success'] = countif(Messages has \\\"Failed to send radius\\\"), ['Auth Failed']=countif(Messages has \\\"Successfully sent radius\\\") by bin(TimeGenerated, \u007bTimeRange:grain\u007d)\",\"size\":0,\"title\":\"RADIUS Authentication Result by Time\",\"timeContext\":\u007b\"durationMs\":0\u007d,\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"areachart\"\u007d,\"customWidth\":\"50\",\"name\":\"query - 10\"\u007d],\"fromTemplateId\":\"sentinel-PulseConnectSecure\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"\u007d\r\n",
                 "version": "1.0",
                 "sourceId": "[variables('workspaceResourceId')]",
                 "category": "sentinel"
@@ -245,7 +283,7 @@
               "apiVersion": "2022-01-01-preview",
               "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
               "properties": {
-                "description": "@{workbookKey=PulseConnectSecureWorkbook; logoFileName=Azure_Sentinel.svg; description=Gain insight into Pulse Secure VPN by analyzing, collecting and correlating vulnerability data.\nThis workbook provides visibility into user VPN activities; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Pulse Connect Secure; templateRelativePath=PulseConnectSecure.json; subtitle=; provider=Pulse Secure}.description",
+                "description": "@\u007bworkbookKey=PulseConnectSecureWorkbook; logoFileName=Azure_Sentinel.svg; description=Gain insight into Pulse Secure VPN by analyzing, collecting and correlating vulnerability data.\nThis workbook provides visibility into user VPN activities; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Pulse Connect Secure; templateRelativePath=PulseConnectSecure.json; subtitle=; provider=Pulse Secure\u007d.description",
                 "parentId": "[variables('workbookId1')]",
                 "contentId": "[variables('_workbookContentId1')]",
                 "kind": "Workbook",
@@ -293,7 +331,8 @@
         "contentProductId": "[variables('_workbookcontentProductId1')]",
         "id": "[variables('_workbookcontentProductId1')]",
         "version": "[variables('workbookVersion1')]"
-      }
+      },
+      "condition": "[parameters('DeployWorkbook')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -304,7 +343,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "PulseConnectSecureVPN-BruteForce_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "PulseConnectSecureVPN-BruteForce_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -332,10 +371,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
-                    "datatypes": [
+                    "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -346,22 +385,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "User"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "Source_IP"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -406,7 +445,8 @@
         "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -417,7 +457,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "PulseConnectSecureVPN-DistinctFailedUserLogin_AnalyticalRules Analytics Rule with template version 3.0.4",
+        "description": "PulseConnectSecureVPN-DistinctFailedUserLogin_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -445,10 +485,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
-                    "datatypes": [
+                    "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -459,13 +499,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Host",
                     "fieldMappings": [
                       {
                         "identifier": "FullName",
                         "columnName": "Computer"
                       }
-                    ],
-                    "entityType": "Host"
+                    ]
                   }
                 ]
               }
@@ -510,19 +550,20 @@
         "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.4",
+        "version": "3.2.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Pulse Connect Secure",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Pulse%20Connect%20Secure/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.ivanti.com/products/connect-secure-vpn?psredirect\">Pulse Connect Secure</a> solution for Microsoft Sentinel enables you to ingest Pulse Connect Secure logs into Microsoft Sentinel.</p>\n<p>This solution is dependent on the Syslog solution containing the Syslog via AMA connector to collect the logs. The Syslog  solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE</strong>: Microsoft recommends installation of Syslog via AMA Connector. Legacy connector uses the Log Analytics agent which were deprecated on <strong>Aug 31, 2024.</strong> Using MMA and AMA on same machine can cause log duplication and extra ingestion cost <a href=\"https://learn.microsoft.com/en-us/azure/sentinel/ama-migrate\">more details</a>.</p>\n<p><strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 2</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Pulse%20Connect%20Secure/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.ivanti.com/products/connect-secure-vpn?psredirect\">Pulse Connect Secure</a> solution for Microsoft Sentinel enables you to ingest Pulse Connect Secure logs into Microsoft Sentinel.</p>\n<p>This solution is dependent on the Syslog solution containing the Syslog via AMA connector to collect the logs. The Syslog  solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE</strong>: Microsoft recommends installation of Syslog via AMA Connector. Legacy connector uses the Log Analytics agent which were deprecated on <strong>Aug 31, 2024.</strong> Using MMA and AMA on same machine can cause log duplication and extra ingestion cost <a href=\"https://learn.microsoft.com/en-us/azure/sentinel/ama-migrate\">more details</a>.</p>\n<p><strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 2, <strong>XDR Detections:</strong> 2, <strong>XDR Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -569,6 +610,21 @@
             {
               "kind": "Solution",
               "contentId": "azuresentinel.azure-sentinel-solution-syslog"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-34663177-8abf-4db1-b0a4-5683ab273f44",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-1fa1528e-f746-4794-8a41-14827f4cb798",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "DefenderWorkbook",
+              "contentId": "03203837-d842-5113-9698-eba2fe945f2b",
+              "version": "3.2.2"
             }
           ]
         },
@@ -578,11 +634,1111 @@
         ],
         "categories": {
           "domains": [
+            "Security - Network",
             "Security - Threat Protection"
           ]
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "PulseConnectSecure-CD-xdr-34663177-8abf-4db1-b0a4-5683ab273f44",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "status": "disabled",
+                "id": "[if(true(), 'xdr-34663177-8abf-4db1-b0a4-5683ab273f44', 'xdr-34663177-8abf-4db1-b0a4-5683ab273f44')]",
+                "displayName": "PulseConnectSecure - Potential Brute Force Attempts",
+                "queryCondition": {
+                  "queryText": "let threshold = 20;\nPulseConnectSecure\n| where Messages contains \"Login failed\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by User, Source_IP\n| where count_ > threshold"
+                },
+                "detectionAction": {
+                  "alertTemplate": {
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "addressColumn": "Source_IP",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ],
+                    "customDetails": {
+                      "AccountFullName": "User"
+                    },
+                    "title": "PulseConnectSecure - Potential Brute Force Attempts",
+                    "description": "'This query identifies evidence of potential brute force attack by looking at multiple failed attempts to log into the VPN server'",
+                    "severity": "low"
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-pulseconnectsecure', 'azuresentinel.azure-sentinel-solution-pulseconnectsecure')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-34663177-8abf-4db1-b0a4-5683ab273f44",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-34663177-8abf-4db1-b0a4-5683ab273f44')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'PulseConnectSecure-CD-xdr-34663177-8abf-4db1-b0a4-5683ab273f44')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query identifies evidence of potential brute force attack by looking at multiple failed attempts to log into the VPN server'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "status": "disabled",
+                "id": "[if(true(), 'xdr-34663177-8abf-4db1-b0a4-5683ab273f44', 'xdr-34663177-8abf-4db1-b0a4-5683ab273f44')]",
+                "displayName": "PulseConnectSecure - Potential Brute Force Attempts",
+                "queryCondition": {
+                  "queryText": "let threshold = 20;\nPulseConnectSecure\n| where Messages contains \"Login failed\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by User, Source_IP\n| where count_ > threshold"
+                },
+                "detectionAction": {
+                  "alertTemplate": {
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "addressColumn": "Source_IP",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ],
+                    "customDetails": {
+                      "AccountFullName": "User"
+                    },
+                    "title": "PulseConnectSecure - Potential Brute Force Attempts",
+                    "description": "'This query identifies evidence of potential brute force attack by looking at multiple failed attempts to log into the VPN server'",
+                    "severity": "low"
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-pulseconnectsecure', 'azuresentinel.azure-sentinel-solution-pulseconnectsecure')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-34663177-8abf-4db1-b0a4-5683ab273f44",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-34663177-8abf-4db1-b0a4-5683ab273f44",
+        "contentKind": "CustomDetection",
+        "displayName": "PulseConnectSecure - Potential Brute Force Attempts",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-34663177-8abf-4db1-b0a4-5683ab273f44','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-34663177-8abf-4db1-b0a4-5683ab273f44','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-pulseconnectsecure', 'azuresentinel.azure-sentinel-solution-pulseconnectsecure')]",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-34663177-8abf-4db1-b0a4-5683ab273f44",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ConfidentialWatchlist",
+                "PulseConnectSecure",
+                "Syslog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "PulseConnectSecure-CD-xdr-1fa1528e-f746-4794-8a41-14827f4cb798",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "status": "disabled",
+                "id": "[if(true(), 'xdr-1fa1528e-f746-4794-8a41-14827f4cb798', 'xdr-1fa1528e-f746-4794-8a41-14827f4cb798')]",
+                "displayName": "PulseConnectSecure - Large Number of Distinct Failed User Logins",
+                "queryCondition": {
+                  "queryText": "let threshold = 100;\nPulseConnectSecure\n| where Messages startswith \"Login failed\"\n| summarize dcount(User) by Computer, bin(TimeGenerated, 15m)\n| where dcount_User > threshold"
+                },
+                "detectionAction": {
+                  "alertTemplate": {
+                    "entityMappings": {
+                      "hosts": [
+                        {
+                          "nameColumn": "Computer",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ],
+                    "customDetails": {
+                      "HostFullName": "Computer"
+                    },
+                    "title": "PulseConnectSecure - Large Number of Distinct Failed User Logins",
+                    "description": "'This query identifies evidence of failed login attempts from a large number of distinct users on a Pulse Connect Secure VPN server'",
+                    "severity": "medium"
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-pulseconnectsecure', 'azuresentinel.azure-sentinel-solution-pulseconnectsecure')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-1fa1528e-f746-4794-8a41-14827f4cb798",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-1fa1528e-f746-4794-8a41-14827f4cb798')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'PulseConnectSecure-CD-xdr-1fa1528e-f746-4794-8a41-14827f4cb798')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query identifies evidence of failed login attempts from a large number of distinct users on a Pulse Connect Secure VPN server'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "status": "disabled",
+                "id": "[if(true(), 'xdr-1fa1528e-f746-4794-8a41-14827f4cb798', 'xdr-1fa1528e-f746-4794-8a41-14827f4cb798')]",
+                "displayName": "PulseConnectSecure - Large Number of Distinct Failed User Logins",
+                "queryCondition": {
+                  "queryText": "let threshold = 100;\nPulseConnectSecure\n| where Messages startswith \"Login failed\"\n| summarize dcount(User) by Computer, bin(TimeGenerated, 15m)\n| where dcount_User > threshold"
+                },
+                "detectionAction": {
+                  "alertTemplate": {
+                    "entityMappings": {
+                      "hosts": [
+                        {
+                          "nameColumn": "Computer",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ],
+                    "customDetails": {
+                      "HostFullName": "Computer"
+                    },
+                    "title": "PulseConnectSecure - Large Number of Distinct Failed User Logins",
+                    "description": "'This query identifies evidence of failed login attempts from a large number of distinct users on a Pulse Connect Secure VPN server'",
+                    "severity": "medium"
+                  }
+                },
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-pulseconnectsecure', 'azuresentinel.azure-sentinel-solution-pulseconnectsecure')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-1fa1528e-f746-4794-8a41-14827f4cb798",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-1fa1528e-f746-4794-8a41-14827f4cb798",
+        "contentKind": "CustomDetection",
+        "displayName": "PulseConnectSecure - Large Number of Distinct Failed User Logins",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-1fa1528e-f746-4794-8a41-14827f4cb798','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-1fa1528e-f746-4794-8a41-14827f4cb798','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-pulseconnectsecure', 'azuresentinel.azure-sentinel-solution-pulseconnectsecure')]",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-1fa1528e-f746-4794-8a41-14827f4cb798",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ConfidentialWatchlist",
+                "PulseConnectSecure",
+                "Syslog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "DefenderWorkbook-6086d887957bee53ac033f806d7ba5a5",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]",
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "workbook": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/workbooks@2026-06-01-preview",
+              "properties": {
+                "id": "bae33bde-ae8d-5520-9917-3714bdcfe767",
+                "name": "Pulse Connect Secure",
+                "content": {
+                  "version": "Notebook/1.0",
+                  "items": [
+                    {
+                      "type": 9,
+                      "content": {
+                        "version": "KqlParameterItem/1.0",
+                        "parameters": [
+                          {
+                            "id": "91698dfb-6494-47f8-8789-44d47c9bb60a",
+                            "version": "KqlParameterItem/1.0",
+                            "name": "TimeRange",
+                            "label": "Time Range",
+                            "type": 4,
+                            "isRequired": true,
+                            "value": {
+                              "durationMs": 2419200000
+                            },
+                            "typeSettings": {
+                              "selectableValues": [
+                                {
+                                  "durationMs": 300000
+                                },
+                                {
+                                  "durationMs": 900000
+                                },
+                                {
+                                  "durationMs": 1800000
+                                },
+                                {
+                                  "durationMs": 3600000
+                                },
+                                {
+                                  "durationMs": 14400000
+                                },
+                                {
+                                  "durationMs": 43200000
+                                },
+                                {
+                                  "durationMs": 86400000
+                                },
+                                {
+                                  "durationMs": 172800000
+                                },
+                                {
+                                  "durationMs": 259200000
+                                },
+                                {
+                                  "durationMs": 604800000
+                                },
+                                {
+                                  "durationMs": 1209600000
+                                },
+                                {
+                                  "durationMs": 2419200000
+                                },
+                                {
+                                  "durationMs": 2592000000
+                                },
+                                {
+                                  "durationMs": 5184000000
+                                },
+                                {
+                                  "durationMs": 7776000000
+                                }
+                              ],
+                              "allowCustom": true
+                            }
+                          },
+                          {
+                            "id": "96ede67e-4a1d-4207-9771-a286c41203f7",
+                            "version": "KqlParameterItem/1.0",
+                            "name": "VPNDevice",
+                            "type": 2,
+                            "isRequired": true,
+                            "multiSelect": true,
+                            "quote": "'",
+                            "delimiter": ",",
+                            "query": "PulseConnectSecure\r\n| distinct tostring(Computer)",
+                            "value": null,
+                            "typeSettings": {
+                              "additionalResourceOptions": [
+                                "value::all"
+                              ]
+                            },
+                            "timeContext": {
+                              "durationMs": 0
+                            },
+                            "timeContextFromParameter": "TimeRange",
+                            "queryType": "advancedHunting",
+                            "label": "VPN Device"
+                          }
+                        ],
+                        "style": "above"
+                      },
+                      "name": "parameters - 1"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| summarize dcount(User) by Computer, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\r\n",
+                        "size": 0,
+                        "title": "Distinct User Login by VPN Device",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "areachart"
+                      },
+                      "name": "query - 2"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where User !endswith \"$\" and User !~ \"SYSTEM\"\r\n| summarize count() by LoginResults, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\r\n",
+                        "size": 0,
+                        "title": "User Login Events by Time",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "barchart",
+                        "chartSettings": {
+                          "seriesLabelSettings": [
+                            {
+                              "seriesName": "succeeded",
+                              "color": "green"
+                            },
+                            {
+                              "seriesName": "failed",
+                              "color": "red"
+                            }
+                          ],
+                          "xSettings": {},
+                          "ySettings": {}
+                        }
+                      },
+                      "customWidth": "50",
+                      "name": "query - 11 - Copy"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where LoginResults == \"failed\"\r\n| where User !endswith \"$\" and User !~ \"SYSTEM\"\r\n| summarize count() by User, Source_IP\r\n| top 10 by count_\r\n",
+                        "size": 0,
+                        "title": "Top 10 Failed Login by User",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "table",
+                        "gridSettings": {
+                          "formatters": [
+                            {
+                              "columnMatch": "count_",
+                              "formatter": 3,
+                              "formatOptions": {
+                                "palette": "coldHot"
+                              }
+                            }
+                          ],
+                          "labelSettings": [
+                            {
+                              "columnId": "User",
+                              "label": "VPN User"
+                            },
+                            {
+                              "columnId": "Source_IP",
+                              "label": "Client IP"
+                            },
+                            {
+                              "columnId": "count_",
+                              "label": "Total"
+                            }
+                          ]
+                        },
+                        "sortBy": []
+                      },
+                      "customWidth": "50",
+                      "name": "query - 11 - Copy - Copy"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where LoginResults == \"failed\"\r\n| where User !endswith \"$\" and User !~ \"SYSTEM\"\r\n| summarize count() by Realm, bin(TimeGenerated, \u007bTimeRange:grain\u007d)",
+                        "size": 0,
+                        "title": "Top 10 Failed Login by User Realm",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "barchart"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 11 - Copy - Copy - Copy"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where LoginResults == \"failed\"\r\n| where User !endswith \"$\" and User != \"SYSTEM\"\r\n| summarize count() by Computer, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\r\n| top 10 by count_\r\n",
+                        "size": 0,
+                        "title": "Top 10 Failed Login by VPN Device",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "areachart"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 11 - Copy - Copy - Copy"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where Messages has \"Host Checker\"\r\n| extend OS = case(Messages has \"Mac\", \"Mac OSX\", Messages has \"Windows\", \"Windows\",\"Other\")\r\n| summarize count() by OS",
+                        "size": 0,
+                        "title": "Client Device Usage",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "piechart"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 7"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| summarize ADPrimaryAuthSuccess = countif(Messages has \"Primary authentication successful\"), ADPrimaryAuthFailed = countif(Messages has \"Primary authentication failed\"), ADsecondaryAuthSuccess =countif(Messages has \"Secondary authentication successful\"), ADSecondaryAuthFailed = countif(Messages has \"Secondary authentication failed\")",
+                        "size": 0,
+                        "title": "Active Directory Authentication Status",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "unstackedbar"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 8"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where Messages has \"User Accounts modified\"\r\n| summarize UserAdded = countif(Messages has \"Added with username\"), UserRemoved = countif(Messages has \"Removed username\")\r\n",
+                        "size": 0,
+                        "title": "User Modification Status by Count",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "unstackedbar"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 9"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where Messages contains \"Radius Accounting\"\r\n| summarize ['Auth Success'] = countif(Messages has \"Failed to send radius\"), ['Auth Failed']=countif(Messages has \"Successfully sent radius\") by bin(TimeGenerated, \u007bTimeRange:grain\u007d)",
+                        "size": 0,
+                        "title": "RADIUS Authentication Result by Time",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "areachart"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 10"
+                    }
+                  ],
+                  "fromTemplateId": "sentinel-PulseConnectSecure",
+                  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+                  "contentProvenance": {
+                    "packageId": "azuresentinel.azure-sentinel-solution-pulseconnectsecure",
+                    "packageVersion": "3.2.2",
+                    "contentId": "03203837-d842-5113-9698-eba2fe945f2b",
+                    "contentVersion": "3.2.2"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployDefenderWorkbook')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dwb-',uniqueString('03203837-d842-5113-9698-eba2fe945f2b')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'DefenderWorkbook-6086d887957bee53ac033f806d7ba5a5')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Defender Workbook: Pulse Connect Secure",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "workbook": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/workbooks@2026-06-01-preview",
+              "properties": {
+                "id": "bae33bde-ae8d-5520-9917-3714bdcfe767",
+                "name": "Pulse Connect Secure",
+                "content": {
+                  "version": "Notebook/1.0",
+                  "items": [
+                    {
+                      "type": 9,
+                      "content": {
+                        "version": "KqlParameterItem/1.0",
+                        "parameters": [
+                          {
+                            "id": "91698dfb-6494-47f8-8789-44d47c9bb60a",
+                            "version": "KqlParameterItem/1.0",
+                            "name": "TimeRange",
+                            "label": "Time Range",
+                            "type": 4,
+                            "isRequired": true,
+                            "value": {
+                              "durationMs": 2419200000
+                            },
+                            "typeSettings": {
+                              "selectableValues": [
+                                {
+                                  "durationMs": 300000
+                                },
+                                {
+                                  "durationMs": 900000
+                                },
+                                {
+                                  "durationMs": 1800000
+                                },
+                                {
+                                  "durationMs": 3600000
+                                },
+                                {
+                                  "durationMs": 14400000
+                                },
+                                {
+                                  "durationMs": 43200000
+                                },
+                                {
+                                  "durationMs": 86400000
+                                },
+                                {
+                                  "durationMs": 172800000
+                                },
+                                {
+                                  "durationMs": 259200000
+                                },
+                                {
+                                  "durationMs": 604800000
+                                },
+                                {
+                                  "durationMs": 1209600000
+                                },
+                                {
+                                  "durationMs": 2419200000
+                                },
+                                {
+                                  "durationMs": 2592000000
+                                },
+                                {
+                                  "durationMs": 5184000000
+                                },
+                                {
+                                  "durationMs": 7776000000
+                                }
+                              ],
+                              "allowCustom": true
+                            }
+                          },
+                          {
+                            "id": "96ede67e-4a1d-4207-9771-a286c41203f7",
+                            "version": "KqlParameterItem/1.0",
+                            "name": "VPNDevice",
+                            "type": 2,
+                            "isRequired": true,
+                            "multiSelect": true,
+                            "quote": "'",
+                            "delimiter": ",",
+                            "query": "PulseConnectSecure\r\n| distinct tostring(Computer)",
+                            "value": null,
+                            "typeSettings": {
+                              "additionalResourceOptions": [
+                                "value::all"
+                              ]
+                            },
+                            "timeContext": {
+                              "durationMs": 0
+                            },
+                            "timeContextFromParameter": "TimeRange",
+                            "queryType": "advancedHunting",
+                            "label": "VPN Device"
+                          }
+                        ],
+                        "style": "above"
+                      },
+                      "name": "parameters - 1"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| summarize dcount(User) by Computer, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\r\n",
+                        "size": 0,
+                        "title": "Distinct User Login by VPN Device",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "areachart"
+                      },
+                      "name": "query - 2"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where User !endswith \"$\" and User !~ \"SYSTEM\"\r\n| summarize count() by LoginResults, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\r\n",
+                        "size": 0,
+                        "title": "User Login Events by Time",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "barchart",
+                        "chartSettings": {
+                          "seriesLabelSettings": [
+                            {
+                              "seriesName": "succeeded",
+                              "color": "green"
+                            },
+                            {
+                              "seriesName": "failed",
+                              "color": "red"
+                            }
+                          ],
+                          "xSettings": {},
+                          "ySettings": {}
+                        }
+                      },
+                      "customWidth": "50",
+                      "name": "query - 11 - Copy"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where LoginResults == \"failed\"\r\n| where User !endswith \"$\" and User !~ \"SYSTEM\"\r\n| summarize count() by User, Source_IP\r\n| top 10 by count_\r\n",
+                        "size": 0,
+                        "title": "Top 10 Failed Login by User",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "table",
+                        "gridSettings": {
+                          "formatters": [
+                            {
+                              "columnMatch": "count_",
+                              "formatter": 3,
+                              "formatOptions": {
+                                "palette": "coldHot"
+                              }
+                            }
+                          ],
+                          "labelSettings": [
+                            {
+                              "columnId": "User",
+                              "label": "VPN User"
+                            },
+                            {
+                              "columnId": "Source_IP",
+                              "label": "Client IP"
+                            },
+                            {
+                              "columnId": "count_",
+                              "label": "Total"
+                            }
+                          ]
+                        },
+                        "sortBy": []
+                      },
+                      "customWidth": "50",
+                      "name": "query - 11 - Copy - Copy"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where LoginResults == \"failed\"\r\n| where User !endswith \"$\" and User !~ \"SYSTEM\"\r\n| summarize count() by Realm, bin(TimeGenerated, \u007bTimeRange:grain\u007d)",
+                        "size": 0,
+                        "title": "Top 10 Failed Login by User Realm",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "barchart"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 11 - Copy - Copy - Copy"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| extend LoginResults = extract(\"^Login (failed|succeeded)\", 1, Messages)\r\n| where isnotempty(LoginResults)\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where LoginResults == \"failed\"\r\n| where User !endswith \"$\" and User != \"SYSTEM\"\r\n| summarize count() by Computer, bin(TimeGenerated, \u007bTimeRange:grain\u007d)\r\n| top 10 by count_\r\n",
+                        "size": 0,
+                        "title": "Top 10 Failed Login by VPN Device",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "areachart"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 11 - Copy - Copy - Copy"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where Messages has \"Host Checker\"\r\n| extend OS = case(Messages has \"Mac\", \"Mac OSX\", Messages has \"Windows\", \"Windows\",\"Other\")\r\n| summarize count() by OS",
+                        "size": 0,
+                        "title": "Client Device Usage",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "piechart"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 7"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| summarize ADPrimaryAuthSuccess = countif(Messages has \"Primary authentication successful\"), ADPrimaryAuthFailed = countif(Messages has \"Primary authentication failed\"), ADsecondaryAuthSuccess =countif(Messages has \"Secondary authentication successful\"), ADSecondaryAuthFailed = countif(Messages has \"Secondary authentication failed\")",
+                        "size": 0,
+                        "title": "Active Directory Authentication Status",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "unstackedbar"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 8"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where Messages has \"User Accounts modified\"\r\n| summarize UserAdded = countif(Messages has \"Added with username\"), UserRemoved = countif(Messages has \"Removed username\")\r\n",
+                        "size": 0,
+                        "title": "User Modification Status by Count",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "unstackedbar"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 9"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "PulseConnectSecure\r\n| where Computer in (\u007bVPNDevice\u007d) or '*' in (\u007bVPNDevice\u007d)\r\n| where Messages contains \"Radius Accounting\"\r\n| summarize ['Auth Success'] = countif(Messages has \"Failed to send radius\"), ['Auth Failed']=countif(Messages has \"Successfully sent radius\") by bin(TimeGenerated, \u007bTimeRange:grain\u007d)",
+                        "size": 0,
+                        "title": "RADIUS Authentication Result by Time",
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": "advancedHunting",
+                        "visualization": "areachart"
+                      },
+                      "customWidth": "50",
+                      "name": "query - 10"
+                    }
+                  ],
+                  "fromTemplateId": "sentinel-PulseConnectSecure",
+                  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+                  "contentProvenance": {
+                    "packageId": "azuresentinel.azure-sentinel-solution-pulseconnectsecure",
+                    "packageVersion": "3.2.2",
+                    "contentId": "03203837-d842-5113-9698-eba2fe945f2b",
+                    "contentVersion": "3.2.2"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "3.2.2",
+        "packageName": "Pulse Connect Secure",
+        "packageId": "azuresentinel.azure-sentinel-solution-pulseconnectsecure",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "03203837-d842-5113-9698-eba2fe945f2b",
+        "contentKind": "DefenderWorkbook",
+        "displayName": "Pulse Connect Secure",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','dwb','-', uniqueString(concat(variables('_solutionId'),'-','DefenderWorkbook','-','03203837-d842-5113-9698-eba2fe945f2b','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','dwb','-', uniqueString(concat(variables('_solutionId'),'-','DefenderWorkbook','-','03203837-d842-5113-9698-eba2fe945f2b','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-pulseconnectsecure",
+          "packageVersion": "3.2.2",
+          "contentId": "03203837-d842-5113-9698-eba2fe945f2b",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ],
+          "requiredWorkspaceFunctions": [
+            {
+              "functionAlias": "PulseConnectSecure",
+              "sourcePath": "Parsers/PulseConnectSecure.yaml",
+              "sourceSha256": "3c384b941bb4dcbe29b0677017d663e1c720ece709c12ca4ced7360a354b8eaa"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployDefenderWorkbook')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "pid-004a25ab-e674-414e-86b7-1ad76fd48a2c-partnercenter",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": []
+        }
+      }
     }
   ],
   "outputs": {}

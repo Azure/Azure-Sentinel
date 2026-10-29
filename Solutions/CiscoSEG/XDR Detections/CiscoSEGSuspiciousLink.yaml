@@ -1,0 +1,90 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSEGEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 506291dd-8050-4c98-a92f-58e376080a0a
+    path: Analytic Rules/CiscoSEGSuspiciousLink.yaml
+    version: 1.0.3
+    querySha256: 04d750736213eb197a9883b17f9d137833cca26e9ad92366e6a7297f16559815
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name output column `AccountCustomEntity` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 7648bf5b64d5335fe870f87e6d3ec97377779c895e348d4c3dd677877d8c1d02
+      targetQuerySha256: cc3ea7b3644bb5ab4cd28532356128449011c8e4edd70e6751c9c1d82b779a08
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-506291dd-8050-4c98-a92f-58e376080a0a
+  displayName: Cisco SEG - Suspicious link
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let bl_cat = dynamic(['Adult', 'Hacking', 'Cheating and Plagiarism', 'Child Abuse Content', 'Dating', 'Illegal Activities', 'Pornography']);
+      CiscoSEGEvent
+      | where NetworkDirection =~ 'Incoming'
+      | where tostring(AdditionalFields) has 'ESAURLDetails'
+      | extend link_cat = extract(@"'Category': '(.*?)'", 1, tostring(AdditionalFields))
+      | where link_cat in~ (bl_cat)
+      | extend AccountCustomEntity = DstUserName, IPCustomEntity = coalesce(SourceIP, DvcIpAddr)
+      | project-away AdditionalFields
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: Cisco SEG - Suspicious link
+      description: '''Detects mails with suspicious links.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566

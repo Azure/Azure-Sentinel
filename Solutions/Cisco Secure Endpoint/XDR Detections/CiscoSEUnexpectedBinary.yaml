@@ -1,0 +1,112 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoSecureEndpointLogsCCPDefinition
+  dataTypes:
+  - CiscoSecureEndpointAuditLogsV2_CL
+  - CiscoSecureEndpointEventsV2_CL
+- connectorId: CiscoSecureEndpoint
+  dataTypes:
+  - CiscoSecureEndpoint_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSecureEndpoint
+    - CiscoSecureEndpointAuditLogsV2_CL
+    - CiscoSecureEndpointEventsV2_CL
+    - CiscoSecureEndpoint_CL
+  requiredDataConnectors:
+  - connectorId: CiscoSecureEndpointLogsCCPDefinition
+    dataTypes:
+    - CiscoSecureEndpointAuditLogsV2_CL
+    - CiscoSecureEndpointEventsV2_CL
+  - connectorId: CiscoSecureEndpoint
+    dataTypes:
+    - CiscoSecureEndpoint_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: eabb9c20-7b0b-4a77-81e8-b06944f351c6
+    path: Analytic Rules/CiscoSEUnexpectedBinary.yaml
+    version: 1.0.0
+    querySha256: 950e81b2f1e6574e40ea65574e45e9ad5c07129394288d98ecf910799b05526c
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 438140dbf3bb706ee79bcf9afeed437109c03881aceed4bc1dda39a1f6b86052
+      targetQuerySha256: cd420a2e15ae79a9aa32b562dc7d0a1aa049a2939fc20e4087256bf7e7706944
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 438140dbf3bb706ee79bcf9afeed437109c03881aceed4bc1dda39a1f6b86052
+      targetQuerySha256: cd420a2e15ae79a9aa32b562dc7d0a1aa049a2939fc20e4087256bf7e7706944
+properties:
+  id: xdr-eabb9c20-7b0b-4a77-81e8-b06944f351c6
+  displayName: Cisco SE - Unexpected binary file
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CiscoSecureEndpoint
+      | where isnotempty(SrcFileName)
+      | where SrcFilePath contains @'AppData\Local\Temp' or SrcFilePath contains @'OUTLOOK_TEMP'
+      | extend ext = extract(@"(.*\/)?(.*)", 2, tostring(SrcFilePath))
+      | where ext contains 'dll' or ext contains @'ps1' or ext contains @'exe'
+      | extend HostCustomEntity = DstHostname, IPCustomEntity = DstIpAddr
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco SE - Unexpected binary file
+      description: '''Detects binary files in uncommon locations.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
