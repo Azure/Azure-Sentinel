@@ -3,10 +3,6 @@
 ARM template for ASIM EmailEvent schema parser for Proofpoint TAP.
 
 Normalizes Proofpoint TAP messages-delivered events from ProofPointTAPMessagesDeliveredV2_CL to ASIM EmailEvent.
-Includes mappings for currently empty source columns and preserves unmapped values in AdditionalFields when pack=true.
-Preserves one normalized record per source row. Multiple threats and message parts remain available in AdditionalFields;
-scalar threat fields and EmailFiles are populated only when the source provides a single corresponding item.
-Message parts are not counted as attachments, and delivery does not imply a known destination folder or direction.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 
