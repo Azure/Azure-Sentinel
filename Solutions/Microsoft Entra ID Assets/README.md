@@ -25,12 +25,29 @@ parser. Deprecation applies to the legacy connector, not to the solution.
 4. Create a client secret and copy its **Value**, not its Secret ID. Store it securely
    and rotate it before expiration. Provide a unique connection name, tenant ID,
    application client ID, and secret through the connector's **Add connection** pane.
-5. Check every collector's deployment status and table freshness. Eligibility requires
-   Microsoft Entra ID P2 or Microsoft Entra ID Governance. A failed eligibility
+5. In **Tables to collect**, select at least one table. All twelve are selected by
+   default. Selecting an asset table enables both its snapshot and hourly changefeed
+   where supported; selecting a relationship table enables all its collection paths.
+6. Check each selected collector's deployment status and table freshness. Collecting
+   `EntraEligibleMembers` requires Microsoft Entra ID P2 or Microsoft Entra ID Governance.
+   Leave it unselected if that dataset is not needed or the tenant is not licensed.
+   A failed eligibility
    collector does not establish that the other collectors failed or succeeded.
 
-The connector supports multiple named connections. It uses 23 pollers: 17 weekly
-snapshot paths and six hourly asset changefeeds.
+The connector supports multiple named connections. With every table selected, it
+uses 23 pollers: 17 weekly snapshot paths and six hourly asset changefeeds. Only
+pollers for the tables selected during setup are deployed.
+
+### Change or stop collection
+
+**Tables to collect is a setup selector, not a live on/off switch.** Unchecking a
+previously enabled table does not stop or delete its existing pollers. To stop it,
+select and delete all poller rows for that table and connection in the connections
+grid, including both snapshot/changefeed rows or every relationship path. Reconnect
+with the desired selection as needed. Changing the connection name creates a separate
+connection; it does not stop the old one.
+
+Existing table data is retained. In-flight work may still complete after disconnect.
 
 | Dataset | System table | Collection |
 | --- | --- | --- |
