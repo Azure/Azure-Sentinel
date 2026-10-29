@@ -1,0 +1,56 @@
+Contentkind: Function
+Description: SAPUsersAuthorizations
+Function:
+  Title: SAPUsersAuthorizations
+  Version: 3.3.0
+  LastUpdated: '2025-02-16'
+Category: SAPFunctions
+FunctionName: SAPUsersAuthorizations
+FunctionParams:
+  - Name: SnapshotAge
+    Type: timespan
+    Default: 0d
+FunctionQuery: |
+  // get the relevant user MD load frequency
+  let UserMDTimeAgo = totimespan(toscalar(SAPGetParameters('UserMDLookBack')| project-keep ValueLow));
+  // let SnapshotAge= 0d;// allow to go back in time and see user MD snapshots
+  let MaxLength= 256;
+  let Star= '*';
+  let ValidityDate= toint(toint(format_datetime(ago(UserMDTimeAgo+ SnapshotAge), 'yyyyMMdd')));
+  let StarArray= todynamic(strcat('["', Star, '"]'));
+  // get the user role assignments, including child roles
+  let UserRoles= materialize((SAP_AGR_USERS
+  | where TimeGenerated between (ago(UserMDTimeAgo+ SnapshotAge).. ago(SnapshotAge))
+  // filter out obsolete assignments
+  | where toint(TO_DAT)>= ValidityDate
+  | summarize
+  arg_max(TimeGenerated, UNAME, AGR_NAME, MANDT, SystemID)
+  by UNAME, AGR_NAME, MANDT, SystemID
+  // get the child roles as well
+  | join kind= leftouter (SAP_AGR_AGRS
+  | where TimeGenerated between (ago(UserMDTimeAgo+ SnapshotAge).. ago(SnapshotAge))
+  | summarize arg_max(TimeGenerated, AGR_NAME) by CHILD_AGR, MANDT,SystemID)
+  on MANDT, SystemID, AGR_NAME
+  // Role is the lowest level
+  | extend Role = iff(isempty(CHILD_AGR), AGR_NAME, CHILD_AGR)
+  | distinct UNAME, MANDT, SystemID, Role));
+  let Auths= SAP_AGR_1251
+  | where TimeGenerated between (ago(UserMDTimeAgo+ SnapshotAge).. ago(SnapshotAge))
+  // filter out obsolete assignments
+  | join
+  hint.shufflekey = SystemID hint.shufflekey= AGR_NAME
+  kind=leftsemi(UserRoles | distinct AGR_NAME= Role, SystemID, MANDT) on AGR_NAME, SystemID, MANDT
+  | summarize
+  EQs= make_set(LOW, MaxLength), Highs=make_set(HIGH, MaxLength/2), HasStar= anyif(true, LOW == Star or HIGH == Star)
+  by AGR_NAME, MANDT, SystemID, OBJECT, FIELD
+  | extend EQs= iff(HasStar, StarArray, set_union(EQs, Highs))
+  | project-away Highs;
+  Auths
+  | join
+  hint.shufflekey = SystemID hint.shufflekey= AGR_NAME
+  kind=inner UserRoles on
+  MANDT, SystemID, $left.AGR_NAME== $right.Role
+  | summarize
+  hint.shufflekey = SystemID hint.shufflekey= UNAME
+  EQs=make_set(EQs, MaxLength) by ClientID = MANDT, SystemID, User=UNAME, Object=OBJECT, Field= FIELD
+  | extend EQs= iff(EQs contains Star, StarArray, EQs)
