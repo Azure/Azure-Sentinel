@@ -1,5 +1,9 @@
 # Changelog for ASimEmailEvent.yaml
 
+## Version 1.0.3
+
+- (2026-10-29) Add the Proofpoint TAP messages-delivered parser.
+
 ## Version 1.0.2
 
 - (2026-10-26) Add Microsoft Defender for Office 365 EmailEvents support - [PR #15430](https://github.com/Azure/Azure-Sentinel/pull/15430)
