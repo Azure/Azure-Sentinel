@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -262,6 +264,10 @@ def _deployment_token(
     return token
 
 
+MAX_GRAPH_DEPLOY_WORKERS = 3
+MAX_GRAPH_REQUEST_RETRIES = 3
+
+
 def _graph_request(
     method: str,
     url: str,
@@ -287,6 +293,31 @@ def _graph_request(
             parsed = json.loads(content)
         except json.JSONDecodeError:
             parsed = {"error": {"message": content[:4000]}}
+        if exc.code in (429, 502, 503, 504):
+            retry_header = exc.headers.get("Retry-After") if exc.headers else None
+            try:
+                wait_seconds = max(1, min(60, int(retry_header))) if retry_header else 2
+            except ValueError:
+                wait_seconds = 2
+            for retry_attempt in range(MAX_GRAPH_REQUEST_RETRIES):
+                time.sleep(wait_seconds)
+                try:
+                    with urllib.request.urlopen(request, timeout=90) as retry_resp:
+                        retry_content = retry_resp.read().decode("utf-8")
+                        return retry_resp.status, json.loads(retry_content) if retry_content else {}
+                except urllib.error.HTTPError as retry_exc:
+                    retry_content = retry_exc.read().decode("utf-8", errors="replace")
+                    try:
+                        parsed = json.loads(retry_content)
+                    except json.JSONDecodeError:
+                        parsed = {"error": {"message": retry_content[:4000]}}
+                    if retry_exc.code not in (429, 502, 503, 504) or retry_attempt + 1 == MAX_GRAPH_REQUEST_RETRIES:
+                        return retry_exc.code, parsed
+                    retry_header = retry_exc.headers.get("Retry-After") if retry_exc.headers else None
+                    try:
+                        wait_seconds = max(1, min(60, int(retry_header))) if retry_header else 2 ** (retry_attempt + 2)
+                    except ValueError:
+                        wait_seconds = 2 ** (retry_attempt + 2)
         return exc.code, parsed
 
 
@@ -353,8 +384,8 @@ def deploy_solution(
 
     package_context = solution_package_context(root)
     token = _deployment_token(state_dir, tenant_id=target["tenantId"])
-    results: list[dict[str, Any]] = []
-    for path in files:
+
+    def _deploy_one(path: Path) -> dict[str, Any]:
         try:
             document = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
             payload, tactic_projection = graph_detection_payload_with_projection(
@@ -443,35 +474,38 @@ def deploy_solution(
                         "contentProvenanceVerified": provenance_verified,
                     }
             initial_disabled = bool(success and deployed_status == "disabled")
-            results.append(
-                {
-                    "file": str(path),
-                    "id": payload["id"],
-                    "operation": operation if success else "failed",
-                    "statusCode": response_status,
-                    "success": success,
-                    "deployedStatus": deployed_status,
-                    "initialDisabled": initial_disabled,
-                    "readbackVerified": initial_disabled,
-                    "tacticProjection": tactic_projection,
-                    "tacticProjectionVerified": tactic_projection_verified,
-                    "contentProvenanceVerified": provenance_verified,
-                    "error": error,
-                }
-            )
+            return {
+                "file": str(path),
+                "id": payload["id"],
+                "operation": operation if success else "failed",
+                "statusCode": response_status,
+                "success": success,
+                "deployedStatus": deployed_status,
+                "initialDisabled": initial_disabled,
+                "readbackVerified": initial_disabled,
+                "tacticProjection": tactic_projection,
+                "tacticProjectionVerified": tactic_projection_verified,
+                "contentProvenanceVerified": provenance_verified,
+                "error": error,
+            }
         except (OSError, ValueError, yaml.YAMLError) as exc:
-            results.append(
-                {
-                    "file": str(path),
-                    "id": None,
-                    "operation": "failed",
-                    "statusCode": 0,
-                    "success": False,
-                    "initialDisabled": False,
-                    "readbackVerified": False,
-                    "error": {"message": str(exc)},
-                }
-            )
+            return {
+                "file": str(path),
+                "id": None,
+                "operation": "failed",
+                "statusCode": 0,
+                "success": False,
+                "initialDisabled": False,
+                "readbackVerified": False,
+                "error": {"message": str(exc)},
+            }
+
+    if len(files) <= 1:
+        results = [_deploy_one(path) for path in files]
+    else:
+        workers = max(1, min(MAX_GRAPH_DEPLOY_WORKERS, len(files)))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            results = list(executor.map(_deploy_one, files))
     report = {
         "solution": str(root),
         "provider": "microsoft-graph-beta",

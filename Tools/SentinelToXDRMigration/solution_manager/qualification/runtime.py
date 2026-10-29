@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import re
@@ -51,6 +52,8 @@ from solution_manager.core.target_context import require_locked_target
 
 ADVANCED_HUNTING_ENDPOINT = "https://graph.microsoft.com/v1.0/security/runHuntingQuery"
 MAX_GRAPH_IN_FLIGHT_REQUESTS = 5
+MAX_ADVANCED_HUNTING_WORKERS = 3
+ADVANCED_HUNTING_MIN_INTERVAL_SECONDS = 1.5
 MAX_ADVANCED_HUNTING_RETRIES = 3
 ADVANCED_HUNTING_RETRY_BUDGET_SECONDS = 5 * 60
 MAX_ADVANCED_HUNTING_SAMPLE_ROWS = 10
@@ -1204,6 +1207,8 @@ def validate_advanced_hunting(
     state_dir: str | Path | None = None,
     tenant_id: str | None = None,
     provider_gap_evidence: str | Path | None = None,
+    max_workers: int = MAX_ADVANCED_HUNTING_WORKERS,
+    min_request_interval_seconds: float | None = None,
 ) -> dict[str, Any]:
     root = Path(solution).expanduser().resolve()
     workflow_state = existing_artifact_path(root, "workflow-state.json")
@@ -1270,7 +1275,6 @@ def validate_advanced_hunting(
         fallback_provider="graph",
     )
     output = root / "XDR Detections"
-    results: list[dict[str, Any]] = []
     token = _advanced_hunting_token(
         effective_state_dir,
         tenant_id=locked_target["tenantId"] if locked_target is not None else tenant_id,
@@ -1282,46 +1286,86 @@ def validate_advanced_hunting(
         query = document["properties"]["queryCondition"]["queryText"]
         detections.append((path, document, query))
 
+    if min_request_interval_seconds is None:
+        is_live_runner = getattr(run_advanced_hunting_query, "__module__", "") == __name__
+        interval = ADVANCED_HUNTING_MIN_INTERVAL_SECONDS if is_live_runner else 0.0
+    else:
+        interval = max(0.0, float(min_request_interval_seconds))
+
+    results: list[dict[str, Any] | None] = [None] * len(detections)
     provider_failure: dict[str, Any] | None = None
-    for path, document, query in detections:
-        if provider_failure:
-            results.append(_not_run_result(path, output, query))
-            continue
-        runtime = run_advanced_hunting_query(query, _token=token)
+    state_lock = threading.Lock()
+    rate_lock = threading.Lock()
+    next_allowed_start = 0.0
+
+    def _paced_query(query: str) -> dict[str, Any]:
+        nonlocal next_allowed_start
+        if interval > 0:
+            with rate_lock:
+                now = time.monotonic()
+                wait_seconds = max(0.0, next_allowed_start - now)
+                next_allowed_start = max(now, next_allowed_start) + interval
+            if wait_seconds > 0:
+                time.sleep(wait_seconds)
+        return run_advanced_hunting_query(query, _token=token)
+
+    def _run_index(index: int) -> None:
+        nonlocal provider_failure
+        path, document, query = detections[index]
+        with state_lock:
+            failed = provider_failure is not None
+        if failed:
+            results[index] = _not_run_result(path, output, query)
+            return
+        runtime = _paced_query(query)
         if runtime.get("failureKind") == "provider":
-            provider_failure = {
-                "provider": "graph",
-                "statusCode": runtime["statusCode"],
-                "error": runtime["error"],
-                "errorDetails": runtime["errorDetails"],
-            }
-            results.append(
-                _not_run_result(
-                    path, output, query, status_code=runtime["statusCode"]
-                )
+            with state_lock:
+                if provider_failure is None:
+                    provider_failure = {
+                        "provider": "graph",
+                        "statusCode": runtime["statusCode"],
+                        "error": runtime["error"],
+                        "errorDetails": runtime["errorDetails"],
+                    }
+            results[index] = _not_run_result(
+                path, output, query, status_code=runtime["statusCode"]
             )
-            continue
+            return
         binding_errors = custom_detail_schema_errors(document, runtime["schema"]) if runtime["ok"] else []
-        results.append(
-            {
-                "detection": path.relative_to(output).as_posix(),
-                "status": "passed" if runtime["ok"] and not binding_errors else "failed",
-                "valid": runtime["ok"] and not binding_errors,
-                "querySha256": _query_sha256(query),
-                "statusCode": runtime["statusCode"],
-                "rowCount": runtime["rowCount"],
-                "schemaColumnCount": len(runtime["schema"]),
-                "schema": runtime["schema"],
-                "sampleRows": runtime.get("sampleRows", []),
-                "sampleRowsTruncated": runtime.get("sampleRowsTruncated", False),
-                "error": "; ".join(binding_errors) if binding_errors else runtime["error"],
-                "errorDetails": runtime["errorDetails"],
-            }
-        )
+        results[index] = {
+            "detection": path.relative_to(output).as_posix(),
+            "status": "passed" if runtime["ok"] and not binding_errors else "failed",
+            "valid": runtime["ok"] and not binding_errors,
+            "querySha256": _query_sha256(query),
+            "statusCode": runtime["statusCode"],
+            "rowCount": runtime["rowCount"],
+            "schemaColumnCount": len(runtime["schema"]),
+            "schema": runtime["schema"],
+            "sampleRows": runtime.get("sampleRows", []),
+            "sampleRowsTruncated": runtime.get("sampleRowsTruncated", False),
+            "error": "; ".join(binding_errors) if binding_errors else runtime["error"],
+            "errorDetails": runtime["errorDetails"],
+        }
+
+    if detections:
+        _run_index(0)
+        remaining_indices = list(range(1, len(detections)))
+        if remaining_indices:
+            if provider_failure is not None or max_workers <= 1:
+                for idx in remaining_indices:
+                    _run_index(idx)
+            else:
+                workers = max(1, min(max_workers, len(remaining_indices)))
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    futures = [executor.submit(_run_index, idx) for idx in remaining_indices]
+                    for future in futures:
+                        future.result()
+
+    final_results = [entry for entry in results if entry is not None]
     return _write_runtime_artifacts(
         root,
         "graph",
-        results,
+        final_results,
         provider_fallback=provider_fallback,
         provider_failure=provider_failure,
         runtime_query_consent=consent,

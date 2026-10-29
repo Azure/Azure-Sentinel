@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,9 @@ from solution_manager.core.artifacts import artifact_path, write_json_artifact
 from solution_manager.qualification.alert_parity import _arm_request, _arm_token, _sentinel_rule_url
 from solution_manager.migration.converter import analytic_rule_files, iso_duration, solution_paths
 from solution_manager.core.target_context import require_locked_target
+
+
+MAX_ANALYTIC_DEPLOY_WORKERS = 8
 
 
 TRIGGER_OPERATORS = {
@@ -122,7 +126,8 @@ def deploy_analytic_rules(
             raise ValueError("current applied package selection has missing Analytic Rule files")
         source_files = [source_by_path[path] for path in sorted(selected_paths)]
     token = _arm_token()
-    for source_path in source_files:
+
+    def _deploy_one(source_path: Path) -> dict[str, Any]:
         result: dict[str, Any] = {
             "source": str(source_path),
             "id": None,
@@ -189,7 +194,14 @@ def deploy_analytic_rules(
             result["initialDisabled"] = False
             result["readbackVerified"] = False
             result["error"] = {"code": type(exc).__name__, "message": str(exc)}
-        results.append(result)
+        return result
+
+    if len(source_files) <= 1:
+        results = [_deploy_one(path) for path in source_files]
+    else:
+        workers = max(1, min(MAX_ANALYTIC_DEPLOY_WORKERS, len(source_files)))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            results = list(executor.map(_deploy_one, source_files))
 
     report = {
         "provider": "azure-resource-manager",

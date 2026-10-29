@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -28,6 +29,7 @@ ARM_SCOPE = "https://management.azure.com/.default"
 SENTINEL_ALERT_RULE_API_VERSION = "2024-03-01"
 STATE_FILE_NAME = "alert-parity-state.json"
 REPORT_FILE_NAME = "alert-parity-report.json"
+MAX_PARITY_LIFECYCLE_WORKERS = 3
 
 
 def _utc_now() -> str:
@@ -356,8 +358,7 @@ def _read_rule_states(
     arm_token: str,
     graph_token: str,
 ) -> list[dict[str, Any]]:
-    states: list[dict[str, Any]] = []
-    for pair in pairs:
+    def _read_one(pair: dict[str, Any]) -> dict[str, Any]:
         sentinel_status, sentinel = _arm_request(
             "GET",
             _sentinel_rule_url(workspace_resource_id, pair["analyticRuleId"]),
@@ -386,17 +387,21 @@ def _read_rule_states(
             )
         pair["sentinelResource"] = sentinel
         pair["initialDisabled"] = True
-        states.append(
-            {
-                "detection": pair["detection"],
-                "analyticRuleId": pair["analyticRuleId"],
-                "customDetectionId": pair["customDetectionId"],
-                "sentinelEnabled": False,
-                "xdrEnabled": False,
-                "initialDisabled": True,
-            }
-        )
-    return states
+        return {
+            "detection": pair["detection"],
+            "analyticRuleId": pair["analyticRuleId"],
+            "customDetectionId": pair["customDetectionId"],
+            "sentinelEnabled": False,
+            "xdrEnabled": False,
+            "initialDisabled": True,
+        }
+
+    if len(pairs) <= 1:
+        return [_read_one(pair) for pair in pairs]
+    workers = max(1, min(MAX_PARITY_LIFECYCLE_WORKERS, len(pairs)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_read_one, pair) for pair in pairs]
+        return [future.result() for future in futures]
 
 
 def _set_pair_enabled(
@@ -504,12 +509,25 @@ def _disable_all(
     results: list[dict[str, Any]] = []
     readback_candidates: list[dict[str, Any]] = []
     receipt_by_detection: dict[str, dict[str, Any]] = {}
-    for pair in rules:
-        errors = list(
-            _set_pair_enabled(
-                pair, workspace_resource_id, arm, graph, False
+    if len(rules) <= 1:
+        disable_errors_list = [
+            list(_set_pair_enabled(pair, workspace_resource_id, arm, graph, False))
+            for pair in rules
+        ]
+    else:
+        workers = max(1, min(MAX_PARITY_LIFECYCLE_WORKERS, len(rules)))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            disable_errors_list = list(
+                executor.map(
+                    lambda pair: list(
+                        _set_pair_enabled(
+                            pair, workspace_resource_id, arm, graph, False
+                        )
+                    ),
+                    rules,
+                )
             )
-        )
+    for pair, errors in zip(rules, disable_errors_list):
         can_readback = bool(
             not errors
             and pair.get("analyticRuleId")
@@ -735,10 +753,25 @@ def start_alert_parity(
     enabled: list[dict[str, Any]] = []
     need_rollback = True
     try:
-        for pair in pairs:
-            errors = _set_pair_enabled(
-                pair, workspace_resource_id, arm_token, graph_token, True
-            )
+        if len(pairs) <= 1:
+            enable_errors_list = [
+                _set_pair_enabled(
+                    pair, workspace_resource_id, arm_token, graph_token, True
+                )
+                for pair in pairs
+            ]
+        else:
+            workers = max(1, min(MAX_PARITY_LIFECYCLE_WORKERS, len(pairs)))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                enable_errors_list = list(
+                    executor.map(
+                        lambda pair: _set_pair_enabled(
+                            pair, workspace_resource_id, arm_token, graph_token, True
+                        ),
+                        pairs,
+                    )
+                )
+        for pair, errors in zip(pairs, enable_errors_list):
             enabled.append({"detection": pair["detection"], "errors": errors})
             if pair.get("e2eQ02Diagnostics"):
                 state["e2eQ02Diagnostics"].extend(pair["e2eQ02Diagnostics"])
@@ -950,21 +983,81 @@ def start_alert_parity_batch(
     need_rollback = True
     enabled_count = 0
     try:
-        ingestions = []
+        ingestions: list[dict[str, Any]] = []
+        grouped_by_contract: dict[str, list[dict[str, Any]]] = {}
         for pair in pairs:
             fixture = fixture_by_detection[pair["detection"]]
-            ingestions.append(
-                {
-                    "detection": pair["detection"],
-                    "result": _ingest(fixture["contract"], fixture["payload"]),
-                }
-            )
+            contract_key = str(Path(fixture["contract"]).expanduser().resolve())
+            grouped_by_contract.setdefault(contract_key, []).append(pair)
+
+        if len(grouped_by_contract) == len(pairs):
+            for pair in pairs:
+                fixture = fixture_by_detection[pair["detection"]]
+                ingestions.append(
+                    {
+                        "detection": pair["detection"],
+                        "result": _ingest(fixture["contract"], fixture["payload"]),
+                    }
+                )
+        else:
+            ingestion_by_detection: dict[str, dict[str, Any]] = {}
+            for group_idx, (contract_key, group_pairs) in enumerate(
+                grouped_by_contract.items(), start=1
+            ):
+                if len(group_pairs) == 1:
+                    single_pair = group_pairs[0]
+                    fixture = fixture_by_detection[single_pair["detection"]]
+                    ingestion_by_detection[single_pair["detection"]] = _ingest(
+                        fixture["contract"], fixture["payload"]
+                    )
+                else:
+                    combined_records: list[dict[str, Any]] = []
+                    for group_pair in group_pairs:
+                        fixture = fixture_by_detection[group_pair["detection"]]
+                        payload_records = json.loads(
+                            Path(fixture["payload"]).read_text(encoding="utf-8-sig")
+                        )
+                        combined_records.extend(payload_records)
+                    combined_payload_path = (
+                        state_path.parent
+                        / f"alert-parity-batch-payload-{group_idx}.json"
+                    )
+                    combined_payload_path.write_text(
+                        json.dumps(combined_records, indent=2),
+                        encoding="utf-8",
+                    )
+                    shared_result = _ingest(contract_key, combined_payload_path)
+                    for group_pair in group_pairs:
+                        ingestion_by_detection[group_pair["detection"]] = shared_result
+            for pair in pairs:
+                ingestions.append(
+                    {
+                        "detection": pair["detection"],
+                        "result": ingestion_by_detection[pair["detection"]],
+                    }
+                )
         state["ingestions"] = ingestions
 
-        for pair in pairs:
-            errors = _set_pair_enabled(
-                pair, workspace_resource_id, arm_token, graph_token, True
-            )
+        if len(pairs) <= 1:
+            enable_errors_list = [
+                _set_pair_enabled(
+                    pair, workspace_resource_id, arm_token, graph_token, True
+                )
+                for pair in pairs
+            ]
+        else:
+            workers = max(1, min(MAX_PARITY_LIFECYCLE_WORKERS, len(pairs)))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                enable_errors_list = list(
+                    executor.map(
+                        lambda pair: _set_pair_enabled(
+                            pair, workspace_resource_id, arm_token, graph_token, True
+                        ),
+                        pairs,
+                    )
+                )
+
+        for pair, errors in zip(pairs, enable_errors_list):
             if errors:
                 pair_diags = list(pair.get("e2eQ02Diagnostics") or [])
                 if pair_diags:
