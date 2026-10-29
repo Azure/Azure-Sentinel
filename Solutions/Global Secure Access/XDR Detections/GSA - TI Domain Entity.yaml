@@ -1,0 +1,131 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - NetworkAccessTrafficLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - NetworkAccessTraffic
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - NetworkAccessTrafficLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4ef07345-5d89-4f5b-9c64-a180d81a6176
+    path: Analytic Rules/GSA - TI Domain Entity.yaml
+    version: 1.0.1
+    querySha256: 982a5f0ebe2fbb2a2f8bf47d0675b5b4aed99227d0bd42e79e60e86922ba4f52
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.Name column `UserPrincipalName` was mapped as a complete UPN identity
+    - Process.CommandLine output column `InitiatingProcessName` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 601e0e1ae29b79e56093fb58734f9f14161d11d98651c7d7905200e8e9879ba5
+      targetQuerySha256: 17afe18c9e7cda1a8cf70b12230fdc8adcb0414d6797f999d87ef5817133d8e3
+    supplementalEntityDetails:
+    - entityType: Process
+      entityIndex: 4
+      identifier: CommandLine
+      sourceColumn: InitiatingProcessName
+      column: InitiatingProcessName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-4ef07345-5d89-4f5b-9c64-a180d81a6176
+  displayName: GSA - TI Domain Entity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let dt_lookBack = 1h;
+      let ioc_lookBack = 14d;
+      let NetworkAccessTraff_ = NetworkAccessTraffic
+      | where TimeGenerated >= ago(dt_lookBack)
+      | where TrafficType == "internet"
+      | where isnotempty(DestinationFqdn)
+      | extend Domain = extract(@'([^.]+\.[^.]+)$', 1, DestinationFqdn)
+      | project-rename GSANetworkAccessTraffic_TimeGenerated = TimeGenerated;
+      let NetworkAccessTraffiDomains =
+          NetworkAccessTraff_
+          | distinct Domain;
+      ThreatIntelIndicators
+        | extend IndicatorType = replace(@'[\[\]"]', "", tostring(split(ObservableKey, ":", 0)))
+        | where IndicatorType == "domain-name"
+        | extend DomainName = tolower(ObservableValue)
+        | where TimeGenerated >= ago(ioc_lookBack)
+        | extend IndicatorId = tostring(split(Id, "--")[2])
+        | where DomainName in (NetworkAccessTraffiDomains)
+        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+        | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
+        | extend Description = tostring(parse_json(Data).description)
+        | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+        | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+        | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
+        | join kind=innerunique (NetworkAccessTraff_) on $left.DomainName == $right.Domain
+        | extend GSAThreatType = ThreatType
+        | summarize GSANetworkAccessTraffic_TimeGenerated = arg_max(GSANetworkAccessTraffic_TimeGenerated, *) by Id, DestinationFqdn
+        | project-reorder *,
+          Tags,
+          TrafficLightProtocolLevel,
+          Type,
+          DomainName,
+          UserPrincipalName,
+          UserId,
+          DeviceId,
+          InitiatingProcessName,
+          GSAThreatType,
+          DestinationUrl,
+          DestinationPort,
+          SourceIp,
+          SourcePort,
+          HttpUserAgent
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GSA - TI Domain Entity
+      description: This query identifies Domain indicators of compromise (IOCs) from threat intelligence (TI) by searching
+        for matches in GSA NetworkAccessTraffic.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: UserPrincipalName
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+        urls:
+        - id: url1
+          addressColumn: DestinationFqdn
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

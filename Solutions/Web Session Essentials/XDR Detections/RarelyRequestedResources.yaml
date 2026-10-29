@@ -1,0 +1,138 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c99cf650-c53b-4c4c-9671-7d7500191a10
+    path: Analytic Rules/RarelyRequestedResources.yaml
+    version: 1.0.2
+    querySha256: 1d8ce5fcc9c98e4140bea755611466b341e2dd9e909faeda833e6d3081876e11
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - customDetails 'EventCount' column `EventCount` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1102
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: dccf581afe76e6ea5ccccb351492490d2196c694987c058565d9c85cf4adb3d1
+      targetQuerySha256: ad1ceb3c98638cf64c3ca3b127b6d49efffcd5e2189bcece45cb262adf73f1b9
+properties:
+  id: xdr-c99cf650-c53b-4c4c-9671-7d7500191a10
+  displayName: Detect requests for an uncommon resources on the web (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback = 1d;
+      let scriptExtensions = dynamic([".php", ".aspx", ".asp", ".cfml", ".py", ".sh", ".bash", ".pl"]);
+      //The number of URI's seen to be suspicious, higher = less likely to be suspicious
+      let uriThreshold = 1;
+      let ReqestCountThreshold = 10; // set minimum requests count to confirm repetitive connections
+      // Only look at connections that were allowed through the web proxy
+      _Im_WebSession (starttime=ago(lookback), eventresult='Success')
+      | project
+          SrcBytes,
+          DstBytes,
+          Url,
+          TimeGenerated,
+          DstIpAddr,
+          SrcIpAddr,
+          HttpRequestMethod,
+          HttpReferrer
+      | where not(ipv4_is_private(DstIpAddr)) // Only take traffic going to internet
+      | extend DestHostName = tostring(parse_url(Url)["Host"])
+      // Only look at connections where some data was exchanged.
+      | where SrcBytes > 0 and DstBytes > 0
+      // Extract Domain
+      | extend Domain = iif(countof(DestHostName, '.') >= 2, strcat(split(DestHostName, '.')[-2], '.', split(DestHostName, '.')[-1]), DestHostName)
+      | extend GetData = iff(Url contains "?", 1, 0)
+      | summarize
+          EventStartTime = min(TimeGenerated),
+          EventEndTime = max(TimeGenerated),
+          make_set(Url, 100),
+          make_set(DstIpAddr, 100),
+          make_set(SrcIpAddr, 100),
+          EventCount = count(),
+          make_set(HttpRequestMethod, 10),
+          max(GetData),
+          max(HttpReferrer)
+          by Domain
+      // Determine the number of URIs that have been visited for the domain
+      | extend destinationURICount = array_length(set_Url)
+      | where destinationURICount <= uriThreshold and EventCount > ReqestCountThreshold // check for repetitive requests for single resource only.
+      | where tostring(set_Url) has_any(scriptExtensions)
+      //Remove matches with referer
+      | where max_HttpReferrer == ""
+      //Keep requests where data was transferred either in a GET with parameters or a POST
+      | where set_HttpRequestMethod in~ ("POST") or max_GetData == 1
+      //Defeat email click tracking, may increase FN's while decreasing FP's
+      | where set_Url !has "click" and set_HttpRequestMethod !has "GET"
+      | mv-expand set_Url, set_DstIpAddr, set_SrcIpAddr
+      | extend
+          RequestURL = tostring(set_Url),
+          DestinationIP = tostring(set_DstIpAddr),
+          SourceIP = tostring(set_SrcIpAddr)
+      | project
+          EventStartTime,
+          EventEndTime,
+          SourceIP,
+          DestinationIP,
+          EventCount,
+          RequestURL,
+          set_HttpRequestMethod
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Detect requests for an uncommon resources on the web (ASIM Web Session)
+      description: "'This detection mechanism examines connections made to a domain where only a single file is requested,\
+        \ which is considered unusual since most contemporary web applications require additional resources. Such activity\
+        \ is often associated with malware beaconing or tracking URLs delivered via emails. \nThe query includes a sample\
+        \ set of popular web script extensions (scriptExtensions), which should be customized to align with the specific requirements\
+        \ of your environment'"
+      severity: low
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+        - id: ip2
+          addressColumn: DestinationIP
+        urls:
+        - id: url1
+          addressColumn: RequestURL
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1102
+        - technique: T1071
+      customDetails:
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime
+        EventCount: EventCount

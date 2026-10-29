@@ -1,0 +1,311 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5965d3e7-8ed0-477c-9b42-e75d9237fab0
+    path: Analytic Rules/DataExfiltrationTimeSeriesAnomaly.yaml
+    version: 1.0.2
+    querySha256: 0ce30333b891d8994e1d3cec8e1f7db59e811d6bfc23e72e87e27272ae4f9c93
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventCount' column `EventCount` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'SourceIPList' column `SourceIPList` has an unproven output binding after a destructive projection; the
+      explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'DestinationIPList' column `DestinationIPList` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'DestinationPortList' column `DestinationPortList` has an unproven output binding after a destructive
+      projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema
+      verification is required
+    - customDetails 'SentBytesinMB' column `SentBytesinMB` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'ReceivedBytesinMB' column `ReceivedBytesinMB` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'anomalies' column `anomalies` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'score' column `score` has an unproven output binding after a destructive projection; the explicit binding
+      is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1030
+    reviewScope:
+      sourceDocumentSha256: 12805bf0f1802a484bc48c44e27db74bd8fadaecd3af9558118299a809f47ba3
+      targetQuerySha256: dc3f9c0fc84ea270d0f65b5ef9d2a62dcb7eefd46db1c51e44c73181192ef65e
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 12805bf0f1802a484bc48c44e27db74bd8fadaecd3af9558118299a809f47ba3
+      targetQuerySha256: dc3f9c0fc84ea270d0f65b5ef9d2a62dcb7eefd46db1c51e44c73181192ef65e
+properties:
+  id: xdr-5965d3e7-8ed0-477c-9b42-e75d9237fab0
+  displayName: Detect unauthorized data transfers using timeseries anomaly (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let startTime = 14d;
+      let endTime = 1d;
+      let timeframe = 1h;
+      let scorethreshold = 5;
+      let bytessentperhourthreshold = 10;
+      // calculate avg. eps(events per second)
+      let eps = materialize(_Im_WebSession(starttime=ago(1d))
+          | project TimeGenerated
+          | summarize AvgPerSec = count() / 3600 by bin(TimeGenerated, 1h)
+          | summarize round(avg(AvgPerSec))
+          );
+      let summarizationexist  = (
+          union isfuzzy=true
+              (
+              WebSessionEssentialsCustomParser
+              | where Type in ("WebSession_Summarized_SrcIP_CL", "WebSession_Summarized_SrcIPV1_CL")
+              | where EventTime_t > ago(1d)
+              | project v = int(2)
+              ),
+              (
+              print int(1)
+              | project v = print_0
+              )
+          | summarize maxv = max(v)
+          | extend sumexist = (maxv > 1)
+          );
+      let TimeSeriesData = union isfuzzy=true
+              (
+              (datatable(exists: int, sumexist: bool)[1, false]
+              | where toscalar(eps) > 1000
+              | join (summarizationexist) on sumexist)
+              | join (
+                  _Im_WebSession(starttime=ago(2d), endtime=now())
+                  | project DstIpAddr, SrcBytes, TimeGenerated, EventProduct
+                  | where isnotempty(DstIpAddr)
+                      and not(ipv4_is_private(DstIpAddr))
+                      and isnotempty(SrcBytes)
+                  | summarize SrcBytesSum=tolong(sum(SrcBytes)) by EventProduct, bin(TimeGenerated, 1h)
+                  | extend EventTime = TimeGenerated, exists=int(1)
+                  )
+                  on exists
+              | project-away exists*, maxv, sum*
+              ),
+              (
+              (datatable(exists: int, sumexist: bool)[1, false]
+              | where toscalar(eps) between (501 .. 1000)
+              | join (summarizationexist) on sumexist)
+              | join (
+                  _Im_WebSession(starttime=ago(3d), endtime=now())
+                  | project DstIpAddr, SrcBytes, TimeGenerated, EventProduct
+                  | where isnotempty(DstIpAddr)
+                      and not(ipv4_is_private(DstIpAddr))
+                      and isnotempty(SrcBytes)
+                  | summarize SrcBytesSum=tolong(sum(SrcBytes)) by EventProduct, bin(TimeGenerated, 1h)
+                  | extend EventTime = TimeGenerated, exists=int(1)
+                  )
+                  on exists
+              | project-away exists*, maxv, sum*
+              ),
+              (
+              (datatable(exists: int, sumexist: bool)[1, false]
+              | where toscalar(eps) <= 500
+              | join (summarizationexist) on sumexist)
+              | join (
+                  _Im_WebSession(starttime=ago(4d), endtime=now())
+                  | project DstIpAddr, SrcBytes, TimeGenerated, EventProduct
+                  | where isnotempty(DstIpAddr)
+                      and not(ipv4_is_private(DstIpAddr))
+                      and isnotempty(SrcBytes)
+                  | summarize SrcBytesSum=tolong(sum(SrcBytes)) by EventProduct, bin(TimeGenerated, 1h)
+                  | extend EventTime = TimeGenerated, exists=int(1)
+                  )
+                  on exists
+              | project-away exists*, maxv, sum*
+              ),
+              (
+              WebSessionEssentialsCustomParser
+              | where Type in ("WebSession_Summarized_SrcIP_CL", "WebSession_Summarized_SrcIPV1_CL")
+              | where EventTime_t between (ago(startTime) .. now())
+              | where isnotempty(SrcBytes_d) and not(DstIPIsPrivate_b)
+              | project
+                  SrcBytesSum=tolong(SrcBytes_d),
+                  EventTime=EventTime_t,
+                  EventProduct = EventProduct_s
+              )
+          | make-series TotalBytesSent = sum(SrcBytesSum) on EventTime from startofday(ago(startTime)) to startofday(now()) step timeframe by EventProduct;
+      // TimeSeriesData block ends here
+      //Take only anomalies in TimeSeriesData
+      let TimeSeriesAnomalies = materialize(TimeSeriesData
+          | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')
+          | mv-expand
+              TotalBytesSent to typeof(long),
+              EventTime to typeof(datetime),
+              anomalies to typeof(double),
+              score to typeof(double),
+              baseline to typeof(long)
+          | where anomalies > 0 and baseline > 0
+          | extend AnomalyHour = EventTime
+          | extend
+              TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024) / 1024), 2),
+              BaselineBytesSentinMBperHour = round(((baseline / 1024) / 1024), 2),
+              score = round(score, 2)
+          | project
+              EventProduct,
+              AnomalyHour,
+              TotalBytesSentinMBperHour,
+              BaselineBytesSentinMBperHour,
+              anomalies,
+              score
+          | where AnomalyHour between (startofday(ago(endTime)) .. startofday(now())) // Get TimeSeriesAnomalies in previous day
+              );
+      // TimeSeriesAlerts block end here
+      let AnomalyHours = materialize (TimeSeriesAnomalies
+          | project AnomalyHour);
+      //Previous day aggregated per hour
+      let PreviousDayLogs =
+          _Im_WebSession(starttime=startofday(ago(endTime)), endtime=startofday(now()))
+          | where isnotempty(DstIpAddr) and isnotempty(SrcIpAddr) and isnotempty(SrcBytes)
+          | where not(ipv4_is_private(DstIpAddr))
+          | project
+              TimeGenerated,
+              DstIpAddr,
+              SrcIpAddr,
+              SrcBytes,
+              DstBytes,
+              DstPortNumber,
+              EventProduct
+          | extend DateHour = bin(TimeGenerated, timeframe) // create a new column and round to hour
+          | where DateHour in (AnomalyHours) // Filter dataset to include only anomaly AnomalyHours
+          | extend
+              SentBytesinMB = ((SrcBytes / 1024) / 1024),
+              ReceivedBytesinMB = ((DstBytes / 1024) / 1024)
+          | summarize
+              HourlyCount = count(),
+              TimeGeneratedMax = arg_max(TimeGenerated, *),
+              DestinationIPList = make_set(DstIpAddr, 100),
+              DestinationPortList = make_set(DstPortNumber, 100),
+              SentBytesinMB = tolong(sum(SentBytesinMB)),
+              ReceivedBytesinMB = tolong(sum(ReceivedBytesinMB))
+              by SrcIpAddr, EventProduct, TimeGeneratedHour = bin(TimeGenerated, timeframe)
+          | where SentBytesinMB > bytessentperhourthreshold
+          | sort by TimeGeneratedHour asc, SentBytesinMB desc
+          | extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition
+          | where Rank <= 10  // Selecting Top 10 records with Highest BytesSent in each Hour
+          | project
+              EventProduct,
+              TimeGeneratedHour,
+              TimeGeneratedMax,
+              SrcIpAddr,
+              DestinationIPList,
+              DestinationPortList,
+              SentBytesinMB,
+              ReceivedBytesinMB,
+              Rank,
+              HourlyCount;
+      // PreviousDayLogs block ends here
+      TimeSeriesAnomalies
+      | join kind = inner (PreviousDayLogs
+          | extend AnomalyHour = TimeGeneratedHour)
+          on EventProduct, AnomalyHour
+      | sort by score desc
+      | project
+          EventProduct,
+          AnomalyHour,
+          TimeGeneratedMax,
+          SrcIpAddr,
+          DestinationIPList,
+          DestinationPortList,
+          SentBytesinMB,
+          ReceivedBytesinMB,
+          TotalBytesSentinMBperHour,
+          BaselineBytesSentinMBperHour,
+          score,
+          anomalies,
+          HourlyCount
+      | summarize
+          EventCount = sum(HourlyCount),
+          startTimeUtc = min(TimeGeneratedMax),
+          EndTimeUtc = max(TimeGeneratedMax),
+          SentBytesinMB = sum(SentBytesinMB),
+          ReceivedBytesinMB = sum(ReceivedBytesinMB),
+          SourceIP = take_any(SrcIpAddr),
+          SourceIPList = make_set(SrcIpAddr, 10),
+          DestinationIPList = make_set(DestinationIPList, 100),
+          DestinationPortList = make_set(DestinationPortList, 100)
+          by
+          AnomalyHour,
+          TotalBytesSentinMBperHour,
+          BaselineBytesSentinMBperHour,
+          score,
+          anomalies,
+          EventProduct
+      | project
+          EventProduct,
+          AnomalyHour,
+          startTimeUtc,
+          EndTimeUtc,
+          SourceIP,
+          SourceIPList,
+          DestinationIPList,
+          DestinationPortList,
+          SentBytesinMB,
+          ReceivedBytesinMB,
+          TotalBytesSentinMBperHour,
+          BaselineBytesSentinMBperHour,
+          anomalies,
+          score,
+          EventCount
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Detect unauthorized data transfers using timeseries anomaly (ASIM Web Session)
+      description: |-
+        'This query utilizes built-in KQL anomaly detection algorithms to identify anomalous data transfers to public networks. It detects significant deviations from a baseline pattern, allowing the detection of sudden increases in data transferred to unknown public networks, which may indicate data exfiltration attempts. Investigating such anomalies is crucial.
+        The score indicates the degree to which the data transfer deviates from the baseline value. A higher score indicates a greater deviation. The query's output provides an aggregated summary view of the traffic observed in the flagged anomaly ho
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1030
+      customDetails:
+        EventCount: EventCount
+        SourceIPList: SourceIPList
+        DestinationIPList: DestinationIPList
+        DestinationPortList: DestinationPortList
+        SentBytesinMB: SentBytesinMB
+        ReceivedBytesinMB: ReceivedBytesinMB
+        anomalies: anomalies
+        score: score

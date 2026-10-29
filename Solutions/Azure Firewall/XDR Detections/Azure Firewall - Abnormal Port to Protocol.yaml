@@ -1,0 +1,211 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureFirewall
+  dataTypes:
+  - AzureDiagnostics
+  - AZFWApplicationRule
+  - AZFWNetworkRule
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes: []
+  requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes:
+    - AZFWApplicationRule
+    - AZFWNetworkRule
+    - AzureDiagnostics
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 826f930c-2f25-4508-8e75-a95b809a4e15
+    path: Analytic Rules/Azure Firewall - Abnormal Port to Protocol.yaml
+    version: 1.1.5
+    querySha256: 7ba48db9aff9d07f1b85f2545cbc15d20438b3e7162b1faa4bce3dd9ea47fbbb
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 8d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1h, lookback=8d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AbnormalPort' column `AlertTimeDstPort` requires runtime output-schema
+      binding verification
+    - customDetails 'NetworkProtocol' column `AlertTimeProtocol` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - CommandAndControl
+    - DefenseEvasion
+    originalTechniques:
+    - T1041
+    - T1571
+    - T1572
+    reviewScope:
+      sourceDocumentSha256: 8e4d33f1a606c953ebeadb64a44ceffc62fbf8a7d2bfb3ee98f7a361604655b1
+      targetQuerySha256: f3c96e3dacb6e7326a0f95201222f529cc6e9c965af1604ee92dc31902570207
+properties:
+  id: xdr-826f930c-2f25-4508-8e75-a95b809a4e15
+  displayName: Abnormal Port to Protocol
+  status: disabled
+  queryCondition:
+    queryText: 'let LearningPeriod = 7d;
+
+      let RunTime = 1h;
+
+      let StartLearningPeriod = LearningPeriod + RunTime;
+
+      let DetectionWindowStart = ago(RunTime);
+
+      let LearningPortToProtocol1 =  (AzureDiagnostics
+
+      | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+
+      | where OperationName == "AzureFirewallApplicationRuleLog"
+
+      | extend msg_s= column_ifexists(''msg_s'',Message)
+
+      | parse msg_s with Protocol " request from " SourceIp ":" SourcePort:int " to
+      " Fqdn ":" DestinationPort:int "." *
+
+      | where isnotempty(DestinationPort)
+
+      | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort,
+      LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+
+      let LearningPortToProtocol2 = (AZFWNetworkRule
+
+      | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+
+      | where isnotempty(DestinationPort)
+
+      | extend Fqdn = DestinationIp
+
+      | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort,
+      LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+
+      let LearningPortToProtocol3 = (AZFWApplicationRule
+
+      | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+
+      | where isnotempty(DestinationPort)
+
+      | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort,
+      LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+
+      let AlertTimePortToProtocol1 = (AzureDiagnostics
+
+      | where TimeGenerated between (DetectionWindowStart .. now())
+
+      | where OperationName == "AzureFirewallApplicationRuleLog"
+
+      | extend msg_s= column_ifexists(''msg_s'',Message)
+
+      | parse msg_s with Protocol " request from " SourceIp ":" SourcePort " to "
+      Fqdn ":" DestinationPort:int "." *
+
+      | where isnotempty(DestinationPort)
+
+      | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort,
+      AlertTimeProtocol = Protocol);
+
+      let AlertTimePortToProtocol2 = (AZFWNetworkRule
+
+      | where TimeGenerated between (DetectionWindowStart .. now())
+
+      | where isnotempty(DestinationPort)
+
+      | extend Fqdn = DestinationIp
+
+      | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort,
+      AlertTimeProtocol = Protocol);
+
+      let AlertTimePortToProtocol3 = (AZFWApplicationRule
+
+      | where TimeGenerated between (DetectionWindowStart .. now())
+
+      | where isnotempty(DestinationPort)
+
+      | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort,
+      AlertTimeProtocol = Protocol);
+
+      (union isfuzzy=true
+
+      (AlertTimePortToProtocol1
+
+      | join kind=leftouter (LearningPortToProtocol1) on $left.AlertTimeDstPort ==
+      $right.LearningTimeDstPort
+
+      | where LearningTimeProtocol != AlertTimeProtocol),
+
+      (AlertTimePortToProtocol2
+
+      | join kind=leftanti (LearningPortToProtocol2) on $left.AlertTimeDstPort ==
+      $right.LearningTimeDstPort, $left.AlertTimeProtocol == $right.LearningTimeProtocol),
+
+      (AlertTimePortToProtocol3
+
+      | join kind=leftouter (LearningPortToProtocol3) on $left.AlertTimeDstPort ==
+      $right.LearningTimeDstPort
+
+      | where LearningTimeProtocol != AlertTimeProtocol))'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Abnormal Port to Protocol
+      description: '''Identifies communication for well known protocol over a non-standard
+        port based on learning period activity. This can indicate malicious communication
+        (C2) or exfiltration by attackers trying to communicate over known ports (22:SSH,
+        80:HTTP) but dont use the known protocol headers to match the port number.
+
+
+        Configurable Parameters:
+
+
+        - Learning period time - learning period for protocol learning in days. Default
+        is set to 7.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+        urls:
+        - id: url1
+          addressColumn: Fqdn
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1041
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1571
+        - technique: T1572
+      - tactic: DefenseEvasion
+      customDetails:
+        AbnormalPort: AlertTimeDstPort
+        NetworkProtocol: AlertTimeProtocol
