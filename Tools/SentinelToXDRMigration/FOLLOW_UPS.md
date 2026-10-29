@@ -144,6 +144,24 @@ themselves establish a toolkit fix is required.
   `Microsoft.Graph/applications@v1.0`, `servicePrincipals@v1.0`, and
   `oauth2PermissionGrants@v1.0` when `ThreatHunting.Read.All` or
   `CustomDetection.ReadWrite.All` is missing.
+- **Align GitHub Actions ARM-TTK CI with local V3.1 filters and `lab-deployment`
+  qualification mode.** Synchronized `.github/actions/entrypoint.ps1` with
+  `.script/local-validation/run-arm-ttk.ps1` (`-Skip @("Template Should Not
+  Contain Blanks", "URIs Should Be Properly Constructed")`, exempt `"packageId"`,
+  `"fromTemplateId"`, `"columnId"`, and `customDetails` `*Id` keys in
+  `IDs Should Be Derived From ResourceIDs`, and fixed nested-template
+  `Summary.Fail` decrement math), guarded `Expand-AzTemplate.ps1` against
+  `"microsoft.resources/deployments/write"` string literals inside KQL
+  `queryText`, and allowed `.github/workflows/arm-ttk-validations.yaml` to
+  recognize verified `lab-deployment` qualification evidence for V3.1
+  `languageVersion: "2.0"` `MicrosoftSecurity` resources (`#15397`).
+- **Rewrite scalar `dynamic([...])` and `mv-apply` filters in `kind: NRT` (`PT0S`)
+  Custom Detections for the Defender XDR streaming compiler.** Added
+  `rewrite_nrt_streaming_constructs` in `converter.py` to inline `let <var> =
+  dynamic([...]);` lists and rewrite scalar `mv-apply` filter stages into
+  streaming-compatible predicates, and added `_assess_nrt_eligibility` checks
+  rejecting residual `dynamic([...])` and `mv-apply` / `mv-expand` in `PT0S`
+  rules (`HuntingRuleQueryStreamingNotSupported`).
 
 - **Flip default workflow profile from `authoring` to `qualification`.**
   Switched the default `--workflow-profile` in `solution_manager/cli.py`,
@@ -153,6 +171,24 @@ themselves establish a toolkit fix is required.
   `.windsurf`) from `authoring` to `qualification`, preserving
   `--workflow-profile authoring` as an explicit offline/ISV fallback when no
   live lab is available.
+- **Enable XDR Custom Detections and Sentinel Analytic Rules during
+  Qualification flow.** Enabled deployed Defender XDR Custom Detections and
+  Sentinel Analytic Rules during lab Qualification, exercising live rule
+  enablement and the Defender XDR NRT streaming compiler before disabling or
+  cleaning up rules after the test window.
+- **Reject false-success packaging results in V3.1 without changing legacy V3
+  flow.** Enforced strict artifact, resource, and error checks in V3.1 packaging
+  acceptance while preserving zero as the normal success exit code.
+- **Extend KQL static validations to XDR artifacts and allow Qualification mode
+  overrides.** Extended `.script/tests/KqlvalidationsTests` and local validation
+  to `XDR Detections/*.yaml` and `XDR Workbooks/*.json`, and allowed verified
+  live `qualification` evidence to override offline static KQL analyzer false
+  positives.
+- **Instrument NPF metrics in CI labeler, validation, and qualification
+  artifacts.** Added `passesPerSolution`, `commitPasses`, `highestStage`,
+  `verdicts`, `runNumber`, `stageTimestamps`, `verdict`, `verdictReasons`,
+  `overrides[]`, and `operatorHash` across `.github/workflows/npf-pr-labeler.yaml`
+  and `solution_manager`.
 
 ## Candidate follow-ups
 

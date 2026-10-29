@@ -112,7 +112,6 @@ NRT_SUPPORTED_TABLES = frozenset(
         "SecurityAlert",
         "SecurityEvent",
         "SigninLogs",
-        "Syslog",
     )
 )
 
@@ -495,6 +494,201 @@ def _parse_cosmetic_summarize_agg(item: str, default_time_col: str) -> tuple[str
         return None, None, False, False
 
     return None, None, False, False
+
+
+_SCALAR_LITERAL_RE = re.compile(
+    r"^(?:@'(?:''|[^'])*'|@\"(?:\"\"|[^\"])*\"|'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|-?\d+(?:\.\d+)?|true|false)$",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def _split_top_level_semicolon_statements(query: str) -> list[str]:
+    statements: list[str] = []
+    start = 0
+    depth = 0
+    for match in re.finditer(
+        r"//[^\n]*|/\*[\s\S]*?\*/|@'(?:''|[^'])*'|@\"(?:\"\"|[^\"])*\"|'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|\(|\)|\[|\]|\{|\}|;",
+        query,
+    ):
+        tok = match.group(0)
+        if tok.startswith(("//", "/*", "'", '"', "@'", '@"')):
+            continue
+        if tok in "([{":
+            depth += 1
+        elif tok in ")]}":
+            depth = max(0, depth - 1)
+        elif tok == ";" and depth == 0:
+            statements.append(query[start:match.start()])
+            start = match.end()
+    tail = query[start:]
+    if tail.strip():
+        statements.append(tail)
+    return statements
+
+
+def _parse_scalar_dynamic_list(raw_inner: str) -> list[str] | None:
+    items = [item.strip() for item in _split_top_level_comma_items(raw_inner) if item.strip()]
+    if not items:
+        return None
+    if not all(_SCALAR_LITERAL_RE.match(item) for item in items):
+        return None
+    return items
+
+
+def rewrite_nrt_streaming_constructs(query: str) -> tuple[str, bool, list[str]]:
+    """Inline scalar dynamic([...]) lists and rewrite scalar mv-apply filters for NRT streaming."""
+    stripped = query.strip()
+    if not stripped:
+        return query, False, []
+
+    statements = _split_top_level_semicolon_statements(stripped)
+    if not statements:
+        return query, False, []
+
+    let_stmt_re = re.compile(
+        r"^\s*let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*dynamic\s*\(\s*\[([\s\S]*)\]\s*\)\s*$",
+        re.IGNORECASE,
+    )
+    dyn_lists: dict[str, tuple[list[str], str]] = {}
+    let_indices: dict[str, int] = {}
+    for idx, stmt in enumerate(statements[:-1]):
+        m = let_stmt_re.match(stmt)
+        if not m:
+            continue
+        var_name = m.group(1)
+        raw_inner = m.group(2).strip()
+        items = _parse_scalar_dynamic_list(raw_inner)
+        if items is None:
+            continue
+        dyn_lists[var_name] = (items, raw_inner)
+        let_indices[var_name] = idx
+
+    pipeline = statements[-1].strip()
+    changed = False
+
+    # 1. Rewrite scalar mv-apply stages over a let-bound dynamic([...]) list or inline dynamic([...])
+    stages = _split_top_level_kql_stages(pipeline)
+    mv_apply_stage_re = re.compile(
+        r"^mv-apply\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
+        r"(?:([A-Za-z_][A-Za-z0-9_]*)|dynamic\s*\(\s*\[([\s\S]*?)\]\s*\))"
+        r"(?:\s+to\s+typeof\s*\(\s*[A-Za-z0-9_]+\s*\))?\s+on\s*\(\s*"
+        r"where\s+([A-Za-z_][A-Za-z0-9_.]*)\s+"
+        r"(contains_cs|!contains_cs|contains|!contains|has_cs|!has_cs|has|!has|"
+        r"startswith_cs|!startswith_cs|startswith|!startswith|endswith_cs|!endswith_cs|endswith|!endswith|=~|!~|==|!=)\s+"
+        r"([A-Za-z_][A-Za-z0-9_]*)\s*\)$",
+        re.IGNORECASE,
+    )
+    if len(stages) >= 2:
+        new_stages = [stages[0]]
+        stage_changed = False
+        for stage in stages[1:]:
+            m_mv = mv_apply_stage_re.match(stage.strip())
+            if m_mv and m_mv.group(1) == m_mv.group(6):
+                var_ref = m_mv.group(2)
+                inline_inner = m_mv.group(3)
+                col = m_mv.group(4)
+                op = m_mv.group(5)
+                op_lower = op.lower()
+                items_tuple: tuple[list[str], str] | None = None
+                if var_ref and var_ref in dyn_lists:
+                    items_tuple = dyn_lists[var_ref]
+                elif inline_inner is not None:
+                    parsed_inline = _parse_scalar_dynamic_list(inline_inner.strip())
+                    if parsed_inline:
+                        items_tuple = (parsed_inline, inline_inner.strip())
+                if items_tuple is not None:
+                    items, raw_inner = items_tuple
+                    if op_lower == "has":
+                        new_stages.append(f"where {col} has_any ({raw_inner})")
+                    elif op_lower == "==":
+                        new_stages.append(f"where {col} in ({raw_inner})")
+                    elif op_lower == "=~":
+                        new_stages.append(f"where {col} in~ ({raw_inner})")
+                    elif op_lower == "!=":
+                        new_stages.append(f"where {col} !in ({raw_inner})")
+                    elif op_lower == "!~":
+                        new_stages.append(f"where {col} !in~ ({raw_inner})")
+                    else:
+                        new_stages.append(
+                            f"where {' or '.join(f'{col} {op} {item}' for item in items)}"
+                        )
+                    stage_changed = True
+                    continue
+            new_stages.append(stage)
+        if stage_changed:
+            pipeline = "\n| ".join(new_stages)
+            changed = True
+
+    # 2. Inline let-bound dynamic([...]) lists into in / in~ / !in / !in~ / has_any / has_all
+    if dyn_lists:
+        var_alternation = "|".join(re.escape(v) for v in sorted(dyn_lists, key=len, reverse=True))
+        list_op_var_re = re.compile(
+            rf"\b(in~?|!in~?|has_any|has_all)\s*\(\s*({var_alternation})\s*\)",
+            re.IGNORECASE,
+        )
+
+        def _replace_var_list(match: re.Match[str]) -> str:
+            nonlocal changed
+            op_tok = match.group(1)
+            v_name = match.group(2)
+            if v_name not in dyn_lists:
+                return match.group(0)
+            changed = True
+            return f"{op_tok} ({dyn_lists[v_name][1]})"
+
+        pipeline = list_op_var_re.sub(_replace_var_list, pipeline)
+
+    # 3. Unwrap direct inline dynamic([...]) inside in / in~ / !in / !in~ / has_any / has_all
+    inline_dyn_op_re = re.compile(
+        r"\b(in~?|!in~?|has_any|has_all)\s*\(\s*dynamic\s*\(\s*\[([\s\S]*?)\]\s*\)\s*\)",
+        re.IGNORECASE,
+    )
+
+    def _replace_inline_dyn(match: re.Match[str]) -> str:
+        nonlocal changed
+        op_tok = match.group(1)
+        raw_inner = match.group(2).strip()
+        if _parse_scalar_dynamic_list(raw_inner) is None:
+            return match.group(0)
+        changed = True
+        return f"{op_tok} ({raw_inner})"
+
+    pipeline = inline_dyn_op_re.sub(_replace_inline_dyn, pipeline)
+
+    # 3b. Rewrite _ResourceId -> ResourceId on AzureActivity (NRT streaming schema omits _ResourceId)
+    if re.search(r"\bAzureActivity\b", pipeline, re.IGNORECASE) and re.search(
+        r"\b_ResourceId\b", pipeline
+    ):
+        pipeline = re.sub(r"\b_ResourceId\b", "ResourceId", pipeline)
+        changed = True
+
+    if not changed:
+        return query, False, []
+
+    # 4. Drop let <var> = dynamic([...]); statements whose variable is no longer referenced
+    remaining_tokens = set(_tokens(pipeline))
+    kept_prefix_stmts: list[str] = []
+    for idx, stmt in enumerate(statements[:-1]):
+        matched_var = next((v for v, i in let_indices.items() if i == idx), None)
+        if matched_var is not None and matched_var not in remaining_tokens:
+            continue
+        kept_prefix_stmts.append(stmt.strip())
+        remaining_tokens.update(_tokens(stmt))
+
+    rewritten = (
+        ";\n".join(kept_prefix_stmts) + ";\n" + pipeline
+        if kept_prefix_stmts
+        else pipeline
+    )
+    notes = [
+        "nrt_streaming_constructs_rewritten",
+        (
+            "nrt_streaming_constructs_rewritten: Inlined scalar dynamic([...]) list declarations "
+            "and rewrote scalar mv-apply filters into streaming-compatible predicates to preserve "
+            "PT0S Continuous execution."
+        ),
+    ]
+    return rewritten, True, notes
 
 
 def rewrite_cosmetic_nrt_summarize(query: str) -> tuple[str, bool, list[str]]:
@@ -1129,6 +1323,14 @@ def _assess_nrt_eligibility(source_query: str, target_query: str) -> tuple[bool,
         reasons.append("Continuous (NRT) frequency does not support join, union, or lookup operators")
     if re.search(r"\b(?:summarize|make-series)\b|\|\s*count\b", code, re.IGNORECASE):
         reasons.append("Continuous (NRT) frequency does not support summarize or aggregation operators")
+    if re.search(r"\bdynamic\s*\(\s*\[", code, re.IGNORECASE):
+        reasons.append("Continuous (NRT) frequency does not support dynamic([...]) array literals in the streaming engine")
+    if re.search(r"\bmv-(?:apply|expand)\b", code, re.IGNORECASE):
+        reasons.append("Continuous (NRT) frequency does not support mv-apply or mv-expand in the streaming engine")
+    if re.search(r"\b_ResourceId\b", code):
+        reasons.append("Continuous (NRT) frequency does not support _ResourceId in the streaming engine; use ResourceId")
+    if re.search(r"\bcolumn_ifexists\s*\(", code, re.IGNORECASE):
+        reasons.append("Continuous (NRT) frequency does not support column_ifexists() in the streaming engine")
 
     refs = query_table_references(target_query)
     tables = []
@@ -2028,6 +2230,7 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
         if w.startswith((
             "security_alert_migrated_to_alert_info",
             "security_incident_migrated_to_alert_info",
+            "nrt_streaming_constructs_rewritten",
             "nrt_cosmetic_summarize_rewritten",
             "nrt_behavioral_summarize_fallback_pt1h",
         ))
@@ -2063,6 +2266,14 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
             == "DeviceEvents | summarize Count = count() by AccountUpn, IPAddress, Timestamp"
         )
         if not is_legacy_synthetic_nrt:
+            rewritten_stream, was_stream_rewritten, nrt_stream_notes = (
+                rewrite_nrt_streaming_constructs(converted_query)
+            )
+            if was_stream_rewritten:
+                converted_query = rewritten_stream
+                warnings.extend(nrt_stream_notes)
+                informational.extend(nrt_stream_notes)
+                provenance_notes.extend(nrt_stream_notes)
             rewritten_nrt, was_rewritten, nrt_rewrite_notes = rewrite_cosmetic_nrt_summarize(
                 converted_query
             )

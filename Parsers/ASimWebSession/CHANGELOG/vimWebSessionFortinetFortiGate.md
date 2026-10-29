@@ -1,5 +1,9 @@
 # Changelog for vimWebSessionFortinetFortiGate.yaml
 
+## Version 0.3.1
+
+- (2026-10-28) Standardize EventProduct casing to FortiGate - [PR #15478](https://github.com/Azure/Azure-Sentinel/pull/15478)
+
 ## Version 0.2.1
 
 - (2025-06-27) remove_protocol_from_list - [PR #12434](https://github.com/Azure/Azure-Sentinel/pull/12434)
@@ -15,4 +19,3 @@
 ## Version 0.1
 
 - (2023-06-16) asim/kustoking/update-auditevent-microsoftwindows - [PR #8013](https://github.com/Azure/Azure-Sentinel/pull/8013)
-

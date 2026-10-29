@@ -1,7 +1,7 @@
 Parser:
   Title: Email Event ASIM parser
-  Version: '1.0.0'
-  LastUpdated: Sep 09, 2026
+  Version: '1.0.2'
+  LastUpdated: Oct 26, 2026
 Product:
   Name: Source agnostic
 Normalization:
@@ -18,15 +18,23 @@ ParserName: ASimEmailEvent
 EquivalentBuiltInParser: _ASim_EmailEvent
 Parsers:
   - _Im_EmailEvent_Empty
+  - _ASim_EmailEvent_ProofpointPODMessage
+  - _ASim_EmailEvent_ProofpointPODMailLog
+  - _ASim_EmailEvent_MicrosoftDefenderOffice365
 ParserParams:
   - Name: pack
     Type: bool
     Default: false
 ParserQuery: |
   let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'ExcludeASimEmailEvent') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser| where isnotempty(SourceSpecificParser));
-  let ASimBuiltInDisabled=toscalar('ExcludeASimEmailEvent' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
+  let ASimBuiltInDisabled=toscalar('ExcludeASimEmailEvent' in (DisabledParsers) or 'Any' in (DisabledParsers));
   let parser=(pack:bool=false){
   union isfuzzy=true
-    vimEmailEventEmpty
-  }; 
+    vimEmailEventEmpty,
+    ASimEmailEventProofpointPODMessage(
+      disabled=ASimBuiltInDisabled or ('ExcludeASimEmailEventProofpointPODMessage' in (DisabledParsers)),
+      pack=pack),
+    ASimEmailEventProofpointPODMailLog(pack=pack, disabled=(ASimBuiltInDisabled or ('ExcludeASimEmailEventProofpointPODMailLog' in (DisabledParsers)))),
+    ASimEmailEventMicrosoftDefenderOffice365(disabled=(ASimBuiltInDisabled or ('ExcludeASimEmailEventMicrosoftDefenderOffice365' in (DisabledParsers))), pack=pack)
+  };
   parser (pack=pack)

@@ -1,0 +1,170 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPAuditLogsDefinition
+  dataTypes:
+  - GCPAuditLogs
+- connectorId: AzureActiveDirectoryIdentityProtection
+  dataTypes:
+  - SecurityAlert
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - SecurityAlert
+- connectorId: MicrosoftDefenderAdvancedThreatProtection
+  dataTypes:
+  - SecurityAlert
+- connectorId: MicrosoftCloudAppSecurity
+  dataTypes:
+  - SecurityAlert
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPAuditLogs
+    - SecurityAlert
+  requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+    - GCPAuditLogs
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+    - SecurityAlert
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - SecurityAlert
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+    - SecurityAlert
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+    - SecurityAlert
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 58e306fe-1c49-4b8f-9b0e-15f25e8f0cd7
+    path: Analytic Rules/CrossCloudSuspiciousUserActivityObservedInGCPEnvourment.yaml
+    version: 1.0.2
+    querySha256: bb8e83debc4967a4fa3d0ee62267e86dc3ce627801086437668b2a7f91a1d232
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AlertName' column `AlertName` requires runtime output-schema binding verification
+    - customDetails 'FirstAlert' column `FirstAlert` requires runtime output-schema binding verification
+    - customDetails 'LastAlert' column `LastAlert` requires runtime output-schema binding verification
+    - customDetails 'TimeDiff' column `TimeDiff` requires runtime output-schema binding verification
+    - customDetails 'MethodName' column `MethodName` requires runtime output-schema binding verification
+    - customDetails 'GCPProjctId' column `GCPProjctId` requires runtime output-schema binding verification
+    - customDetails 'GCPCallerUA' column `GCPCallerUA` requires runtime output-schema binding verification
+    - customDetails 'ServiceName' column `ServiceName` requires runtime output-schema binding verification
+    - customDetails 'AlertUserUPN' column `AlertUserUPN` requires runtime output-schema binding verification
+    - customDetails 'SystemAlertId' column `SystemAlertId` requires runtime output-schema binding verification
+    - customDetails 'Tactics' column `Tactics` requires runtime output-schema binding verification
+    - customDetails 'Request' column `Request` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `GCPUserIdentity`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `GCPUserIdentity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Execution
+    - Persistence
+    - PrivilegeEscalation
+    - CredentialAccess
+    - Discovery
+    originalTechniques:
+    - T1566
+    - T1059
+    - T1078
+    - T1046
+    - T1547
+    - T1548
+    - T1069
+    - T1552
+    reviewScope:
+      sourceDocumentSha256: 970110dbb6034613fd759e451e56b2811352ca60a047fa3f336393289359bfa9
+      targetQuerySha256: 22f161694eae87339115c23f95f67530e0d6cb11509124aa682515610935c744
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: GCPUserIdentity
+      column: GCPUserIdentity
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-58e306fe-1c49-4b8f-9b0e-15f25e8f0cd7
+  displayName: Cross-Cloud Suspicious user activity observed in GCP Environment
+  status: disabled
+  queryCondition:
+    queryText: "// Filter GCP Audit Logs to exclude service accounts\nGCPAuditLogs\n| where PrincipalEmail !endswith \"gserviceaccount.com\"\n// Exclude system-related authentication information\n| where AuthenticationInfo !has (\"system:\")\n// Extract GCP request name and relevant attributes\n| extend GCPRequestName= parse_json(Request).name\n| extend\n    GCPAccoutType= tostring(split(GCPRequestName, \"/\")[2]),\n    GCPUserIdentity = iff(isempty(tostring(split(GCPRequestName, \"/\")[3])), tostring(parse_json(AuthenticationInfo).principalEmail), \"na\"),\n    GCPUserIp = tostring(parse_json(RequestMetadata).callerIp),\n    GCPCallerUA = tostring(parse_json(RequestMetadata).callerSuppliedUserAgent)\n// Filter out empty or service account identities\n| where isnotempty(GCPUserIdentity) and GCPUserIdentity !endswith \"gserviceaccount.com\"\n// Select relevant attributes for further analysis\n| project\n    PrincipalEmail,\n    GCPUserIdentity,\n    GCPAccoutType,\n    GCPRequestName,\n \
+      \   GCPCallerUA,\n    Request,\n    RequestMetadata,\n    GCPUserIp,\n    MethodName,\n    ServiceName,\n    GCPEventTime= TimeGenerated,\n    ProjectId\n// Join GCP Audit Logs with SecurityAlert data based on user identity and IP\n| join kind=inner (\n    SecurityAlert\n    // Exclude alerts from Azure Sentinel\n    | where ProductName !in (\"Azure Sentinel\")\n    // Extract IP entities from alert data\n    | extend AlertIPEntity=  tostring(extract(@\"\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\", 0, Entities))\n    | extend\n        AlertUserUPN = tostring(extract(@'\\b[\\w\\.\\-]+@[\\w\\.\\-]+\\b', 0, Entities)),\n        AlertTime= TimeGenerated\n    // Filter out empty user identities and IP entities\n    | where isnotempty(AlertIPEntity) and isnotempty(AlertUserUPN)\n    )\n    on $left.GCPUserIdentity == $right.AlertUserUPN and $left.GCPUserIp == $right.AlertIPEntity\n// Summarize the data, calculating time differences and aggregating attributes\n| summarize\n    FirstAlert=min(AlertTime),\n\
+      \    LastAlert=max(AlertTime),\n    TimeDiff=datetime_diff('minute', min(AlertTime), min(GCPEventTime)),\n    MethodName=make_set(MethodName),\n    ServiceName= make_set(ServiceName),\n    GCPProjctId=make_set(ProjectId),\n    Request=make_set(Request),\n    GCPCallerUA=make_set(GCPCallerUA)\n    by\n    AlertUserUPN,\n    AlertIPEntity,\n    GCPUserIp,\n    GCPUserIdentity,\n    AlertSeverity,\n    AlertName,\n    AlertLink,\n    Description,\n    Tactics,\n    ProductName,\n    SystemAlertId,\n    GCPAccoutType\n// Extend the data with additional attributes\n| extend\n    Name = tostring(split(GCPUserIdentity, \"@\")[0]),\n    UPNSuffix = tostring(split(GCPUserIdentity, \"@\")[1])"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Cross-Cloud Suspicious user activity observed in GCP Environment
+      description: '''This detection query aims to correlate potentially suspicious user activities logged in Google Cloud Platform (GCP) Audit Logs with security alerts originating from Microsoft Security products. This correlation facilitates the identification of potential cross-cloud security incidents. By summarizing these findings, the query provides valuable insights into cross-cloud identity threats and their associated details, enabling organizations to respond promptly and mitigate potential risks effectively.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: GCPUserIp
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+        - technique: T1078
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+        - technique: T1547
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+        - technique: T1547
+        - technique: T1548
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1552
+      - tactic: Discovery
+        techniques:
+        - technique: T1046
+        - technique: T1069
+      customDetails:
+        AlertName: AlertName
+        FirstAlert: FirstAlert
+        LastAlert: LastAlert
+        TimeDiff: TimeDiff
+        MethodName: MethodName
+        GCPProjctId: GCPProjctId
+        GCPCallerUA: GCPCallerUA
+        ServiceName: ServiceName
+        AlertUserUPN: AlertUserUPN
+        SystemAlertId: SystemAlertId
+        Tactics: Tactics
+        Request: Request
+        AccountFullName: GCPUserIdentity

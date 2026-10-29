@@ -1,0 +1,92 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ADOAuditLogs_CL
+  requiredDataConnectors:
+  - connectorId: AzureDevOpsAuditLogs
+    dataTypes:
+    - ADOAuditLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5f0d80db-3415-4265-9d52-8466b7372e3a
+    path: Analytic Rules/ADOPATUsedWithBrowser.yaml
+    version: 1.0.6
+    querySha256: b641b426ba8a00e21c73c19dac3e6bb937353d69a886b7477e655aa87efb235b
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `ActorUPN`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `ActorUPN` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1528
+    reviewScope:
+      sourceDocumentSha256: d9bf42b976be6333f13d5a9a4218c6aa33334b2149efd3da3a9bb91782285cc8
+      targetQuerySha256: 79623e05720fa77b03499073b58dc3491367e8a5491661a601bfe6e0b9ae6c45
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorUPN
+      column: ActorUPN
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    dependencyReviewRequired: false
+properties:
+  id: xdr-5f0d80db-3415-4265-9d52-8466b7372e3a
+  displayName: Azure DevOps PAT used with Browser
+  status: disabled
+  queryCondition:
+    queryText: 'AzureDevOpsAuditing
+
+      | where AuthenticationMechanism startswith "PAT"
+
+      // Look for useragents that include a redenring engine
+
+      | where UserAgent has_any ("Gecko", "WebKit", "Presto", "Trident", "EdgeHTML", "Blink")
+
+      | extend AccountName = tostring(split(ActorUPN, "@")[0]), AccountUPNSuffix = tostring(split(ActorUPN, "@")[1])'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Azure DevOps PAT used with Browser
+      description: "'Personal Access Tokens (PATs) are used as an alternate password to authenticate into Azure DevOps. PATs are intended for programmatic access use in code or applications. \nThis can be prone to attacker theft if not adequately secured. This query looks for the use of a PAT in authentication but from a User Agent indicating a browser. \nThis should not be normal activity and could be an indicator of an attacker using a stolen PAT.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1528
+      customDetails:
+        AccountFullName: ActorUPN
