@@ -11,6 +11,9 @@ parser. Deprecation applies to the legacy connector, not to the solution.
 
 ## Set up the Graph connector
 
+The connection requires read and write permissions on the target workspace and
+the Microsoft Entra Global Administrator or Security Administrator tenant role.
+
 1. Install the solution in a Microsoft Sentinel-enabled Log Analytics workspace and
    open **Microsoft Entra ID Assets (Preview)**.
 2. In the workspace's deployment tenant, register a single-tenant Microsoft Entra app.
@@ -37,6 +40,8 @@ parser. Deprecation applies to the legacy connector, not to the solution.
 The connector supports multiple named connections. With every table selected, it
 uses 23 pollers: 17 weekly snapshot paths and six hourly asset changefeeds. Only
 pollers for the tables selected during setup are deployed.
+The connector page summarizes weekly preview updates; this wording does not disable
+the six existing hourly changefeeds.
 
 ### Change or stop collection
 
