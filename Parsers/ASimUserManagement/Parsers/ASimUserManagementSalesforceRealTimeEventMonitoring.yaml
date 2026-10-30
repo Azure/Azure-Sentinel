@@ -1,0 +1,145 @@
+Parser:
+  Title: UserManagement ASIM parser for Salesforce Real-Time Event Monitoring
+  Version: '0.1.0'
+  LastUpdated: Oct 30, 2026
+Product:
+  Name: Salesforce Real-Time Event Monitoring
+Normalization:
+  Schema: UserManagement
+  Version: '1.0.0'
+References:
+- Title: ASIM User Management Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Salesforce Real-Time Event Monitoring connector
+  Link: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesForceRealTimeEventMonitoringConnector_CCF
+- Title: Salesforce PermissionSetEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-permissionseteventstore.html
+Description: |
+  Normalizes PermissionSetEventStore permission-set and permission-set-group assignments as UserModified, not group membership. Assignment values map to NewPropertyValue or PreviousPropertyValue; single impacted-user identifiers map to TargetUserId, while bulk events remain one row.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimUserManagementSalesforceRealTimeEventMonitoring
+EquivalentBuiltInParser: _ASim_UserManagement_SalesforceRealTimeEventMonitoring
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // Schema: UserManagement 1.0.0. Permission assignments are not group membership.
+  let parser = (disabled: bool = false, pack: bool = false) {
+      SalesForceRealTimeEventMonitoring_CL
+      | where not(disabled)
+      | where EventType == "PermissionSetEventStore"
+      | where Operation in ("AssignedToUsers", "UnassignedFromUsers")
+      | extend
+          _SourceType = EventType,
+          _Org = SalesforceDomain
+      | extend
+          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host),
+          SrcIpAddr = iff(isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp, "")
+      | extend
+          EventStartTime = coalesce(EventDate, TimeGenerated),
+          EventEndTime = coalesce(EventDate, TimeGenerated),
+          EventCount = toint(1),
+          EventVendor = "Salesforce",
+          EventProduct = "Real-Time Event Monitoring",
+          EventSchema = "UserManagement",
+          EventSchemaVersion = "1.0.0",
+          EventOriginalType = _SourceType,
+          EventOriginalSubType = Operation,
+          EventType = "UserModified",
+          EventResult = case(
+              PolicyOutcome in ("Block", "MeteringBlock", "EndSession", "TwoFADenied", "TwoFAReportedDenied")
+                  or PolicyOutcome startswith "Failed" or PolicyOutcome startswith "TwoFAFailed", "Failure",
+              PolicyOutcome in ("", "NoAction", "ExemptNoAction", "MeteringNoAction", "Notified",
+                  "TwoFANoAction", "TwoFASucceeded", "TwoFAAutomatedSuccess"), "Success",
+              "NA"),
+          EventSeverity = "Informational",
+          EventUid = coalesce(EventIdentifier, SalesforceObjectId, EventUuid),
+          EventOriginalUid = SalesforceObjectId,
+          EventOriginalResultDetails = PolicyOutcome,
+          EventMessage = Operation,
+          Dvc = coalesce(_OrgHost, "Salesforce Real-Time Event Monitoring"),
+          DvcFQDN = _OrgHost,
+          DvcHostname = tostring(split(_OrgHost, ".")[0]),
+          DvcDomain = iff(indexof(_OrgHost, ".") >= 0, substring(_OrgHost, indexof(_OrgHost, ".") + 1), ""),
+          DvcScope = _OrgHost,
+          DvcOriginalAction = PolicyOutcome,
+          DvcAction = case(
+              PolicyOutcome in ("Block", "MeteringBlock"), "Deny",
+              PolicyOutcome == "EndSession", "Terminate",
+              PolicyOutcome in ("NoAction", "ExemptNoAction", "MeteringNoAction", "Notified",
+                  "TwoFANoAction", "TwoFASucceeded", "TwoFAAutomatedSuccess"), "Allow",
+              ""),
+          ActorUserId = UserId,
+          ActorUserIdType = iff(isempty(UserId), "", "SalesforceId"),
+          ActorUsername = UserNameDetail,
+          ActorUsernameType = iff(isempty(UserNameDetail), "", iff(UserNameDetail contains "@", "UPN", "Simple")),
+          ActorScope = _OrgHost,
+          ActorSessionId = SessionKey,
+          // Preserve one source row; a bulk operation has no single target identity.
+          TargetUserId = iff(array_length(ImpactedUserIds) == 1, tostring(ImpactedUserIds[0]), ""),
+          TargetUserIdType = iff(array_length(ImpactedUserIds) == 1 and isnotempty(tostring(ImpactedUserIds[0])), "SalesforceId", ""),
+          TargetUserScope = _OrgHost,
+          PreviousPropertyValue = iff(
+              Operation == "UnassignedFromUsers",
+              case(
+                  array_length(ParentNameList) > 0, tostring(ParentNameList),
+                  tostring(ParentIdList)),
+              ""),
+          NewPropertyValue = iff(
+              Operation == "AssignedToUsers",
+              case(
+                  array_length(ParentNameList) > 0, tostring(ParentNameList),
+                  tostring(ParentIdList)),
+              ""),
+          ActingAppName = EventSource,
+          ActingAppType = iff(isempty(EventSource), "", "SaaS application"),
+          ActingOriginalAppType = EventSource,
+          RuleName = coalesce(PolicyId, Policy),
+          AdditionalFields = iff(pack, bag_pack(
+              "Operation", Operation, "ImpactedUserIds", ImpactedUserIds,
+              "UserCount", UserCount, "HasExternalUsers", HasExternalUsers,
+              "ParentIdList", ParentIdList, "ParentNameList", ParentNameList,
+              "PermissionList", PermissionList, "PermissionType", PermissionType,
+              "PermissionExpiration", PermissionExpiration,
+              "PermissionExpirationList", PermissionExpirationList,
+              "LoginKey", LoginKey, "SourceIp", SourceIp,
+              "LoginHistoryId", LoginHistoryId, "SessionLevel", SessionLevel,
+              "RelatedEventIdentifier", RelatedEventIdentifier,
+              "PolicyOutcome", PolicyOutcome, "EvaluationTime", EvaluationTime), dynamic({})),
+          DvcEntityKey = "",
+          ActorUserEntityKey = "",
+          TargetUserEntityKey = "",
+          SrcSystemEntityKey = "",
+          ActingApplicationEntityKey = "",
+          ActorUserAdditionalIds = dynamic([]),
+          TargetUserAdditionalIds = dynamic([]),
+          AdditionalEntities = dynamic([])
+      | extend
+          DvcDomainType = iff(isempty(DvcDomain), "", "FQDN"),
+          Hostname = DvcHostname,
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          User = ActorUsername,
+          Rule = RuleName
+      | project
+          TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+          EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+          EventOriginalType, EventOriginalSubType, EventType, EventResult, EventSeverity,
+          EventUid, EventOriginalUid, EventOriginalResultDetails, EventMessage,
+          Dvc, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, Hostname, DvcScope, DvcOriginalAction, DvcAction,
+          ActorUserId, ActorUserIdType, ActorUsername, ActorUsernameType,
+          ActorScope, ActorSessionId, User, TargetUserId, TargetUserIdType, TargetUserScope,
+          PreviousPropertyValue, NewPropertyValue,
+          SrcIpAddr, Src, IpAddr, RuleName, Rule, AdditionalFields,
+          ActingAppName, ActingAppType, ActingOriginalAppType,
+          DvcEntityKey, ActorUserEntityKey, TargetUserEntityKey, SrcSystemEntityKey,
+          ActingApplicationEntityKey, ActorUserAdditionalIds, TargetUserAdditionalIds,
+          AdditionalEntities
+  };
+  parser(disabled, pack)

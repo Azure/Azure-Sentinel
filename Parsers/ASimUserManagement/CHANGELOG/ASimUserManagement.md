@@ -2,6 +2,10 @@
 
 ## Version 0.1.5
 
+## Version 0.1.6
+
+- (2026-10-30) Add Salesforce Real-Time Event Monitoring UserManagement parser.
+
 - (2026-10-26) Add the CrowdStrike Falcon Data Replicator User Management parser with disabled-parser watchlist support and optional packing. - [PR #15439](https://github.com/Azure/Azure-Sentinel/pull/15439)
 
 ## Version 0.1.4

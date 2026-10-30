@@ -2,6 +2,10 @@
 
 ## Version 0.2.2
 
+## Version 0.2.3
+
+- (2026-10-30) Add Salesforce Real-Time Event Monitoring AlertEvent parser.
+
 - (2026-10-08) Corrected the Bitdefender GravityZone, Microsoft Defender XDR, SentinelOne Singularity, and Google SecOps parser disable watchlist keys - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)
 
 ## Version 0.2.1
