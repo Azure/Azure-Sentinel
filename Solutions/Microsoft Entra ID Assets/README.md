@@ -1,7 +1,7 @@
 # Microsoft Entra ID Assets
 
-This solution contains the legacy data-lake connector, **Microsoft Entra ID Assets
-(Preview)** for Azure Log Analytics, and one shared schema-normalization
+This solution contains the legacy data-lake connector, **Microsoft Entra ID Assets**
+for Azure Log Analytics (marked Preview by the portal), and one shared schema-normalization
 parser. Deprecation applies to the legacy connector, not to the solution.
 
 > **Draft preview:** The new connector references the onboarded Microsoft-managed
@@ -15,7 +15,7 @@ The connection requires read and write permissions on the target workspace and
 the Microsoft Entra Global Administrator or Security Administrator tenant role.
 
 1. Install the solution in a Microsoft Sentinel-enabled Log Analytics workspace and
-   open **Microsoft Entra ID Assets (Preview)**.
+   open **Microsoft Entra ID Assets** with the portal's **Preview** label.
 2. In the workspace's deployment tenant, register a single-tenant Microsoft Entra app.
    No redirect URI is required. Copy its Application (client) ID, not its Object ID.
 3. Add Microsoft Graph **application** permissions and grant administrator consent:
