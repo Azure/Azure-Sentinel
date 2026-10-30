@@ -1,43 +1,84 @@
 id: 86e7f6fd-5c29-4a3a-bced-3eca3fb0c621
-name: Filewall - Blocked files
-description: Identifies files blocked by Filewall for Microsoft 365 (SharePoint/OneDrive/Teams).
+name: Filewall - Malicious or suspicious file blocked in SharePoint, OneDrive or Teams
+description: |
+  'Identifies SharePoint, OneDrive and Teams files that Filewall for Microsoft 365 blocked because an antivirus engine found malware (High severity), or because static analysis flagged the file or its content does not match its file type (Medium severity).
+  Files blocked only by a policy rule (file type, size or encryption) and files sanitized by CDR are not malware verdicts and do not raise this alert; they stay available in the FilewallM365FileEvent parser.
+  The alert maps the file owner, the file and its original hashes, so Microsoft Defender XDR can correlate it with other evidence for the same file or user, and it links to the file in the Filewall console.'
 severity: High
 status: Available
-kind: Scheduled
-query: |
-  FilewallM365FileEvent()
-  | where EventVendor == 'ODI-X' and EventProduct == 'Filewall for Microsoft 365'
-  | where EventType == 'FileBlocked'
+requiredDataConnectors:
+  - connectorId: FilewallM365
+    dataTypes:
+      - FilewallFile_CL
 queryFrequency: 5m
-queryPeriod: 5m
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
-relevantTechniques:
-- T1048
 tactics:
-- Exfiltration
+  - LateralMovement
+relevantTechniques:
+  - T1080
+query: |
+  // A file can be ingested well after its TimeGenerated, so the rule looks back an hour and takes
+  // each file once, by when it was ingested.
+  FilewallM365FileEvent()
+  | where IngestionTime > ago(5m)
+  | where ThreatVerdict in ("Malicious", "Suspicious")
+  | extend OwnerAccountName = tostring(split(ActorUsername, "@")[0]), OwnerUPNSuffix = tostring(split(ActorUsername, "@")[1])
+  | extend Sha256Algorithm = "SHA256", Sha1Algorithm = "SHA1"
+  | project TimeGenerated, ThreatVerdict, EventSeverity, TargetFileName, TargetFileDirectory, TargetFilePathType, TargetFileExtension, block_reason, summary, OriginalFileSha256, OriginalFileSha1, Sha256Algorithm, Sha1Algorithm, ActorUsername, OwnerAccountName, OwnerUPNSuffix, site_name, drive_name, policy_name, EventReportUrl
 eventGroupingSettings:
   aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: OwnerAccountName
+      - identifier: UPNSuffix
+        columnName: OwnerUPNSuffix
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetFileName
+      - identifier: Directory
+        columnName: TargetFileDirectory
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Sha256Algorithm
+      - identifier: Value
+        columnName: OriginalFileSha256
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Sha1Algorithm
+      - identifier: Value
+        columnName: OriginalFileSha1
+customDetails:
+  Verdict: ThreatVerdict
+  BlockReason: block_reason
+  Detail: summary
+  PolicyName: policy_name
+  Workload: TargetFilePathType
+  Site: site_name
+  Drive: drive_name
+  OriginalSHA256: OriginalFileSha256
+  FilewallReport: EventReportUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Filewall blocked a {{ThreatVerdict}} file in {{TargetFilePathType}} - {{TargetFileName}}'
+  alertDescriptionFormat: 'Filewall for Microsoft 365 blocked the file {{TargetFileName}} owned by {{ActorUsername}}, block reason {{block_reason}}. The custom details hold the original file hash, site and policy, and the alert link opens the file in the Filewall console.'
+  alertSeverityColumnName: EventSeverity
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: EventReportUrl
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
-    matchingMethod: AllEntities
+    enabled: true
     reopenClosedIncident: false
-    enabled: false
-    lookbackDuration: PT1H
-entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: ActorUsername
-- entityType: File
-  fieldMappings:
-  - identifier: Name
-    columnName: TargetFileName
-  - identifier: Directory
-    columnName: TargetFilePath
-requiredDataConnectors:
-- dataTypes:
-  - FilewallFile_CL
-  connectorId: FilewallM365
-version: 1.0.0
+    lookbackDuration: PT5H
+    matchingMethod: Selected
+    groupByEntities:
+      - FileHash
+kind: Scheduled
+version: 1.1.0

@@ -1,0 +1,71 @@
+id: 5eec737b-2efd-4aa4-b2a7-3be10b62ddc2
+name: Filewall - Original of a file Filewall sanitized seen on a device
+description: |
+  'Finds devices holding the original, unsanitized copy of a file that Filewall for Microsoft 365 sanitized, in inbound email or in SharePoint, OneDrive and Teams.
+  Filewall removed active content from these files before delivering them, so a device with the original hash got the file another way: a direct download, a removable drive, another mail flow or a copy released from Filewall.
+  Sanitizing is a policy action, not a malware verdict, so this is a hunting query rather than an alert. The sanitized hash is shown next to the original, and the report link opens the item in the Filewall console. Requires the Microsoft Defender XDR connector to stream DeviceFileEvents into the workspace.'
+requiredDataConnectors:
+  - connectorId: FilewallM365
+    dataTypes:
+      - FilewallExchange_CL
+      - FilewallFile_CL
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204.002
+query: |
+  let lookback = 14d;
+  // only files whose content Filewall changed: the original and the sanitized hash differ
+  let FilewallSanitized = union
+      (FilewallM365EmailAttachmentEvent()
+      | where TimeGenerated > ago(lookback)
+      | where ThreatVerdict == "Sanitized" and EmailDirection != "Outbound"
+      | where isnotempty(OriginalFileSha256) and isnotempty(SanitizedFileSha256) and OriginalFileSha256 != SanitizedFileSha256
+      | project FilewallTime = TimeGenerated, SHA256 = OriginalFileSha256, SanitizedSHA256 = SanitizedFileSha256, FilewallFileName = AttachmentName, FilewallUser = EmailRecipientTo, FilewallSource = "exchange", Sender = EmailSenderFrom, EventReportUrl),
+      (FilewallM365FileEvent()
+      | where TimeGenerated > ago(lookback)
+      | where ThreatVerdict == "Sanitized"
+      | where isnotempty(OriginalFileSha256) and isnotempty(SanitizedFileSha256) and OriginalFileSha256 != SanitizedFileSha256
+      | project FilewallTime = TimeGenerated, SHA256 = OriginalFileSha256, SanitizedSHA256 = SanitizedFileSha256, FilewallFileName = TargetFileName, FilewallUser = ActorUsername, FilewallSource = TargetFilePathType, Sender = "", EventReportUrl)
+    | summarize arg_min(FilewallTime, *) by SHA256;
+  DeviceFileEvents
+  | where TimeGenerated > ago(lookback)
+  | where isnotempty(SHA256)
+  | extend SHA256 = tolower(SHA256)
+  | join kind=inner FilewallSanitized on SHA256
+  | where TimeGenerated > FilewallTime
+  | summarize FirstSeenOnDevice = min(TimeGenerated), LastSeenOnDevice = max(TimeGenerated), DeviceActions = make_set(ActionType), arg_min(TimeGenerated, DeviceName, FileName, FolderPath, InitiatingProcessFileName, InitiatingProcessAccountUpn, FilewallTime, FilewallFileName, FilewallUser, FilewallSource, Sender, SanitizedSHA256, EventReportUrl) by SHA256, DeviceId
+  | extend
+      DeviceAccountName = tostring(split(InitiatingProcessAccountUpn, "@")[0]),
+      DeviceAccountUPNSuffix = tostring(split(InitiatingProcessAccountUpn, "@")[1]),
+      FileDirectory = iff(FolderPath endswith FileName, substring(FolderPath, 0, strlen(FolderPath) - strlen(FileName) - 1), FolderPath),
+      Sha256Algorithm = "SHA256"
+  | project FirstSeenOnDevice, LastSeenOnDevice, DeviceId, DeviceName, DeviceActions, FileName, FileDirectory, SHA256, Sha256Algorithm, SanitizedSHA256, InitiatingProcessFileName, DeviceAccountName, DeviceAccountUPNSuffix, FilewallTime, FilewallFileName, FilewallUser, FilewallSource, Sender, EventReportUrl
+  | order by FirstSeenOnDevice desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: DeviceAccountName
+      - identifier: UPNSuffix
+        columnName: DeviceAccountUPNSuffix
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+      - identifier: Directory
+        columnName: FileDirectory
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Sha256Algorithm
+      - identifier: Value
+        columnName: SHA256
+version: 1.0.0
