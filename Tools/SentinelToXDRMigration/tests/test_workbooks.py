@@ -219,6 +219,129 @@ def test_ambiguous_type_column_references_remain_review_findings(query):
                for flag in result["flags"])
 
 
+def test_sentinel_health_rewrite_adds_normalized_fuzzy_union_and_replays():
+    query = (
+        'SentinelHealth | where SentinelResourceType == "Automation rule" '
+        '| project SentinelResourceId, ExtendedProperties, Label="SentinelHealth" '
+        '// SentinelHealth documentation\n'
+    )
+
+    result = rewrite.rewrite(query, ["SentinelHealth"])
+
+    assert result["deterministic"] is True
+    assert result["targetTables"] == ["SOCHealth", "SentinelHealth"]
+    assert result["convertedKql"].startswith(
+        "let __SentinelXdrUnifiedHealth = union isfuzzy=true\n"
+    )
+    assert "SentinelResourceId = ResourceId" in result["convertedKql"]
+    assert "ExtendedProperties = AdditionalFields" in result["convertedKql"]
+    assert (
+        '__SentinelXdrUnifiedHealth | where SentinelResourceType == "Automation rule"'
+        in result["convertedKql"]
+    )
+    assert 'Label="SentinelHealth"' in result["convertedKql"]
+    assert "// SentinelHealth documentation" in result["convertedKql"]
+    assert result["diff"] == [{
+        "kind": "health-source-union",
+        "before": "SentinelHealth",
+        "after": "SOCHealth, SentinelHealth",
+        "count": 1,
+        "source": "deterministic",
+        "reason": "Read health events from Defender XDR and Microsoft Sentinel",
+    }]
+    assert rewrite.rewrite(result["convertedKql"], ["SentinelHealth"]) == result
+    replay = rewrite.rewrite(result["convertedKql"], result["targetTables"])
+    assert replay["deterministic"] is True
+    for key in ("convertedKql", "targetTables", "diff"):
+        assert replay[key] == result[key]
+
+
+@pytest.mark.parametrize("query,expected", [
+    (
+        "union SOCHealth, SentinelHealth | count",
+        "union __SentinelXdrNormalizedSocHealth, SentinelHealth | count",
+    ),
+    (
+        "union SOCHealth, SOCHealth, SentinelHealth | count",
+        "union __SentinelXdrNormalizedSocHealth, __SentinelXdrNormalizedSocHealth, "
+        "SentinelHealth | count",
+    ),
+    (
+        'union (SOCHealth | where Status == "Failure"), '
+        '(SentinelHealth | where Status == "Success") | count',
+        'union (__SentinelXdrNormalizedSocHealth | where Status == "Failure"), '
+        '(SentinelHealth | where Status == "Success") | count',
+    ),
+    (
+        "SOCHealth | join (SentinelHealth) on RecordId "
+        "| project ResourceId, AdditionalFields",
+        "__SentinelXdrNormalizedSocHealth | join (SentinelHealth) on RecordId "
+        "| project ResourceId, AdditionalFields",
+    ),
+])
+def test_existing_health_sources_are_normalized_without_adding_rows(query, expected):
+    tables = ["SOCHealth", "SentinelHealth"]
+
+    result = rewrite.rewrite(query, tables)
+
+    assert result["deterministic"] is True
+    assert result["targetTables"] == tables
+    assert result["convertedKql"].endswith(expected)
+    assert result["convertedKql"].count("SOCHealth") == 1
+    assert "SentinelResourceId = ResourceId" in result["convertedKql"]
+    assert "ExtendedProperties = AdditionalFields" in result["convertedKql"]
+    assert "| extend" in result["convertedKql"]
+    assert "health-source-union" not in {item["kind"] for item in result["diff"]}
+    assert rewrite.rewrite(result["convertedKql"], tables) == result
+
+
+def test_health_rewrite_keeps_unrelated_target_tables():
+    result = rewrite.rewrite(
+        "union SentinelHealth, EmailEvents | count",
+        ["SentinelHealth", "EmailEvents"],
+    )
+
+    assert result["targetTables"] == ["EmailEvents", "SOCHealth", "SentinelHealth"]
+
+
+@pytest.mark.parametrize("alias", [
+    "__SentinelXdrUnifiedHealth",
+    "__SentinelXdrNormalizedSocHealth",
+])
+def test_sentinel_health_rewrite_fails_closed_on_reserved_alias_collision(alias):
+    query = (
+        f"let {alias} = SentinelHealth | take 1; "
+        f"{alias} | count"
+    )
+
+    result = rewrite.rewrite(query, ["SentinelHealth"])
+
+    assert result["deterministic"] is False
+    assert result["convertedKql"] == query
+    assert any(flag["kind"] == "health-source-alias-collision" for flag in result["flags"])
+
+
+def test_existing_health_union_passes_workbook_conversion_and_validation(solution):
+    source_path = solution / "Workbooks/nested/fixture.json"
+    source = json.loads(source_path.read_text())
+    source["items"][0]["content"]["query"] = (
+        "union isfuzzy=true SOCHealth, SentinelHealth | count"
+    )
+    source_path.write_text(json.dumps(source))
+
+    result = convert(solution, config(solution, ["SOCHealth", "SentinelHealth"]))
+
+    assert result["converted"] == 1 and result["blocked"] == 0
+    assert workbooks.validate_workbooks(solution)["valid"] == 1
+    output = json.loads(authored(solution).read_text())
+    query = output["items"][0]["content"]["query"]
+    assert "union isfuzzy=true __SentinelXdrNormalizedSocHealth, SentinelHealth" in query
+    assert output["contentProvenance"]["requiredWorkloads"] == [
+        {"workload": "mtp", "dataTypes": ["SOCHealth"]},
+        {"workload": "sentinel", "dataTypes": ["SentinelHealth"]},
+    ]
+
+
 def test_endpoint_type_conversion_passes_lineage_replay_and_validation(solution):
     relative = "Workbooks/nested/fixture.json"
     source_path = solution / relative
