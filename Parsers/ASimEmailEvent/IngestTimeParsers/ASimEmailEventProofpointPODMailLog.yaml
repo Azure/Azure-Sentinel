@@ -1,7 +1,7 @@
 Parser:
   DisplayName: 'Ingestion-time Email Event ASIM parser for Proofpoint POD MailLog'
-  Version: '0.1.2'
-  LastUpdated: '2026-10-28'
+  Version: '0.1.3'
+  LastUpdated: '2026-10-30'
 Product:
   Name: 'Proofpoint POD MailLog'
 Normalization:
@@ -19,13 +19,15 @@ SourceRawTable: 'ProofpointPODMailLog_CL'
 TargetASIMTable: 'ASimEmailEventLogs'
 ParserFilterQuery: |
   source
-  | where isnotempty(tostring(sm.qid)) and (isnotnull(sm["from"]) or array_length(sm["to"]) > 0)
+  | extend EnvelopeRecipients = iif(isnull(sm["to"]), parse_json('[]'), sm["to"])
+  | where isnotempty(tostring(sm.qid)) and (isnotnull(sm["from"]) or array_length(EnvelopeRecipients) > 0)
 ParserQuery: |
   source
-  | where isnotempty(tostring(sm.qid)) and (isnotnull(sm["from"]) or array_length(sm["to"]) > 0)
+  | extend EnvelopeRecipients = iif(isnull(sm["to"]), parse_json('[]'), sm["to"])
+  | where isnotempty(tostring(sm.qid)) and (isnotnull(sm["from"]) or array_length(EnvelopeRecipients) > 0)
   | extend Type = "ProofpointPODMailLog_CL"
   | extend
-      IsDelivery = iff(array_length(sm["to"]) > 0, true, false),
+      IsDelivery = array_length(EnvelopeRecipients) > 0,
       Relay = tostring(sm.relay),
       Dvc = iif(isnotempty(tostring(pps.agent)), tostring(pps.agent), tostring(metadata.origin.data.agent)),
       EventStartTime = iif(isnotnull(eventTime), eventTime, TimeGenerated),
@@ -86,5 +88,5 @@ ParserQuery: |
       EmailMailFromAddress, EmailMailFromDomain, EmailSizeBytes, EmailProtocolName, EmailDirection,
       AdditionalFields, AdditionalEntities
 Change:
-  Date: '2026-10-28'
-  Description: 'Initial ingestion-time conversion from query-time version 0.1.2.'
+  Date: '2026-10-30'
+  Description: 'Normalize missing envelope recipients before filtering and delivery classification.'
