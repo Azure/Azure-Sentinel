@@ -63,6 +63,13 @@ warning and blocks QTP/parity without failing the required parser validation
 stages. Once the raw DCR exists, upload or visibility failures fail the target;
 QTP execution and parity also fail the target when they run and fail.
 
+Before ASIM data testing, the `ASimDnsActivityLogs` table slice normalizes
+`ThreatFirstReportedTime` and `ThreatLastReportedTime` to `datetime` and
+`ThreatOriginalRiskLevel` to `string`. This accommodates the documented
+physical-table/logical-ASIM type discrepancy, preferring the corrected `_d`
+and `_s` columns and falling back to casts of the legacy columns. This
+normalization affects only the data-tester input, not ingestion or QTP parity.
+
 Static validation requires `ParserFilterQuery` to contain a `where` stage when
 `ParserQuery` contains one. This is a presence check only; it does not require
 all parser `where` stages to be copied into the filter query.
