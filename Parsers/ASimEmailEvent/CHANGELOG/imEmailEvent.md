@@ -1,5 +1,9 @@
 # Changelog for imEmailEvent.yaml
 
+## Version 1.0.4
+
+- (2026-10-30) Registered the filtering Proofpoint TAP blocked-click interaction parser with all EmailEvent parameters, packing, and watchlist disable controls.
+
 ## Version 1.0.3
 
 - (2026-10-28) Registered the filtering Proofpoint TAP permitted-click interaction parser and forwarded all EmailEvent parameters, packing, and watchlist disable controls - [PR #15483](https://github.com/Azure/Azure-Sentinel/pull/15483)
