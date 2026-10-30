@@ -1,0 +1,150 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "metadata": {
+                "description": "Region where the workspace is deployed"
+            }
+        },
+        "connectorInstanceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Unique identifier for this connector instance"
+            }
+        },
+        "tokenEndpoint": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Token endpoint for Workday OAuth 2.0 authentication"
+            }
+        },
+        "authorizationEndpoint": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Authorization endpoint for Workday OAuth 2.0"
+            }
+        },
+        "apiEndpoint": {
+            "type": "string",
+            "metadata": {
+                "description": "Workday Email Activity Custom Report API endpoint"
+            }
+        },
+        "clientId": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Workday API Client ID"
+            }
+        },
+        "clientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Workday API Client Secret"
+            }
+        },
+        "authorizationCode": {
+            "type": "securestring",
+            "defaultValue": "-NA-",
+            "metadata": {
+                "description": "Workday OAuth 2.0 Authorization Code"
+            }
+        },
+        "queryWindowInMin": {
+            "type": "int",
+            "defaultValue": 5,
+            "metadata": {
+                "description": "Query window interval in minutes"
+            }
+        },
+        "dataCollectionEndpoint": {
+            "type": "string",
+            "metadata": {
+                "description": "Data Collection Endpoint URL"
+            }
+        },
+        "dataCollectionRuleImmutableId": {
+            "type": "string",
+            "metadata": {
+                "description": "Data Collection Rule Immutable ID"
+            }
+        }
+    },
+    "variables": {
+        "connectorDefinitionId": "WorkdayEmailTemplateConnectorDefinition",
+        "asimTableName": "ASimAuditEventLogs"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'WorkdayEmailPoller-', parameters('connectorInstanceName'))]",
+            "apiVersion": "2022-12-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "location": "[parameters('workspace-location')]",
+            "kind": "RestApiPoller",
+            "properties": {
+                "connectorDefinitionName": "[variables('connectorDefinitionId')]",
+                "dataType": "[variables('asimTableName')]",
+                "dcrConfig": {
+                    "dataCollectionEndpoint": "[parameters('dataCollectionEndpoint')]",
+                    "dataCollectionRuleImmutableId": "[parameters('dataCollectionRuleImmutableId')]",
+                    "streamName": "[concat('Custom-', variables('asimTableName'))]"
+                },
+                "auth": {
+                    "type": "OAuth2",
+                    "ClientSecret": "[parameters('clientSecret')]",
+                    "ClientId": "[parameters('clientId')]",
+                    "AuthorizationCode": "[parameters('authorizationCode')]",
+                    "GrantType": "authorization_code",
+                    "TokenEndpoint": "[parameters('tokenEndpoint')]",
+                    "tokenEndpointHeaders": {
+                        "Accept": "application/json",
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    "authorizationEndpoint": "[parameters('authorizationEndpoint')]",
+                    "authorizationEndpointQueryParameters": {
+                        "redirect": "n"
+                    },
+                    "redirectUri": "https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights"
+                },
+                "request": {
+                    "apiEndpoint": "[parameters('apiEndpoint')]",
+                    "rateLimitQPS": 10,
+                    "queryWindowInMin": "[parameters('queryWindowInMin')]",
+                    "httpMethod": "GET",
+                    "retryCount": 3,
+                    "timeoutInSeconds": 60,
+                    "headers": {
+                        "Accept": "application/json"
+                    },
+                    "StartTimeAttributeName": "After_Date_Time",
+                    "EndTimeAttributeName": "Before_Date_Time",
+                    "queryParameters": {
+                        "After_Date_Time": "{_QueryWindowStartTime}",
+                        "Before_Date_Time": "{_QueryWindowEndTime}",
+                        "format": "json"
+                    }
+                },
+                "paging": {
+                    "pagingType": "Offset",
+                    "pageSize": 100,
+                    "PageSizeParaName": "limit",
+                    "OffsetParaName": "offset"
+                },
+                "response": {
+                    "eventsJsonPaths": [
+                        "$.Report_Entry"
+                    ],
+                    "format": "json"
+                },
+                "isActive": true
+            }
+        }
+    ]
+}
