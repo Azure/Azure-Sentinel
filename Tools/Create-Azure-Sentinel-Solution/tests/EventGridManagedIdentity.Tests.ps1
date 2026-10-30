@@ -105,6 +105,24 @@ function Remove-CollectorRbac($Deployment) {
 }
 
 $tests = [ordered]@{
+    'ARM-TTK automation fails closed when the test command returns no results' = {
+        $repoRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
+        $runner = Join-Path $repoRoot 'Tools\Create-Azure-Sentinel-Solution\arm-ttk\run-arm-ttk-in-automation.ps1'
+        $command = @"
+function Test-AzTemplate {
+    param(
+        [string]`$TemplatePath,
+        [hashtable]`$TestParameter,
+        [string]`$File,
+        [string[]]`$Test,
+        [string[]]`$Skip
+    )
+}
+& '$($runner.Replace("'", "''"))' -SolutionName 'Cloudflare'
+"@
+        & pwsh -NoProfile -Command $command *> $null
+        Assert-Equal $LASTEXITCODE 1
+    }
     'V3 routing detects only declared nonempty XDR content' = {
         foreach ($propertyName in @(
             'XDR Detections',

@@ -56,6 +56,12 @@ foreach ($dir in $solutions) {
     )
     $resolved = Resolve-SentinelArmTtkMainTemplateResults -Results $results
 
+    if (($resolved.Pass + $resolved.Fail) -eq 0) {
+        Write-Host "ARM-TTK returned no validation results: $name"
+        $fails += $name
+        continue
+    }
+
     foreach ($testInfo in $resolved.Results) {
         $testInfo.PSObject.Properties.Remove('TestInput')
         $testInfo.PSObject.Properties.Remove('File')
