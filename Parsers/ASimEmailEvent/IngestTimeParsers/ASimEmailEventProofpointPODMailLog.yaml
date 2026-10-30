@@ -1,6 +1,6 @@
 Parser:
   DisplayName: 'Ingestion-time Email Event ASIM parser for Proofpoint POD MailLog'
-  Version: '0.1.3'
+  Version: '0.1.4'
   LastUpdated: '2026-10-30'
 Product:
   Name: 'Proofpoint POD MailLog'
@@ -36,9 +36,10 @@ ParserQuery: |
       Dsn = tostring(sm.dsn),
       DeliveryStatus = tostring(sm.stat)
   | parse Relay with RelayHost " [" RelayIp "]" *
+  | extend RelayHostParts = split(iif(isnotempty(RelayHost), RelayHost, Relay), "@")
   | extend
       EmailMailFromAddress = iff(EmailMailFromAddress contains "@", EmailMailFromAddress, ""),
-      RelayHost = replace(@"(\.)+$", "", tostring(split(iif(isnotempty(RelayHost), RelayHost, Relay), "@")[-1])),
+      RelayHost = extract(@"^([\s\S]*?)[.]*$", 1, tostring(RelayHostParts[(array_length(RelayHostParts) - 1)])),
       RelayIp = iff(isnotnull(parse_ipv4(RelayIp)) or isnotempty(parse_ipv6(RelayIp)), RelayIp, ""),
       EventResult = case(Dsn startswith "2.", "Success", Dsn startswith "4." or Dsn startswith "5.", "Failure", "NA"),
       EmailProtocolName = case(tostring(sm.proto) =~ "SMTP" or tolower(tostring(sm.mailer)) in ("smtp", "esmtp"), "SMTP", ""),
@@ -89,4 +90,4 @@ ParserQuery: |
       AdditionalFields, AdditionalEntities
 Change:
   Date: '2026-10-30'
-  Description: 'Normalize missing envelope recipients before filtering and delivery classification.'
+  Description: 'Normalize the last relay-host component with a positive array index and anchored extraction.'
