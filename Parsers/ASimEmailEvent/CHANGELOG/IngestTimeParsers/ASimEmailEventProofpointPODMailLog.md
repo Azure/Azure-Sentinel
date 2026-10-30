@@ -2,7 +2,7 @@
 
 ## Version 0.1.4
 
-- (2026-10-30) Normalize relay hosts using a positive last-component index and anchored extraction.
+- (2026-10-30) Normalize relay hosts using a positive last-component index and anchored extraction - [PR #15512](https://github.com/Azure/Azure-Sentinel/pull/15512)
 - Preserve the last `@` component and remove trailing dots before source and destination mapping; leave relay IPs, delivery classification, UID mappings, filtering, and the raw `sm` bag unchanged.
 
 ## Version 0.1.3
