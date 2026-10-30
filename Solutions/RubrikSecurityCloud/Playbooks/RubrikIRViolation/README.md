@@ -1,4 +1,4 @@
-# Rubrik IR Violation Remediation
+# Rubrik IR Violation
 
 ## Summary
 
