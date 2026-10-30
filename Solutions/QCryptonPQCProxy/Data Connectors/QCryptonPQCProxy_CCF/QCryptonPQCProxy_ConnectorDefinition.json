@@ -1,0 +1,136 @@
+{
+  "name": "QCryptonPQCProxyCCPDefinition",
+  "apiVersion": "2025-03-01",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "QCryptonPQCProxyCCPDefinition",
+      "title": "QCrypton PQC Proxy (via Codeless Connector Framework)",
+      "publisher": "QCrypton, Inc.",
+      "descriptionMarkdown": "The [QCrypton PQC Proxy](https://www.qcrypton.com/) data connector ingests TLS handshake telemetry from PQC Proxy instances into Microsoft Sentinel through the QCrypton API. PQC Proxy is a hybrid post-quantum TLS 1.3 reverse proxy (X25519MLKEM768) that terminates TLS in front of any HTTP backend. This connector streams handshake negotiation results, PQC downgrade events, certificate health signals, and connection metrics into the **PQCProxy_CL** table.",
+      "graphQueries": [
+        {
+          "metricName": "Total PQC Proxy events received",
+          "legend": "PQCProxy_CL",
+          "baseQuery": "PQCProxy_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "PQC handshake adoption rate in the last 24h",
+          "query": "PQCProxy_CL\n| where TimeGenerated > ago(24h)\n| where EventType == 'handshake'\n| summarize PQC = countif(QuantumPosture == 'pqc-hybrid'), Classical = countif(QuantumPosture == 'classical'), Downgraded = countif(QuantumPosture == 'downgraded') by bin(TimeGenerated, 1h)\n| render timechart"
+        },
+        {
+          "description": "All PQC downgrade events in the last 24h",
+          "query": "PQCProxy_CL\n| where TimeGenerated > ago(24h)\n| where EventType == 'downgrade'\n| project TimeGenerated, ProxyHost, ClientIP, NegotiatedGroup, OfferedGroups, CipherSuite\n| order by TimeGenerated desc"
+        },
+        {
+          "description": "Certificate expiry status across all proxies",
+          "query": "PQCProxy_CL\n| where EventType == 'cert_expiry'\n| summarize arg_max(TimeGenerated, *) by ProxyInstanceId\n| project ProxyHost, CertPath, CertExpiryDays\n| order by CertExpiryDays asc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "PQCProxy_CL",
+          "lastDataReceivedQuery": "PQCProxy_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "QCrypton API Key",
+            "description": "A QCrypton API key is required. Obtain one from the [QCrypton Portal](https://portal.qcrypton.com)."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Connect QCrypton PQC Proxy to Microsoft Sentinel",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "This connector polls the QCrypton API to retrieve TLS handshake telemetry from PQC Proxy instances and ingest them into the **PQCProxy_CL** table in your Log Analytics workspace."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 1. Deploy PQC Proxy\nDeploy QCrypton PQC Proxy as a sidecar container in front of your HTTP backends. Follow the [deployment guide](https://www.qcrypton.com/docs/pqc-proxy) for Docker, Azure VM, or DigitalOcean."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 2. API Key\nObtain your QCrypton API key from the [QCrypton Portal](https://portal.qcrypton.com). Navigate to **Settings > API Keys** and generate a key with read access to proxy telemetry."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 3. API Server URL\nEnter the base URL of your QCrypton API server. The default is `https://api.qcrypton.com`. If you use a dedicated or regional instance, enter the URL provided by QCrypton."
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "QCrypton API Key",
+                "placeholder": "Enter your QCrypton API key",
+                "type": "password",
+                "name": "apiKey",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "QCrypton API Server URL",
+                "placeholder": "https://api.qcrypton.com",
+                "type": "text",
+                "name": "apiServerUrl",
+                "description": "Enter the QCrypton API base URL. Do not include a trailing slash or path.",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "name": "toggle"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,36 @@
+id: 5e6f7a8b-9c0d-4e1f-2a3b-5c6d7e8f9a0b
+name: Upstream backend connection failures on PQC Proxy
+description: |
+  A PQC Proxy instance is experiencing elevated upstream connection failures when forwarding
+  requests to its backend service. This may indicate the backend is down, overloaded, or
+  unreachable. While the PQC Proxy TLS termination is functioning correctly, clients will
+  receive 502/504 errors until the backend recovers.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: QCryptonPQCProxyCCPDefinition
+    dataTypes:
+      - PQCProxy_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 5
+tactics:
+  - Impact
+relevantTechniques:
+  - T1499
+query: |
+  PQCProxy_CL
+  | where TimeGenerated > ago(1h)
+  | where EventType == "upstream_error"
+  | summarize ErrorCount = count(), Errors = make_set(ErrorMessage, 5) by ProxyHost, ProxyInstanceId, UpstreamTarget
+  | where ErrorCount > 5
+  | project ProxyHost, ProxyInstanceId, UpstreamTarget, ErrorCount, Errors
+  | order by ErrorCount desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: ProxyHost
+status: Available
+version: 1.0.0
+kind: Scheduled
