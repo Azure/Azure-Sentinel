@@ -670,7 +670,7 @@
                 "description": "This query generates baseline pattern of cloud resource deletions by an user and generated anomaly when any unusual spike is detected.\nThese anomalies from unusual or privileged users could be an indication of cloud infrastructure take-down by an adversary ",
                 "displayName": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
                 "enabled": false,
-                "query": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet TotalEventsThreshold = 25; \nlet TimeSeriesData = \nAzureActivity \n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where OperationNameValue endswith \"delete\" \n| project TimeGenerated, Caller \n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller; \nlet TimeSeriesAlerts = materialize(TimeSeriesData \n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit') \n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) \n| where anomalies > 0 \n| project Caller, TimeGenerated, Total, baseline, anomalies, score \n| where Total > TotalEventsThreshold and baseline > 0 ); \nTimeSeriesAlerts \n| where TimeGenerated > (ago(endtime)) \n| project TimeGenerated, Caller \n| join kind = inner (AzureActivity \n| where TimeGenerated > (ago(endtime)) \n| where OperationNameValue endswith \"delete\" \n| summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller \n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")\n",
+                "query": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet TotalEventsThreshold = 25; \nlet TimeSeriesData = \nAzureActivity \n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where OperationNameValue endswith \"delete\" \n| project TimeGenerated, Caller \n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller; \nlet TimeSeriesAlerts = materialize(TimeSeriesData \n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit') \n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) \n| where anomalies > 0 \n| project Caller, TimeGenerated, Total, baseline, anomalies, score \n| where Total > TotalEventsThreshold and baseline > 0 ); \nTimeSeriesAlerts \n| where TimeGenerated > ago(2d) \n| project TimeGenerated, Caller \n| join kind = inner (AzureActivity \n| where TimeGenerated > ago(2d) \n| where OperationNameValue endswith \"delete\" \n| summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller \n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -1319,50 +1319,50 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Possible AiTM Phishing Attempt Against Microsoft Entra ID",
-                "queryCondition": {
-                  "queryText": "let time_threshold = 10m;\nlet RiskySignins = materialize (SigninLogs\n| where TimeGenerated > ago(1d)\n| where ResultType == 0\n| where RiskLevelDuringSignIn =~ \"high\" or RiskLevelAggregated =~ \"high\"\n| extend SignInTime = TimeGenerated, Name=split(UserPrincipalName, \"@\")[0], UPNSuffix=split(UserPrincipalName, \"@\")[1]);\nlet ips = todynamic(toscalar(RiskySignins | summarize make_list(IPAddress)));\nRiskySignins\n| join kind=inner (_Im_WebSession(starttime=ago(1d), ipaddr_has_any_prefix=ips, eventresult=\"Success\", pack=True))\non $left.IPAddress == $right.DstIpAddr\n| where EventStartTime < TimeGenerated\n| extend TimeDelta = TimeGenerated - EventStartTime\n| where TimeDelta <= time_threshold\n| extend NetworkEventStartTime = EventStartTime, NetworkEventEndTime = EventEndTime\n| extend SrcUsername = column_ifexists(\"SrcUsername\", \"Unknown\")\n| project-reorder SignInTime, UserPrincipalName, IPAddress, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, NetworkLocationDetails, RiskEventTypes, UserAgent, NetworkEventStartTime, NetworkEventEndTime, SrcIpAddr, DstIpAddr, DstPortNumber, Dvc, DvcHostname, SrcBytes, NetworkProtocol, SrcUsername"
-                },
-                "id": "[if(true(), 'xdr-16daa67c-b137-48dc-8eb7-76598a44791a', 'xdr-16daa67c-b137-48dc-8eb7-76598a44791a')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Possible AiTM Phishing Attempt Against Microsoft Entra ID",
                     "severity": "medium",
-                    "entityMappings": {
-                      "ips": [
-                        {
-                          "addressColumn": "IPAddress",
-                          "id": "[if(true(), 'ip1', 'ip1')]"
-                        }
-                      ],
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "Name",
-                          "upnSuffixColumn": "UPNSuffix"
-                        }
-                      ]
-                    },
-                    "description": "'Threat actors may attempt to phish users in order to hijack a users sign-in session, and skip the authentication process even if the user had enabled multifactor authentication (MFA) by stealing and replaying stolen credentials and session cookies.\nThis detection looks for successful Microsoft Entra ID sign ins that had a high risk profile, indicating it had suspicious characteristics such as an unusual location, ISP, user agent, or use of anonymizer services.\nIt then looks for a network connection to the IP address that made the sign in immediately before the sign in, that may indicate a use",
+                    "description": "Threat actors may phish users to hijack a sign-in session and bypass multifactor authentication (MFA) by stealing and replaying credentials and session cookies.\nThis detection looks for successful Microsoft Entra ID sign-ins with a high risk profile (such as an unusual location, ISP, user agent, or anonymizer use) preceded immediately by a network connection to the same IP address, indicating a potential AiTM phishing session hijack.\nRef: https://www.microsoft.com/security/blog/2022/07/12/from-cookie-theft-to-bec-attackers-use-aitm-phishing-sites-as-entry-point-to-further-financial-fraud/",
+                    "title": "Possible AiTM Phishing Attempt Against Microsoft Entra ID",
                     "tactics": [
                       {
                         "tactic": "InitialAccess",
                         "techniques": [
                           {
+                            "technique": "T1078",
                             "subTechniques": [
                               "T1078.004"
-                            ],
-                            "technique": "T1078"
+                            ]
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "Name",
+                          "upnSuffixColumn": "UPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ],
+                      "ips": [
+                        {
+                          "addressColumn": "IPAddress",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Possible AiTM Phishing Attempt Against Microsoft Entra ID",
                 "schedule": {
                   "frequency": "PT1H"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let time_threshold = 10m;\nlet RiskySignins = materialize (SigninLogs\n| where TimeGenerated > ago(1d)\n| where ResultType == 0\n| where RiskLevelDuringSignIn =~ \"high\" or RiskLevelAggregated =~ \"high\"\n| extend SignInTime = TimeGenerated, Name=split(UserPrincipalName, \"@\")[0], UPNSuffix=split(UserPrincipalName, \"@\")[1]);\nlet ips = todynamic(toscalar(RiskySignins | summarize make_list(IPAddress)));\nRiskySignins\n| join kind=inner (_Im_WebSession(starttime=ago(1d), ipaddr_has_any_prefix=ips, eventresult=\"Success\", pack=True))\non $left.IPAddress == $right.DstIpAddr\n| where EventStartTime < TimeGenerated\n| extend TimeDelta = TimeGenerated - EventStartTime\n| where TimeDelta <= time_threshold\n| extend NetworkEventStartTime = EventStartTime, NetworkEventEndTime = EventEndTime\n| extend SrcUsername = column_ifexists(\"SrcUsername\", \"Unknown\")\n| project-reorder SignInTime, UserPrincipalName, IPAddress, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, NetworkLocationDetails, RiskEventTypes, UserAgent, NetworkEventStartTime, NetworkEventEndTime, SrcIpAddr, DstIpAddr, DstPortNumber, Dvc, DvcHostname, SrcBytes, NetworkProtocol, SrcUsername"
+                },
+                "id": "[if(true(), 'xdr-16daa67c-b137-48dc-8eb7-76598a44791a', 'xdr-16daa67c-b137-48dc-8eb7-76598a44791a')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -1386,7 +1386,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "'Threat actors may attempt to phish users in order to hijack a users sign-in session, and skip the authentication process even if the user had enabled multifactor authentication (MFA) by stealing and replaying stolen credentials and session cookies.\nThis detection looks for successful Microsoft Entra ID sign ins that had a high risk profile, indicating it had suspicious characteristics such as an unusual location, ISP, user agent, or use of anonymizer services.\nIt then looks for a network connection to the IP address that made the sign in immediately before the sign in, that may indicate a use",
+        "description": "Threat actors may phish users to hijack a sign-in session and bypass multifactor authentication (MFA) by stealing and replaying credentials and session cookies.\nThis detection looks for successful Microsoft Entra ID sign-ins with a high risk profile (such as an unusual location, ISP, user agent, or anonymizer use) preceded immediately by a network connection to the same IP address, indicating a potential AiTM phishing session hijack.\nRef: https://www.microsoft.com/security/blog/2022/07/12/from-cookie-theft-to-bec-attackers-use-aitm-phishing-sites-as-entry-point-to-further-financial-fraud/",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "languageVersion": "2.0",
@@ -1402,50 +1402,50 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Possible AiTM Phishing Attempt Against Microsoft Entra ID",
-                "queryCondition": {
-                  "queryText": "let time_threshold = 10m;\nlet RiskySignins = materialize (SigninLogs\n| where TimeGenerated > ago(1d)\n| where ResultType == 0\n| where RiskLevelDuringSignIn =~ \"high\" or RiskLevelAggregated =~ \"high\"\n| extend SignInTime = TimeGenerated, Name=split(UserPrincipalName, \"@\")[0], UPNSuffix=split(UserPrincipalName, \"@\")[1]);\nlet ips = todynamic(toscalar(RiskySignins | summarize make_list(IPAddress)));\nRiskySignins\n| join kind=inner (_Im_WebSession(starttime=ago(1d), ipaddr_has_any_prefix=ips, eventresult=\"Success\", pack=True))\non $left.IPAddress == $right.DstIpAddr\n| where EventStartTime < TimeGenerated\n| extend TimeDelta = TimeGenerated - EventStartTime\n| where TimeDelta <= time_threshold\n| extend NetworkEventStartTime = EventStartTime, NetworkEventEndTime = EventEndTime\n| extend SrcUsername = column_ifexists(\"SrcUsername\", \"Unknown\")\n| project-reorder SignInTime, UserPrincipalName, IPAddress, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, NetworkLocationDetails, RiskEventTypes, UserAgent, NetworkEventStartTime, NetworkEventEndTime, SrcIpAddr, DstIpAddr, DstPortNumber, Dvc, DvcHostname, SrcBytes, NetworkProtocol, SrcUsername"
-                },
-                "id": "[if(true(), 'xdr-16daa67c-b137-48dc-8eb7-76598a44791a', 'xdr-16daa67c-b137-48dc-8eb7-76598a44791a')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Possible AiTM Phishing Attempt Against Microsoft Entra ID",
                     "severity": "medium",
-                    "entityMappings": {
-                      "ips": [
-                        {
-                          "addressColumn": "IPAddress",
-                          "id": "[if(true(), 'ip1', 'ip1')]"
-                        }
-                      ],
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "Name",
-                          "upnSuffixColumn": "UPNSuffix"
-                        }
-                      ]
-                    },
-                    "description": "'Threat actors may attempt to phish users in order to hijack a users sign-in session, and skip the authentication process even if the user had enabled multifactor authentication (MFA) by stealing and replaying stolen credentials and session cookies.\nThis detection looks for successful Microsoft Entra ID sign ins that had a high risk profile, indicating it had suspicious characteristics such as an unusual location, ISP, user agent, or use of anonymizer services.\nIt then looks for a network connection to the IP address that made the sign in immediately before the sign in, that may indicate a use",
+                    "description": "Threat actors may phish users to hijack a sign-in session and bypass multifactor authentication (MFA) by stealing and replaying credentials and session cookies.\nThis detection looks for successful Microsoft Entra ID sign-ins with a high risk profile (such as an unusual location, ISP, user agent, or anonymizer use) preceded immediately by a network connection to the same IP address, indicating a potential AiTM phishing session hijack.\nRef: https://www.microsoft.com/security/blog/2022/07/12/from-cookie-theft-to-bec-attackers-use-aitm-phishing-sites-as-entry-point-to-further-financial-fraud/",
+                    "title": "Possible AiTM Phishing Attempt Against Microsoft Entra ID",
                     "tactics": [
                       {
                         "tactic": "InitialAccess",
                         "techniques": [
                           {
+                            "technique": "T1078",
                             "subTechniques": [
                               "T1078.004"
-                            ],
-                            "technique": "T1078"
+                            ]
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "Name",
+                          "upnSuffixColumn": "UPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ],
+                      "ips": [
+                        {
+                          "addressColumn": "IPAddress",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Possible AiTM Phishing Attempt Against Microsoft Entra ID",
                 "schedule": {
                   "frequency": "PT1H"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let time_threshold = 10m;\nlet RiskySignins = materialize (SigninLogs\n| where TimeGenerated > ago(1d)\n| where ResultType == 0\n| where RiskLevelDuringSignIn =~ \"high\" or RiskLevelAggregated =~ \"high\"\n| extend SignInTime = TimeGenerated, Name=split(UserPrincipalName, \"@\")[0], UPNSuffix=split(UserPrincipalName, \"@\")[1]);\nlet ips = todynamic(toscalar(RiskySignins | summarize make_list(IPAddress)));\nRiskySignins\n| join kind=inner (_Im_WebSession(starttime=ago(1d), ipaddr_has_any_prefix=ips, eventresult=\"Success\", pack=True))\non $left.IPAddress == $right.DstIpAddr\n| where EventStartTime < TimeGenerated\n| extend TimeDelta = TimeGenerated - EventStartTime\n| where TimeDelta <= time_threshold\n| extend NetworkEventStartTime = EventStartTime, NetworkEventEndTime = EventEndTime\n| extend SrcUsername = column_ifexists(\"SrcUsername\", \"Unknown\")\n| project-reorder SignInTime, UserPrincipalName, IPAddress, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, NetworkLocationDetails, RiskEventTypes, UserAgent, NetworkEventStartTime, NetworkEventEndTime, SrcIpAddr, DstIpAddr, DstPortNumber, Dvc, DvcHostname, SrcBytes, NetworkProtocol, SrcUsername"
+                },
+                "id": "[if(true(), 'xdr-16daa67c-b137-48dc-8eb7-76598a44791a', 'xdr-16daa67c-b137-48dc-8eb7-76598a44791a')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -1474,24 +1474,25 @@
           "contentVersion": "3.2.2",
           "requiredWorkloads": [
             {
+              "workload": "sentinel",
               "dataTypes": [
-                "SigninLogs"
-              ],
-              "workload": "sentinel"
+                "SigninLogs",
+                "CommonSecurityLog"
+              ]
             }
           ],
           "requiredDataConnectors": [
             {
+              "connectorId": "AzureActiveDirectory",
               "dataTypes": [
                 "SigninLogs"
-              ],
-              "connectorId": "AzureActiveDirectory"
+              ]
             },
             {
+              "connectorId": "Zscaler",
               "dataTypes": [
                 "CommonSecurityLog (Zscaler)"
-              ],
-              "connectorId": "Zscaler"
+              ]
             }
           ]
         }
@@ -1525,31 +1526,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - Mail redirect via ExO transport rule",
-                "queryCondition": {
-                  "queryText": "OfficeActivity\n| where OfficeWorkload == \"Exchange\"\n| where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n| extend p = parse_json(Parameters)\n| extend RuleName = case(\n  Operation =~ \"Set-TransportRule\", tostring(OfficeObjectId),\n  Operation =~ \"New-TransportRule\", tostring(p[1].Value),\n  \"Unknown\"\n  )\n| mvexpand p\n| where (p.Name =~ \"BlindCopyTo\" or p.Name =~ \"RedirectMessageTo\") and isnotempty(p.Value)\n| extend RedirectTo = p.Value\n| extend ClientIPOnly = case(\n  ClientIP has \".\" and ClientIP has \":\", tostring(split(ClientIP,\":\")[0]),\n  ClientIP has \".\" and ClientIP has \"-\", tostring(split(ClientIP,\"-\")[0]),\n  ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\n  ClientIP\n  )\n| extend Port = case(\n  ClientIP has \".\" and ClientIP has \":\", (split(ClientIP,\":\")[1]),\n  ClientIP has \".\" and ClientIP has \"-\", (split(ClientIP,\"-\")[1]),\n  ClientIP has \"[\" and ClientIP has \":\", tostring(split(ClientIP,\"]:\")[1]),\n  ClientIP has \"[\" and ClientIP has \"-\", tostring(split(ClientIP,\"]-\")[1]),\n  ClientIP\n  )\n| extend ClientIP = ClientIPOnly\n| project TimeGenerated, RedirectTo, ClientIP, Port, UserId, Operation, RuleName\n| extend Name=split(UserId, \"@\")[0], UPNSuffix=split(UserId, \"@\")[1]"
-                },
-                "id": "[if(true(), 'xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284', 'xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - Mail redirect via ExO transport rule",
                     "severity": "medium",
-                    "entityMappings": {
-                      "ips": [
-                        {
-                          "addressColumn": "ClientIP",
-                          "id": "[if(true(), 'ip1', 'ip1')]"
-                        }
-                      ],
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "Name",
-                          "upnSuffixColumn": "UPNSuffix"
-                        }
-                      ]
-                    },
                     "description": "'Identifies when Exchange Online transport rule configured to forward emails.\nThis could be an adversary mailbox configured to collect mail from multiple user accounts.'",
+                    "title": "Threat Essentials - Mail redirect via ExO transport rule",
                     "tactics": [
                       {
                         "tactic": "Collection",
@@ -1559,13 +1541,32 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "Name",
+                          "upnSuffixColumn": "UPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ],
+                      "ips": [
+                        {
+                          "addressColumn": "ClientIP",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - Mail redirect via ExO transport rule",
                 "schedule": {
                   "frequency": "P1D"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "OfficeActivity\n| where OfficeWorkload == \"Exchange\"\n| where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n| extend p = parse_json(Parameters)\n| extend RuleName = case(\n  Operation =~ \"Set-TransportRule\", tostring(OfficeObjectId),\n  Operation =~ \"New-TransportRule\", tostring(p[1].Value),\n  \"Unknown\"\n  )\n| mvexpand p\n| where (p.Name =~ \"BlindCopyTo\" or p.Name =~ \"RedirectMessageTo\") and isnotempty(p.Value)\n| extend RedirectTo = p.Value\n| extend ClientIPOnly = case(\n  ClientIP has \".\" and ClientIP has \":\", tostring(split(ClientIP,\":\")[0]),\n  ClientIP has \".\" and ClientIP has \"-\", tostring(split(ClientIP,\"-\")[0]),\n  ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\n  ClientIP\n  )\n| extend Port = case(\n  ClientIP has \".\" and ClientIP has \":\", (split(ClientIP,\":\")[1]),\n  ClientIP has \".\" and ClientIP has \"-\", (split(ClientIP,\"-\")[1]),\n  ClientIP has \"[\" and ClientIP has \":\", tostring(split(ClientIP,\"]:\")[1]),\n  ClientIP has \"[\" and ClientIP has \"-\", tostring(split(ClientIP,\"]-\")[1]),\n  ClientIP\n  )\n| extend ClientIP = ClientIPOnly\n| project TimeGenerated, RedirectTo, ClientIP, Port, UserId, Operation, RuleName\n| extend Name=split(UserId, \"@\")[0], UPNSuffix=split(UserId, \"@\")[1]"
+                },
+                "id": "[if(true(), 'xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284', 'xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -1605,31 +1606,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - Mail redirect via ExO transport rule",
-                "queryCondition": {
-                  "queryText": "OfficeActivity\n| where OfficeWorkload == \"Exchange\"\n| where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n| extend p = parse_json(Parameters)\n| extend RuleName = case(\n  Operation =~ \"Set-TransportRule\", tostring(OfficeObjectId),\n  Operation =~ \"New-TransportRule\", tostring(p[1].Value),\n  \"Unknown\"\n  )\n| mvexpand p\n| where (p.Name =~ \"BlindCopyTo\" or p.Name =~ \"RedirectMessageTo\") and isnotempty(p.Value)\n| extend RedirectTo = p.Value\n| extend ClientIPOnly = case(\n  ClientIP has \".\" and ClientIP has \":\", tostring(split(ClientIP,\":\")[0]),\n  ClientIP has \".\" and ClientIP has \"-\", tostring(split(ClientIP,\"-\")[0]),\n  ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\n  ClientIP\n  )\n| extend Port = case(\n  ClientIP has \".\" and ClientIP has \":\", (split(ClientIP,\":\")[1]),\n  ClientIP has \".\" and ClientIP has \"-\", (split(ClientIP,\"-\")[1]),\n  ClientIP has \"[\" and ClientIP has \":\", tostring(split(ClientIP,\"]:\")[1]),\n  ClientIP has \"[\" and ClientIP has \"-\", tostring(split(ClientIP,\"]-\")[1]),\n  ClientIP\n  )\n| extend ClientIP = ClientIPOnly\n| project TimeGenerated, RedirectTo, ClientIP, Port, UserId, Operation, RuleName\n| extend Name=split(UserId, \"@\")[0], UPNSuffix=split(UserId, \"@\")[1]"
-                },
-                "id": "[if(true(), 'xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284', 'xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - Mail redirect via ExO transport rule",
                     "severity": "medium",
-                    "entityMappings": {
-                      "ips": [
-                        {
-                          "addressColumn": "ClientIP",
-                          "id": "[if(true(), 'ip1', 'ip1')]"
-                        }
-                      ],
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "Name",
-                          "upnSuffixColumn": "UPNSuffix"
-                        }
-                      ]
-                    },
                     "description": "'Identifies when Exchange Online transport rule configured to forward emails.\nThis could be an adversary mailbox configured to collect mail from multiple user accounts.'",
+                    "title": "Threat Essentials - Mail redirect via ExO transport rule",
                     "tactics": [
                       {
                         "tactic": "Collection",
@@ -1639,13 +1621,32 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "Name",
+                          "upnSuffixColumn": "UPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ],
+                      "ips": [
+                        {
+                          "addressColumn": "ClientIP",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - Mail redirect via ExO transport rule",
                 "schedule": {
                   "frequency": "P1D"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "OfficeActivity\n| where OfficeWorkload == \"Exchange\"\n| where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n| extend p = parse_json(Parameters)\n| extend RuleName = case(\n  Operation =~ \"Set-TransportRule\", tostring(OfficeObjectId),\n  Operation =~ \"New-TransportRule\", tostring(p[1].Value),\n  \"Unknown\"\n  )\n| mvexpand p\n| where (p.Name =~ \"BlindCopyTo\" or p.Name =~ \"RedirectMessageTo\") and isnotempty(p.Value)\n| extend RedirectTo = p.Value\n| extend ClientIPOnly = case(\n  ClientIP has \".\" and ClientIP has \":\", tostring(split(ClientIP,\":\")[0]),\n  ClientIP has \".\" and ClientIP has \"-\", tostring(split(ClientIP,\"-\")[0]),\n  ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\n  ClientIP\n  )\n| extend Port = case(\n  ClientIP has \".\" and ClientIP has \":\", (split(ClientIP,\":\")[1]),\n  ClientIP has \".\" and ClientIP has \"-\", (split(ClientIP,\"-\")[1]),\n  ClientIP has \"[\" and ClientIP has \":\", tostring(split(ClientIP,\"]:\")[1]),\n  ClientIP has \"[\" and ClientIP has \"-\", tostring(split(ClientIP,\"]-\")[1]),\n  ClientIP\n  )\n| extend ClientIP = ClientIPOnly\n| project TimeGenerated, RedirectTo, ClientIP, Port, UserId, Operation, RuleName\n| extend Name=split(UserId, \"@\")[0], UPNSuffix=split(UserId, \"@\")[1]"
+                },
+                "id": "[if(true(), 'xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284', 'xdr-d7c575b2-84f5-48cb-92c5-70d7e8246284')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -1674,19 +1675,18 @@
           "contentVersion": "3.2.2",
           "requiredWorkloads": [
             {
+              "workload": "sentinel",
               "dataTypes": [
-                "OfficeActivity",
-                "Operation"
-              ],
-              "workload": "sentinel"
+                "OfficeActivity"
+              ]
             }
           ],
           "requiredDataConnectors": [
             {
+              "connectorId": "Office365",
               "dataTypes": [
                 "OfficeActivity"
-              ],
-              "connectorId": "Office365"
+              ]
             }
           ]
         }
@@ -1720,25 +1720,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - Multiple admin membership removals from newly created admin.",
-                "queryCondition": {
-                  "queryText": "let lookback = 7d;\nlet timeframe = 1h;\nlet GlobalAdminsRemoved = AuditLogs\n| where TimeGenerated > ago(timeframe)\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Unassign\", \"RemoveEligibleRole\")\n| where ActivityDisplayName has_any (\"Remove member from role\", \"Remove eligible member from role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue)))\n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"  // Filtering PIM events\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target) by OperationName,  RoleName, Initiator, Result;\nlet GlobalAdminsAdded = AuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\") and Result =~ \"success\"\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"  // Filtering PIM events\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result;\nGlobalAdminsAdded\n| join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator\n| where AddedGlobalAdminTime < RemovedGlobalAdminTime\n| extend NoofAdminsRemoved = array_length(TargetAdmins)\n| where NoofAdminsRemoved > 1\n| project AddedGlobalAdminTime, Initiator, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved\n| extend Name=split(Target, \"@\")[0], UPNSuffix=split(Target, \"@\")[1]"
-                },
-                "id": "[if(true(), 'xdr-199978c5-cd6d-4194-b505-8ef5800739df', 'xdr-199978c5-cd6d-4194-b505-8ef5800739df')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - Multiple admin membership removals from newly created admin.",
                     "severity": "medium",
-                    "entityMappings": {
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "Name",
-                          "upnSuffixColumn": "UPNSuffix"
-                        }
-                      ]
-                    },
                     "description": "'This query detects when newly created Global admin removes multiple existing global admins which can be an attempt by adversaries to lock down organization and retain sole access. \n Investigate reasoning and intention of multiple membership removal by new Global admins and take necessary actions accordingly.'",
+                    "title": "Threat Essentials - Multiple admin membership removals from newly created admin.",
                     "tactics": [
                       {
                         "tactic": "Impact",
@@ -1748,13 +1735,26 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "Name",
+                          "upnSuffixColumn": "UPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - Multiple admin membership removals from newly created admin.",
                 "schedule": {
                   "frequency": "PT1H"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let lookback = 7d;\nlet timeframe = 1h;\nlet GlobalAdminsRemoved = AuditLogs\n| where TimeGenerated > ago(timeframe)\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Unassign\", \"RemoveEligibleRole\")\n| where ActivityDisplayName has_any (\"Remove member from role\", \"Remove eligible member from role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue)))\n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"  // Filtering PIM events\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target) by OperationName,  RoleName, Initiator, Result;\nlet GlobalAdminsAdded = AuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\") and Result =~ \"success\"\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"  // Filtering PIM events\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result;\nGlobalAdminsAdded\n| join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator\n| where AddedGlobalAdminTime < RemovedGlobalAdminTime\n| extend NoofAdminsRemoved = array_length(TargetAdmins)\n| where NoofAdminsRemoved > 1\n| project AddedGlobalAdminTime, Initiator, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved\n| extend Name=split(Target, \"@\")[0], UPNSuffix=split(Target, \"@\")[1]"
+                },
+                "id": "[if(true(), 'xdr-199978c5-cd6d-4194-b505-8ef5800739df', 'xdr-199978c5-cd6d-4194-b505-8ef5800739df')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -1794,25 +1794,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - Multiple admin membership removals from newly created admin.",
-                "queryCondition": {
-                  "queryText": "let lookback = 7d;\nlet timeframe = 1h;\nlet GlobalAdminsRemoved = AuditLogs\n| where TimeGenerated > ago(timeframe)\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Unassign\", \"RemoveEligibleRole\")\n| where ActivityDisplayName has_any (\"Remove member from role\", \"Remove eligible member from role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue)))\n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"  // Filtering PIM events\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target) by OperationName,  RoleName, Initiator, Result;\nlet GlobalAdminsAdded = AuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\") and Result =~ \"success\"\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"  // Filtering PIM events\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result;\nGlobalAdminsAdded\n| join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator\n| where AddedGlobalAdminTime < RemovedGlobalAdminTime\n| extend NoofAdminsRemoved = array_length(TargetAdmins)\n| where NoofAdminsRemoved > 1\n| project AddedGlobalAdminTime, Initiator, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved\n| extend Name=split(Target, \"@\")[0], UPNSuffix=split(Target, \"@\")[1]"
-                },
-                "id": "[if(true(), 'xdr-199978c5-cd6d-4194-b505-8ef5800739df', 'xdr-199978c5-cd6d-4194-b505-8ef5800739df')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - Multiple admin membership removals from newly created admin.",
                     "severity": "medium",
-                    "entityMappings": {
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "Name",
-                          "upnSuffixColumn": "UPNSuffix"
-                        }
-                      ]
-                    },
                     "description": "'This query detects when newly created Global admin removes multiple existing global admins which can be an attempt by adversaries to lock down organization and retain sole access. \n Investigate reasoning and intention of multiple membership removal by new Global admins and take necessary actions accordingly.'",
+                    "title": "Threat Essentials - Multiple admin membership removals from newly created admin.",
                     "tactics": [
                       {
                         "tactic": "Impact",
@@ -1822,13 +1809,26 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "Name",
+                          "upnSuffixColumn": "UPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - Multiple admin membership removals from newly created admin.",
                 "schedule": {
                   "frequency": "PT1H"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let lookback = 7d;\nlet timeframe = 1h;\nlet GlobalAdminsRemoved = AuditLogs\n| where TimeGenerated > ago(timeframe)\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Unassign\", \"RemoveEligibleRole\")\n| where ActivityDisplayName has_any (\"Remove member from role\", \"Remove eligible member from role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue)))\n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"  // Filtering PIM events\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target) by OperationName,  RoleName, Initiator, Result;\nlet GlobalAdminsAdded = AuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\") and Result =~ \"success\"\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"  // Filtering PIM events\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result;\nGlobalAdminsAdded\n| join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator\n| where AddedGlobalAdminTime < RemovedGlobalAdminTime\n| extend NoofAdminsRemoved = array_length(TargetAdmins)\n| where NoofAdminsRemoved > 1\n| project AddedGlobalAdminTime, Initiator, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved\n| extend Name=split(Target, \"@\")[0], UPNSuffix=split(Target, \"@\")[1]"
+                },
+                "id": "[if(true(), 'xdr-199978c5-cd6d-4194-b505-8ef5800739df', 'xdr-199978c5-cd6d-4194-b505-8ef5800739df')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -1857,18 +1857,18 @@
           "contentVersion": "3.2.2",
           "requiredWorkloads": [
             {
+              "workload": "sentinel",
               "dataTypes": [
                 "AuditLogs"
-              ],
-              "workload": "sentinel"
+              ]
             }
           ],
           "requiredDataConnectors": [
             {
+              "connectorId": "AzureActiveDirectory",
               "dataTypes": [
                 "AuditLogs"
-              ],
-              "connectorId": "AzureActiveDirectory"
+              ]
             }
           ]
         }
@@ -1902,31 +1902,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - NRT User added to Microsoft Entra ID Privileged Groups",
-                "queryCondition": {
-                  "queryText": "let OperationList = dynamic([\"Add member to role\",\"Add member to role in PIM requested (permanent)\"]);\nlet PrivilegedGroups = dynamic([\"UserAccountAdmins\",\"PrivilegedRoleAdmins\",\"TenantAdmins\"]);\nAuditLogs\n//| where LoggedByService =~ \"Core Directory\"\n| where Category =~ \"RoleManagement\"\n| where OperationName in~ (OperationList)\n| mv-expand TargetResources\n| extend modProps = parse_json(TargetResources).modifiedProperties\n| mv-expand bagexpansion=array modProps\n| evaluate bag_unpack(modProps)\n| extend displayName = column_ifexists(\"displayName\", \"NotAvailable\"), newValue = column_ifexists(\"newValue\", \"NotAvailable\")\n| where displayName =~ \"Role.WellKnownObjectName\"\n| extend DisplayName = displayName, GroupName = replace('\"','',newValue)\n| extend initByApp = parse_json(InitiatedBy).app, initByUser = parse_json(InitiatedBy).user\n| extend AppId = initByApp.appId,\nInitiatedByDisplayName = case(isnotempty(initByApp.displayName), initByApp.displayName, isnotempty(initByUser.displayName), initByUser.displayName, \"not available\"),\nServicePrincipalId = tostring(initByApp.servicePrincipalId),\nServicePrincipalName = tostring(initByApp.servicePrincipalName),\nUserId = initByUser.id,\nUserIPAddress = initByUser.ipAddress,\nUserRoles = initByUser.roles,\nUserPrincipalName = tostring(initByUser.userPrincipalName),\nTargetUserPrincipalName = tostring(TargetResources.userPrincipalName)\n| where GroupName in~ (PrivilegedGroups)\n// If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.\n//| where InitiatedByDisplayName != \"MS-PIM\" and InitiatedByDisplayName != \"MS-PIM-Fairfax\"\n| project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName, TargetUserPrincipalName\n| extend InitiatorAccount = case(isnotempty(ServicePrincipalName), ServicePrincipalName, isnotempty(ServicePrincipalId), ServicePrincipalId, isnotempty(UserPrincipalName), UserPrincipalName, \"not available\")\n| extend InitiatorName = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',0)[0]),\"\")\n| extend InitiatorUPNSuffix = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',1)[0]),\"\")\n| extend InitiatorAadUserId = iif(InitiatorAccount !has '@',InitiatorAccount,\"\")\n| extend TargetName = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',0)[0]),\"\")\n| extend TargetUPNSuffix = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',1)[0]),\"\")"
-                },
-                "id": "[if(true(), 'xdr-0a627f29-f0dd-4924-be92-c3d6dac84367', 'xdr-0a627f29-f0dd-4924-be92-c3d6dac84367')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - NRT User added to Microsoft Entra ID Privileged Groups",
                     "severity": "medium",
-                    "entityMappings": {
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "InitiatorName",
-                          "upnSuffixColumn": "InitiatorUPNSuffix",
-                          "aadUserIdColumn": "InitiatorAadUserId"
-                        },
-                        {
-                          "id": "[if(true(), 'account2', 'account2')]",
-                          "nameColumn": "TargetName",
-                          "upnSuffixColumn": "TargetUPNSuffix"
-                        }
-                      ]
-                    },
                     "description": "'This will alert when a user is added to any of the Privileged Groups.\nFor further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.\nFor Administrator role permissions in Microsoft Entra ID please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles'",
+                    "title": "Threat Essentials - NRT User added to Microsoft Entra ID Privileged Groups",
                     "tactics": [
                       {
                         "tactic": "Persistence",
@@ -1939,13 +1920,32 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "InitiatorName",
+                          "aadUserIdColumn": "InitiatorAadUserId",
+                          "upnSuffixColumn": "InitiatorUPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        },
+                        {
+                          "nameColumn": "TargetName",
+                          "upnSuffixColumn": "TargetUPNSuffix",
+                          "id": "[if(true(), 'account2', 'account2')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - NRT User added to Microsoft Entra ID Privileged Groups",
                 "schedule": {
-                  "frequency": "P1D"
+                  "frequency": "PT1H"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let OperationList = dynamic([\"Add member to role\",\"Add member to role in PIM requested (permanent)\"]);\nlet PrivilegedGroups = dynamic([\"UserAccountAdmins\",\"PrivilegedRoleAdmins\",\"TenantAdmins\"]);\nAuditLogs\n//| where LoggedByService =~ \"Core Directory\"\n| where Category =~ \"RoleManagement\"\n| where OperationName in~ (OperationList)\n| mv-expand TargetResources\n| extend modProps = parse_json(TargetResources).modifiedProperties\n| mv-expand bagexpansion=array modProps\n| evaluate bag_unpack(modProps)\n| extend displayName = column_ifexists(\"displayName\", \"NotAvailable\"), newValue = column_ifexists(\"newValue\", \"NotAvailable\")\n| where displayName =~ \"Role.WellKnownObjectName\"\n| extend DisplayName = displayName, GroupName = replace('\"','',newValue)\n| extend initByApp = parse_json(InitiatedBy).app, initByUser = parse_json(InitiatedBy).user\n| extend AppId = initByApp.appId,\nInitiatedByDisplayName = case(isnotempty(initByApp.displayName), initByApp.displayName, isnotempty(initByUser.displayName), initByUser.displayName, \"not available\"),\nServicePrincipalId = tostring(initByApp.servicePrincipalId),\nServicePrincipalName = tostring(initByApp.servicePrincipalName),\nUserId = initByUser.id,\nUserIPAddress = initByUser.ipAddress,\nUserRoles = initByUser.roles,\nUserPrincipalName = tostring(initByUser.userPrincipalName),\nTargetUserPrincipalName = tostring(TargetResources.userPrincipalName)\n| where GroupName in~ (PrivilegedGroups)\n// If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.\n//| where InitiatedByDisplayName != \"MS-PIM\" and InitiatedByDisplayName != \"MS-PIM-Fairfax\"\n| project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName, TargetUserPrincipalName\n| extend InitiatorAccount = case(isnotempty(ServicePrincipalName), ServicePrincipalName, isnotempty(ServicePrincipalId), ServicePrincipalId, isnotempty(UserPrincipalName), UserPrincipalName, \"not available\")\n| extend InitiatorName = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',0)[0]),\"\")\n| extend InitiatorUPNSuffix = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',1)[0]),\"\")\n| extend InitiatorAadUserId = iif(InitiatorAccount !has '@',InitiatorAccount,\"\")\n| extend TargetName = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',0)[0]),\"\")\n| extend TargetUPNSuffix = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',1)[0]),\"\")"
+                },
+                "id": "[if(true(), 'xdr-0a627f29-f0dd-4924-be92-c3d6dac84367', 'xdr-0a627f29-f0dd-4924-be92-c3d6dac84367')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -1985,31 +1985,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - NRT User added to Microsoft Entra ID Privileged Groups",
-                "queryCondition": {
-                  "queryText": "let OperationList = dynamic([\"Add member to role\",\"Add member to role in PIM requested (permanent)\"]);\nlet PrivilegedGroups = dynamic([\"UserAccountAdmins\",\"PrivilegedRoleAdmins\",\"TenantAdmins\"]);\nAuditLogs\n//| where LoggedByService =~ \"Core Directory\"\n| where Category =~ \"RoleManagement\"\n| where OperationName in~ (OperationList)\n| mv-expand TargetResources\n| extend modProps = parse_json(TargetResources).modifiedProperties\n| mv-expand bagexpansion=array modProps\n| evaluate bag_unpack(modProps)\n| extend displayName = column_ifexists(\"displayName\", \"NotAvailable\"), newValue = column_ifexists(\"newValue\", \"NotAvailable\")\n| where displayName =~ \"Role.WellKnownObjectName\"\n| extend DisplayName = displayName, GroupName = replace('\"','',newValue)\n| extend initByApp = parse_json(InitiatedBy).app, initByUser = parse_json(InitiatedBy).user\n| extend AppId = initByApp.appId,\nInitiatedByDisplayName = case(isnotempty(initByApp.displayName), initByApp.displayName, isnotempty(initByUser.displayName), initByUser.displayName, \"not available\"),\nServicePrincipalId = tostring(initByApp.servicePrincipalId),\nServicePrincipalName = tostring(initByApp.servicePrincipalName),\nUserId = initByUser.id,\nUserIPAddress = initByUser.ipAddress,\nUserRoles = initByUser.roles,\nUserPrincipalName = tostring(initByUser.userPrincipalName),\nTargetUserPrincipalName = tostring(TargetResources.userPrincipalName)\n| where GroupName in~ (PrivilegedGroups)\n// If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.\n//| where InitiatedByDisplayName != \"MS-PIM\" and InitiatedByDisplayName != \"MS-PIM-Fairfax\"\n| project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName, TargetUserPrincipalName\n| extend InitiatorAccount = case(isnotempty(ServicePrincipalName), ServicePrincipalName, isnotempty(ServicePrincipalId), ServicePrincipalId, isnotempty(UserPrincipalName), UserPrincipalName, \"not available\")\n| extend InitiatorName = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',0)[0]),\"\")\n| extend InitiatorUPNSuffix = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',1)[0]),\"\")\n| extend InitiatorAadUserId = iif(InitiatorAccount !has '@',InitiatorAccount,\"\")\n| extend TargetName = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',0)[0]),\"\")\n| extend TargetUPNSuffix = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',1)[0]),\"\")"
-                },
-                "id": "[if(true(), 'xdr-0a627f29-f0dd-4924-be92-c3d6dac84367', 'xdr-0a627f29-f0dd-4924-be92-c3d6dac84367')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - NRT User added to Microsoft Entra ID Privileged Groups",
                     "severity": "medium",
-                    "entityMappings": {
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "InitiatorName",
-                          "upnSuffixColumn": "InitiatorUPNSuffix",
-                          "aadUserIdColumn": "InitiatorAadUserId"
-                        },
-                        {
-                          "id": "[if(true(), 'account2', 'account2')]",
-                          "nameColumn": "TargetName",
-                          "upnSuffixColumn": "TargetUPNSuffix"
-                        }
-                      ]
-                    },
                     "description": "'This will alert when a user is added to any of the Privileged Groups.\nFor further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.\nFor Administrator role permissions in Microsoft Entra ID please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles'",
+                    "title": "Threat Essentials - NRT User added to Microsoft Entra ID Privileged Groups",
                     "tactics": [
                       {
                         "tactic": "Persistence",
@@ -2022,13 +2003,32 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "InitiatorName",
+                          "aadUserIdColumn": "InitiatorAadUserId",
+                          "upnSuffixColumn": "InitiatorUPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        },
+                        {
+                          "nameColumn": "TargetName",
+                          "upnSuffixColumn": "TargetUPNSuffix",
+                          "id": "[if(true(), 'account2', 'account2')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - NRT User added to Microsoft Entra ID Privileged Groups",
                 "schedule": {
-                  "frequency": "P1D"
+                  "frequency": "PT1H"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let OperationList = dynamic([\"Add member to role\",\"Add member to role in PIM requested (permanent)\"]);\nlet PrivilegedGroups = dynamic([\"UserAccountAdmins\",\"PrivilegedRoleAdmins\",\"TenantAdmins\"]);\nAuditLogs\n//| where LoggedByService =~ \"Core Directory\"\n| where Category =~ \"RoleManagement\"\n| where OperationName in~ (OperationList)\n| mv-expand TargetResources\n| extend modProps = parse_json(TargetResources).modifiedProperties\n| mv-expand bagexpansion=array modProps\n| evaluate bag_unpack(modProps)\n| extend displayName = column_ifexists(\"displayName\", \"NotAvailable\"), newValue = column_ifexists(\"newValue\", \"NotAvailable\")\n| where displayName =~ \"Role.WellKnownObjectName\"\n| extend DisplayName = displayName, GroupName = replace('\"','',newValue)\n| extend initByApp = parse_json(InitiatedBy).app, initByUser = parse_json(InitiatedBy).user\n| extend AppId = initByApp.appId,\nInitiatedByDisplayName = case(isnotempty(initByApp.displayName), initByApp.displayName, isnotempty(initByUser.displayName), initByUser.displayName, \"not available\"),\nServicePrincipalId = tostring(initByApp.servicePrincipalId),\nServicePrincipalName = tostring(initByApp.servicePrincipalName),\nUserId = initByUser.id,\nUserIPAddress = initByUser.ipAddress,\nUserRoles = initByUser.roles,\nUserPrincipalName = tostring(initByUser.userPrincipalName),\nTargetUserPrincipalName = tostring(TargetResources.userPrincipalName)\n| where GroupName in~ (PrivilegedGroups)\n// If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.\n//| where InitiatedByDisplayName != \"MS-PIM\" and InitiatedByDisplayName != \"MS-PIM-Fairfax\"\n| project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName, TargetUserPrincipalName\n| extend InitiatorAccount = case(isnotempty(ServicePrincipalName), ServicePrincipalName, isnotempty(ServicePrincipalId), ServicePrincipalId, isnotempty(UserPrincipalName), UserPrincipalName, \"not available\")\n| extend InitiatorName = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',0)[0]),\"\")\n| extend InitiatorUPNSuffix = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',1)[0]),\"\")\n| extend InitiatorAadUserId = iif(InitiatorAccount !has '@',InitiatorAccount,\"\")\n| extend TargetName = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',0)[0]),\"\")\n| extend TargetUPNSuffix = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',1)[0]),\"\")"
+                },
+                "id": "[if(true(), 'xdr-0a627f29-f0dd-4924-be92-c3d6dac84367', 'xdr-0a627f29-f0dd-4924-be92-c3d6dac84367')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -2057,18 +2057,18 @@
           "contentVersion": "3.2.2",
           "requiredWorkloads": [
             {
+              "workload": "sentinel",
               "dataTypes": [
                 "AuditLogs"
-              ],
-              "workload": "sentinel"
+              ]
             }
           ],
           "requiredDataConnectors": [
             {
+              "connectorId": "AzureActiveDirectory",
               "dataTypes": [
                 "AuditLogs"
-              ],
-              "connectorId": "AzureActiveDirectory"
+              ]
             }
           ]
         }
@@ -2102,24 +2102,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - Time series anomaly for data size transferred to public internet",
-                "queryCondition": {
-                  "queryText": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet scorethreshold = 5;\nlet bytessentperhourthreshold = 10;\nlet PrivateIPregex = @'^127\\.|^10\\.|^172\\.1[6-9]\\.|^172\\.2[0-9]\\.|^172\\.3[0-1]\\.|^192\\.168\\.';\nlet TimeSeriesData = (union isfuzzy=true\n(\nVMConnection\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where isnotempty(DestinationIp) and isnotempty(SourceIp)\n| extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\" | extend DeviceVendor = \"VMConnection\"\n| project TimeGenerated, BytesSent, DeviceVendor\n| make-series TotalBytesSent=sum(BytesSent) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor\n),\n(\nCommonSecurityLog\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where isnotempty(DestinationIP) and isnotempty(SourceIP)\n| extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\"\n| project TimeGenerated, SentBytes, DeviceVendor\n| make-series TotalBytesSent=sum(SentBytes) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor\n)\n);\n//Filter anomolies against TimeSeriesData\nlet TimeSeriesAlerts = materialize(TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')\n| mv-expand TotalBytesSent to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)\n| where anomalies > 0 | extend AnomalyHour = TimeGenerated\n| extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), baselinebytessentperHour = round(((baseline / 1024)/1024),2), score = round(score,2)\n| project DeviceVendor, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score);\nlet AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);\n//Union of all BaseLogs aggregated per hour\nlet BaseLogs = (union isfuzzy=true\n(\nCommonSecurityLog\n| where isnotempty(DestinationIP) and isnotempty(SourceIP)\n| where TimeGenerated > ago(2d)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\"\n| extend SentBytesinMB = ((SentBytes / 1024)/1024), ReceivedBytesinMB = ((ReceivedBytes / 1024)/1024)\n| summarize HourlyCount = count(), TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort,100), TotalSentBytesinMB = sum(SentBytesinMB), TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)\n| where TotalSentBytesinMB > bytessentperhourthreshold\n| sort by TimeGeneratedHour asc, TotalSentBytesinMB desc\n| extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition\n| where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour\n| project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank\n),\n(\nVMConnection\n| where isnotempty(DestinationIp) and isnotempty(SourceIp)\n| where TimeGenerated > ago(2d)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend SourceIP = SourceIp, DestinationIP = DestinationIp\n| extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\" | extend DeviceVendor = \"VMConnection\"\n| extend SentBytesinMB = ((BytesSent / 1024)/1024), ReceivedBytesinMB = ((BytesReceived / 1024)/1024)\n| summarize HourlyCount = count(),TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort, 100), TotalSentBytesinMB = sum(SentBytesinMB),TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)\n| where TotalSentBytesinMB > bytessentperhourthreshold\n| sort by TimeGeneratedHour asc, TotalSentBytesinMB desc\n| extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition\n| where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour\n| project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank\n)\n);\n// Join against base logs to retrive records associated with the hour of anomoly\nTimeSeriesAlerts\n| where TimeGenerated > ago(2d)\n| join (\n    BaseLogs | extend AnomalyHour = TimeGeneratedHour\n) on DeviceVendor, AnomalyHour | sort by score desc\n| project DeviceVendor, AnomalyHour,TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies\n| summarize EventCount = count(), StartTimeUtc= min(TimeGeneratedMax), EndTimeUtc= max(TimeGeneratedMax), SourceIPMax= arg_max(SourceIP,*), TotalBytesSentinMB = sum(TotalSentBytesinMB), TotalBytesReceivedinMB = sum(TotalReceivedBytesinMB), SourceIPList = make_set(SourceIP, 100), DestinationIPList = make_set(DestinationIPList, 100) by AnomalyHour,TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies\n| project DeviceVendor, AnomalyHour, StartTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, TotalBytesSentinMB, TotalBytesReceivedinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies, EventCount"
-                },
-                "id": "[if(true(), 'xdr-b49a1093-cbf6-4973-89ac-2eef98f533c6', 'xdr-b49a1093-cbf6-4973-89ac-2eef98f533c6')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - Time series anomaly for data size transferred to public internet",
                     "severity": "medium",
-                    "entityMappings": {
-                      "ips": [
-                        {
-                          "addressColumn": "SourceIPMax",
-                          "id": "[if(true(), 'ip1', 'ip1')]"
-                        }
-                      ]
-                    },
-                    "description": "'Identifies anomalous data transfer to public networks. The query leverages built-in KQL anomaly detection algorithms that detects large deviations from a baseline pattern.\nA sudden increase in data transferred to unknown public networks is an indication of data exfiltration attempts and should be investigated.\nThe higher the score, the further it is from the baseline value.\nThe output is aggregated to provide summary view of unique source IP to destination IP address and port bytes sent traffic observed in the flagged anomaly hour.\nThe source IP addresses which were sending less than bytessen",
+                    "description": "Identifies anomalous data transfer to public networks using built-in KQL anomaly detection algorithms that detect large deviations from a baseline pattern.\nA sudden increase in data transferred to unknown public networks indicates potential data exfiltration and should be investigated. Higher scores indicate larger deviations from baseline.\nOutput is aggregated to summarize unique source IP to destination IP and port bytes-sent traffic in the flagged anomaly hour, excluding source IPs below bytessentperhourthreshold. Query individual source IPs from SourceIPlist to investigate.",
+                    "title": "Threat Essentials - Time series anomaly for data size transferred to public internet",
                     "tactics": [
                       {
                         "tactic": "Exfiltration",
@@ -2129,13 +2117,25 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "addressColumn": "SourceIPMax",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - Time series anomaly for data size transferred to public internet",
                 "schedule": {
                   "frequency": "P1D"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet scorethreshold = 5;\nlet bytessentperhourthreshold = 10;\nlet PrivateIPregex = @'^127\\.|^10\\.|^172\\.1[6-9]\\.|^172\\.2[0-9]\\.|^172\\.3[0-1]\\.|^192\\.168\\.';\nlet TimeSeriesData = (union isfuzzy=true\n(\nVMConnection\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where isnotempty(DestinationIp) and isnotempty(SourceIp)\n| extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\" | extend DeviceVendor = \"VMConnection\"\n| project TimeGenerated, BytesSent, DeviceVendor\n| make-series TotalBytesSent=sum(BytesSent) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor\n),\n(\nCommonSecurityLog\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where isnotempty(DestinationIP) and isnotempty(SourceIP)\n| extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\"\n| project TimeGenerated, SentBytes, DeviceVendor\n| make-series TotalBytesSent=sum(SentBytes) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor\n)\n);\n//Filter anomolies against TimeSeriesData\nlet TimeSeriesAlerts = materialize(TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')\n| mv-expand TotalBytesSent to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)\n| where anomalies > 0 | extend AnomalyHour = TimeGenerated\n| extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), baselinebytessentperHour = round(((baseline / 1024)/1024),2), score = round(score,2)\n| project DeviceVendor, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score);\nlet AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);\n//Union of all BaseLogs aggregated per hour\nlet BaseLogs = (union isfuzzy=true\n(\nCommonSecurityLog\n| where isnotempty(DestinationIP) and isnotempty(SourceIP)\n| where TimeGenerated > ago(2d)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\"\n| extend SentBytesinMB = ((SentBytes / 1024)/1024), ReceivedBytesinMB = ((ReceivedBytes / 1024)/1024)\n| summarize HourlyCount = count(), TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort,100), TotalSentBytesinMB = sum(SentBytesinMB), TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)\n| where TotalSentBytesinMB > bytessentperhourthreshold\n| sort by TimeGeneratedHour asc, TotalSentBytesinMB desc\n| extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition\n| where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour\n| project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank\n),\n(\nVMConnection\n| where isnotempty(DestinationIp) and isnotempty(SourceIp)\n| where TimeGenerated > ago(2d)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend SourceIP = SourceIp, DestinationIP = DestinationIp\n| extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\" | extend DeviceVendor = \"VMConnection\"\n| extend SentBytesinMB = ((BytesSent / 1024)/1024), ReceivedBytesinMB = ((BytesReceived / 1024)/1024)\n| summarize HourlyCount = count(),TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort, 100), TotalSentBytesinMB = sum(SentBytesinMB),TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)\n| where TotalSentBytesinMB > bytessentperhourthreshold\n| sort by TimeGeneratedHour asc, TotalSentBytesinMB desc\n| extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition\n| where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour\n| project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank\n)\n);\n// Join against base logs to retrive records associated with the hour of anomoly\nTimeSeriesAlerts\n| where TimeGenerated > ago(2d)\n| join (\n    BaseLogs | extend AnomalyHour = TimeGeneratedHour\n) on DeviceVendor, AnomalyHour | sort by score desc\n| project DeviceVendor, AnomalyHour,TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies\n| summarize EventCount = count(), StartTimeUtc= min(TimeGeneratedMax), EndTimeUtc= max(TimeGeneratedMax), SourceIPMax= arg_max(SourceIP,*), TotalBytesSentinMB = sum(TotalSentBytesinMB), TotalBytesReceivedinMB = sum(TotalReceivedBytesinMB), SourceIPList = make_set(SourceIP, 100), DestinationIPList = make_set(DestinationIPList, 100) by AnomalyHour,TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies\n| project DeviceVendor, AnomalyHour, StartTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, TotalBytesSentinMB, TotalBytesReceivedinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies, EventCount"
+                },
+                "id": "[if(true(), 'xdr-b49a1093-cbf6-4973-89ac-2eef98f533c6', 'xdr-b49a1093-cbf6-4973-89ac-2eef98f533c6')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -2159,7 +2159,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "'Identifies anomalous data transfer to public networks. The query leverages built-in KQL anomaly detection algorithms that detects large deviations from a baseline pattern.\nA sudden increase in data transferred to unknown public networks is an indication of data exfiltration attempts and should be investigated.\nThe higher the score, the further it is from the baseline value.\nThe output is aggregated to provide summary view of unique source IP to destination IP address and port bytes sent traffic observed in the flagged anomaly hour.\nThe source IP addresses which were sending less than bytessen",
+        "description": "Identifies anomalous data transfer to public networks using built-in KQL anomaly detection algorithms that detect large deviations from a baseline pattern.\nA sudden increase in data transferred to unknown public networks indicates potential data exfiltration and should be investigated. Higher scores indicate larger deviations from baseline.\nOutput is aggregated to summarize unique source IP to destination IP and port bytes-sent traffic in the flagged anomaly hour, excluding source IPs below bytessentperhourthreshold. Query individual source IPs from SourceIPlist to investigate.",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "languageVersion": "2.0",
@@ -2175,24 +2175,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - Time series anomaly for data size transferred to public internet",
-                "queryCondition": {
-                  "queryText": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet scorethreshold = 5;\nlet bytessentperhourthreshold = 10;\nlet PrivateIPregex = @'^127\\.|^10\\.|^172\\.1[6-9]\\.|^172\\.2[0-9]\\.|^172\\.3[0-1]\\.|^192\\.168\\.';\nlet TimeSeriesData = (union isfuzzy=true\n(\nVMConnection\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where isnotempty(DestinationIp) and isnotempty(SourceIp)\n| extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\" | extend DeviceVendor = \"VMConnection\"\n| project TimeGenerated, BytesSent, DeviceVendor\n| make-series TotalBytesSent=sum(BytesSent) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor\n),\n(\nCommonSecurityLog\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where isnotempty(DestinationIP) and isnotempty(SourceIP)\n| extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\"\n| project TimeGenerated, SentBytes, DeviceVendor\n| make-series TotalBytesSent=sum(SentBytes) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor\n)\n);\n//Filter anomolies against TimeSeriesData\nlet TimeSeriesAlerts = materialize(TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')\n| mv-expand TotalBytesSent to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)\n| where anomalies > 0 | extend AnomalyHour = TimeGenerated\n| extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), baselinebytessentperHour = round(((baseline / 1024)/1024),2), score = round(score,2)\n| project DeviceVendor, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score);\nlet AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);\n//Union of all BaseLogs aggregated per hour\nlet BaseLogs = (union isfuzzy=true\n(\nCommonSecurityLog\n| where isnotempty(DestinationIP) and isnotempty(SourceIP)\n| where TimeGenerated > ago(2d)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\"\n| extend SentBytesinMB = ((SentBytes / 1024)/1024), ReceivedBytesinMB = ((ReceivedBytes / 1024)/1024)\n| summarize HourlyCount = count(), TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort,100), TotalSentBytesinMB = sum(SentBytesinMB), TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)\n| where TotalSentBytesinMB > bytessentperhourthreshold\n| sort by TimeGeneratedHour asc, TotalSentBytesinMB desc\n| extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition\n| where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour\n| project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank\n),\n(\nVMConnection\n| where isnotempty(DestinationIp) and isnotempty(SourceIp)\n| where TimeGenerated > ago(2d)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend SourceIP = SourceIp, DestinationIP = DestinationIp\n| extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\" | extend DeviceVendor = \"VMConnection\"\n| extend SentBytesinMB = ((BytesSent / 1024)/1024), ReceivedBytesinMB = ((BytesReceived / 1024)/1024)\n| summarize HourlyCount = count(),TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort, 100), TotalSentBytesinMB = sum(SentBytesinMB),TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)\n| where TotalSentBytesinMB > bytessentperhourthreshold\n| sort by TimeGeneratedHour asc, TotalSentBytesinMB desc\n| extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition\n| where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour\n| project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank\n)\n);\n// Join against base logs to retrive records associated with the hour of anomoly\nTimeSeriesAlerts\n| where TimeGenerated > ago(2d)\n| join (\n    BaseLogs | extend AnomalyHour = TimeGeneratedHour\n) on DeviceVendor, AnomalyHour | sort by score desc\n| project DeviceVendor, AnomalyHour,TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies\n| summarize EventCount = count(), StartTimeUtc= min(TimeGeneratedMax), EndTimeUtc= max(TimeGeneratedMax), SourceIPMax= arg_max(SourceIP,*), TotalBytesSentinMB = sum(TotalSentBytesinMB), TotalBytesReceivedinMB = sum(TotalReceivedBytesinMB), SourceIPList = make_set(SourceIP, 100), DestinationIPList = make_set(DestinationIPList, 100) by AnomalyHour,TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies\n| project DeviceVendor, AnomalyHour, StartTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, TotalBytesSentinMB, TotalBytesReceivedinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies, EventCount"
-                },
-                "id": "[if(true(), 'xdr-b49a1093-cbf6-4973-89ac-2eef98f533c6', 'xdr-b49a1093-cbf6-4973-89ac-2eef98f533c6')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - Time series anomaly for data size transferred to public internet",
                     "severity": "medium",
-                    "entityMappings": {
-                      "ips": [
-                        {
-                          "addressColumn": "SourceIPMax",
-                          "id": "[if(true(), 'ip1', 'ip1')]"
-                        }
-                      ]
-                    },
-                    "description": "'Identifies anomalous data transfer to public networks. The query leverages built-in KQL anomaly detection algorithms that detects large deviations from a baseline pattern.\nA sudden increase in data transferred to unknown public networks is an indication of data exfiltration attempts and should be investigated.\nThe higher the score, the further it is from the baseline value.\nThe output is aggregated to provide summary view of unique source IP to destination IP address and port bytes sent traffic observed in the flagged anomaly hour.\nThe source IP addresses which were sending less than bytessen",
+                    "description": "Identifies anomalous data transfer to public networks using built-in KQL anomaly detection algorithms that detect large deviations from a baseline pattern.\nA sudden increase in data transferred to unknown public networks indicates potential data exfiltration and should be investigated. Higher scores indicate larger deviations from baseline.\nOutput is aggregated to summarize unique source IP to destination IP and port bytes-sent traffic in the flagged anomaly hour, excluding source IPs below bytessentperhourthreshold. Query individual source IPs from SourceIPlist to investigate.",
+                    "title": "Threat Essentials - Time series anomaly for data size transferred to public internet",
                     "tactics": [
                       {
                         "tactic": "Exfiltration",
@@ -2202,13 +2190,25 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "addressColumn": "SourceIPMax",
+                          "id": "[if(true(), 'ip1', 'ip1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - Time series anomaly for data size transferred to public internet",
                 "schedule": {
                   "frequency": "P1D"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet scorethreshold = 5;\nlet bytessentperhourthreshold = 10;\nlet PrivateIPregex = @'^127\\.|^10\\.|^172\\.1[6-9]\\.|^172\\.2[0-9]\\.|^172\\.3[0-1]\\.|^192\\.168\\.';\nlet TimeSeriesData = (union isfuzzy=true\n(\nVMConnection\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where isnotempty(DestinationIp) and isnotempty(SourceIp)\n| extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\" | extend DeviceVendor = \"VMConnection\"\n| project TimeGenerated, BytesSent, DeviceVendor\n| make-series TotalBytesSent=sum(BytesSent) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor\n),\n(\nCommonSecurityLog\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where isnotempty(DestinationIP) and isnotempty(SourceIP)\n| extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\"\n| project TimeGenerated, SentBytes, DeviceVendor\n| make-series TotalBytesSent=sum(SentBytes) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor\n)\n);\n//Filter anomolies against TimeSeriesData\nlet TimeSeriesAlerts = materialize(TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')\n| mv-expand TotalBytesSent to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)\n| where anomalies > 0 | extend AnomalyHour = TimeGenerated\n| extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), baselinebytessentperHour = round(((baseline / 1024)/1024),2), score = round(score,2)\n| project DeviceVendor, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score);\nlet AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);\n//Union of all BaseLogs aggregated per hour\nlet BaseLogs = (union isfuzzy=true\n(\nCommonSecurityLog\n| where isnotempty(DestinationIP) and isnotempty(SourceIP)\n| where TimeGenerated > ago(2d)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\"\n| extend SentBytesinMB = ((SentBytes / 1024)/1024), ReceivedBytesinMB = ((ReceivedBytes / 1024)/1024)\n| summarize HourlyCount = count(), TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort,100), TotalSentBytesinMB = sum(SentBytesinMB), TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)\n| where TotalSentBytesinMB > bytessentperhourthreshold\n| sort by TimeGeneratedHour asc, TotalSentBytesinMB desc\n| extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition\n| where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour\n| project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank\n),\n(\nVMConnection\n| where isnotempty(DestinationIp) and isnotempty(SourceIp)\n| where TimeGenerated > ago(2d)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend SourceIP = SourceIp, DestinationIP = DestinationIp\n| extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,\"private\" ,\"public\" )\n| where DestinationIpType == \"public\" | extend DeviceVendor = \"VMConnection\"\n| extend SentBytesinMB = ((BytesSent / 1024)/1024), ReceivedBytesinMB = ((BytesReceived / 1024)/1024)\n| summarize HourlyCount = count(),TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort, 100), TotalSentBytesinMB = sum(SentBytesinMB),TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)\n| where TotalSentBytesinMB > bytessentperhourthreshold\n| sort by TimeGeneratedHour asc, TotalSentBytesinMB desc\n| extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition\n| where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour\n| project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank\n)\n);\n// Join against base logs to retrive records associated with the hour of anomoly\nTimeSeriesAlerts\n| where TimeGenerated > ago(2d)\n| join (\n    BaseLogs | extend AnomalyHour = TimeGeneratedHour\n) on DeviceVendor, AnomalyHour | sort by score desc\n| project DeviceVendor, AnomalyHour,TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies\n| summarize EventCount = count(), StartTimeUtc= min(TimeGeneratedMax), EndTimeUtc= max(TimeGeneratedMax), SourceIPMax= arg_max(SourceIP,*), TotalBytesSentinMB = sum(TotalSentBytesinMB), TotalBytesReceivedinMB = sum(TotalReceivedBytesinMB), SourceIPList = make_set(SourceIP, 100), DestinationIPList = make_set(DestinationIPList, 100) by AnomalyHour,TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies\n| project DeviceVendor, AnomalyHour, StartTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, TotalBytesSentinMB, TotalBytesReceivedinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies, EventCount"
+                },
+                "id": "[if(true(), 'xdr-b49a1093-cbf6-4973-89ac-2eef98f533c6', 'xdr-b49a1093-cbf6-4973-89ac-2eef98f533c6')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -2237,37 +2237,37 @@
           "contentVersion": "3.2.2",
           "requiredWorkloads": [
             {
+              "workload": "sentinel",
               "dataTypes": [
                 "CommonSecurityLog",
                 "VMConnection"
-              ],
-              "workload": "sentinel"
+              ]
             }
           ],
           "requiredDataConnectors": [
             {
+              "connectorId": "CiscoASA",
               "dataTypes": [
                 "CommonSecurityLog"
-              ],
-              "connectorId": "CiscoASA"
+              ]
             },
             {
+              "connectorId": "CiscoAsaAma",
               "dataTypes": [
                 "CommonSecurityLog"
-              ],
-              "connectorId": "CiscoAsaAma"
+              ]
             },
             {
+              "connectorId": "PaloAltoNetworks",
               "dataTypes": [
                 "CommonSecurityLog"
-              ],
-              "connectorId": "PaloAltoNetworks"
+              ]
             },
             {
+              "connectorId": "AzureMonitor(VMInsights)",
               "dataTypes": [
                 "VMConnection"
-              ],
-              "connectorId": "AzureMonitor(VMInsights)"
+              ]
             }
           ]
         }
@@ -2301,26 +2301,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
-                "queryCondition": {
-                  "queryText": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet TotalEventsThreshold = 25;\nlet TimeSeriesData =\nAzureActivity\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where OperationNameValue endswith \"delete\"\n| project TimeGenerated, Caller\n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller;\nlet TimeSeriesAlerts = materialize(TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit')\n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n| where anomalies > 0\n| project Caller, TimeGenerated, Total, baseline, anomalies, score\n| where Total > TotalEventsThreshold and baseline > 0 );\nTimeSeriesAlerts\n| where TimeGenerated > (ago(endtime))\n| project TimeGenerated, Caller\n| join kind = inner (AzureActivity\n| where TimeGenerated > (ago(endtime))\n| where OperationNameValue endswith \"delete\"\n| summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller\n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")"
-                },
-                "id": "[if(true(), 'xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8', 'xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
                     "severity": "medium",
-                    "entityMappings": {
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "Name",
-                          "upnSuffixColumn": "UPNSuffix",
-                          "aadUserIdColumn": "AadUserId"
-                        }
-                      ]
-                    },
                     "description": "'This query generates baseline pattern of cloud resource deletions by an user and generated anomaly when any unusual spike is detected.\nThese anomalies from unusual or privileged users could be an indication of cloud infrastructure take-down by an adversary '",
+                    "title": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
                     "tactics": [
                       {
                         "tactic": "Impact",
@@ -2330,13 +2316,27 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "Name",
+                          "aadUserIdColumn": "AadUserId",
+                          "upnSuffixColumn": "UPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
                 "schedule": {
                   "frequency": "P1D"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet TotalEventsThreshold = 25;\nlet TimeSeriesData =\nAzureActivity\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where OperationNameValue endswith \"delete\"\n| project TimeGenerated, Caller\n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller;\nlet TimeSeriesAlerts = materialize(TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit')\n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n| where anomalies > 0\n| project Caller, TimeGenerated, Total, baseline, anomalies, score\n| where Total > TotalEventsThreshold and baseline > 0 );\nTimeSeriesAlerts\n| where TimeGenerated > ago(2d)\n| project TimeGenerated, Caller\n| join kind = inner (AzureActivity\n| where TimeGenerated > ago(2d)\n| where OperationNameValue endswith \"delete\"\n| summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller\n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")"
+                },
+                "id": "[if(true(), 'xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8', 'xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -2376,26 +2376,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
-                "queryCondition": {
-                  "queryText": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet TotalEventsThreshold = 25;\nlet TimeSeriesData =\nAzureActivity\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where OperationNameValue endswith \"delete\"\n| project TimeGenerated, Caller\n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller;\nlet TimeSeriesAlerts = materialize(TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit')\n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n| where anomalies > 0\n| project Caller, TimeGenerated, Total, baseline, anomalies, score\n| where Total > TotalEventsThreshold and baseline > 0 );\nTimeSeriesAlerts\n| where TimeGenerated > (ago(endtime))\n| project TimeGenerated, Caller\n| join kind = inner (AzureActivity\n| where TimeGenerated > (ago(endtime))\n| where OperationNameValue endswith \"delete\"\n| summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller\n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")"
-                },
-                "id": "[if(true(), 'xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8', 'xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
                     "severity": "medium",
-                    "entityMappings": {
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "Name",
-                          "upnSuffixColumn": "UPNSuffix",
-                          "aadUserIdColumn": "AadUserId"
-                        }
-                      ]
-                    },
                     "description": "'This query generates baseline pattern of cloud resource deletions by an user and generated anomaly when any unusual spike is detected.\nThese anomalies from unusual or privileged users could be an indication of cloud infrastructure take-down by an adversary '",
+                    "title": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
                     "tactics": [
                       {
                         "tactic": "Impact",
@@ -2405,13 +2391,27 @@
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "Name",
+                          "aadUserIdColumn": "AadUserId",
+                          "upnSuffixColumn": "UPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - Mass Cloud resource deletions Time Series Anomaly",
                 "schedule": {
                   "frequency": "P1D"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet TotalEventsThreshold = 25;\nlet TimeSeriesData =\nAzureActivity\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where OperationNameValue endswith \"delete\"\n| project TimeGenerated, Caller\n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller;\nlet TimeSeriesAlerts = materialize(TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit')\n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n| where anomalies > 0\n| project Caller, TimeGenerated, Total, baseline, anomalies, score\n| where Total > TotalEventsThreshold and baseline > 0 );\nTimeSeriesAlerts\n| where TimeGenerated > ago(2d)\n| project TimeGenerated, Caller\n| join kind = inner (AzureActivity\n| where TimeGenerated > ago(2d)\n| where OperationNameValue endswith \"delete\"\n| summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller\n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")"
+                },
+                "id": "[if(true(), 'xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8', 'xdr-fa2658fe-3714-4c55-bb12-2b7275c628e8')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -2440,18 +2440,18 @@
           "contentVersion": "3.2.2",
           "requiredWorkloads": [
             {
+              "workload": "sentinel",
               "dataTypes": [
                 "AzureActivity"
-              ],
-              "workload": "sentinel"
+              ]
             }
           ],
           "requiredDataConnectors": [
             {
+              "connectorId": "AzureActivity",
               "dataTypes": [
                 "AzureActivity"
-              ],
-              "connectorId": "AzureActivity"
+              ]
             }
           ]
         }
@@ -2485,49 +2485,49 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - User Assigned Privileged Role",
-                "queryCondition": {
-                  "queryText": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName contains \"Admin\"\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result\n| extend InitiatorName=split(Initiator, \"@\")[0], InitiatorUPNSuffix=split(Initiator, \"@\")[1]\n| extend TargetName=split(Target, \"@\")[0], TargetUPNSuffix=split(Target, \"@\")[1]"
-                },
-                "id": "[if(true(), 'xdr-b09795c9-8dce-47ab-8f75-5a4afb78ef0c', 'xdr-b09795c9-8dce-47ab-8f75-5a4afb78ef0c')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - User Assigned Privileged Role",
                     "severity": "high",
-                    "entityMappings": {
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "InitiatorName",
-                          "upnSuffixColumn": "InitiatorUPNSuffix"
-                        },
-                        {
-                          "id": "[if(true(), 'account2', 'account2')]",
-                          "nameColumn": "TargetName",
-                          "upnSuffixColumn": "TargetUPNSuffix"
-                        }
-                      ]
-                    },
                     "description": "'Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'",
+                    "title": "Threat Essentials - User Assigned Privileged Role",
                     "tactics": [
                       {
                         "tactic": "Persistence",
                         "techniques": [
                           {
+                            "technique": "T1078",
                             "subTechniques": [
                               "T1078.004"
-                            ],
-                            "technique": "T1078"
+                            ]
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "InitiatorName",
+                          "upnSuffixColumn": "InitiatorUPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        },
+                        {
+                          "nameColumn": "TargetName",
+                          "upnSuffixColumn": "TargetUPNSuffix",
+                          "id": "[if(true(), 'account2', 'account2')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - User Assigned Privileged Role",
                 "schedule": {
                   "frequency": "PT2H"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName contains \"Admin\"\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result\n| extend InitiatorName=split(Initiator, \"@\")[0], InitiatorUPNSuffix=split(Initiator, \"@\")[1]\n| extend TargetName=split(Target, \"@\")[0], TargetUPNSuffix=split(Target, \"@\")[1]"
+                },
+                "id": "[if(true(), 'xdr-b09795c9-8dce-47ab-8f75-5a4afb78ef0c', 'xdr-b09795c9-8dce-47ab-8f75-5a4afb78ef0c')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -2567,49 +2567,49 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
-                "displayName": "Threat Essentials - User Assigned Privileged Role",
-                "queryCondition": {
-                  "queryText": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName contains \"Admin\"\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result\n| extend InitiatorName=split(Initiator, \"@\")[0], InitiatorUPNSuffix=split(Initiator, \"@\")[1]\n| extend TargetName=split(Target, \"@\")[0], TargetUPNSuffix=split(Target, \"@\")[1]"
-                },
-                "id": "[if(true(), 'xdr-b09795c9-8dce-47ab-8f75-5a4afb78ef0c', 'xdr-b09795c9-8dce-47ab-8f75-5a4afb78ef0c')]",
+                "status": "disabled",
                 "detectionAction": {
                   "alertTemplate": {
-                    "title": "Threat Essentials - User Assigned Privileged Role",
                     "severity": "high",
-                    "entityMappings": {
-                      "accounts": [
-                        {
-                          "id": "[if(true(), 'account1', 'account1')]",
-                          "nameColumn": "InitiatorName",
-                          "upnSuffixColumn": "InitiatorUPNSuffix"
-                        },
-                        {
-                          "id": "[if(true(), 'account2', 'account2')]",
-                          "nameColumn": "TargetName",
-                          "upnSuffixColumn": "TargetUPNSuffix"
-                        }
-                      ]
-                    },
                     "description": "'Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'",
+                    "title": "Threat Essentials - User Assigned Privileged Role",
                     "tactics": [
                       {
                         "tactic": "Persistence",
                         "techniques": [
                           {
+                            "technique": "T1078",
                             "subTechniques": [
                               "T1078.004"
-                            ],
-                            "technique": "T1078"
+                            ]
                           }
                         ]
                       }
-                    ]
+                    ],
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "InitiatorName",
+                          "upnSuffixColumn": "InitiatorUPNSuffix",
+                          "id": "[if(true(), 'account1', 'account1')]"
+                        },
+                        {
+                          "nameColumn": "TargetName",
+                          "upnSuffixColumn": "TargetUPNSuffix",
+                          "id": "[if(true(), 'account2', 'account2')]"
+                        }
+                      ]
+                    }
                   }
                 },
+                "displayName": "Threat Essentials - User Assigned Privileged Role",
                 "schedule": {
                   "frequency": "PT2H"
                 },
-                "status": "disabled",
+                "queryCondition": {
+                  "queryText": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName contains \"Admin\"\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result\n| extend InitiatorName=split(Initiator, \"@\")[0], InitiatorUPNSuffix=split(Initiator, \"@\")[1]\n| extend TargetName=split(Target, \"@\")[0], TargetUPNSuffix=split(Target, \"@\")[1]"
+                },
+                "id": "[if(true(), 'xdr-b09795c9-8dce-47ab-8f75-5a4afb78ef0c', 'xdr-b09795c9-8dce-47ab-8f75-5a4afb78ef0c')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol', 'azuresentinel.azure-sentinel-solution-securitythreatessentialsol')]",
                   "packageVersion": "3.2.2",
@@ -2638,18 +2638,18 @@
           "contentVersion": "3.2.2",
           "requiredWorkloads": [
             {
+              "workload": "sentinel",
               "dataTypes": [
                 "AuditLogs"
-              ],
-              "workload": "sentinel"
+              ]
             }
           ],
           "requiredDataConnectors": [
             {
+              "connectorId": "AzureActiveDirectory",
               "dataTypes": [
                 "AuditLogs"
-              ],
-              "connectorId": "AzureActiveDirectory"
+              ]
             }
           ]
         }
