@@ -11,8 +11,11 @@ parser. Deprecation applies to the legacy connector, not to the solution.
 
 ## Set up the Graph connector
 
-The connection requires read and write permissions on the target workspace and
-the Microsoft Entra Global Administrator or Security Administrator tenant role.
+The connection requires read and write permissions on the target workspace.
+An authorized administrator must grant consent for the application's Graph permissions.
+The page retains the native workspace permission check but omits the unsupported
+tenant-role prerequisite for this custom connector. This does not bypass Azure RBAC,
+Graph application permissions, administrator consent, or eligibility licensing.
 
 1. Install the solution in a Microsoft Sentinel-enabled Log Analytics workspace and
    open **Microsoft Entra ID Assets** with the portal's **Preview** label.

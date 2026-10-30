@@ -2,7 +2,9 @@
 Microsoft Entra ID Assets connector (portal-managed Preview label) with table-selection setup and EntraAssetsNormalize parser, and deprecate
 the legacy connector tile with migration guidance. Refine the connector description,
 workspace/tenant prerequisites and preview page copy; rely on portal-managed Preview
-and Configuration labels rather than duplicating them in the connector. Proposed minor version: 3.5.0. -->
+and Configuration labels rather than duplicating them in the connector. Remove the
+unsupported custom-connector tenant-role prerequisite; retain workspace checks and
+admin-consent instructions. Proposed minor version: 3.5.0. -->
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                      |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------------------------|
