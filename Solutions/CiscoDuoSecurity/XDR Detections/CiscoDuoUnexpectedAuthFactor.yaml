@@ -1,0 +1,111 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoDuoAuthConnectorDefinition
+  dataTypes:
+  - DuoAuthentication_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DuoAuthentication_CL
+  requiredDataConnectors:
+  - connectorId: CiscoDuoAuthConnectorDefinition
+    dataTypes:
+    - DuoAuthentication_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 16c91a2c-17ad-4985-a9ad-4a4f1cb11830
+    path: Analytic Rules/CiscoDuoUnexpectedAuthFactor.yaml
+    version: 1.0.1
+    querySha256: 7cea8fb1e1fbf12051e634c36ed2ac601a9005f049d24e8a7cacc9d3f9c160f7
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: b4110aa5ca73f04e057ab2dc6f92f43d238dd271cd2785147f55e994565946de
+      targetQuerySha256: 0cab461f2ff59bef9accc0011e0ee78ce03ed0fdf52982449c5a2b4f6ecc0ef3
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: b4110aa5ca73f04e057ab2dc6f92f43d238dd271cd2785147f55e994565946de
+      targetQuerySha256: 0cab461f2ff59bef9accc0011e0ee78ce03ed0fdf52982449c5a2b4f6ecc0ef3
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-16c91a2c-17ad-4985-a9ad-4a4f1cb11830
+  displayName: Cisco Duo - Unexpected authentication factor
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let allowed_auth_f = dynamic(['duo_push', 'duo_mobile_passcode']);
+      DuoAuthentication_CL
+      | where Result =~ 'success'
+      | where Factor !in~ (allowed_auth_f)
+      | extend IPCustomEntity = AccessDeviceIp, AccountCustomEntity = UserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco Duo - Unexpected authentication factor
+      description: '''Detects when unexpected authentication factor used.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity

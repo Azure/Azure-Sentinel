@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoDuoActivityConnectorDefinition
+  dataTypes:
+  - DuoActivity_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DuoActivity_CL
+  requiredDataConnectors:
+  - connectorId: CiscoDuoActivityConnectorDefinition
+    dataTypes:
+    - DuoActivity_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e46c5588-e643-4a60-a008-5ba9a4c84328
+    path: Analytic Rules/CiscoDuoAdminMFAFailures.yaml
+    version: 1.0.2
+    querySha256: 380fb6eca60598053d3bb2e7b97735c01a976152c153c70397ddee62f1a0e20f
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: e917635f765e2f9df0aff853fd33842b1ce2ad7d41922ef9a24183216a9f2091
+      targetQuerySha256: e6b3657a456bf376d8f454eb7168364aa9fa9fd7b77ebb48ad0f68835cb21206
+    reviewDecisions:
+    - reason: 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm
+        that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+      decision: accepted
+      sourceDocumentSha256: e917635f765e2f9df0aff853fd33842b1ce2ad7d41922ef9a24183216a9f2091
+      targetQuerySha256: e6b3657a456bf376d8f454eb7168364aa9fa9fd7b77ebb48ad0f68835cb21206
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: e917635f765e2f9df0aff853fd33842b1ce2ad7d41922ef9a24183216a9f2091
+      targetQuerySha256: e6b3657a456bf376d8f454eb7168364aa9fa9fd7b77ebb48ad0f68835cb21206
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-e46c5588-e643-4a60-a008-5ba9a4c84328
+  displayName: Cisco Duo - Multiple admin 2FA failures
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 10;
+      DuoActivity_CL
+      | where ActionName =~ "admin_2fa_error"
+      | summarize count() by ActorName, bin(TimeGenerated, 10m)
+      | where count_ > threshold
+      | extend AccountCustomEntity = ActorName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco Duo - Multiple admin 2FA failures
+      description: '''Detects when multiple admin 2FA failures occurs.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity

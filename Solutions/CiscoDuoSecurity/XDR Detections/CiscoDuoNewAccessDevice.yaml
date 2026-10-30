@@ -1,0 +1,94 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoDuoAuthConnectorDefinition
+  dataTypes:
+  - DuoAuthentication_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DuoAuthentication_CL
+  requiredDataConnectors:
+  - connectorId: CiscoDuoAuthConnectorDefinition
+    dataTypes:
+    - DuoAuthentication_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f05271b6-26a5-49cf-ad73-4a202fba6eb6
+    path: Analytic Rules/CiscoDuoNewAccessDevice.yaml
+    version: 1.0.1
+    querySha256: fc9524638554d0f5c0f1f2cac4c1c3f09480f6d4e4d6e430b21aee95e0755478
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: a45af1900674112856053f85ee3165cc58ae1e21d720bcde918bfea634eb376a
+      targetQuerySha256: f01050a02c8e9a54366009d5f0e9297a9a1555cff64524147ed2008cebdc176b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-f05271b6-26a5-49cf-ad73-4a202fba6eb6
+  displayName: Cisco Duo - New access device
+  status: disabled
+  queryCondition:
+    queryText: |-
+      DuoAuthentication_CL
+      | where Result =~ 'success'
+      | where isnotempty(AccessDeviceIp)
+      | summarize dvc_ip = make_set(AccessDeviceIp) by UserName
+      | join (DuoAuthentication_CL
+              | where Result =~ 'success') on UserName
+      | where dvc_ip !has AccessDeviceIp
+      | extend IPCustomEntity = AccessDeviceIp, AccountCustomEntity = UserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco Duo - New access device
+      description: '''Detects new access device.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity

@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoDuoActivityConnectorDefinition
+  dataTypes:
+  - DuoActivity_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DuoActivity_CL
+  requiredDataConnectors:
+  - connectorId: CiscoDuoActivityConnectorDefinition
+    dataTypes:
+    - DuoActivity_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6e4f9031-91d3-4fa1-8baf-624935f04ad8
+    path: Analytic Rules/CiscoDuoMultipleUsersDeleted.yaml
+    version: 1.0.1
+    querySha256: 31e9e3c4bb5cd2661e46fa5939102f139abc77e95c1fcafc40a3f59925a591b2
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved as customDetails.AccountName from query
+      column `AccountCustomEntity`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1531
+    reviewScope:
+      sourceDocumentSha256: 798ca5f0491cd8fa10cdc29472773a72712f2f3127108340b1a420af568e8659
+      targetQuerySha256: e58b428d3e2b59ed4d42d46d29eb3a8a9f37763e04a3aacd99b4652e731b1b5e
+    reviewDecisions:
+    - reason: 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm
+        that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+      decision: accepted
+      sourceDocumentSha256: 798ca5f0491cd8fa10cdc29472773a72712f2f3127108340b1a420af568e8659
+      targetQuerySha256: e58b428d3e2b59ed4d42d46d29eb3a8a9f37763e04a3aacd99b4652e731b1b5e
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 798ca5f0491cd8fa10cdc29472773a72712f2f3127108340b1a420af568e8659
+      targetQuerySha256: e58b428d3e2b59ed4d42d46d29eb3a8a9f37763e04a3aacd99b4652e731b1b5e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountName
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-6e4f9031-91d3-4fa1-8baf-624935f04ad8
+  displayName: Cisco Duo - Multiple users deleted
+  status: disabled
+  queryCondition:
+    queryText: |-
+      DuoActivity_CL
+      | where ActionName =~ "user_delete"
+      | summarize count() by ActorName, bin(TimeGenerated, 10m)
+      | where count_ > 1
+      | extend AccountCustomEntity = ActorName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco Duo - Multiple users deleted
+      description: '''Detects when multiple users were deleted.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1531
+      customDetails:
+        AccountName: AccountCustomEntity
