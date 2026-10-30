@@ -2,7 +2,6 @@
 
 ## Version 0.1.2
 
-- (2026-10-28) Add the ingestion-time EmailEvent parser and source-table-specific fixture for Proofpoint POD messages - [PR #15464](https://github.com/Azure/Azure-Sentinel/pull/15464)
 - (2026-10-23) Validate Proofpoint connection hosts before mapping ASIM source hostname and domain fields - [PR #15409](https://github.com/Azure/Azure-Sentinel/pull/15409)
 - Retain valid single-label hostnames; leave IP-shaped, malformed, and non-FQDN values out of SrcFQDN and SrcDomain.
 
