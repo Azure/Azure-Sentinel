@@ -1,0 +1,116 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 48896551-1c28-4a09-8388-e51e5a927d23
+    path: Analytic Rules/AWS_PrivilegeEscalationViaDataPipeline.yaml
+    version: 1.0.2
+    querySha256: e21ec8cb439072656be63fa0649f09b438cbcfac7e2bb7998d6b5414078aaf1c
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'PolicyName' column `PolicyName` requires runtime output-schema binding verification
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` requires runtime output-schema binding verification
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.RecipientAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.RecipientAccountId column `RecipientAccountId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1098.003
+    reviewScope:
+      sourceDocumentSha256: 03dd3c53355610267b616af121d94cd5911f79edbfa1ed98404116d2cf9ee04a
+      targetQuerySha256: 3d5ca17cc1d50d4303707d08aa4e105399d7a2e1f6003dc3b8e08f3a72d38525
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: RecipientAccountId
+properties:
+  id: xdr-48896551-1c28-4a09-8388-e51e5a927d23
+  displayName: AWSCloudTrail - Privilege escalation via DataPipeline policy
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+        | where EventName in ("PutUserPolicy","PutRolePolicy","PutGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+        | extend PolicyName = tostring(parse_json(RequestParameters).policyName)
+        | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement
+        | mvexpand Statement
+        | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)
+        | extend Action = tostring(Action)
+        | where Effect =~ "Allow" and (((Action has "iam:*" or Action has "iam:PassRole") and Action has "datapipeline:*") or ((Action has "iam:*" or Action has "iam:PassRole") and Action has "datapipeline:CreatePipeline" and Action has "datapipeline:PutPipelineDefinition" and Action has "datapipeline:ActivatePipeline") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "datapipeline:Create*" and Action contains "datapipeline:Put*" and Action contains "datapipeline:Activate*")) and Resource == "*" and isempty(Condition)
+        | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+        | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+        | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+        | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+          AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+        | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Privilege escalation via DataPipeline policy
+      description: |-
+        Detects inline IAM policy updates that combine Data Pipeline permissions with IAM privileges such as
+        iam:PassRole. This sequence can enable indirect execution and elevated access pathways, indicating potential
+        privilege escalation activity.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+      customDetails:
+        PolicyName: PolicyName
+        EventName: EventName
+        UserIdentityArn: UserIdentityArn
+        RecipientAccountId: RecipientAccountId
