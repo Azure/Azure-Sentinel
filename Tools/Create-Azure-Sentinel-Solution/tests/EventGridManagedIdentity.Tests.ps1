@@ -105,6 +105,32 @@ function Remove-CollectorRbac($Deployment) {
 }
 
 $tests = [ordered]@{
+    'V3 routing detects only declared nonempty XDR content' = {
+        foreach ($propertyName in @(
+            'XDR Detections',
+            'Custom Detections',
+            'XDR Workbooks',
+            'Defender Workbooks'
+        )) {
+            $content = [pscustomobject]@{ Name = 'Test' }
+            $content | Add-Member -NotePropertyName $propertyName -NotePropertyValue @('content/file.yaml')
+            Assert-Equal (Test-SolutionDataHasXdrContent -Content $content) $true
+        }
+
+        $encoded = [pscustomobject]@{
+            Name = 'Test'
+            'XDR Detections' = '["XDR Detections/detection.yaml"]'
+        }
+        Assert-Equal (Test-SolutionDataHasXdrContent -Content $encoded) $true
+
+        $sentinelOnly = [pscustomobject]@{
+            Name = 'Test'
+            'Analytic Rules' = @('Analytic Rules/rule.yaml')
+            'XDR Detections' = @()
+            'XDR Workbooks' = @()
+        }
+        Assert-Equal (Test-SolutionDataHasXdrContent -Content $sentinelOnly) $false
+    }
     'Solution content paths accept existing solution-prefixed references' = {
         $root = Join-Path ([System.IO.Path]::GetTempPath()) "sentinel-solution-path-test-$([guid]::NewGuid().ToString('N'))"
         $solutionRoot = Join-Path $root 'Cloudflare'

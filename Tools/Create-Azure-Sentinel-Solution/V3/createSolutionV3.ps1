@@ -92,6 +92,25 @@ $getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solu
 . $commonFunctionsFilePath # load common functions
 . $getccpDetailsFilePath # load ccp functions
 
+$routeToV31 = $false
+foreach ($candidateDataFileName in @($dataFileName)) {
+    $candidateDataFilePath = Join-Path -Path "$solutionFolderBasePath\$dataFolderName" -ChildPath $candidateDataFileName
+    $candidateContent = Get-Content -LiteralPath $candidateDataFilePath -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+    if (Test-SolutionDataHasXdrContent -Content $candidateContent) {
+        $routeToV31 = $true
+        break
+    }
+}
+if ($routeToV31) {
+    Write-Host 'XDR content detected. Routing package creation through the V3.1 tool.'
+    & (Join-Path $PSScriptRoot 'createSolutionV3_1.ps1') `
+        -SolutionDataFolderPath $path `
+        -VersionMode $VersionMode `
+        -VersionBump $VersionBump
+    return
+}
+
 # Load catalog API functions only if using catalog mode
 if ($VersionMode -eq "catalog") {
     $catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
@@ -349,9 +368,6 @@ try {
         Write-Host "isCCPConnector $isCCPConnector"
         $ccpConnectorCodeExecutionCounter = 1;
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
-            if ($objectProperties.Name.ToLower() -in @('xdr detections', 'custom detections', 'xdr workbooks')) {
-                continue
-            }
             if ($objectProperties.Value -is [System.Array] -and $objectProperties.Name.ToLower() -ne 'dependentdomainsolutionids' -and $objectProperties.Name.ToLower() -ne 'staticdataconnectorids') {
                 foreach ($file in $objectProperties.Value) {
                     $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
@@ -504,21 +520,7 @@ try {
         updateDescriptionCount $global:functionAppList.Count                           "**Function Apps:** "                       "{{FunctionAppsCount}}"             $(checkResourceCounts @($global:playbookCounter))
         updateDescriptionCount ($global:playbookCounter - $global:customConnectorsList.Count - $global:functionAppList.Count)  "**Playbooks:** "   "{{PlaybookCount}}"       $false
 
-        $includeXdrContent = $false
-        foreach ($xdrContentType in @('XDR Detections', 'Custom Detections', 'XDR Workbooks')) {
-            $xdrContentProperty = $contentToImport.PSObject.Properties[$xdrContentType]
-            if ($null -ne $xdrContentProperty -and $xdrContentProperty.Value -is [System.Array] -and $xdrContentProperty.Value.Count -gt 0) {
-                $includeXdrContent = $true
-                break
-            }
-        }
-
-        GeneratePackage `
-            -solutionName $solutionName `
-            -contentToImport $contentToImport `
-            -calculatedBuildPipelinePackageVersion $contentToImport.Version `
-            -IncludeXdrDetections $includeXdrContent `
-            -SolutionMetadataPath (Join-Path $solutionFolderBasePath 'SolutionMetadata.json');
+        GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $contentToImport.Version;
 
         # check if mainTemplate and createUiDefinition json files are valid or not
         CheckJsonIsValid($solutionFolderBasePath)

@@ -140,6 +140,26 @@ function Convert-SolutionDataContentArrays {
     return $Content
 }
 
+function Test-SolutionDataHasXdrContent {
+    param([Parameter(Mandatory = $true)]$Content)
+
+    $Content = Convert-SolutionDataContentArrays -Content $Content
+    foreach ($contentType in @(
+        'XDR Detections',
+        'Custom Detections',
+        'XDR Workbooks',
+        'Defender Workbooks'
+    )) {
+        $property = $Content.PSObject.Properties[$contentType]
+        if ($null -ne $property -and
+            $property.Value -is [System.Array] -and
+            $property.Value.Count -gt 0) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Assert-NoOperationalContent {
     param([Parameter(Mandatory = $true)]$Content)
     $Content = Convert-SolutionDataContentArrays -Content $Content
