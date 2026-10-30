@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PaloAltoPrismaCloud
+  dataTypes:
+  - PaloAltoPrismaCloud
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - PaloAltoPrismaCloudAlert_CL
+    - PaloAltoPrismaCloudAudit_CL
+    - PaloAltoPrismaCloudAlertV2_CL
+    - PaloAltoPrismaCloudAuditV2_CL
+    - PaloAltoPrismaCloud
+    - Alert
+  requiredDataConnectors:
+  - connectorId: PaloAltoPrismaCloudCSPMCCPDefinition
+    dataTypes:
+    - PaloAltoPrismaCloudAlertV2_CL
+    - PaloAltoPrismaCloudAuditV2_CL
+  - connectorId: PaloAltoPrismaCloud
+    dataTypes:
+    - PaloAltoPrismaCloudAlert_CL
+    - PaloAltoPrismaCloudAudit_CL
+    - PaloAltoPrismaCloud
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c5bf680f-fa37-47c3-9f38-e839a9b99c05
+    path: Analytic Rules/PaloAltoPrismaCloudHighSeverityAlertOpenedForXDays.yaml
+    version: 1.0.2
+    querySha256: 336e53b1a6415c4398a5565eeee47abe0a0a48c7e995ce69fab5588ab10f0a19
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 002638ef110c3bd94107e521138f25aa409a917609e99c77c814605726943d20
+      targetQuerySha256: 6a5fdb1cb2286ac77a768daae51ef7f310dc45b895d68f3d92eb5061e89cc5ee
+    reviewDecisions:
+    - reason: 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm
+        that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+      decision: accepted
+      sourceDocumentSha256: 002638ef110c3bd94107e521138f25aa409a917609e99c77c814605726943d20
+      targetQuerySha256: 6a5fdb1cb2286ac77a768daae51ef7f310dc45b895d68f3d92eb5061e89cc5ee
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-c5bf680f-fa37-47c3-9f38-e839a9b99c05
+  displayName: Palo Alto Prisma Cloud - High severity alert opened for several days
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let ResolvedAlerts = PaloAltoPrismaCloud
+      | summarize result = make_set(Status) by AlertId
+      | where result has 'resolved'
+      | project AlertId;
+      PaloAltoPrismaCloud
+      | where Reason =~ 'NEW_ALERT'
+      | where AlertSeverity =~ 'high'
+      | where Status =~ 'open'
+      | where AlertId !in (ResolvedAlerts)
+      | extend alert_time = now() - TimeGenerated
+      | where alert_time > 1d
+      | extend ['Opened Days'] = strcat('Alert opened for ', strcat(toint(alert_time / 1d), ' days'))
+      | distinct AlertId, AlertMessage, AlertSeverity, ['Opened Days'], ResourceId, UserName
+      | extend AccountCustomEntity = UserName
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Palo Alto Prisma Cloud - High severity alert opened for several days
+      description: '''Detects high severity alert which is opened for several days.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1133
+      customDetails:
+        AccountName: AccountCustomEntity

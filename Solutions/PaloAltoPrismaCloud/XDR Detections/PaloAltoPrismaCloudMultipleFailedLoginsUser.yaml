@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PaloAltoPrismaCloud
+  dataTypes:
+  - PaloAltoPrismaCloud
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - PaloAltoPrismaCloudAlert_CL
+    - PaloAltoPrismaCloudAudit_CL
+    - PaloAltoPrismaCloudAlertV2_CL
+    - PaloAltoPrismaCloudAuditV2_CL
+    - PaloAltoPrismaCloud
+  requiredDataConnectors:
+  - connectorId: PaloAltoPrismaCloudCSPMCCPDefinition
+    dataTypes:
+    - PaloAltoPrismaCloudAlertV2_CL
+    - PaloAltoPrismaCloudAuditV2_CL
+  - connectorId: PaloAltoPrismaCloud
+    dataTypes:
+    - PaloAltoPrismaCloudAlert_CL
+    - PaloAltoPrismaCloudAudit_CL
+    - PaloAltoPrismaCloud
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4f688252-bf9b-4136-87bf-d540b5be1050
+    path: Analytic Rules/PaloAltoPrismaCloudMultipleFailedLoginsUser.yaml
+    version: 1.0.1
+    querySha256: 99a281532f4265a6e0b4101f542d2396b64fc9d2e64b04f2de0116793785f5e1
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 4f7068072c94521de79ece62d4f81e54bc4046527bd82ddc04269031a2c9ca4b
+      targetQuerySha256: 29bd825ae67afbf05de3682fae67aea06c8773513c4f9058755c73fe88f13562
+    reviewDecisions:
+    - reason: 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm
+        that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+      decision: accepted
+      sourceDocumentSha256: 4f7068072c94521de79ece62d4f81e54bc4046527bd82ddc04269031a2c9ca4b
+      targetQuerySha256: 29bd825ae67afbf05de3682fae67aea06c8773513c4f9058755c73fe88f13562
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 4f7068072c94521de79ece62d4f81e54bc4046527bd82ddc04269031a2c9ca4b
+      targetQuerySha256: 29bd825ae67afbf05de3682fae67aea06c8773513c4f9058755c73fe88f13562
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-4f688252-bf9b-4136-87bf-d540b5be1050
+  displayName: Palo Alto Prisma Cloud - Multiple failed logins for user
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 10;
+      PaloAltoPrismaCloud
+      | where ResourceType =~ 'Login'
+      | where EventResult =~ 'Failed'
+      | where EventMessage !has 'access key'
+      | summarize count() by UserName, bin(TimeGenerated, 5m)
+      | where count_ > threshold
+      | extend AccountCustomEntity = UserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Palo Alto Prisma Cloud - Multiple failed logins for user
+      description: '''Detects multiple failed logins for the same user account.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        AccountName: AccountCustomEntity
