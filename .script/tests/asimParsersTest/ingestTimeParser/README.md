@@ -51,6 +51,7 @@ discover target
   → freeze a typed parser-input snapshot from the fixture
   → evaluate ParserFilterQuery against an inline fixture datatable
   → upload fixture rows directly through the parser DCR
+  → verify exact per-timestamp target visibility
   → run ASIM data checks
   → optionally replay the fixture to SourceRawTable using InputStream
   → execute the mapped QTP and compare parity when replay succeeds
@@ -62,6 +63,8 @@ optional. If its table or DCR cannot be established, the report records a
 warning and blocks QTP/parity without failing the required parser validation
 stages. Once the raw DCR exists, upload or visibility failures fail the target;
 QTP execution and parity also fail the target when they run and fail.
+Parser ingestion is reported as passed only when both upload and target
+visibility pass.
 
 Static validation requires `ParserFilterQuery` to contain a `where` stage when
 `ParserQuery` contains one. This is a presence check only; it does not require
@@ -82,7 +85,21 @@ and `observedQueryTable` in the error details, including when the shared deadlin
 expires between polls or during settling. Before any successful observation,
 the observed counts are empty and the query table is null. Shared-deadline
 errors retain their original stage and message; query failures remain unchanged.
-These diagnostics do not resolve the underlying canary ingestion timeout.
+The validation artifact records `targetVisibility` as `passed`, `failed`, or
+`not-run`; failed outcomes retain their original error stage and diagnostic
+details. The report nests this explicit result under the existing
+`parserIngestion` stage, whose public key remains unchanged. Older artifacts
+without `targetVisibility` use the exact legacy `target-visibility` error stage
+or a generic deadline error together with target-visibility timing and no
+output-validation timing to identify this failure; other generic query errors
+are not attributed to visibility.
+
+The report's `schema` stage reflects the actual
+`outputValidation.schemaValidation` result and is `not-run` when that evidence
+is absent, even if a parser DCR exists. That field is emitted only after
+ASimDataTester succeeds and its authority is `parser-dcr-output-stream`; it
+does not represent a separate ASimSchemaTester execution. These diagnostics do
+not resolve the underlying canary ingestion timeout.
 
 QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
 `itp_rows` under `outputValidation`. It derives `intersect_schema` from shared

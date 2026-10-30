@@ -54,6 +54,17 @@ class FakeSession:
         return response
 
 
+class DeadlineResponse:
+    def __init__(self, clock, deadline, response):
+        self.clock = clock
+        self.deadline = deadline
+        self.response = response
+
+    def __call__(self, method, url, kwargs):
+        self.clock.value = self.deadline
+        return self.response
+
+
 class FakeTokenProvider:
     def __init__(self):
         self.scopes = []
@@ -508,11 +519,13 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                     deadline=2,
                 )
 
-                def query_error(method, url, kwargs):
-                    clock.value = 2
-                    return FakeResponse(status, payload)
-
-                harness.session.responses.append(query_error)
+                harness.session.responses.append(
+                    DeadlineResponse(
+                        clock,
+                        2,
+                        FakeResponse(status, payload),
+                    )
+                )
                 with self.assertRaises(HARNESS.HarnessError) as caught:
                     harness.wait_for_exact_rows(
                         "Contoso_CL", [timestamp], {timestamp: 1},
@@ -849,6 +862,93 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "cleanup",
             harness.last_result["telemetry"]["stageTimingsSeconds"],
         )
+        self.assertEqual(
+            "not-run",
+            harness.last_result["targetVisibility"]["status"],
+        )
+
+    def test_run_persists_target_visibility_failure_details(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        query_table = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}],
+            [],
+        )["tables"][0]
+        error = HARNESS.HarnessError(
+            "query",
+            "Validation deadline expired.",
+            details={
+                "expectedCounts": {timestamp: 1},
+                "observedCounts": {timestamp: 0},
+                "missingTimestamps": [timestamp],
+                "observedQueryTable": query_table,
+            },
+        )
+        harness, _, _ = self.harness(
+            [
+                FakeResponse(201),  # parser DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/parser",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "parser-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # parser upload
+                FakeResponse(204),  # parser cleanup
+            ]
+        )
+        prepared = {
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso_CL",
+            "rowCount": 1,
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"},
+            ],
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [{"TimeGenerated": timestamp}],
+        }
+        parser = {
+            "ParserName": "ASimAuthenticationContoso",
+            "SourceRawTable": "Contoso_CL",
+            "TargetASIMTable": "ASimAuthenticationEventLogs",
+            "ParserQuery": "source",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            with unittest.mock.patch.object(
+                harness,
+                "wait_for_exact_rows",
+                side_effect=error,
+            ):
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.run(
+                        prepared,
+                        parser,
+                        snapshot_output=Path(directory) / "snapshot.json",
+                        expected_target_counts={timestamp: 1},
+                    )
+
+        self.assertIs(error, caught.exception)
+        visibility = harness.last_result["targetVisibility"]
+        self.assertEqual("failed", visibility["status"])
+        self.assertEqual("query", visibility["error"]["stage"])
+        self.assertEqual(
+            "Validation deadline expired.",
+            visibility["error"]["message"],
+        )
+        self.assertEqual(
+            error.details,
+            visibility["error"]["details"],
+        )
+        self.assertIsNone(harness.last_result["outputValidation"])
 
     def test_full_run_uses_validation_runner_counts_and_outputs(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
@@ -928,6 +1028,15 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         self.assertEqual(
             "passed", result["outputValidation"]["status"]
+        )
+        self.assertEqual(
+            {
+                "status": "passed",
+                "expectedCounts": {timestamp: 1},
+                "observedCounts": {timestamp: 1},
+                "missingTimestamps": [],
+            },
+            result["targetVisibility"],
         )
         self.assertIn(
             "filter-validation",

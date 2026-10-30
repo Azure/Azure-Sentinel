@@ -83,6 +83,62 @@ def _error_detail(error: Any) -> str:
     return "; ".join(unique)
 
 
+def _target_visibility_stage(
+    validation: Mapping[str, Any],
+    *,
+    error: Any,
+    error_stage: Any,
+) -> dict[str, Any]:
+    outcome = validation.get("targetVisibility")
+    if isinstance(outcome, Mapping):
+        status = outcome.get("status")
+        if not isinstance(status, str) or status not in {
+            "passed",
+            "failed",
+            "not-run",
+        }:
+            status = "not-run"
+        detail = (
+            _error_detail(outcome.get("error"))
+            if status == "failed"
+            else ""
+        )
+        return _stage(str(status), detail, outcome)
+
+    if error_stage == "target-visibility":
+        return _stage("failed", _error_detail(error), {"legacy": True})
+
+    telemetry = validation.get("telemetry")
+    timings = (
+        telemetry.get("stageTimingsSeconds")
+        if isinstance(telemetry, Mapping)
+        else None
+    )
+    if not isinstance(timings, Mapping):
+        timings = {}
+    output_validation = validation.get("outputValidation")
+    # Older artifacts need both the exact deadline and stage timing to infer
+    # this failure; other generic query errors remain unattributed.
+    if (
+        error_stage == "query"
+        and isinstance(error, Mapping)
+        and error.get("message") == "Validation deadline expired."
+        and "target-visibility" in timings
+        and "output-validation" not in timings
+        and output_validation is None
+    ):
+        return _stage("failed", _error_detail(error), {"legacy": True})
+
+    if (
+        validation.get("status") == "completed"
+        or isinstance(output_validation, Mapping)
+        or "output-validation" in timings
+    ):
+        return _stage("passed", evidence={"legacy": True})
+
+    return _stage("not-run", evidence={"legacy": True})
+
+
 def _row_payload(example: Any) -> dict[str, Any]:
     if not isinstance(example, Mapping):
         return {}
@@ -278,6 +334,12 @@ def build_report(
         else None
     )
     error_detail = _error_detail(error)
+    target_visibility = _target_visibility_stage(
+        validation,
+        error=error,
+        error_stage=error_stage,
+    )
+    visibility_failed = target_visibility["status"] == "failed"
 
     if isinstance(prepared_fixture, Mapping):
         fixture = _stage(
@@ -332,7 +394,9 @@ def build_report(
     )
     raw_dcr = _stage(
         (
-            "passed"
+            "not-run"
+            if visibility_failed
+            else "passed"
             if raw_dcr_value
             else "warning"
             if qtp_replay_status == "warning"
@@ -341,7 +405,9 @@ def build_report(
             else "not-run"
         ),
         (
-            qtp_replay_detail
+            ""
+            if visibility_failed
+            else qtp_replay_detail
             if qtp_replay_status == "warning"
             else ""
         ),
@@ -350,13 +416,18 @@ def build_report(
                 "dcr": raw_dcr_value,
                 "qtpSourceReplay": qtp_source_replay,
             }
-            if isinstance(qtp_source_replay, Mapping)
+            if not visibility_failed
+            and isinstance(qtp_source_replay, Mapping)
+            else None
+            if visibility_failed
             else raw_dcr_value
         ),
     )
     raw_ingestion = _stage(
         (
-            "failed"
+            "not-run"
+            if visibility_failed
+            else "failed"
             if qtp_replay_status == "failed"
             else "blocked"
             if qtp_replay_status == "warning"
@@ -367,13 +438,17 @@ def build_report(
             else "not-run"
         ),
         (
-            qtp_replay_detail
+            ""
+            if visibility_failed
+            else qtp_replay_detail
             if qtp_replay_status == "failed"
             else "Blocked by QTP raw DCR creation warning."
             if qtp_replay_status == "warning"
             else ""
         ),
-        {
+        None
+        if visibility_failed
+        else {
             "upload": validation.get("rawUpload", []),
             "qtpSourceReplay": qtp_source_replay,
         },
@@ -402,20 +477,31 @@ def build_report(
         error_detail if parser_dcr_failed else "",
         parser_dcr_value,
     )
-    parser_ingestion_failed = error_stage in {
+    parser_upload_failed = error_stage in {
         "upload",
         "upload-reconciliation",
-        "target-visibility",
-    } and bool(validation.get("parserDcr"))
-    parser_ingestion = _stage(
+    }
+    parser_ingestion_status = (
         "failed"
-        if parser_ingestion_failed
+        if parser_upload_failed or target_visibility["status"] == "failed"
         else "passed"
         if validation.get("parserUpload")
-        else "not-run",
-        error_detail if parser_ingestion_failed else "",
+        and target_visibility["status"] == "passed"
+        else "not-run"
+    )
+    parser_ingestion_detail = (
+        error_detail
+        if parser_upload_failed
+        else target_visibility["detail"]
+        if target_visibility["status"] == "failed"
+        else ""
+    )
+    parser_ingestion = _stage(
+        parser_ingestion_status,
+        parser_ingestion_detail,
         validation.get("parserUpload", []),
     )
+    parser_ingestion["targetVisibility"] = target_visibility
 
     output_validation = validation.get("outputValidation")
     schema_validation = (
@@ -438,16 +524,33 @@ def build_report(
         if isinstance(output_validation, Mapping)
         else None
     )
+    schema_status = (
+        "not-run"
+        if visibility_failed
+        else str(schema_validation.get("status"))
+        if isinstance(schema_validation, Mapping)
+        and isinstance(schema_validation.get("status"), str)
+        and schema_validation.get("status")
+        in {"passed", "failed", "blocked", "not-run", "not-applicable"}
+        else "not-run"
+    )
+    schema_detail = (
+        ""
+        if visibility_failed
+        else _short_message(schema_validation.get("detail"))
+        if isinstance(schema_validation, Mapping)
+        else ""
+    )
     schema_stage = _stage(
-        "passed" if validation.get("parserDcr") else (
-            "failed" if error_stage == "output-validation" else "not-run"
-        ),
-        error_detail if error_stage == "output-validation" else "",
-        schema_validation,
+        schema_status,
+        schema_detail,
+        None if visibility_failed else schema_validation,
     )
     data_stage = _stage(
         (
-            str(data_validation.get("status"))
+            "not-run"
+            if visibility_failed
+            else str(data_validation.get("status"))
             if isinstance(data_validation, Mapping)
             else "passed"
             if error_stage
@@ -456,10 +559,25 @@ def build_report(
             if error_stage == "asim-data"
             else "not-run"
         ),
-        error_detail if error_stage == "asim-data" else "",
-        data_validation,
+        (
+            error_detail
+            if error_stage == "asim-data" and not visibility_failed
+            else ""
+        ),
+        None if visibility_failed else data_validation,
     )
-    if counterpart["status"] in {"not-applicable", "blocked"}:
+    if visibility_failed:
+        qtp_stage = _stage(
+            "not-run",
+            "Not run because parser target visibility failed.",
+            None,
+        )
+        parity_stage = _stage(
+            "not-run",
+            "Not run because parser target visibility failed.",
+            None,
+        )
+    elif counterpart["status"] in {"not-applicable", "blocked"}:
         qtp_stage = counterpart
         parity_stage = _stage(
             counterpart["status"], counterpart["detail"]
