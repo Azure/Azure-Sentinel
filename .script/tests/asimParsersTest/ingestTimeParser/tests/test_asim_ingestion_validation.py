@@ -53,6 +53,62 @@ class FakeQueryClient:
 
 
 class QueryConstructionTests(unittest.TestCase):
+    def test_dns_data_tester_normalizes_physical_threat_columns(self):
+        query = VALIDATION.build_asim_tester_query(
+            tester_name="ASimDataTester",
+            tester_query="T | project Result = 'test'",
+            target_table="ASimDnsActivityLogs",
+            timestamps=[TIMESTAMP_1],
+            schema_name="Dns",
+        )
+
+        target_query, tester_query = query.split(
+            "let _AsimValidationTester", 1
+        )
+        self.assertIn(f"datetime({TIMESTAMP_1})", target_query)
+        for field in (
+            "ThreatFirstReportedTime",
+            "ThreatLastReportedTime",
+        ):
+            self.assertIn(
+                f'{field} = coalesce(column_ifexists("{field}_d", '
+                f'datetime(null)), todatetime(column_ifexists('
+                f'"{field}", "")))',
+                target_query,
+            )
+        self.assertIn(
+            'ThreatOriginalRiskLevel = coalesce(column_ifexists('
+            '"ThreatOriginalRiskLevel_s", ""), tostring(column_ifexists('
+            '"ThreatOriginalRiskLevel", int(null))))',
+            target_query,
+        )
+        self.assertIn(
+            "| invoke _AsimValidationTester('Dns')", tester_query
+        )
+
+    def test_data_tester_leaves_other_target_tables_unchanged(self):
+        for table, schema in (
+            ("ASimAuthenticationEventLogs", "Authentication"),
+            ("CustomDns_CL", "Dns"),
+        ):
+            with self.subTest(table=table):
+                query = VALIDATION.build_asim_tester_query(
+                    tester_name="ASimDataTester",
+                    tester_query="T | project Result = 'test'",
+                    target_table=table,
+                    timestamps=[TIMESTAMP_1],
+                    schema_name=schema,
+                )
+
+                self.assertIn(
+                    f"{table}\n| where TimeGenerated in "
+                    f"(datetime({TIMESTAMP_1})));",
+                    query,
+                )
+                self.assertNotIn("ThreatFirstReportedTime", query)
+                self.assertNotIn("ThreatLastReportedTime", query)
+                self.assertNotIn("ThreatOriginalRiskLevel", query)
+
     def test_builds_typed_fixture_filter_query(self):
         query = VALIDATION.build_filter_count_query(
             "source",
