@@ -1,0 +1,195 @@
+Parser:
+  Title: AuditEvent ASIM filtering parser for Salesforce Real-Time Event Monitoring
+  Version: '0.1.0'
+  LastUpdated: Oct 30, 2026
+Product:
+  Name: Salesforce Real-Time Event Monitoring
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Salesforce Real-Time Event Monitoring connector
+  Link: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesForceRealTimeEventMonitoringConnector_CCF
+- Title: Salesforce PermissionSetEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-permissionseteventstore.html
+Description: |
+  Normalizes PermissionSetEventStore permission-definition changes, excluding user-assignment operations handled by the UserManagement parser. Business-data API, report, and list-view activity is not represented as a configuration audit event.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: vimAuditEventSalesforceRealTimeEventMonitoring
+EquivalentBuiltInParser: _Im_AuditEvent_SalesforceRealTimeEventMonitoring
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: ""
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // Schema: AuditEvent 1.0.0. Permission definitions, not business-record CRUD.
+  let parser = (
+      starttime: datetime = datetime(null),
+      endtime: datetime = datetime(null),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresult: string = "",
+      actorusername_has_any: dynamic = dynamic([]),
+      operation_has_any: dynamic = dynamic([]),
+      object_has_any: dynamic = dynamic([]),
+      newvalue_has_any: dynamic = dynamic([]),
+      disabled: bool = false,
+      pack: bool = false
+  ) {
+      let _actorusername_has_any = case(isnull(actorusername_has_any) or tostring(actorusername_has_any) == "", dynamic([]), gettype(actorusername_has_any) == "array", actorusername_has_any, pack_array(tostring(actorusername_has_any)));
+      let _operation_has_any = case(isnull(operation_has_any) or tostring(operation_has_any) == "", dynamic([]), gettype(operation_has_any) == "array", operation_has_any, pack_array(tostring(operation_has_any)));
+      let _object_has_any = case(isnull(object_has_any) or tostring(object_has_any) == "", dynamic([]), gettype(object_has_any) == "array", object_has_any, pack_array(tostring(object_has_any)));
+      let _newvalue_has_any = case(isnull(newvalue_has_any) or tostring(newvalue_has_any) == "", dynamic([]), gettype(newvalue_has_any) == "array", newvalue_has_any, pack_array(tostring(newvalue_has_any)));
+      SalesForceRealTimeEventMonitoring_CL
+      | where not(disabled)
+      | where array_length(_newvalue_has_any) == 0
+      | where isnull(starttime) or TimeGenerated >= starttime
+      | where isnull(endtime) or TimeGenerated <= endtime
+      | where EventType == "PermissionSetEventStore"
+      | where Operation !in ("AssignedToUsers", "UnassignedFromUsers")
+      | where array_length(_actorusername_has_any) == 0 or UserNameDetail has_any (_actorusername_has_any)
+      | where array_length(_operation_has_any) == 0 or Operation has_any (_operation_has_any)
+      | extend
+          _SourceType = EventType,
+          _Org = SalesforceDomain,
+          SrcIpAddr = iff(isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp, "")
+      | where array_length(srcipaddr_has_any_prefix) == 0 or SrcIpAddr in (srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+      | extend
+          EventType = case(
+              Operation in ("PermsEnabled", "CriticalPerms"), "Enable",
+              Operation == "PermsDisabled", "Disable",
+              "Other")
+      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+      | extend
+          EventResult = case(
+              PolicyOutcome in ("Block", "MeteringBlock", "EndSession", "TwoFADenied", "TwoFAReportedDenied")
+                  or PolicyOutcome startswith "Failed" or PolicyOutcome startswith "TwoFAFailed", "Failure",
+              PolicyOutcome in ("", "NoAction", "ExemptNoAction", "MeteringNoAction", "Notified",
+                  "TwoFANoAction", "TwoFASucceeded", "TwoFAAutomatedSuccess"), "Success",
+              "NA")
+      | where isempty(eventresult) or EventResult == eventresult
+      | extend
+          Object = case(
+              array_length(ParentNameList) == 1, tostring(ParentNameList[0]),
+              array_length(ParentNameList) > 1, tostring(ParentNameList),
+              array_length(ParentIdList) == 1, tostring(ParentIdList[0]),
+              array_length(ParentIdList) > 1, tostring(ParentIdList),
+              tostring(PermissionList))
+      | where array_length(_object_has_any) == 0 or Object has_any (_object_has_any)
+      | extend
+          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host)
+      | extend
+          EventStartTime = coalesce(EventDate, TimeGenerated),
+          EventEndTime = coalesce(EventDate, TimeGenerated),
+          EventCount = toint(1),
+          EventVendor = "Salesforce",
+          EventProduct = "Real-Time Event Monitoring",
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "1.0.0",
+          EventOriginalType = _SourceType,
+          EventSeverity = "Informational",
+          EventUid = coalesce(EventIdentifier, SalesforceObjectId, EventUuid),
+          EventOriginalUid = SalesforceObjectId,
+          EventOriginalResultDetails = PolicyOutcome,
+          EventMessage = Operation,
+          ObjectId = iff(array_length(ParentIdList) == 1, tostring(ParentIdList[0]), ""),
+          ObjectType = "Policy Rule",
+          OriginalObjectType = PermissionType,
+          Dvc = coalesce(_OrgHost, "Salesforce Real-Time Event Monitoring"),
+          DvcFQDN = _OrgHost,
+          DvcHostname = tostring(split(_OrgHost, ".")[0]),
+          DvcDomain = iff(indexof(_OrgHost, ".") >= 0, substring(_OrgHost, indexof(_OrgHost, ".") + 1), ""),
+          DvcScope = _OrgHost,
+          DvcOriginalAction = PolicyOutcome,
+          DvcAction = case(
+              PolicyOutcome in ("Block", "MeteringBlock"), "Deny",
+              PolicyOutcome == "EndSession", "Terminate",
+              PolicyOutcome in ("NoAction", "ExemptNoAction", "MeteringNoAction", "Notified",
+                  "TwoFANoAction", "TwoFASucceeded", "TwoFAAutomatedSuccess"), "Allow",
+              ""),
+          ActorUserId = UserId,
+          ActorUserIdType = iff(isempty(UserId), "", "SalesforceId"),
+          ActorUsername = UserNameDetail,
+          ActorUsernameType = iff(isempty(UserNameDetail), "", iff(UserNameDetail contains "@", "UPN", "Simple")),
+          ActorScope = _OrgHost,
+          ActorSessionId = SessionKey,
+          TargetAppName = "Salesforce",
+          TargetAppType = "SaaS application",
+          RuleName = coalesce(PolicyId, Policy),
+          AdditionalFields = iff(pack, bag_pack(
+              "ParentIdList", ParentIdList, "ParentNameList", ParentNameList,
+              "PermissionList", PermissionList, "PermissionType", PermissionType,
+              "ImpactedUserIds", ImpactedUserIds, "UserCount", UserCount,
+              "HasExternalUsers", HasExternalUsers,
+              "PermissionExpiration", PermissionExpiration,
+              "PermissionExpirationList", PermissionExpirationList,
+              "LoginKey", LoginKey, "SourceIp", SourceIp, "EventSource", EventSource,
+              "LoginHistoryId", LoginHistoryId, "SessionLevel", SessionLevel,
+              "RelatedEventIdentifier", RelatedEventIdentifier,
+              "PolicyOutcome", PolicyOutcome, "EvaluationTime", EvaluationTime), dynamic({})),
+          DvcEntityKey = "",
+          ActorUserEntityKey = "",
+          SrcSystemEntityKey = "",
+          TargetSystemEntityKey = "",
+          ActingApplicationEntityKey = "",
+          TargetApplicationEntityKey = "",
+          ActorUserAdditionalIds = dynamic([]),
+          AdditionalEntities = dynamic([])
+      | extend
+          DvcDomainType = iff(isempty(DvcDomain), "", "FQDN"),
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          User = ActorUsername,
+          Application = TargetAppName,
+          Dst = TargetAppName,
+          Rule = RuleName
+      | project
+          TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+          EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+          EventOriginalType, EventType, EventResult, EventSeverity,
+          EventUid, EventOriginalUid, EventOriginalResultDetails, EventMessage,
+          Operation, Object, ObjectId, ObjectType, OriginalObjectType,
+          Dvc, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, DvcScope, DvcOriginalAction, DvcAction,
+          ActorUserId, ActorUserIdType, ActorUsername, ActorUsernameType,
+          ActorScope, ActorSessionId, User, SrcIpAddr, Src, IpAddr,
+          TargetAppName, TargetAppType, Application, Dst, RuleName, Rule,
+          AdditionalFields, DvcEntityKey, ActorUserEntityKey, SrcSystemEntityKey,
+          TargetSystemEntityKey, ActingApplicationEntityKey, TargetApplicationEntityKey,
+          ActorUserAdditionalIds, AdditionalEntities
+  };
+  parser(starttime, endtime, srcipaddr_has_any_prefix, eventtype_in, eventresult,
+      actorusername_has_any, operation_has_any, object_has_any, newvalue_has_any, disabled, pack)
