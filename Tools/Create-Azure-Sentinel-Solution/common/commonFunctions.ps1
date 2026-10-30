@@ -64,6 +64,9 @@ function Resolve-SolutionContentPath {
         }
         $normalized = $parts[2..($parts.Count - 1)] -join '/'
     }
+    elseif ($parts.Count -ge 2 -and $parts[0] -ceq $SolutionName) {
+        $normalized = $parts[1..($parts.Count - 1)] -join '/'
+    }
 
     $root = [System.IO.Path]::GetFullPath($SolutionRoot).TrimEnd(
         [System.IO.Path]::DirectorySeparatorChar,

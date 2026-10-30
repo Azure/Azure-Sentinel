@@ -19,6 +19,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\common\storageAccountDeploymentTemplate.ps1')
 . (Join-Path $PSScriptRoot '..\common\eventGridManagedIdentityDeploymentTemplate.ps1')
+. (Join-Path $PSScriptRoot '..\common\commonFunctions.ps1')
 
 function Assert-Equal($Actual, $Expected) {
     $actualJson = ConvertTo-Json -InputObject $Actual -Depth 100 -Compress
@@ -66,7 +67,7 @@ function Get-TestFixture([bool]$ManagedIdentity, $AdvancedFilters = $null, [bool
             mainTemplate = [pscustomobject]@{ variables = $variables }
         }
     }
-    Set-ResourceVariables -eventGridUseManagedIdentity $ManagedIdentity
+    Set-ResourceVariables -eventGridUseManagedIdentity $ManagedIdentity -isManagedServicePrincipal $ManagedCollector
     $deployment = Get-StorageAccountDeploymentTemplate `
         -eventGridUseManagedIdentity $ManagedIdentity `
         -resourceVariables $templateContentConnections.properties.mainTemplate.variables `
@@ -82,7 +83,54 @@ function Get-OnlyResource($Template, [string]$Type) {
     return $matches[0]
 }
 
+function Remove-CollectorRbac($Deployment) {
+    $copy = $Deployment | ConvertTo-Json -Depth 100 | ConvertFrom-Json -AsHashtable -Depth 100
+    $collectorRoleTypes = @(
+        'Microsoft.Storage/storageAccounts/blobServices/containers/providers/roleAssignments',
+        'Microsoft.Storage/storageAccounts/queueServices/queues/providers/roleAssignments'
+    )
+    $copy.properties.template.resources = @(
+        $copy.properties.template.resources |
+            Where-Object { $_.type -notin $collectorRoleTypes }
+    )
+    foreach ($name in @(
+        'principalId', 'storageBlobReaderRoleId', 'storageQueueContributorRoleId',
+        'blobRaGuid', 'notificationQueueRaGuid', 'dlqRaGuid', 'dlqResourceId'
+    )) {
+        $copy.properties.parameters.Remove($name)
+        $copy.properties.template.parameters.Remove($name)
+        $copy.properties.template.variables.Remove($name)
+    }
+    return $copy
+}
+
 $tests = [ordered]@{
+    'Solution content paths accept existing solution-prefixed references' = {
+        $root = Join-Path ([System.IO.Path]::GetTempPath()) "sentinel-solution-path-test-$([guid]::NewGuid().ToString('N'))"
+        $solutionRoot = Join-Path $root 'Cloudflare'
+        $connector = Join-Path $solutionRoot 'Data Connectors\connector.json'
+        try {
+            New-Item -ItemType Directory -Path (Split-Path $connector -Parent) -Force | Out-Null
+            Set-Content -LiteralPath $connector -Value '{}' -NoNewline
+            foreach ($path in @(
+                'Data Connectors/connector.json',
+                'Cloudflare/Data Connectors/connector.json',
+                'Solutions/Cloudflare/Data Connectors/connector.json'
+            )) {
+                $resolved = Resolve-SolutionContentPath `
+                    -SolutionRoot $solutionRoot `
+                    -SolutionName 'Cloudflare' `
+                    -ContentPath $path `
+                    -RequireFile
+                Assert-Equal $resolved.RelativePath 'Data Connectors/connector.json'
+            }
+        }
+        finally {
+            if (Test-Path $root) {
+                Remove-Item -LiteralPath $root -Recurse -Force
+            }
+        }
+    }
     'GitHub polling configuration generates managed-identity delivery with its audit filter' = {
         $repoRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
         $pollingPath = Join-Path $repoRoot 'Solutions\GitHub\Data Connectors\GitHubAuditLogs_AzStorage\PollingConfig.json'
@@ -179,19 +227,53 @@ $tests = [ordered]@{
         Assert-Equal $inner.parameters.blobFolderName.defaultValue ''
         Assert-Equal $subscription.properties.filter.subjectBeginsWith "[[format('{0}/{1}/blobs/{2}', '/blobServices/default/containers', variables('blobContainerName'), if(empty(parameters('blobFolderName')), '', concat(parameters('blobFolderName'),'/')))]"
     }
-    'Managed collectors do not create Sentinel collector grants; service-principal collectors retain them' = {
+    'Both collector modes receive least-privilege grants with compatible assignment names' = {
         foreach ($enabled in @($false, $true)) {
             $managedCollector = Get-TestFixture $enabled $null $true
-            Assert-Equal @($managedCollector.properties.template.resources | Where-Object type -like '*/providers/roleAssignments').Count 0
-            $legacyCollector = Get-TestFixture $enabled
-            Assert-Equal @($legacyCollector.properties.template.resources | Where-Object type -like '*/providers/roleAssignments').Count 3
+            $servicePrincipalCollector = Get-TestFixture $enabled
+            foreach ($fixture in @($managedCollector, $servicePrincipalCollector)) {
+                $assignments = @($fixture.properties.template.resources | Where-Object type -like '*/providers/roleAssignments')
+                Assert-Equal $assignments.Count 3
+                $blobAssignment = @($assignments | Where-Object type -like '*/blobServices/containers/providers/roleAssignments')[0]
+                Assert-Equal $blobAssignment.properties.roleDefinitionId "[[variables('storageBlobReaderRoleId')]"
+                Assert-Equal $blobAssignment.properties.principalId "[[parameters('principalId')]"
+            }
             if ($enabled) {
-                Assert-Equal $legacyCollector.properties.parameters.principalId.value "[[parameters('principalId')]"
-                Assert-Equal $legacyCollector.properties.template.variables.blobRaGuid "[[parameters('blobRaGuid')]"
+                foreach ($fixture in @($managedCollector, $servicePrincipalCollector)) {
+                    Assert-Equal $fixture.properties.parameters.principalId.value "[[parameters('principalId')]"
+                    Assert-Equal $fixture.properties.template.parameters.principalId.type 'securestring'
+                    Assert-Equal $fixture.properties.template.variables.blobRaGuid "[[parameters('blobRaGuid')]"
+                    Assert-Equal $fixture.properties.parameters.blobRaGuid.value "[[variables('blobRaGuid')]"
+                    Assert-Equal $fixture.properties.template.variables.notificationQueueRaGuid "[[parameters('notificationQueueRaGuid')]"
+                }
             }
         }
-        Assert-Equal $inner.resources.Count 5
-        Assert-Equal $inner.parameters.ContainsKey('principalId') $false
+        $variables = [ordered]@{}
+        $templateContentConnections = [pscustomobject]@{
+            properties = [pscustomobject]@{ mainTemplate = [pscustomobject]@{ variables = $variables } }
+        }
+        Set-ResourceVariables -eventGridUseManagedIdentity $true -isManagedServicePrincipal $true
+        Assert-Equal $variables.storageBlobReaderRoleId `
+            "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')]"
+        Assert-Equal $variables.blobRaGuid `
+            "[[guid(toLower(variables('storageAccountId')), toLower(variables('blobContainerName')), toLower(parameters('principalId')), toLower(variables('storageBlobReaderRoleId')))]"
+        Assert-Equal $variables.notificationQueueRaGuid `
+            "[[guid(toLower(variables('notificationQueueResourceId')), toLower(parameters('principalId')), toLower(variables('storageQueueContributorRoleId')))]"
+        Assert-Equal $variables.dlqRaGuid `
+            "[[guid(toLower(variables('dlqResourceId')), toLower(parameters('principalId')), toLower(variables('storageQueueContributorRoleId')))]"
+        $variables = [ordered]@{}
+        $templateContentConnections = [pscustomobject]@{
+            properties = [pscustomobject]@{ mainTemplate = [pscustomobject]@{ variables = $variables } }
+        }
+        Set-ResourceVariables -eventGridUseManagedIdentity $true
+        Assert-Equal $variables.blobRaGuid `
+            "[[guid(variables('storageAccountName'), variables('blobContainerName'))]"
+        Assert-Equal $variables.notificationQueueRaGuid `
+            "[[guid(variables('storageAccountName'), variables('queueName'))]"
+        Assert-Equal $variables.dlqRaGuid `
+            "[[guid(variables('storageAccountName'), variables('dlqName'))]"
+        Assert-Equal $inner.resources.Count 8
+        Assert-Equal $inner.parameters.ContainsKey('principalId') $true
     }
     'Subscription uses managed-identity delivery, not the legacy destination property' = {
         Assert-Equal $subscription.properties.ContainsKey('destination') $false
@@ -265,7 +347,7 @@ if ($ReferenceTemplatePath) {
         $referenceDeployment = Get-OnlyResource $connections[0].properties.mainTemplate 'Microsoft.Resources/deployments'
         $referenceSubscription = Get-OnlyResource $referenceDeployment.properties.template 'Microsoft.EventGrid/systemTopics/eventSubscriptions'
         $actual = Get-TestFixture $true $referenceSubscription.properties.filter.advancedFilters $true
-        Assert-Equivalent $actual $referenceDeployment
+        Assert-Equivalent (Remove-CollectorRbac $actual) $referenceDeployment
     }
 }
 
@@ -285,6 +367,9 @@ $tests['CCF packaging preserves source content, optional parameters and both col
         Copy-Item -LiteralPath (Join-Path $repoRoot 'Solutions\GitHub\Data Connectors\GitHubAuditLogs_AzStorage\table_GitHubAuditLogsV3.json') -Destination $fixtureConnector
         $sourceDefinition = Get-Content -LiteralPath (Join-Path $fixtureConnector 'ConnectorDefinition.json') -Raw | ConvertFrom-Json -AsHashtable -Depth 100
         $sourceDcr = Get-Content -LiteralPath (Join-Path $fixtureConnector 'DCR.json') -Raw | ConvertFrom-Json -AsHashtable -Depth 100
+        if ($ConnectorDirectory) {
+            Assert-Equal (($sourceDefinition | ConvertTo-Json -Depth 100 -Compress).Contains('7ae5462d-d9d1-42f6-93ca-198d7b0ca997')) $true
+        }
         $pollingPath = Join-Path $fixtureConnector 'PollingConfig.json'
         $polling = Get-Content -LiteralPath $pollingPath -Raw | ConvertFrom-Json -Depth 100
         foreach ($authType in @('ManagedServicePrincipal', 'ServicePrincipal')) {
@@ -329,11 +414,11 @@ $tests['CCF packaging preserves source content, optional parameters and both col
             Assert-Equivalent $dcr.properties.streamDeclarations $sourceDcr.properties.streamDeclarations
             Assert-Equivalent $dcr.properties.dataFlows $sourceDcr.properties.dataFlows
             $deployment = Get-OnlyResource $connectionTemplate 'Microsoft.Resources/deployments'
-            Assert-Equal @($deployment.properties.template.resources | Where-Object type -like '*/providers/roleAssignments').Count $(if ($authType -eq 'ManagedServicePrincipal') { 0 } else { 3 })
+            Assert-Equal @($deployment.properties.template.resources | Where-Object type -like '*/providers/roleAssignments').Count 3
             if ($ReferenceTemplatePath -and $authType -eq 'ManagedServicePrincipal') {
                 $reference = Get-Content -LiteralPath $ReferenceTemplatePath -Raw | ConvertFrom-Json -AsHashtable -Depth 100
                 $referenceConnections = @($reference.resources | Where-Object { $_.properties.contentKind -eq 'ResourcesDataConnector' })[0].properties.mainTemplate
-                Assert-Equivalent $deployment (Get-OnlyResource $referenceConnections 'Microsoft.Resources/deployments')
+                Assert-Equivalent (Remove-CollectorRbac $deployment) (Get-OnlyResource $referenceConnections 'Microsoft.Resources/deployments')
             }
         }
     }

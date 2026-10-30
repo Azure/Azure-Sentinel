@@ -48,7 +48,12 @@ foreach ($dir in $solutions) {
     $templateText = (Get-ChildItem -LiteralPath $dir.FullName -Filter mainTemplate.json -Recurse |
         ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
     $testParameter = Get-SentinelArmTtkTestParameter -TemplateText $templateText
-    $results = @(Test-AzTemplate -TemplatePath $dir.FullName -TestParameter $testParameter)
+    $results = @(
+        Test-AzTemplate `
+            -TemplatePath $dir.FullName `
+            -TestParameter $testParameter `
+            -ErrorAction Continue
+    )
     $resolved = Resolve-SentinelArmTtkMainTemplateResults -Results $results
 
     foreach ($testInfo in $resolved.Results) {
