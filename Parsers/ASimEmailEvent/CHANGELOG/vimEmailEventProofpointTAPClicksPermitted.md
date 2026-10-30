@@ -1,5 +1,10 @@
 # Changelog for vimEmailEventProofpointTAPClicksPermitted.yaml
 
+## Version 0.1.3
+
+- (2026-10-30) Read the source id directly for EventOriginalUid instead of substituting an empty value when the column is missing - [PR #15501](https://github.com/Azure/Azure-Sentinel/pull/15501)
+- Require the declared source id column; retain all existing filtering, mappings, and packing behavior.
+
 ## Version 0.1.2
 
 - (2026-10-29) Read the optional source id defensively while retaining the existing filtering behavior - [PR #15483](https://github.com/Azure/Azure-Sentinel/pull/15483)
