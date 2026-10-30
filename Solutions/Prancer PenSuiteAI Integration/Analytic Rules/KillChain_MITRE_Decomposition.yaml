@@ -1,0 +1,90 @@
+id: 13c8adbf-9aff-444f-9325-636d366e1591
+name: Kill chain decomposition - deep or dangerous-technique chains
+description: |
+  'Decomposes KillChain''s free-text stage-arrow format ("Stage A via/to detail -> Stage B via/to detail -> ...")
+  into a per-finding, per-stage MITRE tactic/technique chain - replacing a static, rule-level, identical-
+  for-every-finding tactic tag with genuine per-finding mapping. Flags kill chains that are either deep
+  (4+ stages) or contain a dangerous technique marker (Mimikatz, DCSync, Golden/Silver Ticket, Kerberoast,
+  ADCS ESC1/2/8, NTDS.dit, Pass-the-Hash). VALIDATION NOTE (2026-08-11): live-tested against real production
+  data - the query executes cleanly and correctly returns zero matches today, because observed KillChain
+  values are a flat scan-level execution-mode string ("full"), not a per-finding stage-arrow path. Safe to
+  ship (no errors, no false positives), but functionally dormant until SwarmHack populates a real per-finding
+  narrative in KillChain - revisit once that data is confirmed available.'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - CredentialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1003
+  - T1558
+  - T1649
+  - T1550
+query: |
+  // split() on '->' is cheap; the StageCount/dangerous-marker where-clause runs immediately after split
+  // and before mv-expand, so only kill chains that already qualify pay the per-stage extract() cost.
+  let DangerousTechniqueMarkers = dynamic([
+      'Mimikatz', 'DCSync', 'Golden Ticket', 'Silver Ticket', 'Kerberoast',
+      'ADCS ESC1', 'ADCS ESC2', 'ADCS ESC8', 'NTDS.dit', 'Pass-the-Hash', 'Pass the Hash'
+  ]);
+  PrancerFindings
+  | where DeviceProduct == 'swarmhack'
+  | where isnotempty(KillChain)
+  | extend KillChainStages = split(KillChain, '->')
+  | extend StageCount = array_length(KillChainStages)
+  | where StageCount >= 4 or KillChain has_any (DangerousTechniqueMarkers)
+  | mv-expand with_itemindex = StageIndex KillChainStages
+  | extend Stage = trim(' ', tostring(KillChainStages))
+  | extend
+      StageTactic = trim(' ', extract(@'^(.*?)\s+(?:via|to)\s+.*$', 1, Stage)),
+      StageDetail = trim(' ', extract(@'^.*?\s+(?:via|to)\s+(.*)$', 1, Stage))
+  | extend StageIsDangerous = Stage has_any (DangerousTechniqueMarkers)
+  | summarize
+      StageChain = make_list(pack('index', StageIndex, 'tactic', StageTactic, 'detail', StageDetail, 'dangerous', StageIsDangerous)),
+      DangerousStageTactics = make_set_if(StageTactic, StageIsDangerous)
+    by FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, RiskScore, Confidence, ResourceID,
+       KillChain, StageCount, TimeGenerated
+  | extend
+      IsDeepChain = StageCount >= 4,
+      HasDangerousTechnique = array_length(DangerousStageTactics) > 0
+  | extend DecompositionSummary = strcat(
+      StageCount, '-stage kill chain',
+      iff(IsDeepChain, ' (deep)', ''),
+      iff(HasDangerousTechnique, strcat(' - dangerous technique(s) at stage(s): ', tostring(DangerousStageTactics)), ''))
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceID
+customDetails:
+  UniqueFindingId: FindingId
+  StageCount: StageCount
+  RiskScore: RiskScore
+  Confidence: Confidence
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+alertDetailsOverride:
+  alertDisplayNameFormat: "Kill chain decomposition: {{Title}}"
+  alertDescriptionFormat: "{{DecompositionSummary}}"
+  alertSeverityColumnName: Severity
+version: 1.0.0
+kind: Scheduled
