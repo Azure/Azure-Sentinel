@@ -1,0 +1,53 @@
+Parser:
+  DisplayName: 'Web Session ASIM parser for Fortinet FortiGate - ingestion-time normalization'
+  Version: '0.3.0'
+  LastUpdated: '2026-10-22'
+Product:
+  Name: 'Fortinet FortiGate'
+Normalization:
+  Schema: 'WebSession'
+  Version: '0.2.6'
+Author: 'Microsoft'
+Description: |
+  Normalizes Fortinet FortiGate WebSession events from CommonSecurityLog into ASimWebSessionLogs during ingestion.
+ParserName: 'ASimWebSessionFortinetFortiGate'
+DCRType: 'Standard'
+InputStream: 'Microsoft-CommonSecurityLog'
+SourceRawTable: 'CommonSecurityLog'
+TargetASIMTable: 'ASimWebSessionLogs'
+ParserFilterQuery: |
+  source
+  | where DeviceVendor=="Fortinet" and DeviceProduct startswith "Fortigate" and((Activity has 'webfilter' and Activity has 'utm')or(Activity has 'ips' and Activity has 'utm'))
+ParserQuery: |
+  source
+  | extend Type="CommonSecurityLog"
+  | where DeviceVendor=="Fortinet" and DeviceProduct startswith "Fortigate" and((Activity has 'webfilter' and Activity has 'utm')or(Activity has 'ips' and Activity has 'utm'))
+  | extend DvcAction=case(DeviceAction=="passthrough","Allow",DeviceAction=="blocked","Deny","")
+  | extend EventResult=case(DeviceAction=="passthrough","Success",DeviceAction=="blocked","Failure","")
+  | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated,DeviceExternalID,Type,Computer,EventResult,DvcAction,RequestURL,RequestContext,DestinationHostName,SourceHostName,SourceUserName,DestinationUserName,ApplicationProtocol
+  | project-rename Url=RequestURL,UrlCategory=RequestContext,DstBytes=ReceivedBytes,DstInterfaceName=DeviceOutboundInterface,DstIpAddr=DestinationIP,DstPortNumber=DestinationPort,DvcHostname=Computer,EventMessage=Activity,EventOriginalSeverity=LogSeverity,EventProductVersion=DeviceVersion,SrcBytes=SentBytes,SrcInterfaceName=DeviceInboundInterface,SrcIpAddr=SourceIP,SrcPortNumber=SourcePort,DvcId=DeviceExternalID,DstHostname=DestinationHostName,SrcHostname=SourceHostName,SrcUsername=SourceUserName,DstUsername=DestinationUserName,NetworkApplicationProtocol=ApplicationProtocol
+  | extend NetworkProtocolNumber=toint(Protocol)
+  | extend NetworkProtocol=case(NetworkProtocolNumber>=0 and NetworkProtocolNumber<=143,tostring(split("HOPOPT|ICMP|IGMP|GGP|IPv4|ST|TCP|CBT|EGP|IGP|BBN-RCC-MON|NVP-II|PUP|ARGUS (deprecated)|EMCON|XNET|CHAOS|UDP|MUX|DCN-MEAS|HMP|PRM|XNS-IDP|TRUNK-1|TRUNK-2|LEAF-1|LEAF-2|RDP|IRTP|ISO-TP4|NETBLT|MFE-NSP|MERIT-INP|DCCP|3PC|IDPR|XTP|DDP|IDPR-CMTP|TP++|IL|IPv6|SDRP|IPv6-Route|IPv6-Frag|IDRP|RSVP|GRE|DSR|BNA|ESP|AH|I-NLSP|SWIPE (deprecated)|NARP|MOBILE|TLSP|SKIP|IPv6-ICMP|IPv6-NoNxt|IPv6-Opts||CFTP||SAT-EXPAK|KRYPTOLAN|RVD|IPPC||SAT-MON|VISA|IPCV|CPNX|CPHB|WSN|PVP|BR-SAT-MON|SUN-ND|WB-MON|WB-EXPAK|ISO-IP|VMTP|SECURE-VMTP|VINES|IPTM|NSFNET-IGP|DGP|TCF|EIGRP|OSPFIGP|Sprite-RPC|LARP|MTP|AX.25|IPIP|MICP (deprecated)|SCC-SP|ETHERIP|ENCAP||GMTP|IFMP|PNNI|PIM|ARIS|SCPS|QNX|A/N|IPComp|SNP|Compaq-Peer|IPX-in-IP|VRRP|PGM||L2TP|DDX|IATP|STP|SRP|UTI|SMP|SM (deprecated)|PTP|ISIS over IPv4|FIRE|CRTP|CRUDP|SSCOPMCE|IPLT|SPS|PIPE|SCTP|FC|RSVP-E2E-IGNORE|Mobility Header|UDPLite|MPLS-in-IP|manet|HIP|Shim6|WESP|ROHC|Ethernet","|")[NetworkProtocolNumber]),NetworkProtocolNumber==255,"Reserved","")
+  | extend NetworkProtocol=case(NetworkProtocol !="",NetworkProtocol,"Unassigned")
+  | extend DstUsernameType=(case(DstUsername contains "@","UPN",DstUsername contains "\\","Windows",(DstUsername has "CN=" or DstUsername has "OU=" or DstUsername has "DC="),"DN",isempty(DstUsername),"","Simple")),SrcUsernameType=(case(SrcUsername contains "@","UPN",SrcUsername contains "\\","Windows",(SrcUsername has "CN=" or SrcUsername has "OU=" or SrcUsername has "DC="),"DN",isempty(SrcUsername),"","Simple"))
+  | project-rename DvcOriginalAction=DeviceAction
+  | parse-kv AdditionalExtensions as(start:datetime,srcintfrole:string,dstintfrole:string,externalID:string,policyid:int,dstcountry:string,srccountry:string,crscore:string,duration:int,sentpkt:long,rcvdpkt:long,['ad.referralurl']:string,['ad.httpmethod']:string,['ad.agent']:string,deviceSeverity:string,ref:string,msg:string,profile:string,incidentserialno:string,policytype:string,attack:string,attackid:string,logid:string,direction:string,subtype:string,severity: string,vd:string,FTNTFGTattack:string,FTNTFGTattackid:string,FTNTFGTlogid:string,FTNTFGTsubtype:string,FTNTFGTvd:string,FTNTFGTstart:datetime,FTNTFGTsrcintfrole:string,FTNTFGTdstintfrole:string,FTNTFGTexternalID:string,FTNTFGTpolicyid:int,FTNTFGTdstcountry:string,FTNTFGTsrccountry:string,FTNTFGTcrscore:string,FTNTFGTduration:int,FTNTFGTsentpkt:long,FTNTFGTrcvdpkt:long)with(pair_delimiter=';',kv_delimiter='=')
+  | parse AdditionalExtensions with * "x-forwarded-for=" HttpRequestXff:string ";" *
+  | project-rename HttpReferrer=['ad.referralurl'],HttpRequestMethod=['ad.httpmethod'],HttpUserAgent=['ad.agent']
+  | extend ThreatName=iif(isnotempty(attack),attack,FTNTFGTattack),ThreatId=iif(isnotempty(attackid),attackid,FTNTFGTattackid),EventOriginalUid=iif(isnotempty(logid),logid,FTNTFGTlogid),EventOriginalSubType=iif(isnotempty(subtype),subtype,FTNTFGTsubtype),EventStartTime=iif(isnotnull(start),start,FTNTFGTstart),SrcZone=iif(isnotempty(srcintfrole),srcintfrole,FTNTFGTsrcintfrole),DstZone=iif(isnotempty(dstintfrole),dstintfrole,FTNTFGTdstintfrole),NetworkSessionId=iif(isnotempty(externalID),externalID,FTNTFGTexternalID),RuleNumber=iif(isnotnull(policyid),policyid,FTNTFGTpolicyid),NetworkDuration=iif(isnotnull(duration),duration,FTNTFGTduration),DstGeoCountry=iif(isnotempty(dstcountry),dstcountry,FTNTFGTdstcountry),SrcGeoCountry=iif(isnotempty(srccountry),srccountry,FTNTFGTsrccountry),ThreatOriginalRiskLevel=iif(isnotempty(crscore),crscore,FTNTFGTcrscore),SrcPackets=iif(isnotnull(sentpkt),sentpkt,FTNTFGTsentpkt),DstPackets=iif(isnotnull(rcvdpkt),rcvdpkt,FTNTFGTrcvdpkt)
+  | project EventMessage,AdditionalExtensions,DstIpAddr,DstPortNumber,DvcOriginalAction,SrcInterfaceName,DstInterfaceName,DeviceProduct,EventProductVersion,EventOriginalSeverity,Protocol,DstBytes,SrcBytes,SrcIpAddr,SrcPortNumber,TimeGenerated,DvcId,Type,DvcHostname,EventResult,DvcAction,Url,UrlCategory,DstHostname,SrcHostname,SrcUsername,DstUsername,NetworkApplicationProtocol,NetworkProtocolNumber,NetworkProtocol,DstUsernameType,SrcUsernameType,HttpReferrer,HttpRequestMethod,HttpUserAgent,deviceSeverity,ref,msg,profile,incidentserialno,policytype,direction,severity,vd,HttpRequestXff,ThreatName,ThreatId,EventOriginalUid,EventOriginalSubType,EventStartTime,SrcZone,DstZone,NetworkSessionId,RuleNumber,NetworkDuration,DstGeoCountry,SrcGeoCountry,ThreatOriginalRiskLevel,SrcPackets,DstPackets
+  | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
+  | extend HttpRequestMethod=iif(isnotempty(temp_HttpRequestMethod),temp_HttpRequestMethod,HttpRequestMethod),HttpUserAgent=iif(isnotempty(temp_HttpUserAgent),temp_HttpUserAgent,HttpUserAgent)
+  | project EventMessage,AdditionalExtensions,DstIpAddr,DstPortNumber,DvcOriginalAction,SrcInterfaceName,DstInterfaceName,DeviceProduct,EventProductVersion,EventOriginalSeverity,Protocol,DstBytes,SrcBytes,SrcIpAddr,SrcPortNumber,TimeGenerated,DvcId,Type,DvcHostname,EventResult,DvcAction,Url,UrlCategory,DstHostname,SrcHostname,SrcUsername,DstUsername,NetworkApplicationProtocol,NetworkProtocolNumber,NetworkProtocol,DstUsernameType,SrcUsernameType,HttpReferrer,HttpRequestMethod,HttpUserAgent,deviceSeverity,ref,msg,profile,incidentserialno,policytype,direction,severity,vd,HttpRequestXff,ThreatName,ThreatId,EventOriginalUid,EventOriginalSubType,EventStartTime,SrcZone,DstZone,NetworkSessionId,RuleNumber,NetworkDuration,DstGeoCountry,SrcGeoCountry,ThreatOriginalRiskLevel,SrcPackets,DstPackets
+  | extend AdditionalFields=pack("incidentserialno",incidentserialno,"policytype",policytype,"profile",profile,"ref",ref,"vd",vd,"Message",msg,"deviceSeverity",deviceSeverity)
+  | extend EventCount=int(1),EventSchema="WebSession",EventSchemaVersion="0.2.6",EventType="HTTPsession",EventVendor="Fortinet",EventProduct="FortiGate",DvcIdType="Other",NetworkBytes=DstBytes + SrcBytes,EventEndTime=TimeGenerated,EventStartTime=iif(isnotnull(EventStartTime),EventStartTime,TimeGenerated),NetworkProtocolVersion=case(DstIpAddr contains ".","IPv4",DstIpAddr contains ":","IPv6",""),NetworkPackets=DstPackets + SrcPackets,UserAgent=HttpUserAgent,Dvc=DvcHostname,User=SrcUsername,Hostname=DstHostname
+  | extend EventSeverity=case(EventOriginalSeverity=="1","Informational",EventOriginalSeverity=="2","Informational",EventOriginalSeverity=="3","Informational",EventOriginalSeverity=="4","Low",EventOriginalSeverity=="5","Low",EventOriginalSeverity=="6","High",EventOriginalSeverity=="7","Medium",EventOriginalSeverity=="8","High","")
+  | extend ipsseverity=case(severity=="low","Low",severity=="high","High",severity=="medium","Medium",severity=="info","Informational","")
+  | extend EventSeverity=iff((EventMessage has 'ips' and EventMessage has 'utm'),ipsseverity,EventSeverity)
+  | extend Src=SrcIpAddr,Dst=DstIpAddr,SessionId=NetworkSessionId,IpAddr=SrcIpAddr,Duration=NetworkDuration,Rule=tostring(RuleNumber)
+  | extend NetworkDirection=case(direction=="incoming","Inbound",direction=="outgoing","Outbound","")
+  | project-away Protocol,AdditionalExtensions,NetworkProtocolNumber,severity,incidentserialno,policytype,profile,ref,msg,deviceSeverity,direction,vd,ipsseverity
+  | project EventMessage, DstIpAddr, DstPortNumber, DvcOriginalAction, SrcInterfaceName, DstInterfaceName, DeviceProduct, EventProductVersion, EventOriginalSeverity, DstBytes, SrcBytes, SrcIpAddr, SrcPortNumber, TimeGenerated, DvcId, Type, DvcHostname, EventResult, DvcAction, Url, UrlCategory, DstHostname, SrcHostname, SrcUsername, DstUsername, NetworkApplicationProtocol, NetworkProtocol, DstUsernameType, SrcUsernameType, HttpReferrer, HttpRequestMethod, HttpUserAgent, HttpRequestXff, ThreatName, ThreatId, EventOriginalUid, EventOriginalSubType, EventStartTime, SrcZone, DstZone, NetworkSessionId, RuleNumber, NetworkDuration, DstGeoCountry, SrcGeoCountry, ThreatOriginalRiskLevel, SrcPackets, DstPackets, AdditionalFields, EventCount, EventSchema, EventSchemaVersion, EventType, EventVendor, EventProduct, DvcIdType, NetworkBytes, EventEndTime, NetworkProtocolVersion, NetworkPackets, UserAgent, Dvc, User, Hostname, EventSeverity, Src, Dst, SessionId, IpAddr, Duration, Rule, NetworkDirection
+Change:
+  Date: '2026-10-22'
+  Description: 'Initial ingest-time parser targeting ASimWebSessionLogs.'
