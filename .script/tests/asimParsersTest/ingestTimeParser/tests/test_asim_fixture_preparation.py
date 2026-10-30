@@ -340,6 +340,82 @@ class FixturePreparationTests(unittest.TestCase):
         self.assertEqual("Contoso_CL", artifact["sourceRawTable"])
         self.assertEqual("inferred", artifact["schemaSource"])
 
+    def test_preserves_source_id_in_inferred_schema(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,id,_ItemId\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,00123,platform-item\n"
+        )
+
+        artifact = self.prepare(fixture)
+
+        self.assertIn({"name": "id", "type": "string"}, artifact["schema"])
+        self.assertEqual("00123", artifact["rows"][0]["id"])
+        self.assertFalse(
+            {"Type", "_ItemId"}
+            & {column["name"] for column in artifact["schema"]}
+        )
+
+    def test_preserves_source_id_in_schema_csv(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,id\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,00123\n"
+        )
+        schema_path = self.root / "ContosoSchema.csv"
+        schema_path.write_text(
+            "ColumnName,ColumnType\n"
+            "TimeGenerated,datetime\n"
+            "Type,string\n"
+            "id,string\n",
+            encoding="utf-8",
+        )
+
+        artifact = self.prepare(fixture, schema_path=schema_path)
+
+        self.assertEqual("explicit", artifact["schemaSource"])
+        self.assertIn({"name": "id", "type": "string"}, artifact["schema"])
+        self.assertEqual("00123", artifact["rows"][0]["id"])
+        self.assertNotIn(
+            "Type", {column["name"] for column in artifact["schema"]}
+        )
+
+    def test_preserves_source_id_in_repository_table_schema(self):
+        fixture_directory = self.root / "Sample Data" / "ASIM"
+        fixture_directory.mkdir(parents=True)
+        fixture = fixture_directory / "Sample.csv"
+        fixture.write_text(
+            "TimeGenerated,Type,id\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,00123\n",
+            encoding="utf-8",
+        )
+        schema_directory = (
+            self.root / ".script" / "tests" / "KqlvalidationsTests"
+            / "CustomTables"
+        )
+        schema_directory.mkdir(parents=True)
+        schema_path = schema_directory / "Contoso_CL.json"
+        schema_path.write_text(
+            json.dumps(
+                {
+                    "Name": "Contoso_CL",
+                    "Properties": [
+                        {"Name": "TimeGenerated", "Type": "DateTime"},
+                        {"Name": "Type", "Type": "String"},
+                        {"Name": "id", "Type": "String"},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        artifact = self.prepare(fixture)
+
+        self.assertEqual("repository", artifact["schemaSource"])
+        self.assertIn({"name": "id", "type": "string"}, artifact["schema"])
+        self.assertEqual("00123", artifact["rows"][0]["id"])
+        self.assertNotIn(
+            "Type", {column["name"] for column in artifact["schema"]}
+        )
+
     def test_uses_discovered_table_schema(self):
         fixture = self.write_fixture(
             "TimeGenerated,Type,Enabled,Payload\n"
