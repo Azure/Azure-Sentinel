@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (Exchange)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (Exchange)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
+    path: Analytic Rules/office_policytampering.yaml
+    version: 2.0.3
+    querySha256: 806764e7fac5126c961905383413740d887802a13e510f6256434f9d82469492
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserId`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - DefenseEvasion
+    originalTechniques:
+    - T1098
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: b0bc371cb9f92761e11510a6c3eba5e8658331ce741d9403a38b1078dbeb5661
+      targetQuerySha256: 293c6336fa30d99c367d38bfc1c953345e8cbc922cd377dd7380756ed76cc25c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
+  displayName: Office Policy Tampering
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let opList = OfficeActivity
+      | summarize by Operation
+      //| where Operation startswith "Remove-" or Operation startswith "Disable-"
+      | where Operation has_any ("Remove", "Disable")
+      | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
+      | summarize make_set(Operation, 500);
+      OfficeActivity
+      // Only admin or global-admin can disable/remove policy
+      | where RecordType =~ "ExchangeAdmin"
+      | where UserType in~ ("Admin","DcAdmin")
+      // Pass in interesting Operation list
+      | where Operation in~ (opList)
+      | extend ClientIPOnly = case(
+      ClientIP has ".", tostring(split(ClientIP,":")[0]),
+      ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
+      ClientIP
+      )
+      | extend Port = case(
+      ClientIP has ".", (split(ClientIP,":")[1]),
+      ClientIP has "[", tostring(split(ClientIP,"]:")[1]),
+      ClientIP
+      )
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Office Policy Tampering
+      description: "'Identifies if any tampering is done to either auditlog, ATP Safelink, SafeAttachment, AntiPhish or Dlp\
+        \ policy. \nAn adversary may use this technique to evade detection or avoid other policy based defenses.\nReferences:\
+        \ https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+      customDetails:
+        AccountFullName: UserId

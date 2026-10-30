@@ -939,6 +939,13 @@ class ReportTests(unittest.TestCase):
             "stage": "target-visibility",
             "message": "timed out",
         }
+        validation["targetVisibility"] = {
+            "status": "failed",
+            "error": {
+                "stage": "target-visibility",
+                "message": "timed out",
+            },
+        }
         validation["outputValidation"] = None
 
         report = self.build(validation)
@@ -948,8 +955,160 @@ class ReportTests(unittest.TestCase):
             report["stages"]["parserIngestion"]["status"],
         )
         self.assertEqual(
-            "passed", report["stages"]["schema"]["status"]
+            "failed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
         )
+        self.assertEqual(
+            "not-run", report["stages"]["schema"]["status"]
+        )
+
+    def test_query_deadline_visibility_failure_overrides_accepted_upload(self):
+        validation = self.base_validation()
+        details = {
+            "expectedCounts": {"timestamp": 1},
+            "observedCounts": {"timestamp": 0},
+            "missingTimestamps": ["timestamp"],
+            "observedQueryTable": {
+                "columns": [{"name": "TimeGenerated", "type": "datetime"}],
+                "rows": [],
+            },
+        }
+        validation["status"] = "failed"
+        validation["targetVisibility"] = {
+            "status": "failed",
+            "error": {
+                "stage": "query",
+                "message": "Validation deadline expired.",
+                "details": details,
+            },
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "Validation deadline expired.",
+            "details": details,
+        }
+        validation["outputValidation"] = None
+
+        report = self.build(validation)
+        ingestion = report["stages"]["parserIngestion"]
+
+        self.assertEqual("failed", ingestion["status"])
+        self.assertEqual("failed", ingestion["targetVisibility"]["status"])
+        self.assertEqual("query", report["error"]["stage"])
+        self.assertEqual(
+            details,
+            ingestion["targetVisibility"]["evidence"]["error"]["details"],
+        )
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+        self.assertEqual("not-run", report["stages"]["rawDcr"]["status"])
+        self.assertEqual(
+            "not-run", report["stages"]["rawIngestion"]["status"]
+        )
+        self.assertEqual("not-run", report["stages"]["data"]["status"])
+        self.assertEqual(
+            "not-run", report["stages"]["qtpExecution"]["status"]
+        )
+        self.assertEqual("not-run", report["stages"]["parity"]["status"])
+
+    def test_legacy_query_deadline_with_visibility_timing_is_failed(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["telemetry"]["stageTimingsSeconds"] = {
+            "target-visibility": 889.465,
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "Validation deadline expired.",
+            "details": None,
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "failed", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "failed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+        self.assertTrue(
+            report["stages"]["parserIngestion"]["targetVisibility"][
+                "evidence"
+            ]["legacy"]
+        )
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+
+    def test_generic_query_error_does_not_infer_visibility_failure(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["telemetry"]["stageTimingsSeconds"] = {
+            "filter-validation": 1.0,
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "POST failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "not-run", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "not-run",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+
+    def test_schema_stage_uses_only_schema_validation_outcome(self):
+        validation = self.base_validation()
+        validation["targetVisibility"] = {
+            "status": "passed",
+            "expectedCounts": {"timestamp": 1},
+            "observedCounts": {"timestamp": 1},
+            "missingTimestamps": [],
+        }
+        validation["outputValidation"]["schemaValidation"] = {
+            "status": "passed",
+            "authority": "parser-dcr-output-stream",
+        }
+
+        report = self.build(validation)
+        self.assertEqual("passed", report["stages"]["schema"]["status"])
+        self.assertEqual(
+            "passed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+        self.assertEqual(
+            "parser-dcr-output-stream",
+            report["stages"]["schema"]["evidence"]["authority"],
+        )
+
+        validation["outputValidation"]["schemaValidation"] = {
+            "status": "failed",
+            "authority": "parser-dcr-output-stream",
+        }
+        report = self.build(validation)
+        self.assertEqual("failed", report["stages"]["schema"]["status"])
+
+        validation["outputValidation"].pop("schemaValidation")
+        report = self.build(validation)
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+
+    def test_schema_remains_not_run_when_data_tester_fails_first(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "asim-data",
+            "message": "ASimDataTester query failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+        self.assertEqual("failed", report["stages"]["data"]["status"])
 
     def test_parity_failure_records_successful_qtp_execution(self):
         validation = self.base_validation()
@@ -1236,9 +1395,16 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_untrusted_pr_content_is_pinned_to_event_head_sha(self):
+    def test_comparison_refs_are_pinned_to_event_shas(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
+        self.assertEqual(
+            2,
+            workflow.count(
+                "BASE_SHA: "
+                "${{ github.event.pull_request.base.sha }}"
+            ),
+        )
         self.assertEqual(
             2,
             workflow.count(
@@ -1255,23 +1421,69 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertEqual(
             2,
             workflow.count(
-                'if [ "$fetched_sha" != "$PR_HEAD_SHA" ]; then'
+                'if [ "$fetched_base_sha" != "$BASE_SHA" ]; then'
             ),
         )
         self.assertEqual(
             2,
             workflow.count(
-                '"$pr_data_dir" "$PR_HEAD_SHA"'
+                'if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"+$BASE_SHA:$trusted_base_ref"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"+refs/pull/$PR_NUMBER/head:$pr_head_ref"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"$pr_data_dir" "$pr_head_ref"'
             ),
         )
 
-    def test_trusted_helper_package_is_restored_from_master(self):
+    def test_checkout_fetches_only_targeted_history(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertEqual(3, workflow.count("fetch-depth: 1"))
+        self.assertNotIn("fetch-depth: 0", workflow)
+        self.assertEqual(
+            2,
+            workflow.count(
+                "for depth in 1 32 128 512 2048 8192; do"
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count("--filter=blob:none"),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                'git merge-base "$trusted_base_ref" "$pr_head_ref"'
+            ),
+        )
+        self.assertNotIn("+refs/heads/*", workflow)
+        self.assertNotIn("+refs/tags/*", workflow)
+
+    def test_trusted_helper_package_is_restored_from_pinned_base(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
         self.assertEqual(
-            3,
-            workflow.count("git archive origin/master"),
+            2,
+            workflow.count(
+                'git archive "$ASIM_TRUSTED_BASE_REF"'
+            ),
         )
+        self.assertEqual(1, workflow.count("git archive HEAD"))
+        self.assertNotIn("git archive origin/master", workflow)
         self.assertGreaterEqual(
             workflow.count(
                 ".script/tests/asimParsersTest/ingestTimeParser"

@@ -497,69 +497,96 @@ class AzureMonitorClient:
             raise ValueError("Expected counts cannot be negative.")
         poll_index = 0
         stable_once = False
-        while True:
-            query_table = self.query_exact_rows(table_name, timestamps)
-            raw_observed_counts = _query_timestamp_counts(
-                query_table, stage
-            )
-            unexpected = {
-                timestamp: count
-                for timestamp, count in raw_observed_counts.items()
-                if timestamp not in expected_counts
-            }
-            if unexpected:
-                raise HarnessError(
-                    stage,
-                    "Exact timestamp query returned unexpected timestamps.",
-                    details={
-                        "unexpected": unexpected,
-                        "observedQueryTable": query_table,
-                    },
+        query_table = None
+        observed_counts: dict[str, int] = {}
+        try:
+            while True:
+                query_table = self.query_exact_rows(table_name, timestamps)
+                raw_observed_counts = _query_timestamp_counts(
+                    query_table, stage
                 )
-            observed_counts = {
-                timestamp: raw_observed_counts.get(timestamp, 0)
-                for timestamp in expected_counts
-            }
-            overages = {
-                timestamp: {
-                    "expected": expected_counts.get(timestamp, 0),
-                    "observed": observed,
+                unexpected = {
+                    timestamp: count
+                    for timestamp, count in raw_observed_counts.items()
+                    if timestamp not in expected_counts
                 }
-                for timestamp, observed in observed_counts.items()
-                if observed > expected_counts.get(timestamp, 0)
+                if unexpected:
+                    raise HarnessError(
+                        stage,
+                        "Exact timestamp query returned unexpected timestamps.",
+                        details={
+                            "unexpected": unexpected,
+                            "observedQueryTable": query_table,
+                        },
+                    )
+                observed_counts = {
+                    timestamp: raw_observed_counts.get(timestamp, 0)
+                    for timestamp in expected_counts
+                }
+                overages = {
+                    timestamp: {
+                        "expected": expected_counts.get(timestamp, 0),
+                        "observed": observed,
+                    }
+                    for timestamp, observed in observed_counts.items()
+                    if observed > expected_counts.get(timestamp, 0)
+                }
+                if overages:
+                    raise HarnessError(
+                        stage,
+                        "Exact timestamp slice contains more rows than "
+                        "expected for one or more timestamps.",
+                        details={
+                            "overages": overages,
+                            "observedQueryTable": query_table,
+                        },
+                    )
+                if observed_counts == expected_counts:
+                    if stable_once:
+                        return query_table
+                    stable_once = True
+                    self._sleep(self.settling_delay_seconds)
+                    continue
+                stable_once = False
+                if self._remaining() <= 0:
+                    raise HarnessError(
+                        stage,
+                        "Timed out waiting for exact table rows.",
+                        details={
+                            "expectedCounts": expected_counts,
+                            "observedCounts": observed_counts,
+                            "missingTimestamps": [
+                                timestamp
+                                for timestamp, count in expected_counts.items()
+                                if observed_counts.get(timestamp, 0) < count
+                            ],
+                            "observedQueryTable": query_table,
+                        },
+                    )
+                delay = self.poll_delays[
+                    min(poll_index, len(self.poll_delays) - 1)
+                ]
+                poll_index += 1
+                self._sleep(delay)
+        except HarnessError as exc:
+            # Only enrich locally generated deadline errors, not query failures.
+            if (
+                exc.stage not in {"query", "deadline"}
+                or str(exc) != "Validation deadline expired."
+                or exc.status_code is not None
+            ):
+                raise
+            exc.details = {
+                "expectedCounts": expected_counts,
+                "observedCounts": observed_counts,
+                "missingTimestamps": [
+                    timestamp
+                    for timestamp, count in expected_counts.items()
+                    if observed_counts.get(timestamp, 0) < count
+                ],
+                "observedQueryTable": query_table,
             }
-            if overages:
-                raise HarnessError(
-                    stage,
-                    "Exact timestamp slice contains more rows than "
-                    "expected for one or more timestamps.",
-                    details={
-                        "overages": overages,
-                        "observedQueryTable": query_table,
-                    },
-                )
-            if observed_counts == expected_counts:
-                if stable_once:
-                    return query_table
-                stable_once = True
-                self._sleep(self.settling_delay_seconds)
-                continue
-            stable_once = False
-            if self._remaining() <= 0:
-                raise HarnessError(
-                    stage,
-                    "Timed out waiting for exact table rows.",
-                    details={
-                        "expectedCounts": expected_counts,
-                        "observedCounts": observed_counts,
-                        "observedQueryTable": query_table,
-                    },
-                )
-            delay = self.poll_delays[
-                min(poll_index, len(self.poll_delays) - 1)
-            ]
-            poll_index += 1
-            self._sleep(delay)
+            raise
 
     def upload_rows(
         self,

@@ -1,0 +1,112 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f1634822-b7e9-44f5-95ac-fa4a04f14513
+    path: Analytic Rules/Dataverse - Audit log data deletion.yaml
+    version: 3.2.0
+    querySha256: 27d6ec9d3dd157cc5f5ee75db73a19e1a62f07c650d8e3f0e76bfb5379c004d0
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1070
+    reviewScope:
+      sourceDocumentSha256: d9a7f8aecd6d7aaf991b89cb52edd6aa76d357ce15c0c5d813aa27a1a8594e2e
+      targetQuerySha256: cad5a15a9ec543759fda6a8fa9831846cb41ff38a2c3d7111ef4be5877f9d3d5
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-f1634822-b7e9-44f5-95ac-fa4a04f14513
+  displayName: Dataverse - Audit log data deletion
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message =~ 'DeleteRecordChangeHistory' or Message =~ 'DeleteAuditData'
+      | extend CloudAppId = int(32780)
+      | extend AccountName = tostring(split(UserId, "@")[0])
+      | extend UPNSuffix = tostring(split(UserId, "@")[1])
+      | project
+          TimeGenerated,
+          UserId,
+          ClientIp,
+          UserAgent,
+          Message,
+          EntityName,
+          InstanceUrl,
+          AccountName,
+          UPNSuffix,
+          CloudAppId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Audit log data deletion
+      description: Identifies audit log data deletion activity in Dataverse.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1070
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

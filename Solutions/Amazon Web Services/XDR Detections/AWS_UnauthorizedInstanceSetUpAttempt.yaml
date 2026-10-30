@@ -1,0 +1,88 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f7210a45-12a4-4d02-b59e-f23476827a4b
+    path: Analytic Rules/AWS_UnauthorizedInstanceSetUpAttempt.yaml
+    version: 1.0.1
+    querySha256: be7ceff2654b77b5f46ec0565162581ea93626ec55059a7d8f131a691ead68a2
+    schedule:
+      queryFrequency: 10m
+      queryPeriod: 10m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10m, lookback=10m; target frequency=PT10M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - ResourceDevelopment
+    originalTechniques:
+    - T1583
+    reviewScope:
+      sourceDocumentSha256: cffae4d938e316cc736d4c06d7df5e6fc7b4f2555b5052347fe0341609518713
+      targetQuerySha256: 34a8282fc00310e377400947150fd55f2b71eaf88e32db5c0797e1a3f25d29fd
+properties:
+  id: xdr-f7210a45-12a4-4d02-b59e-f23476827a4b
+  displayName: AWSCloudTrail - Unauthorized EC2 Instance Setup Attempt
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where EventName == "RunInstances"
+      | where ErrorCode == "Client.UnauthorizedOperation"
+      | project TimeGenerated, AwsEventId, EventTypeName, UserIdentityPrincipalid, UserIdentityType,  UserIdentityAccountId, SessionMfaAuthenticated, SessionCreationDate, SessionIssuerUserName, SourceIpAddress, AWSRegion, UserAgent, RequestParameters, ErrorMessage
+      | extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, ":") + 1)
+      | extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Unauthorized EC2 Instance Setup Attempt
+      description: 'Detects an unauthorized attempt to launch an EC2 instance by a user without the necessary permissions.
+        This may indicate an attempt to provision malicious infrastructure within the AWS subscription. Reference: https://stratus-red-team.cloud/attack-techniques/AWS/aws.execution.ec2-launch-unusual-instances/'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UpnSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: ResourceDevelopment
+        techniques:
+        - technique: T1583
+      customDetails:
+        AWSRegion: AWSRegion
+        UserAgent: UserAgent
+        ErrorMessage: ErrorMessage
+        UserIdentityType: UserIdentityType

@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (Exchange)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (Exchange)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 871ba14c-88ef-48aa-ad38-810f26760ca3
+    path: Analytic Rules/Office_MailForwarding.yaml
+    version: 2.0.3
+    querySha256: 440b0db4591b2b8dc3877b8586fac5a49908f502d1b75c677d4992eed36dbb99
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserId`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Collection
+    - Exfiltration
+    originalTechniques:
+    - T1114
+    - T1020
+    reviewScope:
+      sourceDocumentSha256: ba333733cfb307e83bbfb8fc650a47db5bf8ba21980785fd3fdaf3ceb2918c0c
+      targetQuerySha256: 8ec6befeb1f0d8b935f3df374467b0bcb9cabb5548d5c13da91fdc5ca2fb72b2
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-871ba14c-88ef-48aa-ad38-810f26760ca3
+  displayName: Multiple users email forwarded to same destination
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let queryfrequency = 1d;
+      let queryperiod = 7d;
+      OfficeActivity
+      | where TimeGenerated > ago(queryperiod)
+      | where OfficeWorkload =~ "Exchange"
+      //| where Operation in ("Set-Mailbox", "New-InboxRule", "Set-InboxRule")
+      | where Parameters has_any ("ForwardTo", "RedirectTo", "ForwardingSmtpAddress")
+      | mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(bag_pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))
+      | evaluate bag_unpack(ParsedParameters, columnsConflict='replace_source')
+      | extend DestinationMailAddress = tolower(case(
+          isnotempty(column_ifexists("ForwardTo", "")), column_ifexists("ForwardTo", ""),
+          isnotempty(column_ifexists("RedirectTo", "")), column_ifexists("RedirectTo", ""),
+          isnotempty(column_ifexists("ForwardingSmtpAddress", "")), trim_start(@"smtp:", column_ifexists("ForwardingSmtpAddress", "")),
+          ""))
+      | where isnotempty(DestinationMailAddress)
+      | mv-expand split(DestinationMailAddress, ";")
+      | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
+      | extend ClientIP = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1])
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId, 250), Ports = make_set(Port, 250), EventCount = count() by tostring(DestinationMailAddress), ClientIP
+      | where DistinctUserCount > 1 and EndTime > ago(queryfrequency)
+      | mv-expand UserId to typeof(string)
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Multiple users email forwarded to same destination
+      description: "'Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination.\
+        \ \nThis could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised\
+        \ user accounts.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1114
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020
+      customDetails:
+        AccountFullName: UserId
