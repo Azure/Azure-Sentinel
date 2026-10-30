@@ -1,0 +1,149 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n\u2022 Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/DecTrax/ReleaseNotes.md)\n\n \u2022 There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nThe [DECTRAX](https://dectrax.com) solution delivers automated, high-fidelity threat intelligence, active deception honeypot telemetry, and zero-trust gateway blocks directly into your Log Analytics workspace.\n\n**Underlying Microsoft Technologies used:**\r\n\n  a. [Codeless Connector Framework](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector)\n\n  b. [Azure Monitor Log Analytics](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/log-analytics-overview)\n\n**Data Connectors:** 1, **Parsers:** 1, **Workbooks:** 1, **Analytic Rules:** 4, **Hunting Queries:** 2\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "decTraxConfig",
+        "label": "DECTRAX Setup",
+        "subLabel": {
+          "preValidation": "Configure your DECTRAX API endpoint and authentication token.",
+          "postValidation": "Configuration valid."
+        },
+        "bladeTitle": "DECTRAX Setup",
+        "elements": [
+          {
+            "name": "apiEndpoint",
+            "type": "Microsoft.Common.TextBox",
+            "label": "DECTRAX API Endpoint URL",
+            "defaultValue": "https://api.dectrax.com/api/attacks/recent?format=json",
+            "toolTip": "Enter your DECTRAX Threat Intelligence API URL.",
+            "constraints": {
+              "required": true,
+              "regex": "^https?://.{4,200}$",
+              "validationMessage": "Please provide a valid DECTRAX API Endpoint URL."
+            }
+          },
+          {
+            "name": "apiKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "DECTRAX API Bearer Token",
+              "confirmPassword": "Confirm DECTRAX API Bearer Token"
+            },
+            "toolTip": "Enter your secure DECTRAX API Bearer Token.",
+            "constraints": {
+              "required": true,
+              "regex": "^.{12,256}$",
+              "validationMessage": "DECTRAX API Bearer Token must be at least 12 characters long."
+            }
+          },
+          {
+            "name": "enableDataConnector",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Enable Codeless REST API Data Connector",
+            "defaultValue": true,
+            "toolTip": "Enables automatic scheduled polling of DECTRAX threat feeds directly into your Sentinel workspace."
+          }
+        ]
+      },
+      {
+        "name": "securityContent",
+        "label": "Security Content & Analytics",
+        "subLabel": {
+          "preValidation": "Select detection rules, workbooks, and hunting queries to deploy.",
+          "postValidation": "Content selection valid."
+        },
+        "bladeTitle": "Security Content & Analytics",
+        "elements": [
+          {
+            "name": "contentInfo",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "Select the security artifacts you wish to deploy alongside the DECTRAX integration:"
+            }
+          },
+          {
+            "name": "enableAnalyticRules",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy Pre-configured Sentinel Analytic Detection Rules (4 Rules)",
+            "defaultValue": true,
+            "toolTip": "Deploys MITRE ATT&CK-mapped Scheduled Alert Rules: High Severity Honeypot Breach, Volumetric Recon/Scan, GATE Zero-Trust Threat Intercept, and SCADA/BMS Protocol Tampering."
+          },
+          {
+            "name": "enableWorkbooks",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy DECTRAX Threat Intelligence & Deception Dashboard Workbook",
+            "defaultValue": true,
+            "toolTip": "Deploys an interactive multi-tab Azure Monitor/Sentinel Workbook with attack geolocations, protocol breakdowns, honeypot sensor status, and attacker IP analytics."
+          },
+          {
+            "name": "enableHuntingQueries",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Deploy Threat Hunting Saved Searches & ASIM Parsers",
+            "defaultValue": true,
+            "toolTip": "Deploys Log Analytics Saved Searches and ASIM normalization parser functions for advanced threat hunting."
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]",
+      "decTraxApiEndpoint": "[steps('decTraxConfig').apiEndpoint]",
+      "decTraxApiKey": "[steps('decTraxConfig').apiKey]",
+      "enableDataConnector": "[steps('decTraxConfig').enableDataConnector]",
+      "enableAnalyticRules": "[steps('securityContent').enableAnalyticRules]",
+      "enableWorkbooks": "[steps('securityContent').enableWorkbooks]",
+      "enableHuntingQueries": "[steps('securityContent').enableHuntingQueries]"
+    }
+  }
+}
