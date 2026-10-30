@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (SharePoint)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (SharePoint)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d722831e-88f5-4e25-b106-4ef6e29f8c13
+    path: Analytic Rules/Office_Uploaded_Executables.yaml
+    version: 2.0.5
+    querySha256: e55a4a816352a301ccc7c5030669a83058950ee12820d9b8fa4003bdf1b1434f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 8d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=8d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserId`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    - LateralMovement
+    originalTechniques:
+    - T1105
+    - T1570
+    reviewScope:
+      sourceDocumentSha256: 88a2518d8b3620f50bbe6684d1429fa141a5b9890402447a7534a25c9eac5e65
+      targetQuerySha256: 59028c2dc4edb10a6b0691877a2a7d3d50fc5b14889aa4952bb60bed03fab8f7
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-d722831e-88f5-4e25-b106-4ef6e29f8c13
+  displayName: New executable via Office FileUploaded Operation
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // a threshold can be enabled, see commented line below for PrevSeenCount
+      let threshold = 2;
+      let uploadOp = 'FileUploaded';
+      // Extensions that are interesting. Add/Remove to this list as you see fit
+      let execExt = dynamic(['exe', 'inf', 'gzip', 'cmd', 'bat']);
+      let starttime = 8d;
+      let endtime = 1d;
+      OfficeActivity | where TimeGenerated >= ago(endtime)
+      // Limited to File Uploads due to potential noise, comment out the Operation statement below to include any operation type
+      // Additional, but potentially noisy operation types that include Uploads and Downloads can be included by adding the following - Operation contains "upload" or Operation contains "download"
+      | where Operation =~ uploadOp
+      | where SourceFileExtension has_any (execExt)
+      | project TimeGenerated, OfficeId, OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName
+      | join kind= leftanti (
+      OfficeActivity | where TimeGenerated between (ago(starttime) .. ago(endtime))
+      | where Operation =~ uploadOp
+      | where SourceFileExtension has_any (execExt)
+      | summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000) , PrevSeenCount = count() by SourceFileName
+      // To exclude previous matches when only above a specific count, change threshold above and uncomment the line below
+      //| where PrevSeenCount > threshold
+      | mvexpand SourceRelativeUrl, UserId
+      | extend SourceRelativeUrl = tostring(SourceRelativeUrl), UserId = tostring(UserId)
+      ) on SourceFileName, SourceRelativeUrl, UserId
+      | extend SiteUrlUserFolder = tolower(split(Site_Url, '/')[-2])
+      | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
+      // identify when UserId is not a match to the specific site url personal folder reference
+      | extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true , false )
+      | summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated),
+      UserAgents = make_list(UserAgent, 100000), OfficeIds = make_list(OfficeId, 100000), SourceRelativeUrls = make_list(SourceRelativeUrl, 100000), FileNames = make_list(SourceFileName, 100000)
+      by OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: New executable via Office FileUploaded Operation
+      description: |-
+        'Identifies when executable file types are uploaded to Office services such as SharePoint and OneDrive.
+        List currently includes 'exe', 'inf', 'gzip', 'cmd', 'bat' file extensions.
+        Additionally, identifies when a given user is uploading these files to another users workspace.
+        This may be indication of a staging location for malware or other malicious activity.'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+        urls:
+        - id: url1
+          addressColumn: Site_Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1105
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1570
+      customDetails:
+        AccountFullName: UserId

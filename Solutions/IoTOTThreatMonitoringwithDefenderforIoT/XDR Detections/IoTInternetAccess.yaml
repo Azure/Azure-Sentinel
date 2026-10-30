@@ -1,0 +1,120 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: IoT
+  dataTypes:
+  - SecurityAlert (ASC for IoT)
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertInfo
+  requiredDataConnectors:
+  - connectorId: IoT
+    dataTypes:
+    - SecurityAlert (ASC for IoT)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9ff3b13b-287a-4ed0-8f6b-7e7b66cbbcbd
+    path: Analytic Rules/IoTInternetAccess.yaml
+    version: 1.0.3
+    querySha256: d65c733bdc5f54341d74928e435896c0964a956990c1337f1ede1ba612005c96
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      target frequency has no documented native fixed lookback. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - No valid source mapping survived; inferred entities from projected columns
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    notes:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    errors: []
+    originalTactics:
+    - LateralMovement
+    originalTechniques:
+    - T0886
+    reviewScope:
+      sourceDocumentSha256: 5f94cd80fb03223f7da09c70b022f44f3c7420bcc2758c503607bf931cdb0594
+      targetQuerySha256: 35cadffc7bfeed44e8c26754e1dd0c086aa36443654e6d7efa86d524af37adc9
+properties:
+  id: xdr-9ff3b13b-287a-4ed0-8f6b-7e7b66cbbcbd
+  displayName: Internet Access (Microsoft Defender for IoT)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AlertInfo
+      | join kind=leftouter AlertEvidence on AlertId
+      | extend AlertName = Title, AlertSeverity = Severity, ProviderName = DetectionSource, ProductName = ServiceSource, Tactics = AttackTechniques, Description = Title, Entities = AdditionalFields, ExtendedProperties = AdditionalFields, RemediationSteps = "[]", ProductComponentName = ServiceSource, VendorOriginalId = AlertId, AlertLink = "", Techniques = AttackTechniques
+      | where DetectionSource == "IoTSecurity"
+      | where Title has "Internet"
+      | extend ExtendedProperties = parse_json(ExtendedProperties)
+      | where tostring(ExtendedProperties.isNew) == "True"
+      | extend DeviceId = tostring(ExtendedProperties.DeviceId),
+               SourceDeviceAddress = tostring(ExtendedProperties.SourceDeviceAddress),
+               DestDeviceAddress = tostring(ExtendedProperties.DestinationDeviceAddress),
+               RemediationSteps = tostring(parse_json(RemediationSteps)[0]),
+               Protocol = tostring(ExtendedProperties.Protocol),
+               AlertManagementUri = tostring(ExtendedProperties.AlertManagementUri)
+      | project
+        Timestamp,
+        DeviceId,
+        ProductName,
+        ProductComponentName,
+        AlertSeverity,
+        AlertName,
+        Description,
+        Protocol,
+        SourceDeviceAddress,
+        DestDeviceAddress,
+        RemediationSteps,
+        Tactics,
+        Entities,
+        VendorOriginalId,
+        AlertLink,
+        AlertManagementUri,
+        Techniques, Title, Severity, ServiceSource, AttackTechniques, AdditionalFields
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Internet Access (Microsoft Defender for IoT)
+      description: '''This alert leverages Defender for IoT to detect an OT device communicating with Internet which is possibly
+        an indication of improper configuration of an application or malicious activity on the network.'''
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          deviceIdColumn: DeviceId
+      tactics:
+      - tactic: LateralMovement
+        techniques:
+        - technique: T0886
+      customDetails:
+        Sensor: DeviceId
+        Protocol: Protocol
+        VendorOriginalKey: VendorOriginalId
+        AlertManagementUri: AlertManagementUri

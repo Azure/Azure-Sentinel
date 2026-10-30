@@ -1,0 +1,156 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0820da12-e895-417f-9175-7c256fcfb33e
+    path: Analytic Rules/Dataverse - Anomalous application user activity.yaml
+    version: 3.2.0
+    querySha256: ca0d2a7d0c13a734df7db440e7f14fe702e8d7d85ba1cb755d052e0af27c5de3
+    schedule:
+      queryFrequency: 5h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5h, lookback=14d; target frequency=PT5H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'InstranceUrl' column `InstanceUrl` requires runtime output-schema binding verification
+    - CloudApplication.InstanceName value is retained as customDetails.InstranceUrl from query column `InstanceUrl`, but its
+      target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.InstranceUrl column `InstanceUrl` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - Execution
+    - Persistence
+    originalTechniques:
+    - T1528
+    - T1569
+    - T0871
+    - T0834
+    - T0859
+    reviewScope:
+      sourceDocumentSha256: 93e1efdc73f41d81de4fd64b0ec112d3dcd06092eb71667b428091b7952ac937
+      targetQuerySha256: e185f632052ed6f00f84eef3779eb291bc387c4e26773ce7a47de38c597d2033
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: InstranceUrl
+properties:
+  id: xdr-0820da12-e895-417f-9175-7c256fcfb33e
+  displayName: Dataverse - Anomalous application user activity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_lookback = 14d;
+      let query_frequency = 5h;
+      let anomaly_threshold = 2.5;
+      let seasonality = -1;
+      let trend = 'linefit';
+      let step_duration = 5h;
+      let app_user_regex = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\.com$";
+      let guid_regex = "([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})";
+      let application_users = DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where UserId !endswith "@onmicrosoft.com" and UserId != "Unknown"
+          | summarize by UserId
+          | where split(UserId, "@")[1] matches regex app_user_regex;
+      DataverseActivity
+      | where TimeGenerated >= startofday(ago(query_lookback))
+      | where UserId in (application_users)
+      | where isnotempty(OriginalObjectId)
+      | make-series TotalEvents = count() default=0 on TimeGenerated from startofday(ago(query_lookback)) to now() step step_duration by UserId, InstanceUrl, OriginalObjectId
+      | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(TotalEvents, anomaly_threshold, seasonality, trend)
+      | mv-expand
+          TotalEvents to typeof(double),
+          AnomalyTimeGenerated = TimeGenerated to typeof(datetime),
+          Anomalies to typeof(double),
+          Score to typeof(double),
+          Baseline to typeof(long)
+      | where Anomalies > 0
+      | extend Details = bag_pack(
+                             "TotalEvents",
+                             TotalEvents,
+                             "Anomalies",
+                             Anomalies,
+                             "Baseline",
+                             Baseline,
+                             "Score",
+                             Score,
+                             "OriginalObjectId",
+                             OriginalObjectId
+                         )
+      | summarize Details = make_set(Details, 100) by UserId, InstanceUrl, AnomalyTimeGenerated
+      | extend
+          CloudAppId = int(32780),
+          AadUserId = extract(guid_regex, 1, tostring(split(UserId, "@")[0]))
+      | project
+          AnomalyTimeGenerated,
+          UserId,
+          AadUserId,
+          InstanceUrl,
+          Details,
+          CloudAppId
+  schedule:
+    frequency: PT5H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Anomalous application user activity
+      description: Identifies anomalies in activity patterns of Dataverse application (non-interactive) users, based on activity
+        falling outside the normal pattern of use.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          aadUserIdColumn: AadUserId
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1528
+      - tactic: Execution
+        techniques:
+        - technique: T1569
+        - technique: T0871
+        - technique: T0834
+      - tactic: Persistence
+        techniques:
+        - technique: T0859
+      customDetails:
+        InstranceUrl: InstanceUrl
