@@ -75,6 +75,9 @@ param(
     
     [Parameter(Mandatory=$false, HelpMessage="Prefix for connection names (default: SAP)")]
     [string]$ConnectionPrefix = "SAP",
+
+    [Parameter(Mandatory=$false, HelpMessage="Optional wildcard filters for RFC destination names, for example @('*QB4*','*QE4*'). Only matching destinations are processed.")]
+    [string[]]$DestinationNameFilter,
     
     # Direct Credential Parameters
     # When these are provided, CF CLI is not required
@@ -108,6 +111,12 @@ param(
     # Optional Configuration
     [Parameter(Mandatory=$false, HelpMessage="API path suffix after /http (default: /microsoft/sentinel/sap-log-trigger)")]
     [string]$ApiPathSuffix = "/microsoft/sentinel/sap-log-trigger",
+
+    [Parameter(Mandatory=$false, HelpMessage="Temporary fixed UTC window start for historical recovery, for example 2026-09-01T20:30:00Z. Must be used with FixedWindowEndUtc.")]
+    [string]$FixedWindowStartUtc,
+
+    [Parameter(Mandatory=$false, HelpMessage="Temporary fixed UTC window end for historical recovery. Use the next UTC boundary, for example 2026-09-04T00:00:00Z to include all of 2026-09-03. Must be used with FixedWindowStartUtc.")]
+    [string]$FixedWindowEndUtc,
     
     [Parameter(Mandatory=$false, HelpMessage="Azure Management API version")]
     [string]$ApiVersion = "2025-07-01-preview",
@@ -125,6 +134,11 @@ Write-Log "=====================================================================
 Write-Log "SAP Integration Suite - Microsoft Sentinel Connector"
 Write-Log "======================================================================="
 Write-Log "This script creates data connector connections for SAP Integration Suite"
+if (-not [string]::IsNullOrWhiteSpace($FixedWindowStartUtc) -or
+    -not [string]::IsNullOrWhiteSpace($FixedWindowEndUtc)) {
+    Write-Log "FIXED-WINDOW MODE: the same historical interval is requested on every poll." -Level "WARNING"
+    Write-Log "Delete or disable the temporary connection immediately after the backfill succeeds." -Level "WARNING"
+}
 Write-Log "Data will flow to standard Microsoft SAP tables:"
 Write-Log "  - ABAPAuditLog"
 Write-Log "  - ABAPChangeDocsLog"
@@ -249,6 +263,24 @@ if ($null -eq $destinations -or $destinations.Count -eq 0) {
     exit 1
 }
 
+if ($null -ne $DestinationNameFilter -and $DestinationNameFilter.Count -gt 0) {
+    $allDestinations = @($destinations)
+    $destinations = @(
+        $allDestinations | Where-Object {
+            $destinationName = $_.DestinationName
+            @($DestinationNameFilter | Where-Object { $destinationName -like $_ }).Count -gt 0
+        }
+    )
+
+    if ($destinations.Count -eq 0) {
+        Write-Log "No destinations matched DestinationNameFilter: $($DestinationNameFilter -join ', ')" -Level "ERROR"
+        exit 1
+    }
+
+    Write-Log "Destination filter applied: $($DestinationNameFilter -join ', ')"
+    Write-Log "Selected $($destinations.Count) of $($allDestinations.Count) destination(s)"
+}
+
 Write-Log "Found $($destinations.Count) destination(s) to process"
 
 # Get workspace details for DCE/DCR setup
@@ -353,6 +385,8 @@ foreach ($destination in $destinations) {
         -ApiPathSuffix $ApiPathSuffix `
         -RfcDestinationName $rfcDestinationName `
         -PollingFrequencyMinutes $pollingFrequency `
+        -FixedWindowStartUtc $FixedWindowStartUtc `
+        -FixedWindowEndUtc $FixedWindowEndUtc `
         -ApiVersion $ApiVersion `
         -TimeoutSec $ConnectorTimeoutSec
     
