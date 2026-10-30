@@ -1,0 +1,38 @@
+id: 4d5e6f7a-8b9c-4d0e-1f2a-4b5c6d7e8f9a
+name: TLS handshake failure spike on PQC Proxy
+description: |
+  An elevated rate of TLS handshake failures was detected on a PQC Proxy instance within the
+  last hour. This may indicate clients using incompatible TLS libraries, expired or invalid
+  certificates, a denial-of-service attempt, or network-level interference with the TLS
+  handshake. Investigate the error messages and client IPs to determine the root cause.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: QCryptonPQCProxyCCPDefinition
+    dataTypes:
+      - PQCProxy_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 10
+tactics:
+  - Impact
+  - InitialAccess
+relevantTechniques:
+  - T1499
+  - T1190
+query: |
+  PQCProxy_CL
+  | where TimeGenerated > ago(1h)
+  | where EventType == "tls_error"
+  | summarize ErrorCount = count(), DistinctClients = dcount(ClientIP), Errors = make_set(ErrorMessage, 5) by ProxyHost, ProxyInstanceId
+  | where ErrorCount > 10
+  | project ProxyHost, ProxyInstanceId, ErrorCount, DistinctClients, Errors
+  | order by ErrorCount desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: ProxyHost
+status: Available
+version: 1.0.0
+kind: Scheduled

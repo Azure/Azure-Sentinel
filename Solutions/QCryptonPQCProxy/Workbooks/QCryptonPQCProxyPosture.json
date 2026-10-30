@@ -1,0 +1,125 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# QCrypton PQC Proxy — Hybrid Post-Quantum TLS Dashboard\n\nTLS handshake telemetry across PQC Proxy instances. Tracks hybrid PQC adoption, downgrade events, certificate health, and connection metrics. Data source: `PQCProxy_CL`."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timeRange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "value": { "durationMs": 86400000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ]
+            }
+          }
+        ]
+      },
+      "name": "params"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCProxy_CL\n| where TimeGenerated {TimeRange}\n| where EventType == 'handshake'\n| summarize Count = count() by QuantumPosture\n| render piechart",
+        "size": 0,
+        "title": "PQC adoption — handshake posture distribution",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "postureDistribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCProxy_CL\n| where TimeGenerated {TimeRange}\n| where EventType == 'handshake'\n| summarize Count = count() by NegotiatedGroup\n| order by Count desc\n| render piechart",
+        "size": 0,
+        "title": "Negotiated key exchange groups",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "groupDistribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCProxy_CL\n| where TimeGenerated {TimeRange}\n| where EventType == 'handshake'\n| summarize PQC = countif(QuantumPosture == 'pqc-hybrid'), Classical = countif(QuantumPosture == 'classical'), Downgraded = countif(QuantumPosture == 'downgraded') by bin(TimeGenerated, 1h)\n| render timechart",
+        "size": 0,
+        "title": "PQC vs classical handshakes over time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "adoptionTrend"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCProxy_CL\n| where TimeGenerated {TimeRange}\n| where EventType == 'downgrade'\n| summarize Downgrades = count() by bin(TimeGenerated, 1h), ProxyHost\n| render timechart",
+        "size": 0,
+        "title": "PQC downgrade events over time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "downgradeTrend"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCProxy_CL\n| where TimeGenerated {TimeRange}\n| where EventType == 'handshake'\n| summarize Total = count(), PQC = countif(QuantumPosture == 'pqc-hybrid'), Classical = countif(QuantumPosture == 'classical'), Downgrades = countif(QuantumPosture == 'downgraded'), AvgLatencyMs = round(avg(RequestLatencyMs), 2) by ProxyHost, ProxyInstanceId\n| extend PQCPct = round(100.0 * PQC / Total, 1)\n| project ProxyHost, ProxyInstanceId, Total, PQC, Classical, Downgrades, PQCPct, AvgLatencyMs\n| order by Total desc",
+        "size": 0,
+        "title": "Per-proxy summary",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "proxySummary"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCProxy_CL\n| where EventType == 'cert_expiry'\n| summarize arg_max(TimeGenerated, *) by ProxyInstanceId, CertPath\n| project ProxyHost, CertPath, DaysRemaining = round(CertExpiryDays, 1), LastReported = TimeGenerated\n| order by DaysRemaining asc",
+        "size": 0,
+        "title": "Certificate expiry status",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "certExpiry"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCProxy_CL\n| where TimeGenerated {TimeRange}\n| where EventType in ('tls_error', 'upstream_error')\n| summarize Count = count() by bin(TimeGenerated, 1h), EventType\n| render timechart",
+        "size": 0,
+        "title": "Error events over time",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "errorTrend"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "QCrypton-PQCProxyPosture",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
