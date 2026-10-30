@@ -1,0 +1,131 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mda
+    dataTypes:
+    - CloudAppEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0385e99c-ae45-45f4-aecf-00104485cd6b
+    path: Analytic Rules/EmailEntity_CloudAppEvents_Updated.yaml
+    version: 1.0.8
+    querySha256: fd1700ce787d007747fe5d9ec97c987c24bf379c77ee31bbaa93ed54d39d07d3
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.8
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.DisplayName value is retained as customDetails.AccountDisplayName from
+      query column `Name`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountDisplayName column `Name` requires runtime
+      output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `User_Id`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `User_Id` requires runtime
+      output-schema binding verification
+    - Account.UPNSuffix value is retained as customDetails.AccountUPNSuffix from query
+      column `UPNSuffix`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountUPNSuffix column `UPNSuffix` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 5ea03537796a7f7cfc84efc3b887be67234d024f769531e8aedde316b7fb2b87
+      targetQuerySha256: 0ab55fe97a1d273a40b839d29aacc9510b7ac8e68771af0c454f6810c6a33b88
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: User_Id
+      column: User_Id
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-0385e99c-ae45-45f4-aecf-00104485cd6b
+  displayName: TI Map Email entity to Cloud App Events
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\\
+      .[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n\
+      \  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      \  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n//extract\
+      \ key part of kv pair\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\"\
+      , \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType ==\
+      \ \"email-addr\"\n  | extend EmailSenderAddress = ObservableValue\n  | extend\
+      \ EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress,\
+      \ \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\"\
+      ) - 1)\n  | project-reorder *, EmailSenderAddress, EmailSourceDomain, Type\n\
+      \  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | join kind=innerunique\
+      \ (CloudAppEvents\n| extend User_Id = tostring(RawEventData.UserId)\n| where\
+      \ isnotempty(User_Id)\n| where TimeGenerated >= ago(dt_lookBack) and isnotempty(Application)\n\
+      | extend CloudAppEvents_TimeGenerated = TimeGenerated\n| where User_Id matches\
+      \ regex emailregex) on $left.EmailSenderAddress == $right.User_Id\n| where CloudAppEvents_TimeGenerated\
+      \ < ValidUntil\n| summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated,\
+      \ *) by IndicatorId, User_Id\n| extend Name = tostring(split(User_Id, '@', 0)[0]),\
+      \ UPNSuffix = tostring(split(User_Id, '@', 1)[0])\n| extend timestamp = CloudAppEvents_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Email entity to Cloud App Events
+      description: '''Identifies compromises and attacks and detect malicious activities
+        in one''s email entity from TI'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      customDetails:
+        AccountFullName: User_Id

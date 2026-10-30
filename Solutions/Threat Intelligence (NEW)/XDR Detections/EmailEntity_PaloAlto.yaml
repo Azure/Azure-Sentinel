@@ -1,0 +1,146 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PaloAltoNetworks
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 17fe80fe-072f-44d4-b62c-97a5bce56a64
+    path: Analytic Rules/EmailEntity_PaloAlto.yaml
+    version: 1.2.10
+    querySha256: 16975e34103235166d71e9aabf9d3a681ed9f062f897c784c9e5d27d7756fa24
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.2.10
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required
+      Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `DestinationUserID`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `DestinationUserID` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 8c4c56c694ede4cc09bb44d21790d78ab7344e5a7f10c271387a1cb669df1e39
+      targetQuerySha256: 85df0055cfc9e3f5931f41a4dab77ce242cc2d9d5fb67bc1be2851e82fe07338
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: DestinationUserID
+      column: DestinationUserID
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-17fe80fe-072f-44d4-b62c-97a5bce56a64
+  displayName: TI Map Email entity to PaloAlto CommonSecurityLog
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\\
+      .[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n//Filtering the table for Email related\
+      \ IOCs\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"email-addr\"\n| extend EmailSenderAddress\
+      \ = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress,\
+      \ indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress,\
+      \ \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | extend IndicatorId = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey\
+      \ == \"url:value\", ObservableValue, \"\")\n| where TimeGenerated >= ago(ioc_lookBack)\n\
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| project-reorder\
+      \ *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type\n\
+      // using innerunique to keep perf fast and result set low, we only need one\
+      \ match to indicate potential malicious activity that needs to be investigated\n\
+      | join kind=innerunique (\n    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\
+      \ and isnotempty(DestinationUserID)\n    // Filtering PAN Logs for specific\
+      \ event type to match relevant email entities\n    | where DeviceVendor == \"\
+      Palo Alto Networks\" and  DeviceEventClassID == \"wildfire\" and ApplicationProtocol\
+      \ in (\"smtp\",\"pop3\")\n    | extend DestinationUserID = tolower(DestinationUserID)\n\
+      \    | where DestinationUserID matches regex emailregex\n    | extend CommonSecurityLog_TimeGenerated\
+      \ = TimeGenerated\n)\non $left.EmailSenderAddress == $right.DestinationUserID\n\
+      | where CommonSecurityLog_TimeGenerated < ValidUntil\n| extend Description =\
+      \ tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"\
+      ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| summarize CommonSecurityLog_TimeGenerated\
+      \ = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, DestinationUserID\n|\
+      \ project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames,\
+      \ Id, ValidUntil, Confidence, EmailSenderAddress, DestinationUserID, DeviceEventClassID,\
+      \ LogSeverity, DeviceAction, SourceIP, SourcePort,\nDestinationIP, DestinationPort,\
+      \ Protocol, ApplicationProtocol, Url//,  EmailRecipient, EmailSourceDomain,\
+      \ EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType,\n| extend\
+      \ timestamp = CommonSecurityLog_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Email entity to PaloAlto CommonSecurityLog
+      description: '''Identifies a match in CommonSecurityLog table from any Email
+        IOC from TI'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      customDetails:
+        AccountName: DestinationUserID

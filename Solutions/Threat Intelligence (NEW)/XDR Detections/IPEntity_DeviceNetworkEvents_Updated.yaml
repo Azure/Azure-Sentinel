@@ -1,0 +1,142 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mde
+    dataTypes:
+    - DeviceNetworkEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - DeviceNetworkEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2474343c-9135-42ec-9c40-a1bace43da5c
+    path: Analytic Rules/IPEntity_DeviceNetworkEvents_Updated.yaml
+    version: 1.0.4
+    querySha256: 612d335de4d96828bcbfcd13f1202b2f462e5838e54948a917186df42dd755eb
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.4
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - URL.Url column `RemoteUrl` is not produced by the query
+    - URL.Url value is retained as customDetails.URLUrl from query column `RemoteUrl`,
+      but its target output binding requires runtime-schema verification; custom details
+      do not restore entity identity or correlation
+    - Supplemental customDetails.URLUrl column `RemoteUrl` requires runtime output-schema
+      binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 1907ffde396bab0522e806e02796d08df1839320e6328b2902abed7a06552927
+      targetQuerySha256: 48420810de7b7e5ade7255735484b855614cf922a788853a6cef48f209095bbb
+    supplementalEntityDetails:
+    - entityType: URL
+      entityIndex: 3
+      identifier: Url
+      sourceColumn: RemoteUrl
+      column: RemoteUrl
+      status: runtime-binding-pending
+      customDetailKey: URLUrl
+properties:
+  id: xdr-2474343c-9135-42ec-9c40-a1bace43da5c
+  displayName: TI Map IP Entity to DeviceNetworkEvents
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceNetworkEvents_\
+      \ = DeviceNetworkEvents\n| where isnotempty(RemoteIP)\n| where TimeGenerated\
+      \ > ago(dt_lookBack)\n| where ActionType !has \"ConnectionFailed\"\n| extend\
+      \ isPrivate = ipv4_is_private(RemoteIP)\n| where isPrivate != true;\nlet IPs\
+      \ = DeviceNetworkEvents_ | distinct RemoteIP | summarize make_list(RemoteIP);\n\
+      ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\"\
+      )\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n| where TimeGenerated >=\
+      \ ago(ioc_lookBack)\n| extend TI_ipEntity = NetworkSourceIP\n| where TI_ipEntity\
+      \ in (IPs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id,\
+      \ ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n\
+      | extend Description = tostring(parse_json(Data).description)\n| where Description\
+      \ !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\
+      \n| join kind=innerunique (DeviceNetworkEvents_) on $left.TI_ipEntity == $right.RemoteIP\n\
+      | summarize TimeGenerated = arg_max(TimeGenerated, *) by Id, TI_ipEntity, DeviceName\n\
+      | extend timestamp = TimeGenerated, Name = tostring(split(InitiatingProcessAccountUpn,\
+      \ '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@',\
+      \ 1)[0])\n| project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP,\
+      \ Type, TI_ipEntity"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP Entity to DeviceNetworkEvents
+      description: '''Identifies a match in DeviceNetworkEvents Event data from any
+        IP Indicator from TI.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: TI_ipEntity
+        hosts:
+        - id: host1
+          nameColumn: DeviceName
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        URLUrl: RemoteUrl

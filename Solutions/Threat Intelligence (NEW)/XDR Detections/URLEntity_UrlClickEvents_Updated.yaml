@@ -1,0 +1,137 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - UrlClickEvents
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mdo
+    dataTypes:
+    - UrlClickEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - UrlClickEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ad4fa1f2-2189-459c-9458-f77d2039d2f5
+    path: Analytic Rules/URLEntity_UrlClickEvents_Updated.yaml
+    version: 1.0.5
+    querySha256: e0b3176c5faff3a24076f7a53e053e5ddf3582e9aac7f4f130160ceaab6ce638
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.5
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `AccountUpn` cannot be proven after a destructive
+      projection; no supplemental customDetails binding was added and KQL was not
+      rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 6d9208ba323dab693afbd06e9ac0ff54837e7d9c16a643abfec647bcf2cf49ea
+      targetQuerySha256: 2bbb3130d105324a167773c12456e7e6efdee5dc9ca00f6979f6ceb998eb9c02
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountUpn
+      column: AccountUpn
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-ad4fa1f2-2189-459c-9458-f77d2039d2f5
+  displayName: TI Map URL Entity to UrlClickEvents
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet UrlClickEvents_\
+      \ = materialize(UrlClickEvents\n    | where TimeGenerated >= ago(dt_lookBack)\n\
+      \    | extend UrlClickEvents_TimeGenerated = TimeGenerated);\nlet ChainReportID\
+      \ = UrlClickEvents_\n    | mv-expand todynamic(UrlChain)\n    | extend UrlChain\
+      \ = tolower(UrlChain)\n    | project ReportId, Url, UrlChain;\n// Url is not\
+      \ always in UrlChain, so we need to check both\nlet ClickedUrls =\n  (union\
+      \ isfuzzy=false (ChainReportID), (ChainReportID | project Url = UrlChain))\n\
+      \  | distinct Url\n  | summarize make_list(Url);\nlet TI = materialize(ThreatIntelIndicators\n\
+      //extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\
+      \"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType\
+      \ == \"url\"\n| extend Url = ObservableValue\n  | extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated\
+      \ >= ago(ioc_lookBack)\n  | where tolower(Url) in (ClickedUrls)\n  | summarize\
+      \ LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n \
+      \ | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n  | project-rename\
+      \ TI_Url = Url, TI_Type = Type\n  );\n(union isfuzzy=false (TI | join kind=innerunique\
+      \ (ChainReportID) on $left.TI_Url == $right.UrlChain),\n  (TI | join kind=innerunique\
+      \ (ChainReportID) on $left.TI_Url == $right.Url))\n| project-away UrlChain\n\
+      | join kind=innerunique (UrlClickEvents_) on ReportId\n| where UrlClickEvents_TimeGenerated\
+      \ < ValidUntil\n| summarize UrlClickEvents_TimeGenerated = arg_max(UrlClickEvents_TimeGenerated,\
+      \ *) by Id\n| extend Description = tostring(parse_json(Data).description)\n\
+      | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project UrlClickEvents_TimeGenerated, AccountUpn, Description, ActivityGroupNames,\
+      \ Id, Type, ValidUntil, Confidence, Url, NetworkMessageId\n| extend timestamp\
+      \ = UrlClickEvents_TimeGenerated\n| extend timestamp = UrlClickEvents_TimeGenerated,\
+      \ Name = tostring(split(AccountUpn, '@', 0)), UPNSuffix = tostring(split(AccountUpn,\
+      \ '@', 1))"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map URL Entity to UrlClickEvents
+      description: '''This query identifies any URL indicators of compromise (IOCs)
+        from threat intelligence (TI) by searching for matches in UrlClickEvents.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
