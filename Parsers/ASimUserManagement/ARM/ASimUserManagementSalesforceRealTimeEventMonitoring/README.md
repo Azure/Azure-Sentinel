@@ -2,7 +2,7 @@
 
 ARM template for ASIM UserManagement schema parser for Salesforce Real-Time Event Monitoring.
 
-Normalizes PermissionSetEventStore user assignments as UserModified, not group membership. Single impacted-user identifiers map to TargetUserId; bulk events remain one row and do not select an arbitrary target.
+Normalizes PermissionSetEventStore permission-set and permission-set-group assignments as UserModified, not group membership. Assignment values map to NewPropertyValue or PreviousPropertyValue; single impacted-user identifiers map to TargetUserId, while bulk events remain one row.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 

@@ -17,7 +17,7 @@ References:
 - Title: Salesforce PermissionSetEventStore
   Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-permissionseteventstore.html
 Description: |
-  Normalizes PermissionSetEventStore user assignments as UserModified, not group membership. Single impacted-user identifiers map to TargetUserId; bulk events remain one row and do not select an arbitrary target.
+  Normalizes PermissionSetEventStore permission-set and permission-set-group assignments as UserModified, not group membership. Assignment values map to NewPropertyValue or PreviousPropertyValue; single impacted-user identifiers map to TargetUserId, while bulk events remain one row.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: vimUserManagementSalesforceRealTimeEventMonitoring
 EquivalentBuiltInParser: _Im_UserManagement_SalesforceRealTimeEventMonitoring
@@ -119,6 +119,21 @@ ParserQuery: |
           TargetUserId = iff(array_length(ImpactedUserIds) == 1, tostring(ImpactedUserIds[0]), ""),
           TargetUserIdType = iff(array_length(ImpactedUserIds) == 1 and isnotempty(tostring(ImpactedUserIds[0])), "SalesforceId", ""),
           TargetUserScope = _OrgHost,
+          PreviousPropertyValue = iff(
+              Operation == "UnassignedFromUsers",
+              case(
+                  array_length(ParentNameList) > 0, tostring(ParentNameList),
+                  tostring(ParentIdList)),
+              ""),
+          NewPropertyValue = iff(
+              Operation == "AssignedToUsers",
+              case(
+                  array_length(ParentNameList) > 0, tostring(ParentNameList),
+                  tostring(ParentIdList)),
+              ""),
+          ActingAppName = EventSource,
+          ActingAppType = iff(isempty(EventSource), "", "SaaS application"),
+          ActingOriginalAppType = EventSource,
           RuleName = coalesce(PolicyId, Policy),
           AdditionalFields = iff(pack, bag_pack(
               "Operation", Operation, "ImpactedUserIds", ImpactedUserIds,
@@ -127,7 +142,7 @@ ParserQuery: |
               "PermissionList", PermissionList, "PermissionType", PermissionType,
               "PermissionExpiration", PermissionExpiration,
               "PermissionExpirationList", PermissionExpirationList,
-              "LoginKey", LoginKey, "SourceIp", SourceIp, "EventSource", EventSource,
+              "LoginKey", LoginKey, "SourceIp", SourceIp,
               "LoginHistoryId", LoginHistoryId, "SessionLevel", SessionLevel,
               "RelatedEventIdentifier", RelatedEventIdentifier,
               "PolicyOutcome", PolicyOutcome, "EvaluationTime", EvaluationTime), dynamic({})),
@@ -154,7 +169,9 @@ ParserQuery: |
           Dvc, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, Hostname, DvcScope, DvcOriginalAction, DvcAction,
           ActorUserId, ActorUserIdType, ActorUsername, ActorUsernameType,
           ActorScope, ActorSessionId, User, TargetUserId, TargetUserIdType, TargetUserScope,
+          PreviousPropertyValue, NewPropertyValue,
           SrcIpAddr, Src, IpAddr, RuleName, Rule, AdditionalFields,
+          ActingAppName, ActingAppType, ActingOriginalAppType,
           DvcEntityKey, ActorUserEntityKey, TargetUserEntityKey, SrcSystemEntityKey,
           ActingApplicationEntityKey, ActorUserAdditionalIds, TargetUserAdditionalIds,
           AdditionalEntities

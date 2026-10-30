@@ -17,7 +17,7 @@ References:
 - Title: Salesforce PermissionSetEventStore
   Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-permissionseteventstore.html
 Description: |
-  Normalizes PermissionSetEventStore permission-definition changes, excluding user-assignment operations handled by the UserManagement parser. Business-data API, report, and list-view activity is not represented as a configuration audit event.
+  Normalizes PermissionSetEventStore permission-definition changes, excluding user-assignment operations handled by the UserManagement parser. Enabled permissions are mapped to NewValue and disabled permissions to OldValue; affected permission sets, groups, and profiles remain configuration objects.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: ASimAuditEventSalesforceRealTimeEventMonitoring
 EquivalentBuiltInParser: _ASim_AuditEvent_SalesforceRealTimeEventMonitoring
@@ -50,6 +50,7 @@ ParserQuery: |
           EventSchema = "AuditEvent",
           EventSchemaVersion = "1.0.0",
           EventOriginalType = _SourceType,
+          EventSubType = PermissionType,
           EventType = case(
               Operation in ("PermsEnabled", "CriticalPerms"), "Enable",
               Operation == "PermsDisabled", "Disable",
@@ -72,8 +73,12 @@ ParserQuery: |
               array_length(ParentIdList) > 1, tostring(ParentIdList),
               tostring(PermissionList)),
           ObjectId = iff(array_length(ParentIdList) == 1, tostring(ParentIdList[0]), ""),
-          ObjectType = "Policy Rule",
+          ObjectType = "Configuration Atom",
           OriginalObjectType = PermissionType,
+          OldValue = iff(Operation == "PermsDisabled", tostring(PermissionList), ""),
+          NewValue = iff(Operation in ("PermsEnabled", "CriticalPerms"), tostring(PermissionList), ""),
+          Value = iff(Operation in ("PermsEnabled", "CriticalPerms"), tostring(PermissionList), ""),
+          ValueType = iff(array_length(PermissionList) > 0, "Other", ""),
           Dvc = coalesce(_OrgHost, "Salesforce Real-Time Event Monitoring"),
           DvcFQDN = _OrgHost,
           DvcHostname = tostring(split(_OrgHost, ".")[0]),
@@ -92,6 +97,9 @@ ParserQuery: |
           ActorUsernameType = iff(isempty(UserNameDetail), "", iff(UserNameDetail contains "@", "UPN", "Simple")),
           ActorScope = _OrgHost,
           ActorSessionId = SessionKey,
+          ActingAppName = EventSource,
+          ActingAppType = iff(isempty(EventSource), "", "SaaS application"),
+          ActingOriginalAppType = EventSource,
           TargetAppName = "Salesforce",
           TargetAppType = "SaaS application",
           RuleName = coalesce(PolicyId, Policy),
@@ -102,7 +110,7 @@ ParserQuery: |
               "HasExternalUsers", HasExternalUsers,
               "PermissionExpiration", PermissionExpiration,
               "PermissionExpirationList", PermissionExpirationList,
-              "LoginKey", LoginKey, "SourceIp", SourceIp, "EventSource", EventSource,
+              "LoginKey", LoginKey, "SourceIp", SourceIp,
               "LoginHistoryId", LoginHistoryId, "SessionLevel", SessionLevel,
               "RelatedEventIdentifier", RelatedEventIdentifier,
               "PolicyOutcome", PolicyOutcome, "EvaluationTime", EvaluationTime), dynamic({})),
@@ -125,12 +133,14 @@ ParserQuery: |
       | project
           TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
           EventVendor, EventProduct, EventSchema, EventSchemaVersion,
-          EventOriginalType, EventType, EventResult, EventSeverity,
+          EventOriginalType, EventSubType, EventType, EventResult, EventSeverity,
           EventUid, EventOriginalUid, EventOriginalResultDetails, EventMessage,
           Operation, Object, ObjectId, ObjectType, OriginalObjectType,
+          OldValue, NewValue, Value, ValueType,
           Dvc, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, DvcScope, DvcOriginalAction, DvcAction,
           ActorUserId, ActorUserIdType, ActorUsername, ActorUsernameType,
           ActorScope, ActorSessionId, User, SrcIpAddr, Src, IpAddr,
+          ActingAppName, ActingAppType, ActingOriginalAppType,
           TargetAppName, TargetAppType, Application, Dst, RuleName, Rule,
           AdditionalFields, DvcEntityKey, ActorUserEntityKey, SrcSystemEntityKey,
           TargetSystemEntityKey, ActingApplicationEntityKey, TargetApplicationEntityKey,

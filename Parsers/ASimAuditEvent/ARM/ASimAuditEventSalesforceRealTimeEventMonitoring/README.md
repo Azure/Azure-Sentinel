@@ -2,7 +2,7 @@
 
 ARM template for ASIM AuditEvent schema parser for Salesforce Real-Time Event Monitoring.
 
-Normalizes PermissionSetEventStore permission-definition changes, excluding user-assignment operations handled by the UserManagement parser. Business-data API, report, and list-view activity is not represented as a configuration audit event.
+Normalizes PermissionSetEventStore permission-definition changes, excluding user-assignment operations handled by the UserManagement parser. Enabled permissions are mapped to NewValue and disabled permissions to OldValue; affected permission sets, groups, and profiles remain configuration objects.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 

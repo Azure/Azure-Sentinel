@@ -4,6 +4,6 @@
 
 - Forward all filtering and control parameters and filter before device normalization and packing.
 - Reference the PermissionSetEventStore API, use the guaranteed `SalesforceDomain` column directly, and preserve documented login-history, session-level, and related-event identifiers when packing.
-- Retain permission-set assignment context without fabricating group membership, target usernames, or complete before/after permission snapshots.
+- Normalize assigned and unassigned permission-set or permission-set-group values as `NewPropertyValue` and `PreviousPropertyValue`, and the documented event source as the acting application, without fabricating group membership or target usernames.
 - (2026-10-30) Initial creation of the Salesforce Real-Time Event Monitoring UserManagement parser.
 - Normalizes PermissionSetEventStore user assignments as UserModified, not group membership. Single impacted-user identifiers map to TargetUserId; bulk events remain one row and do not select an arbitrary target.
