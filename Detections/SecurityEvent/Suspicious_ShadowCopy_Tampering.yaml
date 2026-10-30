@@ -1,0 +1,77 @@
+id: d7a18b2c-6e4f-4a3d-9c1e-8f2a5b4c9e71
+name: Suspicious Volume Shadow Copy and Recovery Configuration Tampering
+description: |
+  'Detects attempts to tamper with system recovery configurations, volume shadow copies, or backup catalogs using native utilities (vssadmin, bcdedit, wbadmin). 
+  This behavior is frequently observed during ransomware campaigns (T1490) attempting to inhibit system recovery.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - DefenseEvasion
+relevantTechniques:
+  - T1490
+query: |
+  let TimeWindow = 15m;
+  let Threshold = 3;
+  SecurityEvent
+  | where EventID == 4688
+  | where CommandLine has_any ("vssadmin", "bcdedit", "wbadmin")
+  | where CommandLine has_any ("delete", "recoveryenabled", "catalog", "resize")
+  | extend Tool = case(
+      CommandLine has "vssadmin", "vssadmin",
+      CommandLine has "bcdedit", "bcdedit",
+      CommandLine has "wbadmin", "wbadmin",
+      "Other"
+  )
+  | extend IsLegitimate = case(
+      ParentProcessName endswith "\\VeeamAgent.exe", true,
+      ParentProcessName endswith "\\AcronisAgent.exe", true,
+      Account has "backup", true,
+      false
+  )
+  | where IsLegitimate == false
+  | summarize 
+      ComputerCount = dcount(Computer),
+      StartTime = min(TimeGenerated),
+      EndTime = max(TimeGenerated),
+      AccountList = make_set(Account, 5),
+      ToolList = make_set(Tool, 5),
+      ComputerList = make_set(Computer, 5)
+      by bin(TimeGenerated, TimeWindow)
+  | where ComputerCount >= Threshold
+  | extend RiskScore = 
+      ComputerCount * 10 + 
+      iif(ToolList has "bcdedit", 20, 0) + 
+      iif(AccountList has "SYSTEM", 15, 0)
+  | order by RiskScore desc
+  | project 
+      TimeGenerated = StartTime,
+      ComputerCount,
+      RiskScore,
+      StartTime,
+      EndTime,
+      AccountList,
+      ToolList,
+      ComputerList
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountList
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: ComputerList
+version: 1.0.0
+kind: Scheduled
