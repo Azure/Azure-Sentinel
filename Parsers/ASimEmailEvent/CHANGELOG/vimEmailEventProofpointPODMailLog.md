@@ -1,5 +1,10 @@
 # Changelog for vimEmailEventProofpointPODMailLog.yaml
 
+## Version 0.1.3
+
+- (2026-10-30) Read the Proofpoint source ID directly without changing filtering or other optional-field handling - [PR #15512](https://github.com/Azure/Azure-Sentinel/pull/15512)
+- Preserve connector-provided IDs; CI replay that omits `id` is expected to fail QTP execution until fixture tooling is corrected.
+
 ## Version 0.1.2
 
 - (2026-10-24) Normalize mailbox-form relay hosts and identify relay-less local delivery destinations - [PR #15410](https://github.com/Azure/Azure-Sentinel/pull/15410)
