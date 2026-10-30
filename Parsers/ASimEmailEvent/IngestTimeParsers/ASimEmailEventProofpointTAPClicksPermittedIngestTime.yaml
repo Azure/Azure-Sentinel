@@ -1,0 +1,91 @@
+Parser:
+  DisplayName: 'Proofpoint TAP permitted clicks ASIM EmailEvent ingestion-time parser'
+  Version: '0.1.2'
+  LastUpdated: '2026-10-29'
+Product:
+  Name: 'Proofpoint Targeted Attack Protection'
+Normalization:
+  Schema: 'EmailEvent'
+  Version: '1.0.0'
+Author: 'nsethupathi'
+Description: |
+  Normalizes ProofPointTAPClicksPermittedV2_CL URL Defense permitted-click events
+  into ASimEmailEventLogs as EmailInteraction activity during ingestion.
+  Expects the connector's raw-table shape, including TimeGenerated.
+ParserName: 'ASimEmailEventProofpointTAPClicksPermittedIngestTime'
+DCRType: 'Standard'
+InputStream: 'Custom-ProofPointTAPClicksPermittedV2_CL'
+SourceRawTable: 'ProofPointTAPClicksPermittedV2_CL'
+TargetASIMTable: 'ASimEmailEventLogs'
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend Type = "ProofPointTAPClicksPermittedV2_CL"
+  | project-rename
+      Dst=recipient,
+      EmailMailFromAddress=sender,
+      SrcIpAddr=clickIP,
+      ThreatId=threatID,
+      ThreatOriginalCategory=classification,
+      ThreatFirstReportedTime=threatTime,
+      EventReportUrl=threatURL
+  | extend
+      EventVendor="Proofpoint",
+      EventProduct="TAP",
+      EventSchema="EmailEvent",
+      EventSchemaVersion="1.0.0",
+      EventType="EmailInteraction",
+      EventOriginalType="clicksPermitted",
+      EventOriginalUid=tostring(columnifexists("id", "")),
+      EventCount=int(1),
+      EventStartTime=iif(isnotnull(clickTime), clickTime, TimeGenerated),
+      EventResult="NA",
+      DvcOriginalAction="Permitted",
+      DvcAction="NA",
+      DvcEntityKey="",
+      EmailDirection="Unknown",
+      EmailUrls=iff(isempty(url), parse_json('[]'), pack_array(url)),
+      AdditionalEntities=parse_json('[]'),
+      AdditionalFields=pack(
+          "CampaignId", campaignId,
+          "MessageGuid", GUID,
+          "MessageId", messageID,
+          "SenderIpAddr", senderIP,
+          "ThreatStatus", threatStatus,
+          "UserAgent", userAgent)
+  | extend
+      EventEndTime=EventStartTime,
+      Dvc=EventProduct,
+      Src=SrcIpAddr,
+      IpAddr=SrcIpAddr,
+      EmailMailFromDomain=tostring(split(EmailMailFromAddress, "@")[1]),
+      ThreatCategory=case(
+          ThreatOriginalCategory =~ "malware", "Malware",
+          tolower(ThreatOriginalCategory) in ("phish", "phishing"), "Phishing",
+          ThreatOriginalCategory =~ "spam", "Spam",
+          ""),
+      ThreatIsActive=case(
+          threatStatus =~ "active", true,
+          tolower(threatStatus) in ("cleared", "falsepositive"), false,
+          bool(null)),
+      ThreatField=iff(isnotempty(url), "EmailUrls", ""),
+      EventResultDetails=case(
+          ThreatOriginalCategory =~ "malware", "MalwareDetected",
+          tolower(ThreatOriginalCategory) in ("phish", "phishing"), "PhishingDetected",
+          isnotempty(ThreatOriginalCategory), "Other",
+          "")
+  | project
+      TimeGenerated, Type,
+      EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+      EventType, EventOriginalType, EventCount, EventStartTime, EventEndTime,
+      EventResult, EventResultDetails, EventOriginalUid, EventReportUrl,
+      Dvc, DvcOriginalAction, DvcAction, DvcEntityKey,
+      Src, SrcIpAddr, IpAddr, Dst,
+      EmailMailFromAddress, EmailMailFromDomain, EmailDirection, EmailUrls,
+      ThreatId, ThreatOriginalCategory, ThreatCategory, ThreatIsActive,
+      ThreatFirstReportedTime, ThreatField,
+      AdditionalEntities, AdditionalFields
+Change:
+  Date: '2026-10-29'
+  Description: 'Initial ingestion-time conversion of the Proofpoint TAP permitted-click EmailEvent parser.'
