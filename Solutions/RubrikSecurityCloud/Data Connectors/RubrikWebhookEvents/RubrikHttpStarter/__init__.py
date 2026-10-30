@@ -3,9 +3,11 @@ import inspect
 import json
 import azure.functions as func
 import azure.durable_functions as df
-from shared_code.consts import LOGS_STARTS_WITH
+from shared_code.consts import LOGS_STARTS_WITH, LOG_FORMAT
 from shared_code.logger import applogger
 from shared_code.rubrik_exception import RubrikException
+
+FUNCTION_NAME = "RubrikHttpStarter"
 
 
 def get_data_from_request_body(request):
@@ -23,10 +25,10 @@ def get_data_from_request_body(request):
         json_data = json.dumps(data)
         return json_data
     except ValueError as value_error:
-        applogger.error("{}(method={}) {}".format(LOGS_STARTS_WITH, __method_name, value_error))
+        applogger.error(LOG_FORMAT.format(LOGS_STARTS_WITH, FUNCTION_NAME, __method_name, value_error))
         raise RubrikException(value_error)
     except Exception as err:
-        applogger.error("{}(method={}) {}".format(LOGS_STARTS_WITH, __method_name, err))
+        applogger.error(LOG_FORMAT.format(LOGS_STARTS_WITH, FUNCTION_NAME, __method_name, err))
         raise RubrikException(err)
 
 
@@ -41,17 +43,31 @@ async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
         func.HttpResponse: Status of Http request process (successful/failed).
     """
     __method_name = inspect.currentframe().f_code.co_name
+    applogger.info(
+        LOG_FORMAT.format(
+            LOGS_STARTS_WITH, FUNCTION_NAME, __method_name,
+            "HTTP trigger received; routing to orchestrator '{}'.".format(
+                req.route_params.get("functionName", "unknown")
+            ),
+        )
+    )
     try:
-        applogger.debug("{} HttpStarter Function Called.".format(LOGS_STARTS_WITH))
         data = get_data_from_request_body(req)
         if data:
+            applogger.debug(
+                LOG_FORMAT.format(
+                    LOGS_STARTS_WITH, FUNCTION_NAME, __method_name,
+                    "Request body parsed successfully (size={} bytes).".format(len(data)),
+                )
+            )
             client = df.DurableOrchestrationClient(starter)
             instance_id = await client.start_new(
                 req.route_params["functionName"], client_input=data
             )
             applogger.info(
-                "{} Started orchestration with ID = '{}'.".format(
-                    LOGS_STARTS_WITH, instance_id
+                LOG_FORMAT.format(
+                    LOGS_STARTS_WITH, FUNCTION_NAME, __method_name,
+                    "Durable orchestration started with ID = '{}'.".format(instance_id)
                 )
             )
             body = "Data Received successfully via Rubrik Webhook."
@@ -61,7 +77,7 @@ async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
                 headers={"Content-Length": str(len(body))},
             )
         else:
-            applogger.info("{}(method={})No required data found.".format(LOGS_STARTS_WITH, __method_name))
+            applogger.info(LOG_FORMAT.format(LOGS_STARTS_WITH, FUNCTION_NAME, __method_name, "No required data found."))
             body = "No required data found."
             return func.HttpResponse(
                 body=body,
