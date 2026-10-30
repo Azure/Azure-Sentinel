@@ -1,0 +1,54 @@
+id: 9563dc15-ea0a-438a-9d50-7ab243378241
+name: Create Incident for Classification events for non DSPM license users
+version: 1.0.0
+kind: Scheduled
+description: |
+  'Creates an incident for Classification events (ClassficationResultsAvailable) for non DSPM license users.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: RubrikSecurityCloudAzureFunctions
+    dataTypes:
+      - RubrikViolationData
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+relevantTechniques:
+  - T1213
+query: |
+  Rubrik_Violation_Data_CL
+  | where class_s == "Classification" and custom_details_eventName_s in ("ClassficationResultsAvailable", "ClassificationResultsAvailable")
+  | extend NewSeverity = case(severity_s=="info", "Low",
+                              severity_s=="warning", "Medium",
+                              severity_s=="critical", "High",
+                              "Informational"),
+           ObjectId = iff(isnotempty(custom_details_objectId_s), custom_details_objectId_s, tostring(custom_details_objectId_g)),
+           SnapshotId = custom_details_snapshotId_s
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P7D
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - ObjectId
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{class_s}} event occurred for object {{custom_details_objectName_s}} with type {{custom_details_objectType_s}}'
+  alertDescriptionFormat: '{{summary_s}}'
+  alertSeverityColumnName: NewSeverity
+customDetails:
+  ObjectId: ObjectId
+  ObjectName: custom_details_objectName_s
+  ObjectType: custom_details_objectType_s
+  EventType: class_s
+  EventName: custom_details_eventName_s
+  Summary: summary_s
+  EventTimestamp: timestamp_t
+  Severity: severity_s
+  SnapshotId: custom_details_snapshotId_s
