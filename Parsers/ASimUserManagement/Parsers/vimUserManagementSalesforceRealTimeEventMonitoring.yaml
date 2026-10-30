@@ -16,6 +16,8 @@ References:
   Link: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesForceRealTimeEventMonitoringConnector_CCF
 - Title: Salesforce Event Monitoring documentation
   Link: https://developer.salesforce.com/docs/atlas.en-us.securityImplGuide.meta/securityImplGuide/event_monitoring.htm
+- Title: Salesforce PermissionSetEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-permissionseteventstore.html
 Description: |
   Normalizes PermissionSetEventStore user assignments as UserModified, not group membership. Single impacted-user identifiers map to TargetUserId; bulk events remain one row and do not select an arbitrary target.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
@@ -60,16 +62,21 @@ ParserQuery: |
   ) {
       SalesForceRealTimeEventMonitoring_CL
       | where not(disabled)
+      | where array_length(targetusername_has_any) == 0
+      | where array_length(eventtype_in) == 0 or "UserModified" in (eventtype_in)
       | where isnull(starttime) or TimeGenerated >= starttime
       | where isnull(endtime) or TimeGenerated <= endtime
       | where EventType == "PermissionSetEventStore"
       | where Operation in ("AssignedToUsers", "UnassignedFromUsers")
+      | where array_length(actorusername_has_any) == 0 or UserNameDetail has_any (actorusername_has_any)
       | extend
           _SourceType = EventType,
-          _Org = tostring(column_ifexists("SalesforceDomain", ""))
+          _Org = SalesforceDomain
       | extend
-          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host),
           SrcIpAddr = iff(isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp, "")
+      | where array_length(srcipaddr_has_any_prefix) == 0 or SrcIpAddr in (srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+      | extend
+          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host)
       | extend
           EventStartTime = coalesce(EventDate, TimeGenerated),
           EventEndTime = coalesce(EventDate, TimeGenerated),
@@ -123,6 +130,8 @@ ParserQuery: |
               "PermissionExpiration", PermissionExpiration,
               "PermissionExpirationList", PermissionExpirationList,
               "LoginKey", LoginKey, "SourceIp", SourceIp, "EventSource", EventSource,
+              "LoginHistoryId", LoginHistoryId, "SessionLevel", SessionLevel,
+              "RelatedEventIdentifier", RelatedEventIdentifier,
               "PolicyOutcome", PolicyOutcome, "EvaluationTime", EvaluationTime), dynamic({})),
           DvcEntityKey = "",
           ActorUserEntityKey = "",
@@ -139,10 +148,6 @@ ParserQuery: |
           IpAddr = SrcIpAddr,
           User = ActorUsername,
           Rule = RuleName
-      | where array_length(srcipaddr_has_any_prefix) == 0 or SrcIpAddr in (srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
-      | where array_length(targetusername_has_any) == 0
-      | where array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any)
-      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
       | project
           TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
           EventVendor, EventProduct, EventSchema, EventSchemaVersion,
@@ -156,4 +161,5 @@ ParserQuery: |
           ActingApplicationEntityKey, ActorUserAdditionalIds, TargetUserAdditionalIds,
           AdditionalEntities
   };
-  parser()
+  parser(starttime, endtime, srcipaddr_has_any_prefix, targetusername_has_any,
+      actorusername_has_any, eventtype_in, disabled, pack)

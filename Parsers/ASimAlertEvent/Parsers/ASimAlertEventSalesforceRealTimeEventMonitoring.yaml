@@ -16,6 +16,20 @@ References:
   Link: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesForceRealTimeEventMonitoringConnector_CCF
 - Title: Salesforce Event Monitoring documentation
   Link: https://developer.salesforce.com/docs/atlas.en-us.securityImplGuide.meta/securityImplGuide/event_monitoring.htm
+- Title: Salesforce ApiAnomalyEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-apianomalyeventstore.html
+- Title: Salesforce CredentialStuffingEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-credentialstuffingeventstore.html
+- Title: Salesforce GuestUserAnomalyEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-guestuseranomalyeventstore.html
+- Title: Salesforce LoginAnomalyEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-loginanomalyeventstore.html
+- Title: Salesforce ReportAnomalyEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-reportanomalyeventstore.html
+- Title: Salesforce SessionHijackingEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-sessionhijackingeventstore.html
+- Title: Salesforce UniversalAnomalyEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-universalanomalyeventstore.html
 Description: |
   Salesforce anomaly event-store records are normalized as alert events. The source does not supply analyst verdicts or normalized severity, so verdict and severity defaults are conservative; source score remains additional context. Identity-provider and LoginAccessChange coverage are not included.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
@@ -41,7 +55,7 @@ ParserQuery: |
       | extend
           _SourceType = EventType,
           _RawIp = iff(EventType == "SessionHijackingEventStore", coalesce(CurrentIp, SourceIp), SourceIp),
-          _Org = tostring(column_ifexists("SalesforceDomain", ""))
+          _Org = SalesforceDomain
       | extend
           _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host),
           DvcIpAddr = iff(isnotnull(parse_ipv4(_RawIp)) or isnotempty(parse_ipv6(_RawIp)), _RawIp, "")
@@ -85,6 +99,7 @@ ParserQuery: |
               ""),
           Username = UserNameDetail,
           UsernameType = iff(isempty(UserNameDetail), "", iff(UserNameDetail contains "@", "UPN", "Simple")),
+          OriginalUserType = iff(_SourceType == "GuestUserAnomalyEventStore", UserType, ""),
           UserIdType = iff(isempty(UserId), "", "SalesforceId"),
           UserScope = _OrgHost,
           UserSessionId = SessionKey,
@@ -100,6 +115,11 @@ ParserQuery: |
               "Operation", Operation, "QueriedEntities", QueriedEntities,
               "RowsProcessed", RowsProcessed, "RequestIdentifier", RequestIdentifier,
               "Uri", Uri, "AnomalySubType", AnomalySubType,
+              "LoginType", LoginType, "LoginUrl", LoginUrl, "AcceptLanguage", AcceptLanguage,
+              "ReportId", ReportId, "SoqlCommands", SoqlCommands,
+              "TotalControllerEvents", TotalControllerEvents,
+              "FeatureName", FeatureName, "FeatureValue", FeatureValue,
+              "FeatureContribution", FeatureContribution,
               "EvaluationTime", EvaluationTime), dynamic({})),
           DvcEntityKey = "",
           UserEntityKey = "",
@@ -121,9 +141,9 @@ ParserQuery: |
           AlertId, AlertName, AlertDescription, AlertVerdict, DetectionMethod,
           ThreatCategory, ThreatOriginalCategory,
           Dvc, DvcIpAddr, IpAddr, DvcScope, DvcOriginalAction, DvcAction,
-          Username, UsernameType, User, UserId, UserIdType, UserScope, UserSessionId,
+          Username, UsernameType, OriginalUserType, User, UserId, UserIdType, UserScope, UserSessionId,
           RuleName, Rule, AdditionalFields,
           DvcEntityKey, UserEntityKey, FileEntityKey, ProcessEntityKey,
           UserAdditionalIds, AdditionalEntities
   };
-  parser()
+  parser(disabled, pack)

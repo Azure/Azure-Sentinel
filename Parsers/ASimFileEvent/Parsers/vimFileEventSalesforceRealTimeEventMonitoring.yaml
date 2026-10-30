@@ -16,6 +16,8 @@ References:
   Link: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesForceRealTimeEventMonitoringConnector_CCF
 - Title: Salesforce Event Monitoring documentation
   Link: https://developer.salesforce.com/docs/atlas.en-us.securityImplGuide.meta/securityImplGuide/event_monitoring.htm
+- Title: Salesforce FileEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-fileeventstore.html
 Description: |
   Normalizes documented API_DOWNLOAD, UI_DOWNLOAD, PREVIEW, and UPLOAD actions. FileName is used without inventing a path; API_DOWNLOAD rows without FileName can produce an empty TargetFilePath and require review. Upload is mapped conservatively, and transfer success is not inferred.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
@@ -72,16 +74,27 @@ ParserQuery: |
   ) {
       SalesForceRealTimeEventMonitoring_CL
       | where not(disabled)
+      | where array_length(srcfilepath_has_any) == 0
+      | where array_length(hashes_has_any) == 0
       | where isnull(starttime) or TimeGenerated >= starttime
       | where isnull(endtime) or TimeGenerated <= endtime
       | where EventType == "FileEventStore"
       | where FileAction in ("API_DOWNLOAD", "UI_DOWNLOAD", "PREVIEW", "UPLOAD")
+      | where array_length(actorusername_has_any) == 0 or UserNameDetail has_any (actorusername_has_any)
+      | where array_length(targetfilepath_has_any) == 0 or FileName has_any (targetfilepath_has_any)
       | extend
           _SourceType = EventType,
-          _Org = tostring(column_ifexists("SalesforceDomain", ""))
+          _Org = SalesforceDomain,
+          // An upload can create a new file or check in a new version.
+          EventType = iff(FileAction == "UPLOAD", "FileCreatedOrModified", "FileAccessed")
+      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
       | extend
-          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host),
           SrcIpAddr = iff(isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp, "")
+      | where array_length(srcipaddr_has_any_prefix) == 0 or SrcIpAddr in (srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+      | extend
+          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host)
+      | extend DvcHostname = tostring(split(_OrgHost, ".")[0])
+      | where array_length(dvchostname_has_any) == 0 or DvcHostname has_any (dvchostname_has_any)
       | extend
           EventStartTime = coalesce(EventDate, TimeGenerated),
           EventEndTime = coalesce(EventDate, TimeGenerated),
@@ -92,8 +105,6 @@ ParserQuery: |
           EventSchemaVersion = "1.0.0",
           EventOriginalType = _SourceType,
           EventOriginalSubType = FileAction,
-          // An upload can create a new file or check in a new version.
-          EventType = iff(FileAction == "UPLOAD", "FileCreatedOrModified", "FileAccessed"),
           EventSubType = case(FileAction == "UPLOAD", "Checkin", FileAction == "PREVIEW", "Preview", "Download"),
           EventResult = iff(
               PolicyOutcome in ("Block", "MeteringBlock", "EndSession", "TwoFADenied", "TwoFAReportedDenied")
@@ -110,7 +121,6 @@ ParserQuery: |
           TargetFileSize = tolong(ContentSize),
           Dvc = coalesce(_OrgHost, "Salesforce Real-Time Event Monitoring"),
           DvcFQDN = _OrgHost,
-          DvcHostname = tostring(split(_OrgHost, ".")[0]),
           DvcDomain = iff(indexof(_OrgHost, ".") >= 0, substring(_OrgHost, indexof(_OrgHost, ".") + 1), ""),
           DvcScope = _OrgHost,
           DvcOriginalAction = PolicyOutcome,
@@ -134,6 +144,7 @@ ParserQuery: |
               "FileAction", FileAction, "IsLatestVersion", IsLatestVersion,
               "CanDownloadPdf", CanDownloadPdf, "ProcessDuration", ProcessDuration,
               "LoginKey", LoginKey, "SourceIp", SourceIp,
+              "SessionLevel", SessionLevel,
               "PolicyOutcome", PolicyOutcome, "RelatedEventIdentifier", RelatedEventIdentifier,
               "EvaluationTime", EvaluationTime), dynamic({})),
           DvcEntityKey = "",
@@ -155,13 +166,6 @@ ParserQuery: |
           User = ActorUsername,
           Application = TargetAppName,
           Rule = RuleName
-      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
-      | where array_length(srcipaddr_has_any_prefix) == 0 or SrcIpAddr in (srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
-      | where array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any)
-      | where array_length(targetfilepath_has_any) == 0 or TargetFilePath has_any (targetfilepath_has_any)
-      | where array_length(srcfilepath_has_any) == 0
-      | where array_length(hashes_has_any) == 0
-      | where array_length(dvchostname_has_any) == 0 or DvcHostname has_any (dvchostname_has_any)
       | project
           TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
           EventVendor, EventProduct, EventSchema, EventSchemaVersion,
@@ -177,4 +181,5 @@ ParserQuery: |
           ActingApplicationEntityKey, TargetApplicationEntityKey, ActingProcessEntityKey,
           SrcFileEntityKey, TargetFileEntityKey, ActorUserAdditionalIds, AdditionalEntities
   };
-  parser()
+  parser(starttime, endtime, eventtype_in, srcipaddr_has_any_prefix, actorusername_has_any,
+      targetfilepath_has_any, srcfilepath_has_any, hashes_has_any, dvchostname_has_any, disabled, pack)

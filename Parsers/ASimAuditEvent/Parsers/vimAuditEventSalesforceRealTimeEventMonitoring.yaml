@@ -16,6 +16,8 @@ References:
   Link: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesForceRealTimeEventMonitoringConnector_CCF
 - Title: Salesforce Event Monitoring documentation
   Link: https://developer.salesforce.com/docs/atlas.en-us.securityImplGuide.meta/securityImplGuide/event_monitoring.htm
+- Title: Salesforce PermissionSetEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-permissionseteventstore.html
 Description: |
   Normalizes PermissionSetEventStore permission-definition changes, excluding user-assignment operations handled by the UserManagement parser. Business-data API, report, and list-view activity is not represented as a configuration audit event.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
@@ -76,16 +78,42 @@ ParserQuery: |
       let _newvalue_has_any = case(isnull(newvalue_has_any) or tostring(newvalue_has_any) == "", dynamic([]), gettype(newvalue_has_any) == "array", newvalue_has_any, pack_array(tostring(newvalue_has_any)));
       SalesForceRealTimeEventMonitoring_CL
       | where not(disabled)
+      | where array_length(_newvalue_has_any) == 0
       | where isnull(starttime) or TimeGenerated >= starttime
       | where isnull(endtime) or TimeGenerated <= endtime
       | where EventType == "PermissionSetEventStore"
       | where Operation !in ("AssignedToUsers", "UnassignedFromUsers")
+      | where array_length(_actorusername_has_any) == 0 or UserNameDetail has_any (_actorusername_has_any)
+      | where array_length(_operation_has_any) == 0 or Operation has_any (_operation_has_any)
       | extend
           _SourceType = EventType,
-          _Org = tostring(column_ifexists("SalesforceDomain", ""))
-      | extend
-          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host),
+          _Org = SalesforceDomain,
           SrcIpAddr = iff(isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp, "")
+      | where array_length(srcipaddr_has_any_prefix) == 0 or SrcIpAddr in (srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+      | extend
+          EventType = case(
+              Operation in ("PermsEnabled", "CriticalPerms"), "Enable",
+              Operation == "PermsDisabled", "Disable",
+              "Other")
+      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+      | extend
+          EventResult = case(
+              PolicyOutcome in ("Block", "MeteringBlock", "EndSession", "TwoFADenied", "TwoFAReportedDenied")
+                  or PolicyOutcome startswith "Failed" or PolicyOutcome startswith "TwoFAFailed", "Failure",
+              PolicyOutcome in ("", "NoAction", "ExemptNoAction", "MeteringNoAction", "Notified",
+                  "TwoFANoAction", "TwoFASucceeded", "TwoFAAutomatedSuccess"), "Success",
+              "NA")
+      | where isempty(eventresult) or EventResult == eventresult
+      | extend
+          Object = case(
+              array_length(ParentNameList) == 1, tostring(ParentNameList[0]),
+              array_length(ParentNameList) > 1, tostring(ParentNameList),
+              array_length(ParentIdList) == 1, tostring(ParentIdList[0]),
+              array_length(ParentIdList) > 1, tostring(ParentIdList),
+              tostring(PermissionList))
+      | where array_length(_object_has_any) == 0 or Object has_any (_object_has_any)
+      | extend
+          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host)
       | extend
           EventStartTime = coalesce(EventDate, TimeGenerated),
           EventEndTime = coalesce(EventDate, TimeGenerated),
@@ -95,27 +123,11 @@ ParserQuery: |
           EventSchema = "AuditEvent",
           EventSchemaVersion = "1.0.0",
           EventOriginalType = _SourceType,
-          EventType = case(
-              Operation in ("PermsEnabled", "CriticalPerms"), "Enable",
-              Operation == "PermsDisabled", "Disable",
-              "Other"),
-          EventResult = case(
-              PolicyOutcome in ("Block", "MeteringBlock", "EndSession", "TwoFADenied", "TwoFAReportedDenied")
-                  or PolicyOutcome startswith "Failed" or PolicyOutcome startswith "TwoFAFailed", "Failure",
-              PolicyOutcome in ("", "NoAction", "ExemptNoAction", "MeteringNoAction", "Notified",
-                  "TwoFANoAction", "TwoFASucceeded", "TwoFAAutomatedSuccess"), "Success",
-              "NA"),
           EventSeverity = "Informational",
           EventUid = coalesce(EventIdentifier, SalesforceObjectId, EventUuid),
           EventOriginalUid = SalesforceObjectId,
           EventOriginalResultDetails = PolicyOutcome,
           EventMessage = Operation,
-          Object = case(
-              array_length(ParentNameList) == 1, tostring(ParentNameList[0]),
-              array_length(ParentNameList) > 1, tostring(ParentNameList),
-              array_length(ParentIdList) == 1, tostring(ParentIdList[0]),
-              array_length(ParentIdList) > 1, tostring(ParentIdList),
-              tostring(PermissionList)),
           ObjectId = iff(array_length(ParentIdList) == 1, tostring(ParentIdList[0]), ""),
           ObjectType = "Policy Rule",
           OriginalObjectType = PermissionType,
@@ -148,6 +160,8 @@ ParserQuery: |
               "PermissionExpiration", PermissionExpiration,
               "PermissionExpirationList", PermissionExpirationList,
               "LoginKey", LoginKey, "SourceIp", SourceIp, "EventSource", EventSource,
+              "LoginHistoryId", LoginHistoryId, "SessionLevel", SessionLevel,
+              "RelatedEventIdentifier", RelatedEventIdentifier,
               "PolicyOutcome", PolicyOutcome, "EvaluationTime", EvaluationTime), dynamic({})),
           DvcEntityKey = "",
           ActorUserEntityKey = "",
@@ -165,13 +179,6 @@ ParserQuery: |
           Application = TargetAppName,
           Dst = TargetAppName,
           Rule = RuleName
-      | where array_length(srcipaddr_has_any_prefix) == 0 or SrcIpAddr in (srcipaddr_has_any_prefix) or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
-      | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
-      | where isempty(eventresult) or EventResult == eventresult
-      | where array_length(_actorusername_has_any) == 0 or ActorUsername has_any (_actorusername_has_any)
-      | where array_length(_operation_has_any) == 0 or Operation has_any (_operation_has_any)
-      | where array_length(_object_has_any) == 0 or Object has_any (_object_has_any)
-      | where array_length(_newvalue_has_any) == 0
       | project
           TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
           EventVendor, EventProduct, EventSchema, EventSchemaVersion,
@@ -186,4 +193,5 @@ ParserQuery: |
           TargetSystemEntityKey, ActingApplicationEntityKey, TargetApplicationEntityKey,
           ActorUserAdditionalIds, AdditionalEntities
   };
-  parser()
+  parser(starttime, endtime, srcipaddr_has_any_prefix, eventtype_in, eventresult,
+      actorusername_has_any, operation_has_any, object_has_any, newvalue_has_any, disabled, pack)
