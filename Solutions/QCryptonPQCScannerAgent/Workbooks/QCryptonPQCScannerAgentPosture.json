@@ -1,0 +1,113 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# QCrypton PQC Scanner Agent — Internal Network PQ Readiness\n\nPost-quantum cryptography posture across internal network appliances and VNet endpoints. Data source: `PQReadiness_CL`."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timeRange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "value": { "durationMs": 86400000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ]
+            }
+          }
+        ]
+      },
+      "name": "params"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQReadiness_CL\n| where TimeGenerated {TimeRange}\n| summarize Count = count() by QuantumPosture\n| render piechart",
+        "size": 0,
+        "title": "Overall quantum posture distribution",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "postureDistribution"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQReadiness_CL\n| where TimeGenerated {TimeRange}\n| where ResourceType has_any ('F5', 'CheckPoint', 'PaloAlto', 'Cisco', 'Fortinet')\n| summarize Vulnerable = countif(QuantumPosture == 'vulnerable'), Compliant = countif(QuantumPosture == 'compliant'), Partial = countif(QuantumPosture == 'partial') by ResourceType\n| order by Vulnerable desc",
+        "size": 0,
+        "title": "Appliance posture by vendor",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "appliancePosture"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQReadiness_CL\n| where TimeGenerated {TimeRange}\n| where QuantumPosture == 'vulnerable'\n| summarize Vulnerable = count() by bin(TimeGenerated, 1h), ResourceType\n| render timechart",
+        "size": 0,
+        "title": "Vulnerable findings over time by resource type",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "vulnTrend"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQReadiness_CL\n| where TimeGenerated {TimeRange}\n| where QuantumPosture == 'vulnerable'\n| summarize Latest = arg_max(TimeGenerated, *) by AssetIdentifier\n| project Resource = ResourceName, Type = ResourceType, AssetKind, Algorithm, KeySize, Reason = PostureReason, Risk = RiskScore, Expires = ExpiresOn, Subscription = SubscriptionId\n| order by Risk desc",
+        "size": 0,
+        "title": "Top vulnerable assets (ordered by risk)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "topVuln"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQReadiness_CL\n| where TimeGenerated {TimeRange}\n| where QuantumPosture == 'compliant'\n| where Metadata contains 'pqc_hybrid_key_exchange' or Metadata contains 'f5_pqc_engine_active' or Metadata contains 'pqc_cert_ready'\n| summarize Latest = arg_max(TimeGenerated, *) by AssetIdentifier\n| project Resource = ResourceName, Type = ResourceType, Algorithm, Reason = PostureReason, TimeGenerated\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "PQC-ready endpoints (quantum-safe confirmed)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "pqcReady"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQReadiness_CL\n| where TimeGenerated {TimeRange}\n| where AssetKind == 'tls-cert' and isnotnull(ExpiresOn)\n| where QuantumPosture == 'vulnerable'\n| where ResourceType has_any ('F5', 'CheckPoint', 'PaloAlto', 'Cisco', 'Fortinet')\n| project ResourceName, AssetIdentifier, ResourceType, SignatureAlgorithm, ExpiresOn, RiskScore\n| order by ExpiresOn asc",
+        "size": 0,
+        "title": "Appliance certificates by expiry date",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "certExpiry"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "QCrypton-ScannerAgentPosture",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
