@@ -48,8 +48,19 @@ foreach ($dir in $solutions) {
     $templateText = (Get-ChildItem -LiteralPath $dir.FullName -Filter mainTemplate.json -Recurse |
         ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
     $testParameter = Get-SentinelArmTtkTestParameter -TemplateText $templateText
-    $results = @(Test-AzTemplate -TemplatePath $dir.FullName -TestParameter $testParameter)
+    $results = @(
+        Test-AzTemplate `
+            -TemplatePath $dir.FullName `
+            -TestParameter $testParameter `
+            -ErrorAction Continue
+    )
     $resolved = Resolve-SentinelArmTtkMainTemplateResults -Results $results
+
+    if (($resolved.Pass + $resolved.Fail) -eq 0) {
+        Write-Host "ARM-TTK returned no validation results: $name"
+        $fails += $name
+        continue
+    }
 
     foreach ($testInfo in $resolved.Results) {
         $testInfo.PSObject.Properties.Remove('TestInput')

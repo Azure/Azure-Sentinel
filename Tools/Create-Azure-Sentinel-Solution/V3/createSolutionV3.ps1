@@ -92,6 +92,25 @@ $getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solu
 . $commonFunctionsFilePath # load common functions
 . $getccpDetailsFilePath # load ccp functions
 
+$routeToV31 = $false
+foreach ($candidateDataFileName in @($dataFileName)) {
+    $candidateDataFilePath = Join-Path -Path "$solutionFolderBasePath\$dataFolderName" -ChildPath $candidateDataFileName
+    $candidateContent = Get-Content -LiteralPath $candidateDataFilePath -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+    if (Test-SolutionDataHasXdrContent -Content $candidateContent) {
+        $routeToV31 = $true
+        break
+    }
+}
+if ($routeToV31) {
+    Write-Host 'XDR content detected. Routing package creation through the V3.1 tool.'
+    & (Join-Path $PSScriptRoot 'createSolutionV3_1.ps1') `
+        -SolutionDataFolderPath $path `
+        -VersionMode $VersionMode `
+        -VersionBump $VersionBump
+    return
+}
+
 # Load catalog API functions only if using catalog mode
 if ($VersionMode -eq "catalog") {
     $catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
