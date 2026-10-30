@@ -1,4 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 | ---|---|---|
+| 3.2.0 | 28-10-2026 | Playbooks now declare a dependency on the SilentPush-API custom connector, and their prerequisites and new README files (with Deploy to Azure buttons) state that the connector must be deployed first in the same resource group, named SilentPush-API. Full playbooks: renamed the workspace parameter to WorkspaceName and the Microsoft Sentinel connection now uses the resource group location (fixes errors when creating them from the playbook template). Custom connector: the User-Agent header is now fixed and no longer a deployment parameter. |
 | 3.1.0 | 16-09-2026 | Added SilentPush Feeds Data Connector (Codeless/CCP) to ingest Silent Push threat-intel feed exports into SLP_Feeds_CL. |
 | 3.0.0 | 20-08-2026 | Initial solution release. |

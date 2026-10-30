@@ -4,6 +4,11 @@
   "metadata": {
     "title": "SilentPush-DomainExportEnrichment-Full",
     "description": "Silent Push domains export with enrichment and TI upload",
+    "prerequisites": [
+      "1. Deploy the Silent Push custom connector BEFORE creating this playbook. Installing the solution does not create it. Deploy it with the Deploy to Azure button on https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SilentPush/Connector/SilentPushCustomConnector (or deploy its azuredeploy.json as a custom template).",
+      "2. Deploy the connector into the same resource group where you create this playbook and keep its name as SilentPush-API (or use the same name in the CustomConnectorName parameter)."
+    ],
+    "prerequisitesDeployTemplateFile": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SilentPush/Connector/SilentPushCustomConnector/azuredeploy.json",
     "postDeployment": [
       "**Authorize the SilentPush connector connection**",
       "This playbook deploys with a placeholder (empty) API key for the SilentPush connector. Complete the connection before enabling/running the playbook:",
@@ -28,7 +33,7 @@
         "description": "The SilentPush API custom connector"
       }
     },
-    "workspace": {
+    "WorkspaceName": {
       "type": "string",
       "metadata": {
         "description": "Log Analytics workspace name where Microsoft Sentinel is enabled"
@@ -36,10 +41,9 @@
     }
   },
   "variables": {
-    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
     "SilentPushConnectionName": "[parameters('PlaybookName')]",
     "MicrosoftSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-    "silentPushApiId": "[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]",
     "_SentinelContributorRoleGuid": "ab8e14d6-4a74-4a29-9ba8-549422addade",
     "SentinelContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_SentinelContributorRoleGuid'))]",
     "maxExportSizeChars": "20000000",
@@ -55,7 +59,7 @@
       "properties": {
         "displayName": "[variables('SilentPushConnectionName')]",
         "api": {
-          "id": "[variables('silentPushApiId')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
         },
         "parameterValues": {
           "api_key": ""
@@ -72,13 +76,16 @@
         "displayName": "[variables('MicrosoftSentinelConnectionName')]",
         "parameterValueType": "Alternative",
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', reference(resourceId('microsoft.OperationalInsights/workspaces', parameters('workspace')), '2025-07-01', 'Full').location, '/managedApis/azuresentinel')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
         }
       }
     },
     {
       "name": "[parameters('PlaybookName')]",
       "type": "Microsoft.Logic/workflows",
+      "tags": {
+        "hidden-SentinelTemplateVersion": "1.4"
+      },
       "location": "[resourceGroup().location]",
       "identity": {
         "type": "SystemAssigned"
@@ -325,7 +332,7 @@
                                   "sourcesystem": "Silent Push - IOFA Export",
                                   "indicators": "@body('Build_TI_Indicators')"
                                 },
-                                "path": "[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), '2025-07-01').customerId, '/UploadIndicators/')]",
+                                "path": "[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName')), '2025-07-01').customerId, '/UploadIndicators/')]",
                                 "retryPolicy": {
                                   "type": "exponential",
                                   "count": 10,
@@ -399,7 +406,7 @@
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                 "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', reference(resourceId('microsoft.OperationalInsights/workspaces', parameters('workspace')), '2025-07-01', 'Full').location, '/managedApis/azuresentinel')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
                 "connectionProperties": {
                   "authentication": {
                     "type": "ManagedServiceIdentity"
