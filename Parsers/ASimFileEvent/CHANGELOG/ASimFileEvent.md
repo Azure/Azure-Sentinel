@@ -2,6 +2,10 @@
 
 ## Version 0.1.6
 
+## Version 0.1.7
+
+- (2026-10-30) Add Salesforce Real-Time Event Monitoring FileEvent parser.
+
 - (2026-10-26) Add the CrowdStrike Falcon Data Replicator FileEvent parser with disable-watchlist and optional field-packing support. - [PR #15436](https://github.com/Azure/Azure-Sentinel/pull/15436)
 
 ## Version 0.1.5

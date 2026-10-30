@@ -1,0 +1,129 @@
+Parser:
+  Title: AlertEvent ASIM parser for Salesforce Real-Time Event Monitoring
+  Version: '0.1.0'
+  LastUpdated: Oct 30, 2026
+Product:
+  Name: Salesforce Real-Time Event Monitoring
+Normalization:
+  Schema: AlertEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Alert Event Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Salesforce Real-Time Event Monitoring connector
+  Link: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesForceRealTimeEventMonitoringConnector_CCF
+- Title: Salesforce Event Monitoring documentation
+  Link: https://developer.salesforce.com/docs/atlas.en-us.securityImplGuide.meta/securityImplGuide/event_monitoring.htm
+Description: |
+  Salesforce anomaly event-store records are normalized as alert events. The source does not supply analyst verdicts or normalized severity, so verdict and severity defaults are conservative; source score remains additional context. Identity-provider and LoginAccessChange coverage are not included.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimAlertEventSalesforceRealTimeEventMonitoring
+EquivalentBuiltInParser: _ASim_AlertEvent_SalesforceRealTimeEventMonitoring
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // Schema: AlertEvent 1.0.0. Source: Salesforce Real-Time Event Monitoring (CCF).
+  let parser = (disabled: bool = false, pack: bool = false) {
+      SalesForceRealTimeEventMonitoring_CL
+      | where not(disabled)
+      | where EventType in (
+          "ApiAnomalyEventStore", "CredentialStuffingEventStore",
+          "GuestUserAnomalyEventStore", "LoginAnomalyEventStore",
+          "ReportAnomalyEventStore", "SessionHijackingEventStore",
+          "UniversalAnomalyEventStore")
+      | extend
+          _SourceType = EventType,
+          _RawIp = iff(EventType == "SessionHijackingEventStore", coalesce(CurrentIp, SourceIp), SourceIp),
+          _Org = tostring(column_ifexists("SalesforceDomain", ""))
+      | extend
+          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host),
+          DvcIpAddr = iff(isnotnull(parse_ipv4(_RawIp)) or isnotempty(parse_ipv6(_RawIp)), _RawIp, "")
+      | extend
+          EventStartTime = coalesce(EventDate, TimeGenerated),
+          EventEndTime = coalesce(EventDate, TimeGenerated),
+          EventCount = toint(1),
+          EventVendor = "Salesforce",
+          EventProduct = "Real-Time Event Monitoring",
+          EventSchema = "AlertEvent",
+          EventSchemaVersion = "1.0.0",
+          EventOriginalType = _SourceType,
+          EventOriginalSubType = AnomalySubType,
+          EventType = "Alert",
+          EventSubType = "Anomaly",
+          EventResult = "NA",
+          // The source has no normalized severity or analyst verdict.
+          EventSeverity = "Informational",
+          EventUid = coalesce(EventIdentifier, SalesforceObjectId, EventUuid),
+          EventOriginalUid = SalesforceObjectId,
+          EventMessage = Summary,
+          AlertName = case(
+              _SourceType == "ApiAnomalyEventStore", "Salesforce API anomaly",
+              _SourceType == "CredentialStuffingEventStore", "Salesforce credential stuffing",
+              _SourceType == "GuestUserAnomalyEventStore", "Salesforce guest user anomaly",
+              _SourceType == "LoginAnomalyEventStore", "Salesforce login anomaly",
+              _SourceType == "ReportAnomalyEventStore", "Salesforce report anomaly",
+              _SourceType == "SessionHijackingEventStore", "Salesforce session hijacking",
+              "Salesforce universal anomaly"),
+          AlertVerdict = "Unknown",
+          DetectionMethod = "Behavioral Analytics",
+          ThreatCategory = "Unknown",
+          ThreatOriginalCategory = coalesce(AnomalySubType, _SourceType),
+          Dvc = coalesce(DvcIpAddr, "Salesforce Real-Time Event Monitoring"),
+          DvcScope = _OrgHost,
+          DvcOriginalAction = PolicyOutcome,
+          DvcAction = case(
+              PolicyOutcome in ("Block", "MeteringBlock"), "Deny",
+              PolicyOutcome == "EndSession", "Terminate",
+              PolicyOutcome in ("NoAction", "ExemptNoAction", "MeteringNoAction", "Notified"), "Allow",
+              ""),
+          Username = UserNameDetail,
+          UsernameType = iff(isempty(UserNameDetail), "", iff(UserNameDetail contains "@", "UPN", "Simple")),
+          UserIdType = iff(isempty(UserId), "", "SalesforceId"),
+          UserScope = _OrgHost,
+          UserSessionId = SessionKey,
+          RuleName = coalesce(PolicyId, Policy),
+          AdditionalFields = iff(pack, bag_pack(
+              "Score", Score, "SecurityEventData", SecurityEventData,
+              "SourceIp", SourceIp, "CurrentIp", CurrentIp, "PreviousIp", PreviousIp,
+              "CurrentPlatform", CurrentPlatform, "PreviousPlatform", PreviousPlatform,
+              "CurrentScreen", CurrentScreen, "PreviousScreen", PreviousScreen,
+              "CurrentWindow", CurrentWindow, "PreviousWindow", PreviousWindow,
+              "CurrentUserAgent", CurrentUserAgent, "PreviousUserAgent", PreviousUserAgent,
+              "UserAgent", UserAgent, "LoginKey", LoginKey, "PolicyOutcome", PolicyOutcome,
+              "Operation", Operation, "QueriedEntities", QueriedEntities,
+              "RowsProcessed", RowsProcessed, "RequestIdentifier", RequestIdentifier,
+              "Uri", Uri, "AnomalySubType", AnomalySubType,
+              "EvaluationTime", EvaluationTime), dynamic({})),
+          DvcEntityKey = "",
+          UserEntityKey = "",
+          FileEntityKey = "",
+          ProcessEntityKey = "",
+          UserAdditionalIds = dynamic([]),
+          AdditionalEntities = dynamic([])
+      | extend
+          AlertId = EventUid,
+          AlertDescription = EventMessage,
+          IpAddr = DvcIpAddr,
+          User = Username,
+          Rule = RuleName
+      | project
+          TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+          EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+          EventOriginalType, EventOriginalSubType, EventType, EventSubType,
+          EventResult, EventSeverity, EventUid, EventOriginalUid, EventMessage,
+          AlertId, AlertName, AlertDescription, AlertVerdict, DetectionMethod,
+          ThreatCategory, ThreatOriginalCategory,
+          Dvc, DvcIpAddr, IpAddr, DvcScope, DvcOriginalAction, DvcAction,
+          Username, UsernameType, User, UserId, UserIdType, UserScope, UserSessionId,
+          RuleName, Rule, AdditionalFields,
+          DvcEntityKey, UserEntityKey, FileEntityKey, ProcessEntityKey,
+          UserAdditionalIds, AdditionalEntities
+  };
+  parser()
