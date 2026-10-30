@@ -1,7 +1,7 @@
 Commvault Security IQ - Microsoft Sentinel Integration
 ======================================================
 
-This integration connects Commvault Cloud with Microsoft Sentinel to enable anomaly ingestion, incident creation, investigation, and response through analytic rules, playbooks, and the Commvault Security Investigation Agent.
+This integration connects Commvault Cloud with Microsoft Sentinel to enable threat indicator anomaly ingestion, incident creation, investigation, and response through analytic rules, playbooks, and the Commvault Security Investigation Agent.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -14,9 +14,9 @@ This integration connects Commvault Cloud with Microsoft Sentinel to enable anom
 
 ## Overview
 This solution provides:
-- **Data Ingestion**: Automated collection of Commvault client anomaly events via the Codeless Connector Framework
-- **Incident Creation**: Creation of Microsoft Sentinel incidents from Commvault anomaly detections after the analytic rule is created and enabled
-- **AI-powered Insights**: Use the Commvault Security Investigation Agent in Microsoft Security Copilot to correlate Commvault anomaly events with signals from tools such as CrowdStrike, Netskope, and Palo Alto to validate impact on affected hosts and speed investigation
+- **Data Ingestion**: Automated collection of Commvault client threat indicator anomaly events via the Codeless Connector Framework
+- **Incident Creation**: Creation of Microsoft Sentinel incidents from Commvault threat indicator anomaly detections after the analytic rule is created and enabled
+- **AI-powered Insights**: Use the Commvault Security Investigation Agent in Microsoft Security Copilot to correlate Commvault threat indicator anomaly events with signals from tools such as CrowdStrike, Netskope, and Palo Alto to validate impact on affected hosts and speed investigation
 - **Incident Response**: Playbook templates for remediation actions such as disabling users, disabling SAML identity providers, and disabling data aging
 
 ## Prerequisites
@@ -36,7 +36,7 @@ Before beginning the installation, ensure you have:
 
 ## Required Azure Resources
 
-The **Commvault Security IQ (via Codeless Connector Framework)** data connector collects Commvault anomaly events in Microsoft Sentinel. After you connect the connector, events are available in the `CommvaultAlertsCCF_CL` table.
+The **Commvault Security IQ (via Codeless Connector Framework)** data connector collects Commvault threat indicator anomaly events in Microsoft Sentinel. After you connect the connector, events are available in the `CommvaultAlertsCCF_CL` table.
 
 After you select **Add connector** and click **Connect**, Microsoft Sentinel creates the connector resources and starts polling the Commvault API.
 
@@ -74,9 +74,10 @@ If you use the response playbooks, create the following secrets in the Key Vault
     - Under **Configuration**, enter the following:
        - **Commvault Environment Endpoint URL**: Your Commvault Cloud API base URL including the `/commandcenter/api` path (for example, `https://your-commvault-endpoint/commandcenter/api`).
        - **API token**: The API token generated in step 1.
+       - **Ingestion Mode**: Select **Incremental (Time Window)** to poll events using the 30-minute query window, or **All Active Threat Indicator Anomalies (No Time Window)** to query without time bounds.
     - Click **Connect**.
 
-The connector polls Commvault every 30 minutes and ingests threat anomaly events into the `CommvaultAlertsCCF_CL` table in your Log Analytics workspace.
+The connector polls Commvault every 30 minutes and ingests threat indicator anomaly events into the `CommvaultAlertsCCF_CL` table in your Log Analytics workspace.
 
 ### Incident Detection and Response Setup Steps
 
