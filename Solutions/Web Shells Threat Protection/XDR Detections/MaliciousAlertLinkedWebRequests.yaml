@@ -1,0 +1,167 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftDefenderAdvancedThreatProtection
+  dataTypes:
+  - SecurityAlert
+- connectorId: AzureMonitor(IIS)
+  dataTypes:
+  - W3CIISLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertEvidence
+    - AlertInfo
+  - workload: sentinel
+    dataTypes:
+    - SecurityAlert
+    - W3CIISLog
+  requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+    - SecurityAlert
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+    - W3CIISLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: fbfbf530-506b-49a4-81ad-4030885a195c
+    path: Analytic Rules/MaliciousAlertLinkedWebRequests.yaml
+    version: 1.0.4
+    querySha256: c65aaed21568838be54befdcc1867188e62cd56c8691eac6bfb0c4e21f78f29c
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    notes:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1505
+    reviewScope:
+      sourceDocumentSha256: 2de680befd886988dc19b125efac1f54cabb78d5ca6c52d2f11d9165e8b1599c
+      targetQuerySha256: 4cb211fd367198c7f954549ec84c3ee15a690f9968bfc56b87152d08c48efaa4
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 2de680befd886988dc19b125efac1f54cabb78d5ca6c52d2f11d9165e8b1599c
+      targetQuerySha256: 4cb211fd367198c7f954549ec84c3ee15a690f9968bfc56b87152d08c48efaa4
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-fbfbf530-506b-49a4-81ad-4030885a195c
+  displayName: Malicious web application requests linked with Microsoft Defender for Endpoint (formerly Microsoft Defender
+    ATP) alerts
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let alertTimeWindow = 1h;
+      let logTimeWindow = 7d;
+      // Define script extensions that suit your web application environment - a sample are provided below
+      let scriptExtensions = dynamic([".php", ".jsp", ".js", ".aspx", ".asmx", ".asax", ".cfm", ".shtml"]);
+      let alertData = materialize(AlertInfo
+      | where Timestamp > ago(alertTimeWindow)
+      | where DetectionSource == "MDATP" or ServiceSource has "Defender for Endpoint"
+      | join kind=leftouter (AlertEvidence | where Timestamp > ago(alertTimeWindow)) on AlertId
+      // Parse and expand the alert JSON
+      | extend alertData = parse_json(AdditionalFields)
+      | extend alertEntities = iif(isnotempty(tostring(alertData.Entities)), parse_json(tostring(alertData.Entities)), pack_array(alertData))
+      | mv-expand alertEntities);
+      let fileData = alertData
+      // Extract web script files from MDATP alerts - our malicious web scripts - candidate webshells
+      | extend EntityTypeVal = coalesce(tostring(alertEntities.Type), tostring(EntityType))
+      | where EntityTypeVal =~ "file"
+      | extend FileName = coalesce(tostring(alertEntities.Name), tostring(FileName)), Directory = coalesce(tostring(alertEntities.Directory), tostring(FolderPath))
+      | where FileName has_any(scriptExtensions);
+      let hostData = alertData
+      // Extract server details from alerts and map to alert id
+      | extend EntityTypeVal = coalesce(tostring(alertEntities.Type), tostring(EntityType))
+      | where EntityTypeVal in~ ("host", "machine")
+      | extend HostName = coalesce(tostring(alertEntities.HostName), tostring(split(DeviceName, ".")[0]))
+      | extend DnsDomain = coalesce(tostring(alertEntities.DnsDomain), tostring(strcat_array(array_slice(split(DeviceName, "."), 1, -1), ".")))
+      | project HostName, DnsDomain, AlertId
+      | distinct HostName, DnsDomain, AlertId;
+      // Join the files on their impacted servers
+      let webshellData = fileData
+      | join kind=inner (hostData) on AlertId
+      | project Timestamp, FileName, Directory, HostName, DnsDomain;
+      webshellData
+      | join (
+      // Find requests that were made to this file on the impacted server in the W3CIISLog table
+      W3CIISLog
+      | where TimeGenerated > ago(logTimeWindow)
+      // Restrict to accesses to script extensions
+      | where csUriStem has_any(scriptExtensions)
+      | extend splitUriStem = split(csUriStem, "/")
+      | extend FileName = tostring(splitUriStem[-1]), HostName = coalesce(column_ifexists("sComputerName", ""), Computer)
+      // Summarize potential attacker activity
+      | summarize count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), RequestUserAgents=make_set(csUserAgent), ReqestMethods=make_set(csMethod), RequestStatusCodes=make_set(scStatus), RequestCookies=make_set(csCookie), RequestReferers=make_set(csReferer), RequestQueryStrings=make_set(csUriQuery) by AttackerIP=cIP, SiteName=sSiteName, ShellLocation=csUriStem, tostring(FileName), HostName
+      ) on FileName, HostName
+      | project StartTime, EndTime, AttackerIP, RequestUserAgents, Computer = HostName, SiteName, ShellLocation, ReqestMethods, RequestStatusCodes, RequestCookies, RequestReferers, RequestQueryStrings, RequestCount = count_
+      | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Malicious web application requests linked with Microsoft Defender for Endpoint (formerly Microsoft Defender ATP)
+        alerts
+      description: |-
+        'Takes Microsoft Defender for Endpoint (formerly Microsoft Defender ATP) alerts where web scripts are present in the evidence and correlates with requests made to those scripts in the WCSIISLog to surface new alerts for potentially malicious web request activity.
+        The lookback for alerts is set to 1h and the lookback for W3CIISLogs is set to 7d. A sample set of popular web script extensions has been provided in scriptExtensions that should be tailored to your environment.'
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+        ips:
+        - id: ip1
+          addressColumn: AttackerIP
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1505
+      customDetails:
+        HostFullName: Computer

@@ -5,7 +5,7 @@ description: |
 severity: Medium
 status: Available
 requiredDataConnectors: []
-queryFrequency: 7d
+queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
@@ -19,17 +19,27 @@ query: |
   | extend Level=iff(ComplianceControl in ("3.1.1","3.1.2","3.1.20","3.1.22","3.4.1","3.5.2","3.5.2","3.8.3","3.13.1","3.13.5","3.14.1","3.14.2","3.14.4","3.14.5"), "Level 1: Foundational","Level 2: Advanced")
   | where Level == "Level 2: Advanced"
   | summarize arg_max(TimeGenerated, *) by RecommendationName, AssessedResourceId, Level
-  |summarize Failed=countif(State=="Failed"),Passed=countif(State=="Passed"),Total=countif(State=="Passed" or State == "Failed") by Level
-  |extend PassedControlsPercentage = (Passed/todouble(Total))*100
+  | extend DeviceName = extract(@"(?i)/providers/[^/]+/(?:virtualmachines|machines)/([^/]+)$", 1, tostring(AssessedResourceId))
+  | summarize Failed=countif(State=="Failed"),Passed=countif(State=="Passed"),Total=countif(State=="Passed" or State == "Failed"), AffectedHosts=make_set_if(DeviceName, State=="Failed" and isnotempty(DeviceName)) by Level
+  | extend PassedControlsPercentage = (Passed/todouble(Total))*100
   | where PassedControlsPercentage < 70 
   //Adjust Either Passed Thresholds within Organizational Needs
+  | mv-expand DeviceName = AffectedHosts
+  | extend DeviceName = tostring(DeviceName)
   | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
-  | project Level, Total, PassedControlsPercentage, Passed, Failed, RemediationLink, LastObserved=now()
+  | project Level, ComplianceStandard="CMMC 2.0", Total, PassedControlsPercentage, Passed, Failed, RemediationLink, DeviceName, LastObserved=now()
   | extend URLCustomEntity = RemediationLink
 entityMappings:
   - entityType: URL
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.0.0
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+customDetails:
+  ComplianceStandard: ComplianceStandard
+  MaturityLevel: Level
+version: 1.0.1
 kind: Scheduled
