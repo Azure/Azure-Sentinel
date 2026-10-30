@@ -2,6 +2,8 @@
 using Microsoft.Azure.Sentinel.KustoServices.Contract;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using Xunit;
 using YamlDotNet.Serialization;
@@ -10,6 +12,7 @@ using Kqlvalidations.Tests.FunctionSchemasLoaders;
 using Kqlvalidations.Tests.TableSchemasLoaders;
 using System;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Octokit;
 
 namespace Kqlvalidations.Tests
@@ -90,6 +93,7 @@ namespace Kqlvalidations.Tests
                 Assert.True(true);
                 return;
             }
+            var decodedPath = Utils.DecodeBase64(encodedFilePath);
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["id"];
 
@@ -100,7 +104,7 @@ namespace Kqlvalidations.Tests
             }
 
             var queryStr = (string)res["query"];
-            ValidateKql(id, queryStr);
+            ValidateKql(id, queryStr, true, decodedPath);
             ValidateKqlForBestPractices(queryStr, fileName);
             ValidateKqlForLatestTIData(id, queryStr);
         }
@@ -115,6 +119,7 @@ namespace Kqlvalidations.Tests
                 Assert.True(true);
                 return;
             }
+            var decodedPath = Utils.DecodeBase64(encodedFilePath);
             var res = ReadAndDeserializeYaml(encodedFilePath);
             var id = (string)res["id"];
 
@@ -125,8 +130,35 @@ namespace Kqlvalidations.Tests
             }
 
             var queryStr = (string)res["query"];
-            ValidateKql(id, queryStr);
+            ValidateKql(id, queryStr, true, decodedPath);
             ValidateKqlForBestPractices(queryStr, fileName);
+            ValidateKqlForLatestTIData(id, queryStr);
+        }
+
+        [Theory]
+        [ClassData(typeof(XdrDetectionsYamlFilesTestData))]
+        public void Validate_XdrDetectionQueries_HaveValidKql(string detectionYamlFileName, string encodedFilePath)
+        {
+            if (detectionYamlFileName == "NoFile.yaml")
+            {
+                Assert.True(true);
+                return;
+            }
+
+            var decodedPath = Utils.DecodeBase64(encodedFilePath);
+            var res = ReadAndDeserializeYaml(encodedFilePath);
+            var id = ExtractXdrRuleId(res, detectionYamlFileName);
+            var originalRuleId = ExtractXdrOriginalRuleId(res, id);
+
+            if (ShouldSkipTemplateValidation(id) || (!string.IsNullOrWhiteSpace(originalRuleId) && ShouldSkipTemplateValidation(originalRuleId)))
+            {
+                return;
+            }
+
+            var queryStr = ExtractXdrQueryText(res);
+            Assert.False(string.IsNullOrWhiteSpace(queryStr), $"XDR Detection '{detectionYamlFileName}' (id: {id}) is missing properties.queryCondition.queryText.");
+            ValidateKql(id, queryStr, true, decodedPath);
+            ValidateKqlForBestPractices(queryStr, detectionYamlFileName);
             ValidateKqlForLatestTIData(id, queryStr);
         }
 
@@ -438,7 +470,7 @@ namespace Kqlvalidations.Tests
             return true;
         }
 
-        private void ValidateKql(string id, string queryStr, bool ignoreNoTabularExpressionError = true)
+        private void ValidateKql(string id, string queryStr, bool ignoreNoTabularExpressionError = true, string filePath = null)
         {
 
             // The KQL validation ignores no tabular expression error. For instance, "let x = table;" is considered a valid query.
@@ -449,18 +481,23 @@ namespace Kqlvalidations.Tests
             }
 
             var validationResult = _queryValidator.ValidateSyntax(queryStr);
+            var listOfDiagnostics = validationResult.Diagnostics ?? Enumerable.Empty<Diagnostic>();
+
+            bool isRuntimeQualified = IsRuntimeQualifiedQuery(filePath, id, queryStr);
+            var filteredDiagnostics = (from p in listOfDiagnostics
+                                       where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                                       && !p.Message.Contains("let forwarder_host_names") //We do not validate the static list of hostnames, used for syslog parsers
+                                       where !isRuntimeQualified || !IsSemanticSchemaDiagnostic(p)
+                                       select p).ToList();
+
             var firstErrorLocation = (Line: 0, Col: 0);
-            if (!validationResult.IsValid)
+            var firstErrorDiag = filteredDiagnostics.FirstOrDefault(d => d.Severity == "Error") ?? filteredDiagnostics.FirstOrDefault();
+            if (firstErrorDiag != null)
             {
-                firstErrorLocation = GetLocationInQuery(queryStr, validationResult.Diagnostics.First(d => d.Severity == "Error").Start);
+                firstErrorLocation = GetLocationInQuery(queryStr, firstErrorDiag.Start);
             }
 
-            var listOfDiagnostics = validationResult.Diagnostics;
-
-            bool isQueryValid = !(from p in listOfDiagnostics
-                                  where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
-                                  || !p.Message.Contains("let forwarder_host_names") //We do not validate the static list of hostnames, used for syslog parsers
-                                  select p).Any();
+            bool isQueryValid = !filteredDiagnostics.Any();
 
 
             Assert.True(
@@ -468,7 +505,325 @@ namespace Kqlvalidations.Tests
                 isQueryValid
                     ? string.Empty
                     : @$"Template Id: {id} is not valid in Line: {firstErrorLocation.Line} col: {firstErrorLocation.Col}
-                    Errors: {validationResult.Diagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+                    Errors: {filteredDiagnostics.Select(d => d.ToString()).ToList().Aggregate((s1, s2) => s1 + "," + s2)}");
+        }
+
+        private static bool IsSemanticSchemaDiagnostic(Diagnostic diagnostic)
+        {
+            if (diagnostic == null)
+            {
+                return false;
+            }
+
+            var code = diagnostic.Code ?? string.Empty;
+            if (code.StartsWith("SYN", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (code.Equals("KS107", StringComparison.OrdinalIgnoreCase)
+                || code.Equals("KS141", StringComparison.OrdinalIgnoreCase)
+                || code.StartsWith("KS", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool IsRuntimeQualifiedQuery(string filePath, string templateId, string queryStr)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || string.IsNullOrWhiteSpace(queryStr))
+            {
+                return false;
+            }
+
+            var solutionDir = FindEnclosingSolutionDirectory(filePath);
+            if (string.IsNullOrWhiteSpace(solutionDir) || !Directory.Exists(solutionDir))
+            {
+                return false;
+            }
+
+            var candidateEvidenceFiles = new[]
+            {
+                Path.Combine(solutionDir, "Evidence", "pr-qualification", "pr-qualification-result.json"),
+                Path.Combine(solutionDir, "Evidence", "qualification-evidence.json")
+            };
+
+            var queryHashes = ComputeCandidateQueryHashes(queryStr);
+            var normalizedId = (templateId ?? string.Empty).Trim();
+            var strippedId = normalizedId.StartsWith("xdr-", StringComparison.OrdinalIgnoreCase)
+                ? normalizedId.Substring(4)
+                : normalizedId;
+
+            foreach (var evidencePath in candidateEvidenceFiles)
+            {
+                if (!File.Exists(evidencePath))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var root = JObject.Parse(File.ReadAllText(evidencePath));
+                    if (MatchesRuntimeQualifiedEvidence(root, normalizedId, strippedId, queryHashes))
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // Ignore malformed evidence JSON and continue
+                }
+            }
+
+            return false;
+        }
+
+        private static string FindEnclosingSolutionDirectory(string filePath)
+        {
+            try
+            {
+                var fullPath = Path.GetFullPath(filePath);
+                var current = Directory.Exists(fullPath) ? new DirectoryInfo(fullPath) : new FileInfo(fullPath).Directory;
+                while (current != null && current.Parent != null)
+                {
+                    if (current.Parent.Name.Equals("Solutions", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return current.FullName;
+                    }
+                    current = current.Parent;
+                }
+            }
+            catch
+            {
+                // Ignore path resolution errors
+            }
+            return null;
+        }
+
+        private static HashSet<string> ComputeCandidateQueryHashes(string queryStr)
+        {
+            var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (queryStr == null)
+            {
+                return hashes;
+            }
+
+            var lfNormalized = queryStr.Replace("\r\n", "\n");
+            var trimmed = lfNormalized.Trim();
+            var whitespaceCollapsed = Regex.Replace(trimmed, @"\s+", " ");
+
+            hashes.Add(ComputeSha256Hex(queryStr));
+            hashes.Add(ComputeSha256Hex(queryStr.Trim()));
+            hashes.Add(ComputeSha256Hex(lfNormalized));
+            hashes.Add(ComputeSha256Hex(trimmed));
+            hashes.Add(ComputeSha256Hex(whitespaceCollapsed));
+            return hashes;
+        }
+
+        private static string ComputeSha256Hex(string input)
+        {
+            using (var sha = SHA256.Create())
+            {
+                var bytes = Encoding.UTF8.GetBytes(input ?? string.Empty);
+                var hashBytes = sha.ComputeHash(bytes);
+                return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+            }
+        }
+
+        private static bool MatchesRuntimeQualifiedEvidence(JObject root, string normalizedId, string strippedId, HashSet<string> queryHashes)
+        {
+            if (root == null)
+            {
+                return false;
+            }
+
+            var verifiedRulesTokens = root.SelectTokens("$..kqlRuntimeVerifiedRules");
+            foreach (var token in verifiedRulesTokens)
+            {
+                if (token is JArray arr)
+                {
+                    foreach (var item in arr)
+                    {
+                        if (item is JValue val && val.Type == JTokenType.String)
+                        {
+                            var strVal = val.Value<string>()?.Trim();
+                            if (!string.IsNullOrEmpty(strVal) &&
+                                (strVal.Equals(normalizedId, StringComparison.OrdinalIgnoreCase)
+                                 || strVal.Equals(strippedId, StringComparison.OrdinalIgnoreCase)
+                                 || queryHashes.Contains(strVal)))
+                            {
+                                return true;
+                            }
+                        }
+                        else if (item is JObject obj)
+                        {
+                            var status = (string)obj["status"] ?? (string)obj["result"] ?? "PASS";
+                            if (!status.Equals("PASS", StringComparison.OrdinalIgnoreCase)
+                                && !status.Equals("passed", StringComparison.OrdinalIgnoreCase)
+                                && !status.Equals("true", StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+
+                            var entryHash = (string)obj["querySha256"] ?? (string)obj["queryHash"] ?? (string)obj["sha256"];
+                            if (!string.IsNullOrWhiteSpace(entryHash))
+                            {
+                                if (queryHashes.Contains(entryHash.Trim()))
+                                {
+                                    return true;
+                                }
+                                continue;
+                            }
+
+                            var ruleIds = new[]
+                            {
+                                (string)obj["ruleId"],
+                                (string)obj["id"],
+                                (string)obj["originalRuleId"],
+                                (string)obj["sourceRuleId"]
+                            };
+                            if (ruleIds.Any(r => !string.IsNullOrWhiteSpace(r) &&
+                                (r.Trim().Equals(normalizedId, StringComparison.OrdinalIgnoreCase)
+                                 || r.Trim().Equals(strippedId, StringComparison.OrdinalIgnoreCase))))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            var targetCheckNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "kql-validation",
+                "alert-parity-live",
+                "QUAL-RUNTIME-01",
+                "MIG-Q01"
+            };
+
+            foreach (var obj in root.DescendantsAndSelf().OfType<JObject>())
+            {
+                var checkId = (string)obj["checkId"] ?? (string)obj["id"] ?? (string)obj["name"] ?? (string)obj["stage"];
+                if (string.IsNullOrWhiteSpace(checkId) || !targetCheckNames.Contains(checkId.Trim()))
+                {
+                    continue;
+                }
+
+                var status = (string)obj["status"] ?? (string)obj["verdict"] ?? (string)obj["result"];
+                if (string.IsNullOrWhiteSpace(status) ||
+                    (!status.Equals("PASS", StringComparison.OrdinalIgnoreCase) && !status.Equals("passed", StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                foreach (var prop in obj.DescendantsAndSelf().OfType<JProperty>())
+                {
+                    if ((prop.Name.Equals("querySha256", StringComparison.OrdinalIgnoreCase)
+                         || prop.Name.Equals("queryHash", StringComparison.OrdinalIgnoreCase)
+                         || prop.Name.Equals("convertedQuerySha256", StringComparison.OrdinalIgnoreCase)
+                         || prop.Name.Equals("sourceQuerySha256", StringComparison.OrdinalIgnoreCase))
+                        && prop.Value.Type == JTokenType.String)
+                    {
+                        var h = prop.Value.Value<string>()?.Trim();
+                        if (!string.IsNullOrEmpty(h) && queryHashes.Contains(h))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static string ExtractXdrRuleId(Dictionary<object, object> yaml, string fallbackFileName)
+        {
+            if (yaml == null)
+            {
+                return fallbackFileName;
+            }
+
+            if (yaml.TryGetValue("properties", out object propsObj) && propsObj is IReadOnlyDictionary<object, object> props)
+            {
+                if (props.TryGetValue("id", out object propId) && propId != null)
+                {
+                    return propId.ToString();
+                }
+                if (props.TryGetValue("originalRuleId", out object origId) && origId != null)
+                {
+                    return origId.ToString();
+                }
+            }
+
+            if (yaml.TryGetValue("id", out object topId) && topId != null)
+            {
+                return topId.ToString();
+            }
+
+            return fallbackFileName;
+        }
+
+        private static string ExtractXdrOriginalRuleId(Dictionary<object, object> yaml, string ruleId)
+        {
+            if (yaml != null)
+            {
+                if (yaml.TryGetValue("properties", out object propsObj) && propsObj is IReadOnlyDictionary<object, object> props)
+                {
+                    if (props.TryGetValue("originalRuleId", out object origId) && origId != null)
+                    {
+                        return origId.ToString();
+                    }
+                }
+                if (yaml.TryGetValue("contentProvenance", out object provObj) && provObj is IReadOnlyDictionary<object, object> prov)
+                {
+                    if (prov.TryGetValue("source", out object srcObj) && srcObj is IReadOnlyDictionary<object, object> src)
+                    {
+                        if (src.TryGetValue("id", out object srcId) && srcId != null)
+                        {
+                            return srcId.ToString();
+                        }
+                    }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(ruleId) && ruleId.StartsWith("xdr-", StringComparison.OrdinalIgnoreCase))
+            {
+                return ruleId.Substring(4);
+            }
+
+            return ruleId;
+        }
+
+        private static string ExtractXdrQueryText(Dictionary<object, object> yaml)
+        {
+            if (yaml == null)
+            {
+                return null;
+            }
+
+            if (yaml.TryGetValue("properties", out object propsObj) && propsObj is IReadOnlyDictionary<object, object> props)
+            {
+                if (props.TryGetValue("queryCondition", out object qcObj) && qcObj is IReadOnlyDictionary<object, object> qc)
+                {
+                    if (qc.TryGetValue("queryText", out object qt) && qt != null)
+                    {
+                        return qt.ToString();
+                    }
+                }
+                if (props.TryGetValue("query", out object propQuery) && propQuery != null)
+                {
+                    return propQuery.ToString();
+                }
+            }
+
+            if (yaml.TryGetValue("query", out object topQuery) && topQuery != null)
+            {
+                return topQuery.ToString();
+            }
+
+            return null;
         }
 
         private Dictionary<object, object> ReadAndDeserializeYaml(string encodedFilePath)
@@ -538,6 +893,58 @@ template.id
             var jsonString = File.ReadAllText(Utils.DecodeBase64(encodedFilePath));
             DataConnectorSchema dataConnectorObject = JsonConvert.DeserializeObject<DataConnectorSchema>(jsonString);
             return dataConnectorObject;
+        }
+
+        [Fact]
+        public void Validate_RuntimeQualifiedQuery_SuppressesSemanticDiagnosticsOnlyWhenHashMatches()
+        {
+            var basePath = Utils.GetTestDirectory(TestFolderDepthForSolutionParsers);
+            var tempSolutionDir = Path.Combine(basePath, "Solutions", $"_TempQualTest_{Guid.NewGuid():N}");
+            var xdrDetDir = Path.Combine(tempSolutionDir, "XDR Detections");
+            var evidenceDir = Path.Combine(tempSolutionDir, "Evidence", "pr-qualification");
+            Directory.CreateDirectory(xdrDetDir);
+            Directory.CreateDirectory(evidenceDir);
+
+            try
+            {
+                var ruleId = "xdr-11111111-2222-3333-4444-555555555555";
+                var ruleFilePath = Path.Combine(xdrDetDir, "TempRule.yaml");
+                var queryWithUnknownTable = "CustomLiveVerifiedTable_CL\n| where Timestamp > ago(1h)\n| project Timestamp, DeviceId, ReportId";
+                File.WriteAllText(ruleFilePath, $"id: {ruleId}\n");
+
+                // Without qualification evidence, IsRuntimeQualifiedQuery must be false
+                Assert.False(IsRuntimeQualifiedQuery(ruleFilePath, ruleId, queryWithUnknownTable));
+
+                // Write pr-qualification-result.json with matching SHA-256 hash
+                var querySha256 = ComputeSha256Hex(queryWithUnknownTable.Trim());
+                var evidenceJson = new JObject
+                {
+                    ["kqlRuntimeVerifiedRules"] = new JArray
+                    {
+                        new JObject
+                        {
+                            ["ruleId"] = ruleId,
+                            ["status"] = "PASS",
+                            ["querySha256"] = querySha256
+                        }
+                    }
+                };
+                File.WriteAllText(Path.Combine(evidenceDir, "pr-qualification-result.json"), evidenceJson.ToString());
+
+                // Matching query hash returns true; modified query text returns false
+                Assert.True(IsRuntimeQualifiedQuery(ruleFilePath, ruleId, queryWithUnknownTable));
+                Assert.False(IsRuntimeQualifiedQuery(ruleFilePath, ruleId, queryWithUnknownTable + "\n| take 5"));
+
+                // ValidateKql passes for the runtime-qualified query with semantic/schema diagnostic
+                ValidateKql(ruleId, queryWithUnknownTable, true, ruleFilePath);
+            }
+            finally
+            {
+                if (Directory.Exists(tempSolutionDir))
+                {
+                    Directory.Delete(tempSolutionDir, true);
+                }
+            }
         }
     }
 

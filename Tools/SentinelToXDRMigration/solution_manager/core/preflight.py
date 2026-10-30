@@ -10,8 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from solution_manager.core.artifacts import existing_artifact_path
-from solution_manager.core.onboarding import _command_status
+from solution_manager.core.onboarding import _command_status, _state_dir
 from solution_manager.core.target_context import require_locked_target
+from solution_manager.qualification.graph_client_config import (
+    azure_cli_profile,
+    configured_azure_cli_profile,
+)
 
 
 PREFLIGHT_API_VERSION = "1.0.0"
@@ -334,17 +338,24 @@ def run_preflight(
 
     qualification = profile == "qualification"
     python_supported = sys.version_info[:2] in {(3, 11), (3, 12)}
-    azure_cli = (
-        _command_status(
-            "azureCli", ("az", "version", "--output", "none"), runner=runner
-        )
-        if qualification
-        else _record(
-            "azureCli",
-            "notApplicable",
-            detail="Azure CLI is not required for offline authoring",
-        )
+    configured_profile = (
+        configured_azure_cli_profile(_state_dir()) if qualification else None
     )
+    with azure_cli_profile(configured_profile):
+        azure_cli = (
+            _command_status(
+                "azureCli",
+                ("az", "version", "--output", "none"),
+                runner=runner,
+                azure_config_dir=configured_profile,
+            )
+            if qualification
+            else _record(
+                "azureCli",
+                "notApplicable",
+                detail="Azure CLI is not required for offline authoring",
+            )
+        )
     local_tools = {
         "python": _record(
             "python",

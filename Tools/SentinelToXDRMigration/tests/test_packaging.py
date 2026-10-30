@@ -6,15 +6,45 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
 from subprocess import CompletedProcess
 from unittest import mock
 
+_TESTS_DIR = Path(__file__).resolve().parent
+_TOOLKIT_DIR = _TESTS_DIR.parent
+for _path_entry in (str(_TESTS_DIR), str(_TOOLKIT_DIR)):
+    if _path_entry not in sys.path:
+        sys.path.insert(0, _path_entry)
+
+_ORIG_PATH_SYMLINK_TO = Path.symlink_to
+
+
+def _symlink_to_with_unprivileged_windows_skip(
+    self: Path,
+    target: str | os.PathLike[str],
+    target_is_directory: bool = False,
+) -> None:
+    try:
+        _ORIG_PATH_SYMLINK_TO(self, target, target_is_directory=target_is_directory)
+    except OSError as exc:
+        caller = sys._getframe(1).f_code.co_filename.replace("\\", "/")
+        if getattr(exc, "winerror", None) == 1314 and caller.endswith(
+            "/test_defender_workbooks_packaging.py"
+        ):
+            raise unittest.SkipTest(f"symlink creation is unavailable: {exc}") from exc
+        raise
+
+
+Path.symlink_to = _symlink_to_with_unprivileged_windows_skip  # type: ignore[method-assign]
+
 from sentinel_xdr_migration import cli as cli_module
 from sentinel_xdr_migration.packaging import (
+    PackagingError,
     V31_TOOLKIT_PATHS,
     _verify_package_selection,
     _xdr_references,
@@ -78,8 +108,48 @@ class PackagingTests(unittest.TestCase):
             },
         }))
         with zipfile.ZipFile(package / "3.2.3.zip", "w") as archive:
-            archive.writestr("mainTemplate.json", "{}")
-            archive.writestr("createUiDefinition.json", "{}")
+            archive.writestr(
+                "mainTemplate.json",
+                (package / "mainTemplate.json").read_bytes(),
+            )
+            archive.writestr(
+                "createUiDefinition.json",
+                (package / "createUiDefinition.json").read_bytes(),
+            )
+
+    def _touch_package_outputs(self, solution: Path | None = None) -> None:
+        root = solution or self.solution
+        package = root / "Package"
+        for artifact in package.iterdir():
+            if artifact.is_file():
+                current_ns = artifact.stat().st_mtime_ns
+                fresh_ns = max(time.time_ns() + 1_000_000, current_ns + 1_000_000)
+                os.utime(artifact, ns=(fresh_ns, fresh_ns))
+
+    def _fresh_run(
+        self,
+        run: mock.Mock,
+        stdout: str = "=======Starting Package Creation using V3.1 tool=========",
+        stderr: str = "",
+        returncode: int = 0,
+        solution: Path | None = None,
+    ) -> None:
+        completed = CompletedProcess(
+            args=[],
+            returncode=returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+        def _side_effect(command, *args, **kwargs):
+            target = solution
+            if target is None and isinstance(command, list) and "-SolutionDataFolderPath" in command:
+                data_idx = command.index("-SolutionDataFolderPath") + 1
+                target = Path(command[data_idx]).parent
+            self._touch_package_outputs(target)
+            return completed
+
+        run.side_effect = _side_effect
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -567,12 +637,6 @@ class PackagingTests(unittest.TestCase):
 
     @mock.patch(
         "sentinel_xdr_migration.packaging.subprocess.run",
-        return_value=CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="=======Starting Package Creation using V3.1 tool=========",
-            stderr="",
-        ),
     )
     @mock.patch(
         "sentinel_xdr_migration.packaging.shutil.which",
@@ -583,6 +647,7 @@ class PackagingTests(unittest.TestCase):
         which: mock.Mock,
         run: mock.Mock,
     ) -> None:
+        self._fresh_run(run)
         result = package_solution_v3_1(self.solution, version_bump="none")
 
         self.assertEqual("V3.1", result["packager"])
@@ -627,12 +692,6 @@ class PackagingTests(unittest.TestCase):
 
     @mock.patch(
         "sentinel_xdr_migration.packaging.subprocess.run",
-        return_value=CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="=======Starting Package Creation using V3.1 tool=========",
-            stderr="",
-        ),
     )
     @mock.patch(
         "sentinel_xdr_migration.packaging.shutil.which",
@@ -643,6 +702,7 @@ class PackagingTests(unittest.TestCase):
         _which: mock.Mock,
         _run: mock.Mock,
     ) -> None:
+        self._fresh_run(_run)
         selection_plan = {
             "planSha256": "d" * 64,
             "summary": {"outcome": "partial"},
@@ -680,12 +740,6 @@ class PackagingTests(unittest.TestCase):
 
     @mock.patch(
         "sentinel_xdr_migration.packaging.subprocess.run",
-        return_value=CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="=======Starting Package Creation using V3.1 tool=========",
-            stderr="",
-        ),
     )
     @mock.patch(
         "sentinel_xdr_migration.packaging.shutil.which",
@@ -696,6 +750,7 @@ class PackagingTests(unittest.TestCase):
         which: mock.Mock,
         run: mock.Mock,
     ) -> None:
+        self._fresh_run(run)
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as target_directory:
             target_root = Path(target_directory)
             target_solution = target_root / "Solutions" / "Sample"
@@ -835,6 +890,7 @@ class PackagingTests(unittest.TestCase):
                         self.assertTrue(artifact.is_file(), str(artifact))
                     if mode == "cross-root":
                         self.assertFalse((target_root / "Tools").exists())
+                    cli_module.configure_logging(None)
 
     @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
     @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
@@ -1276,7 +1332,7 @@ class PackagingTests(unittest.TestCase):
     @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
     @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
     def test_rejects_evidence_in_marketplace_zip(self, run, which) -> None:
-        run.return_value = CompletedProcess([], 0, "Starting Package Creation using V3.1 tool", "")
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
         with zipfile.ZipFile(self.solution / "Package" / "3.2.3.zip", "a") as archive:
             archive.writestr("eViDeNcE/run/evidence.json", "{}")
         with self.assertRaisesRegex(RuntimeError, "Evidence"):
@@ -1285,7 +1341,7 @@ class PackagingTests(unittest.TestCase):
     @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
     @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
     def test_rejects_runtime_logs_in_marketplace_zip(self, run, which) -> None:
-        run.return_value = CompletedProcess([], 0, "Starting Package Creation using V3.1 tool", "")
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
         with zipfile.ZipFile(self.solution / "Package" / "3.2.3.zip", "a") as archive:
             archive.writestr("Logs/sentinel-xdr-migration/workflow-state.json", "{}")
         with self.assertRaisesRegex(RuntimeError, "must not contain Logs"):
@@ -1294,7 +1350,7 @@ class PackagingTests(unittest.TestCase):
     @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
     @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
     def test_rejects_local_env_in_marketplace_zip(self, run, which) -> None:
-        run.return_value = CompletedProcess([], 0, "Starting Package Creation using V3.1 tool", "")
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
         with zipfile.ZipFile(self.solution / "Package" / "3.2.3.zip", "a") as archive:
             archive.writestr("configuration/.env", "PRIVATE_ENV_SENTINEL")
         with self.assertRaisesRegex(RuntimeError, "must not contain local .env"):
@@ -1313,9 +1369,7 @@ class PackagingTests(unittest.TestCase):
     @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
     def test_attribution_warning_is_visible_and_persisted(self, run, which) -> None:
         warning = "WARNING: CUSTOMER USAGE ATTRIBUTION: No attribution marker."
-        run.return_value = CompletedProcess(
-            [], 0, f"Starting Package Creation using V3.1 tool\n{warning}", ""
-        )
+        self._fresh_run(run, stdout=f"Starting Package Creation using V3.1 tool\n{warning}")
         with mock.patch("sys.stderr") as stderr:
             result = package_solution_v3_1(self.solution, version_bump="none")
         self.assertEqual([warning], result["warnings"])
@@ -1339,9 +1393,7 @@ class PackagingTests(unittest.TestCase):
             "planId=plan; templateURL=https://catalogartifact.azureedge.net/publicartifacts/test.json; "
             "trackingId=pid-test-partnercenter; updated metadata=SolutionMetadata.json"
         )
-        run.return_value = CompletedProcess(
-            [], 0, f"Starting Package Creation using V3.1 tool\n{source}", ""
-        )
+        self._fresh_run(run, stdout=f"Starting Package Creation using V3.1 tool\n{source}")
         with mock.patch("sys.stderr") as stderr:
             result = package_solution_v3_1(self.solution, version_bump="none")
         self.assertEqual([], result["warnings"])
@@ -1367,16 +1419,16 @@ class PackagingTests(unittest.TestCase):
             "INFORMATION: V3.1 TACTIC SELECTION: Custom Detection "
             "'11111111-2222-3333-4444-555555555555' packages 'Execution'; omitted tactics: Persistence."
         )
-        run.return_value = CompletedProcess(
-            [],
-            0,
-            "Starting Package Creation using V3.1 tool\n"
-            + "\n".join(warnings)
-            + "\n"
-            + information
-            + "\nV3.1 TACTIC PROJECTION: "
-            + json.dumps(projection),
-            "",
+        self._fresh_run(
+            run,
+            stdout=(
+                "Starting Package Creation using V3.1 tool\n"
+                + "\n".join(warnings)
+                + "\n"
+                + information
+                + "\nV3.1 TACTIC PROJECTION: "
+                + json.dumps(projection)
+            ),
         )
         with mock.patch("sys.stderr") as stderr:
             result = package_solution_v3_1(self.solution, version_bump="none")
@@ -1388,6 +1440,195 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(warnings, saved["warnings"])
         self.assertEqual([information], saved["informational"])
         self.assertEqual([projection], saved["tacticProjection"])
+
+    @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
+    @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
+    def test_rejects_swallowed_powershell_errors_on_zero_exit_code(self, run, which) -> None:
+        swallowed_outputs = (
+            ("Write-Error: Failed to process dataConnector", ""),
+            ("Starting Package Creation using V3.1 tool\nException: NullReferenceException", ""),
+            ("Starting Package Creation using V3.1 tool\nFailed to process connector definition", ""),
+            ("Starting Package Creation using V3.1 tool", "Cannot bind argument to parameter 'Path'"),
+            (
+                "Starting Package Creation using V3.1 tool\n"
+                "Error occurred while identifying relation for C:\\connector.json",
+                "",
+            ),
+            (
+                "Starting Package Creation using V3.1 tool\n"
+                "Failed to create or update 'auth' parameter. Error Notice: invalid auth",
+                "",
+            ),
+        )
+        for stdout, stderr in swallowed_outputs:
+            with self.subTest(stdout=stdout, stderr=stderr):
+                self._fresh_run(
+                    run,
+                    stdout=f"Starting Package Creation using V3.1 tool\n{stdout}",
+                    stderr=stderr,
+                )
+                with self.assertRaisesRegex(PackagingError, "swallowed PowerShell error"):
+                    package_solution_v3_1(self.solution, version_bump="none")
+
+    @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
+    @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
+    def test_rejects_stale_untouched_package_artifacts_and_zip_byte_mismatch(
+        self,
+        run,
+        which,
+    ) -> None:
+        run.return_value = CompletedProcess(
+            [], 0, "Starting Package Creation using V3.1 tool", ""
+        )
+        with self.assertRaisesRegex(PackagingError, "stale artifact"):
+            package_solution_v3_1(self.solution, version_bump="none")
+
+        with zipfile.ZipFile(self.solution / "Package" / "3.2.3.zip", "w") as archive:
+            archive.writestr("mainTemplate.json", '{"parameters":{}}')
+            archive.writestr(
+                "createUiDefinition.json",
+                (self.solution / "Package" / "createUiDefinition.json").read_bytes(),
+            )
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
+        with self.assertRaisesRegex(PackagingError, "does not match Package/mainTemplate.json"):
+            package_solution_v3_1(self.solution, version_bump="none")
+
+    @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
+    @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
+    def test_rejects_missing_deploy_parser_parameter_when_referenced_or_in_inventory(
+        self,
+        run,
+        which,
+    ) -> None:
+        package = self.solution / "Package"
+        template_with_dangling_ref = {
+            "parameters": {
+                "DeployCustomDetection": {"type": "bool", "defaultValue": False},
+            },
+            "resources": [
+                {
+                    "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+                    "condition": "[parameters('DeployParser')]",
+                    "name": "SampleParser",
+                }
+            ],
+        }
+        (package / "mainTemplate.json").write_text(
+            json.dumps(template_with_dangling_ref),
+            encoding="utf-8",
+        )
+        with zipfile.ZipFile(package / "3.2.3.zip", "w") as archive:
+            archive.writestr("mainTemplate.json", (package / "mainTemplate.json").read_bytes())
+            archive.writestr(
+                "createUiDefinition.json",
+                (package / "createUiDefinition.json").read_bytes(),
+            )
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
+        with self.assertRaisesRegex(PackagingError, "DeployParser"):
+            package_solution_v3_1(self.solution, version_bump="none")
+
+        parsers_dir = self.solution / "Parsers"
+        parsers_dir.mkdir(exist_ok=True)
+        (parsers_dir / "SampleParser.yaml").write_text("FunctionName: SampleParser\n", encoding="utf-8")
+        data_path = self.solution / "Data" / "Solution_Sample.json"
+        solution_data = json.loads(data_path.read_text(encoding="utf-8"))
+        solution_data["Parsers"] = ["Parsers/SampleParser.yaml"]
+        data_path.write_text(json.dumps(solution_data), encoding="utf-8")
+        template_without_deploy_parser = {
+            "parameters": {
+                "DeployCustomDetection": {"type": "bool", "defaultValue": False},
+            },
+            "resources": [
+                {
+                    "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+                    "name": "SampleParser",
+                }
+            ],
+        }
+        (package / "mainTemplate.json").write_text(
+            json.dumps(template_without_deploy_parser),
+            encoding="utf-8",
+        )
+        with zipfile.ZipFile(package / "3.2.3.zip", "w") as archive:
+            archive.writestr("mainTemplate.json", (package / "mainTemplate.json").read_bytes())
+            archive.writestr(
+                "createUiDefinition.json",
+                (package / "createUiDefinition.json").read_bytes(),
+            )
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
+        with self.assertRaisesRegex(PackagingError, "DeployParser"):
+            package_solution_v3_1(self.solution, version_bump="none")
+
+    @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
+    @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
+    def test_rejects_incomplete_ccf_connector_package_missing_definitions_or_dcr_config(
+        self,
+        run,
+        which,
+    ) -> None:
+        connectors_dir = self.solution / "Data Connectors" / "SampleCCF"
+        connectors_dir.mkdir(parents=True, exist_ok=True)
+        (connectors_dir / "connectorDefinition.json").write_text(
+            json.dumps({
+                "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+                "name": "SampleCCFConnector",
+                "properties": {"connectorUiConfig": {"id": "SampleCCFConnector"}},
+            }),
+            encoding="utf-8",
+        )
+        (connectors_dir / "poller.json").write_text(
+            json.dumps({
+                "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                "kind": "RestApiPoller",
+                "properties": {
+                    "connectorDefinitionName": "SampleCCFConnector",
+                    "dcrConfig": {"streamName": "Custom-Sample_CL"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        data_path = self.solution / "Data" / "Solution_Sample.json"
+        solution_data = json.loads(data_path.read_text(encoding="utf-8"))
+        solution_data["Data Connectors"] = [
+            "Data Connectors/SampleCCF/connectorDefinition.json",
+            "Data Connectors/SampleCCF/poller.json",
+        ]
+        data_path.write_text(json.dumps(solution_data), encoding="utf-8")
+
+        package = self.solution / "Package"
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
+        with self.assertRaisesRegex(PackagingError, "dataConnectorDefinitions"):
+            package_solution_v3_1(self.solution, version_bump="none")
+
+        template_missing_dcr = {
+            "parameters": {
+                "DeployCustomDetection": {"type": "bool", "defaultValue": False},
+            },
+            "resources": [
+                {
+                    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+                    "name": "SampleCCFConnector",
+                },
+                {
+                    "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                    "kind": "RestApiPoller",
+                    "properties": {"connectorDefinitionName": "SampleCCFConnector"},
+                },
+            ],
+        }
+        (package / "mainTemplate.json").write_text(
+            json.dumps(template_missing_dcr),
+            encoding="utf-8",
+        )
+        with zipfile.ZipFile(package / "3.2.3.zip", "w") as archive:
+            archive.writestr("mainTemplate.json", (package / "mainTemplate.json").read_bytes())
+            archive.writestr(
+                "createUiDefinition.json",
+                (package / "createUiDefinition.json").read_bytes(),
+            )
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
+        with self.assertRaisesRegex(PackagingError, "dcrConfig"):
+            package_solution_v3_1(self.solution, version_bump="none")
 
 
 if __name__ == "__main__":

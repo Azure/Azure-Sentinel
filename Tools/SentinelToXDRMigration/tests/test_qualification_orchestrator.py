@@ -556,3 +556,509 @@ def test_evaluate_qualification_promotion_gate_pass_and_block_conditions():
     assert blocked["status"] == "blocked"
     assert "ruleParityVerified" in blocked["missingGates"]
     assert "sanitizedEvidenceReady" in blocked["missingGates"]
+
+
+def test_initial_disabled_deployment_and_get_readback_receipts():
+    from unittest.mock import patch
+    from solution_manager.qualification.analytic_deployment import deploy_analytic_rules
+    from solution_manager.qualification.deployment import deploy_solution
+
+    scratch, sol_root = _create_solution_fixture(
+        num_rules=1,
+        num_sentinel_workbooks=0,
+        num_defender_workbooks=0,
+        num_detections=1,
+        table_name="Syslog",
+    )
+    try:
+        rule_id = "00000000-0000-4000-8000-000000000001"
+        rule_path = sol_root / "Analytic Rules" / "rule_1.yaml"
+        rule_path.write_text(
+            yaml.safe_dump(
+                {
+                    "id": rule_id,
+                    "name": "Fixture Rule 1",
+                    "description": "Test rule",
+                    "severity": "High",
+                    "queryFrequency": "1h",
+                    "queryPeriod": "2h",
+                    "triggerOperator": "gt",
+                    "triggerThreshold": 0,
+                    "query": "Syslog | take 1",
+                    "tactics": ["InitialAccess"],
+                    "relevantTechniques": ["T1190"],
+                    "entityMappings": [
+                        {
+                            "entityType": "Host",
+                            "fieldMappings": [
+                                {"identifier": "HostName", "columnName": "HostName"}
+                            ],
+                        }
+                    ],
+                    "version": "1.0.0",
+                    "kind": "Scheduled",
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+        det_path = sol_root / "XDR Detections" / "detection_1.yaml"
+        det_path.write_text(
+            yaml.safe_dump(
+                {
+                    "schemaVersion": "1.0.0",
+                    "version": "3.1.0",
+                    "kind": "CustomDetection",
+                    "resourceType": "Microsoft.Security/detectionRules",
+                    "apiVersion": "2026-06-01-preview",
+                    "contentProvenance": {
+                        "requiredWorkloads": [{"workload": "sentinel", "dataTypes": ["Syslog"]}],
+                        "requiredDataConnectors": [],
+                        "source": {
+                            "platform": "Microsoft Sentinel",
+                            "kind": "AnalyticsRule",
+                            "id": rule_id,
+                            "path": "Analytic Rules/rule_1.yaml",
+                            "querySha256": "hash",
+                            "schedule": {"queryFrequency": "1h", "queryPeriod": "1h"},
+                        },
+                        "conversion": {
+                            "tool": "sentinel-to-xdr-migration",
+                            "version": "0.1.0",
+                            "status": "converted",
+                            "reviewRequired": False,
+                            "reviewReasons": [],
+                            "requiredWorkloads": ["sentinel"],
+                            "warnings": [],
+                            "errors": [],
+                        },
+                    },
+                    "properties": {
+                        "id": f"xdr-{rule_id}",
+                        "displayName": "Fixture Detection 1",
+                        "status": "disabled",
+                        "queryCondition": {"queryText": "Syslog | take 1"},
+                        "schedule": {"frequency": "PT1H"},
+                        "detectionAction": {
+                            "alertTemplate": {
+                                "title": "Fixture Detection 1",
+                                "description": "Test",
+                                "severity": "high",
+                                "entityMappings": {
+                                    "hosts": [{"id": "host1", "hostNameColumn": "HostName"}]
+                                },
+                            }
+                        },
+                    },
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+        arm_calls: list[tuple[str, str]] = []
+
+        def fake_arm_request(method, url, token, payload=None):
+            arm_calls.append((method, url))
+            if method == "PUT":
+                assert payload["properties"]["enabled"] is False
+                return 200, {"name": rule_id, "properties": {"enabled": False}}
+            if method == "GET":
+                return 200, {"name": rule_id, "properties": {"enabled": False}}
+            raise AssertionError(f"Unexpected ARM method: {method}")
+
+        with patch("solution_manager.qualification.analytic_deployment.require_locked_target", return_value=LAB_TARGET), patch(
+            "solution_manager.qualification.analytic_deployment._arm_token", return_value="arm-tok"
+        ), patch(
+            "solution_manager.qualification.analytic_deployment._arm_request",
+            side_effect=fake_arm_request,
+        ):
+            analytic_report = deploy_analytic_rules(
+                sol_root,
+                workspace_resource_id=LAB_TARGET["workspaceResourceId"],
+                verify_readback=True,
+            )
+
+        assert analytic_report["succeeded"] == 1
+        assert analytic_report["initialDisabled"] is True
+        assert analytic_report["results"][0]["initialDisabled"] is True
+        assert analytic_report["results"][0]["readbackVerified"] is True
+        assert [m for m, _ in arm_calls] == ["PUT", "GET"]
+
+        graph_calls: list[str] = []
+        created_payload: dict = {}
+
+        def fake_graph_request(method, url, token, body=None):
+            graph_calls.append(method)
+            if method == "GET" and not created_payload:
+                return 404, {}
+            if method == "POST":
+                assert body["status"] == "disabled"
+                created_payload.update(body)
+                return 201, {**body, "isEnabled": False, "status": "disabled"}
+            if method == "GET" and created_payload:
+                return 200, {**created_payload, "isEnabled": False, "status": "disabled"}
+            raise AssertionError(f"Unexpected Graph call: {method} {url}")
+
+        (sol_root / "Data" / "Solution_HybridFixture.json").write_text(
+            json.dumps({"Version": "3.1.0", "Metadata": "SolutionMetadata.json"}),
+            encoding="utf-8",
+        )
+        (sol_root / "SolutionMetadata.json").write_text(
+            json.dumps({"publisherId": "testpublisher", "offerId": "test-sentinel"}),
+            encoding="utf-8",
+        )
+
+        with patch("solution_manager.qualification.deployment.require_locked_target", return_value=LAB_TARGET), patch(
+            "solution_manager.qualification.deployment._deployment_token", return_value="graph-tok"
+        ), patch(
+            "solution_manager.qualification.deployment._graph_request",
+            side_effect=fake_graph_request,
+        ):
+            xdr_report = deploy_solution(sol_root)
+
+        assert xdr_report["succeeded"] == 1
+        assert xdr_report["initialDisabled"] is True
+        assert xdr_report["results"][0]["initialDisabled"] is True
+        assert xdr_report["results"][0]["readbackVerified"] is True
+        assert graph_calls == ["GET", "POST", "GET"]
+    finally:
+        shutil.rmtree(scratch)
+
+
+def test_full_enable_fire_disable_lifecycle_and_tk_q11_readbacks():
+    from unittest.mock import patch
+    from solution_manager.qualification import alert_parity
+
+    scratch, sol_root = _create_solution_fixture(
+        num_rules=1,
+        num_sentinel_workbooks=0,
+        num_defender_workbooks=0,
+        num_detections=1,
+        table_name="Syslog",
+    )
+    try:
+        contract = scratch / "contract.json"
+        payload = scratch / "payload.json"
+        plan_path = scratch / "batch-plan.json"
+        contract.write_text("{}", encoding="utf-8")
+        payload.write_text('[{"HostName": "host-tkq11"}]', encoding="utf-8")
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "fixtures": [
+                        {
+                            "detection": "detection_1.yaml",
+                            "contract": str(contract),
+                            "payload": str(payload),
+                            "scenarioMarker": "host-tkq11",
+                            "expectedMatchKeys": ["host-tkq11"],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        pair = {
+            "detection": "detection_1.yaml",
+            "displayName": "Fixture Detection 1",
+            "analyticRuleId": "00000000-0000-4000-8000-000000000001",
+            "customDetectionId": "xdr-rule-1",
+            "entityMappings": {},
+        }
+
+        call_sequence: list[str] = []
+        sentinel_enabled = False
+        xdr_enabled = False
+
+        def fake_arm(method, url, token, body=None):
+            nonlocal sentinel_enabled
+            if method == "GET":
+                call_sequence.append(f"sentinel_get:{sentinel_enabled}")
+                return 200, {
+                    "name": "00000000-0000-4000-8000-000000000001",
+                    "etag": "etag-1",
+                    "kind": "Scheduled",
+                    "properties": {
+                        "displayName": "Fixture Rule 1",
+                        "enabled": sentinel_enabled,
+                        "query": "Syslog | where TimeGenerated > ago(1h)",
+                    },
+                }
+            if method == "PUT":
+                sentinel_enabled = bool(body["properties"]["enabled"])
+                call_sequence.append(f"sentinel_put:{sentinel_enabled}")
+                return 200, {"properties": {"enabled": sentinel_enabled}}
+            raise AssertionError(f"Unexpected ARM request: {method} {url}")
+
+        def fake_graph(method, url, token, body=None):
+            nonlocal xdr_enabled
+            if method == "GET":
+                call_sequence.append(f"xdr_get:{xdr_enabled}")
+                return 200, {
+                    "id": "xdr-rule-1",
+                    "displayName": "Fixture Detection 1",
+                    "isEnabled": xdr_enabled,
+                    "status": "enabled" if xdr_enabled else "disabled",
+                }
+            if method == "PATCH":
+                xdr_enabled = bool(body.get("isEnabled"))
+                call_sequence.append(f"xdr_patch:{xdr_enabled}")
+                return 200, {
+                    "id": "xdr-rule-1",
+                    "isEnabled": xdr_enabled,
+                    "status": "enabled" if xdr_enabled else "disabled",
+                }
+            raise AssertionError(f"Unexpected Graph request: {method} {url}")
+
+        def fake_ingest(c, p):
+            call_sequence.append("ingest_e2e_q01")
+            return {"recordsAccepted": 1}
+
+        with patch.object(alert_parity, "require_locked_target", return_value=LAB_TARGET), patch.object(
+            alert_parity, "_arm_token", return_value="arm-tok"
+        ), patch.object(
+            alert_parity, "_deployment_token", return_value="graph-tok"
+        ), patch.object(
+            alert_parity, "_load_pairs", return_value=(sol_root, [pair])
+        ), patch.object(
+            alert_parity, "_arm_request", side_effect=fake_arm
+        ), patch.object(
+            alert_parity, "_graph_request", side_effect=fake_graph
+        ), patch.object(
+            alert_parity, "_ingest", side_effect=fake_ingest
+        ):
+            started = alert_parity.start_alert_parity_batch(sol_root, plan_path=plan_path)
+            assert started["status"] == "awaiting-alerts"
+            assert started["initialDisabled"] is True
+            assert started["alertLifecycle"]["initialDisabled"] is True
+            assert call_sequence.index("ingest_e2e_q01") < call_sequence.index("sentinel_put:True")
+            assert call_sequence.index("ingest_e2e_q01") < call_sequence.index("xdr_patch:True")
+            assert sentinel_enabled is True
+            assert xdr_enabled is True
+
+            sample_alert = {
+                "matchKey": "host-tkq11",
+                "severity": "high",
+                "tactics": ["Execution"],
+                "entities": {"hosts": [{"hostName": "host-tkq11"}]},
+                "evidence": {"eventIds": ["host-tkq11"]},
+            }
+            report = alert_parity.poll_alert_parity_batch(
+                sol_root,
+                results={
+                    "results": [
+                        {
+                            "detection": "detection_1.yaml",
+                            "analyticRule": {"alerts": [sample_alert]},
+                            "customDetection": {"alerts": [sample_alert]},
+                        }
+                    ]
+                },
+            )
+
+        assert report["status"] == "passed"
+        assert report["initialDisabled"] is True
+        assert report["returnedToDisabled"] is True
+        assert report["tkQ11Passed"] is True
+        assert report["alertLifecycle"]["initialDisabled"] is True
+        assert report["alertLifecycle"]["returnedToDisabled"] is True
+        assert report["alertLifecycle"]["tkQ11Verified"] is True
+        assert report["cleanup"][0]["disabled"] is True
+        assert report["cleanup"][0]["returnedToDisabled"] is True
+        assert sentinel_enabled is False
+        assert xdr_enabled is False
+        assert call_sequence[-2:] == ["sentinel_get:False", "xdr_get:False"]
+    finally:
+        shutil.rmtree(scratch)
+
+
+def test_streaming_compiler_error_e2e_q02_captures_diagnostics_and_runs_finally_disable():
+    from unittest.mock import patch
+    from solution_manager.qualification import alert_parity
+
+    scratch, sol_root = _create_solution_fixture(
+        num_rules=1,
+        num_sentinel_workbooks=0,
+        num_defender_workbooks=0,
+        num_detections=1,
+        table_name="Syslog",
+    )
+    try:
+        contract = scratch / "contract.json"
+        payload = scratch / "payload.json"
+        plan_path = scratch / "batch-plan.json"
+        contract.write_text("{}", encoding="utf-8")
+        payload.write_text('[{"HostName": "host-e2eq02"}]', encoding="utf-8")
+        plan_path.write_text(
+            json.dumps(
+                {
+                    "fixtures": [
+                        {
+                            "detection": "detection_1.yaml",
+                            "contract": str(contract),
+                            "payload": str(payload),
+                            "scenarioMarker": "host-e2eq02",
+                            "expectedMatchKeys": ["host-e2eq02"],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        pair = {
+            "detection": "detection_1.yaml",
+            "displayName": "Fixture Detection 1",
+            "analyticRuleId": "00000000-0000-4000-8000-000000000001",
+            "customDetectionId": "xdr-rule-1",
+            "entityMappings": {},
+        }
+
+        sentinel_enabled = False
+        xdr_enabled = False
+        call_log: list[str] = []
+
+        def fake_arm(method, url, token, body=None):
+            nonlocal sentinel_enabled
+            if method == "GET":
+                call_log.append(f"sentinel_get:{sentinel_enabled}")
+                return 200, {
+                    "name": "00000000-0000-4000-8000-000000000001",
+                    "etag": "etag-1",
+                    "kind": "Scheduled",
+                    "properties": {
+                        "displayName": "Fixture Rule 1",
+                        "enabled": sentinel_enabled,
+                        "query": "Syslog | where TimeGenerated > ago(1h)",
+                    },
+                }
+            if method == "PUT":
+                sentinel_enabled = bool(body["properties"]["enabled"])
+                call_log.append(f"sentinel_put:{sentinel_enabled}")
+                return 200, {"properties": {"enabled": sentinel_enabled}}
+            raise AssertionError(f"Unexpected ARM request: {method} {url}")
+
+        def fake_graph(method, url, token, body=None):
+            nonlocal xdr_enabled
+            if method == "GET":
+                call_log.append(f"xdr_get:{xdr_enabled}")
+                return 200, {
+                    "id": "xdr-rule-1",
+                    "displayName": "Fixture Detection 1",
+                    "isEnabled": xdr_enabled,
+                    "status": "enabled" if xdr_enabled else "disabled",
+                }
+            if method == "PATCH":
+                if body.get("isEnabled") is True or body.get("status") == "enabled":
+                    call_log.append("xdr_patch_enable_compiler_error")
+                    return 400, {
+                        "error": {
+                            "code": "HuntingRuleQueryStreamingNotSupported",
+                            "message": "KqlCompilationFailed: Unsupported streaming table or dynamic literal in query.",
+                        }
+                    }
+                xdr_enabled = False
+                call_log.append("xdr_patch:False")
+                return 200, {"id": "xdr-rule-1", "isEnabled": False, "status": "disabled"}
+            raise AssertionError(f"Unexpected Graph request: {method} {url}")
+
+        with patch.object(alert_parity, "require_locked_target", return_value=LAB_TARGET), patch.object(
+            alert_parity, "_arm_token", return_value="arm-tok"
+        ), patch.object(
+            alert_parity, "_deployment_token", return_value="graph-tok"
+        ), patch.object(
+            alert_parity, "_load_pairs", return_value=(sol_root, [pair])
+        ), patch.object(
+            alert_parity, "_arm_request", side_effect=fake_arm
+        ), patch.object(
+            alert_parity, "_graph_request", side_effect=fake_graph
+        ), patch.object(
+            alert_parity, "_ingest", return_value={"recordsAccepted": 1}
+        ):
+            batch_res = alert_parity.start_alert_parity_batch(sol_root, plan_path=plan_path)
+
+        assert batch_res["status"] == "failed"
+        assert batch_res["initialDisabled"] is True
+        assert batch_res["returnedToDisabled"] is True
+        assert batch_res["tkQ11Passed"] is True
+        assert len(batch_res["e2eQ02Diagnostics"]) == 1
+        diag = batch_res["e2eQ02Diagnostics"][0]
+        assert diag["checkId"] == "E2E-Q02"
+        assert diag["errorCode"] == "HuntingRuleQueryStreamingNotSupported"
+        assert diag["stage"] == "enablement"
+        assert diag["streamingCompilerError"] is True
+        assert diag["ruleId"] == "xdr-rule-1"
+        assert sentinel_enabled is False
+        assert xdr_enabled is False
+        assert call_log[-2:] == ["sentinel_get:False", "xdr_get:False"]
+
+        # Also verify orchestrator run_rule_parity surfaces alertLifecycle and e2eQ02Diagnostics
+        plan = plan_qualification_pipeline(sol_root, target=LAB_TARGET)
+        rq_consent, dep_consent, ing_consent = _valid_consents_for_plan(plan)
+
+        def failing_parity_evaluator(pair, ing_ev, target):
+            return {
+                "statusCode": 400,
+                "errorPayload": {
+                    "error": {
+                        "code": "KqlCompilationFailed",
+                        "message": "Dynamic literals are not supported in streaming custom detections.",
+                    }
+                },
+                "initialDisabled": True,
+                "returnedToDisabled": True,
+                "parityVerified": False,
+            }
+
+        orch_state = run_qualification_pipeline(
+            sol_root,
+            target=LAB_TARGET,
+            runtime_query_consent=rq_consent,
+            deployment_consent=dep_consent,
+            mock_ingestion_consent=ing_consent,
+            parity_evaluator=failing_parity_evaluator,
+            resume=False,
+        )
+        rp_stage = orch_state["qualificationStages"]["rule_parity"]
+        assert rp_stage["status"] == "failed"
+        assert rp_stage["alertLifecycle"]["initialDisabled"] is True
+        assert rp_stage["alertLifecycle"]["returnedToDisabled"] is True
+        assert rp_stage["alertLifecycle"]["tkQ11Verified"] is True
+        assert len(rp_stage["alertLifecycle"]["e2eQ02Diagnostics"]) == 1
+        assert rp_stage["alertLifecycle"]["e2eQ02Diagnostics"][0]["checkId"] == "E2E-Q02"
+        assert rp_stage["alertLifecycle"]["e2eQ02Diagnostics"][0]["errorCode"] == "KqlCompilationFailed"
+    finally:
+        shutil.rmtree(scratch)
+
+
+import unittest
+
+
+class QualificationOrchestratorTestCase(unittest.TestCase):
+    def test_plan_qualification_pipeline_builds_consolidated_preflight_packet(self):
+        test_plan_qualification_pipeline_builds_consolidated_preflight_packet()
+
+    def test_fail_closed_when_consents_missing_or_scope_mismatched(self):
+        test_fail_closed_when_consents_missing_or_scope_mismatched()
+
+    def test_resumable_progression_across_all_5_stages_for_hybrid_solution(self):
+        test_resumable_progression_across_all_5_stages_for_hybrid_solution()
+
+    def test_workbook_only_solution_like_aks_marks_rule_parity_not_applicable(self):
+        test_workbook_only_solution_like_aks_marks_rule_parity_not_applicable()
+
+    def test_evaluate_qualification_promotion_gate_pass_and_block_conditions(self):
+        test_evaluate_qualification_promotion_gate_pass_and_block_conditions()
+
+    def test_initial_disabled_deployment_and_get_readback_receipts(self):
+        test_initial_disabled_deployment_and_get_readback_receipts()
+
+    def test_full_enable_fire_disable_lifecycle_and_tk_q11_readbacks(self):
+        test_full_enable_fire_disable_lifecycle_and_tk_q11_readbacks()
+
+    def test_streaming_compiler_error_e2e_q02_captures_diagnostics_and_runs_finally_disable(self):
+        test_streaming_compiler_error_e2e_q02_captures_diagnostics_and_runs_finally_disable()
+

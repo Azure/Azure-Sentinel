@@ -14,6 +14,9 @@ from solution_manager.core.artifacts import (
     report_directory,
     using_run,
 )
+from solution_manager.qualification.alert_parity import (
+    classify_streaming_compiler_error,
+)
 from solution_manager.qualification.mock_data import (
     discover_dcr_streams,
     generate_mock_data,
@@ -647,6 +650,17 @@ class QualificationOrchestrator:
                         ap_art = ap_st.setdefault("artifacts", {})
                         ap_art["alertParityVerified"] = "true" if pipeline_state.get("alertParityVerified") is True else "false"
                         ap_art["qualificationPipelineState"] = rel_pipeline
+                        rp_lifecycle = rp.get("alertLifecycle") or {}
+                        if isinstance(rp_lifecycle, Mapping) and rp_lifecycle:
+                            ap_art["initialDisabled"] = (
+                                "true" if rp_lifecycle.get("initialDisabled") is True else "false"
+                            )
+                            ap_art["returnedToDisabled"] = (
+                                "true" if rp_lifecycle.get("returnedToDisabled") is True else "false"
+                            )
+                            ap_art["tkQ11Verified"] = (
+                                "true" if rp_lifecycle.get("tkQ11Verified") is True else "false"
+                            )
 
                 # Workbook Qualification -> report / validation artifacts
                 wbq = q_stages["workbook_qualification"]
@@ -908,6 +922,7 @@ class QualificationOrchestrator:
                 "completedAt": _now_iso(),
                 "writeAttempted": bool(deploy_result.get("writeAttempted", True)),
                 "enabled": False,
+                "initialDisabled": disabled_ok,
                 "allResourcesDisabled": disabled_ok,
                 "readbackReconciliation": readback_result,
                 "deploymentVerified": deploy_ok,
@@ -1046,27 +1061,125 @@ class QualificationOrchestrator:
             self.state["alertParityVerified"] = False
             return self._persist_state(self.state)
 
+        raw_eval_records: list[dict[str, Any]] = []
+        e2e_q02_diagnostics: list[dict[str, Any]] = []
+
+        def _wrapped_evaluator(
+            pair_descriptor: dict[str, Any],
+            ing_ev: Mapping[str, Any] | None,
+            tgt: Mapping[str, Any] | None,
+        ) -> dict[str, Any]:
+            assert self.parity_evaluator is not None
+            res = dict(self.parity_evaluator(pair_descriptor, ing_ev, tgt))
+            nested_lc = res.get("alertLifecycle") if isinstance(res.get("alertLifecycle"), Mapping) else {}
+            diags = list(res.get("e2eQ02Diagnostics") or nested_lc.get("e2eQ02Diagnostics") or [])
+            if not diags and int(res.get("statusCode", 200)) >= 400:
+                classified = classify_streaming_compiler_error(
+                    int(res.get("statusCode", 400)),
+                    res.get("errorPayload") or res.get("graphError") or res,
+                    rule_id=str(pair_descriptor.get("customDetectionId") or ""),
+                    detection=str(pair_descriptor.get("customDetectionPath") or ""),
+                )
+                if classified is not None:
+                    diags.append(classified)
+            if diags:
+                e2e_q02_diagnostics.extend(diags)
+                res["parityVerified"] = False
+                res["rowParity"] = False
+            raw_eval_records.append(res)
+            return res
+
         parity_res = evaluate_rule_parity(
             self.solution_root,
             inventory=self.plan["inventory"],
             ingestion_evidence=self.state.get("ingestionEvidence"),
             runtime_query_consent=self.runtime_query_consent,
             target=self.plan["target"],
-            parity_evaluator=self.parity_evaluator,
+            parity_evaluator=_wrapped_evaluator if self.parity_evaluator is not None else None,
         )
-        verified = parity_res.get("ruleParityVerified")
+
+        top_lc = parity_res.get("alertLifecycle") if isinstance(parity_res.get("alertLifecycle"), Mapping) else {}
+        for diag in list(parity_res.get("e2eQ02Diagnostics") or top_lc.get("e2eQ02Diagnostics") or []):
+            if diag not in e2e_q02_diagnostics:
+                e2e_q02_diagnostics.append(diag)
+
+        if raw_eval_records:
+            initial_disabled = all(
+                bool(
+                    r.get(
+                        "initialDisabled",
+                        (r.get("alertLifecycle") or {}).get("initialDisabled", True),
+                    )
+                )
+                for r in raw_eval_records
+            )
+            returned_to_disabled = all(
+                bool(
+                    r.get(
+                        "returnedToDisabled",
+                        (r.get("alertLifecycle") or {}).get("returnedToDisabled", True),
+                    )
+                )
+                for r in raw_eval_records
+            )
+        else:
+            initial_disabled = bool(
+                parity_res.get("initialDisabled", top_lc.get("initialDisabled", True))
+            )
+            returned_to_disabled = bool(
+                parity_res.get("returnedToDisabled", top_lc.get("returnedToDisabled", True))
+            )
+
+        tk_q11_verified = bool(initial_disabled and returned_to_disabled)
+        alert_lifecycle = {
+            "initialDisabled": initial_disabled,
+            "returnedToDisabled": returned_to_disabled,
+            "tkQ11Verified": tk_q11_verified,
+            "tkQ11Passed": tk_q11_verified,
+            "e2eQ02Diagnostics": e2e_q02_diagnostics,
+        }
+
+        reasons = list(parity_res.get("reasons") or [])
+        for diag in e2e_q02_diagnostics:
+            msg = f"E2E-Q02 streaming compiler error ({diag.get('errorCode')}): {diag.get('message')}"
+            if msg not in reasons:
+                reasons.append(msg)
+        if not tk_q11_verified:
+            reasons.append(
+                "TK-Q11 rule lifecycle verification failed: rules must start disabled and return to disabled via GET readback."
+            )
+
+        verified = bool(
+            parity_res.get("ruleParityVerified") is True
+            and not e2e_q02_diagnostics
+            and tk_q11_verified
+        )
+        alert_parity_verified = bool(
+            parity_res.get("alertParityVerified") is True
+            and not e2e_q02_diagnostics
+            and tk_q11_verified
+        )
+        stage_status = "passed" if verified else (
+            "blocked" if parity_res.get("status") == "blocked" else "failed"
+        )
         stage.update(
             {
-                "status": str(parity_res.get("status")),
+                "status": stage_status,
                 "completedAt": _now_iso(),
-                "alertParityVerified": parity_res.get("alertParityVerified"),
+                "alertParityVerified": alert_parity_verified,
                 "ruleParityVerified": verified,
+                "initialDisabled": initial_disabled,
+                "returnedToDisabled": returned_to_disabled,
+                "tkQ11Verified": tk_q11_verified,
+                "e2eQ02Diagnostics": e2e_q02_diagnostics,
+                "alertLifecycle": alert_lifecycle,
                 "comparisons": parity_res.get("comparisons", []),
-                "reasons": list(parity_res.get("reasons") or []),
+                "reasons": reasons,
             }
         )
         self.state["ruleParityVerified"] = verified
-        self.state["alertParityVerified"] = parity_res.get("alertParityVerified")
+        self.state["alertParityVerified"] = alert_parity_verified
+        self.state["alertLifecycle"] = alert_lifecycle
         return self._persist_state(self.state)
 
     def run_workbook_qualification(self) -> dict[str, Any]:

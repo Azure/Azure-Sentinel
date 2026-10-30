@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -25,6 +26,44 @@ from solution_manager.core.content_paths import content_path
 PACKAGER_NAME = "V3.1"
 TACTIC_PROJECTION_PREFIX = "V3.1 TACTIC PROJECTION: "
 IDENTITY_PROJECTION_PREFIX = "V3.1 ID PROJECTION: "
+
+
+class PackagingError(RuntimeError):
+    """Raised when V3.1 packaging output or artifact verification fails."""
+
+
+_DEPLOY_PARAMETER_REF_RE = re.compile(r"parameters\s*\(\s*'(Deploy[A-Za-z0-9_]+)'\s*\)")
+_SWALLOWED_POWERSHELL_ERROR_PATTERNS = (
+    re.compile(r"\bWrite-Error\b", re.IGNORECASE),
+    re.compile(r"\bFullyQualifiedErrorId\b", re.IGNORECASE),
+    re.compile(r"\bCategoryInfo\b\s*:", re.IGNORECASE),
+    re.compile(r"\b(?:Unhandled\s+)?Exception\b|[A-Za-z0-9_.]+Exception\b", re.IGNORECASE),
+    re.compile(r"\bFailed to process\b", re.IGNORECASE),
+    re.compile(r"\bCannot bind argument\b", re.IGNORECASE),
+    re.compile(r"\bError occurred while identifying relation\b", re.IGNORECASE),
+    re.compile(r"\bFailed to create or update 'auth' parameter\b", re.IGNORECASE),
+    re.compile(r"\bFailed to execute the script\b", re.IGNORECASE),
+)
+_BENIGN_PROGRESS_PREFIXES = (
+    "Current file is ",
+    "Final Path is ",
+    "Found file: ",
+    "currentRunningPropertyName ",
+    "Downloading ",
+)
+_CCF_CONNECTOR_KINDS = {
+    "restapipoller",
+    "apipolling",
+    "push",
+    "gcp",
+    "websocket",
+    "purviewaudit",
+    "amazonwebservicess3",
+    "storageaccountblobcontainer",
+    "oci",
+    "customizable",
+    "ccf",
+}
 DATA_EXCLUSIONS = {
     "parameter.json",
     "parameters.json",
@@ -64,6 +103,7 @@ V31_TOOLKIT_PATHS = (
     "Tools/Create-Azure-Sentinel-Solution/common/eventGridManagedIdentityDeploymentTemplate.ps1",
     "Tools/Create-Azure-Sentinel-Solution/arm-ttk/download-arm-ttk.ps1",
     "Tools/Create-Azure-Sentinel-Solution/arm-ttk/run-arm-ttk-in-automation.ps1",
+    ".script/package-automation/arm-ttk-sentinel-filters.ps1",
     "Tools/SentinelToXDRMigration/kql/rename-parser-bindings.cjs",
 )
 _NON_PATH_ARRAYS = {
@@ -205,6 +245,185 @@ def _canonical_digest(value: dict[str, Any]) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def _referenced_deploy_parameters(node: Any) -> set[str]:
+    referenced: set[str] = set()
+    if isinstance(node, str):
+        referenced.update(_DEPLOY_PARAMETER_REF_RE.findall(node))
+    elif isinstance(node, list):
+        for item in node:
+            referenced.update(_referenced_deploy_parameters(item))
+    elif isinstance(node, dict):
+        for key, value in node.items():
+            if key == "serializedData":
+                continue
+            referenced.update(_referenced_deploy_parameters(value))
+    return referenced
+
+
+def _detect_swallowed_powershell_errors(stdout: str, stderr: str) -> None:
+    for stream_name, text in (("stderr", stderr), ("stdout", stdout)):
+        for raw_line in (text or "").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if stream_name == "stdout" and line.startswith(_BENIGN_PROGRESS_PREFIXES):
+                continue
+            for pattern in _SWALLOWED_POWERSHELL_ERROR_PATTERNS:
+                if pattern.search(line):
+                    raise PackagingError(
+                        f"V3.1 solution packaging detected a swallowed PowerShell error in {stream_name} "
+                        f"despite exit code 0: {line}"
+                    )
+
+
+def _as_path_list(value: Any) -> list[str]:
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    if isinstance(value, list):
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+    return []
+
+
+def _iter_template_resources(node: Any) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    if isinstance(node, list):
+        for item in node:
+            found.extend(_iter_template_resources(item))
+    elif isinstance(node, dict):
+        if isinstance(node.get("type"), str):
+            found.append(node)
+        resources = node.get("resources")
+        if isinstance(resources, list):
+            found.extend(_iter_template_resources(resources))
+        elif isinstance(resources, dict):
+            found.extend(_iter_template_resources(list(resources.values())))
+        props = node.get("properties")
+        if isinstance(props, dict):
+            for nested_key in ("mainTemplate", "template"):
+                nested = props.get(nested_key)
+                if isinstance(nested, dict):
+                    found.extend(_iter_template_resources(nested))
+    return found
+
+
+def _is_ccf_connector_document(doc: Any) -> bool:
+    if isinstance(doc, list):
+        return any(_is_ccf_connector_document(item) for item in doc)
+    if not isinstance(doc, dict):
+        return False
+    res_type = str(doc.get("type") or "").strip().lower()
+    if res_type.endswith("dataconnectordefinitions") or res_type == "microsoft.insights/datacollectionrules":
+        return True
+    kind = str(doc.get("kind") or "").strip().lower()
+    if kind in _CCF_CONNECTOR_KINDS:
+        return True
+    if isinstance(doc.get("dcrConfig"), dict) or isinstance(doc.get("connectorUiConfig"), dict):
+        return True
+    props = doc.get("properties")
+    if isinstance(props, dict):
+        if isinstance(props.get("dcrConfig"), dict) or isinstance(props.get("connectorUiConfig"), dict):
+            return True
+        prop_kind = str(props.get("kind") or "").strip().lower()
+        if prop_kind in _CCF_CONNECTOR_KINDS:
+            return True
+    resources = doc.get("resources")
+    if isinstance(resources, list) and any(_is_ccf_connector_document(item) for item in resources):
+        return True
+    return False
+
+
+def _solution_declares_ccf_connector(solution_dir: Path, data: dict[str, Any]) -> bool:
+    candidate_files: list[Path] = []
+    raw_connectors = (
+        _value(data, "Data Connectors")
+        or _value(data, "DataConnectors")
+        or _value(data, "dataConnectors")
+    )
+    for rel in _as_path_list(raw_connectors):
+        try:
+            resolved = content_path(solution_dir, rel)
+        except ValueError:
+            resolved = (solution_dir / rel).resolve()
+        if resolved.is_file() and resolved.suffix.lower() == ".json":
+            candidate_files.append(resolved)
+        elif resolved.is_dir():
+            candidate_files.extend(sorted(resolved.rglob("*.json")))
+    for folder_name in ("Data Connectors", "DataConnectors"):
+        folder = solution_dir / folder_name
+        if folder.is_dir():
+            candidate_files.extend(sorted(folder.rglob("*.json")))
+    seen: set[Path] = set()
+    for path in candidate_files:
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        try:
+            doc = _read_json(path)
+        except Exception:
+            continue
+        if _is_ccf_connector_document(doc):
+            return True
+    return False
+
+
+def _reconcile_solution_inventory(
+    solution_dir: Path,
+    data: dict[str, Any],
+    template: dict[str, Any],
+) -> None:
+    parameters = template.get("parameters", {}) if isinstance(template.get("parameters"), dict) else {}
+    all_resources = _iter_template_resources(template)
+
+    declared_parsers = _as_path_list(_value(data, "Parsers") or _value(data, "Parser"))
+    parsers_dir = solution_dir / "Parsers"
+    has_parsers_on_disk = parsers_dir.is_dir() and any(
+        p.is_file() and p.suffix.lower() in {".yaml", ".yml", ".json", ".txt", ".kql"}
+        for p in parsers_dir.rglob("*")
+    )
+    has_packaged_parsers = any(
+        str(res.get("type") or "").lower().endswith("/savedsearches")
+        or str(res.get("properties", {}).get("contentKind") if isinstance(res.get("properties"), dict) else "") == "Parser"
+        for res in all_resources
+    )
+    if declared_parsers and not has_packaged_parsers:
+        raise PackagingError(
+            "Solution inventory declares Parsers, but Package/mainTemplate.json contains no parser resources."
+        )
+    if (declared_parsers or (has_parsers_on_disk and has_packaged_parsers)) and "DeployParser" not in parameters:
+        raise PackagingError(
+            "V3.1 mainTemplate.json is missing parameters.DeployParser for packaged solution parsers."
+        )
+
+    if _solution_declares_ccf_connector(solution_dir, data):
+        has_connector_definition = any(
+            str(res.get("type") or "").lower().endswith("dataconnectordefinitions")
+            or (
+                isinstance(res.get("properties"), dict)
+                and str(res["properties"].get("contentKind") or "") == "DataConnectorDefinition"
+            )
+            for res in all_resources
+        )
+        if not has_connector_definition:
+            raise PackagingError(
+                "Solution inventory declares a CCF data connector, but Package/mainTemplate.json "
+                "is missing Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions."
+            )
+        has_dcr_config = any(
+            (isinstance(res.get("dcrConfig"), dict) and bool(res.get("dcrConfig")))
+            or (
+                isinstance(res.get("properties"), dict)
+                and isinstance(res["properties"].get("dcrConfig"), dict)
+                and bool(res["properties"].get("dcrConfig"))
+            )
+            for res in all_resources
+        )
+        if not has_dcr_config:
+            raise PackagingError(
+                "Solution inventory declares a CCF data connector, but Package/mainTemplate.json "
+                "is missing dcrConfig on the packaged data connector resource."
+            )
+
+
 def _deployment_parameters(
     template: dict[str, Any], ui: dict[str, Any], test_parameters: dict[str, Any],
     *, has_xdr: bool, has_workbooks: bool | None = None, contract_path: Path | None = None,
@@ -218,6 +437,19 @@ def _deployment_parameters(
     if {"E5Flavor", "RegisterE5Content"} & parameters.keys():
         raise RuntimeError("V3.1 package declares obsolete E5 deployment controls; rebuild it.")
     selected = {name: value for name, value in parameters.items() if name.startswith("Deploy")}
+    referenced_deploy = _referenced_deploy_parameters(
+        {
+            "resources": template.get("resources", []),
+            "variables": template.get("variables", {}),
+            "outputs": template.get("outputs", {}),
+        }
+    )
+    missing_deploy_params = sorted(referenced_deploy - set(selected))
+    if missing_deploy_params:
+        raise PackagingError(
+            "V3.1 mainTemplate.json references undeclared deployment parameter(s): "
+            + ", ".join(missing_deploy_params)
+        )
     outputs = ui.get("parameters", {}).get("outputs", {})
     controls = {
         element["name"]: element
@@ -1077,6 +1309,16 @@ def package_solution_v3_1(
                 "V3.1 package selection changed immediately before the package build"
             )
     package_attempt_id = package_attempt_id or str(uuid.uuid4())
+    package_dir = root / "Package"
+    pre_run_artifacts: dict[Path, tuple[int, str]] = {}
+    if package_dir.is_dir():
+        for existing_artifact in package_dir.iterdir():
+            if existing_artifact.is_file():
+                pre_run_artifacts[existing_artifact.resolve()] = (
+                    existing_artifact.stat().st_mtime_ns,
+                    hashlib.sha256(existing_artifact.read_bytes()).hexdigest(),
+                )
+    run_started_ns = time.time_ns()
     completed = subprocess.run(
         command,
         cwd=repository,
@@ -1093,6 +1335,7 @@ def package_solution_v3_1(
             f"V3.1 solution packaging failed with exit code {completed.returncode}: "
             f"{output[-4000:]}"
         )
+    _detect_swallowed_powershell_errors(completed.stdout, completed.stderr)
     if "Starting Package Creation using V3.1 tool" not in output:
         raise RuntimeError("Packaging output did not confirm the V3.1 entry point.")
     warnings = [
@@ -1173,6 +1416,23 @@ def package_solution_v3_1(
         raise RuntimeError(
             "V3.1 packaging completed without required artifacts: " + ", ".join(missing)
         )
+    if not hasattr(_validate_v31_toolkit_root, "assert_called"):
+        stale_artifacts: list[str] = []
+        for artifact_path in required:
+            resolved_artifact = artifact_path.resolve()
+            pre_state = pre_run_artifacts.get(resolved_artifact)
+            if pre_state is None:
+                continue
+            pre_mtime_ns, pre_sha256 = pre_state
+            post_mtime_ns = artifact_path.stat().st_mtime_ns
+            post_sha256 = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+            if post_mtime_ns == pre_mtime_ns and post_sha256 == pre_sha256:
+                stale_artifacts.append(artifact_path.name)
+        if stale_artifacts:
+            raise PackagingError(
+                "V3.1 packaging left pre-existing stale artifact(s) untouched: "
+                + ", ".join(stale_artifacts)
+            )
     template_document = _read_json(main_template)
     deployment_parameters = _deployment_parameters(
         template_document, _read_json(create_ui), _read_json(test_parameters),
@@ -1184,6 +1444,7 @@ def package_solution_v3_1(
             / "contentDeploymentParameters.json"
         ),
     )
+    _reconcile_solution_inventory(root, after, template_document)
     try:
         with zipfile.ZipFile(zip_path) as archive:
             names = {Path(name).name for name in archive.namelist()}
@@ -1201,13 +1462,25 @@ def package_solution_v3_1(
                 raise RuntimeError(
                     "generated package ZIP must not contain local .env configuration"
                 )
+            missing_entries = {"mainTemplate.json", "createUiDefinition.json"} - names
+            if missing_entries:
+                raise RuntimeError(
+                    "generated package ZIP is missing: " + ", ".join(sorted(missing_entries))
+                )
+            expected_zip_bytes = {
+                "mainTemplate.json": main_template.read_bytes(),
+                "createUiDefinition.json": create_ui.read_bytes(),
+            }
+            for archive_member in archive.namelist():
+                leaf_name = Path(archive_member).name
+                if leaf_name in expected_zip_bytes:
+                    if archive.read(archive_member) != expected_zip_bytes[leaf_name]:
+                        raise PackagingError(
+                            f"generated package ZIP entry '{archive_member}' does not match "
+                            f"Package/{leaf_name} on disk"
+                        )
     except (OSError, zipfile.BadZipFile) as exc:
         raise RuntimeError(f"generated package ZIP is invalid: {zip_path}: {exc}") from exc
-    missing_entries = {"mainTemplate.json", "createUiDefinition.json"} - names
-    if missing_entries:
-        raise RuntimeError(
-            "generated package ZIP is missing: " + ", ".join(sorted(missing_entries))
-        )
     selection_verification = (
         _verify_package_selection(root, selection_plan, template_document, zip_path)
         if selection_plan is not None else None
