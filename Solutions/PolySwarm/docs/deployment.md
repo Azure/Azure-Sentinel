@@ -116,10 +116,14 @@ Microsoft Sentinel experience has no Access control (IAM) pane of its own.
 2. Assign **Microsoft Sentinel Responder** to the playbook's managed identity. This
    lets the playbook read incident entities and post comments; it does not grant it
    any other Sentinel permission.
-3. Go to your Key Vault's **Access control (IAM)** (or access policies, depending on
-   your vault's permission model) and grant the same managed identity
-   **Key Vault Secrets User**, scoped to the vault or to the PolySwarm secret alone.
-   This is read-only: the identity can retrieve the secret value but cannot manage the
+3. Give the same managed identity read access to the PolySwarm API key. How depends on
+   your vault's permission model (Key Vault, **Settings** > **Access configuration**):
+   - **Azure role-based access control:** in the vault's **Access control (IAM)**, assign
+     **Key Vault Secrets User**, scoped to the vault or to the PolySwarm secret alone.
+   - **Vault access policy:** in the vault's **Access policies**, add a policy for the
+     managed identity with the **Get** secret permission only. A role assignment has no
+     effect on a vault using this model.
+   Either way this is read-only: the identity can read the secret but cannot manage the
    vault.
 4. Authorize the Microsoft Sentinel and Azure Key Vault API connections in the portal
    if they show as unauthorized.

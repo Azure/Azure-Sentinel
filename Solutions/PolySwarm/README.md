@@ -361,7 +361,7 @@ solution's own name and version and the calling component's name.
 | Symptom | Likely cause |
 | --- | --- |
 | A playbook fails with a 403 posting a comment or reading incident entities | Its managed identity is missing the **Microsoft Sentinel Responder** role. See `docs/permissions.md`. |
-| A playbook fails reading the PolySwarm API key | Its managed identity is missing the **Key Vault Secrets User** role on the Key Vault holding the secret, or the secret name does not match what the playbook expects. |
+| A playbook fails reading the PolySwarm API key | Its managed identity cannot read the secret: on a vault using Azure role-based access control it needs **Key Vault Secrets User**; on a vault using access policies it needs an access policy with the **Get** secret permission. Or the secret name does not match what the playbook expects. |
 | A sandbox playbook fails writing to `PolySwarmSandbox_CL` | Its managed identity is missing **Monitoring Metrics Publisher** on the Data Collection Rule, or the shared `PolySwarmSandboxResults` infrastructure has not been deployed yet. |
 | A data connector shows disconnected | The stored PolySwarm API key or, for the curated feed connector, account number/API key pair is invalid, or the account does not carry the entitlement that connector needs. |
 | No PolySwarm result, HTTP 401 | The PolySwarm API key is invalid or missing. |
