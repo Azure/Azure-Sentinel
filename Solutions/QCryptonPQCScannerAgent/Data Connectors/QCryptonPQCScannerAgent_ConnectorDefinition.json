@@ -1,0 +1,136 @@
+{
+  "name": "QCryptonPQCScannerAgentCCPDefinition",
+  "apiVersion": "2025-03-01",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "QCryptonPQCScannerAgentCCPDefinition",
+      "title": "QCrypton PQC Scanner Agent",
+      "publisher": "QCrypton, Inc.",
+      "descriptionMarkdown": "The [QCrypton PQC Scanner Agent](https://www.qcrypton.com/) data connector ingests post-quantum cryptography readiness findings from internal network scans into Microsoft Sentinel through the QCrypton API. The Scanner Agent probes TLS posture on VNet-internal Azure endpoints and network appliances including F5 BIG-IP, Check Point, Palo Alto, Cisco ASA, and Fortinet FortiGate. Findings include quantum-vulnerable certificates, weak TLS configurations, classical key exchanges, and PQC readiness status.",
+      "graphQueries": [
+        {
+          "metricName": "Total internal network PQ readiness findings received",
+          "legend": "PQReadiness_CL",
+          "baseQuery": "PQReadiness_CL\n| where Metadata contains '\"source\":\"scanner-agent\"' or ResourceType has_any ('F5', 'CheckPoint', 'PaloAlto', 'Cisco', 'Fortinet')"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "All quantum-vulnerable internal findings in the last 24h",
+          "query": "PQReadiness_CL\n| where TimeGenerated > ago(24h)\n| where QuantumPosture == 'vulnerable'\n| where ResourceType has_any ('F5', 'CheckPoint', 'PaloAlto', 'Cisco', 'Fortinet', 'Azure/AppService', 'Azure/ContainerApp', 'Azure/FrontDoor', 'Azure/ApiManagement')\n| project TimeGenerated, ResourceName, ResourceType, AssetKind, Algorithm, PostureReason, RiskScore\n| order by RiskScore desc"
+        },
+        {
+          "description": "Appliance TLS posture summary by vendor",
+          "query": "PQReadiness_CL\n| where TimeGenerated > ago(24h)\n| where ResourceType has_any ('F5', 'CheckPoint', 'PaloAlto', 'Cisco', 'Fortinet')\n| summarize Vulnerable = countif(QuantumPosture == 'vulnerable'), Compliant = countif(QuantumPosture == 'compliant') by ResourceType"
+        },
+        {
+          "description": "Endpoints with PQC hybrid key exchange negotiated",
+          "query": "PQReadiness_CL\n| where TimeGenerated > ago(24h)\n| where QuantumPosture == 'compliant'\n| where Metadata contains 'pqc_hybrid_key_exchange' or Metadata contains 'f5_pqc_engine_active'\n| project TimeGenerated, ResourceName, ResourceType, Algorithm, PostureReason"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "PQReadiness_CL",
+          "lastDataReceivedQuery": "PQReadiness_CL\n| where Metadata contains '\"source\":\"scanner-agent\"' or ResourceType has_any ('F5', 'CheckPoint', 'PaloAlto', 'Cisco', 'Fortinet')\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": false,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "QCrypton API Key",
+            "description": "A QCrypton PQC Scanner Agent API key is required. Obtain one from the [QCrypton Portal](https://portal.qcrypton.com)."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Connect QCrypton PQC Scanner Agent to Microsoft Sentinel",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "This connector polls the QCrypton PQC Scanner Agent API to retrieve post-quantum cryptography readiness findings from internal network scans and ingest them into the **PQReadiness_CL** table in your Log Analytics workspace."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 1. Deploy the Scanner Agent\nDeploy the QCrypton PQC Scanner Agent as an Azure Container App in your VNet. Follow the [deployment guide](https://www.qcrypton.com/docs/scanner-agent) to configure appliance targets (F5 BIG-IP, Check Point, Palo Alto, Cisco, Fortinet) and Azure endpoint discovery."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 2. API Key\nObtain your QCrypton API key from the [QCrypton Portal](https://portal.qcrypton.com). Navigate to **Settings > API Keys** and generate a key with read access to agent scan findings."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 3. API Server URL\nEnter the base URL of your QCrypton API server. The default is `https://api.qcrypton.com`. If you use a dedicated or regional instance, enter the URL provided by QCrypton."
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "QCrypton API Key",
+                "placeholder": "Enter your QCrypton API key",
+                "type": "password",
+                "name": "apiKey",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "QCrypton API Server URL",
+                "placeholder": "https://api.qcrypton.com",
+                "type": "text",
+                "name": "apiServerUrl",
+                "description": "Enter the QCrypton API base URL. Do not include a trailing slash or path.",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "name": "toggle"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
