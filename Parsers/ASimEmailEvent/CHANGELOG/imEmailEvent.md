@@ -1,5 +1,9 @@
 # Changelog for imEmailEvent.yaml
 
+## Version 1.0.4
+
+- (2026-10-29) Register vimEmailEventProofpointTAPBlocked with EmailEvent filter forwarding, packing, and watchlist disable controls - [PR #15500](https://github.com/Azure/Azure-Sentinel/pull/15500)
+
 ## Version 1.0.3
 
 - (2026-10-29) Register the filtering Proofpoint TAP messages-delivered parser as vimEmailEventProofpointTAPDelivered - [PR #15500](https://github.com/Azure/Azure-Sentinel/pull/15500)

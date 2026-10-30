@@ -1,0 +1,185 @@
+Parser:
+  Title: Email Event ASIM filtering parser for Proofpoint TAP blocked messages
+  Version: '0.1.0'
+  LastUpdated: Oct 29, 2026
+Product:
+  Name: Proofpoint TAP
+Normalization:
+  Schema: EmailEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Email Event Schema
+  Link: https://aka.ms/ASimEmailEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Proofpoint TAP SIEM API
+  Link: https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API
+Description: |
+  Filters and normalizes Proofpoint TAP messages-blocked events from ProofPointTAPMessagesBlockedV2_CL to ASIM EmailEvent.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: vimEmailEventProofpointTAPBlocked
+EquivalentBuiltInParser: _Im_EmailEvent_ProofpointTAPBlocked
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailfromaddress_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailrecipient_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailsubject_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildirection_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildeliverylocation_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime:datetime = datetime(null),
+      endtime:datetime = datetime(null),
+      ipaddr_has_any_prefix:dynamic = dynamic([]),
+      emailfromaddress_has_any:dynamic = dynamic([]),
+      emailrecipient_has_any:dynamic = dynamic([]),
+      emailsubject_has_any:dynamic = dynamic([]),
+      emaildirection_in:dynamic = dynamic([]),
+      emaildeliverylocation_in:dynamic = dynamic([]),
+      eventresult:string = "*",
+      disabled:bool = false,
+      pack:bool = false
+  ) {
+      let Address = (value:dynamic) {
+          let text = iff(gettype(value) == "array",
+              iff(array_length(value) == 1, tostring(value[0]), ""), tostring(value));
+          trim(" ", iff(indexof(text, "<") >= 0, tostring(split(tostring(split(text, "<")[1]), ">")[0]), text))
+      };
+      let Addresses = (value:dynamic) {
+          parse_json(replace_strings(tostring(coalesce(value, dynamic([]))),
+              dynamic(["<", ">"]), dynamic(["", ""])))
+      };
+      ProofPointTAPMessagesBlockedV2_CL
+      | where not(disabled)
+      | where isnull(starttime) or messageTime >= starttime or (isnull(messageTime) and TimeGenerated >= starttime)
+      | where isnull(endtime) or messageTime <= endtime or (isnull(messageTime) and TimeGenerated <= endtime)
+      | where eventresult == "*" or eventresult == "Failure"
+      | where array_length(emaildirection_in) == 0 or set_has_element(emaildirection_in, "Unknown")
+      | where array_length(emaildeliverylocation_in) == 0 or set_has_element(emaildeliverylocation_in, "Quarantine")
+      | where array_length(ipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(senderIP, ipaddr_has_any_prefix)
+      | where array_length(emailsubject_has_any) == 0 or subject has_any (emailsubject_has_any)
+      | extend
+          EmailFromAddress = coalesce(Address(fromAddress), Address(headerFrom)),
+          EmailReplyToAddress = coalesce(Address(replyToAddress), Address(headerReplyTo)),
+          EmailMailFromAddress = Address(sender),
+          EmailToRecipients = Addresses(toAddresses),
+          EmailCCRecipients = Addresses(ccAddresses),
+          EnvelopeRecipients = Addresses(recipient)
+      | where array_length(emailfromaddress_has_any) == 0 or EmailFromAddress has_any (emailfromaddress_has_any)
+      | where array_length(emailrecipient_has_any) == 0
+          or EmailToRecipients has_any (emailrecipient_has_any)
+          or EmailCCRecipients has_any (emailrecipient_has_any)
+          or EnvelopeRecipients has_any (emailrecipient_has_any)
+      | extend
+          // Only a single threat can populate scalar fields without losing multi-threat context.
+          Threat = case(gettype(threatsInfoMap) == "dictionary", threatsInfoMap,
+              array_length(threatsInfoMap) == 1, threatsInfoMap[0], dynamic(null)),
+          Part = case(gettype(messageParts) == "dictionary", messageParts,
+              array_length(messageParts) == 1, messageParts[0], dynamic(null))
+      | extend
+          EventStartTime = coalesce(messageTime, TimeGenerated),
+          EventEndTime = coalesce(messageTime, TimeGenerated),
+          EventCount = int(1),
+          EventType = "EmailDelivery",
+          EventOriginalType = "messagesBlocked",
+          EventResult = "Failure",
+          EventSchema = "EmailEvent",
+          EventSchemaVersion = "1.0.0",
+          EventVendor = "Proofpoint",
+          EventProduct = "TAP",
+          EventOriginalUid = coalesce(GUID, tostring(column_ifexists("id", ""))),
+          Dvc = coalesce(cluster, "Proofpoint TAP"),
+          DvcAction = "Quarantined",
+          DvcEntityKey = "",
+          AdditionalEntities = dynamic([]),
+          EmailFromDomain = tostring(split(EmailFromAddress, "@")[1]),
+          EmailMailFromDomain = tostring(split(EmailMailFromAddress, "@")[1]),
+          EmailReplyToDomain = tostring(split(EmailReplyToAddress, "@")[1]),
+          EmailDirection = "Unknown",
+          EmailDeliveryLocation = "Quarantine",
+          EmailProtocolName = "SMTP",
+          EmailSizeBytes = tolong(messageSize),
+          Dst = iff(array_length(EnvelopeRecipients) == 1, tostring(EnvelopeRecipients[0]),
+              iff(array_length(EnvelopeRecipients) > 1, tostring(EnvelopeRecipients), "")),
+          ThreatOriginalCategory = tostring(Threat.classification),
+          ThreatId = tostring(Threat.threatID),
+          ThreatName = tostring(Threat.threat),
+          ThreatFirstReportedTime = todatetime(Threat.threatTime),
+          ThreatIsActive = case(tolower(tostring(Threat.threatStatus)) == "active", true,
+              tolower(tostring(Threat.threatStatus)) in ("cleared", "falsepositive"), false, bool(null)),
+          EventReportUrl = tostring(Threat.threatUrl),
+          // Message parts can contain bodies as well as attachments; do not count them as files.
+          EmailFiles = iff(tolower(tostring(Part.disposition)) == "attached", pack_array(Part), dynamic([])),
+          RuleName = quarantineRule,
+          AdditionalFields = iff(pack, bag_pack(
+              "GUID", GUID, "messageID", messageID, "QID", QID,
+              "cluster", cluster, "completelyRewritten", completelyRewritten,
+              "fromAddress", fromAddress, "headerFrom", headerFrom, "headerReplyTo", headerReplyTo,
+              "replyToAddress", replyToAddress, "sender", sender,
+              "recipient", recipient, "toAddresses", toAddresses, "ccAddresses", ccAddresses,
+              "impostorScore", impostorScore, "malwareScore", malwareScore,
+              "phishScore", phishScore, "spamScore", spamScore,
+              "messageParts", messageParts, "threatsInfoMap", threatsInfoMap,
+              "messageTime", messageTime, "messageSize", messageSize,
+              "modulesRun", modulesRun, "policyRoutes", policyRoutes,
+              "quarantineFolder", quarantineFolder, "quarantineRule", quarantineRule,
+              "xmailer", xmailer, "TenantId", column_ifexists("TenantId", ""),
+              "_ResourceId", column_ifexists("_ResourceId", "")), dynamic({}))
+      | extend
+          EventUid = EventOriginalUid,
+          SrcUserName = EmailMailFromAddress,
+          Src = senderIP,
+          ThreatCategory = case(tolower(ThreatOriginalCategory) == "phish", "Phishing",
+              tolower(ThreatOriginalCategory) == "malware", "Malware",
+              tolower(ThreatOriginalCategory) == "spam", "Spam",
+              tolower(ThreatOriginalCategory) == "impostor", "Impersonation",
+              tolower(ThreatOriginalCategory) == "toad", "TOAD", ""),
+          EventResultDetails = case(tolower(ThreatOriginalCategory) == "phish", "PhishingDetected",
+              tolower(ThreatOriginalCategory) == "malware", "MalwareDetected", "Other")
+      | project-rename EmailSubject = subject, SrcIpAddr = senderIP, EmailOriginalDeliveryLocation = quarantineFolder
+      | extend IpAddr = SrcIpAddr, User = SrcUserName, Rule = RuleName
+      | project
+          TimeGenerated, Type, EventStartTime, EventEndTime, EventCount, EventType, EventOriginalType,
+          EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventVendor, EventProduct,
+          EventOriginalUid, EventUid, EventReportUrl, Dvc, DvcAction, DvcEntityKey, AdditionalEntities,
+          EmailFromAddress, EmailFromDomain, EmailMailFromAddress, EmailMailFromDomain,
+          EmailReplyToAddress, EmailReplyToDomain, EmailToRecipients, EmailCCRecipients,
+          EmailSubject, EmailSizeBytes, EmailDirection, EmailDeliveryLocation, EmailOriginalDeliveryLocation,
+          EmailProtocolName, EmailFiles,
+          Dst, Src, SrcIpAddr, IpAddr, SrcUserName, User, RuleName, Rule,
+          ThreatId, ThreatName, ThreatCategory, ThreatOriginalCategory, ThreatFirstReportedTime,
+          ThreatIsActive, AdditionalFields
+  };
+  parser(
+      starttime=starttime, endtime=endtime, ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      emailfromaddress_has_any=emailfromaddress_has_any, emailrecipient_has_any=emailrecipient_has_any,
+      emailsubject_has_any=emailsubject_has_any, emaildirection_in=emaildirection_in,
+      emaildeliverylocation_in=emaildeliverylocation_in, eventresult=eventresult,
+      disabled=disabled, pack=pack)

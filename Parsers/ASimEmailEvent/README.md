@@ -10,6 +10,45 @@ For more information, see:
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
 - [ASIM Email Event normalization schema reference](https://aka.ms/ASimEmailEventDoc)
 
+## Proofpoint TAP blocked messages
+
+[ASimEmailEventProofpointTAPBlocked](Parsers/ASimEmailEventProofpointTAPBlocked.yaml)
+and [vimEmailEventProofpointTAPBlocked](Parsers/vimEmailEventProofpointTAPBlocked.yaml)
+normalize `ProofPointTAPMessagesBlockedV2_CL` to EmailEvent 1.0.0.
+They retain the Delivered parser's address, message, and threat mappings while
+using `EventOriginalType=messagesBlocked`, `EventResult=Failure`,
+`DvcAction=Quarantined`, and `EmailDeliveryLocation=Quarantine`.
+The result describes prevented email delivery, not failure of protection.
+`quarantineFolder` maps to `EmailOriginalDeliveryLocation`, and
+`quarantineRule` maps to `RuleName` and `Rule`.
+
+The filtering parser accepts the standard EmailEvent parameters. Result
+filters match `Failure`; delivery-location filters match `Quarantine`.
+Direction remains `Unknown`, and IP-prefix matching supports IPv4.
+Both parsers preserve one output row per source row. Multiple threats and
+message parts are retained with `pack=true`, without row expansion.
+
+Both KQL drafts passed schema and data validation with ten synthetic records,
+and their default outputs matched exactly. Focused synthetic checks cover
+quarantine/result filtering and disabling. Missing recommended fields and an
+empty destination in the deliberately sparse sample remain warnings.
+The source table was unavailable in the supplied workspace; live validation
+is deferred. No source ingestion or parser deployment was performed.
+
+CI qualification requires maintainer changes before submission:
+
+- The custom-table catalog has no `ProofPointTAPMessagesBlockedV2_CL` entry.
+  The similarly named legacy `ProofPointTAPMessagesBlocked_CL` entry is a
+  different table and must not be used as a substitute.
+- Both TAP parser variants emit `EventVendor=Proofpoint`, `EventProduct=TAP`,
+  and `EventSchema=EmailEvent`. The ingestion workflow therefore selects
+  `Proofpoint_TAP_EmailEvent_IngestedLogs.csv` for both, but that fixture targets
+  the Delivered table. Per-source fixture selection is needed; the Delivered
+  fixture was not overwritten and product identity was not changed to avoid
+  the naming collision.
+- The repository PowerShell filter runner does not support EmailEvent.
+  Synthetic smoke checks are not a substitute for full filter certification.
+
 ## Proofpoint POD MailLog
 
 `ASimEmailEventProofpointPODMailLog` and `vimEmailEventProofpointPODMailLog`
