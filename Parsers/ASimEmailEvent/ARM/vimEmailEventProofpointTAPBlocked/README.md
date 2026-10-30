@@ -3,8 +3,6 @@
 ARM template for ASIM EmailEvent schema parser for Proofpoint TAP.
 
 Filters and normalizes Proofpoint TAP messages-blocked events from ProofPointTAPMessagesBlockedV2_CL to ASIM EmailEvent.
-Supports event-time, IPv4-prefix, sender, recipient, subject, result, direction, delivery-location, disable, and packing parameters.
-Result filters match Failure; delivery-location filters match Quarantine. The original quarantine folder and rule are retained.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 
