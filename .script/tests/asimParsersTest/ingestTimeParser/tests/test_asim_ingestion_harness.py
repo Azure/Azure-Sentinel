@@ -508,7 +508,9 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                     deadline=2,
                 )
 
-                def query_error(method, url, kwargs):
+                def query_error(
+                    method, url, kwargs, status=status, payload=payload,
+                ):
                     clock.value = 2
                     return FakeResponse(status, payload)
 
