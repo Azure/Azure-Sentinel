@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.5       | 28-10-2026                     | Fixed **Parser** field mappings and user enrichment. |
 | 3.0.4       | 16-10-2026                     | Added missing OneLogin event fields |
 | 3.0.3       | 29-07-2025                     |  Removed Deprecated **Data Connector**. | 
 | 3.0.2       | 30-06-2025                     |  OneLoginIAM **CCF Data Connector** moving to GA.  		                |
