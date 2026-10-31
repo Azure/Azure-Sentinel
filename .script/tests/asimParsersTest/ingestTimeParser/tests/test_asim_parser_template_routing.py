@@ -18,7 +18,7 @@ class QueryTimeParserFileSelectionTests(unittest.TestCase):
     def test_mixed_changes_select_only_query_time_parser_files(self):
         changed_files = [
             "Parsers/ASimEmailEvent/Parsers/ASimEmailEventContoso.yaml",
-            "Parsers/ASimEmailEvent/IngestTimeParsers/"
+            "Parsers/ASimEmailEvent/IngestTimeParsers/" +
             "ASimEmailEventProofpointPODMailLog.yaml",
             "Parsers/ASimEmailEvent/IngestTimeParsers/notes.txt",
         ]
@@ -30,7 +30,7 @@ class QueryTimeParserFileSelectionTests(unittest.TestCase):
 
     def test_ingestion_time_parser_only_changes_select_no_files(self):
         changed_files = [
-            "Parsers\\ASimEmailEvent\\IngestTimeParsers\\"
+            "Parsers\\ASimEmailEvent\\IngestTimeParsers\\" +
             "ASimEmailEventProofpointPODMailLog.yaml",
         ]
 
