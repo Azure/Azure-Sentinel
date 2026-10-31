@@ -1,0 +1,117 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - SymantecProxySG
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7a58b253-0ef2-4248-b4e5-c350f15a8346
+    path: Analytic Rules/ExcessiveDeniedProxyTraffic.yaml
+    version: 1.0.5
+    querySha256: 85acb4168859e0daebb54a522193c080d529059e38676eeecb658ab8e5b4ffac
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings: []
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - CommandAndControl
+    originalTechniques:
+    - T1090
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: e41195e40528ce40a8a20cc4c98c733427a54209f627953565f13e8919f615b2
+      targetQuerySha256: 96b2729d5d2420b43e578e6598a906f41ff07ad28e3f9898238e8e8c465875fc
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: e41195e40528ce40a8a20cc4c98c733427a54209f627953565f13e8919f615b2
+      targetQuerySha256: 96b2729d5d2420b43e578e6598a906f41ff07ad28e3f9898238e8e8c465875fc
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: cs_host
+      column: cs_host
+      status: retained-custom-detail
+      customDetailKey: HostFullName
+properties:
+  id: xdr-7a58b253-0ef2-4248-b4e5-c350f15a8346
+  displayName: Excessive Denied Proxy Traffic
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 100;
+      SymantecProxySG
+      | where sc_filter_result =~ "DENIED"
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by c_ip, cs_host
+      | where count_ > threshold
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Excessive Denied Proxy Traffic
+      description: '''This alert creates an incident when a client generates an excessive amounts of denied proxy traffic.'''
+      severity: low
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: cs_host
+        ips:
+        - id: ip1
+          addressColumn: c_ip
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1090
+      customDetails:
+        HostFullName: cs_host

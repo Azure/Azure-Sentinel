@@ -1,0 +1,93 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ClarotyEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e7dbcbc3-b18f-4635-b27c-718195c369f1
+    path: Analytic Rules/ClarotyLoginToUncommonSite.yaml
+    version: 1.0.4
+    querySha256: dff020eaa6c80972f19fa15fcf53dab476d89bc83213e7c9895a790abd4d8a71
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 863d0b7a688afb256feb0669eb8a7ebd5737f53b05cee5101a7248533d079771
+      targetQuerySha256: a18f4877ae34b2d0a29edf2d3f5dbfc1a370e2723497fdd601282122e37412cc
+properties:
+  id: xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1
+  displayName: Claroty - Login to uncommon location
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let usr_sites = ClarotyEvent
+      | where TimeGenerated between (ago(14d) .. ago(1h))
+      | where EventType has 'Login to SRA succeeded'
+      | extend Site = column_ifexists("site_name","")
+      | where isnotempty(Site)
+      | extend SrcUsername = extract(@'User\s(.*?)\slogged', 1, EventMessage)
+      | where isnotempty(SrcUsername)
+      | summarize all_loc = make_set(tostring(Site)) by SrcUsername;
+      ClarotyEvent
+      | where TimeGenerated > ago(1h)
+      | where EventType has 'Login to SRA succeeded'
+      | extend Site = column_ifexists("site_name","")
+      | where isnotempty(Site)
+      | extend SrcUsername = extract(@'User\s(.*?)\slogged', 1, EventMessage)
+      | where isnotempty(SrcUsername)
+      | join kind=leftouter (usr_sites) on SrcUsername
+      | where isempty(all_loc) or not(set_has_element(all_loc, tostring(Site)))
+      | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), EventCount=count(), Sites=make_set(Site, 100), KnownSites=any(all_loc) by SrcUsername, SrcIpAddr, Site, EventType, EventMessage
+      | extend UncommonSiteCount = array_length(Sites)
+      | project StartTime, EndTime, SrcUsername, SrcIpAddr, Site, EventType, EventMessage, EventCount, UncommonSiteCount, KnownSites
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Claroty - Login to uncommon location
+      description: Detects user login to uncommon location.
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133

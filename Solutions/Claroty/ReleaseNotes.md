@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                             |
 | ----------- | ------------------------------ | ---------------------------------------------- |
+| 3.2.2       | 28-10-2026                     | Added Defender XDR Custom Detection **Analytic Rules** and migrated **Workbooks** to Defender XDR. |
 | 3.0.5       | 05-05-2026                     | Updated **analytical rule** and **Hunting Queries**.|
 | 3.0.4       | 03-04-2026                     | Fixed typo error in analytical rule            |
 | 3.0.3       | 18-11-2024                     | Removed Deprecated **Data Connectors**         |

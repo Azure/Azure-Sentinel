@@ -27,13 +27,34 @@
       "metadata": {
         "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
       }
+    },
+    "DeployAnalyticsRule": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel analytic rules carried by this solution (ContentKind AnalyticsRule and its AnalyticsRuleTemplate registration face)."
+      }
+    },
+    "DeployCustomDetection": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy the XDR-native custom detection resources and their Content Hub registrations (ContentKind CustomDetection and CustomDetectionTemplate). Independent of DeployAnalyticsRule: both kinds can be selected together. Existing analytic-rule instances are not disabled or removed. CD enabled or disabled status is controlled separately from this deployment switch."
+      }
+    },
+    "DeployParser": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the parsers and their registrations carried by this solution."
+      }
     }
   },
   "variables": {
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "GitLab",
-    "_solutionVersion": "3.0.3",
+    "_solutionVersion": "3.2.2",
     "solutionId": "azuresentinel.azure-sentinel-solution-gitlab",
     "_solutionId": "[variables('solutionId')]",
     "parserObject1": {
@@ -47,7 +68,7 @@
       "_parserName2": "[concat(parameters('workspace'),'/','GitLabApp')]",
       "_parserId2": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'GitLabApp')]",
       "parserTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('GitLabApp-Parser')))]",
-      "parserVersion2": "1.0.0",
+      "parserVersion2": "1.0.1",
       "parserContentId2": "GitLabApp-Parser"
     },
     "parserObject3": {
@@ -132,7 +153,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLabAccess Data Parser with template version 3.0.3",
+        "description": "GitLabAccess Data Parser with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -202,7 +223,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
         "version": "[variables('parserObject1').parserVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -223,7 +245,8 @@
             "value": ""
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -253,7 +276,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -264,7 +288,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLabApp Data Parser with template version 3.0.3",
+        "description": "GitLabApp Data Parser with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject2').parserVersion2]",
@@ -281,7 +305,7 @@
                 "displayName": "Parser for GitLabApp",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "GitLabApp",
-                "query": "Syslog\n| where Facility == 'local7'\n| where ProcessName == 'GitLab-Application-Logs'\n| extend parsedMessage = parse_json(SyslogMessage)\n| project TimeGenerated, \n  Severity = parsedMessage.severity,\n  Computer,\n  HostName,\n  HostIP,\n  EventTime = todatetime(parsedMessage.['time']),\n  CorrelationID = parsedMessage.correlation_id,\n  Message = parsedMessage.message,\n  FailedLogin = iff(parsedMessage hasprefix_cs \"Failed Login\",1,0),\n  UserAdded = iff(parsedMessage hassuffix_cs \"was created\",1,0),\n  UserImpersonated = iff(parsedMessage matches regex \".*impersonating.*\",1,0)\n",
+                "query": "Syslog\n| where Facility == 'local7'\n| where ProcessName == 'GitLab-Application-Logs'\n| extend parsedMessage = parse_json(SyslogMessage)\n| project TimeGenerated, \n  Severity = parsedMessage.severity,\n  Computer,\n  HostName,\n  HostIP,\n  EventTime = todatetime(parsedMessage.['time']),\n  CorrelationID = parsedMessage.correlation_id,\n  Message = parsedMessage.message,\n  FailedLogin = iff(tostring(parsedMessage.message) hasprefix_cs \"Failed Login\",1,0),\n  UserAdded = iff(tostring(parsedMessage.message) hassuffix_cs \"was created\",1,0),\n  UserImpersonated = iff(tostring(parsedMessage.message) matches regex \".*impersonating.*\",1,0)\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -331,10 +355,11 @@
         "contentId": "[variables('parserObject2').parserContentId2]",
         "contentKind": "Parser",
         "displayName": "Parser for GitLabApp",
-        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.0')))]",
-        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.0')))]",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.1')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject2').parserContentId2,'-', '1.0.1')))]",
         "version": "[variables('parserObject2').parserVersion2]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -346,7 +371,7 @@
         "displayName": "Parser for GitLabApp",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "GitLabApp",
-        "query": "Syslog\n| where Facility == 'local7'\n| where ProcessName == 'GitLab-Application-Logs'\n| extend parsedMessage = parse_json(SyslogMessage)\n| project TimeGenerated, \n  Severity = parsedMessage.severity,\n  Computer,\n  HostName,\n  HostIP,\n  EventTime = todatetime(parsedMessage.['time']),\n  CorrelationID = parsedMessage.correlation_id,\n  Message = parsedMessage.message,\n  FailedLogin = iff(parsedMessage hasprefix_cs \"Failed Login\",1,0),\n  UserAdded = iff(parsedMessage hassuffix_cs \"was created\",1,0),\n  UserImpersonated = iff(parsedMessage matches regex \".*impersonating.*\",1,0)\n",
+        "query": "Syslog\n| where Facility == 'local7'\n| where ProcessName == 'GitLab-Application-Logs'\n| extend parsedMessage = parse_json(SyslogMessage)\n| project TimeGenerated, \n  Severity = parsedMessage.severity,\n  Computer,\n  HostName,\n  HostIP,\n  EventTime = todatetime(parsedMessage.['time']),\n  CorrelationID = parsedMessage.correlation_id,\n  Message = parsedMessage.message,\n  FailedLogin = iff(tostring(parsedMessage.message) hasprefix_cs \"Failed Login\",1,0),\n  UserAdded = iff(tostring(parsedMessage.message) hassuffix_cs \"was created\",1,0),\n  UserImpersonated = iff(tostring(parsedMessage.message) matches regex \".*impersonating.*\",1,0)\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -355,7 +380,8 @@
             "value": ""
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -385,7 +411,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -396,7 +423,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLabAudit Data Parser with template version 3.0.3",
+        "description": "GitLabAudit Data Parser with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject3').parserVersion3]",
@@ -466,7 +493,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject3').parserContentId3,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject3').parserContentId3,'-', '1.0.0')))]",
         "version": "[variables('parserObject3').parserVersion3]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -487,7 +515,8 @@
             "value": ""
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -517,7 +546,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -528,7 +558,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_BruteForce_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_BruteForce_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -556,10 +586,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
                     "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -570,22 +600,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IpAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IpAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "User",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "User"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -630,7 +660,8 @@
         "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -641,7 +672,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_ExternalUser_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_ExternalUser_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -669,10 +700,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
                     "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -683,40 +714,40 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "User",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "User"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AuthorName",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AuthorName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "DNS",
                     "fieldMappings": [
                       {
-                        "columnName": "DomainName",
-                        "identifier": "DomainName"
+                        "identifier": "DomainName",
+                        "columnName": "DomainName"
                       }
-                    ],
-                    "entityType": "DNS"
+                    ]
                   }
                 ]
               }
@@ -761,7 +792,8 @@
         "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -772,7 +804,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_Impersonation_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_Impersonation_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -800,10 +832,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
                     "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -814,40 +846,40 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPStart",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPStart"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPStop",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPStop"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "EntityName",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "EntityName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "TargetDetails",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "TargetDetails"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -892,7 +924,8 @@
         "contentProductId": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "id": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -903,7 +936,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_LocalAuthNoMFA_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_LocalAuthNoMFA_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -931,10 +964,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
                     "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -945,22 +978,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AuthorName",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AuthorName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -1005,7 +1038,8 @@
         "contentProductId": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "id": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "version": "[variables('analyticRuleObject4').analyticRuleVersion4]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1016,7 +1050,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_MaliciousIP_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_MaliciousIP_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -1044,22 +1078,22 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "ThreatIntelligence",
                     "dataTypes": [
                       "ThreatIntelligenceIndicator"
-                    ]
+                    ],
+                    "connectorId": "ThreatIntelligence"
                   },
                   {
-                    "connectorId": "ThreatIntelligenceTaxii",
                     "dataTypes": [
                       "ThreatIntelligenceIndicator"
-                    ]
+                    ],
+                    "connectorId": "ThreatIntelligenceTaxii"
                   },
                   {
-                    "connectorId": "SyslogAma",
                     "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -1070,22 +1104,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "Url",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "Url"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ]
               }
@@ -1130,7 +1164,8 @@
         "contentProductId": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "id": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "version": "[variables('analyticRuleObject5').analyticRuleVersion5]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1141,7 +1176,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_PAT_Repo_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_PAT_Repo_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
@@ -1169,10 +1204,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
                     "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -1183,13 +1218,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AuthorName",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AuthorName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -1234,7 +1269,8 @@
         "contentProductId": "[variables('analyticRuleObject6')._analyticRulecontentProductId6]",
         "id": "[variables('analyticRuleObject6')._analyticRulecontentProductId6]",
         "version": "[variables('analyticRuleObject6').analyticRuleVersion6]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1245,7 +1281,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_RepoVisibilityChange_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_RepoVisibilityChange_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
@@ -1273,10 +1309,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
                     "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -1289,31 +1325,31 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AuthorName",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AuthorName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "URL",
                     "fieldMappings": [
                       {
-                        "columnName": "EntityName",
-                        "identifier": "Url"
+                        "identifier": "Url",
+                        "columnName": "EntityName"
                       }
-                    ],
-                    "entityType": "URL"
+                    ]
                   }
                 ]
               }
@@ -1358,7 +1394,8 @@
         "contentProductId": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
         "id": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
         "version": "[variables('analyticRuleObject7').analyticRuleVersion7]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1369,7 +1406,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_Repo_Deletion_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_Repo_Deletion_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject8').analyticRuleVersion8]",
@@ -1397,10 +1434,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "SyslogAma",
                     "dataTypes": [
                       "Syslog"
-                    ]
+                    ],
+                    "connectorId": "SyslogAma"
                   }
                 ],
                 "tactics": [
@@ -1411,22 +1448,22 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IPAddress",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "AuthorName",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "AuthorName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -1471,7 +1508,8 @@
         "contentProductId": "[variables('analyticRuleObject8')._analyticRulecontentProductId8]",
         "id": "[variables('analyticRuleObject8')._analyticRulecontentProductId8]",
         "version": "[variables('analyticRuleObject8').analyticRuleVersion8]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1482,7 +1520,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "GitLab_SignInBurst_AnalyticalRules Analytics Rule with template version 3.0.3",
+        "description": "GitLab_SignInBurst_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject9').analyticRuleVersion9]",
@@ -1510,10 +1548,10 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureActiveDirectory",
                     "dataTypes": [
                       "SigninLogs"
-                    ]
+                    ],
+                    "connectorId": "AzureActiveDirectory"
                   }
                 ],
                 "tactics": [
@@ -1524,13 +1562,13 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
-                        "columnName": "User",
-                        "identifier": "FullName"
+                        "identifier": "FullName",
+                        "columnName": "User"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -1575,19 +1613,20 @@
         "contentProductId": "[variables('analyticRuleObject9')._analyticRulecontentProductId9]",
         "id": "[variables('analyticRuleObject9')._analyticRulecontentProductId9]",
         "version": "[variables('analyticRuleObject9').analyticRuleVersion9]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.3",
+        "version": "3.2.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "GitLab",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/GitLab/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://about.gitlab.com/solutions/devops-platform/\">GitLab</a> solution allows you to easily connect your GitLab (GitLab Enterprise Edition - Standalone) logs into Microsoft Sentinel. This gives you more security insight into your organization's DevOps pipelines.</p>\n<p>This solution is dependent on the Syslog solution containing the Syslog via AMA connector to collect the logs. The Syslog  solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE</strong>: Microsoft recommends installation of Syslog via AMA Connector. Legacy connector uses the Log Analytics agent which were deprecated on <strong>Aug 31, 2024.</strong> Using MMA and AMA on same machine can cause log duplication and extra ingestion cost <a href=\"https://learn.microsoft.com/en-us/azure/sentinel/ama-migrate\">more details</a>.</p>\n<p><strong>Parsers:</strong> 3, <strong>Analytic Rules:</strong> 9</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/GitLab/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://about.gitlab.com/solutions/devops-platform/\">GitLab</a> solution allows you to easily connect your GitLab (GitLab Enterprise Edition - Standalone) logs into Microsoft Sentinel. This gives you more security insight into your organization's DevOps pipelines.</p>\n<p>This solution is dependent on the Syslog solution containing the Syslog via AMA connector to collect the logs. The Syslog  solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE</strong>: Microsoft recommends installation of Syslog via AMA Connector. Legacy connector uses the Log Analytics agent which were deprecated on <strong>Aug 31, 2024.</strong> Using MMA and AMA on same machine can cause log duplication and extra ingestion cost <a href=\"https://learn.microsoft.com/en-us/azure/sentinel/ama-migrate\">more details</a>.</p>\n<p><strong>Parsers:</strong> 3, <strong>Analytic Rules:</strong> 9, <strong>XDR Detections:</strong> 9</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -1674,6 +1713,51 @@
             {
               "kind": "Solution",
               "contentId": "azuresentinel.azure-sentinel-solution-syslog"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-2238d13a-cf05-4973-a83f-d12a25dbb153",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-e0b45487-5c79-482d-8ac0-695de8c031af",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-7241740a-5280-4b74-820a-862312d721a8",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-57b1634b-531d-4eab-a456-8b855887428f",
+              "version": "3.2.2"
             }
           ]
         },
@@ -1689,6 +1773,1734 @@
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-2238d13a-cf05-4973-a83f-d12a25dbb153",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Brute-force Attempts",
+                    "customDetails": {
+                      "AccountFullName": "User"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IpAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This query relies on GitLab Application Logs to get failed logins to highlight brute-force attempts from different IP addresses in a short space of time.'",
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let LearningPeriod = 7d;\nlet EndLearningTime = now();\nlet BinTime = 1h;\nlet RunTime = 1h;\nlet MinThreshold = 3.0;\nlet GitLabFailedLogins = (GitLabApp\n| where FailedLogin == 1\n| parse kind=regex Message with \"Failed Login: username=\" User \"ip=\" IpAddress\n| project TimeGenerated, EventTime, Computer, User, HostName, HostIP, IpAddress);\nGitLabFailedLogins\n| where EventTime between (ago(LearningPeriod) .. EndLearningTime)\n| summarize FailedLoginsCountInBinTime = count() by User, bin(EventTime, BinTime)\n| summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User\n| extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning, MinThreshold)\n| join kind=innerunique ( GitLabFailedLogins\n| summarize FailedLoginsCountInRunTime = count() by User, IpAddress, EventTime = bin(EventTime, BinTime) ) on User\n| where FailedLoginsCountInRunTime >= LearningThreshold\n| project User, IpAddress, EventTime, FailedLoginsCountInRunTime, LearningThreshold"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-2238d13a-cf05-4973-a83f-d12a25dbb153', 'xdr-2238d13a-cf05-4973-a83f-d12a25dbb153')]",
+                "displayName": "GitLab - Brute-force Attempts",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-2238d13a-cf05-4973-a83f-d12a25dbb153",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-2238d13a-cf05-4973-a83f-d12a25dbb153')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-2238d13a-cf05-4973-a83f-d12a25dbb153')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query relies on GitLab Application Logs to get failed logins to highlight brute-force attempts from different IP addresses in a short space of time.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Brute-force Attempts",
+                    "customDetails": {
+                      "AccountFullName": "User"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IpAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This query relies on GitLab Application Logs to get failed logins to highlight brute-force attempts from different IP addresses in a short space of time.'",
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let LearningPeriod = 7d;\nlet EndLearningTime = now();\nlet BinTime = 1h;\nlet RunTime = 1h;\nlet MinThreshold = 3.0;\nlet GitLabFailedLogins = (GitLabApp\n| where FailedLogin == 1\n| parse kind=regex Message with \"Failed Login: username=\" User \"ip=\" IpAddress\n| project TimeGenerated, EventTime, Computer, User, HostName, HostIP, IpAddress);\nGitLabFailedLogins\n| where EventTime between (ago(LearningPeriod) .. EndLearningTime)\n| summarize FailedLoginsCountInBinTime = count() by User, bin(EventTime, BinTime)\n| summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User\n| extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning, MinThreshold)\n| join kind=innerunique ( GitLabFailedLogins\n| summarize FailedLoginsCountInRunTime = count() by User, IpAddress, EventTime = bin(EventTime, BinTime) ) on User\n| where FailedLoginsCountInRunTime >= LearningThreshold\n| project User, IpAddress, EventTime, FailedLoginsCountInRunTime, LearningThreshold"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-2238d13a-cf05-4973-a83f-d12a25dbb153', 'xdr-2238d13a-cf05-4973-a83f-d12a25dbb153')]",
+                "displayName": "GitLab - Brute-force Attempts",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-2238d13a-cf05-4973-a83f-d12a25dbb153",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-2238d13a-cf05-4973-a83f-d12a25dbb153",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - Brute-force Attempts",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-2238d13a-cf05-4973-a83f-d12a25dbb153','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-2238d13a-cf05-4973-a83f-d12a25dbb153','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-2238d13a-cf05-4973-a83f-d12a25dbb153",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "Syslog"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - External User Added to GitLab",
+                    "customDetails": {
+                      "AccountFullName_2": "AuthorName",
+                      "AccountFullName": "User",
+                      "DnsDomainName": "DomainName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This queries GitLab Application logs to list external user accounts (i.e.: account not in allow-listed domains) which have been added to GitLab users.'",
+                    "tactics": [
+                      {
+                        "tactic": "Persistence",
+                        "techniques": [
+                          {
+                            "technique": "T1136"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "// List of allow-listed domains\nlet allowedDomain = pack_array(\"mydomain.com\");\nGitLabAudit()\n| where AddAction == \"user\"\n| project AuthorName, IPAddress, User = EntityName\n| join (GitLabApp\n| where UserAdded == 1\n| parse kind=regex Message with \"User \\\"\" User \"\\\"\" EmailAddress \" was created\"\n| project tostring(User), EmailAddress = substring(EmailAddress,2,strlen(EmailAddress)-3)) on User\n| project  AuthorName, IPAddress, User, EmailAddress, DomainName = tostring(extract(\"@(.*)$\", 1, EmailAddress))\n| where allowedDomain !contains DomainName"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833', 'xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833')]",
+                "displayName": "GitLab - External User Added to GitLab",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This queries GitLab Application logs to list external user accounts (i.e.: account not in allow-listed domains) which have been added to GitLab users.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - External User Added to GitLab",
+                    "customDetails": {
+                      "AccountFullName_2": "AuthorName",
+                      "AccountFullName": "User",
+                      "DnsDomainName": "DomainName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This queries GitLab Application logs to list external user accounts (i.e.: account not in allow-listed domains) which have been added to GitLab users.'",
+                    "tactics": [
+                      {
+                        "tactic": "Persistence",
+                        "techniques": [
+                          {
+                            "technique": "T1136"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "// List of allow-listed domains\nlet allowedDomain = pack_array(\"mydomain.com\");\nGitLabAudit()\n| where AddAction == \"user\"\n| project AuthorName, IPAddress, User = EntityName\n| join (GitLabApp\n| where UserAdded == 1\n| parse kind=regex Message with \"User \\\"\" User \"\\\"\" EmailAddress \" was created\"\n| project tostring(User), EmailAddress = substring(EmailAddress,2,strlen(EmailAddress)-3)) on User\n| project  AuthorName, IPAddress, User, EmailAddress, DomainName = tostring(extract(\"@(.*)$\", 1, EmailAddress))\n| where allowedDomain !contains DomainName"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833', 'xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833')]",
+                "displayName": "GitLab - External User Added to GitLab",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - External User Added to GitLab",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-c1544d8f-cbbd-4e35-8d32-5b9312279833",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "Syslog"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - User Impersonation",
+                    "customDetails": {
+                      "AccountFullName": "EntityName",
+                      "AccountFullName_2": "TargetDetails"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPStart"
+                        },
+                        {
+                          "id": "[if(true(), 'ip2', 'ip2')]",
+                          "addressColumn": "IPStop"
+                        }
+                      ]
+                    },
+                    "description": "'This queries GitLab Audit Logs for user impersonation. A malicious operator or a compromised admin account could leverage the impersonation feature of GitLab to change code or repository settings bypassing usual processes. This hunting queries allows you to track the audit actions done under impersonation.'",
+                    "tactics": [
+                      {
+                        "tactic": "Persistence",
+                        "techniques": [
+                          {
+                            "technique": "T1078"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let impersonationStart = (GitLabAudit\n| where CustomMessage == 'Started Impersonation');\nlet impersonationStop = (GitLabAudit\n| where CustomMessage == 'Stopped Impersonation');\nimpersonationStart\n| join kind=inner impersonationStop on $left.TargetID == $right.TargetID and $left.AuthorID == $right.AuthorID\n| where EventTime1 > EventTime\n| project TimeGenerated, AuthorID, AuthorName, TargetID, TargetDetails, IPStart = IPAddress, IPStop = IPAddress1, ImpStartTime = EventTime, ImpStopTime = EventTime1, EntityName\n| join kind=inner (GitLabAudit | project ActionTime = EventTime, AuthorName, Action, CustomMessage) on $left.TargetDetails == $right.AuthorName\n| where ImpStartTime < ActionTime and ActionTime < ImpStopTime\n| project TimeGenerated, AuthorID, AuthorName, TargetID, TargetDetails, IPStart, IPStop, ImpStartTime, ImpStopTime, ActionTime, Action, CustomMessage, EntityName"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40', 'xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40')]",
+                "displayName": "GitLab - User Impersonation",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This queries GitLab Audit Logs for user impersonation. A malicious operator or a compromised admin account could leverage the impersonation feature of GitLab to change code or repository settings bypassing usual processes. This hunting queries allows you to track the audit actions done under impersonation.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - User Impersonation",
+                    "customDetails": {
+                      "AccountFullName": "EntityName",
+                      "AccountFullName_2": "TargetDetails"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPStart"
+                        },
+                        {
+                          "id": "[if(true(), 'ip2', 'ip2')]",
+                          "addressColumn": "IPStop"
+                        }
+                      ]
+                    },
+                    "description": "'This queries GitLab Audit Logs for user impersonation. A malicious operator or a compromised admin account could leverage the impersonation feature of GitLab to change code or repository settings bypassing usual processes. This hunting queries allows you to track the audit actions done under impersonation.'",
+                    "tactics": [
+                      {
+                        "tactic": "Persistence",
+                        "techniques": [
+                          {
+                            "technique": "T1078"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let impersonationStart = (GitLabAudit\n| where CustomMessage == 'Started Impersonation');\nlet impersonationStop = (GitLabAudit\n| where CustomMessage == 'Stopped Impersonation');\nimpersonationStart\n| join kind=inner impersonationStop on $left.TargetID == $right.TargetID and $left.AuthorID == $right.AuthorID\n| where EventTime1 > EventTime\n| project TimeGenerated, AuthorID, AuthorName, TargetID, TargetDetails, IPStart = IPAddress, IPStop = IPAddress1, ImpStartTime = EventTime, ImpStopTime = EventTime1, EntityName\n| join kind=inner (GitLabAudit | project ActionTime = EventTime, AuthorName, Action, CustomMessage) on $left.TargetDetails == $right.AuthorName\n| where ImpStartTime < ActionTime and ActionTime < ImpStopTime\n| project TimeGenerated, AuthorID, AuthorName, TargetID, TargetDetails, IPStart, IPStop, ImpStartTime, ImpStopTime, ActionTime, Action, CustomMessage, EntityName"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40', 'xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40')]",
+                "displayName": "GitLab - User Impersonation",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - User Impersonation",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-0f4f16a2-b464-4c10-9a42-993da3e15a40",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "Syslog"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-e0b45487-5c79-482d-8ac0-695de8c031af",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Local Auth - No MFA",
+                    "customDetails": {
+                      "AccountFullName": "AuthorName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This query checks GitLab Audit Logs to see if a user authenticated without MFA. Ot might mean that MFA was disabled for the GitLab server or that an external authentication provider was bypassed. This rule focuses on 'admin' privileges but the parameter can be adapted to also include all users.'",
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let isAdmin = true;\nGitLabAudit()\n| where AuthenticationType == \"standard\" and ((isAdmin and TargetDetails contains \"Administrator\") or (isAdmin==false))"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-e0b45487-5c79-482d-8ac0-695de8c031af', 'xdr-e0b45487-5c79-482d-8ac0-695de8c031af')]",
+                "displayName": "GitLab - Local Auth - No MFA",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-e0b45487-5c79-482d-8ac0-695de8c031af",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-e0b45487-5c79-482d-8ac0-695de8c031af')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-e0b45487-5c79-482d-8ac0-695de8c031af')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query checks GitLab Audit Logs to see if a user authenticated without MFA. Ot might mean that MFA was disabled for the GitLab server or that an external authentication provider was bypassed. This rule focuses on 'admin' privileges but the parameter can be adapted to also include all users.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Local Auth - No MFA",
+                    "customDetails": {
+                      "AccountFullName": "AuthorName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This query checks GitLab Audit Logs to see if a user authenticated without MFA. Ot might mean that MFA was disabled for the GitLab server or that an external authentication provider was bypassed. This rule focuses on 'admin' privileges but the parameter can be adapted to also include all users.'",
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let isAdmin = true;\nGitLabAudit()\n| where AuthenticationType == \"standard\" and ((isAdmin and TargetDetails contains \"Administrator\") or (isAdmin==false))"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-e0b45487-5c79-482d-8ac0-695de8c031af', 'xdr-e0b45487-5c79-482d-8ac0-695de8c031af')]",
+                "displayName": "GitLab - Local Auth - No MFA",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-e0b45487-5c79-482d-8ac0-695de8c031af",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-e0b45487-5c79-482d-8ac0-695de8c031af",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - Local Auth - No MFA",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-e0b45487-5c79-482d-8ac0-695de8c031af','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-e0b45487-5c79-482d-8ac0-695de8c031af','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-e0b45487-5c79-482d-8ac0-695de8c031af",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "Syslog"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-7241740a-5280-4b74-820a-862312d721a8",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "tactics": [
+                      {
+                        "tactic": "InitialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1078"
+                          }
+                        ]
+                      }
+                    ],
+                    "title": "GitLab - TI - Connection from Malicious IP",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ],
+                      "urls": [
+                        {
+                          "id": "[if(true(), 'url1', 'url1')]",
+                          "addressColumn": "Url"
+                        }
+                      ]
+                    },
+                    "description": "'This query correlates Threat Intelligence data from Microsoft Sentinel with GitLab NGINX Access Logs (available in GitLab CE as well) to identify access from potentially TI-flagged IPs.'"
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "ThreatIntelligenceIndicator\n| where Action == true\n// Picking up only IOCs that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n//Exclude local addresses using ipv4_is_private operator\n|where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n| join (GitLabAccess) on $left.TI_ipEntity == $right.IPAddress\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TimeGenerated = EventTime, TI_ipEntity, IPAddress, URI"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-7241740a-5280-4b74-820a-862312d721a8', 'xdr-7241740a-5280-4b74-820a-862312d721a8')]",
+                "displayName": "GitLab - TI - Connection from Malicious IP",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-7241740a-5280-4b74-820a-862312d721a8",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-7241740a-5280-4b74-820a-862312d721a8')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-7241740a-5280-4b74-820a-862312d721a8')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query correlates Threat Intelligence data from Microsoft Sentinel with GitLab NGINX Access Logs (available in GitLab CE as well) to identify access from potentially TI-flagged IPs.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "tactics": [
+                      {
+                        "tactic": "InitialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1078"
+                          }
+                        ]
+                      }
+                    ],
+                    "title": "GitLab - TI - Connection from Malicious IP",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ],
+                      "urls": [
+                        {
+                          "id": "[if(true(), 'url1', 'url1')]",
+                          "addressColumn": "Url"
+                        }
+                      ]
+                    },
+                    "description": "'This query correlates Threat Intelligence data from Microsoft Sentinel with GitLab NGINX Access Logs (available in GitLab CE as well) to identify access from potentially TI-flagged IPs.'"
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "ThreatIntelligenceIndicator\n| where Action == true\n// Picking up only IOCs that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n//Exclude local addresses using ipv4_is_private operator\n|where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n| join (GitLabAccess) on $left.TI_ipEntity == $right.IPAddress\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TimeGenerated = EventTime, TI_ipEntity, IPAddress, URI"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-7241740a-5280-4b74-820a-862312d721a8', 'xdr-7241740a-5280-4b74-820a-862312d721a8')]",
+                "displayName": "GitLab - TI - Connection from Malicious IP",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-7241740a-5280-4b74-820a-862312d721a8",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-7241740a-5280-4b74-820a-862312d721a8",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - TI - Connection from Malicious IP",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-7241740a-5280-4b74-820a-862312d721a8','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-7241740a-5280-4b74-820a-862312d721a8','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-7241740a-5280-4b74-820a-862312d721a8",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "Syslog",
+                "ThreatIntelligenceIndicator"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "ThreatIntelligence",
+              "dataTypes": [
+                "ThreatIntelligenceIndicator"
+              ]
+            },
+            {
+              "connectorId": "ThreatIntelligenceTaxii",
+              "dataTypes": [
+                "ThreatIntelligenceIndicator"
+              ]
+            },
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Personal Access Tokens creation over time",
+                    "customDetails": {
+                      "AccountName": "AuthorName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This queries GitLab Audit Logs for access tokens. Attacker can exfiltrate data from you GitLab repository after gaining access to it by generating or hijacking access tokens. \nThis hunting queries allows you to track the personal access tokens creation for each of your repositories. \nThe visualization allow you to quickly identify anomalies/excessive creation, to further investigate repo access & permissions.'",
+                    "tactics": [
+                      {
+                        "tactic": "Collection",
+                        "techniques": [
+                          {
+                            "technique": "T1213"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "// l_min_tokens_created - minimum tokens created per repository per user per day to consider\nlet l_min_tokens_created = 0;\nlet interval = 1d;\nGitLabAudit()\n| where TargetType == \"PersonalAccessToken\"\n| project Severity, TimeGenerated = bin(todatetime(EventTime),1d), AuthorName, IPAddress = tostring(IPAddress), Repository = EntityName, Action, TargetType\n| summarize total = count() by Repository, TimeGenerated, AuthorName, IPAddress\n| where total >= l_min_tokens_created"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb', 'xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb')]",
+                "displayName": "GitLab - Personal Access Tokens creation over time",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This queries GitLab Audit Logs for access tokens. Attacker can exfiltrate data from you GitLab repository after gaining access to it by generating or hijacking access tokens. \nThis hunting queries allows you to track the personal access tokens creation for each of your repositories. \nThe visualization allow you to quickly identify anomalies/excessive creation, to further investigate repo access & permissions.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Personal Access Tokens creation over time",
+                    "customDetails": {
+                      "AccountName": "AuthorName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This queries GitLab Audit Logs for access tokens. Attacker can exfiltrate data from you GitLab repository after gaining access to it by generating or hijacking access tokens. \nThis hunting queries allows you to track the personal access tokens creation for each of your repositories. \nThe visualization allow you to quickly identify anomalies/excessive creation, to further investigate repo access & permissions.'",
+                    "tactics": [
+                      {
+                        "tactic": "Collection",
+                        "techniques": [
+                          {
+                            "technique": "T1213"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "// l_min_tokens_created - minimum tokens created per repository per user per day to consider\nlet l_min_tokens_created = 0;\nlet interval = 1d;\nGitLabAudit()\n| where TargetType == \"PersonalAccessToken\"\n| project Severity, TimeGenerated = bin(todatetime(EventTime),1d), AuthorName, IPAddress = tostring(IPAddress), Repository = EntityName, Action, TargetType\n| summarize total = count() by Repository, TimeGenerated, AuthorName, IPAddress\n| where total >= l_min_tokens_created"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb', 'xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb')]",
+                "displayName": "GitLab - Personal Access Tokens creation over time",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - Personal Access Tokens creation over time",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-4d6d8b0e-6d9a-4857-a141-f5d89393cddb",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "Syslog"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Repository visibility to Public",
+                    "customDetails": {
+                      "AccountFullName": "AuthorName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ],
+                      "urls": [
+                        {
+                          "id": "[if(true(), 'url1', 'url1')]",
+                          "addressColumn": "EntityName"
+                        }
+                      ]
+                    },
+                    "description": "'This query leverages GitLab Audit Logs. A repository in GitLab changed visibility from Private or Internal to Public which could indicate compromise, error or misconfiguration leading to exposing the repository to the public.'",
+                    "tactics": [
+                      {
+                        "tactic": "Persistence",
+                        "techniques": [
+                          {
+                            "technique": "T1556"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "GitLabAudit()\n| where SourceVisibility != \"Public\" and ChangeType == \"visibility\" and TargetVisibility == \"Public\"\n| project TimeGenerated, EventTime, IPAddress, AuthorName, ChangeType, TargetType, SourceVisibility,  TargetVisibility, EntityName"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e', 'xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e')]",
+                "displayName": "GitLab - Repository visibility to Public",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query leverages GitLab Audit Logs. A repository in GitLab changed visibility from Private or Internal to Public which could indicate compromise, error or misconfiguration leading to exposing the repository to the public.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Repository visibility to Public",
+                    "customDetails": {
+                      "AccountFullName": "AuthorName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ],
+                      "urls": [
+                        {
+                          "id": "[if(true(), 'url1', 'url1')]",
+                          "addressColumn": "EntityName"
+                        }
+                      ]
+                    },
+                    "description": "'This query leverages GitLab Audit Logs. A repository in GitLab changed visibility from Private or Internal to Public which could indicate compromise, error or misconfiguration leading to exposing the repository to the public.'",
+                    "tactics": [
+                      {
+                        "tactic": "Persistence",
+                        "techniques": [
+                          {
+                            "technique": "T1556"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "GitLabAudit()\n| where SourceVisibility != \"Public\" and ChangeType == \"visibility\" and TargetVisibility == \"Public\"\n| project TimeGenerated, EventTime, IPAddress, AuthorName, ChangeType, TargetType, SourceVisibility,  TargetVisibility, EntityName"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e', 'xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e')]",
+                "displayName": "GitLab - Repository visibility to Public",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - Repository visibility to Public",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-8b291c3d-90ba-4ebf-af2c-0283192d430e",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "Syslog"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Abnormal number of repositories deleted",
+                    "customDetails": {
+                      "AccountFullName": "AuthorName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This hunting queries identify an unusual increase of repo deletion activities adversaries may want to disrupt availability or compromise integrity by deleting business data.'",
+                    "tactics": [
+                      {
+                        "tactic": "Impact",
+                        "techniques": [
+                          {
+                            "technique": "T1485"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let LearningPeriod = 7d;\nlet BinTime = 1h;\nlet RunTime = 1h;\nlet StartTime = 1h;\nlet NumberOfStds = 3;\nlet MinThreshold = 10.0;\nlet EndRunTime = StartTime - RunTime;\nlet EndLearningTime = StartTime + LearningPeriod;\nlet GitLabRepositoryDestroyEvents = (GitLabAudit\n| where RemoveAction == \"project\" or RemoveAction == \"repository\");\nGitLabRepositoryDestroyEvents\n| where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))\n| summarize count() by bin(TimeGenerated, BinTime)\n| summarize AvgInLearning = avg(count_), StdInLearning = stdev(count_)\n| extend LearningThreshold = max_of(AvgInLearning + StdInLearning * NumberOfStds, MinThreshold)\n| extend Dummy = 1\n| join kind=innerunique (GitLabRepositoryDestroyEvents\n| where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))\n| summarize CountInRunTime = count(), IPAddress = take_any(IPAddress), AuthorName = take_any(AuthorName) by bin(TimeGenerated, BinTime)\n| extend Dummy = 1) on Dummy\n| project TimeGenerated, AvgInLearning, StdInLearning, LearningThreshold, CountInRunTime, IPAddress, AuthorName\n| where CountInRunTime > LearningThreshold"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd', 'xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd')]",
+                "displayName": "GitLab - Abnormal number of repositories deleted",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This hunting queries identify an unusual increase of repo deletion activities adversaries may want to disrupt availability or compromise integrity by deleting business data.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "title": "GitLab - Abnormal number of repositories deleted",
+                    "customDetails": {
+                      "AccountFullName": "AuthorName"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPAddress"
+                        }
+                      ]
+                    },
+                    "description": "'This hunting queries identify an unusual increase of repo deletion activities adversaries may want to disrupt availability or compromise integrity by deleting business data.'",
+                    "tactics": [
+                      {
+                        "tactic": "Impact",
+                        "techniques": [
+                          {
+                            "technique": "T1485"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let LearningPeriod = 7d;\nlet BinTime = 1h;\nlet RunTime = 1h;\nlet StartTime = 1h;\nlet NumberOfStds = 3;\nlet MinThreshold = 10.0;\nlet EndRunTime = StartTime - RunTime;\nlet EndLearningTime = StartTime + LearningPeriod;\nlet GitLabRepositoryDestroyEvents = (GitLabAudit\n| where RemoveAction == \"project\" or RemoveAction == \"repository\");\nGitLabRepositoryDestroyEvents\n| where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))\n| summarize count() by bin(TimeGenerated, BinTime)\n| summarize AvgInLearning = avg(count_), StdInLearning = stdev(count_)\n| extend LearningThreshold = max_of(AvgInLearning + StdInLearning * NumberOfStds, MinThreshold)\n| extend Dummy = 1\n| join kind=innerunique (GitLabRepositoryDestroyEvents\n| where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))\n| summarize CountInRunTime = count(), IPAddress = take_any(IPAddress), AuthorName = take_any(AuthorName) by bin(TimeGenerated, BinTime)\n| extend Dummy = 1) on Dummy\n| project TimeGenerated, AvgInLearning, StdInLearning, LearningThreshold, CountInRunTime, IPAddress, AuthorName\n| where CountInRunTime > LearningThreshold"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd', 'xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd')]",
+                "displayName": "GitLab - Abnormal number of repositories deleted",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - Abnormal number of repositories deleted",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "Syslog"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "SyslogAma",
+              "dataTypes": [
+                "Syslog"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GitLab-CD-xdr-57b1634b-531d-4eab-a456-8b855887428f",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ],
+                    "title": "GitLab - SSO - Sign-Ins Burst",
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "User",
+                          "id": "[if(true(), 'account1', 'account1')]",
+                          "aadUserIdColumn": "AADUserId"
+                        }
+                      ]
+                    },
+                    "description": "'This query relies on Microsoft Entra ID sign-in activity when Microsoft Entra ID is used for SSO with GitLab to highlights GitLab accounts associated with multiple authentications from different geographical locations in a short space of time.'"
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let locationCountMin = 1;\nlet appRegistrationName = \"GitLab\";\nSigninLogs\n| where AppDisplayName == appRegistrationName\n| where ResultType == 0\n| where Location != \"\"\n| summarize CountOfLocations = dcount(Location), Locations = make_set(Location) by User = Identity, UserPrincipalName, AADUserId = UserId\n| where CountOfLocations > locationCountMin"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-57b1634b-531d-4eab-a456-8b855887428f', 'xdr-57b1634b-531d-4eab-a456-8b855887428f')]",
+                "displayName": "GitLab - SSO - Sign-Ins Burst",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-57b1634b-531d-4eab-a456-8b855887428f",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-57b1634b-531d-4eab-a456-8b855887428f')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GitLab-CD-xdr-57b1634b-531d-4eab-a456-8b855887428f')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'This query relies on Microsoft Entra ID sign-in activity when Microsoft Entra ID is used for SSO with GitLab to highlights GitLab accounts associated with multiple authentications from different geographical locations in a short space of time.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "detectionAction": {
+                  "alertTemplate": {
+                    "severity": "medium",
+                    "tactics": [
+                      {
+                        "tactic": "CredentialAccess",
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ]
+                      }
+                    ],
+                    "title": "GitLab - SSO - Sign-Ins Burst",
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "nameColumn": "User",
+                          "id": "[if(true(), 'account1', 'account1')]",
+                          "aadUserIdColumn": "AADUserId"
+                        }
+                      ]
+                    },
+                    "description": "'This query relies on Microsoft Entra ID sign-in activity when Microsoft Entra ID is used for SSO with GitLab to highlights GitLab accounts associated with multiple authentications from different geographical locations in a short space of time.'"
+                  }
+                },
+                "queryCondition": {
+                  "queryText": "let locationCountMin = 1;\nlet appRegistrationName = \"GitLab\";\nSigninLogs\n| where AppDisplayName == appRegistrationName\n| where ResultType == 0\n| where Location != \"\"\n| summarize CountOfLocations = dcount(Location), Locations = make_set(Location) by User = Identity, UserPrincipalName, AADUserId = UserId\n| where CountOfLocations > locationCountMin"
+                },
+                "status": "disabled",
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-57b1634b-531d-4eab-a456-8b855887428f', 'xdr-57b1634b-531d-4eab-a456-8b855887428f')]",
+                "displayName": "GitLab - SSO - Sign-Ins Burst",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-57b1634b-531d-4eab-a456-8b855887428f",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-57b1634b-531d-4eab-a456-8b855887428f",
+        "contentKind": "CustomDetection",
+        "displayName": "GitLab - SSO - Sign-Ins Burst",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-57b1634b-531d-4eab-a456-8b855887428f','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-57b1634b-531d-4eab-a456-8b855887428f','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-gitlab",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-57b1634b-531d-4eab-a456-8b855887428f",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "SigninLogs"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "AzureActiveDirectory",
+              "dataTypes": [
+                "SigninLogs"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "pid-656a8b21-c062-4304-bae6-a3d1dd0363f8-partnercenter",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": []
+        }
+      }
     }
   ],
   "outputs": {}
