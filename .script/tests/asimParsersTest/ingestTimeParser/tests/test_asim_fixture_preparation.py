@@ -340,6 +340,93 @@ class FixturePreparationTests(unittest.TestCase):
         self.assertEqual("Contoso_CL", artifact["sourceRawTable"])
         self.assertEqual("inferred", artifact["schemaSource"])
 
+    def test_preserves_source_id_across_schema_resolution_paths(self):
+        reserved = [
+            "_ItemId", "_ResourceId", "_ResourceId_s", "_SubscriptionId",
+            "MG", "TenantId", "Title", "Type", "UniqueId", "verbose", "verbose_b",
+        ]
+        columns = ["TimeGenerated", "id", *reserved]
+        values = [
+            "2026-01-01T00:00:00Z",
+            "000123",
+            *[
+                "Contoso_CL" if name == "Type" else "platform-value"
+                for name in reserved
+            ],
+        ]
+        schema_columns = [
+            {"name": name, "type": "datetime" if name == "TimeGenerated"
+             else "string"}
+            for name in columns
+        ]
+        for schema_source in ("inferred", "explicit", "discovered", "repository"):
+            with self.subTest(schema_source=schema_source):
+                repo_root = self.root / schema_source
+                fixture_dir = repo_root / "Sample Data"
+                fixture_dir.mkdir(parents=True)
+                fixture = fixture_dir / "Sample.csv"
+                fixture.write_text(
+                    ",".join(columns) + "\n" + ",".join(values) + "\n",
+                    encoding="utf-8",
+                )
+                schema_path = None
+                if schema_source in {"explicit", "discovered"}:
+                    csv_path = fixture_dir / "Contoso_CL_Schema.csv"
+                    csv_path.write_text(
+                        "ColumnName,ColumnType\n"
+                        + "".join(
+                            f'{column["name"]},{column["type"]}\n'
+                            for column in schema_columns
+                        ),
+                        encoding="utf-8",
+                    )
+                    if schema_source == "explicit":
+                        schema_path = csv_path
+                elif schema_source == "repository":
+                    schema_dir = (
+                        repo_root / ".script/tests/KqlvalidationsTests/CustomTables"
+                    )
+                    schema_dir.mkdir(parents=True)
+                    (schema_dir / "Contoso_CL.json").write_text(
+                        json.dumps({"Properties": schema_columns}),
+                        encoding="utf-8",
+                    )
+
+                artifact = self.prepare(fixture, schema_path=schema_path)
+
+                self.assertEqual(schema_source, artifact["schemaSource"])
+                self.assertEqual(
+                    {"TimeGenerated": "datetime", "id": "string"},
+                    {
+                        column["name"]: column["type"]
+                        for column in artifact["schema"]
+                    },
+                )
+                self.assertEqual("000123", artifact["rows"][0]["id"])
+
+    def test_prepares_real_proofpoint_maillog_source_id(self):
+        repo_root = Path(__file__).resolve().parents[5]
+        fixture = (
+            repo_root / "Sample Data/ASIM"
+            / "Proofpoint_POD MailLog_EmailEvent_IngestedLogs.csv"
+        )
+        source_rows, _, _ = FIXTURES.load_fixture_csv(fixture)
+
+        artifact = self.prepare(fixture)
+
+        self.assertEqual("discovered", artifact["schemaSource"])
+        self.assertIn({"name": "id", "type": "string"}, artifact["schema"])
+        self.assertTrue(any(row["id"] for row in source_rows))
+        self.assertEqual(
+            [row["id"] for row in source_rows],
+            [row["id"] for row in artifact["rows"]],
+        )
+        repository_schema = FIXTURES.fixture_data.load_table_schema_json(
+            repo_root / ".script/tests/KqlvalidationsTests/CustomTables"
+            / "ProofpointPODMailLog_CL.json"
+        )
+        self.assertIn({"name": "id", "type": "string"}, repository_schema)
+
     def test_uses_discovered_table_schema(self):
         fixture = self.write_fixture(
             "TimeGenerated,Type,Enabled,Payload\n"
