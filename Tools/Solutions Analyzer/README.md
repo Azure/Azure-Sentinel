@@ -200,6 +200,14 @@ See the script documentation for details:
 
 ## Version History
 
+### v9.12 - Published documentation endpoints and schema compatibility
+
+**Documentation collector recovery:**
+- Fetch Defender XDR and Microsoft Sentinel references through Microsoft Learn's published Markdown endpoints instead of unavailable public GitHub raw sources. Validate Markdown response types before caching.
+- Restore the Sentinel tables/connectors capability matrix and normalize escaped underscores in custom table names without shifting empty capability cells.
+- Discover ASIM schemas from both legacy and current catalogs, preserving the canonical schema name, version, event/entity classification, and extensionless documentation links. Restore case-insensitive entity discovery and common-field references.
+- Preserve alias targets when published Markdown renders same-page links as plain field names, excluding examples and conditional prose from extracted targets.
+
 ### v9.11 - Parser/table discovery, mapping accuracy, and consolidated table feature reference
 
 **Unifying ASIM parser deduplication and dual-variant parser pages:**
