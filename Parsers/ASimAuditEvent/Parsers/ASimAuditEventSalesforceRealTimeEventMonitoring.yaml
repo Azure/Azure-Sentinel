@@ -1,0 +1,149 @@
+Parser:
+  Title: AuditEvent ASIM parser for Salesforce Real-Time Event Monitoring
+  Version: '0.1.0'
+  LastUpdated: Oct 30, 2026
+Product:
+  Name: Salesforce Real-Time Event Monitoring
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Salesforce Real-Time Event Monitoring connector
+  Link: https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Salesforce%20Service%20Cloud/Data%20Connectors/SalesForceRealTimeEventMonitoringConnector_CCF
+- Title: Salesforce PermissionSetEventStore
+  Link: https://developer.salesforce.com/docs/platform/platform-events/guide/sforce-api-objects-permissionseteventstore.html
+Description: |
+  Normalizes PermissionSetEventStore permission-definition changes, excluding user-assignment operations handled by the UserManagement parser. Enabled permissions are mapped to NewValue and disabled permissions to OldValue; affected permission sets, groups, and profiles remain configuration objects.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimAuditEventSalesforceRealTimeEventMonitoring
+EquivalentBuiltInParser: _ASim_AuditEvent_SalesforceRealTimeEventMonitoring
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // Schema: AuditEvent 1.0.0. Permission definitions, not business-record CRUD.
+  let parser = (disabled: bool = false, pack: bool = false) {
+      SalesForceRealTimeEventMonitoring_CL
+      | where not(disabled)
+      | where EventType == "PermissionSetEventStore"
+      | where Operation !in ("AssignedToUsers", "UnassignedFromUsers")
+      | extend
+          _SourceType = EventType,
+          _Org = SalesforceDomain
+      | extend
+          _OrgHost = tostring(parse_url(iff(_Org contains "://", _Org, strcat("https://", _Org))).Host),
+          SrcIpAddr = iff(isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp, "")
+      | extend
+          EventStartTime = coalesce(EventDate, TimeGenerated),
+          EventEndTime = coalesce(EventDate, TimeGenerated),
+          EventCount = toint(1),
+          EventVendor = "Salesforce",
+          EventProduct = "Real-Time Event Monitoring",
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "1.0.0",
+          EventOriginalType = _SourceType,
+          EventSubType = PermissionType,
+          EventType = case(
+              Operation in ("PermsEnabled", "CriticalPerms"), "Enable",
+              Operation == "PermsDisabled", "Disable",
+              "Other"),
+          EventResult = case(
+              PolicyOutcome in ("Block", "MeteringBlock", "EndSession", "TwoFADenied", "TwoFAReportedDenied")
+                  or PolicyOutcome startswith "Failed" or PolicyOutcome startswith "TwoFAFailed", "Failure",
+              PolicyOutcome in ("", "NoAction", "ExemptNoAction", "MeteringNoAction", "Notified",
+                  "TwoFANoAction", "TwoFASucceeded", "TwoFAAutomatedSuccess"), "Success",
+              "NA"),
+          EventSeverity = "Informational",
+          EventUid = coalesce(EventIdentifier, SalesforceObjectId, EventUuid),
+          EventOriginalUid = SalesforceObjectId,
+          EventOriginalResultDetails = PolicyOutcome,
+          EventMessage = Operation,
+          Object = case(
+              array_length(ParentNameList) == 1, tostring(ParentNameList[0]),
+              array_length(ParentNameList) > 1, tostring(ParentNameList),
+              array_length(ParentIdList) == 1, tostring(ParentIdList[0]),
+              array_length(ParentIdList) > 1, tostring(ParentIdList),
+              tostring(PermissionList)),
+          ObjectId = iff(array_length(ParentIdList) == 1, tostring(ParentIdList[0]), ""),
+          ObjectType = "Configuration Atom",
+          OriginalObjectType = PermissionType,
+          OldValue = iff(Operation == "PermsDisabled", tostring(PermissionList), ""),
+          NewValue = iff(Operation in ("PermsEnabled", "CriticalPerms"), tostring(PermissionList), ""),
+          Value = iff(Operation in ("PermsEnabled", "CriticalPerms"), tostring(PermissionList), ""),
+          ValueType = iff(array_length(PermissionList) > 0, "Other", ""),
+          Dvc = coalesce(_OrgHost, "Salesforce Real-Time Event Monitoring"),
+          DvcFQDN = _OrgHost,
+          DvcHostname = tostring(split(_OrgHost, ".")[0]),
+          DvcDomain = iff(indexof(_OrgHost, ".") >= 0, substring(_OrgHost, indexof(_OrgHost, ".") + 1), ""),
+          DvcScope = _OrgHost,
+          DvcOriginalAction = PolicyOutcome,
+          DvcAction = case(
+              PolicyOutcome in ("Block", "MeteringBlock"), "Deny",
+              PolicyOutcome == "EndSession", "Terminate",
+              PolicyOutcome in ("NoAction", "ExemptNoAction", "MeteringNoAction", "Notified",
+                  "TwoFANoAction", "TwoFASucceeded", "TwoFAAutomatedSuccess"), "Allow",
+              ""),
+          ActorUserId = UserId,
+          ActorUserIdType = iff(isempty(UserId), "", "SalesforceId"),
+          ActorUsername = UserNameDetail,
+          ActorUsernameType = iff(isempty(UserNameDetail), "", iff(UserNameDetail contains "@", "UPN", "Simple")),
+          ActorScope = _OrgHost,
+          ActorSessionId = SessionKey,
+          ActingAppName = EventSource,
+          ActingAppType = iff(isempty(EventSource), "", "SaaS application"),
+          ActingOriginalAppType = EventSource,
+          TargetAppName = "Salesforce",
+          TargetAppType = "SaaS application",
+          RuleName = coalesce(PolicyId, Policy),
+          AdditionalFields = iff(pack, bag_pack(
+              "ParentIdList", ParentIdList, "ParentNameList", ParentNameList,
+              "PermissionList", PermissionList, "PermissionType", PermissionType,
+              "ImpactedUserIds", ImpactedUserIds, "UserCount", UserCount,
+              "HasExternalUsers", HasExternalUsers,
+              "PermissionExpiration", PermissionExpiration,
+              "PermissionExpirationList", PermissionExpirationList,
+              "LoginKey", LoginKey, "SourceIp", SourceIp,
+              "LoginHistoryId", LoginHistoryId, "SessionLevel", SessionLevel,
+              "RelatedEventIdentifier", RelatedEventIdentifier,
+              "PolicyOutcome", PolicyOutcome, "EvaluationTime", EvaluationTime), dynamic({})),
+          DvcEntityKey = "",
+          ActorUserEntityKey = "",
+          SrcSystemEntityKey = "",
+          TargetSystemEntityKey = "",
+          ActingApplicationEntityKey = "",
+          TargetApplicationEntityKey = "",
+          ActorUserAdditionalIds = dynamic([]),
+          AdditionalEntities = dynamic([])
+      | extend
+          DvcDomainType = iff(isempty(DvcDomain), "", "FQDN"),
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          User = ActorUsername,
+          Application = TargetAppName,
+          Dst = TargetAppName,
+          Rule = RuleName
+      | project
+          TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+          EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+          EventOriginalType, EventSubType, EventType, EventResult, EventSeverity,
+          EventUid, EventOriginalUid, EventOriginalResultDetails, EventMessage,
+          Operation, Object, ObjectId, ObjectType, OriginalObjectType,
+          OldValue, NewValue, Value, ValueType,
+          Dvc, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, DvcScope, DvcOriginalAction, DvcAction,
+          ActorUserId, ActorUserIdType, ActorUsername, ActorUsernameType,
+          ActorScope, ActorSessionId, User, SrcIpAddr, Src, IpAddr,
+          ActingAppName, ActingAppType, ActingOriginalAppType,
+          TargetAppName, TargetAppType, Application, Dst, RuleName, Rule,
+          AdditionalFields, DvcEntityKey, ActorUserEntityKey, SrcSystemEntityKey,
+          TargetSystemEntityKey, ActingApplicationEntityKey, TargetApplicationEntityKey,
+          ActorUserAdditionalIds, AdditionalEntities
+  };
+  parser(disabled, pack)
