@@ -17,6 +17,8 @@ HARNESS = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = HARNESS
 SPEC.loader.exec_module(HARNESS)
 
+from asim_ingestion.fixtures import data as fixture_data
+
 
 class FakeResponse:
     def __init__(self, status_code=200, payload=None, headers=None):
@@ -1048,11 +1050,15 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         self.assertTrue(result["telemetry"]["requestAttempts"])
 
-    def test_qtp_source_replay_uses_itp_input_stream(self):
+    def test_qtp_source_replay_preserves_source_id_and_itp_input_stream(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
+        source_id = "000123"
         query_result = query_payload(
-            [{"name": "TimeGenerated", "type": "datetime"}],
-            [[timestamp]],
+            [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "id", "type": "string"},
+            ],
+            [[timestamp, source_id]],
         )
         harness, session, _ = self.harness(
             [
@@ -1070,6 +1076,10 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(204),  # parser upload
                 FakeResponse(200, query_result),  # target visibility
                 FakeResponse(200, query_result),  # target stable
+                FakeResponse(201),  # raw table PUT
+                FakeResponse(
+                    200, {"properties": {"provisioningState": "Succeeded"}}
+                ),
                 FakeResponse(201),  # QTP raw DCR PUT
                 FakeResponse(
                     200,
@@ -1088,42 +1098,49 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(204),  # parser cleanup
             ]
         )
-        prepared = {
-            "targetId": "parser-a",
-            "sourceRawTable": "Contoso",
-            "rowCount": 1,
-            "schema": [
-                {"name": "TimeGenerated", "type": "datetime"}
-            ],
-            "namespace": {
-                "pullRequest": "123",
-                "runId": "456",
-                "runAttempt": 1,
-                "timestampValues": [timestamp],
-            },
-            "rows": [
-                {
-                    "TimeGenerated": timestamp,
-                    "Type": "Contoso",
-                }
-            ],
-        }
         parser = {
             "ParserName": "ASimAuthenticationContoso",
             "InputStream": "Microsoft-SentinelContoso",
-            "SourceRawTable": "Contoso",
+            "SourceRawTable": "Contoso_CL",
             "TargetASIMTable": "ASimAuthenticationEventLogs",
             "ParserQuery": "source",
         }
         validation_runner = FakeValidationRunner(timestamp)
 
         with tempfile.TemporaryDirectory() as directory:
+            fixture_path = Path(directory) / "fixture.csv"
+            fixture_path.write_text(
+                "TimeGenerated,Type,id,_ItemId\n"
+                f"{timestamp},Contoso_CL,{source_id},platform-item\n",
+                encoding="utf-8",
+            )
+            prepared = fixture_data.prepare_fixture(
+                fixture_path=fixture_path,
+                expected_source_raw_table="Contoso_CL",
+                target_id="parser-a",
+                target_group="ASimAuthenticationEventLogs",
+                repository="Azure/Azure-Sentinel",
+                pull_request="123",
+                run_id="456",
+                run_attempt=1,
+                now_ticks=fixture_data.parse_kusto_datetime_ticks(
+                    "2026-10-16T20:00:00Z"
+                ),
+            )
+            timestamp = prepared["rows"][0]["TimeGenerated"]
+            query_result["tables"][0]["rows"][0][0] = timestamp
+            validation_runner.timestamp = timestamp
             result = harness.run(
                 prepared,
                 parser,
                 snapshot_output=Path(directory) / "snapshot.json",
                 validation_runner=validation_runner,
-                query_time_document={"ParserQuery": "Contoso"},
+                query_time_document={
+                    "ParserQuery": "Contoso_CL | extend EventOriginalUid=tostring(id)"
+                },
+            )
+            snapshot = json.loads(
+                (Path(directory) / "snapshot.json").read_text(encoding="utf-8")
             )
 
         dcr_puts = [
@@ -1155,6 +1172,25 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "Type",
             {column["name"] for column in raw_columns},
         )
+        table_put = next(
+            call["json"]["properties"]["schema"]
+            for call in session.calls
+            if call["method"] == "PUT" and "/tables/" in call["url"]
+        )
+        for columns in (
+            snapshot["schema"], parser_columns, raw_columns, table_put["columns"]
+        ):
+            self.assertIn({"name": "id", "type": "string"}, columns)
+            self.assertNotIn("_ItemId", {column["name"] for column in columns})
+        self.assertEqual(source_id, snapshot["rows"][0]["id"])
+        uploads = [
+            json.loads(call["data"])
+            for call in session.calls
+            if call["method"] == "POST" and "/streams/" in call["url"]
+        ]
+        self.assertEqual(2, len(uploads))
+        for rows in uploads:
+            self.assertEqual(source_id, rows[0]["id"])
         self.assertEqual(
             "passed", result["qtpSourceReplay"]["status"]
         )
@@ -1163,11 +1199,14 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             result["rawDcr"]["outputStream"],
         )
         self.assertEqual(
-            [{"name": "TimeGenerated", "type": "datetime"}],
+            [
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "id", "type": "string"},
+            ],
             result["qtpSourceReplay"]["observedSchema"],
         )
         self.assertEqual(
-            [{"TimeGenerated": timestamp}],
+            [{"TimeGenerated": timestamp, "id": source_id}],
             result["qtpSourceReplay"]["observedRows"],
         )
         self.assertEqual(

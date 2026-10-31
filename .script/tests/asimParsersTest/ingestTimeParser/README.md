@@ -66,6 +66,15 @@ QTP execution and parity also fail the target when they run and fail.
 Parser ingestion is reported as passed only when both upload and target
 visibility pass.
 
+Fixture schema resolution preserves source-defined `id` columns, including
+Proofpoint POD MailLog message IDs. Explicit and discovered CSV schemas,
+repository table JSON schemas, and inferred schemas all retain this field;
+inference treats `id` as a string to preserve numeric-looking identifiers.
+The prepared schema feeds both parser-input snapshots and optional raw-table
+and replay DCR creation. Existing reserved-column exclusions, including
+`_ItemId`, `_ResourceId`, `_SubscriptionId`, `TenantId`, and `Type`, remain
+unchanged; the source `id` is not a platform-managed `_ItemId`.
+
 Before ASIM data testing, the `ASimDnsActivityLogs` table slice normalizes
 `ThreatFirstReportedTime` and `ThreatLastReportedTime` to `datetime` and
 `ThreatOriginalRiskLevel` to `string`. This accommodates the documented
