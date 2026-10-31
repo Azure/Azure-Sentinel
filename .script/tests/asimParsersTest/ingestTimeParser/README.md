@@ -58,6 +58,12 @@ discover target
   → clean up DCRs and publish the report
 ```
 
+The legacy `VerifyASimParserTemplate.py` validator is limited to query-time
+parser files under `Parsers/`; its changed-file filter excludes
+`IngestTimeParsers/`. Ingestion-time parsers are validated by the dedicated
+workflow above, without requiring query-time union-parser metadata or a
+corresponding `vim*` parser.
+
 Parser validation does not depend on raw-table replay. QTP source replay is
 optional. If its table or DCR cannot be established, the report records a
 warning and blocks QTP/parity without failing the required parser validation
