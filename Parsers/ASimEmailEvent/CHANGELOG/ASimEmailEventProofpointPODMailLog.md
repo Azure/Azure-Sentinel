@@ -2,8 +2,8 @@
 
 ## Version 0.1.3
 
-- (2026-10-30) Read the Proofpoint source ID directly instead of substituting an empty value for a missing column - [PR #15512](https://github.com/Azure/Azure-Sentinel/pull/15512)
-- Preserve connector-provided IDs; CI replay that omits `id` is expected to fail QTP execution until fixture tooling is corrected.
+- (2026-10-30) Read Proofpoint MailLog event IDs directly from the source `id` column - [PR #15463](https://github.com/Azure/Azure-Sentinel/pull/15463)
+- Use the declared source column to populate `EventOriginalUid`.
 
 ## Version 0.1.2
 
