@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+  - OracleDatabaseAuditEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - OracleDatabaseAuditEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+    - OracleDatabaseAuditEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 75024e1c-26e7-4e73-821d-95e5decdd8db
+    path: Analytic Rules/OracleDBAuditSelectOnManyTables.yaml
+    version: 1.0.2
+    querySha256: 5f3967448144264c7b85a7404a3a92a4f7aa4ef95c3f7c84202e6717bceb09fb
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Collection
+    originalTechniques:
+    - T1119
+    reviewScope:
+      sourceDocumentSha256: ef1e2436687cf93e5e11e9d891a6a23105fd84bc7f6b6a75e3b40f7be5a6a733
+      targetQuerySha256: 1161b7589753a7380dc76cc6b35e7ae5bd83455582d9ca9a467f16e3f469b7bb
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: ef1e2436687cf93e5e11e9d891a6a23105fd84bc7f6b6a75e3b40f7be5a6a733
+      targetQuerySha256: 1161b7589753a7380dc76cc6b35e7ae5bd83455582d9ca9a467f16e3f469b7bb
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-75024e1c-26e7-4e73-821d-95e5decdd8db
+  displayName: OracleDBAudit - Unusual user activity on multiple tables
+  status: disabled
+  queryCondition:
+    queryText: 'let tbl_threshold = 10;
+
+      OracleDatabaseAuditEvent
+
+      | where isnotempty(DstUserName)
+
+      | where DbAction =~ ''SELECT''
+
+      | extend TableName = replace(@''[,\(\)]'', '''', extract(@''(?i)SELECT(.*?)FROM\s(.*?)\s'',
+      2, Action))
+
+      | where isnotempty(TableName)
+
+      | where TableName !~ ''SELECT''
+
+      | summarize tbl_count = dcount(TableName) by DstUserName, SrcIpAddr, bucket
+      = bin(TimeGenerated, 5m)
+
+      | where tbl_count > tbl_threshold
+
+      | extend AccountCustomEntity = DstUserName, IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: OracleDBAudit - Unusual user activity on multiple tables
+      description: '''Detects when user queries many tables in short period of time.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1119
+      customDetails:
+        AccountFullName: AccountCustomEntity

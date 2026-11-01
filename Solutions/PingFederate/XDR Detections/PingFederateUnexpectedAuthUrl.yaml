@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - PingFederateEvent
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: PingFederate
+    dataTypes:
+    - PingFederateEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9578ef7f-cbb4-4e9a-bd26-37c15c53b413
+    path: Analytic Rules/PingFederateUnexpectedAuthUrl.yaml
+    version: 1.0.3
+    querySha256: aee539fc9ab1ad057f90fa3fc576b782951473764ff743dd0208be23e9574e6b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required
+      Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 759e42e4bad9ab306a2439af0db25ece3443c6d99c25ec0ef02b2e3c421329e0
+      targetQuerySha256: e3f0edff51fcd7cbfa2ffc7870f77980f1fd9b567364eb3b55aabb33677690dd
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-9578ef7f-cbb4-4e9a-bd26-37c15c53b413
+  displayName: Ping Federate - Unexpected authentication URL.
+  status: disabled
+  queryCondition:
+    queryText: 'let known_domains =
+
+      PingFederateEvent
+
+      | where TimeGenerated between (ago(14d) .. ago(1d))
+
+      | where isnotempty(DeviceCustomString1)
+
+      | extend url_parsed = parse_url(DeviceCustomString1)
+
+      | extend url_domain = extract(@''.*\.(.*\.[a-z]+)'', 1, tostring(url_parsed.Host))
+
+      | summarize makeset(url_domain);
+
+      PingFederateEvent
+
+      | where isnotempty(DeviceCustomString1)
+
+      | extend url_parsed = parse_url(DeviceCustomString1)
+
+      | extend url_domain = extract(@''.*\.(.*\.[a-z]+)'', 1, tostring(url_parsed.Host))
+
+      | where url_domain !in (known_domains)
+
+      | extend AccountCustomEntity = DstUserName
+
+      | extend IpCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ping Federate - Unexpected authentication URL.
+      description: '''Detects unexpected authentication URL.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IpCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity

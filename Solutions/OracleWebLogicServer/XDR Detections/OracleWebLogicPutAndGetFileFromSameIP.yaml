@@ -1,0 +1,126 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - OracleWebLogicServer_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OracleWebLogicServer_CL
+    - OracleWebLogicServerEvent
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - OracleWebLogicServer_CL
+  - connectorId: OracleWebLogicServer
+    dataTypes:
+    - OracleWebLogicServerEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 033e98d2-5740-11ec-bf63-0242ac130002
+    path: Analytic Rules/OracleWebLogicPutAndGetFileFromSameIP.yaml
+    version: 1.0.2
+    querySha256: 973ba1c28ea241abe341eed4395398f3165c4e685bf558cb2733afb0b357ccc6
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 5ca4d5e2a9380d68b0a83f549061764ee8aedad3b68d1d75596ee10d0bb284b9
+      targetQuerySha256: f4ffc33b16d860ada4aaca7f5c54f84e99cb468bf301a6a642c9441714c02e24
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 5ca4d5e2a9380d68b0a83f549061764ee8aedad3b68d1d75596ee10d0bb284b9
+      targetQuerySha256: f4ffc33b16d860ada4aaca7f5c54f84e99cb468bf301a6a642c9441714c02e24
+properties:
+  id: xdr-033e98d2-5740-11ec-bf63-0242ac130002
+  displayName: Oracle - Put file and get file from same IP address
+  status: disabled
+  queryCondition:
+    queryText: 'let p = OracleWebLogicServerEvent
+
+      | where HttpRequestMethod in~ (''POST'', ''PUT'')
+
+      | sort by EventStartTime asc
+
+      | summarize post_time=min(EventStartTime) by SrcIpAddr, tostring(UrlOriginal);
+
+      OracleWebLogicServerEvent
+
+      | where HttpRequestMethod =~ ''GET''
+
+      | sort by EventStartTime asc
+
+      | summarize get_time=min(EventStartTime) by SrcIpAddr, tostring(UrlOriginal)
+
+      | join kind=innerunique (p) on UrlOriginal, SrcIpAddr
+
+      | extend second = datetime_diff(''second'',get_time,post_time)
+
+      | where second between (1 .. 300)
+
+      | project second, post_time, get_time, SrcIpAddr, UrlOriginal
+
+      | extend IPCustomEntity = SrcIpAddr, UrlCustomEntity = tostring(UrlOriginal)'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Oracle - Put file and get file from same IP address
+      description: '''Detects put or get files from one source in short timeframe'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+        urls:
+        - id: url1
+          addressColumn: UrlCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133

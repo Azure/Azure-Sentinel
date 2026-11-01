@@ -1,0 +1,100 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+  - OracleDatabaseAuditEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - OracleDatabaseAuditEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+    - OracleDatabaseAuditEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 39a0995e-f4a9-4869-a0ae-36d6d9049bfd
+    path: Analytic Rules/OracleDBAuditNewIpForUser.yaml
+    version: 1.0.2
+    querySha256: c366d4ebc98eb31c2750afb90815cd8f6972fa8074ae45ea32305dc6add90940
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 9e4392112b5c94934cadc9eab4b2d5b620724476f46d6b22fc2fa488d7854bbb
+      targetQuerySha256: 89e1d75d1e258f3937ed92a2fce1b1bce9f9a38aca043f18f51139fc30f05f19
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-39a0995e-f4a9-4869-a0ae-36d6d9049bfd
+  displayName: OracleDBAudit - User connected to database from new IP
+  status: disabled
+  queryCondition:
+    queryText: "let lbtime_d = 14d;\nlet lbtime_24h = 24h;\nOracleDatabaseAuditEvent\n\
+      | where TimeGenerated between (ago(lbtime_d) .. ago(lbtime_24h))\n| where isnotempty(SrcIpAddr)\n\
+      | where isnotempty(DstUserName)\n| summarize knownIPs = make_set(SrcIpAddr)\
+      \ by DstUserName\n| join (OracleDatabaseAuditEvent\n      | where isnotempty(SrcIpAddr)\n\
+      \      | where isnotempty(DstUserName)\n      | where DbAction =~ 'connect'\n\
+      \      ) on DstUserName\n| where knownIPs !contains SrcIpAddr\n| project DstUserName,\
+      \ SrcIpAddr\n| extend AccountCustomEntity = DstUserName\n| extend IPCustomEntity\
+      \ = SrcIpAddr"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: OracleDBAudit - User connected to database from new IP
+      description: '''Detects when a user connects to database from new IP address.'''
+      severity: low
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountFullName: AccountCustomEntity

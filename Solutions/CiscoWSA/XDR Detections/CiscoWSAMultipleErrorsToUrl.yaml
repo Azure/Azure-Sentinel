@@ -1,0 +1,130 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+  - CiscoWSAEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - CiscoWSAEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+    - CiscoWSAEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1db49647-435c-41ad-bf8c-7130ba75429d
+    path: Analytic Rules/CiscoWSAMultipleErrorsToUrl.yaml
+    version: 1.0.2
+    querySha256: 64706787c44a0d9f05351880aee922fd37c0539b6677c8756bbb65c0e9b70dd7
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped
+      to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise
+      project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1102
+    reviewScope:
+      sourceDocumentSha256: bb480af4b6d98ff804fe74bcedca8cb25d0a5523c36892fd6850de6d82fc547a
+      targetQuerySha256: 7d288ad59d7548a983c32d6a86df18a1e2f943c62878258abfdace8cb640c109
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: bb480af4b6d98ff804fe74bcedca8cb25d0a5523c36892fd6850de6d82fc547a
+      targetQuerySha256: 7d288ad59d7548a983c32d6a86df18a1e2f943c62878258abfdace8cb640c109
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-1db49647-435c-41ad-bf8c-7130ba75429d
+  displayName: Cisco WSA - Multiple errors to URL
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 5;
+
+      CiscoWSAEvent
+
+      | where DvcAction =~ ''NONE''
+
+      | summarize count() by SrcUserName, UrlOriginal, bin(TimeGenerated, 5m)
+
+      | where count_ >= threshold
+
+      | extend URLCustomEntity = UrlOriginal, AccountCustomEntity = SrcUserName'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco WSA - Multiple errors to URL
+      description: '''Detects multiple connection errors to URL.'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: URLCustomEntity
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1102
+      customDetails:
+        AccountName: AccountCustomEntity

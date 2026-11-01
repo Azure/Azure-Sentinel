@@ -1,0 +1,143 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+  - CiscoWSAEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - CiscoWSAEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+    - CiscoWSAEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ebf9db0c-ba7b-4249-b9ec-50a05fa7c7c9
+    path: Analytic Rules/CiscoWSAMultipleErrorsToUnwantedCategory.yaml
+    version: 1.0.2
+    querySha256: af803b22a294b199a0662c271322c41419d5ddd5ec75d5855e0a77e6bf74d71c
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped
+      to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise
+      project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - CommandAndControl
+    originalTechniques:
+    - T1189
+    - T1102
+    reviewScope:
+      sourceDocumentSha256: 9bd2e3416be1583fba192a7f21ea450c9d2a1c76c9c3f129e262aea7a193f8ad
+      targetQuerySha256: 5af1a5118b52158dfcc5814ab05b3012788093f844daf684b1e823987fb2062b
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 9bd2e3416be1583fba192a7f21ea450c9d2a1c76c9c3f129e262aea7a193f8ad
+      targetQuerySha256: 5af1a5118b52158dfcc5814ab05b3012788093f844daf684b1e823987fb2062b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-ebf9db0c-ba7b-4249-b9ec-50a05fa7c7c9
+  displayName: Cisco WSA - Multiple errors to resource from risky category
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 10;
+
+      let risky_sites = dynamic([''IW_adlt'', ''IW_hack'', ''IW_porn'']);
+
+      CiscoWSAEvent
+
+      | where DvcAction startswith ''BLOCK_''
+
+      | where UrlCategory in~ (risky_sites)
+
+      | summarize count() by SrcUserName, UrlOriginal, bin(TimeGenerated, 5m)
+
+      | where count_ >= threshold
+
+      | extend URLCustomEntity = UrlOriginal, AccountCustomEntity = SrcUserName'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco WSA - Multiple errors to resource from risky category
+      description: '''Detects multiple connection errors to resource from risky category.'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: URLCustomEntity
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1189
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1102
+      customDetails:
+        AccountName: AccountCustomEntity

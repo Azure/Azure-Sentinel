@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+  - CiscoWSAEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - CiscoWSAEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+    - CiscoWSAEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 32c460ad-2d40-43e9-8ead-5cdd1d7a3163
+    path: Analytic Rules/CiscoWSADataExfiltration.yaml
+    version: 1.0.3
+    querySha256: 5bce0979eac67d00b5494120519948bcd829d143a00bc7dc3701262fa50fa785
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped
+      to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise
+      project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+    reviewScope:
+      sourceDocumentSha256: bdc05f2afa95e88682cccdaac0622de1a3b19a4980fd3a15dbd20f14e2ca4cfe
+      targetQuerySha256: bad98cda4c2436b26423ec6c77deedc478fdc952e5a0d11feb97d5d752df9c7a
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: bdc05f2afa95e88682cccdaac0622de1a3b19a4980fd3a15dbd20f14e2ca4cfe
+      targetQuerySha256: bad98cda4c2436b26423ec6c77deedc478fdc952e5a0d11feb97d5d752df9c7a
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-32c460ad-2d40-43e9-8ead-5cdd1d7a3163
+  displayName: Cisco WSA - Unexpected uploads
+  status: disabled
+  queryCondition:
+    queryText: 'let f_cnt_upload_threshold = 5;
+
+      let f_upload_size_threshold = 5000000;
+
+      CiscoWSAEvent
+
+      | where HttpRequestMethod in~ (''POST'', ''PUT'')
+
+      | where isnotempty(AmpFileName)
+
+      | where UrlCategory in~ (''IW_fts'', ''IW_osb'')
+
+      | where DstBytes > f_upload_size_threshold
+
+      | summarize count() by AmpFileName, SrcUserName, bin(TimeGenerated, 10m)
+
+      | where count_ >= f_cnt_upload_threshold
+
+      | extend AccountCustomEntity = SrcUserName'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco WSA - Unexpected uploads
+      description: '''Detects unexpected file uploads.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      customDetails:
+        AccountName: AccountCustomEntity

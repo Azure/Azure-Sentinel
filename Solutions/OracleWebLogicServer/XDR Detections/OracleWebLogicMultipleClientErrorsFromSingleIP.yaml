@@ -1,0 +1,110 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - OracleWebLogicServer_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OracleWebLogicServer_CL
+    - OracleWebLogicServerEvent
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - OracleWebLogicServer_CL
+  - connectorId: OracleWebLogicServer
+    dataTypes:
+    - OracleWebLogicServerEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 41775080-5740-11ec-bf63-0242ac130002
+    path: Analytic Rules/OracleWebLogicMultipleClientErrorsFromSingleIP.yaml
+    version: 1.0.3
+    querySha256: 0c2a2312215d58c49baa52c1f90b63b5f991c7f3cf0bdd1f69ee15c55fc056bb
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: e622267ed035f8ec59ac19283b038ecf127683b58b2b0df6c238e60df10416be
+      targetQuerySha256: 84e459f45f33a1a5df5cef05ae1cffface76ce17496f248c17b96e4906d62342
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: e622267ed035f8ec59ac19283b038ecf127683b58b2b0df6c238e60df10416be
+      targetQuerySha256: 84e459f45f33a1a5df5cef05ae1cffface76ce17496f248c17b96e4906d62342
+properties:
+  id: xdr-41775080-5740-11ec-bf63-0242ac130002
+  displayName: Oracle - Multiple client errors from single IP
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 100;
+
+      OracleWebLogicServerEvent
+
+      | where HttpStatusCode >= 400 and HttpStatusCode <= 499
+
+      | summarize MultipleClientErrors = count() by SrcIpAddr, bin(TimeGenerated,
+      5m)
+
+      | where MultipleClientErrors > threshold
+
+      | extend IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Oracle - Multiple client errors from single IP
+      description: '''Detects multiple client errors from one source in short timeframe'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133

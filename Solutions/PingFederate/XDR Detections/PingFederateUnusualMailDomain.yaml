@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - PingFederateEvent
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: PingFederate
+    dataTypes:
+    - PingFederateEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: dc79de7d-2590-4852-95fb-f8e02b34f4da
+    path: Analytic Rules/PingFederateUnusualMailDomain.yaml
+    version: 1.0.3
+    querySha256: ac7cf5a8cec38196e1604f68d33dc056c817db64d9bf0f72ea7056a830dea890
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required
+      Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 90eb31fb05337e84d52af918ee0c8e29883434a0fc61a14dace666c6a697ece5
+      targetQuerySha256: d6f5eecc15955aeeab6ac556b2f3eb7c28c0b7c320bf31a8c917f1f0d144b5d6
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-dc79de7d-2590-4852-95fb-f8e02b34f4da
+  displayName: Ping Federate - Unusual mail domain.
+  status: disabled
+  queryCondition:
+    queryText: 'let known_domains =
+
+      PingFederateEvent
+
+      | where TimeGenerated between (ago(14d) .. ago(1d))
+
+      | extend email = extract(@''email=(.*?),.*'', 1, AdditionalExtensions)
+
+      | extend m_domain = extract(@''@(.*)'', 1, email)
+
+      | where isnotempty(m_domain)
+
+      | summarize makeset(m_domain);
+
+      PingFederateEvent
+
+      | extend email = extract(@''email=(.*?),.*'', 1, AdditionalExtensions)
+
+      | extend m_domain = extract(@''@(.*)'', 1, email)
+
+      | where isnotempty(m_domain)
+
+      | where m_domain !in (known_domains)
+
+      | extend AccountCustomEntity = DstUserName
+
+      | extend IpCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ping Federate - Unusual mail domain.
+      description: '''Detects unusual mail domain in authentication requests.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IpCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity

@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+  - CiscoWSAEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - CiscoWSAEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+    - CiscoWSAEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 46b6c6fc-2c1a-4270-be10-9d444d83f027
+    path: Analytic Rules/CiscoWSAMultipleUnwantedFileTypes.yaml
+    version: 1.0.2
+    querySha256: a719e27e7fe924ebd84d896f9b2d65f74dd740a9ef6dd85170d4f85b04842a1b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1189
+    reviewScope:
+      sourceDocumentSha256: 647272501ff18b299e7f6cfab2053d3de48af17edce3108a80e912364a9e9893
+      targetQuerySha256: df5180354ad0b4c396dd7fe3a44467de98c7eeeb31251e702ae51eeceb50cadf
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 647272501ff18b299e7f6cfab2053d3de48af17edce3108a80e912364a9e9893
+      targetQuerySha256: df5180354ad0b4c396dd7fe3a44467de98c7eeeb31251e702ae51eeceb50cadf
+properties:
+  id: xdr-46b6c6fc-2c1a-4270-be10-9d444d83f027
+  displayName: Cisco WSA - Multiple attempts to download unwanted file
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 2;
+
+      CiscoWSAEvent
+
+      | where DvcAction =~ ''BLOCK_ADMIN_FILE_TYPE''
+
+      | summarize i_src = makeset(SrcIpAddr) by UrlOriginal, bin(TimeGenerated, 15m)
+
+      | where array_length(i_src) >= threshold
+
+      | extend IPCustomEntity = i_src, UrlCustomEntity = UrlOriginal'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco WSA - Multiple attempts to download unwanted file
+      description: '''Detects when multiple attempts to download unwanted file occur.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+        urls:
+        - id: url1
+          addressColumn: UrlCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1189

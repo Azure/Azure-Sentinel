@@ -1,0 +1,140 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+  - OracleDatabaseAuditEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - OracleDatabaseAuditEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+    - OracleDatabaseAuditEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5e93a535-036b-4570-9e58-d8992f30e1ae
+    path: Analytic Rules/OracleDBAuditRareUserActivity.yaml
+    version: 1.0.2
+    querySha256: 1df506636c6e253b250741a242b6ea6d727a71309008f8405b058e576abf6c2f
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: d7fdf864a9f2681fd7a29143bbab90170d8807585bfa027d9ca6c9b803385306
+      targetQuerySha256: c0d9b42c87de6ef7937ccb358fbb766816ca4f9f5aba673970cbed22734ea8e4
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-5e93a535-036b-4570-9e58-d8992f30e1ae
+  displayName: OracleDBAudit - User activity after long inactivity time
+  status: disabled
+  queryCondition:
+    queryText: 'let lbtime_14d = 14d;
+
+      let lbtime_7d = 7d;
+
+      let lbtime_24h = 24h;
+
+      let known_users_14d = OracleDatabaseAuditEvent
+
+      | where TimeGenerated between (ago(lbtime_14d) .. ago(lbtime_7d))
+
+      | where isnotempty(DstUserName)
+
+      | where isnotempty(Action)
+
+      | summarize makeset(DstUserName);
+
+      let known_users_7d = OracleDatabaseAuditEvent
+
+      | where TimeGenerated between (ago(lbtime_7d) .. ago(lbtime_24h))
+
+      | where isnotempty(DstUserName)
+
+      | where isnotempty(Action)
+
+      | summarize makeset(DstUserName);
+
+      OracleDatabaseAuditEvent
+
+      | where isnotempty(DstUserName)
+
+      | where isnotempty(Action)
+
+      | where DstUserName !in (known_users_7d)
+
+      | where DstUserName in (known_users_14d)
+
+      | project DstUserName, SrcIpAddr
+
+      | extend AccountCustomEntity = DstUserName, IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: OracleDBAudit - User activity after long inactivity time
+      description: '''Detects when an action was made by a user which last activity
+        was observed more than 30 days ago.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountFullName: AccountCustomEntity

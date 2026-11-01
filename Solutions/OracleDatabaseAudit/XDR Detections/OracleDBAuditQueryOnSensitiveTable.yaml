@@ -1,0 +1,110 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+  - OracleDatabaseAuditEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - OracleDatabaseAuditEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+    - OracleDatabaseAuditEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d7fdcad5-ce96-4db6-9a5e-4a86a5166e5e
+    path: Analytic Rules/OracleDBAuditQueryOnSensitiveTable.yaml
+    version: 1.0.3
+    querySha256: 00417c37799ea91917a5a28d2e0f2381982b7a8e8a35ed9a1a41c4d30b142f53
+    schedule:
+      queryFrequency: 30m
+      queryPeriod: 30m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=30m, lookback=30m; target frequency=PT30M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Collection
+    originalTechniques:
+    - T1005
+    reviewScope:
+      sourceDocumentSha256: 0aedd3705d90b0fdfb0d16e5a23054ab5bf9bbf14daa17f6ed5d41782234b983
+      targetQuerySha256: 93d7f17af539a59f4480f920dcc4e93ac93a135883fd595cce15e5902deff74c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-d7fdcad5-ce96-4db6-9a5e-4a86a5166e5e
+  displayName: OracleDBAudit - Query on Sensitive Table
+  status: disabled
+  queryCondition:
+    queryText: 'let sensitive_tbls = dynamic([''table_name1'', ''table_name2'']);
+
+      OracleDatabaseAuditEvent
+
+      | where isnotempty(DstUserName)
+
+      | where isnotempty(Action)
+
+      | extend TableName = replace(@''[,\(\)]'', '''', extract(@''(?i)SELECT(.*?)FROM\s(.*?)\s'',
+      2, Action))
+
+      | where isnotempty(TableName)
+
+      | where TableName in (sensitive_tbls)
+
+      | project TableName, DstUserName, DbAction, SrcIpAddr
+
+      | extend AccountCustomEntity = DstUserName, IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT30M
+  detectionAction:
+    alertTemplate:
+      title: OracleDBAudit - Query on Sensitive Table
+      description: '''Detects when user queries sensitive tables.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1005
+      customDetails:
+        AccountFullName: AccountCustomEntity

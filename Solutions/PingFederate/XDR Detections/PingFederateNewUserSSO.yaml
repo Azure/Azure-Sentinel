@@ -1,0 +1,124 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - PingFederateEvent
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: PingFederate
+    dataTypes:
+    - PingFederateEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 05282c91-7aaf-4d76-9a19-6dc582e6a411
+    path: Analytic Rules/PingFederateNewUserSSO.yaml
+    version: 1.0.3
+    querySha256: 22b7ea4eca51e1e19cef25100a7314b6b2b2b0d942bac86450c48a840bc4c527
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped
+      to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise
+      project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    originalTechniques:
+    - T1078
+    - T1136
+    reviewScope:
+      sourceDocumentSha256: f8b1902a1b5c5a04a52d480c81072b2301971327ea0fdb26be15da6a43ee37f0
+      targetQuerySha256: ab877880306c5fa41d0207d2e55a70075e64acc5f05cad3e065e48a8c2d47dc2
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-05282c91-7aaf-4d76-9a19-6dc582e6a411
+  displayName: Ping Federate - New user SSO success login
+  status: disabled
+  queryCondition:
+    queryText: 'let known_usrs =
+
+      PingFederateEvent
+
+      | where TimeGenerated between (ago(14d) .. ago(1d))
+
+      | where isnotempty(DstUserName)
+
+      | summarize makeset(DstUserName);
+
+      PingFederateEvent
+
+      | where EventType =~ ''SSO''
+
+      | where EventMessage has ''success''
+
+      | where DstUserName !in (known_usrs)
+
+      | extend AccountCustomEntity = DstUserName'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Ping Federate - New user SSO success login
+      description: '''Detects new user SSO success login.'''
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+        - technique: T1136
+      customDetails:
+        AccountName: AccountCustomEntity
