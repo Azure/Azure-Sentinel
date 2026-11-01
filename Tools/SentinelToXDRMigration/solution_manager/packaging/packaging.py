@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 import uuid
 import zipfile
 from datetime import datetime, timezone
@@ -53,7 +52,6 @@ _BENIGN_PROGRESS_PREFIXES = (
 )
 _CCF_CONNECTOR_KINDS = {
     "restapipoller",
-    "apipolling",
     "push",
     "gcp",
     "websocket",
@@ -61,7 +59,6 @@ _CCF_CONNECTOR_KINDS = {
     "amazonwebservicess3",
     "storageaccountblobcontainer",
     "oci",
-    "customizable",
     "ccf",
 }
 DATA_EXCLUSIONS = {
@@ -312,16 +309,16 @@ def _is_ccf_connector_document(doc: Any) -> bool:
     if not isinstance(doc, dict):
         return False
     res_type = str(doc.get("type") or "").strip().lower()
-    if res_type.endswith("dataconnectordefinitions") or res_type == "microsoft.insights/datacollectionrules":
+    if res_type.endswith("dataconnectordefinitions"):
         return True
     kind = str(doc.get("kind") or "").strip().lower()
     if kind in _CCF_CONNECTOR_KINDS:
         return True
-    if isinstance(doc.get("dcrConfig"), dict) or isinstance(doc.get("connectorUiConfig"), dict):
+    if isinstance(doc.get("dcrConfig"), dict):
         return True
     props = doc.get("properties")
     if isinstance(props, dict):
-        if isinstance(props.get("dcrConfig"), dict) or isinstance(props.get("connectorUiConfig"), dict):
+        if isinstance(props.get("dcrConfig"), dict):
             return True
         prop_kind = str(props.get("kind") or "").strip().lower()
         if prop_kind in _CCF_CONNECTOR_KINDS:
@@ -332,7 +329,23 @@ def _is_ccf_connector_document(doc: Any) -> bool:
     return False
 
 
-def _solution_declares_ccf_connector(solution_dir: Path, data: dict[str, Any]) -> bool:
+def _ccf_document_declares_dcr_config(doc: Any) -> bool:
+    if isinstance(doc, list):
+        return any(_ccf_document_declares_dcr_config(item) for item in doc)
+    if not isinstance(doc, dict):
+        return False
+    if isinstance(doc.get("dcrConfig"), dict) and bool(doc.get("dcrConfig")):
+        return True
+    props = doc.get("properties")
+    if isinstance(props, dict) and isinstance(props.get("dcrConfig"), dict) and bool(props.get("dcrConfig")):
+        return True
+    resources = doc.get("resources")
+    if isinstance(resources, list) and any(_ccf_document_declares_dcr_config(item) for item in resources):
+        return True
+    return False
+
+
+def _iter_solution_connector_docs(solution_dir: Path, data: dict[str, Any]) -> list[Any]:
     candidate_files: list[Path] = []
     raw_connectors = (
         _value(data, "Data Connectors")
@@ -352,18 +365,25 @@ def _solution_declares_ccf_connector(solution_dir: Path, data: dict[str, Any]) -
         folder = solution_dir / folder_name
         if folder.is_dir():
             candidate_files.extend(sorted(folder.rglob("*.json")))
+    docs: list[Any] = []
     seen: set[Path] = set()
     for path in candidate_files:
         if path in seen or not path.is_file():
             continue
         seen.add(path)
         try:
-            doc = _read_json(path)
+            docs.append(_read_json(path))
         except Exception:
             continue
-        if _is_ccf_connector_document(doc):
-            return True
-    return False
+    return docs
+
+
+def _solution_declares_ccf_connector(solution_dir: Path, data: dict[str, Any]) -> bool:
+    return any(_is_ccf_connector_document(doc) for doc in _iter_solution_connector_docs(solution_dir, data))
+
+
+def _solution_declares_ccf_dcr_config(solution_dir: Path, data: dict[str, Any]) -> bool:
+    return any(_ccf_document_declares_dcr_config(doc) for doc in _iter_solution_connector_docs(solution_dir, data))
 
 
 def _reconcile_solution_inventory(
@@ -417,7 +437,7 @@ def _reconcile_solution_inventory(
             )
             for res in all_resources
         )
-        if not has_dcr_config:
+        if _solution_declares_ccf_dcr_config(solution_dir, data) and not has_dcr_config:
             raise PackagingError(
                 "Solution inventory declares a CCF data connector, but Package/mainTemplate.json "
                 "is missing dcrConfig on the packaged data connector resource."
@@ -1318,7 +1338,6 @@ def package_solution_v3_1(
                     existing_artifact.stat().st_mtime_ns,
                     hashlib.sha256(existing_artifact.read_bytes()).hexdigest(),
                 )
-    run_started_ns = time.time_ns()
     completed = subprocess.run(
         command,
         cwd=repository,

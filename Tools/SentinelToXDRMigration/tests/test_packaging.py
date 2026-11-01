@@ -1630,6 +1630,50 @@ class PackagingTests(unittest.TestCase):
         with self.assertRaisesRegex(PackagingError, "dcrConfig"):
             package_solution_v3_1(self.solution, version_bump="none")
 
+    @mock.patch("sentinel_xdr_migration.packaging.shutil.which", return_value="pwsh")
+    @mock.patch("sentinel_xdr_migration.packaging.subprocess.run")
+    def test_allows_dcr_based_function_and_legacy_apipolling_connectors_without_ccf_definitions(
+        self,
+        run,
+        which,
+    ) -> None:
+        connectors_dir = self.solution / "Data Connectors"
+        connectors_dir.mkdir(parents=True, exist_ok=True)
+        (connectors_dir / "FunctionConnector.json").write_text(
+            json.dumps({
+                "id": "SampleFunctionConnector",
+                "title": "Sample Function Connector",
+                "instructionSteps": [],
+            }),
+            encoding="utf-8",
+        )
+        (connectors_dir / "DCR.json").write_text(
+            json.dumps({
+                "type": "Microsoft.Insights/dataCollectionRules",
+                "name": "SampleDCR",
+            }),
+            encoding="utf-8",
+        )
+        (connectors_dir / "LegacyApiPolling.json").write_text(
+            json.dumps({
+                "kind": "APIPolling",
+                "properties": {"pollingConfig": {}},
+            }),
+            encoding="utf-8",
+        )
+        data_path = self.solution / "Data" / "Solution_Sample.json"
+        solution_data = json.loads(data_path.read_text(encoding="utf-8"))
+        solution_data["Data Connectors"] = [
+            "Data Connectors/FunctionConnector.json",
+            "Data Connectors/DCR.json",
+            "Data Connectors/LegacyApiPolling.json",
+        ]
+        data_path.write_text(json.dumps(solution_data), encoding="utf-8")
+
+        self._fresh_run(run, stdout="Starting Package Creation using V3.1 tool")
+        result = package_solution_v3_1(self.solution, version_bump="none")
+        self.assertEqual("V3.1", result["packager"])
+
 
 if __name__ == "__main__":
     unittest.main()

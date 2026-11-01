@@ -124,6 +124,7 @@ def _known_tables_catalog() -> set[str]:
                 if isinstance(target, str) and target.strip():
                     known.add(target.strip())
     except Exception:
+        # Mapping catalog is optional during static table discovery; proceed with built-in catalog.
         pass
     known.update(
         {
@@ -541,8 +542,22 @@ def _validate_pipeline_stages(
             else:
                 operators_seen.append(op)
                 rest = stage[op_match.end() :].strip()
-                if op in {"where", "extend", "project", "summarize", "join", "lookup", "mv-expand", "mvexpand", "parse", "top", "take", "limit", "sort", "order"} and not rest:
-                    errors.append(f"KQL operator '{op_match.group(1)}' is missing required arguments in {stmt_label} at stage #{stage_idx + 1}")
+                if op in {"where", "extend", "project", "summarize", "join", "lookup", "mv-expand", "mvexpand", "parse", "top", "take", "limit", "sort", "order"}:
+                    if not rest:
+                        errors.append(f"KQL operator '{op_match.group(1)}' is missing required arguments in {stmt_label} at stage #{stage_idx + 1}")
+                    else:
+                        if re.search(r"(?<![A-Za-z0-9_])\(\s*\)", rest):
+                            errors.append(
+                                f"KQL operator '{op_match.group(1)}' contains an empty parenthesized expression in {stmt_label} at stage #{stage_idx + 1}"
+                            )
+                        if re.search(
+                            r"(?:==|!=|=~|!~|<=|>=|<|>|=|\+|\-|\*|/|%|,|\band\b|\bor\b|\bhas\b|\bcontains\b|\bin\b|\bstartswith\b|\bendswith\b|\bmatches\s+regex\b)\s*$",
+                            rest,
+                            re.IGNORECASE,
+                        ):
+                            errors.append(
+                                f"KQL operator '{op_match.group(1)}' has an incomplete trailing expression in {stmt_label} at stage #{stage_idx + 1}"
+                            )
 
 
 def _validate_pipeline_source(
@@ -646,16 +661,6 @@ def validate_xdr_detection_kql(
 
     prov = doc.get("contentProvenance") if isinstance(doc.get("contentProvenance"), dict) else {}
     declared_tables: set[str] = set(known_tables)
-    for item in prov.get("requiredWorkloads") or []:
-        if isinstance(item, dict):
-            for dt in item.get("dataTypes") or []:
-                if isinstance(dt, str) and dt.strip():
-                    declared_tables.add(dt.strip())
-    for item in prov.get("requiredDataConnectors") or []:
-        if isinstance(item, dict):
-            for dt in item.get("dataTypes") or []:
-                if isinstance(dt, str) and dt.strip():
-                    declared_tables.add(dt.strip())
 
     fn_aliases: set[str] = set(known_functions)
     for fn_rec in prov.get("requiredWorkspaceFunctions") or []:
@@ -685,16 +690,6 @@ def validate_xdr_workbook_kql(
 
     prov = doc.get("contentProvenance") if isinstance(doc.get("contentProvenance"), dict) else {}
     declared_tables: set[str] = set(known_tables)
-    for item in prov.get("requiredWorkloads") or []:
-        if isinstance(item, dict):
-            for dt in item.get("dataTypes") or []:
-                if isinstance(dt, str) and dt.strip():
-                    declared_tables.add(dt.strip())
-    for item in prov.get("requiredDataConnectors") or []:
-        if isinstance(item, dict):
-            for dt in item.get("dataTypes") or []:
-                if isinstance(dt, str) and dt.strip():
-                    declared_tables.add(dt.strip())
 
     fn_aliases: set[str] = set(known_functions)
     for fn_rec in prov.get("requiredWorkspaceFunctions") or []:

@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 from typing import Iterator
 import unittest
-from unittest import mock
+import unittest.mock as mock
 
 
 _GUARDED_TARGETS: tuple[tuple[str, str, tuple[str, ...]], ...] = (

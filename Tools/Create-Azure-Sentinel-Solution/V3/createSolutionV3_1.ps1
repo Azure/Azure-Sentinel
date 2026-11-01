@@ -58,6 +58,7 @@ if ($PSCmdlet.ParameterSetName -eq "Local") {
         }
     }
     $localImplementation = Join-Path $PSScriptRoot "..\common\createSolutionLocal.ps1"
+    $global:LASTEXITCODE = 0
     & $localImplementation `
         -SolutionDataFolderPath $SolutionDataFolderPath `
         -VersionMode $VersionMode `
@@ -70,8 +71,8 @@ if ($PSCmdlet.ParameterSetName -eq "Local") {
         -IncludeXdrDetections $true `
         -EnforceV31Versions $true `
         -SkipAttributionLookup:$SkipAttributionLookup
-    if ($LASTEXITCODE -ne 0) {
-        exit $LASTEXITCODE
+    if (-not $? -or ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0)) {
+        exit $(if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 1 })
     }
     return
 }

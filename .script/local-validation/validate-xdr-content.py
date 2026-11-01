@@ -345,7 +345,10 @@ def validate_solution_xdr_detections(
         xdr_detection_files,
     )
     from sentinel_xdr_migration.packaging import _read_json, _value, _xdr_references
-    from solution_manager.authoring.validator import validate_xdr_detection_kql
+    from solution_manager.authoring.validator import (
+        _solution_parser_aliases,
+        validate_xdr_detection_kql,
+    )
 
     xdr_dir = solution_root / "XDR Detections"
     authored_files = xdr_detection_files(xdr_dir) if xdr_dir.is_dir() else []
@@ -404,6 +407,7 @@ def validate_solution_xdr_detections(
     results: list[dict[str, Any]] = []
     seen_ids: dict[str, list[Path]] = {}
     parsed_docs: dict[Path, dict[str, Any]] = {}
+    parser_aliases = _solution_parser_aliases(solution_root)
 
     for path in authored_files:
         file_errors: list[str] = []
@@ -422,11 +426,15 @@ def validate_solution_xdr_detections(
             file_errors.append(f"Invalid YAML syntax: {exc}")
             document = {}
 
+        static_kql_valid = False
         if document:
             parsed_docs[path] = document
             file_errors.extend(validate_document(document))
             file_warnings.extend(custom_detail_binding_warnings(document))
-            static_kql_res = validate_xdr_detection_kql(document)
+            static_kql_res = validate_xdr_detection_kql(
+                document, known_functions=parser_aliases
+            )
+            static_kql_valid = bool(static_kql_res.get("valid"))
             for kql_err in static_kql_res.get("errors") or []:
                 file_errors.append(f"Static KQL validation: {kql_err}")
 
@@ -504,7 +512,7 @@ def validate_solution_xdr_detections(
                 "validator": "XDR Detection",
                 "filePath": _rel_path(path, content_root),
                 "passed": len(file_errors) == 0,
-                "staticKqlValidated": True,
+                "staticKqlValidated": static_kql_valid and len(file_errors) == 0,
                 "error": "; ".join(dict.fromkeys(file_errors)) if file_errors else None,
                 "warnings": file_warnings,
             }
@@ -580,7 +588,11 @@ def validate_solution_xdr_detections(
 
     return {
         "applicable": True,
-        "staticKqlValidated": True,
+        "staticKqlValidated": bool(authored_files)
+        and all(
+            bool(r.get("staticKqlValidated", True)) and bool(r.get("passed"))
+            for r in results
+        ),
         "liveKqlSkipped": True,
         "liveKqlSkipReason": (
             "Live Advanced Hunting KQL validation for XDR Detections requires an "
@@ -700,9 +712,13 @@ def validate_solution_xdr_workbooks(
         selected_workbook_files,
         validate_workbooks,
     )
-    from solution_manager.authoring.validator import validate_xdr_workbook_kql
+    from solution_manager.authoring.validator import (
+        _solution_parser_aliases,
+        validate_xdr_workbook_kql,
+    )
 
     wb_dir = solution_root / "XDR Workbooks"
+    parser_aliases = _solution_parser_aliases(solution_root)
     authored_files = (
         sorted(p for p in wb_dir.rglob("*.json") if p.is_file())
         if wb_dir.is_dir()
@@ -811,13 +827,17 @@ def validate_solution_xdr_workbooks(
                 target_path = solution_root / rel_item_path
                 # Run explicit schema check against Tools/SentinelToXDRMigration/schema/xdr-workbook.schema.json
                 doc = parsed_workbooks.get(target_path)
+                static_kql_valid = False
                 if doc is not None:
                     for err in schema_validator.iter_errors(doc):
                         loc = "/".join(map(str, err.absolute_path)) or "<root>"
                         msg = f"{loc}: {err.message}"
                         if msg not in item_errors:
                             item_errors.append(msg)
-                    static_kql_res = validate_xdr_workbook_kql(doc)
+                    static_kql_res = validate_xdr_workbook_kql(
+                        doc, known_functions=parser_aliases
+                    )
+                    static_kql_valid = bool(static_kql_res.get("valid"))
                     for kql_err in static_kql_res.get("errors") or []:
                         msg = f"Static KQL validation: {kql_err}"
                         if msg not in item_errors:
@@ -827,7 +847,7 @@ def validate_solution_xdr_workbooks(
                         "validator": "XDR Workbook",
                         "filePath": _rel_path(target_path, content_root),
                         "passed": len(item_errors) == 0,
-                        "staticKqlValidated": True,
+                        "staticKqlValidated": static_kql_valid and len(item_errors) == 0,
                         "error": "; ".join(dict.fromkeys(item_errors)) if item_errors else None,
                     }
                 )
@@ -860,6 +880,7 @@ def validate_solution_xdr_workbooks(
             ]
             file_errors.extend(dependency_validation_errors(doc))
             static_kql_res = validate_xdr_workbook_kql(doc)
+            static_kql_valid = bool(static_kql_res.get("valid"))
             for kql_err in static_kql_res.get("errors") or []:
                 file_errors.append(f"Static KQL validation: {kql_err}")
             provenance = doc.get("contentProvenance")
@@ -875,7 +896,7 @@ def validate_solution_xdr_workbooks(
                     "validator": "XDR Workbook",
                     "filePath": _rel_path(path, content_root),
                     "passed": len(file_errors) == 0,
-                    "staticKqlValidated": True,
+                    "staticKqlValidated": static_kql_valid and len(file_errors) == 0,
                     "error": "; ".join(dict.fromkeys(file_errors)) if file_errors else None,
                 }
             )
@@ -942,7 +963,11 @@ def validate_solution_xdr_workbooks(
 
     return {
         "applicable": True,
-        "staticKqlValidated": True,
+        "staticKqlValidated": bool(authored_files)
+        and all(
+            bool(r.get("staticKqlValidated", True)) and bool(r.get("passed"))
+            for r in results
+        ),
         "liveKqlSkipped": True,
         "liveKqlSkipReason": (
             "Live Advanced Hunting / Defender Workbook query & portal rendering validation "

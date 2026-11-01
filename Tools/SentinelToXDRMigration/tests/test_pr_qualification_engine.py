@@ -1001,7 +1001,23 @@ def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: 
     xdr_query_sha = hashlib.sha256(str(xdr_raw_q).strip().encode("utf-8")).hexdigest()
 
     qual_ev = _build_live_qualification_evidence()
-    qual_ev["runtimeKql"] = {"status": "passed", "passed": True}
+    qual_ev["runtimeKql"] = {
+        "status": "passed",
+        "passed": True,
+        "queries": [
+            {
+                "id": rule_id,
+                "status": "PASS",
+                "querySha256": ar_query_sha,
+            },
+            {
+                "id": f"xdr-{rule_id}",
+                "originalRuleId": rule_id,
+                "status": "PASS",
+                "querySha256": xdr_query_sha,
+            },
+        ],
+    }
     qual_ev["ciChecks"] = {
         "passed": False,
         "reason": "Static KQL analyzer reported KS107/KS141",
@@ -1082,7 +1098,7 @@ def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: 
     assert res["verdict"] == "Qualified"
     assert isinstance(res["verdictReasons"], list)
 
-    # Ensure SYN* syntax errors are never overridden in VAL-CI-01
+    # Ensure SYN* and non-allowlisted KS* (e.g., KS005) syntax errors and unrelated string errors are never overridden in VAL-CI-01
     qual_ev_syn = dict(qual_ev)
     qual_ev_syn["ciChecks"] = {
         "passed": False,
@@ -1105,6 +1121,62 @@ def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: 
     assert res_syn["firstPassPassed"] is False
     assert res_syn["verdict"] == "Failed"
     assert any(r.startswith("VAL-CI-01 (FAIL):") for r in res_syn["verdictReasons"])
+
+    qual_ev_ks005 = dict(qual_ev)
+    qual_ev_ks005["ciChecks"] = {
+        "passed": False,
+        "reason": "KQL syntax error KS005",
+        "kqlStaticErrors": [
+            {
+                "id": f"xdr-{rule_id}",
+                "code": "KS005",
+                "querySha256": xdr_query_sha,
+            }
+        ],
+    }
+    res_ks005 = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_ks005,
+        run_number=1,
+    )
+    assert res_ks005["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+
+    qual_ev_str_err = dict(qual_ev)
+    qual_ev_str_err["ciChecks"] = {
+        "passed": False,
+        "reason": "ARM template validation failed",
+        "errors": ["ARM template deployment validation failed on mainTemplate.json"],
+    }
+    res_str_err = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_str_err,
+        run_number=1,
+    )
+    assert res_str_err["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+
+    # Ensure stale receipts with mismatched querySha256 do not mint fresh PASS hashes for edited queries
+    qual_ev_stale = dict(qual_ev)
+    qual_ev_stale["runtimeKql"] = {
+        "status": "passed",
+        "passed": True,
+        "queries": [
+            {
+                "id": rule_id,
+                "status": "PASS",
+                "querySha256": "0" * 64,
+            }
+        ],
+    }
+    res_stale = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_stale,
+        run_number=1,
+    )
+    assert res_stale["kqlRuntimeVerifiedRules"] == []
+    assert res_stale["checksById"]["VAL-CI-01"]["status"] == "FAIL"
 
 
 class TestPrQualificationEngineUnittest(unittest.TestCase):

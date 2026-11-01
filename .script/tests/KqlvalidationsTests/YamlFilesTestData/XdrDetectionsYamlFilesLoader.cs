@@ -10,7 +10,7 @@ namespace Kqlvalidations.Tests
         protected override List<string> GetDirectoryPaths()
         {
             var basePath = Utils.GetTestDirectory(TestFolderDepth);
-            var solutionsDir = Path.Combine(basePath, "Solutions");
+            var solutionsDir = Path.Join(basePath, "Solutions");
             if (!Directory.Exists(solutionsDir))
             {
                 return new List<string>();

@@ -348,7 +348,7 @@ def _is_graph_detection_disabled(graph: Any) -> tuple[bool, bool]:
         return True, False
     is_disabled = (is_enabled_val is False) or (status_val == "disabled")
     if "isEnabled" not in graph and not status_val:
-        is_disabled = True
+        is_disabled = False
     return False, is_disabled
 
 
@@ -719,10 +719,8 @@ def start_alert_parity(
     arm_token = _arm_token(state_dir)
     graph_token = _deployment_token(state_dir, tenant_id=target["tenantId"])
     _read_rule_states(pairs, workspace_resource_id, arm_token, graph_token)
-    for pair in pairs:
-        pair.setdefault("initialDisabled", True)
     initial_disabled = bool(pairs) and all(
-        bool(pair.get("initialDisabled", True)) for pair in pairs
+        bool(pair.get("initialDisabled", False)) for pair in pairs
     )
     started_at = _utc_now()
     state = {
@@ -837,7 +835,7 @@ def _normalize_cleanup_and_lifecycle(
     initial_disabled = bool(
         (state.get("alertLifecycle") or {}).get(
             "initialDisabled",
-            bool(rules) and all(bool(pair.get("initialDisabled", True)) for pair in rules),
+            bool(rules) and all(bool(pair.get("initialDisabled", False)) for pair in rules),
         )
     )
     for item in cleanup:
@@ -945,10 +943,8 @@ def start_alert_parity_batch(
     arm_token = _arm_token(state_dir)
     graph_token = _deployment_token(state_dir, tenant_id=target["tenantId"])
     _read_rule_states(pairs, workspace_resource_id, arm_token, graph_token)
-    for pair in pairs:
-        pair.setdefault("initialDisabled", True)
     initial_disabled = bool(pairs) and all(
-        bool(pair.get("initialDisabled", True)) for pair in pairs
+        bool(pair.get("initialDisabled", False)) for pair in pairs
     )
     started_at = _utc_now()
     state = {
@@ -984,60 +980,6 @@ def start_alert_parity_batch(
     enabled_count = 0
     try:
         ingestions: list[dict[str, Any]] = []
-        grouped_by_contract: dict[str, list[dict[str, Any]]] = {}
-        for pair in pairs:
-            fixture = fixture_by_detection[pair["detection"]]
-            contract_key = str(Path(fixture["contract"]).expanduser().resolve())
-            grouped_by_contract.setdefault(contract_key, []).append(pair)
-
-        if len(grouped_by_contract) == len(pairs):
-            for pair in pairs:
-                fixture = fixture_by_detection[pair["detection"]]
-                ingestions.append(
-                    {
-                        "detection": pair["detection"],
-                        "result": _ingest(fixture["contract"], fixture["payload"]),
-                    }
-                )
-        else:
-            ingestion_by_detection: dict[str, dict[str, Any]] = {}
-            for group_idx, (contract_key, group_pairs) in enumerate(
-                grouped_by_contract.items(), start=1
-            ):
-                if len(group_pairs) == 1:
-                    single_pair = group_pairs[0]
-                    fixture = fixture_by_detection[single_pair["detection"]]
-                    ingestion_by_detection[single_pair["detection"]] = _ingest(
-                        fixture["contract"], fixture["payload"]
-                    )
-                else:
-                    combined_records: list[dict[str, Any]] = []
-                    for group_pair in group_pairs:
-                        fixture = fixture_by_detection[group_pair["detection"]]
-                        payload_records = json.loads(
-                            Path(fixture["payload"]).read_text(encoding="utf-8-sig")
-                        )
-                        combined_records.extend(payload_records)
-                    combined_payload_path = (
-                        state_path.parent
-                        / f"alert-parity-batch-payload-{group_idx}.json"
-                    )
-                    combined_payload_path.write_text(
-                        json.dumps(combined_records, indent=2),
-                        encoding="utf-8",
-                    )
-                    shared_result = _ingest(contract_key, combined_payload_path)
-                    for group_pair in group_pairs:
-                        ingestion_by_detection[group_pair["detection"]] = shared_result
-            for pair in pairs:
-                ingestions.append(
-                    {
-                        "detection": pair["detection"],
-                        "result": ingestion_by_detection[pair["detection"]],
-                    }
-                )
-        state["ingestions"] = ingestions
-
         if len(pairs) <= 1:
             enable_errors_list = [
                 _set_pair_enabled(
@@ -1092,6 +1034,60 @@ def start_alert_parity_batch(
                 )
             enabled_count += 1
 
+        grouped_by_contract: dict[str, list[dict[str, Any]]] = {}
+        for pair in pairs:
+            fixture = fixture_by_detection[pair["detection"]]
+            contract_key = str(Path(fixture["contract"]).expanduser().resolve())
+            grouped_by_contract.setdefault(contract_key, []).append(pair)
+
+        if len(grouped_by_contract) == len(pairs):
+            for pair in pairs:
+                fixture = fixture_by_detection[pair["detection"]]
+                ingestions.append(
+                    {
+                        "detection": pair["detection"],
+                        "result": _ingest(fixture["contract"], fixture["payload"]),
+                    }
+                )
+        else:
+            ingestion_by_detection: dict[str, dict[str, Any]] = {}
+            for group_idx, (contract_key, group_pairs) in enumerate(
+                grouped_by_contract.items(), start=1
+            ):
+                if len(group_pairs) == 1:
+                    single_pair = group_pairs[0]
+                    fixture = fixture_by_detection[single_pair["detection"]]
+                    ingestion_by_detection[single_pair["detection"]] = _ingest(
+                        fixture["contract"], fixture["payload"]
+                    )
+                else:
+                    combined_records: list[dict[str, Any]] = []
+                    for group_pair in group_pairs:
+                        fixture = fixture_by_detection[group_pair["detection"]]
+                        payload_records = json.loads(
+                            Path(fixture["payload"]).read_text(encoding="utf-8-sig")
+                        )
+                        combined_records.extend(payload_records)
+                    combined_payload_path = (
+                        state_path.parent
+                        / f"alert-parity-batch-payload-{group_idx}.json"
+                    )
+                    combined_payload_path.write_text(
+                        json.dumps(combined_records, indent=2),
+                        encoding="utf-8",
+                    )
+                    shared_result = _ingest(contract_key, combined_payload_path)
+                    for group_pair in group_pairs:
+                        ingestion_by_detection[group_pair["detection"]] = shared_result
+            for pair in pairs:
+                ingestions.append(
+                    {
+                        "detection": pair["detection"],
+                        "result": ingestion_by_detection[pair["detection"]],
+                    }
+                )
+        state["ingestions"] = ingestions
+
         state["status"] = "awaiting-alerts"
         state["enabledAt"] = _utc_now()
         state["capturePlan"] = [
@@ -1137,12 +1133,23 @@ def start_alert_parity_batch(
     finally:
         if need_rollback:
             state["status"] = "failed"
-            raw_cleanup = _disable_all(
-                state,
-                arm_token=arm_token,
-                graph_token=graph_token,
-                state_dir=state_dir,
-            )
+            try:
+                raw_cleanup = _disable_all(
+                    state,
+                    arm_token=arm_token,
+                    graph_token=graph_token,
+                    state_dir=state_dir,
+                )
+            except Exception as cleanup_exc:
+                raw_cleanup = [
+                    {
+                        "detection": pair.get("detection"),
+                        "disabled": False,
+                        "returnedToDisabled": False,
+                        "errors": [str(cleanup_exc)],
+                    }
+                    for pair in pairs
+                ]
             cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
                 state, raw_cleanup
             )
@@ -1429,6 +1436,18 @@ def poll_alert_parity_batch(
                 ).items()
             },
         )
+        all_captures_matched = bool(comparisons) and all(
+            item["passed"] for item in comparisons
+        )
+        if not finalize and not timeout_expired and not all_captures_matched:
+            should_disable = False
+            return {
+                "status": "awaiting-alerts",
+                "runId": state["runId"],
+                "statePath": str(state_path),
+                "comparisons": comparisons,
+            }
+        should_disable = True
     except Exception as exc:
         should_disable = True
         if verified_scope is None:
@@ -1472,8 +1491,8 @@ def poll_alert_parity_batch(
         ),
         "comparisons": comparisons,
         "qualificationScope": verified_scope or state.get("qualificationScope"),
-        "initialDisabled": lifecycle.get("initialDisabled", True),
-        "returnedToDisabled": lifecycle.get("returnedToDisabled", False),
+        "initialDisabled": bool(lifecycle.get("initialDisabled", False)),
+        "returnedToDisabled": bool(lifecycle.get("returnedToDisabled", False)),
         "tkQ11Passed": tk_q11_passed,
         "alertLifecycle": lifecycle,
         "e2eQ02Diagnostics": list(lifecycle.get("e2eQ02Diagnostics") or []),

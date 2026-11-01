@@ -1108,7 +1108,7 @@ class QualificationOrchestrator:
                 bool(
                     r.get(
                         "initialDisabled",
-                        (r.get("alertLifecycle") or {}).get("initialDisabled", True),
+                        (r.get("alertLifecycle") or {}).get("initialDisabled", False),
                     )
                 )
                 for r in raw_eval_records
@@ -1117,17 +1117,17 @@ class QualificationOrchestrator:
                 bool(
                     r.get(
                         "returnedToDisabled",
-                        (r.get("alertLifecycle") or {}).get("returnedToDisabled", True),
+                        (r.get("alertLifecycle") or {}).get("returnedToDisabled", False),
                     )
                 )
                 for r in raw_eval_records
             )
         else:
             initial_disabled = bool(
-                parity_res.get("initialDisabled", top_lc.get("initialDisabled", True))
+                parity_res.get("initialDisabled", top_lc.get("initialDisabled", False))
             )
             returned_to_disabled = bool(
-                parity_res.get("returnedToDisabled", top_lc.get("returnedToDisabled", True))
+                parity_res.get("returnedToDisabled", top_lc.get("returnedToDisabled", False))
             )
 
         tk_q11_verified = bool(initial_disabled and returned_to_disabled)

@@ -353,7 +353,13 @@ def test_resumable_progression_across_all_5_stages_for_hybrid_solution():
         def parity_cb(pair, ing_ev, target):
             stage_calls.append(f"parity:{pair['sentinelRuleId']}")
             rows = [{"HostName": "node-1", "Severity": "High"}]
-            return {"sentinelRows": rows, "xdrRows": rows, "parityVerified": True}
+            return {
+                "sentinelRows": rows,
+                "xdrRows": rows,
+                "parityVerified": True,
+                "initialDisabled": True,
+                "returnedToDisabled": True,
+            }
 
         def wb_query_cb(wb_path, target):
             stage_calls.append(f"wb_query:{wb_path}")
@@ -834,8 +840,26 @@ def test_full_enable_fire_disable_lifecycle_and_tk_q11_readbacks():
             assert started["status"] == "awaiting-alerts"
             assert started["initialDisabled"] is True
             assert started["alertLifecycle"]["initialDisabled"] is True
-            assert call_sequence.index("ingest_e2e_q01") < call_sequence.index("sentinel_put:True")
-            assert call_sequence.index("ingest_e2e_q01") < call_sequence.index("xdr_patch:True")
+            assert call_sequence.index("sentinel_put:True") < call_sequence.index("ingest_e2e_q01")
+            assert call_sequence.index("xdr_patch:True") < call_sequence.index("ingest_e2e_q01")
+            assert sentinel_enabled is True
+            assert xdr_enabled is True
+
+            # Non-finalized poll with empty captures stays in awaiting-alerts without disabling rules
+            pending_poll = alert_parity.poll_alert_parity_batch(
+                sol_root,
+                results={
+                    "results": [
+                        {
+                            "detection": "detection_1.yaml",
+                            "analyticRule": {"alerts": []},
+                            "customDetection": {"alerts": []},
+                        }
+                    ]
+                },
+                finalize=False,
+            )
+            assert pending_poll["status"] == "awaiting-alerts"
             assert sentinel_enabled is True
             assert xdr_enabled is True
 

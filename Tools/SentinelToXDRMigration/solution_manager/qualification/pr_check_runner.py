@@ -962,7 +962,7 @@ def _evaluate_validation_checks(
                 for vr in verified_rules_list:
                     if not isinstance(vr, Mapping):
                         continue
-                    if str(vr.get("status") or "PASS").upper() != "PASS":
+                    if str(vr.get("status") or "").strip().upper() not in {"PASS", "PASSED"}:
                         continue
                     q_sha = str(vr.get("querySha256") or "").strip().lower()
                     for key_name in ("id", "originalRuleId"):
@@ -970,6 +970,7 @@ def _evaluate_validation_checks(
                         if rid_val and q_sha:
                             verified_by_id.setdefault(rid_val, set()).add(q_sha)
 
+                allowed_kql_override_codes = {"KS107", "KS141", "KS142", "KS204"}
                 raw_failures = (
                     ci_info.get("kqlStaticErrors")
                     or ci_info.get("failedRules")
@@ -987,7 +988,7 @@ def _evaluate_validation_checks(
                     or ci_info.get("syntaxErrors")
                     or ci_info.get("parseErrors")
                 )
-                all_failures_covered = bool(verified_by_id) and (bool(failure_items) or bool(error_codes))
+                all_failures_covered = bool(verified_by_id) and bool(failure_items)
 
                 for item in failure_items:
                     if isinstance(item, Mapping):
@@ -996,21 +997,25 @@ def _evaluate_validation_checks(
                             error_codes.append(code)
                         if code.upper().startswith("SYN") or str(item.get("category") or "").lower() in {"syntax", "parse"}:
                             has_syntax_or_parse_error = True
+                            all_failures_covered = False
+                            break
+                        if not code or code.upper() not in allowed_kql_override_codes:
+                            all_failures_covered = False
                             break
                         f_id = str(item.get("id") or item.get("ruleId") or item.get("originalRuleId") or "").strip()
                         f_sha = str(item.get("querySha256") or "").strip().lower()
                         if not f_sha and isinstance(item.get("query"), str) and item["query"].strip():
-                            f_sha = hashlib.sha256(item["query"].strip().encode("utf-8")).hexdigest()
-                        if not f_id or f_id not in verified_by_id:
-                            all_failures_covered = False
-                            break
-                        if f_sha and f_sha not in verified_by_id[f_id]:
+                            f_sha = hashlib.sha256(
+                                item["query"].replace("\r\n", "\n").strip().encode("utf-8")
+                            ).hexdigest()
+                        if not f_id or not f_sha or f_id not in verified_by_id or f_sha not in verified_by_id[f_id]:
                             all_failures_covered = False
                             break
                     elif isinstance(item, str):
                         if re.search(r"\bSYN\d+\b", item, re.IGNORECASE):
                             has_syntax_or_parse_error = True
-                            break
+                        all_failures_covered = False
+                        break
                     else:
                         all_failures_covered = False
                         break
@@ -1018,6 +1023,10 @@ def _evaluate_validation_checks(
                 for code in error_codes:
                     if code.upper().startswith("SYN"):
                         has_syntax_or_parse_error = True
+                        all_failures_covered = False
+                        break
+                    if code.upper() not in allowed_kql_override_codes:
+                        all_failures_covered = False
                         break
 
                 if all_failures_covered and not has_syntax_or_parse_error:
@@ -3016,6 +3025,41 @@ def _build_kql_runtime_verified_rules(
     verified: list[dict[str, Any]] = []
     seen_keys: set[tuple[str, str]] = set()
 
+    files_by_type = applicability.get("filesByContentType", {})
+    on_disk_rules_by_id: dict[str, dict[str, str | None]] = {}
+
+    for rel in files_by_type.get("analytic-rules", []):
+        doc, err = _load_yaml_safe(solution_root / rel)
+        if err or not isinstance(doc, Mapping):
+            continue
+        rid = str(doc.get("id") or "").strip()
+        q_text = str(doc.get("query") or "").replace("\r\n", "\n").strip()
+        if rid and q_text:
+            q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
+            on_disk_rules_by_id[rid] = {
+                "id": rid,
+                "originalRuleId": None,
+                "file": rel,
+                "querySha256": q_sha,
+            }
+
+    for rel in files_by_type.get("xdr-detections", []):
+        doc, err = _load_yaml_safe(solution_root / rel)
+        if err or not isinstance(doc, Mapping):
+            continue
+        xdr_fields = _extract_xdr_detection_fields(doc)
+        rid = str(xdr_fields.get("id") or "").strip()
+        orig_id = str(xdr_fields.get("sourceRuleId") or "").strip() or None
+        q_text = str(xdr_fields.get("query") or "").replace("\r\n", "\n").strip()
+        if rid and q_text:
+            q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
+            on_disk_rules_by_id[rid] = {
+                "id": rid,
+                "originalRuleId": orig_id,
+                "file": rel,
+                "querySha256": q_sha,
+            }
+
     def _add_entry(
         rule_id: str,
         query_sha256: str,
@@ -3028,6 +3072,20 @@ def _build_kql_runtime_verified_rules(
         qsha = str(query_sha256 or "").strip().lower()
         if not rid or not qsha:
             return
+        st_norm = str(status or "").strip().upper()
+        if st_norm == "PASSED":
+            st_norm = "PASS"
+        if st_norm != "PASS":
+            return
+        disk_info = on_disk_rules_by_id.get(rid)
+        if disk_info is not None:
+            if disk_info.get("querySha256") != qsha:
+                # Reject stale receipt when on-disk query was edited after live qualification.
+                return
+            if not original_rule_id and disk_info.get("originalRuleId"):
+                original_rule_id = disk_info["originalRuleId"]
+            if not file_rel and disk_info.get("file"):
+                file_rel = disk_info["file"]
         key = (rid, qsha)
         if key in seen_keys:
             return
@@ -3035,13 +3093,24 @@ def _build_kql_runtime_verified_rules(
         entry: dict[str, Any] = {
             "id": rid,
             "querySha256": qsha,
-            "status": str(status or "PASS").strip().upper(),
+            "status": "PASS",
         }
         if original_rule_id and str(original_rule_id).strip():
             entry["originalRuleId"] = str(original_rule_id).strip()
         if file_rel and str(file_rel).strip():
             entry["file"] = str(file_rel).strip()
         verified.append(entry)
+
+    def _extract_item_sha(item: Mapping[str, Any], *sha_keys: str) -> str:
+        for k in sha_keys:
+            val = str(item.get(k) or "").strip().lower()
+            if val:
+                return val
+        if isinstance(item.get("query"), str) and item["query"].strip():
+            return hashlib.sha256(
+                item["query"].replace("\r\n", "\n").strip().encode("utf-8")
+            ).hexdigest()
+        return ""
 
     for raw_list in (
         qualification_evidence.get("kqlRuntimeVerifiedRules"),
@@ -3052,18 +3121,14 @@ def _build_kql_runtime_verified_rules(
         for item in raw_list:
             if not isinstance(item, Mapping):
                 continue
-            st = str(item.get("status") or "PASS").strip().upper()
-            if st == "PASSED":
-                st = "PASS"
-            if st != "PASS":
+            st = str(item.get("status") or item.get("result") or "").strip().upper()
+            if st not in {"PASS", "PASSED"}:
                 continue
             rid = str(item.get("id") or item.get("ruleId") or "").strip()
             orig_id = str(item.get("originalRuleId") or item.get("sourceRuleId") or "").strip() or None
             f_rel = str(item.get("file") or item.get("path") or "").strip() or None
-            q_sha = str(item.get("querySha256") or "").strip().lower()
-            if not q_sha and isinstance(item.get("query"), str) and item["query"].strip():
-                q_sha = hashlib.sha256(item["query"].strip().encode("utf-8")).hexdigest()
-            _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status="PASS")
+            q_sha = _extract_item_sha(item, "querySha256", "queryHash", "sha256")
+            _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status=st)
 
     rt_ev = (
         qualification_evidence.get("runtimeKql")
@@ -3077,113 +3142,70 @@ def _build_kql_runtime_verified_rules(
         or {}
     )
     lifecycle_ev = qualification_evidence.get("alertLifecycle") or {}
-    qual_stages = (
-        workflow_state.get("qualificationStages")
-        if isinstance(workflow_state.get("qualificationStages"), Mapping)
-        else {}
-    )
-    wf_stages = (
-        workflow_state.get("stages")
-        if isinstance(workflow_state.get("stages"), Mapping)
-        else {}
-    )
-
-    solution_live_kql_passed = False
-    passed_rule_ids: set[str] = set()
 
     if isinstance(rt_ev, Mapping):
-        if (
-            rt_ev.get("passed") is True
-            or rt_ev.get("status") == "passed"
-            or rt_ev.get("dualSurfaceVerified") is True
-            or rt_ev.get("runtimeKqlVerified") is True
-            or (rt_ev.get("sentinelKqlPassed") is True and rt_ev.get("xdrKqlPassed") is True)
-        ):
-            solution_live_kql_passed = True
-        for r_item in rt_ev.get("rules") or rt_ev.get("results") or []:
-            if isinstance(r_item, Mapping) and (
-                r_item.get("passed") is True or str(r_item.get("status") or "").lower() in {"pass", "passed"}
-            ):
-                for k in ("id", "ruleId", "originalRuleId", "sourceRuleId"):
-                    if r_item.get(k):
-                        passed_rule_ids.add(str(r_item[k]).strip())
+        for r_item in rt_ev.get("rules") or rt_ev.get("results") or rt_ev.get("queries") or []:
+            if not isinstance(r_item, Mapping):
+                continue
+            item_passed = r_item.get("passed") is True or str(r_item.get("status") or "").lower() in {"pass", "passed"}
+            if not item_passed:
+                continue
+            rid = str(r_item.get("id") or r_item.get("ruleId") or "").strip()
+            orig_id = str(r_item.get("originalRuleId") or r_item.get("sourceRuleId") or "").strip() or None
+            f_rel = str(r_item.get("file") or r_item.get("path") or "").strip() or None
+            q_sha = _extract_item_sha(r_item, "querySha256", "queryHash", "sha256")
+            _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status="PASS")
+            src_id = str(r_item.get("sourceRuleId") or r_item.get("originalRuleId") or "").strip()
+            src_sha = _extract_item_sha(r_item, "sourceQuerySha256")
+            if src_id and src_sha:
+                _add_entry(src_id, src_sha, status="PASS")
+            conv_id = str(r_item.get("customDetectionId") or r_item.get("targetRuleId") or rid).strip()
+            conv_sha = _extract_item_sha(r_item, "convertedQuerySha256", "targetQuerySha256")
+            if conv_id and conv_sha:
+                _add_entry(conv_id, conv_sha, original_rule_id=src_id or orig_id, file_rel=f_rel, status="PASS")
 
     if isinstance(parity_ev, Mapping):
-        if (
-            parity_ev.get("alertParityVerified") is True
-            or parity_ev.get("parityPassed") is True
-            or parity_ev.get("passed") is True
-            or (parity_ev.get("status") == "passed" and parity_ev.get("alertParityVerified") is not False)
-        ):
-            solution_live_kql_passed = True
         for r_item in parity_ev.get("rules") or parity_ev.get("pairs") or parity_ev.get("detections") or []:
-            if isinstance(r_item, Mapping) and (
+            if not isinstance(r_item, Mapping):
+                continue
+            item_passed = (
                 r_item.get("passed") is True
                 or r_item.get("parityPassed") is True
                 or str(r_item.get("status") or "").lower() in {"pass", "passed"}
                 or int(r_item.get("alertsFired") or r_item.get("alertCount") or 0) >= 1
-            ):
-                for k in ("id", "ruleId", "originalRuleId", "sourceRuleId"):
-                    if r_item.get(k):
-                        passed_rule_ids.add(str(r_item[k]).strip())
+            )
+            if not item_passed:
+                continue
+            rid = str(r_item.get("id") or r_item.get("ruleId") or "").strip()
+            orig_id = str(r_item.get("originalRuleId") or r_item.get("sourceRuleId") or "").strip() or None
+            f_rel = str(r_item.get("file") or r_item.get("path") or "").strip() or None
+            q_sha = _extract_item_sha(r_item, "querySha256", "queryHash", "sha256")
+            _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status="PASS")
+            src_id = str(r_item.get("sourceRuleId") or r_item.get("originalRuleId") or "").strip()
+            src_sha = _extract_item_sha(r_item, "sourceQuerySha256")
+            if src_id and src_sha:
+                _add_entry(src_id, src_sha, status="PASS")
+            conv_id = str(r_item.get("customDetectionId") or r_item.get("targetRuleId") or rid).strip()
+            conv_sha = _extract_item_sha(r_item, "convertedQuerySha256", "targetQuerySha256")
+            if conv_id and conv_sha:
+                _add_entry(conv_id, conv_sha, original_rule_id=src_id or orig_id, file_rel=f_rel, status="PASS")
 
     if isinstance(lifecycle_ev, Mapping):
         det_list = lifecycle_ev.get("detections") or lifecycle_ev.get("rules") or []
-        if isinstance(det_list, list) and det_list:
-            all_det_passed = True
+        if isinstance(det_list, list):
             for d_item in det_list:
                 if not isinstance(d_item, Mapping):
                     continue
                 fired = int(d_item.get("alertsFired") or d_item.get("alertCount") or 0) >= 1 or (
                     d_item.get("fired") is True
                 )
-                if fired:
-                    for k in ("id", "ruleId", "originalRuleId", "sourceRuleId"):
-                        if d_item.get(k):
-                            passed_rule_ids.add(str(d_item[k]).strip())
-                else:
-                    all_det_passed = False
-            if all_det_passed:
-                solution_live_kql_passed = True
-
-    if (qual_stages.get("rule_parity") or {}).get("status") == "passed" or (
-        wf_stages.get("alertParity") or {}
-    ).get("status") in {"passed", "completed"}:
-        if qualification_evidence.get("providerReceipts") or qual_stages:
-            solution_live_kql_passed = True
-
-    if verified and not passed_rule_ids:
-        for v in verified:
-            passed_rule_ids.add(v["id"])
-            if v.get("originalRuleId"):
-                passed_rule_ids.add(v["originalRuleId"])
-
-    files_by_type = applicability.get("filesByContentType", {})
-    for rel in files_by_type.get("analytic-rules", []):
-        doc, err = _load_yaml_safe(solution_root / rel)
-        if err or not isinstance(doc, Mapping):
-            continue
-        rid = str(doc.get("id") or "").strip()
-        q_text = str(doc.get("query") or "").strip()
-        if rid and q_text and (solution_live_kql_passed or rid in passed_rule_ids):
-            q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
-            _add_entry(rid, q_sha, file_rel=rel, status="PASS")
-
-    for rel in files_by_type.get("xdr-detections", []):
-        doc, err = _load_yaml_safe(solution_root / rel)
-        if err or not isinstance(doc, Mapping):
-            continue
-        xdr_fields = _extract_xdr_detection_fields(doc)
-        rid = str(xdr_fields.get("id") or "").strip()
-        orig_id = str(xdr_fields.get("sourceRuleId") or "").strip() or None
-        q_text = str(xdr_fields.get("query") or "").strip()
-        if rid and q_text and (
-            solution_live_kql_passed
-            or rid in passed_rule_ids
-            or (orig_id and orig_id in passed_rule_ids)
-        ):
-            q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
-            _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=rel, status="PASS")
+                if not fired:
+                    continue
+                rid = str(d_item.get("id") or d_item.get("ruleId") or "").strip()
+                orig_id = str(d_item.get("originalRuleId") or d_item.get("sourceRuleId") or "").strip() or None
+                f_rel = str(d_item.get("file") or d_item.get("path") or "").strip() or None
+                q_sha = _extract_item_sha(d_item, "querySha256", "queryHash", "sha256")
+                _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status="PASS")
 
     return verified
 
@@ -3282,14 +3304,13 @@ def _resolve_run_and_pr_numbers(
             resolved_run = None
 
     if resolved_run is None:
-        for env_key in ("NPF_RUN_NUMBER", "GITHUB_RUN_NUMBER"):
-            env_val = os.environ.get(env_key, "").strip()
-            if env_val:
-                try:
-                    resolved_run = max(1, int(env_val))
-                    break
-                except (TypeError, ValueError):
-                    pass
+        env_val = os.environ.get("NPF_RUN_NUMBER", "").strip()
+        if env_val:
+            try:
+                resolved_run = max(1, int(env_val))
+            except (TypeError, ValueError):
+                # Ignore malformed NPF_RUN_NUMBER and fall back to workflow state attempts.
+                resolved_run = None
 
     if resolved_run is None:
         stages = workflow_state.get("stages") if isinstance(workflow_state.get("stages"), Mapping) else {}
