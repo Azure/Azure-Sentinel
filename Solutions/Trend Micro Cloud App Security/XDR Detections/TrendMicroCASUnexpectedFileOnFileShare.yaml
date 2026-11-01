@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: TrendMicroCAS
+  dataTypes:
+  - TrendMicroCAS
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - TrendMicroCAS_CL
+  requiredDataConnectors:
+  - connectorId: TrendMicroCAS
+    dataTypes:
+    - TrendMicroCAS_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: de54f817-f338-46bf-989b-4e016ea6b71b
+    path: Analytic Rules/TrendMicroCASUnexpectedFileOnFileShare.yaml
+    version: 1.0.0
+    querySha256: aafc976689803b12968c00b27fef998e242500721ac4701ec0fdb2449c0e743a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountCustomEntity`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 951174aebfd5adf9b664ba7bc981567bd67f8ea210e8a6170de2ddc728ccd6cc
+      targetQuerySha256: 9fc514f77292de80081cd8d822abc852df298430951781873aa7a85435bee38e
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 951174aebfd5adf9b664ba7bc981567bd67f8ea210e8a6170de2ddc728ccd6cc
+      targetQuerySha256: 9fc514f77292de80081cd8d822abc852df298430951781873aa7a85435bee38e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    reviewDecisions:
+    - reason: 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm
+        that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+      decision: accepted
+      sourceDocumentSha256: 951174aebfd5adf9b664ba7bc981567bd67f8ea210e8a6170de2ddc728ccd6cc
+      targetQuerySha256: 9fc514f77292de80081cd8d822abc852df298430951781873aa7a85435bee38e
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+properties:
+  id: xdr-de54f817-f338-46bf-989b-4e016ea6b71b
+  displayName: Trend Micro CAS - Unexpected file on file share
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let f_types = dynamic(['ps1', 'bat', 'scr', 'sh', 'exe', 'js', 'lnk']);
+      TrendMicroCAS
+      | where EventCategoryType in~ ('sharepoint', 'onedrive', 'dropbox', 'box', 'googledrive')
+      | where isnotempty(SrcFileName)
+      | extend file_type = extract(@'\.(\w+)$', 1, SrcFileName)
+      | where file_type in~ (f_types) or SrcFileName !contains @'.'
+      | extend AccountCustomEntity = DstUserName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Trend Micro CAS - Unexpected file on file share
+      description: '''Detects unexpected files on file share.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      customDetails:
+        AccountName: AccountCustomEntity
