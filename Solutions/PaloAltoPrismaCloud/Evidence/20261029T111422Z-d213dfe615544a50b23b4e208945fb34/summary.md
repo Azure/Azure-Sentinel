@@ -3,11 +3,11 @@
 Solution: **PaloAltoPrismaCloud**
 Run: `20261029T111422Z-d213dfe615544a50b23b4e208945fb34`
 Profile: **qualification**
-Recorded workflow status: **completed**
+Recorded workflow status: **inProgress**
 Current solution version at export: **3.2.2** (not a packaging claim)
 Requested version action: **none**
 Requested target solution version: **unknown (not recorded)** (not a packaged version)
-Evidence exported at (UTC): **2026-10-29T14:40:55.110960+00:00**
+Evidence exported at (UTC): **2026-11-01T09:35:43.851626+00:00**
 Evidence exporter: **sentinel-xdr-migration 0.1.0** (export tool, not historical run version)
 Exporter Python: **3.12.10**
 
@@ -22,7 +22,7 @@ Content hashes describe export-time bytes, not proof of what historical tests ra
 | discovery | passed | 1 |
 | conversion | passed | 1 |
 | validation | passed | 1 |
-| packaging | passed | 8 |
+| packaging | passed | 10 |
 | deployment | passed | 1 |
 | mockIngestion | passed | 1 |
 | alertParity | passed | 1 |
