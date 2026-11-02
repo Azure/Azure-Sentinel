@@ -198,6 +198,23 @@ def test_literal_numeric_range_conversion_is_identity_and_dependency_free(query)
     assert proposal["reviewRequired"] is False
 
 
+def test_sentinel_health_union_dependencies_are_health_only_and_connector_optional():
+    source = "SentinelHealth | take 1"
+    converted = migrator.convert(source, tables=["SentinelHealth"])
+
+    proposal = dependency_plan(source, target_query=converted["convertedKql"])
+
+    assert converted["targetTables"] == ["SOCHealth", "SentinelHealth"]
+    assert proposal["requiredWorkloads"] == [
+        {"workload": "mtp", "dataTypes": ["SOCHealth"]},
+        {"workload": "sentinel", "dataTypes": ["SentinelHealth"]},
+    ]
+    assert proposal["requiredDataConnectors"] == []
+    assert proposal["reviewRequired"] is False
+    from sentinel_xdr_migration.dependencies import CONNECTOR_OPTIONAL_SENTINEL_TABLES
+    assert CONNECTOR_OPTIONAL_SENTINEL_TABLES == frozenset({"SentinelHealth"})
+
+
 @pytest.mark.parametrize("query", [
     "range(0, 10, 1)",
     "range x from 0 to Limit step 1",

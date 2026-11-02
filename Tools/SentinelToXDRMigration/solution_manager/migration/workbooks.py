@@ -19,7 +19,12 @@ from jsonschema import Draft202012Validator
 
 from solution_manager import __version__
 from solution_manager.core.artifacts import report_directory as resolve_report_directory
-from solution_manager.authoring.dependencies import dependency_validation_errors, workload_records, telemetry_data_types
+from solution_manager.authoring.dependencies import (
+    CONNECTOR_OPTIONAL_SENTINEL_TABLES,
+    dependency_validation_errors,
+    workload_records,
+    telemetry_data_types,
+)
 from solution_manager.migration._workbook_core import workbook, mapping_catalog
 
 MANIFEST = "workbooks-manifest.json"
@@ -320,7 +325,14 @@ def _dependencies(queries: list[dict], configured: dict | None, reviewed_sources
         reasons.append("Output data types require reviewed workload mappings.")
     if unknown and "requiredWorkloads" not in settings:
         reasons.append("Unknown output workload: " + ", ".join(unknown))
-    if any(r.get("workload") == "sentinel" for r in records) and connectors is None:
+    connector_required = {
+        table
+        for record in records
+        if record.get("workload") == "sentinel"
+        for table in record.get("dataTypes", [])
+        if table not in CONNECTOR_OPTIONAL_SENTINEL_TABLES
+    }
+    if connector_required and connectors is None:
         reasons.append("Explicit source-associated Sentinel connector prerequisites required.")
     if settings.get("dependencyReviewRequired") is True:
         reasons.append("Reviewer deferred dependencies; explicit current review is required.")

@@ -18,6 +18,7 @@ WORKLOADS = (
     "appgovernance", "sentinel", "mtp",
 )
 PLATFORM_REFERENCE_INPUTS = frozenset({"Watchlist"})
+CONNECTOR_OPTIONAL_SENTINEL_TABLES = frozenset({"SentinelHealth"})
 
 
 def telemetry_data_types(tables):
@@ -35,12 +36,12 @@ TABLE_WORKLOADS = {
     **{table: "mdi" for table in (
         "IdentityDirectoryEvents", "IdentityLogonEvents", "IdentityQueryEvents",
     )},
-    **{table: "mtp" for table in ("AlertInfo", "AlertEvidence", "IdentityInfo")},
+    **{table: "mtp" for table in ("AlertInfo", "AlertEvidence", "IdentityInfo", "SOCHealth")},
     "CloudAppEvents": "mda",
     **{table: "sentinel" for table in (
         "Syslog", "SecurityAlert", "SecurityIncident", "SecurityEvent", "WindowsEvent", "Event",
         "AzureActivity", "AzureDiagnostics", "CommonSecurityLog", "SigninLogs", "AuditLogs",
-        "OfficeActivity", "AWSCloudTrail", "AWSGuardDuty",
+        "OfficeActivity", "AWSCloudTrail", "AWSGuardDuty", "SentinelHealth",
     )},
 }
 
@@ -165,7 +166,14 @@ def dependency_plan(
             if not isinstance(record, dict) or not isinstance(record.get("dataTypes"), list)
             or telemetry_data_types(record["dataTypes"])
         ]
-    if any(item["workload"] == "sentinel" for item in workloads) and connectors is None:
+    connector_required = {
+        table
+        for item in workloads
+        if item["workload"] == "sentinel"
+        for table in item["dataTypes"]
+        if table not in CONNECTOR_OPTIONAL_SENTINEL_TABLES
+    }
+    if connector_required and connectors is None:
         reasons.append("Provide or explicitly confirm the Sentinel connector prerequisites.")
     return {
         **resolution,

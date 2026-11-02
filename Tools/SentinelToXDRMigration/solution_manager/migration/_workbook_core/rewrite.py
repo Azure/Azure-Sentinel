@@ -54,6 +54,28 @@ ASIM_REWRITE_ENABLED = True
 from . import mapping_catalog, dynamic_casts, asim_functions
 
 _TIER_RANK = {"1to1": 0, "renamed": 1, "merged": 1, "unknown": 2, "blocked": 3}
+_UNIFIED_HEALTH_ALIAS = "__SentinelXdrUnifiedHealth"
+_UNIFIED_HEALTH_PREFIX = f"""let {_UNIFIED_HEALTH_ALIAS} = union isfuzzy=true
+(
+    SOCHealth
+    | project-rename
+        SentinelResourceId = ResourceId,
+        SentinelResourceName = ResourceName,
+        SentinelResourceType = ResourceType,
+        SentinelResourceKind = ResourceKind,
+        ExtendedProperties = AdditionalFields
+),
+SentinelHealth;
+"""
+_NORMALIZED_SOC_HEALTH_ALIAS = "__SentinelXdrNormalizedSocHealth"
+_NORMALIZED_SOC_HEALTH_PREFIX = f"""let {_NORMALIZED_SOC_HEALTH_ALIAS} = SOCHealth
+    | extend
+        SentinelResourceId = ResourceId,
+        SentinelResourceName = ResourceName,
+        SentinelResourceType = ResourceType,
+        SentinelResourceKind = ResourceKind,
+        ExtendedProperties = AdditionalFields;
+"""
 
 
 def _segments(kql: str) -> List[Tuple[str, str]]:
@@ -124,6 +146,45 @@ def _find_identifiers(kql: str, names: set) -> set:
         if kind == "code":
             found.update(m.group(1) for m in pat.finditer(text))
     return found
+
+
+def _rewrite_sentinel_health_source(kql: str, tables: List[str]) -> Tuple[str, Optional[dict]]:
+    """Normalize explicit SOCHealth sources or expand SentinelHealth-only queries."""
+    if "SentinelHealth" not in tables:
+        return kql, None
+    normalized = kql.startswith(_NORMALIZED_SOC_HEALTH_PREFIX) or (
+        "SOCHealth" in tables and not kql.startswith(_UNIFIED_HEALTH_PREFIX)
+    )
+    if normalized:
+        # Keep native columns and branch filters when both sources are already explicit.
+        prefix = _NORMALIZED_SOC_HEALTH_PREFIX
+        alias, source = _NORMALIZED_SOC_HEALTH_ALIAS, "SOCHealth"
+        kind = "health-source-normalization"
+        after = alias
+        reason = "Normalize existing Defender XDR health without adding another source"
+    else:
+        prefix = _UNIFIED_HEALTH_PREFIX
+        alias, source = _UNIFIED_HEALTH_ALIAS, "SentinelHealth"
+        kind = "health-source-union"
+        after = "SOCHealth, SentinelHealth"
+        reason = "Read health events from Defender XDR and Microsoft Sentinel"
+    replay = kql.startswith(prefix)
+    if not replay and _find_identifiers(kql, {_UNIFIED_HEALTH_ALIAS, _NORMALIZED_SOC_HEALTH_ALIAS}):
+        return kql, None
+    tail = kql[len(prefix):] if replay else kql
+    token = alias if replay else source
+    converted, counts = _apply_renames(tail, {token: alias})
+    count = counts.get(token, 0)
+    if not count:
+        return kql, None
+    return prefix + converted, {
+        "kind": kind,
+        "before": source,
+        "after": after,
+        "count": count,
+        "source": "deterministic",
+        "reason": reason,
+    }
 
 
 def _type_column_rewrite(kql: str, eligible_tables: set[str]) -> Tuple[str, bool, List[str]]:
@@ -679,6 +740,22 @@ def rewrite(kql: str, tables: Optional[List[str]],
     # Apply table + column renames in one whole-identifier pass.
     rename_map = {**col_renames, **table_renames}
     converted, counts = _apply_renames(converted, rename_map)
+    health_alias_collisions = (
+        _find_identifiers(converted, {_UNIFIED_HEALTH_ALIAS, _NORMALIZED_SOC_HEALTH_ALIAS})
+        if "SentinelHealth" in tables
+        and not converted.startswith((_UNIFIED_HEALTH_PREFIX, _NORMALIZED_SOC_HEALTH_PREFIX))
+        else set()
+    )
+    converted, health_diff = _rewrite_sentinel_health_source(converted, tables)
+    if health_diff:
+        target_tables.extend(table_renames.get(table, table) for table in tables)
+        target_tables.extend(["SOCHealth", "SentinelHealth"])
+    elif health_alias_collisions:
+        flags.extend({
+            "kind": "health-source-alias-collision",
+            "name": alias,
+            "reason": "Query already defines a reserved health alias; manual review required.",
+        } for alias in sorted(health_alias_collisions))
 
     # Drop redundant duplicate group-by keys (AH rejects duplicate output columns).
     converted, dup_keys = _dedupe_summarize_keys(converted)
@@ -710,6 +787,8 @@ def rewrite(kql: str, tables: Optional[List[str]],
         })
     diff.extend(cast_diffs)
     diff.extend(int_diffs)
+    if health_diff:
+        diff.append(health_diff)
 
     # ASIM unifying-parser function calls (_Im_WebSession(...), _Im_NetworkSession(...),
     # etc.) don't resolve in AH; swap them for the AH-native ASim<Schema>Logs table,
@@ -762,11 +841,13 @@ def rewrite(kql: str, tables: Optional[List[str]],
     # asim_functions.py) did not block `deterministic`, letting AH's silent-bind-to-
     # wrong-table behavior masquerade as a passing static bind. See batch_xdr.py's
     # matching [ASIM-FIX 2026-08-02] guard and mcp/tests/test_asim_functions.py.
-    has_review_flag = any(f["kind"] in ("la-only-column", "removed-column",
-                                        "asim-function-unrewritten") for f in flags)
+    has_review_flag = any(f["kind"] in (
+        "la-only-column", "removed-column", "asim-function-unrewritten",
+        "health-source-alias-collision",
+    ) for f in flags)
     deterministic = bool(tables) and overall == "1to1" and not has_review_flag
 
-    return {
+    result = {
         "convertedKql": converted,
         "diff": diff,
         "renamedTables": table_renames,
@@ -776,3 +857,6 @@ def rewrite(kql: str, tables: Optional[List[str]],
         "overallTier": overall,
         "deterministic": deterministic,
     }
+    if target_tables:
+        result["targetTables"] = sorted(set(target_tables))
+    return result

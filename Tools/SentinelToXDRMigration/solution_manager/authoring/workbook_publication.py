@@ -10,7 +10,11 @@ import sys
 
 from solution_manager.migration._workbook_core import workbook
 from solution_manager.migration._workbook_core import mapping_catalog
-from solution_manager.authoring.dependencies import TABLE_WORKLOADS, dependency_validation_errors
+from solution_manager.authoring.dependencies import (
+    CONNECTOR_OPTIONAL_SENTINEL_TABLES,
+    TABLE_WORKLOADS,
+    dependency_validation_errors,
+)
 from solution_manager.authoring.native_workbooks import _query
 from solution_manager.authoring.workbook_functions import validate_functions
 from solution_manager.migration.workbooks import _root, _path, _document, _load_json, _sha, _write
@@ -69,9 +73,12 @@ def validate_public_document(solution, document):
             if not tables <= declared:
                 errors.append("Current query tables are outside public dependencies: "
                               + ", ".join(sorted(tables - declared)))
-            if not (tables & sentinel) <= connectors:
+            connector_required = (
+                tables & sentinel
+            ) - CONNECTOR_OPTIONAL_SENTINEL_TABLES
+            if not connector_required <= connectors:
                 errors.append("Current Sentinel query tables require explicit connector coverage: "
-                              + ", ".join(sorted((tables & sentinel) - connectors)))
+                              + ", ".join(sorted(connector_required - connectors)))
             for table in tables:
                 expected = TABLE_WORKLOADS.get(table)
                 if expected and not any(row["workload"] == expected and table in row["dataTypes"]
