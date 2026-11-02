@@ -297,6 +297,21 @@ Describe 'AzureSentinelCost offline calculation regressions' {
         }
     }
 
+    It 'withholds a combined tier recommendation when multiple workspaces are selected' {
+        $query = Get-WorkbookQuery -ItemName 'CommitmentTierUsageContext'
+        $now = [datetimeoffset]'2026-10-29T12:00:00Z'
+        $records = @(
+            @{ TimeGenerated = $now.AddDays(-31.5); Quantity = 0.0; IsBillable = $true }
+            @{ TimeGenerated = $now.AddDays(-15); Quantity = 40.0 * 31.0 * 1024.0; IsBillable = $true; Workspace = 'workspace-one' }
+            @{ TimeGenerated = $now.AddDays(-15); Quantity = 40.0 * 31.0 * 1024.0; IsBillable = $true; Workspace = 'workspace-two' }
+        )
+        $actual = Get-FixtureTierUsage -Records $records -Now $now
+
+        $actual.AverageDailyGB | Should -Be 80.0
+        $query | Should -Match "extend suggestedTier = case\(currentTier == 'Multiple workspaces', 'Not evaluated',"
+        $query | Should -Match "extend alignmentStatus = case\(currentTier == 'Multiple workspaces', 'Not evaluated', DaysRemaining > 0, 'Not Ready',"
+    }
+
     It 'keeps the tier query independent of the selected time range and avoids raw event scans' {
         $content = $script:workbookItems['CommitmentTierUsageContext'].content
         $content.PSObject.Properties.Name | Should -Not -Contain 'timeContextFromParameter'
