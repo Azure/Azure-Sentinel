@@ -665,6 +665,8 @@ class LocalValidationXdrTests(unittest.TestCase):
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         self.assertEqual(proc.returncode, 0, proc.stderr or proc.stdout)
@@ -797,6 +799,8 @@ class LocalValidationXdrTests(unittest.TestCase):
             cwd=str(REPO_ROOT),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
         output = proc.stdout

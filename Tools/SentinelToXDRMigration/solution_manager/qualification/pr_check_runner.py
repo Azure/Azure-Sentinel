@@ -4,8 +4,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 from typing import Any, Iterable, Mapping
 import uuid
 
@@ -943,7 +945,101 @@ def _evaluate_validation_checks(
 
             ci_info = qualification_evidence.get("ciChecks")
             ci_failed = isinstance(ci_info, Mapping) and ci_info.get("passed") is False
-            if parse_errors or ci_failed:
+            ci_overridden_by_runtime_kql = False
+            ci_override_details = ""
+
+            if not parse_errors and ci_failed and isinstance(ci_info, Mapping):
+                verified_rules_list = (
+                    qualification_evidence.get("_kqlRuntimeVerifiedRules")
+                    if isinstance(qualification_evidence.get("_kqlRuntimeVerifiedRules"), list)
+                    else (
+                        qualification_evidence.get("kqlRuntimeVerifiedRules")
+                        if isinstance(qualification_evidence.get("kqlRuntimeVerifiedRules"), list)
+                        else []
+                    )
+                )
+                verified_by_id: dict[str, set[str]] = {}
+                for vr in verified_rules_list:
+                    if not isinstance(vr, Mapping):
+                        continue
+                    if str(vr.get("status") or "").strip().upper() not in {"PASS", "PASSED"}:
+                        continue
+                    q_sha = str(vr.get("querySha256") or "").strip().lower()
+                    for key_name in ("id", "originalRuleId"):
+                        rid_val = str(vr.get(key_name) or "").strip()
+                        if rid_val and q_sha:
+                            verified_by_id.setdefault(rid_val, set()).add(q_sha)
+
+                allowed_kql_override_codes = {"KS107", "KS141", "KS142", "KS204"}
+                failure_items: list[Any] = []
+                has_non_list_failure_field = False
+                for list_key in ("kqlStaticErrors", "failedRules", "errors", "failures"):
+                    raw_val = ci_info.get(list_key)
+                    if raw_val is None:
+                        continue
+                    if isinstance(raw_val, list):
+                        failure_items.extend(raw_val)
+                    elif raw_val:
+                        has_non_list_failure_field = True
+                error_codes: list[str] = []
+                if isinstance(ci_info.get("errorCodes"), list):
+                    error_codes.extend(str(c).strip() for c in ci_info["errorCodes"] if str(c).strip())
+
+                has_syntax_or_parse_error = bool(
+                    ci_info.get("hasSyntaxErrors")
+                    or ci_info.get("syntaxErrors")
+                    or ci_info.get("parseErrors")
+                )
+                all_failures_covered = bool(verified_by_id) and bool(failure_items) and not has_non_list_failure_field
+
+                for item in failure_items:
+                    if isinstance(item, Mapping):
+                        code = str(item.get("code") or item.get("errorCode") or item.get("rule") or "").strip()
+                        if code:
+                            error_codes.append(code)
+                        if code.upper().startswith("SYN") or str(item.get("category") or "").lower() in {"syntax", "parse"}:
+                            has_syntax_or_parse_error = True
+                            all_failures_covered = False
+                            break
+                        if not code or code.upper() not in allowed_kql_override_codes:
+                            all_failures_covered = False
+                            break
+                        f_id = str(item.get("id") or item.get("ruleId") or item.get("originalRuleId") or "").strip()
+                        f_sha = str(item.get("querySha256") or "").strip().lower()
+                        if not f_sha and isinstance(item.get("query"), str) and item["query"].strip():
+                            f_sha = hashlib.sha256(
+                                item["query"].replace("\r\n", "\n").strip().encode("utf-8")
+                            ).hexdigest()
+                        if not f_id or not f_sha or f_id not in verified_by_id or f_sha not in verified_by_id[f_id]:
+                            all_failures_covered = False
+                            break
+                    elif isinstance(item, str):
+                        if re.search(r"\bSYN\d+\b", item, re.IGNORECASE):
+                            has_syntax_or_parse_error = True
+                        all_failures_covered = False
+                        break
+                    else:
+                        all_failures_covered = False
+                        break
+
+                for code in error_codes:
+                    if code.upper().startswith("SYN"):
+                        has_syntax_or_parse_error = True
+                        all_failures_covered = False
+                        break
+                    if code.upper() not in allowed_kql_override_codes:
+                        all_failures_covered = False
+                        break
+
+                if all_failures_covered and not has_syntax_or_parse_error:
+                    ci_overridden_by_runtime_kql = True
+                    codes_summary = ", ".join(sorted(set(error_codes))) if error_codes else "static KQL schema/semantic error"
+                    ci_override_details = (
+                        f"Offline static KQL analyzer error ({codes_summary}) was overridden by "
+                        f"live runtime KQL qualification (kqlRuntimeVerifiedRules: {len(verified_by_id)} verified rule ID(s))."
+                    )
+
+            if parse_errors or (ci_failed and not ci_overridden_by_runtime_kql):
                 reason_detail = "; ".join(parse_errors) if parse_errors else str((ci_info or {}).get("reason") or "CI checks reported failure")
                 results.append(
                     _build_check_result(
@@ -957,13 +1053,22 @@ def _evaluate_validation_checks(
                     )
                 )
             else:
+                if ci_overridden_by_runtime_kql:
+                    obs = f"Validated {json_count} JSON file(s) and {yaml_count} YAML file(s) with 0 syntax/parse errors. {ci_override_details}"
+                    why = (
+                        "All repository JSON/YAML artifacts parsed cleanly and offline static KQL analyzer failures "
+                        "were overridden by live runtime KQL qualification (kqlRuntimeVerifiedRules)."
+                    )
+                else:
+                    obs = f"Validated {json_count} JSON file(s) and {yaml_count} YAML file(s) with 0 syntax/schema errors."
+                    why = "All repository JSON/YAML artifacts parsed cleanly and CI checks passed."
                 results.append(
                     _build_check_result(
                         cdef,
                         status="PASS",
                         what_we_checked="Parsed all JSON and YAML files in solution scope and inspected CI validation status.",
-                        what_we_observed=f"Validated {json_count} JSON file(s) and {yaml_count} YAML file(s) with 0 syntax/schema errors.",
-                        why_passed_or_failed="All repository JSON/YAML artifacts parsed cleanly and CI checks passed.",
+                        what_we_observed=obs,
+                        why_passed_or_failed=why,
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
@@ -2010,33 +2115,175 @@ def _evaluate_qualification_checks(
             det_count = len(files_by_type.get("analytic-rules", [])) + len(files_by_type.get("xdr-detections", []))
             refs = [_make_evidence_ref("Alert lifecycle & firing receipt", "qualification_evidence.alertLifecycle", kind="receipt")]
 
+            on_disk_rule_errors: list[str] = []
+            if isinstance(qualification_evidence.get("_onDiskRuleErrors"), list):
+                on_disk_rule_errors = list(qualification_evidence["_onDiskRuleErrors"])
+                on_disk_rules_by_id = (
+                    qualification_evidence.get("_onDiskRulesById")
+                    if isinstance(qualification_evidence.get("_onDiskRulesById"), Mapping)
+                    else _collect_on_disk_rules_by_id(solution_root, applicability)
+                )
+            else:
+                on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability, on_disk_rule_errors)
+
             lc_ok = False
             obs_detail = ""
             if not simulated_flag and isinstance(lc_ev, Mapping) and lc_ev:
-                rules_list = lc_ev.get("detections") or lc_ev.get("rules")
-                if isinstance(rules_list, list) and rules_list:
-                    all_initial_disabled = all(bool(r.get("initialDisabled", True)) for r in rules_list if isinstance(r, Mapping))
-                    all_fired = all(int(r.get("alertsFired") or r.get("alertCount") or 0) >= 1 for r in rules_list if isinstance(r, Mapping))
-                    all_returned_disabled = all(
-                        bool(r.get("returnedToDisabled") is True or str(r.get("finalState") or "").lower() == "disabled")
-                        for r in rules_list
-                        if isinstance(r, Mapping)
+                has_rules_list_key = (
+                    ("detections" in lc_ev and lc_ev.get("detections") is not None)
+                    or ("rules" in lc_ev and lc_ev.get("rules") is not None)
+                )
+                rules_list = (
+                    lc_ev.get("detections")
+                    if "detections" in lc_ev and lc_ev.get("detections") is not None
+                    else lc_ev.get("rules")
+                )
+                require_per_detection_receipts = det_count > 0 or bool(on_disk_rules_by_id) or bool(on_disk_rule_errors)
+                if has_rules_list_key or require_per_detection_receipts:
+                    mapping_rules = (
+                        [r for r in rules_list if isinstance(r, Mapping)]
+                        if isinstance(rules_list, list) and len(rules_list) > 0 and all(isinstance(r, Mapping) for r in rules_list)
+                        else []
                     )
-                    total_alerts = sum(int(r.get("alertsFired") or r.get("alertCount") or 0) for r in rules_list if isinstance(r, Mapping))
-                    lc_ok = all_initial_disabled and all_fired and all_returned_disabled
-                    obs_detail = (
-                        f"Evaluated {len(rules_list)} detection(s): initialDisabled={all_initial_disabled}, "
-                        f"totalAlertsFired={total_alerts}, returnedToDisabled={all_returned_disabled}."
-                    )
+                    if mapping_rules:
+                        all_initial_disabled = all(r.get("initialDisabled") is True for r in mapping_rules)
+                        all_fired = all(int(r.get("alertsFired") or r.get("alertCount") or 0) >= 1 for r in mapping_rules)
+                        all_returned_disabled = all(
+                            bool(r.get("returnedToDisabled") is True or str(r.get("finalState") or "").lower() == "disabled")
+                            for r in mapping_rules
+                        )
+                        receipt_ids_by_idx: list[set[str]] = []
+                        receipt_names_by_idx: list[set[str]] = []
+                        for r in mapping_rules:
+                            r_ids: set[str] = set()
+                            for id_key in (
+                                "id",
+                                "ruleId",
+                                "detectionId",
+                                "customDetectionId",
+                                "targetRuleId",
+                                "sourceRuleId",
+                                "originalRuleId",
+                                "analyticRuleId",
+                            ):
+                                val = str(r.get(id_key) or "").strip().lower()
+                                if val:
+                                    r_ids.add(val)
+                            r_names: set[str] = set()
+                            if not r_ids:
+                                for name_key in ("name", "detection", "ruleName", "displayName"):
+                                    n_val = str(r.get(name_key) or "").strip()
+                                    if n_val:
+                                        r_names.add(n_val.casefold())
+                                        r_names.add(Path(n_val).stem.casefold())
+                            receipt_ids_by_idx.append(r_ids)
+                            receipt_names_by_idx.append(r_names)
+
+                        xdr_disk_ids = sorted(
+                            rid
+                            for rid, info in on_disk_rules_by_id.items()
+                            if str(info.get("file") or "").replace("\\", "/").startswith("XDR Detections/")
+                        )
+                        ar_disk_ids = sorted(
+                            rid
+                            for rid, info in on_disk_rules_by_id.items()
+                            if str(info.get("file") or "").replace("\\", "/").startswith("Analytic Rules/")
+                        )
+
+                        linked_ar_ids_by_xdr: dict[str, str] = {}
+                        orig_id_xdr_counts: dict[str, int] = {}
+                        for rid in xdr_disk_ids:
+                            orig_low = str((on_disk_rules_by_id.get(rid) or {}).get("originalRuleId") or "").strip().lower()
+                            if orig_low:
+                                linked_ar_ids_by_xdr[rid] = orig_low
+                                orig_id_xdr_counts[orig_low] = orig_id_xdr_counts.get(orig_low, 0) + 1
+
+                        unambiguously_linked_ar_ids_low = {
+                            orig_low for orig_low, cnt in orig_id_xdr_counts.items() if cnt == 1
+                        }
+                        unlinked_ar_ids = [
+                            rid for rid in ar_disk_ids if rid.strip().lower() not in unambiguously_linked_ar_ids_low
+                        ]
+                        target_rule_ids = xdr_disk_ids + unlinked_ar_ids
+
+                        fallback_token_owners: dict[str, set[str]] = {}
+                        for rid in target_rule_ids:
+                            info = on_disk_rules_by_id.get(rid) or {}
+                            for tok in (
+                                str(info.get("stem") or "").strip().casefold(),
+                                str(info.get("name") or "").strip().casefold(),
+                            ):
+                                if tok:
+                                    fallback_token_owners.setdefault(tok, set()).add(rid)
+
+                        def _candidate_receipts_for_rule(rid: str) -> set[int]:
+                            info = on_disk_rules_by_id.get(rid) or {}
+                            rid_low = rid.strip().lower()
+                            orig_low = str(info.get("originalRuleId") or "").strip().lower()
+                            allow_orig_id = bool(orig_low and orig_id_xdr_counts.get(orig_low, 0) == 1)
+                            stem_cf = str(info.get("stem") or "").strip().casefold()
+                            name_cf = str(info.get("name") or "").strip().casefold()
+                            allow_stem = bool(stem_cf and len(fallback_token_owners.get(stem_cf, ())) == 1)
+                            allow_name = bool(name_cf and len(fallback_token_owners.get(name_cf, ())) == 1)
+                            cands: set[int] = set()
+                            for idx, r_ids in enumerate(receipt_ids_by_idx):
+                                if r_ids:
+                                    if rid_low in r_ids or (allow_orig_id and orig_low in r_ids):
+                                        cands.add(idx)
+                                else:
+                                    r_names = receipt_names_by_idx[idx]
+                                    if (allow_stem and stem_cf in r_names) or (allow_name and name_cf in r_names):
+                                        cands.add(idx)
+                            return cands
+
+                        def _has_bipartite_match(
+                            items: list[str],
+                            candidates_map: dict[str, set[int]],
+                        ) -> bool:
+                            assigned_by_receipt: dict[int, str] = {}
+
+                            def _try_assign(item: str, visited: set[int]) -> bool:
+                                for r_idx in sorted(candidates_map.get(item, ())):
+                                    if r_idx in visited:
+                                        continue
+                                    visited.add(r_idx)
+                                    prev_item = assigned_by_receipt.get(r_idx)
+                                    if prev_item is None or _try_assign(prev_item, visited):
+                                        assigned_by_receipt[r_idx] = item
+                                        return True
+                                return False
+
+                            for item in items:
+                                if not _try_assign(item, set()):
+                                    return False
+                            return True
+
+                        all_candidates = {rid: _candidate_receipts_for_rule(rid) for rid in target_rule_ids}
+                        all_matched = _has_bipartite_match(target_rule_ids, all_candidates)
+
+                        all_disk_covered = (
+                            not on_disk_rule_errors
+                            and bool(xdr_disk_ids or ar_disk_ids)
+                            and all_matched
+                        )
+                        total_alerts = sum(int(r.get("alertsFired") or r.get("alertCount") or 0) for r in mapping_rules)
+                        lc_ok = all_initial_disabled and all_fired and all_returned_disabled and all_disk_covered
+                        obs_detail = (
+                            f"Evaluated {len(mapping_rules)} detection(s): initialDisabled={all_initial_disabled}, "
+                            f"totalAlertsFired={total_alerts}, returnedToDisabled={all_returned_disabled}, "
+                            f"allOnDiskCovered={all_disk_covered}."
+                        )
+                    else:
+                        obs_detail = f"Empty or invalid detection entries in alertLifecycle evidence for {det_count} detection(s)."
                 else:
-                    init_dis = bool(lc_ev.get("initialDisabled", True))
+                    init_dis = lc_ev.get("initialDisabled") is True
                     alerts_cnt = int(lc_ev.get("alertsFired") or lc_ev.get("alertCount") or (det_count if lc_ev.get("alertParityVerified") is True else 0))
                     ret_dis = bool(
                         lc_ev.get("returnedToDisabled") is True
                         or str(lc_ev.get("finalState") or "").lower() == "disabled"
                         or lc_ev.get("allResourcesReturnedToDisabled") is True
                     )
-                    lc_ok = init_dis and alerts_cnt >= 1 and ret_dis
+                    lc_ok = not on_disk_rule_errors and init_dis and alerts_cnt >= max(1, det_count) and ret_dis
                     obs_detail = (
                         f"Evaluated {det_count} detection(s): initialDisabled={init_dis}, "
                         f"alertsFired={alerts_cnt}, returnedToDisabled={ret_dis}."
@@ -2295,6 +2542,116 @@ def _evaluate_qualification_checks(
         # ---------------------------------------------------------------------
         # QUAL-HR-01: Reviewer confirmation of supplied XDR / portal behavioral artifacts
         # ---------------------------------------------------------------------
+        elif cid == "QUAL-RUNTIME-01":
+            rt_ev = (
+                qualification_evidence.get("runtimeKql")
+                or qualification_evidence.get("dualSurfaceKql")
+                or qualification_evidence.get("kqlRuntime")
+                or {}
+            )
+            parity_ev = (
+                qualification_evidence.get("ruleParity")
+                or qualification_evidence.get("alertParity")
+                or qualification_evidence.get("alertLifecycle")
+                or {}
+            )
+            wb_ev = qualification_evidence.get("workbookQualification") or {}
+            if "_kqlRuntimeVerifiedRules" in qualification_evidence and isinstance(
+                qualification_evidence.get("_kqlRuntimeVerifiedRules"), list
+            ):
+                verified_rules = qualification_evidence["_kqlRuntimeVerifiedRules"]
+            elif isinstance(qualification_evidence.get("kqlRuntimeVerifiedRules"), list):
+                verified_rules = qualification_evidence["kqlRuntimeVerifiedRules"]
+            else:
+                verified_rules = []
+            on_disk_rule_errors: list[str] = []
+            if isinstance(qualification_evidence.get("_onDiskRuleErrors"), list):
+                on_disk_rule_errors = list(qualification_evidence["_onDiskRuleErrors"])
+                on_disk_rules_by_id = (
+                    qualification_evidence.get("_onDiskRulesById")
+                    if isinstance(qualification_evidence.get("_onDiskRulesById"), Mapping)
+                    else _collect_on_disk_rules_by_id(solution_root, applicability)
+                )
+            else:
+                on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability, on_disk_rule_errors)
+            has_detection_files = bool(
+                files_by_type.get("analytic-rules") or files_by_type.get("xdr-detections")
+            )
+            rt_passed = False
+            if not simulated_flag and not on_disk_rule_errors:
+                if has_detection_files or on_disk_rules_by_id:
+                    verified_by_rule_id: dict[str, str] = {}
+                    all_entries_valid = bool(on_disk_rules_by_id) and bool(verified_rules)
+                    for r in verified_rules:
+                        if not isinstance(r, Mapping):
+                            all_entries_valid = False
+                            break
+                        r_status = str(r.get("status") or "").strip().upper()
+                        r_id = str(r.get("id") or "").strip().lower()
+                        r_sha = str(r.get("querySha256") or "").strip().lower()
+                        if r_status not in {"PASS", "PASSED"} or not r_id or not r_sha:
+                            all_entries_valid = False
+                            break
+                        verified_by_rule_id[r_id] = r_sha
+                    if all_entries_valid and all(
+                        verified_by_rule_id.get(rid.lower()) == str(info.get("querySha256") or "").strip().lower()
+                        for rid, info in on_disk_rules_by_id.items()
+                    ):
+                        rt_passed = True
+                elif isinstance(wb_ev, Mapping) and (
+                    wb_ev.get("passed") is True
+                    or wb_ev.get("status") == "passed"
+                    or (
+                        isinstance(wb_ev.get("queries"), list)
+                        and bool(wb_ev.get("queries"))
+                        and all(
+                            isinstance(q, Mapping) and str(q.get("status") or "").lower() in ("passed", "pass")
+                            for q in wb_ev.get("queries", [])
+                        )
+                    )
+                ):
+                    rt_passed = True
+                elif (qual_stages.get("workbook_qualification") or {}).get("status") == "passed":
+                    rt_passed = True
+
+            refs = [_make_evidence_ref("runtimeKql", "qualification_evidence.dualSurfaceKql", kind="receipt")]
+            if rt_passed:
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="PASS",
+                        what_we_checked="Verified live runtime KQL execution receipts across solution detections and workbooks without simulated flags.",
+                        what_we_observed=f"Live runtime KQL validation passed ({len(verified_rules)} runtime-verified detection rule(s)).",
+                        why_passed_or_failed="All applicable KQL queries executed cleanly against live workspace/Defender surfaces.",
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
+                    )
+                )
+            elif not on_disk_rule_errors and not (qualification_evidence.get("providerReceipts") or qual_stages or rt_ev or parity_ev or wb_ev):
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="SKIPPED",
+                        what_we_checked="Looked for live runtime KQL qualification receipts.",
+                        what_we_observed="No runtime KQL qualification evidence was supplied.",
+                        why_passed_or_failed="Live runtime KQL validation has not been executed.",
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
+                    )
+                )
+            else:
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="FAIL",
+                        what_we_checked="Verified live runtime KQL execution receipts across solution detections and workbooks.",
+                        what_we_observed=f"Runtime KQL validation failed or used simulated evidence (simulated={simulated_flag}).",
+                        why_passed_or_failed="Live runtime KQL validation must pass against real workspace/Defender surfaces.",
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
+                    )
+                )
+
         elif cid == "QUAL-HR-01":
             refs = []
             if (solution_root / "Evidence" / "decision-manifest.json").is_file():
@@ -2807,6 +3164,415 @@ def _compute_overall_verdict(
     return "Qualified"
 
 
+def _collect_on_disk_rules_by_id(
+    solution_root: Path,
+    applicability: Mapping[str, Any],
+    errors_out: list[str] | None = None,
+) -> dict[str, dict[str, str | None]]:
+    files_by_type = applicability.get("filesByContentType", {})
+    on_disk_rules_by_id: dict[str, dict[str, str | None]] = {}
+    key_by_lower: dict[str, str] = {}
+    duplicate_ids_low: set[str] = set()
+
+    for rel in files_by_type.get("analytic-rules", []):
+        doc, err = _load_yaml_safe(solution_root / rel)
+        if err or not isinstance(doc, Mapping):
+            if errors_out is not None:
+                errors_out.append(f"Failed to parse Analytic Rule YAML '{rel}': {err or 'document is not a mapping'}")
+            continue
+        rid = str(doc.get("id") or "").strip()
+        rid_low = rid.lower()
+        q_text = str(doc.get("query") or "").replace("\r\n", "\n").strip()
+        if not rid or not q_text:
+            if errors_out is not None:
+                errors_out.append(f"Analytic Rule '{rel}' is missing required 'id' or 'query'")
+            continue
+        if rid_low in key_by_lower or rid_low in duplicate_ids_low:
+            duplicate_ids_low.add(rid_low)
+            existing_key = key_by_lower.pop(rid_low, None)
+            existing_file = (on_disk_rules_by_id.pop(existing_key, None) or {}).get("file") if existing_key else "<duplicate>"
+            if errors_out is not None:
+                errors_out.append(f"Duplicate rule ID '{rid}' across '{existing_file}' and '{rel}'")
+            continue
+        q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
+        key_by_lower[rid_low] = rid
+        on_disk_rules_by_id[rid] = {
+            "id": rid,
+            "originalRuleId": None,
+            "file": rel,
+            "stem": Path(rel).stem,
+            "name": str(doc.get("name") or doc.get("displayName") or "").strip() or Path(rel).stem,
+            "querySha256": q_sha,
+        }
+
+    for rel in files_by_type.get("xdr-detections", []):
+        doc, err = _load_yaml_safe(solution_root / rel)
+        if err or not isinstance(doc, Mapping):
+            if errors_out is not None:
+                errors_out.append(f"Failed to parse XDR Detection YAML '{rel}': {err or 'document is not a mapping'}")
+            continue
+        xdr_fields = _extract_xdr_detection_fields(doc)
+        rid = str(xdr_fields.get("id") or "").strip()
+        rid_low = rid.lower()
+        orig_id = str(xdr_fields.get("sourceRuleId") or "").strip() or None
+        q_text = str(xdr_fields.get("query") or "").replace("\r\n", "\n").strip()
+        if not rid or not q_text:
+            if errors_out is not None:
+                errors_out.append(f"XDR Detection '{rel}' is missing required 'id' or 'query'")
+            continue
+        if rid_low in key_by_lower or rid_low in duplicate_ids_low:
+            duplicate_ids_low.add(rid_low)
+            existing_key = key_by_lower.pop(rid_low, None)
+            existing_file = (on_disk_rules_by_id.pop(existing_key, None) or {}).get("file") if existing_key else "<duplicate>"
+            if errors_out is not None:
+                errors_out.append(f"Duplicate rule ID '{rid}' across '{existing_file}' and '{rel}'")
+            continue
+        q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
+        key_by_lower[rid_low] = rid
+        on_disk_rules_by_id[rid] = {
+            "id": rid,
+            "originalRuleId": orig_id,
+            "file": rel,
+            "stem": Path(rel).stem,
+            "name": str(xdr_fields.get("displayName") or doc.get("name") or "").strip() or Path(rel).stem,
+            "querySha256": q_sha,
+        }
+
+    return on_disk_rules_by_id
+
+
+def _build_kql_runtime_verified_rules(
+    solution_root: Path,
+    applicability: Mapping[str, Any],
+    *,
+    workflow_state: Mapping[str, Any],
+    qualification_evidence: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    simulated_flag, _ = _has_simulated_or_dry_run_evidence(qualification_evidence, workflow_state)
+    if simulated_flag:
+        return []
+
+    verified: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    on_disk_rule_errors: list[str] = []
+    on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability, on_disk_rule_errors)
+    if on_disk_rule_errors:
+        return []
+    on_disk_rules_by_lower = {k.lower(): v for k, v in on_disk_rules_by_id.items()}
+
+    def _add_entry(
+        rule_id: str,
+        query_sha256: str,
+        *,
+        original_rule_id: str | None = None,
+        file_rel: str | None = None,
+        status: str = "PASS",
+    ) -> None:
+        rid = str(rule_id or "").strip()
+        qsha = str(query_sha256 or "").strip().lower()
+        if not rid or not qsha:
+            return
+        st_norm = str(status or "").strip().upper()
+        if st_norm == "PASSED":
+            st_norm = "PASS"
+        if st_norm != "PASS":
+            return
+        disk_info = on_disk_rules_by_lower.get(rid.lower())
+        if disk_info is None:
+            # Drop receipts for rule IDs that do not exist on disk in the solution.
+            return
+        canonical_id = str(disk_info.get("id") or rid).strip()
+        if disk_info.get("querySha256") != qsha:
+            # Reject stale receipt when on-disk query was edited after live qualification.
+            return
+        if not original_rule_id and disk_info.get("originalRuleId"):
+            original_rule_id = disk_info["originalRuleId"]
+        if not file_rel and disk_info.get("file"):
+            file_rel = disk_info["file"]
+        key = (canonical_id.lower(), qsha)
+        if key in seen_keys:
+            return
+        seen_keys.add(key)
+        entry: dict[str, Any] = {
+            "id": canonical_id,
+            "querySha256": qsha,
+            "status": "PASS",
+        }
+        if original_rule_id and str(original_rule_id).strip():
+            entry["originalRuleId"] = str(original_rule_id).strip()
+        if file_rel and str(file_rel).strip():
+            entry["file"] = str(file_rel).strip()
+        verified.append(entry)
+
+    def _extract_item_sha(item: Mapping[str, Any], *sha_keys: str) -> str:
+        for k in sha_keys:
+            val = str(item.get(k) or "").strip().lower()
+            if val:
+                return val
+        if isinstance(item.get("query"), str) and item["query"].strip():
+            return hashlib.sha256(
+                item["query"].replace("\r\n", "\n").strip().encode("utf-8")
+            ).hexdigest()
+        return ""
+
+    for raw_list in (
+        qualification_evidence.get("kqlRuntimeVerifiedRules"),
+        workflow_state.get("kqlRuntimeVerifiedRules"),
+    ):
+        if not isinstance(raw_list, list):
+            continue
+        for item in raw_list:
+            if not isinstance(item, Mapping):
+                continue
+            st = str(item.get("status") or item.get("result") or "").strip().upper()
+            if st not in {"PASS", "PASSED"}:
+                continue
+            rid = str(item.get("id") or item.get("ruleId") or "").strip()
+            orig_id = str(item.get("originalRuleId") or item.get("sourceRuleId") or "").strip() or None
+            f_rel = str(item.get("file") or item.get("path") or "").strip() or None
+            q_sha = _extract_item_sha(item, "querySha256", "queryHash", "sha256")
+            _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status=st)
+
+    rt_ev = (
+        qualification_evidence.get("runtimeKql")
+        or qualification_evidence.get("dualSurfaceKql")
+        or qualification_evidence.get("kqlRuntime")
+        or {}
+    )
+    parity_ev = (
+        qualification_evidence.get("alertParity")
+        or qualification_evidence.get("ruleParity")
+        or {}
+    )
+    lifecycle_ev = qualification_evidence.get("alertLifecycle") or {}
+
+    if isinstance(rt_ev, Mapping):
+        for r_item in rt_ev.get("rules") or rt_ev.get("results") or rt_ev.get("queries") or []:
+            if not isinstance(r_item, Mapping):
+                continue
+            item_passed = r_item.get("passed") is True or str(r_item.get("status") or "").lower() in {"pass", "passed"}
+            if not item_passed:
+                continue
+            rid = str(r_item.get("id") or r_item.get("ruleId") or "").strip()
+            orig_id = str(r_item.get("originalRuleId") or r_item.get("sourceRuleId") or "").strip() or None
+            f_rel = str(r_item.get("file") or r_item.get("path") or "").strip() or None
+            q_sha = _extract_item_sha(r_item, "querySha256", "queryHash", "sha256")
+            _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status="PASS")
+            src_id = str(r_item.get("sourceRuleId") or r_item.get("originalRuleId") or "").strip()
+            src_sha = _extract_item_sha(r_item, "sourceQuerySha256")
+            if src_id and src_sha:
+                _add_entry(src_id, src_sha, status="PASS")
+            conv_id = str(r_item.get("customDetectionId") or r_item.get("targetRuleId") or rid).strip()
+            conv_sha = _extract_item_sha(r_item, "convertedQuerySha256", "targetQuerySha256")
+            if conv_id and conv_sha:
+                _add_entry(conv_id, conv_sha, original_rule_id=src_id or orig_id, file_rel=f_rel, status="PASS")
+
+    if isinstance(parity_ev, Mapping):
+        for r_item in parity_ev.get("rules") or parity_ev.get("pairs") or parity_ev.get("detections") or []:
+            if not isinstance(r_item, Mapping):
+                continue
+            item_passed = (
+                r_item.get("passed") is True
+                or r_item.get("parityPassed") is True
+                or str(r_item.get("status") or "").lower() in {"pass", "passed"}
+                or int(r_item.get("alertsFired") or r_item.get("alertCount") or 0) >= 1
+            )
+            if not item_passed:
+                continue
+            rid = str(r_item.get("id") or r_item.get("ruleId") or "").strip()
+            orig_id = str(r_item.get("originalRuleId") or r_item.get("sourceRuleId") or "").strip() or None
+            f_rel = str(r_item.get("file") or r_item.get("path") or "").strip() or None
+            q_sha = _extract_item_sha(r_item, "querySha256", "queryHash", "sha256")
+            _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status="PASS")
+            src_id = str(r_item.get("sourceRuleId") or r_item.get("originalRuleId") or "").strip()
+            src_sha = _extract_item_sha(r_item, "sourceQuerySha256")
+            if src_id and src_sha:
+                _add_entry(src_id, src_sha, status="PASS")
+            conv_id = str(r_item.get("customDetectionId") or r_item.get("targetRuleId") or rid).strip()
+            conv_sha = _extract_item_sha(r_item, "convertedQuerySha256", "targetQuerySha256")
+            if conv_id and conv_sha:
+                _add_entry(conv_id, conv_sha, original_rule_id=src_id or orig_id, file_rel=f_rel, status="PASS")
+
+    if isinstance(lifecycle_ev, Mapping):
+        det_list = lifecycle_ev.get("detections") or lifecycle_ev.get("rules") or []
+        if isinstance(det_list, list):
+            for d_item in det_list:
+                if not isinstance(d_item, Mapping):
+                    continue
+                fired = int(d_item.get("alertsFired") or d_item.get("alertCount") or 0) >= 1 or (
+                    d_item.get("fired") is True
+                )
+                if not fired:
+                    continue
+                rid = str(d_item.get("id") or d_item.get("ruleId") or "").strip()
+                orig_id = str(d_item.get("originalRuleId") or d_item.get("sourceRuleId") or "").strip() or None
+                f_rel = str(d_item.get("file") or d_item.get("path") or "").strip() or None
+                q_sha = _extract_item_sha(d_item, "querySha256", "queryHash", "sha256")
+                _add_entry(rid, q_sha, original_rule_id=orig_id, file_rel=f_rel, status="PASS")
+
+    return verified
+
+
+def _resolve_operator_hash(
+    solution_root: Path,
+    workflow_state: Mapping[str, Any],
+) -> str:
+    for candidate in (
+        workflow_state.get("operatorHash"),
+        (workflow_state.get("context") or {}).get("operatorHash")
+        if isinstance(workflow_state.get("context"), Mapping)
+        else None,
+    ):
+        if isinstance(candidate, str) and re.fullmatch(r"[0-9a-fA-F]{16}", candidate.strip()):
+            return candidate.strip().lower()
+
+    raw_identity = ""
+    try:
+        proc = subprocess.run(
+            ["git", "config", "user.email"],
+            cwd=str(solution_root if solution_root.is_dir() else solution_root.parent),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            raw_identity = proc.stdout.strip().lower()
+    except Exception:
+        raw_identity = ""
+
+    if not raw_identity:
+        raw_identity = str(os.environ.get("GITHUB_ACTOR") or "unknown").strip().lower()
+
+    return hashlib.sha256(raw_identity.encode("utf-8")).hexdigest()[:16]
+
+
+def _extract_stage_timestamps(workflow_state: Mapping[str, Any]) -> dict[str, str | None]:
+    stages = workflow_state.get("stages") if isinstance(workflow_state.get("stages"), Mapping) else {}
+    conv = stages.get("conversion") or stages.get("rule_conversion") or {}
+    val = stages.get("validation") or {}
+    alert_parity = stages.get("alertParity") or stages.get("parity") or {}
+    report_st = stages.get("report") or {}
+    deploy_st = stages.get("deployment") or {}
+    pkg_st = stages.get("packaging") or {}
+    pkg_root = workflow_state.get("packaging") if isinstance(workflow_state.get("packaging"), Mapping) else {}
+    pkg_curr = pkg_root.get("currentAttempt") if isinstance(pkg_root.get("currentAttempt"), Mapping) else {}
+
+    def _str_or_none(val_in: Any) -> str | None:
+        if isinstance(val_in, str) and val_in.strip():
+            return val_in.strip()
+        return None
+
+    return {
+        "convertingStartedAtUtc": _str_or_none(conv.get("startedAt") if isinstance(conv, Mapping) else None),
+        "convertingCompletedAtUtc": _str_or_none(conv.get("completedAt") if isinstance(conv, Mapping) else None),
+        "validationCompletedAtUtc": _str_or_none(val.get("completedAt") if isinstance(val, Mapping) else None),
+        "qualificationCompletedAtUtc": _str_or_none(
+            (alert_parity.get("completedAt") if isinstance(alert_parity, Mapping) else None)
+            or (report_st.get("completedAt") if isinstance(report_st, Mapping) else None)
+            or (deploy_st.get("completedAt") if isinstance(deploy_st, Mapping) else None)
+        ),
+        "packagedAtUtc": _str_or_none(
+            (pkg_st.get("completedAt") if isinstance(pkg_st, Mapping) else None)
+            or pkg_curr.get("completedAt")
+        ),
+    }
+
+
+def _resolve_run_and_pr_numbers(
+    solution_root: Path,
+    workflow_state: Mapping[str, Any],
+    *,
+    pr_number: int | None = None,
+    run_number: int | None = None,
+    existing_result_path: Path | None = None,
+) -> tuple[int, int | None]:
+    resolved_pr: int | None = None
+    if pr_number is not None:
+        try:
+            resolved_pr = int(pr_number)
+        except (TypeError, ValueError):
+            resolved_pr = None
+    elif os.environ.get("GITHUB_PR_NUMBER", "").strip():
+        try:
+            resolved_pr = int(os.environ["GITHUB_PR_NUMBER"].strip())
+        except (TypeError, ValueError):
+            resolved_pr = None
+
+    resolved_run: int | None = None
+    if run_number is not None:
+        try:
+            resolved_run = max(1, int(run_number))
+        except (TypeError, ValueError):
+            resolved_run = None
+
+    if resolved_run is None:
+        env_val = os.environ.get("NPF_RUN_NUMBER", "").strip()
+        if env_val:
+            try:
+                resolved_run = max(1, int(env_val))
+            except (TypeError, ValueError):
+                # Ignore malformed NPF_RUN_NUMBER and fall back to workflow state attempts.
+                resolved_run = None
+
+    if resolved_run is None:
+        stages = workflow_state.get("stages") if isinstance(workflow_state.get("stages"), Mapping) else {}
+        val_stage = stages.get("validation") if isinstance(stages.get("validation"), Mapping) else {}
+        attempts = val_stage.get("attempts")
+        if isinstance(attempts, int) and attempts >= 1:
+            resolved_run = attempts
+
+    if resolved_run is None:
+        candidate_paths = []
+        if existing_result_path is not None:
+            candidate_paths.append(existing_result_path)
+        candidate_paths.extend(
+            [
+                solution_root / "Evidence" / "pr-qualification" / "pr-qualification-result.json",
+                solution_root / "Evidence" / "pr-qualification-result.json",
+            ]
+        )
+        for cpath in candidate_paths:
+            doc, err = _load_json_safe(cpath)
+            if not err and isinstance(doc, Mapping) and isinstance(doc.get("runNumber"), int) and doc["runNumber"] >= 1:
+                resolved_run = int(doc["runNumber"]) + 1
+                break
+
+    if resolved_run is None:
+        resolved_run = 1
+
+    return resolved_run, resolved_pr
+
+
+def _compute_verdict_and_reasons(
+    overall_verdict: str,
+    ordered_checks: Iterable[Mapping[str, Any]],
+) -> tuple[str, list[str]]:
+    if overall_verdict in {"Validation Failed", "Qualification Failed"}:
+        verdict = "Failed"
+    elif overall_verdict in {"Qualified", "Conditionally Qualified", "Validated", "Partially Validated"}:
+        verdict = overall_verdict
+    else:
+        verdict = "Failed"
+
+    reasons: list[str] = []
+    target_statuses = {"FAIL", "SKIPPED", "WAIVED_WITH_AUTHOR_EVIDENCE", "HUMAN_REVIEW_REQUIRED"}
+    for chk in ordered_checks:
+        st = str(chk.get("status") or "").strip().upper()
+        if st not in target_statuses:
+            continue
+        cid = str(chk.get("id") or "").strip()
+        reason_text = ""
+        if st == "WAIVED_WITH_AUTHOR_EVIDENCE" and isinstance(chk.get("authorException"), Mapping):
+            exc = chk["authorException"]
+            reason_text = str(exc.get("reason") or exc.get("authorJustification") or "").strip()
+        if not reason_text:
+            reason_text = str(chk.get("whyPassedOrFailed") or chk.get("whatWeObserved") or "").strip()
+        reasons.append(f"{cid} ({st}): {reason_text}")
+
+    return verdict, reasons
+
+
 def run_pr_qualification_checks(
     solution_path: str | Path,
     *,
@@ -2821,6 +3587,8 @@ def run_pr_qualification_checks(
     author_exceptions: list[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     acknowledged_exclusions: list[str | Mapping[str, Any]] | None = None,
     docs_dir: str | Path | None = None,
+    pr_number: int | None = None,
+    run_number: int | None = None,
 ) -> dict[str, Any]:
     """Run Validation, Qualification, and Migration checklists with first-class evidence and rollup outcomes."""
     root = Path(solution_path).expanduser().resolve()
@@ -2840,6 +3608,21 @@ def run_pr_qualification_checks(
     qual_ev: dict[str, Any] = dict(qualification_evidence) if isinstance(qualification_evidence, Mapping) else {}
     exceptions_by_id = _normalize_author_exceptions(author_exceptions, decision_manifest=dec_manifest)
     quartet = _extract_version_quartet(root, target_version=target_version)
+
+    on_disk_rule_errors: list[str] = []
+    on_disk_rules_by_id = _collect_on_disk_rules_by_id(root, applicability, on_disk_rule_errors)
+    kql_runtime_verified_rules = _build_kql_runtime_verified_rules(
+        root,
+        applicability,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev,
+    )
+    qual_ev = {
+        **qual_ev,
+        "_kqlRuntimeVerifiedRules": kql_runtime_verified_rules,
+        "_onDiskRulesById": on_disk_rules_by_id,
+        "_onDiskRuleErrors": on_disk_rule_errors,
+    }
 
     validation_results = _evaluate_validation_checks(
         root,
@@ -2933,6 +3716,30 @@ def run_pr_qualification_checks(
     )
     previous_version = str(prev_ver_raw).strip() if prev_ver_raw and str(prev_ver_raw).strip() else None
 
+    verdict, verdict_reasons = _compute_verdict_and_reasons(overall_verdict, all_checks)
+    resolved_run_number, resolved_pr_number = _resolve_run_and_pr_numbers(
+        root,
+        wf_state,
+        pr_number=pr_number,
+        run_number=run_number,
+    )
+    stages_map = wf_state.get("stages") if isinstance(wf_state.get("stages"), Mapping) else {}
+    val_stage_map = stages_map.get("validation") if isinstance(stages_map.get("validation"), Mapping) else {}
+    val_attempts = val_stage_map.get("attempts")
+    passes_per_solution = (
+        max(1, int(val_attempts))
+        if isinstance(val_attempts, int) and val_attempts >= 1
+        else resolved_run_number
+    )
+    first_pass_passed = bool(resolved_run_number == 1 and summary_counts.get("fail", 0) == 0)
+    stage_timestamps = _extract_stage_timestamps(wf_state)
+    operator_hash = _resolve_operator_hash(root, wf_state)
+    workflow_profile = str(
+        wf_state.get("workflowProfile")
+        or (wf_state.get("context") or {}).get("workflowProfile")
+        or ("qualification" if run_qualification else "validation")
+    ).strip()
+
     return {
         "schemaVersion": "pr-qualification-report-v1",
         "solutionPath": f"Solutions/{root.name}" if root.parent.name == "Solutions" else root.name,
@@ -2943,12 +3750,22 @@ def run_pr_qualification_checks(
         "isMigration": bool(applicability["isMigration"]),
         "migrationReason": applicability["migrationReason"],
         "runQualification": bool(run_qualification),
+        "workflowProfile": workflow_profile,
+        "operatorHash": operator_hash,
+        "runNumber": resolved_run_number,
+        "passesPerSolution": passes_per_solution,
+        "prNumber": resolved_pr_number,
+        "firstPassPassed": first_pass_passed,
+        "stageTimestamps": stage_timestamps,
         "detectedContentTypes": applicability["detectedContentTypes"],
         "applicability": applicability,
         "validationStatus": validation_status,
         "qualificationStatus": qualification_status,
         "migrationStatus": migration_status,
         "overallVerdict": overall_verdict,
+        "verdict": verdict,
+        "verdictReasons": verdict_reasons,
+        "kqlRuntimeVerifiedRules": kql_runtime_verified_rules,
         "checks": all_checks,
         "checksById": checks_by_id,
         "checklists": {
@@ -2978,6 +3795,8 @@ def evaluate_solution_pr_qualification(
     author_exceptions: list[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     acknowledged_exclusions: list[str | Mapping[str, Any]] | None = None,
     docs_dir: str | Path | None = None,
+    pr_number: int | None = None,
+    run_number: int | None = None,
 ) -> dict[str, Any]:
     """High-level entry point for CLI `pr-qualify` and programmatic PR qualification evaluation."""
     normalized_mode = str(mode or "full").strip().lower()
@@ -3088,6 +3907,8 @@ def evaluate_solution_pr_qualification(
         author_exceptions=merged_exceptions,
         acknowledged_exclusions=merged_exclusions,
         docs_dir=docs_dir,
+        pr_number=pr_number,
+        run_number=run_number,
     )
     result["mode"] = normalized_mode
     return result

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
+import sys
 import threading
 import tempfile
 import unittest
@@ -12,6 +14,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+for _path in (
+    str(Path(__file__).resolve().parents[1]),
+    str(Path(__file__).resolve().parent),
+):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+import conftest  # noqa: E402
 import yaml
 
 from sentinel_xdr_migration import cli
@@ -1467,6 +1477,139 @@ class RuntimeQueryConsentTests(unittest.TestCase):
         self.assertFalse(plan["labReadConsent"]["operationFamilies"][SOURCE]["resourceMutation"])
         self.assertEqual("POST", plan["labReadConsent"]["operationFamilies"][XDR]["httpMethod"])
         self.assertFalse(plan["labReadConsent"]["operationFamilies"][XDR]["resourceMutation"])
+
+    def test_profiled_credential_get_token_info_uses_isolated_profile(self) -> None:
+        from solution_manager.qualification.graph_client_config import (
+            azure_cli_credential,
+            configure_azure_cli_profile,
+        )
+
+        state_root = self.base / "profiled-cred-state"
+        isolated_profile = (self.base / "isolated-cli-profile").resolve()
+        configure_azure_cli_profile(state_root, isolated_profile)
+        observed_profiles: list[str | None] = []
+
+        class StubCliCredential:
+            def __init__(self, *, tenant_id=None, subscription=None):
+                self.tenant_id = tenant_id
+                self.subscription = subscription
+
+            def get_token_info(self, *scopes, **kwargs):
+                observed_profiles.append(os.environ.get("AZURE_CONFIG_DIR"))
+                return SimpleNamespace(
+                    token="stub-token",
+                    expires_on=4070908800,
+                    refresh_on=None,
+                    scopes=scopes,
+                    kwargs=kwargs,
+                )
+
+        previous_env = os.environ.get("AZURE_CONFIG_DIR")
+        with mock.patch(
+            "azure.identity.AzureCliCredential",
+            side_effect=StubCliCredential,
+        ):
+            credential = azure_cli_credential(
+                tenant_id=TENANT_ID,
+                state_root=state_root,
+            )
+            token_info = credential.get_token_info(
+                "https://api.loganalytics.io/.default",
+                options={},
+            )
+
+        self.assertEqual("stub-token", token_info.token)
+        self.assertEqual([str(isolated_profile)], observed_profiles)
+        self.assertEqual(previous_env, os.environ.get("AZURE_CONFIG_DIR"))
+
+    def test_workbook_preflight_execution_profile_never_falls_back_to_home_azure(
+        self,
+    ) -> None:
+        from solution_manager.qualification.graph_client_config import (
+            configure_azure_cli_profile,
+        )
+        from solution_manager.qualification.workbook_preflight_workflow import (
+            execution_profile,
+        )
+
+        unconfigured_state = (self.base / "unconfigured-workbook-state").resolve()
+        ambient_home = str((Path.home() / ".azure").resolve())
+        with mock.patch.dict(
+            os.environ,
+            {"AZURE_CONFIG_DIR": ambient_home},
+            clear=False,
+        ):
+            resolved_default = execution_profile(unconfigured_state)
+
+        self.assertEqual(
+            str((unconfigured_state / "azure-cli-profile").resolve()),
+            resolved_default,
+        )
+        self.assertNotEqual(ambient_home, resolved_default)
+
+        configured_dir = (self.base / "configured-workbook-cli").resolve()
+        configure_azure_cli_profile(unconfigured_state, configured_dir)
+        self.assertEqual(
+            str(configured_dir),
+            execution_profile(unconfigured_state),
+        )
+
+    def test_conftest_guard_blocks_unmocked_live_interactive_browser_get_token(
+        self,
+    ) -> None:
+        from azure.identity import InteractiveBrowserCredential
+
+        with conftest.isolated_auth_guard() as isolated_dir:
+            self.assertEqual(
+                str(isolated_dir.resolve()),
+                os.environ.get("AZURE_CONFIG_DIR"),
+            )
+            credential = InteractiveBrowserCredential()
+            with self.assertRaisesRegex(
+                RuntimeError,
+                r"InteractiveBrowserCredential\.get_token",
+            ):
+                credential.get_token("https://graph.microsoft.com/.default")
+
+    def test_onboarding_and_preflight_azure_cli_checks_use_configured_profile(
+        self,
+    ) -> None:
+        from solution_manager.core.onboarding import doctor
+        from solution_manager.core.preflight import run_preflight
+        from solution_manager.qualification.graph_client_config import (
+            configure_azure_cli_profile,
+        )
+
+        state_root = (self.base / "cli-check-state").resolve()
+        isolated_profile = (self.base / "cli-check-profile").resolve()
+        configure_azure_cli_profile(state_root, isolated_profile)
+        observed_env: list[str | None] = []
+
+        def fake_runner(command: list[str], **_kwargs):
+            if Path(command[0]).stem.lower() == "az":
+                observed_env.append(os.environ.get("AZURE_CONFIG_DIR"))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with mock.patch(
+            "solution_manager.core.onboarding.shutil.which",
+            return_value="/usr/bin/az",
+        ), mock.patch(
+            "solution_manager.core.onboarding._state_dir",
+            return_value=state_root,
+        ), mock.patch(
+            "solution_manager.core.preflight._state_dir",
+            return_value=state_root,
+        ):
+            doctor(state_dir=state_root, runner=fake_runner)
+            run_preflight(
+                self.solution,
+                runner=fake_runner,
+            )
+
+        self.assertEqual(
+            [str(isolated_profile), str(isolated_profile)],
+            observed_env,
+        )
 
 
 if __name__ == "__main__":
