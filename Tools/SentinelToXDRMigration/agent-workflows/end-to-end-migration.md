@@ -195,6 +195,17 @@ edited generated-file overwrite safeguards, or the QA prohibition on Save/Edit.
 
 ### Workbook Qualification and browser QA
 
+For Sentinel workbook testing, invoke the
+[validate-sentinel-workbook-browser skill](../../../.github/skills/validate-sentinel-workbook-browser/SKILL.md)
+and follow the [Defender-portal walkthrough](../docs/workbook-browser-testing.md).
+Use `security.microsoft.com` as the primary surface, verify the locked
+tenant/workspace and installed instance through observed identity assertions,
+and require separate browser execution approval. Azure fallback coverage
+must be explicitly approved and separately reported. Native Sentinel
+browser QA does not imply conversion to XDR or rule parity. Standalone MCP
+observations and offline/synthetic tests are not accepted live toolkit
+Qualification evidence without the existing provenance/review contracts.
+
 `workbook-query-plan/review/execute` bind the exact reviewed fixture harness
 family to the locked Qualification target. Linux Machines has 202 queries
 across independent Sentinel and Advanced Hunting providers. Exact result
