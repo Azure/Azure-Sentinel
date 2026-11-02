@@ -2,7 +2,7 @@
 
 ## Version 1.0.4
 
-- (2026-10-30) Registered the Proofpoint TAP blocked-click interaction parser with packing and watchlist disable controls.
+- (2026-10-30) Registered the Proofpoint TAP blocked-click interaction parser with packing and watchlist disable controls - [PR #15530](https://github.com/Azure/Azure-Sentinel/pull/15530)
 
 ## Version 1.0.3
 
