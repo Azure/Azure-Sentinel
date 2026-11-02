@@ -816,14 +816,17 @@ def start_alert_parity(
     finally:
         if need_rollback:
             state["status"] = "failed"
-            raw_cleanup = _disable_all(
-                state,
-                arm_token=arm_token,
-                graph_token=graph_token,
-                state_dir=state_dir,
-            )
-            cleanup, _, _ = _normalize_cleanup_and_lifecycle(state, raw_cleanup)
-            state["cleanup"] = cleanup
+            try:
+                raw_cleanup = _disable_all(
+                    state,
+                    arm_token=arm_token,
+                    graph_token=graph_token,
+                    state_dir=state_dir,
+                )
+                cleanup, _, _ = _normalize_cleanup_and_lifecycle(state, raw_cleanup)
+                state["cleanup"] = cleanup
+            except Exception as cleanup_exc:
+                state["cleanupError"] = str(cleanup_exc)
             write_json_artifact(root, state_path, state)
 
 
@@ -1322,10 +1325,17 @@ def complete_alert_parity(
         else:
             comparison_error = str(exc)
     finally:
-        raw_cleanup = _disable_all(state, state_dir=state_dir)
-        cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
-            state, raw_cleanup
-        )
+        try:
+            raw_cleanup = _disable_all(state, state_dir=state_dir)
+            cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
+                state, raw_cleanup
+            )
+        except Exception as cleanup_exc:
+            if comparison_error is None:
+                comparison_error = f"Cleanup disable_all failed: {cleanup_exc}"
+            cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
+                state, []
+            )
 
     cleanup_ok = all(item["disabled"] for item in cleanup)
     passed = (

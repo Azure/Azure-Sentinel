@@ -2119,22 +2119,22 @@ def _evaluate_qualification_checks(
             obs_detail = ""
             if not simulated_flag and isinstance(lc_ev, Mapping) and lc_ev:
                 rules_list = lc_ev.get("detections") or lc_ev.get("rules")
-                if isinstance(rules_list, list) and rules_list:
-                    all_initial_disabled = all(bool(r.get("initialDisabled", True)) for r in rules_list if isinstance(r, Mapping))
-                    all_fired = all(int(r.get("alertsFired") or r.get("alertCount") or 0) >= 1 for r in rules_list if isinstance(r, Mapping))
+                mapping_rules = [r for r in rules_list if isinstance(r, Mapping)] if isinstance(rules_list, list) else []
+                if mapping_rules:
+                    all_initial_disabled = all(r.get("initialDisabled") is True for r in mapping_rules)
+                    all_fired = all(int(r.get("alertsFired") or r.get("alertCount") or 0) >= 1 for r in mapping_rules)
                     all_returned_disabled = all(
                         bool(r.get("returnedToDisabled") is True or str(r.get("finalState") or "").lower() == "disabled")
-                        for r in rules_list
-                        if isinstance(r, Mapping)
+                        for r in mapping_rules
                     )
-                    total_alerts = sum(int(r.get("alertsFired") or r.get("alertCount") or 0) for r in rules_list if isinstance(r, Mapping))
+                    total_alerts = sum(int(r.get("alertsFired") or r.get("alertCount") or 0) for r in mapping_rules)
                     lc_ok = all_initial_disabled and all_fired and all_returned_disabled
                     obs_detail = (
-                        f"Evaluated {len(rules_list)} detection(s): initialDisabled={all_initial_disabled}, "
+                        f"Evaluated {len(mapping_rules)} detection(s): initialDisabled={all_initial_disabled}, "
                         f"totalAlertsFired={total_alerts}, returnedToDisabled={all_returned_disabled}."
                     )
-                else:
-                    init_dis = bool(lc_ev.get("initialDisabled", True))
+                elif not isinstance(rules_list, list):
+                    init_dis = lc_ev.get("initialDisabled") is True
                     alerts_cnt = int(lc_ev.get("alertsFired") or lc_ev.get("alertCount") or (det_count if lc_ev.get("alertParityVerified") is True else 0))
                     ret_dis = bool(
                         lc_ev.get("returnedToDisabled") is True
@@ -2146,6 +2146,8 @@ def _evaluate_qualification_checks(
                         f"Evaluated {det_count} detection(s): initialDisabled={init_dis}, "
                         f"alertsFired={alerts_cnt}, returnedToDisabled={ret_dis}."
                     )
+                else:
+                    obs_detail = f"No valid detection entries in alertLifecycle evidence for {det_count} detection(s)."
             else:
                 obs_detail = f"No live alert lifecycle evidence supplied for {det_count} detection(s)."
 

@@ -591,7 +591,11 @@ def _extract_top_level_parenthesized_groups(text: str) -> list[str]:
             if depth > 0:
                 depth -= 1
                 if depth == 0 and start_idx >= 0:
-                    groups.append(text[start_idx:idx].strip())
+                    inner = text[start_idx:idx].strip()
+                    if inner:
+                        groups.append(inner)
+                        if len(_split_top_level(inner, "|")) <= 1:
+                            groups.extend(_extract_top_level_parenthesized_groups(inner))
                     start_idx = -1
     return groups
 

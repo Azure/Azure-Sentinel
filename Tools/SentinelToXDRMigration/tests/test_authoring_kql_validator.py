@@ -165,6 +165,13 @@ class AuthoringKqlValidatorTests(unittest.TestCase):
         self.assertFalse(res_sub["valid"])
         self.assertTrue(any("Unknown KQL tabular operator 'frobnicate'" in err for err in res_sub["errors"]))
 
+        nested_toscalar_subquery = (
+            "DeviceNetworkEvents | where DeviceId in (toscalar(DeviceProcessEvents | frobnicate Timestamp > ago(1h)))"
+        )
+        res_nested = validate_kql_query_static(nested_toscalar_subquery, surface="advancedHunting")
+        self.assertFalse(res_nested["valid"])
+        self.assertTrue(any("Unknown KQL tabular operator 'frobnicate'" in err for err in res_nested["errors"]))
+
     def test_author_supplied_required_workspace_functions_are_not_trusted_as_known_tables(self) -> None:
         det_doc = {
             "properties": {
