@@ -1,5 +1,10 @@
 # Changelog for ASimEmailEvent.yaml
 
+## Version 1.0.4
+
+- (2026-10-29) Register ASimEmailEventProofpointTAPBlocked parser - [PR #15500](https://github.com/Azure/Azure-Sentinel/pull/15500)
+- Add the Proofpoint TAP messages-delivered parser as ASimEmailEventProofpointTAPDelivered
+
 ## Version 1.0.3
 
 - (2026-10-28) Registered the Proofpoint TAP permitted-click interaction parser with pack forwarding and watchlist disable controls - [PR #15483](https://github.com/Azure/Azure-Sentinel/pull/15483)
