@@ -225,6 +225,13 @@ BeforeAll {
 }
 
 Describe 'AzureSentinelCost offline calculation regressions' {
+    It 'defaults the global time filter to 30 days and preserves custom time ranges' {
+        $timeRange = @($script:workbook.items | ForEach-Object { $_.content.parameters }) | Where-Object name -eq 'TimeRange'
+        $timeRange.value.durationMs | Should -Be 2592000000
+        $timeRange.typeSettings.selectableValues.durationMs | Should -Contain 2592000000
+        $timeRange.typeSettings.allowCustom | Should -BeTrue
+    }
+
     It 'excludes billable records from <ItemName> volumes and savings' -ForEach @(
         @{ ItemName = 'FreeSentinelDataAvgPerDay'; Pattern = "\['Average Free Data Per Day'\] = (?<expression>[^|;]+)"; Expected = 2.0 }
         @{ ItemName = 'FreeSentinelDataAvgDailySavings'; Pattern = "\['Avg Daily Free Data Savings'\] = (?<expression>[^|;]+)"; Expected = 4.0 }
