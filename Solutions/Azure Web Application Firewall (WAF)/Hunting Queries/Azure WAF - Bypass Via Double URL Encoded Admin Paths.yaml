@@ -27,11 +27,13 @@ query: |
   | where RequestPath != PrimaryDecode and PrimaryDecode != SecondaryDecode
   | extend NormalizedPath = tolower(SecondaryDecode)
   | where NormalizedPath matches regex TargetAdminPathRegex
-  | project TimeGenerated, clientIp = ClientIp, hostname = Hostname, requestUri = RequestUri, action = Action);
+  | project TimeGenerated, clientIp = ClientIp, hostname = Hostname, requestUri = RequestUri, action = Action,
+  TransactionToken = hash_sha256(strcat(tostring(TimeGenerated), ClientIp, RequestUri))
+  );
   let LegacyWAF = (AzureDiagnostics_Normalized
   | where TimeGenerated between (StartTime .. EndTime)
   | extend LegacyFields = column_ifexists("AdditionalFields", dynamic({}))
-  | extend action_s = coalesce(tostring(column_ifexists("action_s", "")), tostring(action_s)),
+  | extend action_s = coalesce(tostring(column_ifexists("action_s", "")), tostring(LegacyFields.action)),
           requestUri_s = coalesce(tostring(column_ifexists("requestUri_s", "")), tostring(LegacyFields.requestUri)),
           clientIp_s = coalesce(tostring(column_ifexists("clientIp_s", "")), tostring(LegacyFields.clientIp)),
           hostname_s = coalesce(tostring(column_ifexists("hostname_s", "")), tostring(LegacyFields.hostname)),
@@ -45,12 +47,15 @@ query: |
   | where RequestPath != PrimaryDecode and PrimaryDecode != SecondaryDecode
   | extend NormalizedPath = tolower(SecondaryDecode)
   | where NormalizedPath matches regex TargetAdminPathRegex
-  | project TimeGenerated, clientIp = clientIp_s, hostname = hostname_s, requestUri = requestUri_s, action = action_s);
+  | project TimeGenerated, clientIp = clientIp_s, hostname = hostname_s, requestUri = requestUri_s, action = action_s,
+            TransactionToken = hash_sha256(strcat(tostring(TimeGenerated), clientIp_s, requestUri_s)
+  );
   union isfuzzy=true ModernWAF, LegacyWAF
   | summarize FirstSeen = min(TimeGenerated),
               LastSeen = max(TimeGenerated),
-              TotalAttempts = dcount(requestUri),
-              SamplePayloads = make_set(requestUri, 5)
+              TotalAttempts = dcount(TransactionToken),
+              SamplePayloads = make_set(requestUri, 5),
+              AttackCount = count()
               by clientIp, hostname, action
 entityMappings:
   - entityType: IP
