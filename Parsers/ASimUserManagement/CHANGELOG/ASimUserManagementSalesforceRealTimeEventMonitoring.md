@@ -2,7 +2,8 @@
 
 ## Version 0.1.0 - 2026-10-30
 
-- Forward `disabled` and `pack` and reference the connector's guaranteed `SalesforceDomain` column directly.
+- Forward `disabled` and `pack`.
+- Support RDA tables without `SalesforceDomain` or `Type`: leave domain-derived fields empty when the domain column is absent and use the source table name when `Type` is absent. - [PR #15514](https://github.com/Azure/Azure-Sentinel/pull/15514)
 - Reference the PermissionSetEventStore API and preserve documented login-history, session-level, and related-event identifiers when packing.
 - Normalize assigned and unassigned permission-set or permission-set-group values as `NewPropertyValue` and `PreviousPropertyValue`, and the documented event source as the acting application, without fabricating group membership or target usernames.
 - (2026-10-30) Initial creation of the Salesforce Real-Time Event Monitoring UserManagement parser.
