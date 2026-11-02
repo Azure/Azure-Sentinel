@@ -1,5 +1,10 @@
 # Changelog for vimEmailEventProofpointPODMailLog.yaml
 
+## Version 0.1.3
+
+- (2026-10-30) Read Proofpoint MailLog event IDs directly from the source `id` column - [PR #15463](https://github.com/Azure/Azure-Sentinel/pull/15463)
+- Use the declared source column to populate `EventOriginalUid` without changing filtering.
+
 ## Version 0.1.2
 
 - (2026-10-24) Normalize mailbox-form relay hosts and identify relay-less local delivery destinations - [PR #15410](https://github.com/Azure/Azure-Sentinel/pull/15410)
