@@ -185,11 +185,18 @@ BeforeAll {
     }
 
     function Get-FixtureTierUsage {
-        param([object[]]$Records, [datetimeoffset]$Now)
+        param([object[]]$Records, [datetimeoffset]$Now, [string]$Workspace)
 
         $query = Get-WorkbookQuery -ItemName 'CommitmentTierUsageContext'
         if ($query -notmatch 'Usage\s*\|\s*where TimeGenerated >= historyProbeStart and TimeGenerated < now\(\)\s*\|\s*where IsBillable == true\s*\|\s*summarize TotalBilledMB = sumif\(Quantity, TimeGenerated >= reviewStart\), FirstObserved = min\(TimeGenerated\)') {
             throw 'Tier volume and history must use billable Usage aggregates.'
+        }
+        if ($Workspace) {
+            $resources = $script:workbookItems['CommitmentTierUsageContext'].content.crossComponentResources
+            if ($resources.Count -ne 1 -or $resources[0] -ne '{CommitmentWorkspace}') {
+                throw 'Tier usage must be scoped to the single commitment workspace.'
+            }
+            $Records = @($Records | Where-Object { $_.Workspace -eq $Workspace })
         }
         $reviewDays = [double](Get-QueryExpression -Query $query -Pattern 'let reviewDays = (?<expression>[0-9.]+);')
         $reviewStart = $Now.AddDays(-[double](Get-QueryExpression -Query $query -Pattern 'let reviewStart = ago\((?<expression>[0-9.]+)d\);'))
@@ -310,6 +317,66 @@ Describe 'AzureSentinelCost offline calculation regressions' {
         $actual.AverageDailyGB | Should -Be 80.0
         $query | Should -Match "extend suggestedTier = case\(currentTier == 'Multiple workspaces', 'Not evaluated',"
         $query | Should -Match "extend alignmentStatus = case\(currentTier == 'Multiple workspaces', 'Not evaluated', DaysRemaining > 0, 'Not Ready',"
+    }
+
+    It 'provides a required single-workspace selector with a deterministic default and no All option' {
+        $parameters = $script:workbookItems['parameters - commitment tier current'].content.parameters
+        $selector = $parameters | Where-Object name -eq 'CommitmentWorkspace'
+        $selector.type | Should -Be 2
+        $selector.isRequired | Should -BeTrue
+        $selector.multiSelect | Should -BeFalse
+        $selector.query | Should -Match "where name contains 'SecurityInsights'"
+        $selector.query | Should -Match 'summarize by workspaceResourceId'
+        $selector.query | Should -Match 'join kind=inner'
+        $selector.query | Should -Match 'preference = iif\(workspaceResourceId in~ \(\{Workspace\}\), 0, 1\)'
+        $selector.query | Should -Match 'order by preference asc, workspaceName asc, workspaceResourceId asc'
+        $selector.query | Should -Match 'project value = workspaceResourceId, label = workspaceName, selected = true'
+        ($selector | ConvertTo-Json -Depth 20) | Should -Not -Match 'value::all'
+        @($parameters.name).IndexOf('CommitmentWorkspace') | Should -BeLessThan (@($parameters.name).IndexOf('CurrentCommitmentTier'))
+    }
+
+    It 'uses the same single workspace for current tier detection and Usage history without changing global scope' {
+        $parameters = $script:workbookItems['parameters - commitment tier current'].content.parameters
+        $current = $parameters | Where-Object name -eq 'CurrentCommitmentTier'
+        $current.query | Should -Match "where id =~ '\{CommitmentWorkspace\}'"
+        $current.query | Should -Not -Match '\{Workspace\}|value::all'
+        $current.query | Should -Match "WorkspaceCount == 0, 'Not available'"
+        $usage = $script:workbookItems['CommitmentTierUsageContext'].content
+        @($usage.crossComponentResources).Count | Should -Be 1
+        $usage.crossComponentResources[0] | Should -Be '{CommitmentWorkspace}'
+        $usage.title | Should -Match '\{CommitmentWorkspace:label\}'
+        $script:workbookItems['WorkspaceBillableIngestionSizeTrend'].content.crossComponentResources[0] | Should -Be '{Workspace}'
+    }
+
+    It 'isolates 40 GB/day per workspace instead of combining two workspaces into 80 GB/day' -ForEach @(
+        @{ SelectedWorkspace = 'workspace-one' }
+        @{ SelectedWorkspace = 'workspace-two' }
+    ) {
+        $now = [datetimeoffset]'2026-10-29T12:00:00Z'
+        $records = @(
+            foreach ($workspace in 'workspace-one', 'workspace-two') {
+                @{ TimeGenerated = $now.AddDays(-31.5); Quantity = 0.0; IsBillable = $true; Workspace = $workspace }
+                @{ TimeGenerated = $now.AddDays(-15); Quantity = 40.0 * 31.0 * 1024.0; IsBillable = $true; Workspace = $workspace }
+            }
+        )
+        $actual = Get-FixtureTierUsage -Records $records -Now $now -Workspace $SelectedWorkspace
+        $actual.DaysRemaining | Should -Be 0
+        $actual.AverageDailyGB | Should -Be 40.0
+        (Get-WorkbookQuery -ItemName 'CommitmentTierUsageContext') | Should -Match "AvgDailyGB < 50.0, 'Pay-As-You-Go'"
+    }
+
+    It 'does not borrow another workspace history when switching to a new workspace' {
+        $now = [datetimeoffset]'2026-10-29T12:00:00Z'
+        $records = @(
+            @{ TimeGenerated = $now.AddDays(-31.5); Quantity = 1024.0; IsBillable = $true; Workspace = 'old-workspace' }
+            @{ TimeGenerated = $now.AddDays(-10); Quantity = 1024.0; IsBillable = $true; Workspace = 'new-workspace' }
+        )
+        $actual = Get-FixtureTierUsage -Records $records -Now $now -Workspace 'new-workspace'
+        $actual.DaysRemaining | Should -Be 21
+        $actual.AverageDailyGB | Should -BeNullOrEmpty
+        $empty = Get-FixtureTierUsage -Records $records -Now $now -Workspace 'empty-workspace'
+        $empty.DaysRemaining | Should -Be 31
+        $empty.AverageDailyGB | Should -BeNullOrEmpty
     }
 
     It 'keeps the tier query independent of the selected time range and avoids raw event scans' {

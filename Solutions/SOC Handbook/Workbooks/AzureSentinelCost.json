@@ -79,10 +79,10 @@
             "id": "67c2ce6e-ea54-4ae4-8343-3fcad8e53d1b",
             "version": "KqlParameterItem/1.0",
             "name": "Workspace",
-            "label": "Workspaces (all sections)",
+            "label": "Workspaces (except Commitment Tiers)",
             "type": 5,
             "isRequired": true,
-            "description": "Select the Microsoft Sentinel workspaces used throughout the workbook, including the observed table-usage context in the Data Lake section. All accessible workspaces are selected by default.",
+            "description": "Select the Microsoft Sentinel workspaces used throughout the workbook, including the observed table-usage context in the Data Lake section. Commitment Tiers has its own single-workspace selector. All accessible workspaces are selected by default.",
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
@@ -1902,7 +1902,7 @@
           {
             "type": 1,
             "content": {
-              "json": "Microsoft Sentinel and Log Analytics offer Pay-As-You-Go and Commitment Tier pricing. This section automatically detects the current workspace tier and calculates a **usage-based suggested tier** from average billable daily ingestion over the last 31 days for a single workspace. The suggestion is withheld when multiple workspaces are selected because their combined ingestion does not support a per-workspace tier decision. Volume and history checks use hourly billable `Usage` aggregates rather than raw events, independently of the selected time range.\r\n\r\n> **New workspace notice:** A recommendation is shown only after 31 days of billable data are detected. Until then, the table reports how many days remain before the recommendation becomes available; a shorter history cannot accurately represent the fixed 31-day review period.\r\n\r\n> **Estimate only:** The suggested tier uses ingestion volume, not actual pricing. It is not the Azure portal **Recommended Tier** and should not be used as the sole basis for a pricing change. Azure evaluates each available tier using the prior 31 days and your applicable pricing to identify the lowest estimated-cost option. Review [Usage and estimated costs in the Azure portal](https://learn.microsoft.com/azure/azure-monitor/logs/change-pricing-tier#changing-pricing-tier) before changing a tier.\r\n\r\nReview **Days since tier last changed** before making a change: a commitment tier has a 31-day period during which it cannot move to a lower commitment or consumption tier. Confirm rates on the [Microsoft Sentinel pricing page](https://www.microsoft.com/security/pricing/microsoft-sentinel/) and review [Plan costs and understand pricing and billing for Microsoft Sentinel](https://learn.microsoft.com/azure/sentinel/billing?tabs=simplified%2Ccommitment-tiers#analytics-tier)."
+              "json": "Microsoft Sentinel and Log Analytics offer Pay-As-You-Go and Commitment Tier pricing. Select one **Commitment tier workspace** below to automatically detect its current tier and calculate a **usage-based suggested tier** from its average billable daily ingestion over the last 31 days. Both tier detection and usage history are scoped only to this workspace, independently of the global workspace and time-range filters. Changing this selector does not change other workbook sections.\r\n\r\nThe initial selection prefers a workspace selected in the global filter, ordered by workspace name and resource ID. When the global filter selects all workspaces, the first accessible Sentinel workspace in that order is selected. This is a default, not an inferred primary workspace; use the dropdown to choose the workspace you want to evaluate. If no accessible Sentinel workspace is found, check your subscriptions and permissions.\r\n\r\n> **New workspace notice:** A recommendation is shown only after 31 days of billable data are detected. Until then, the table reports how many days remain before the recommendation becomes available; a shorter history cannot accurately represent the fixed 31-day review period.\r\n\r\n> **Estimate only:** The suggested tier uses ingestion volume, not actual pricing. It is not the Azure portal **Recommended Tier** and should not be used as the sole basis for a pricing change. Azure evaluates each available tier using the prior 31 days and your applicable pricing to identify the lowest estimated-cost option. Review [Usage and estimated costs in the Azure portal](https://learn.microsoft.com/azure/azure-monitor/logs/change-pricing-tier#changing-pricing-tier) before changing a tier.\r\n\r\nReview **Days since tier last changed** before making a change: a commitment tier has a 31-day period during which it cannot move to a lower commitment or consumption tier. Confirm rates on the [Microsoft Sentinel pricing page](https://www.microsoft.com/security/pricing/microsoft-sentinel/) and review [Plan costs and understand pricing and billing for Microsoft Sentinel](https://learn.microsoft.com/azure/sentinel/billing?tabs=simplified%2Ccommitment-tiers#analytics-tier)."
             },
             "name": "text - commitment tiers"
           },
@@ -1912,12 +1912,25 @@
               "version": "KqlParameterItem/1.0",
               "parameters": [
                 {
+                  "id": "91d7922c-e35c-4360-b7ce-cb8618368cd7",
+                  "version": "KqlParameterItem/1.0",
+                  "name": "CommitmentWorkspace",
+                  "label": "Commitment tier workspace",
+                  "type": 2,
+                  "isRequired": true,
+                  "multiSelect": false,
+                  "description": "Evaluate one Sentinel workspace. Initially prefers a workspace selected in the global filter; otherwise selects the first accessible Sentinel workspace by name. You can switch without changing other sections.",
+                  "query": "resources\r\n| where type =~ 'Microsoft.operationsmanagement/solutions'\r\n| where name contains 'SecurityInsights'\r\n| extend workspaceResourceId = tolower(tostring(properties.workspaceResourceId))\r\n| summarize by workspaceResourceId\r\n| join kind=inner (resources | where type =~ 'Microsoft.OperationalInsights/workspaces' | project workspaceResourceId = tolower(id), workspaceName = name) on workspaceResourceId\r\n| extend preference = iif(workspaceResourceId in~ ({Workspace}), 0, 1)\r\n| order by preference asc, workspaceName asc, workspaceResourceId asc\r\n| project value = workspaceResourceId, label = workspaceName, selected = true",
+                  "queryType": 1,
+                  "resourceType": "microsoft.resourcegraph/resources"
+                },
+                {
                   "id": "7df48bd0-c79e-4c17-9a6d-b00b9511d9e1",
                   "version": "KqlParameterItem/1.0",
                   "name": "CurrentCommitmentTier",
                   "type": 1,
                   "isRequired": true,
-                  "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| where id in~ ({Workspace}) or 'value::all' in~ ({Workspace})\r\n| extend skuName = tolower(tostring(properties.sku.name)), capacityReservationLevel = toint(properties.sku.capacityReservationLevel)\r\n| extend currentTier = case(skuName == 'capacityreservation', strcat(tostring(capacityReservationLevel), ' GB/day commitment'), skuName == 'pergb2018', 'Pay-As-You-Go', skuName == 'free', 'Free tier', skuName == 'standalone', 'Standalone tier', skuName == 'standard', 'Standard tier', skuName == 'premium', 'Premium tier', 'Unknown')\r\n| summarize WorkspaceCount = dcount(id), CurrentTier = any(currentTier)\r\n| project CurrentCommitmentTier = iif(WorkspaceCount == 1, CurrentTier, 'Multiple workspaces')",
+                  "query": "resources\r\n| where type =~ 'microsoft.operationalinsights/workspaces'\r\n| where id =~ '{CommitmentWorkspace}'\r\n| extend skuName = tolower(tostring(properties.sku.name)), capacityReservationLevel = toint(properties.sku.capacityReservationLevel)\r\n| extend currentTier = case(skuName == 'capacityreservation', strcat(tostring(capacityReservationLevel), ' GB/day commitment'), skuName == 'pergb2018', 'Pay-As-You-Go', skuName == 'free', 'Free tier', skuName == 'standalone', 'Standalone tier', skuName == 'standard', 'Standard tier', skuName == 'premium', 'Premium tier', 'Unknown')\r\n| summarize WorkspaceCount = dcount(id), CurrentTier = any(currentTier)\r\n| project CurrentCommitmentTier = case(WorkspaceCount == 1, CurrentTier, WorkspaceCount == 0, 'Not available', 'Multiple workspaces')",
                   "isHiddenWhenLocked": true,
                   "queryType": 1,
                   "resourceType": "microsoft.resourcegraph/resources"
@@ -1935,7 +1948,7 @@
               "version": "KqlItem/1.0",
               "query": "let reviewDays = 31.0; let reviewStart = ago(31d); let historyProbeStart = ago(32d); let currentTier = '{CurrentCommitmentTier}'; let tierLevels = dynamic([50,100,200,300,400,500,1000,2000,5000]); Usage | where TimeGenerated >= historyProbeStart and TimeGenerated < now() | where IsBillable == true | summarize TotalBilledMB = sumif(Quantity, TimeGenerated >= reviewStart), FirstObserved = min(TimeGenerated) | extend ObservedHistoryDays = iif(isnull(FirstObserved), 0.0, min_of(reviewDays, datetime_diff('second', now(), FirstObserved) / 86400.0)) | extend DaysRemaining = toint(ceiling(max_of(reviewDays - ObservedHistoryDays, 0.0))) | extend AvgDailyGB = iif(DaysRemaining == 0, TotalBilledMB / 1024.0 / reviewDays, real(null)), TierLevels = tierLevels | mv-expand TierLevel = TierLevels to typeof(int) | extend IsEligible = TierLevel >= AvgDailyGB | summarize SuggestedTierGBPerDay = minif(TierLevel, IsEligible), AvgDailyGB = any(AvgDailyGB), ObservedHistoryDays = any(ObservedHistoryDays), DaysRemaining = any(DaysRemaining) | extend suggestedTier = case(currentTier == 'Multiple workspaces', 'Not evaluated', DaysRemaining > 0, strcat('Ready in ', tostring(DaysRemaining), iif(DaysRemaining == 1, ' day', ' days')), AvgDailyGB < 50.0, 'Pay-As-You-Go', isnotempty(SuggestedTierGBPerDay), strcat(tostring(SuggestedTierGBPerDay), ' GB/day commitment'), 'Above 5000 GB/day - review Azure portal options') | extend alignmentStatus = case(currentTier == 'Multiple workspaces', 'Not evaluated', DaysRemaining > 0, 'Not Ready', currentTier == 'Not available' or currentTier == 'Unknown', 'Not evaluated', suggestedTier startswith 'Above 5000 GB/day', 'Review in portal', currentTier == suggestedTier, 'Aligned', 'Review tier') | project Current = currentTier, Suggested = suggestedTier, Status = alignmentStatus, ['Avg daily GB'] = round(AvgDailyGB, 2)",
               "size": 0,
-              "title": "Usage-based suggested tier details",
+              "title": "Usage-based suggested tier details - {CommitmentWorkspace:label}",
               "timeContext": {
                 "durationMs": 0
               },
@@ -1944,7 +1957,7 @@
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "crossComponentResources": [
-                "{Workspace}"
+                "{CommitmentWorkspace}"
               ],
               "visualization": "table",
               "gridSettings": {
