@@ -1392,6 +1392,19 @@ def test_round3_kql_subquery_and_retry_after_fixes() -> None:
     )
     assert res_lookup["valid"] is False and any("MissingLookupTable" in e for e in res_lookup["errors"])
 
+    # Multi-statement view () { let ...; ... } with parse trailing wildcard * should pass
+    res_view = validate_kql_query_static(
+        "let xdr_inline_Parser = view () {\n"
+        "    let ActionMappingTable = datatable(Code:string, Action:string)['1', 'Login'];\n"
+        "    Syslog\n"
+        "    | parse SyslogMessage with * 'ACTION :' Code:string ' ' *\n"
+        "    | lookup kind=leftouter ActionMappingTable on Code\n"
+        "};\n"
+        "xdr_inline_Parser\n"
+        "| where isnotempty(Action)"
+    )
+    assert res_view["valid"] is True, f"Expected multi-statement view() to pass, got {res_view['errors']}"
+
     # _parse_retry_after_seconds handles inf/nan, <1s remaining, and Retry-After > remaining budget
     assert _parse_retry_after_seconds("inf", default_seconds=2, remaining_budget_seconds=120.0) == 2
     assert _parse_retry_after_seconds("-inf", default_seconds=2, remaining_budget_seconds=120.0) == 2

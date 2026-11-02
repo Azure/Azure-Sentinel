@@ -439,55 +439,16 @@ def validate_kql_query_static(
 
         if first_word in KNOWN_STATEMENT_KEYWORDS:
             if first_word == "let":
-                let_match = re.match(r"^let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$", stmt, re.IGNORECASE)
-                if not let_match:
-                    errors.append(f"Malformed 'let' statement in statement #{stmt_idx + 1}")
-                    continue
-                let_name = let_match.group(1)
-                let_bindings.add(let_name.casefold())
-                rhs = let_match.group(2).strip()
-                # If the RHS is a lambda/view `(params) { body }`, extract body if tabular
-                view_match = re.match(r"^(?:view\s*)?\([^)]*\)\s*\{([\s\S]*)\}\s*$", rhs, re.IGNORECASE)
-                if view_match:
-                    rhs = view_match.group(1).strip()
-                unwrapped_rhs = rhs
-                while unwrapped_rhs.startswith("(") and unwrapped_rhs.endswith(")"):
-                    inner_rhs = unwrapped_rhs[1:-1].strip()
-                    _, inner_errs = _scan_lexical_structure(inner_rhs)
-                    if inner_errs:
-                        break
-                    unwrapped_rhs = inner_rhs
-                if len(_split_top_level(unwrapped_rhs, "|")) > 1:
-                    _validate_pipeline_stages(
-                        unwrapped_rhs,
-                        stmt_label=f"let {let_name}",
-                        known_table_map=known_table_map,
-                        let_bindings=let_bindings,
-                        approved_fn_set=approved_fn_set | builtin_asim,
-                        operators_seen=operators_seen,
-                        referenced_tables=referenced_tables,
-                        errors=errors,
-                    )
-                else:
-                    for sub_group in _extract_top_level_parenthesized_groups(unwrapped_rhs):
-                        if len(_split_top_level(sub_group, "|")) > 1:
-                            _validate_pipeline_stages(
-                                sub_group,
-                                stmt_label=f"let {let_name} subquery",
-                                known_table_map=known_table_map,
-                                let_bindings=let_bindings,
-                                approved_fn_set=approved_fn_set | builtin_asim,
-                                operators_seen=operators_seen,
-                                referenced_tables=referenced_tables,
-                                errors=errors,
-                            )
-                    head_ident_match = re.match(r"^(?:\(\s*)*([A-Za-z_][A-Za-z0-9_]*)", unwrapped_rhs)
-                    if head_ident_match:
-                        ident = head_ident_match.group(1)
-                        if ident.casefold() in known_table_map:
-                            referenced_tables.add(known_table_map[ident.casefold()])
-                        elif re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*_CL", ident, re.IGNORECASE):
-                            referenced_tables.add(ident)
+                _validate_let_statement(
+                    stmt,
+                    stmt_idx=stmt_idx,
+                    known_table_map=known_table_map,
+                    let_bindings=let_bindings,
+                    approved_fn_set=approved_fn_set | builtin_asim,
+                    operators_seen=operators_seen,
+                    referenced_tables=referenced_tables,
+                    errors=errors,
+                )
             continue
 
         has_tabular_expression = True
@@ -629,6 +590,111 @@ def _extract_join_or_lookup_rhs_source(rest: str) -> str | None:
     return None
 
 
+def _validate_let_statement(
+    stmt: str,
+    *,
+    stmt_idx: int,
+    known_table_map: dict[str, str],
+    let_bindings: set[str],
+    approved_fn_set: set[str],
+    operators_seen: list[str],
+    referenced_tables: set[str],
+    errors: list[str],
+    stmt_label_prefix: str = "",
+) -> None:
+    let_match = re.match(r"^let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]+)$", stmt, re.IGNORECASE)
+    if not let_match:
+        label = f"{stmt_label_prefix}statement #{stmt_idx + 1}" if stmt_label_prefix else f"statement #{stmt_idx + 1}"
+        errors.append(f"Malformed 'let' statement in {label}")
+        return
+    let_name = let_match.group(1)
+    let_bindings.add(let_name.casefold())
+    rhs = let_match.group(2).strip()
+    let_label = f"{stmt_label_prefix}let {let_name}".strip()
+
+    view_match = re.match(r"^(?:view\s*)?\(([^)]*)\)\s*\{([\s\S]*)\}\s*$", rhs, re.IGNORECASE)
+    if view_match:
+        params_raw = view_match.group(1).strip()
+        body_raw = view_match.group(2).strip()
+        scoped_bindings = set(let_bindings)
+        if params_raw:
+            for param_part in _split_top_level(params_raw, ","):
+                p_match = re.match(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:", param_part)
+                if p_match:
+                    scoped_bindings.add(p_match.group(1).casefold())
+        inner_stmts = [s.strip() for s in _split_top_level(body_raw, ";") if s.strip()]
+        if len(inner_stmts) > 1:
+            for inner_idx, inner_stmt in enumerate(inner_stmts):
+                inner_first_match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)", inner_stmt)
+                inner_first = inner_first_match.group(1).casefold() if inner_first_match else ""
+                if inner_first in KNOWN_STATEMENT_KEYWORDS:
+                    if inner_first == "let":
+                        _validate_let_statement(
+                            inner_stmt,
+                            stmt_idx=inner_idx,
+                            known_table_map=known_table_map,
+                            let_bindings=scoped_bindings,
+                            approved_fn_set=approved_fn_set,
+                            operators_seen=operators_seen,
+                            referenced_tables=referenced_tables,
+                            errors=errors,
+                            stmt_label_prefix=f"{let_label} ",
+                        )
+                    continue
+                _validate_pipeline_stages(
+                    inner_stmt,
+                    stmt_label=let_label,
+                    known_table_map=known_table_map,
+                    let_bindings=scoped_bindings,
+                    approved_fn_set=approved_fn_set,
+                    operators_seen=operators_seen,
+                    referenced_tables=referenced_tables,
+                    errors=errors,
+                )
+            return
+        rhs = body_raw
+        let_bindings = scoped_bindings
+
+    unwrapped_rhs = rhs
+    while unwrapped_rhs.startswith("(") and unwrapped_rhs.endswith(")"):
+        inner_rhs = unwrapped_rhs[1:-1].strip()
+        _, inner_errs = _scan_lexical_structure(inner_rhs)
+        if inner_errs:
+            break
+        unwrapped_rhs = inner_rhs
+    if len(_split_top_level(unwrapped_rhs, "|")) > 1:
+        _validate_pipeline_stages(
+            unwrapped_rhs,
+            stmt_label=let_label,
+            known_table_map=known_table_map,
+            let_bindings=let_bindings,
+            approved_fn_set=approved_fn_set,
+            operators_seen=operators_seen,
+            referenced_tables=referenced_tables,
+            errors=errors,
+        )
+    else:
+        for sub_group in _extract_top_level_parenthesized_groups(unwrapped_rhs):
+            if len(_split_top_level(sub_group, "|")) > 1:
+                _validate_pipeline_stages(
+                    sub_group,
+                    stmt_label=f"{let_label} subquery",
+                    known_table_map=known_table_map,
+                    let_bindings=let_bindings,
+                    approved_fn_set=approved_fn_set,
+                    operators_seen=operators_seen,
+                    referenced_tables=referenced_tables,
+                    errors=errors,
+                )
+        head_ident_match = re.match(r"^(?:\(\s*)*([A-Za-z_][A-Za-z0-9_]*)", unwrapped_rhs)
+        if head_ident_match:
+            ident = head_ident_match.group(1)
+            if ident.casefold() in known_table_map:
+                referenced_tables.add(known_table_map[ident.casefold()])
+            elif re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*_CL", ident, re.IGNORECASE):
+                referenced_tables.add(ident)
+
+
 def _validate_pipeline_stages(
     expr: str,
     *,
@@ -699,8 +765,13 @@ def _validate_pipeline_stages(
                             errors.append(
                                 f"KQL operator '{op_match.group(1)}' contains an empty parenthesized expression in {stmt_label} at stage #{stage_idx + 1}"
                             )
+                        trailing_op_pattern = (
+                            r"(?:==|!=|=~|!~|<=|>=|<|>|=|\+|\-|/|%|,|\band\b|\bor\b|\bhas\b|\bcontains\b|\bin\b|\bstartswith\b|\bendswith\b|\bmatches\s+regex\b)\s*$"
+                            if op == "parse"
+                            else r"(?:==|!=|=~|!~|<=|>=|<|>|=|\+|\-|\*|/|%|,|\band\b|\bor\b|\bhas\b|\bcontains\b|\bin\b|\bstartswith\b|\bendswith\b|\bmatches\s+regex\b)\s*$"
+                        )
                         if re.search(
-                            r"(?:==|!=|=~|!~|<=|>=|<|>|=|\+|\-|\*|/|%|,|\band\b|\bor\b|\bhas\b|\bcontains\b|\bin\b|\bstartswith\b|\bendswith\b|\bmatches\s+regex\b)\s*$",
+                            trailing_op_pattern,
                             rest,
                             re.IGNORECASE,
                         ):

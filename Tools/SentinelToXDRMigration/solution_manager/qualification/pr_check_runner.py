@@ -2152,7 +2152,9 @@ def _evaluate_qualification_checks(
                             for r in mapping_rules
                         )
                         covered_ids: set[str] = set()
+                        covered_idless_names: set[str] = set()
                         for r in mapping_rules:
+                            entry_has_id = False
                             for id_key in (
                                 "id",
                                 "ruleId",
@@ -2166,6 +2168,13 @@ def _evaluate_qualification_checks(
                                 val = str(r.get(id_key) or "").strip()
                                 if val:
                                     covered_ids.add(val)
+                                    entry_has_id = True
+                            if not entry_has_id:
+                                for name_key in ("name", "detection", "ruleName", "displayName"):
+                                    n_val = str(r.get(name_key) or "").strip()
+                                    if n_val:
+                                        covered_idless_names.add(n_val.casefold())
+                                        covered_idless_names.add(Path(n_val).stem.casefold())
                         xdr_disk_ids = {
                             rid
                             for rid, info in on_disk_rules_by_id.items()
@@ -2176,15 +2185,31 @@ def _evaluate_qualification_checks(
                             for rid, info in on_disk_rules_by_id.items()
                             if str(info.get("file") or "").replace("\\", "/").startswith("Analytic Rules/")
                         }
+                        covered_xdr_ids = {
+                            rid
+                            for rid in xdr_disk_ids
+                            if rid in covered_ids
+                            or str((on_disk_rules_by_id.get(rid) or {}).get("originalRuleId") or "").strip() in covered_ids
+                            or str((on_disk_rules_by_id.get(rid) or {}).get("stem") or "").strip().casefold() in covered_idless_names
+                            or str((on_disk_rules_by_id.get(rid) or {}).get("name") or "").strip().casefold() in covered_idless_names
+                        }
                         linked_ar_ids = {
-                            str(info.get("originalRuleId") or "").strip()
-                            for rid, info in on_disk_rules_by_id.items()
-                            if rid in xdr_disk_ids and rid in covered_ids and info.get("originalRuleId")
+                            str((on_disk_rules_by_id.get(rid) or {}).get("originalRuleId") or "").strip()
+                            for rid in covered_xdr_ids
+                            if (on_disk_rules_by_id.get(rid) or {}).get("originalRuleId")
+                        }
+                        covered_ar_ids = {
+                            rid
+                            for rid in ar_disk_ids
+                            if rid in covered_ids
+                            or rid in linked_ar_ids
+                            or str((on_disk_rules_by_id.get(rid) or {}).get("stem") or "").strip().casefold() in covered_idless_names
+                            or str((on_disk_rules_by_id.get(rid) or {}).get("name") or "").strip().casefold() in covered_idless_names
                         }
                         all_disk_covered = (
                             not on_disk_rule_errors
-                            and xdr_disk_ids.issubset(covered_ids)
-                            and ar_disk_ids.issubset(covered_ids | linked_ar_ids)
+                            and xdr_disk_ids.issubset(covered_xdr_ids)
+                            and ar_disk_ids.issubset(covered_ar_ids)
                             and (len(mapping_rules) >= max(1, len(xdr_disk_ids) or len(ar_disk_ids)))
                         )
                         total_alerts = sum(int(r.get("alertsFired") or r.get("alertCount") or 0) for r in mapping_rules)
@@ -3118,6 +3143,8 @@ def _collect_on_disk_rules_by_id(
             "id": rid,
             "originalRuleId": None,
             "file": rel,
+            "stem": Path(rel).stem,
+            "name": str(doc.get("name") or doc.get("displayName") or "").strip() or Path(rel).stem,
             "querySha256": q_sha,
         }
 
@@ -3147,6 +3174,8 @@ def _collect_on_disk_rules_by_id(
             "id": rid,
             "originalRuleId": orig_id,
             "file": rel,
+            "stem": Path(rel).stem,
+            "name": str(xdr_fields.get("displayName") or doc.get("name") or "").strip() or Path(rel).stem,
             "querySha256": q_sha,
         }
 
