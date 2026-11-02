@@ -5,7 +5,7 @@
 # It expects the Azure-Sentinel repo to be checked out locally and works as follows:
 #   1. Detects modified ASIM parser YAML files by comparing the current branch against upstream/master.
 #   2. Reads each parser YAML from the local repo to extract schema, vendor, and product info.
-#   3. Loads the corresponding sample data and schema CSV files from "Sample Data/ASIM/".
+#   3. Prefers source-specific sample CSVs, with legacy vendor/product/schema fallback.
 #   4. For custom log tables: creates the table and a Data Collection Rule (DCR), then ingests data.
 #   5. For built-in tables: creates a DCR (handling GUID column mismatches) and ingests data.
 #
@@ -30,6 +30,7 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+resolve_sample_data_path = parser_file_utils.resolve_sample_data_path
 
 import requests
 import yaml
@@ -514,9 +515,10 @@ for file in parser_yaml_files:
     equivalent_built_in_parser = asim_parser.get('EquivalentBuiltInParser')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
-    SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_dir = os.path.join(repo_root, 'Sample Data', 'ASIM')
-    sample_data_path = os.path.join(sample_data_dir, SampleDataFile)
+    sample_data_path = resolve_sample_data_path(
+        sample_data_dir, event_vendor, event_product, schema, parser_query
+    )
     print(f"Sample data log file reading from local path: {sample_data_path}")
     try:
         with open(sample_data_path, 'rb') as f:
