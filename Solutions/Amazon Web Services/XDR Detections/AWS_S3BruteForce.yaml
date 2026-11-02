@@ -1,0 +1,154 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 31b9e94b-0df6-4a3d-a297-3457b53c5d86
+    path: Analytic Rules/AWS_S3BruteForce.yaml
+    version: 1.0.2
+    querySha256: b0cd4b82bb03563c5a6d14bab9d86dfc5ea7c4cfd87d020ae774c8cf7555bb1c
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'bucketName' column `bucketName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'failed_keys' column `failed_keys` has an unproven output binding after a destructive projection; the
+      explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'success_keys' column `success_keys` has an unproven output binding after a destructive projection; the
+      explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - Account.CloudAppAccountId output column `RecipientAccountId` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: bffad46f81d4c55467b69c104fa9ea3a14c395f3af41922424b753d3ae2aeebf
+      targetQuerySha256: 9ba1da9235eece0f5eaa57ed00d816ad759f180d19b83fc28d33d554576ac173
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: bffad46f81d4c55467b69c104fa9ea3a14c395f3af41922424b753d3ae2aeebf
+      targetQuerySha256: 9ba1da9235eece0f5eaa57ed00d816ad759f180d19b83fc28d33d554576ac173
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-31b9e94b-0df6-4a3d-a297-3457b53c5d86
+  displayName: AWSCloudTrail - Successful brute force attack on S3 Bucket
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let timeframe = 1h;
+      let failed_attempts = AWSCloudTrail
+      | where TimeGenerated >= ago(timeframe)
+      | where EventName == "GetObject" and isnotempty(ErrorMessage) and isnotempty(ErrorCode)
+      | where UserIdentityAccountId == "ANONYMOUS_PRINCIPAL" or UserIdentityAccessKeyId <> RecipientAccountId
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
+      | summarize time_min_failed=arg_min(TimeGenerated, *), failed_keys = dcount(keyName) by RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, SourceIpAddress, bucketName
+      | where failed_keys > 20;
+      let success_attempts = AWSCloudTrail
+      | where TimeGenerated >= ago(timeframe)
+      | where EventName == "GetObject" and isempty(ErrorMessage) and isempty(ErrorCode)
+      | where UserIdentityAccountId == "ANONYMOUS_PRINCIPAL" or UserIdentityAccessKeyId <> RecipientAccountId
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
+      | summarize time_min_success=arg_min(TimeGenerated, *), success_keys = dcount(keyName) by RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, SourceIpAddress, bucketName
+      | where success_keys >= 1;
+      failed_attempts
+      | join kind=inner success_attempts on SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, bucketName
+      | where time_min_success > time_min_failed
+      | project-away keyName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Successful brute force attack on S3 Bucket
+      description: |-
+        Detects repeated failed GetObject attempts against an S3 bucket followed by a successful access from the
+        same source, which can indicate brute-force-style object discovery or access attempts.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        bucketName: bucketName
+        failed_keys: failed_keys
+        success_keys: success_keys
+        RecipientAccountId: RecipientAccountId

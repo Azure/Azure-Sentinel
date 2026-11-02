@@ -453,6 +453,23 @@ def build_asim_tester_query(
     )
     schema_literal = _quote_kql_string(schema_name)
     if tester_name == "ASimDataTester":
+        if target_table == "ASimDnsActivityLogs":
+            # ASimDnsActivityLogs has a type discrepancy with logical ASIM:
+            # these timestamps are string and the original risk level is int.
+            # Prefer the corrected _d/_s columns before casting legacy values.
+            # https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimdnsactivitylogs
+            target_expression += (
+                "\n| extend "
+                "ThreatFirstReportedTime = coalesce("
+                'column_ifexists("ThreatFirstReportedTime_d", datetime(null)), '
+                'todatetime(column_ifexists("ThreatFirstReportedTime", ""))), '
+                "ThreatLastReportedTime = coalesce("
+                'column_ifexists("ThreatLastReportedTime_d", datetime(null)), '
+                'todatetime(column_ifexists("ThreatLastReportedTime", ""))), '
+                "ThreatOriginalRiskLevel = coalesce("
+                'column_ifexists("ThreatOriginalRiskLevel_s", ""), '
+                'tostring(column_ifexists("ThreatOriginalRiskLevel", int(null))))'
+            )
         signature = "T:(*), selected_schema:string=''"
         invocation = (
             "_AsimValidationTargetRows\n"

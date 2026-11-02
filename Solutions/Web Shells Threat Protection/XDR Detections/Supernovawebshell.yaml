@@ -1,0 +1,138 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureMonitor(IIS)
+  dataTypes:
+  - W3CIISLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - W3CIISLog
+  requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+    - W3CIISLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2acc91c3-17c2-4388-938e-4eac2d5894e8
+    path: Analytic Rules/Supernovawebshell.yaml
+    version: 1.0.4
+    querySha256: 7b851cfbbfc2ae4697cc7bfd3b0ea02f887c48ba42fe486739627ab2fb8367a0
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `csUserName`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `csUserName` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - CommandAndControl
+    originalTechniques:
+    - T1505
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: f177ff0db8908f3cd87c204c43cc1fdb5ef215690ea5d8ca5ab1dc025f1c4f4a
+      targetQuerySha256: cc3193835aa00d7d3067a08db57a13be151a047235f58afccf92a19f4341e878
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: f177ff0db8908f3cd87c204c43cc1fdb5ef215690ea5d8ca5ab1dc025f1c4f4a
+      targetQuerySha256: cc3193835aa00d7d3067a08db57a13be151a047235f58afccf92a19f4341e878
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: csUserName
+      column: csUserName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-2acc91c3-17c2-4388-938e-4eac2d5894e8
+  displayName: SUPERNOVA webshell
+  status: disabled
+  queryCondition:
+    queryText: |-
+      W3CIISLog
+      | where csMethod == 'GET'
+      | where isnotempty(csUriStem) and isnotempty(csUriQuery)
+      | where csUriStem contains "logoimagehandler.ashx"
+      | where csUriQuery contains "codes" and csUriQuery contains "clazz" and csUriQuery contains "method" and csUriQuery contains "args"
+      | extend timestamp = TimeGenerated
+      | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+      | extend AccountName = tostring(split(csUserName, "@")[0]), AccountUPNSuffix = tostring(split(csUserName, "@")[1])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: SUPERNOVA webshell
+      description: |-
+        'Identifies SUPERNOVA webshell based on W3CIISLog data.
+         References:
+         - https://unit42.paloaltonetworks.com/solarstorm-supernova/'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+        ips:
+        - id: ip1
+          addressColumn: cIP
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1505
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountFullName: csUserName
+        HostFullName: Computer
