@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -267,6 +268,7 @@ def _deployment_token(
 MAX_GRAPH_DEPLOY_WORKERS = 3
 MAX_GRAPH_REQUEST_RETRIES = 3
 MAX_GRAPH_RETRY_BUDGET_SECONDS = 300
+_ACTIVE_STAGE_RETRY_DEADLINE: float | None = None
 
 
 def _parse_retry_after_seconds(
@@ -274,15 +276,23 @@ def _parse_retry_after_seconds(
     *,
     default_seconds: int,
     remaining_budget_seconds: float,
-) -> int:
-    budget_cap = max(1, int(remaining_budget_seconds))
+) -> int | None:
+    if not math.isfinite(remaining_budget_seconds) or remaining_budget_seconds < 1.0:
+        return None
+    budget_cap = int(remaining_budget_seconds)
+    default_wait = max(1, int(default_seconds))
     if not retry_header:
-        return max(1, min(budget_cap, default_seconds))
+        return default_wait if default_wait <= budget_cap else None
     try:
-        parsed_seconds = int(float(retry_header.strip()))
-    except ValueError:
-        return max(1, min(budget_cap, default_seconds))
-    return max(1, min(budget_cap, parsed_seconds))
+        parsed_float = float(retry_header.strip())
+    except (TypeError, ValueError):
+        return default_wait if default_wait <= budget_cap else None
+    if not math.isfinite(parsed_float):
+        return default_wait if default_wait <= budget_cap else None
+    parsed_seconds = max(1, int(math.ceil(parsed_float))) if parsed_float > 0 else 1
+    if parsed_seconds > remaining_budget_seconds:
+        return None
+    return min(budget_cap, parsed_seconds)
 
 
 def _graph_request(
@@ -290,6 +300,8 @@ def _graph_request(
     url: str,
     token: str,
     body: dict[str, Any] | None = None,
+    *,
+    retry_deadline: float | None = None,
 ) -> tuple[int, dict[str, Any]]:
     request = urllib.request.Request(
         url,
@@ -299,6 +311,11 @@ def _graph_request(
             "Content-Type": "application/json",
         },
         method=method,
+    )
+    effective_deadline = (
+        retry_deadline
+        if retry_deadline is not None
+        else _ACTIVE_STAGE_RETRY_DEADLINE
     )
     try:
         with urllib.request.urlopen(request, timeout=90) as response:
@@ -311,17 +328,28 @@ def _graph_request(
         except json.JSONDecodeError:
             parsed = {"error": {"message": content[:4000]}}
         if exc.code in (429, 502, 503, 504):
-            retry_deadline = time.monotonic() + float(MAX_GRAPH_RETRY_BUDGET_SECONDS)
+            deadline = (
+                effective_deadline
+                if effective_deadline is not None
+                else time.monotonic() + float(MAX_GRAPH_RETRY_BUDGET_SECONDS)
+            )
             retry_header = exc.headers.get("Retry-After") if exc.headers else None
             wait_seconds = _parse_retry_after_seconds(
                 retry_header,
                 default_seconds=2,
-                remaining_budget_seconds=retry_deadline - time.monotonic(),
+                remaining_budget_seconds=deadline - time.monotonic(),
             )
             for retry_attempt in range(MAX_GRAPH_REQUEST_RETRIES):
+                if wait_seconds is None:
+                    return exc.code, parsed
                 time.sleep(wait_seconds)
+                remaining_for_req = deadline - time.monotonic()
+                if remaining_for_req <= 0:
+                    return exc.code, parsed
                 try:
-                    with urllib.request.urlopen(request, timeout=90) as retry_resp:
+                    with urllib.request.urlopen(
+                        request, timeout=max(1, min(90, int(remaining_for_req)))
+                    ) as retry_resp:
                         retry_content = retry_resp.read().decode("utf-8")
                         return retry_resp.status, json.loads(retry_content) if retry_content else {}
                 except urllib.error.HTTPError as retry_exc:
@@ -330,11 +358,11 @@ def _graph_request(
                         parsed = json.loads(retry_content)
                     except json.JSONDecodeError:
                         parsed = {"error": {"message": retry_content[:4000]}}
-                    remaining_budget = retry_deadline - time.monotonic()
+                    remaining_budget = deadline - time.monotonic()
                     if (
                         retry_exc.code not in (429, 502, 503, 504)
                         or retry_attempt + 1 == MAX_GRAPH_REQUEST_RETRIES
-                        or remaining_budget <= 0
+                        or remaining_budget < 1.0
                     ):
                         return retry_exc.code, parsed
                     retry_header = retry_exc.headers.get("Retry-After") if retry_exc.headers else None
@@ -343,6 +371,8 @@ def _graph_request(
                         default_seconds=2 ** (retry_attempt + 2),
                         remaining_budget_seconds=remaining_budget,
                     )
+                    if wait_seconds is None:
+                        return retry_exc.code, parsed
         return exc.code, parsed
 
 
@@ -525,12 +555,18 @@ def deploy_solution(
                 "error": {"message": str(exc)},
             }
 
-    if len(files) <= 1:
-        results = [_deploy_one(path) for path in files]
-    else:
-        workers = max(1, min(MAX_GRAPH_DEPLOY_WORKERS, len(files)))
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            results = list(executor.map(_deploy_one, files))
+    global _ACTIVE_STAGE_RETRY_DEADLINE
+    prev_deadline = _ACTIVE_STAGE_RETRY_DEADLINE
+    _ACTIVE_STAGE_RETRY_DEADLINE = time.monotonic() + float(MAX_GRAPH_RETRY_BUDGET_SECONDS)
+    try:
+        if len(files) <= 1:
+            results = [_deploy_one(path) for path in files]
+        else:
+            workers = max(1, min(MAX_GRAPH_DEPLOY_WORKERS, len(files)))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                results = list(executor.map(_deploy_one, files))
+    finally:
+        _ACTIVE_STAGE_RETRY_DEADLINE = prev_deadline
     report = {
         "solution": str(root),
         "provider": "microsoft-graph-beta",

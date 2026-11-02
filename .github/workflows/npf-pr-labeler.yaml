@@ -96,6 +96,23 @@ jobs:
               'Qualification Failed'
             ]);
 
+            const VERDICT_PRIORITY = {
+              'Not Qualified': 6,
+              'Qualification Failed': 6,
+              'Validation Failed': 6,
+              'Failed': 6,
+              'Conditionally Qualified': 5,
+              'Partially Validated': 4,
+              'Qualified': 3,
+              'Validated': 2
+            };
+
+            function pickHigherPriorityVerdict(current, candidate) {
+              if (!candidate) return current;
+              if (!current) return candidate;
+              return (VERDICT_PRIORITY[candidate] || 0) > (VERDICT_PRIORITY[current] || 0) ? candidate : current;
+            }
+
             const sortedSolutions = [...solutionNames].sort();
 
             let hasXdrContent = activePaths.some(p =>
@@ -181,8 +198,7 @@ jobs:
                       solHasQual = true;
                     }
                     if (verdictVal && ALLOWED_VERDICTS.has(verdictVal)) {
-                      solVerdict = verdictVal;
-                      break;
+                      solVerdict = pickHigherPriorityVerdict(solVerdict, verdictVal);
                     }
                   } catch (_) {
                     // Ignore parse errors
@@ -193,23 +209,25 @@ jobs:
                   const mdTexts = await Promise.all(summaryCandidates.map(cand => fetchFileText(cand)));
                   for (const mdText of mdTexts) {
                     if (!mdText) continue;
+                    let mdVerdict = null;
                     if (
                       /\b(?:Not\s+Qualified|Non-Qualified|Not\s+Conditionally\s+Qualified|Qualification\s+Failed|Validation\s+Failed|Migration\s+Failed)\b/i.test(
                         mdText
                       )
                     ) {
-                      if (!solVerdict) solVerdict = 'Not Qualified';
+                      mdVerdict = 'Not Qualified';
                     } else if (/\bConditionally Qualified\b/i.test(mdText)) {
                       solHasQual = true;
-                      if (!solVerdict) solVerdict = 'Conditionally Qualified';
+                      mdVerdict = 'Conditionally Qualified';
                     } else if (/\bQualified\b/i.test(mdText)) {
                       solHasQual = true;
-                      if (!solVerdict) solVerdict = 'Qualified';
-                    } else if (!solVerdict && /\bPartially Validated\b/i.test(mdText)) {
-                      solVerdict = 'Partially Validated';
-                    } else if (!solVerdict && /\bValidated\b/i.test(mdText)) {
-                      solVerdict = 'Validated';
+                      mdVerdict = 'Qualified';
+                    } else if (/\bPartially Validated\b/i.test(mdText)) {
+                      mdVerdict = 'Partially Validated';
+                    } else if (/\bValidated\b/i.test(mdText)) {
+                      mdVerdict = 'Validated';
                     }
+                    solVerdict = pickHigherPriorityVerdict(solVerdict, mdVerdict);
                   }
                 }
 

@@ -600,6 +600,35 @@ def _extract_top_level_parenthesized_groups(text: str) -> list[str]:
     return groups
 
 
+def _extract_join_or_lookup_rhs_source(rest: str) -> str | None:
+    rem = rest.strip()
+    while True:
+        param_match = re.match(
+            r"^(?:kind|withsource|isfuzzy|hint\.[A-Za-z0-9_]+)\s*=\s*[^\s(]+\s*",
+            rem,
+            re.IGNORECASE,
+        )
+        if not param_match:
+            break
+        rem = rem[param_match.end() :].strip()
+    if not rem:
+        return None
+    if rem.startswith("("):
+        depth = 0
+        for idx, ch in enumerate(rem):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    return rem[1:idx].strip()
+        return None
+    ident_match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)(?:\s*\([^)]*\))?", rem)
+    if ident_match:
+        return ident_match.group(0).strip()
+    return None
+
+
 def _validate_pipeline_stages(
     expr: str,
     *,
@@ -610,6 +639,7 @@ def _validate_pipeline_stages(
     operators_seen: list[str],
     referenced_tables: set[str],
     errors: list[str],
+    allow_leading_operator: bool = False,
 ) -> None:
     stages = _split_top_level(expr, "|")
     for stage_idx, raw_stage in enumerate(stages):
@@ -618,7 +648,17 @@ def _validate_pipeline_stages(
             errors.append(f"Empty pipeline stage in {stmt_label} at stage #{stage_idx + 1}")
             continue
 
-        if stage_idx == 0:
+        lead_op_match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)", stage)
+        lead_op_low = lead_op_match.group(1).casefold() if lead_op_match else ""
+        is_leading_operator_stage = (
+            stage_idx == 0
+            and allow_leading_operator
+            and bool(lead_op_low)
+            and lead_op_low in KNOWN_TABULAR_OPERATORS
+            and lead_op_low not in TABULAR_GENERATOR_KEYWORDS
+        )
+
+        if stage_idx == 0 and not is_leading_operator_stage:
             _validate_pipeline_source(
                 stage,
                 stmt_label=stmt_label,
@@ -667,18 +707,49 @@ def _validate_pipeline_stages(
                             errors.append(
                                 f"KQL operator '{op_match.group(1)}' has an incomplete trailing expression in {stmt_label} at stage #{stage_idx + 1}"
                             )
-                for sub_group in _extract_top_level_parenthesized_groups(rest):
-                    if len(_split_top_level(sub_group, "|")) > 1:
-                        _validate_pipeline_stages(
-                            sub_group,
-                            stmt_label=f"{stmt_label} stage #{stage_idx + 1} ({op_match.group(1)}) subquery",
+                if op in {"join", "lookup"}:
+                    rhs_source = _extract_join_or_lookup_rhs_source(rest)
+                    if rhs_source:
+                        _validate_pipeline_source(
+                            rhs_source,
+                            stmt_label=f"{stmt_label} stage #{stage_idx + 1} ({op_match.group(1)})",
                             known_table_map=known_table_map,
                             let_bindings=let_bindings,
                             approved_fn_set=approved_fn_set,
-                            operators_seen=operators_seen,
                             referenced_tables=referenced_tables,
                             errors=errors,
                         )
+                elif op in {"mv-apply", "mvapply", "partition"}:
+                    for sub_group in _extract_top_level_parenthesized_groups(rest):
+                        sub_lead = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)", sub_group.strip())
+                        sub_lead_op = sub_lead.group(1).casefold() if sub_lead else ""
+                        if len(_split_top_level(sub_group, "|")) > 1 or (
+                            sub_lead_op in KNOWN_TABULAR_OPERATORS and sub_lead_op not in TABULAR_GENERATOR_KEYWORDS
+                        ):
+                            _validate_pipeline_stages(
+                                sub_group,
+                                stmt_label=f"{stmt_label} stage #{stage_idx + 1} ({op_match.group(1)}) subquery",
+                                known_table_map=known_table_map,
+                                let_bindings=let_bindings,
+                                approved_fn_set=approved_fn_set,
+                                operators_seen=operators_seen,
+                                referenced_tables=referenced_tables,
+                                errors=errors,
+                                allow_leading_operator=True,
+                            )
+                else:
+                    for sub_group in _extract_top_level_parenthesized_groups(rest):
+                        if len(_split_top_level(sub_group, "|")) > 1:
+                            _validate_pipeline_stages(
+                                sub_group,
+                                stmt_label=f"{stmt_label} stage #{stage_idx + 1} ({op_match.group(1)}) subquery",
+                                known_table_map=known_table_map,
+                                let_bindings=let_bindings,
+                                approved_fn_set=approved_fn_set,
+                                operators_seen=operators_seen,
+                                referenced_tables=referenced_tables,
+                                errors=errors,
+                            )
 
 
 def _validate_pipeline_source(

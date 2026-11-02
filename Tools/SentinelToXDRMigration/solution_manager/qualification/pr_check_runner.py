@@ -2115,25 +2115,88 @@ def _evaluate_qualification_checks(
             det_count = len(files_by_type.get("analytic-rules", [])) + len(files_by_type.get("xdr-detections", []))
             refs = [_make_evidence_ref("Alert lifecycle & firing receipt", "qualification_evidence.alertLifecycle", kind="receipt")]
 
+            on_disk_rule_errors: list[str] = []
+            if isinstance(qualification_evidence.get("_onDiskRuleErrors"), list):
+                on_disk_rule_errors = list(qualification_evidence["_onDiskRuleErrors"])
+                on_disk_rules_by_id = (
+                    qualification_evidence.get("_onDiskRulesById")
+                    if isinstance(qualification_evidence.get("_onDiskRulesById"), Mapping)
+                    else _collect_on_disk_rules_by_id(solution_root, applicability)
+                )
+            else:
+                on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability, on_disk_rule_errors)
+
             lc_ok = False
             obs_detail = ""
             if not simulated_flag and isinstance(lc_ev, Mapping) and lc_ev:
-                rules_list = lc_ev.get("detections") or lc_ev.get("rules")
-                mapping_rules = [r for r in rules_list if isinstance(r, Mapping)] if isinstance(rules_list, list) else []
-                if mapping_rules:
-                    all_initial_disabled = all(r.get("initialDisabled") is True for r in mapping_rules)
-                    all_fired = all(int(r.get("alertsFired") or r.get("alertCount") or 0) >= 1 for r in mapping_rules)
-                    all_returned_disabled = all(
-                        bool(r.get("returnedToDisabled") is True or str(r.get("finalState") or "").lower() == "disabled")
-                        for r in mapping_rules
+                has_rules_list_key = (
+                    ("detections" in lc_ev and lc_ev.get("detections") is not None)
+                    or ("rules" in lc_ev and lc_ev.get("rules") is not None)
+                )
+                rules_list = (
+                    lc_ev.get("detections")
+                    if "detections" in lc_ev and lc_ev.get("detections") is not None
+                    else lc_ev.get("rules")
+                )
+                if has_rules_list_key:
+                    mapping_rules = (
+                        [r for r in rules_list if isinstance(r, Mapping)]
+                        if isinstance(rules_list, list) and len(rules_list) > 0 and all(isinstance(r, Mapping) for r in rules_list)
+                        else []
                     )
-                    total_alerts = sum(int(r.get("alertsFired") or r.get("alertCount") or 0) for r in mapping_rules)
-                    lc_ok = all_initial_disabled and all_fired and all_returned_disabled
-                    obs_detail = (
-                        f"Evaluated {len(mapping_rules)} detection(s): initialDisabled={all_initial_disabled}, "
-                        f"totalAlertsFired={total_alerts}, returnedToDisabled={all_returned_disabled}."
-                    )
-                elif not isinstance(rules_list, list):
+                    if mapping_rules:
+                        all_initial_disabled = all(r.get("initialDisabled") is True for r in mapping_rules)
+                        all_fired = all(int(r.get("alertsFired") or r.get("alertCount") or 0) >= 1 for r in mapping_rules)
+                        all_returned_disabled = all(
+                            bool(r.get("returnedToDisabled") is True or str(r.get("finalState") or "").lower() == "disabled")
+                            for r in mapping_rules
+                        )
+                        covered_ids: set[str] = set()
+                        for r in mapping_rules:
+                            for id_key in (
+                                "id",
+                                "ruleId",
+                                "detectionId",
+                                "customDetectionId",
+                                "targetRuleId",
+                                "sourceRuleId",
+                                "originalRuleId",
+                                "analyticRuleId",
+                            ):
+                                val = str(r.get(id_key) or "").strip()
+                                if val:
+                                    covered_ids.add(val)
+                        xdr_disk_ids = {
+                            rid
+                            for rid, info in on_disk_rules_by_id.items()
+                            if str(info.get("file") or "").replace("\\", "/").startswith("XDR Detections/")
+                        }
+                        ar_disk_ids = {
+                            rid
+                            for rid, info in on_disk_rules_by_id.items()
+                            if str(info.get("file") or "").replace("\\", "/").startswith("Analytic Rules/")
+                        }
+                        linked_ar_ids = {
+                            str(info.get("originalRuleId") or "").strip()
+                            for rid, info in on_disk_rules_by_id.items()
+                            if rid in xdr_disk_ids and rid in covered_ids and info.get("originalRuleId")
+                        }
+                        all_disk_covered = (
+                            not on_disk_rule_errors
+                            and xdr_disk_ids.issubset(covered_ids)
+                            and ar_disk_ids.issubset(covered_ids | linked_ar_ids)
+                            and (len(mapping_rules) >= max(1, len(xdr_disk_ids) or len(ar_disk_ids)))
+                        )
+                        total_alerts = sum(int(r.get("alertsFired") or r.get("alertCount") or 0) for r in mapping_rules)
+                        lc_ok = all_initial_disabled and all_fired and all_returned_disabled and all_disk_covered
+                        obs_detail = (
+                            f"Evaluated {len(mapping_rules)} detection(s): initialDisabled={all_initial_disabled}, "
+                            f"totalAlertsFired={total_alerts}, returnedToDisabled={all_returned_disabled}, "
+                            f"allOnDiskCovered={all_disk_covered}."
+                        )
+                    else:
+                        obs_detail = f"Empty or invalid detection entries in alertLifecycle evidence for {det_count} detection(s)."
+                else:
                     init_dis = lc_ev.get("initialDisabled") is True
                     alerts_cnt = int(lc_ev.get("alertsFired") or lc_ev.get("alertCount") or (det_count if lc_ev.get("alertParityVerified") is True else 0))
                     ret_dis = bool(
@@ -2141,13 +2204,11 @@ def _evaluate_qualification_checks(
                         or str(lc_ev.get("finalState") or "").lower() == "disabled"
                         or lc_ev.get("allResourcesReturnedToDisabled") is True
                     )
-                    lc_ok = init_dis and alerts_cnt >= 1 and ret_dis
+                    lc_ok = not on_disk_rule_errors and init_dis and alerts_cnt >= max(1, det_count) and ret_dis
                     obs_detail = (
                         f"Evaluated {det_count} detection(s): initialDisabled={init_dis}, "
                         f"alertsFired={alerts_cnt}, returnedToDisabled={ret_dis}."
                     )
-                else:
-                    obs_detail = f"No valid detection entries in alertLifecycle evidence for {det_count} detection(s)."
             else:
                 obs_detail = f"No live alert lifecycle evidence supplied for {det_count} detection(s)."
 
@@ -2424,16 +2485,24 @@ def _evaluate_qualification_checks(
                 verified_rules = qualification_evidence["kqlRuntimeVerifiedRules"]
             else:
                 verified_rules = []
-            on_disk_rules_by_id = (
-                qualification_evidence.get("_onDiskRulesById")
-                if isinstance(qualification_evidence.get("_onDiskRulesById"), Mapping)
-                else _collect_on_disk_rules_by_id(solution_root, applicability)
+            on_disk_rule_errors: list[str] = []
+            if isinstance(qualification_evidence.get("_onDiskRuleErrors"), list):
+                on_disk_rule_errors = list(qualification_evidence["_onDiskRuleErrors"])
+                on_disk_rules_by_id = (
+                    qualification_evidence.get("_onDiskRulesById")
+                    if isinstance(qualification_evidence.get("_onDiskRulesById"), Mapping)
+                    else _collect_on_disk_rules_by_id(solution_root, applicability)
+                )
+            else:
+                on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability, on_disk_rule_errors)
+            has_detection_files = bool(
+                files_by_type.get("analytic-rules") or files_by_type.get("xdr-detections")
             )
             rt_passed = False
-            if not simulated_flag:
-                if on_disk_rules_by_id:
+            if not simulated_flag and not on_disk_rule_errors:
+                if has_detection_files or on_disk_rules_by_id:
                     verified_by_rule_id: dict[str, str] = {}
-                    all_entries_valid = bool(verified_rules)
+                    all_entries_valid = bool(on_disk_rules_by_id) and bool(verified_rules)
                     for r in verified_rules:
                         if not isinstance(r, Mapping):
                             all_entries_valid = False
@@ -3019,41 +3088,67 @@ def _compute_overall_verdict(
 def _collect_on_disk_rules_by_id(
     solution_root: Path,
     applicability: Mapping[str, Any],
+    errors_out: list[str] | None = None,
 ) -> dict[str, dict[str, str | None]]:
     files_by_type = applicability.get("filesByContentType", {})
     on_disk_rules_by_id: dict[str, dict[str, str | None]] = {}
+    duplicate_ids: set[str] = set()
 
     for rel in files_by_type.get("analytic-rules", []):
         doc, err = _load_yaml_safe(solution_root / rel)
         if err or not isinstance(doc, Mapping):
+            if errors_out is not None:
+                errors_out.append(f"Failed to parse Analytic Rule YAML '{rel}': {err or 'document is not a mapping'}")
             continue
         rid = str(doc.get("id") or "").strip()
         q_text = str(doc.get("query") or "").replace("\r\n", "\n").strip()
-        if rid and q_text:
-            q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
-            on_disk_rules_by_id[rid] = {
-                "id": rid,
-                "originalRuleId": None,
-                "file": rel,
-                "querySha256": q_sha,
-            }
+        if not rid or not q_text:
+            if errors_out is not None:
+                errors_out.append(f"Analytic Rule '{rel}' is missing required 'id' or 'query'")
+            continue
+        if rid in on_disk_rules_by_id or rid in duplicate_ids:
+            duplicate_ids.add(rid)
+            existing_file = (on_disk_rules_by_id.get(rid) or {}).get("file") or "<duplicate>"
+            on_disk_rules_by_id.pop(rid, None)
+            if errors_out is not None:
+                errors_out.append(f"Duplicate rule ID '{rid}' across '{existing_file}' and '{rel}'")
+            continue
+        q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
+        on_disk_rules_by_id[rid] = {
+            "id": rid,
+            "originalRuleId": None,
+            "file": rel,
+            "querySha256": q_sha,
+        }
 
     for rel in files_by_type.get("xdr-detections", []):
         doc, err = _load_yaml_safe(solution_root / rel)
         if err or not isinstance(doc, Mapping):
+            if errors_out is not None:
+                errors_out.append(f"Failed to parse XDR Detection YAML '{rel}': {err or 'document is not a mapping'}")
             continue
         xdr_fields = _extract_xdr_detection_fields(doc)
         rid = str(xdr_fields.get("id") or "").strip()
         orig_id = str(xdr_fields.get("sourceRuleId") or "").strip() or None
         q_text = str(xdr_fields.get("query") or "").replace("\r\n", "\n").strip()
-        if rid and q_text:
-            q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
-            on_disk_rules_by_id[rid] = {
-                "id": rid,
-                "originalRuleId": orig_id,
-                "file": rel,
-                "querySha256": q_sha,
-            }
+        if not rid or not q_text:
+            if errors_out is not None:
+                errors_out.append(f"XDR Detection '{rel}' is missing required 'id' or 'query'")
+            continue
+        if rid in on_disk_rules_by_id or rid in duplicate_ids:
+            duplicate_ids.add(rid)
+            existing_file = (on_disk_rules_by_id.get(rid) or {}).get("file") or "<duplicate>"
+            on_disk_rules_by_id.pop(rid, None)
+            if errors_out is not None:
+                errors_out.append(f"Duplicate rule ID '{rid}' across '{existing_file}' and '{rel}'")
+            continue
+        q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
+        on_disk_rules_by_id[rid] = {
+            "id": rid,
+            "originalRuleId": orig_id,
+            "file": rel,
+            "querySha256": q_sha,
+        }
 
     return on_disk_rules_by_id
 
@@ -3071,7 +3166,10 @@ def _build_kql_runtime_verified_rules(
 
     verified: list[dict[str, Any]] = []
     seen_keys: set[tuple[str, str]] = set()
-    on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability)
+    on_disk_rule_errors: list[str] = []
+    on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability, on_disk_rule_errors)
+    if on_disk_rule_errors:
+        return []
 
     def _add_entry(
         rule_id: str,
@@ -3421,7 +3519,8 @@ def run_pr_qualification_checks(
     exceptions_by_id = _normalize_author_exceptions(author_exceptions, decision_manifest=dec_manifest)
     quartet = _extract_version_quartet(root, target_version=target_version)
 
-    on_disk_rules_by_id = _collect_on_disk_rules_by_id(root, applicability)
+    on_disk_rule_errors: list[str] = []
+    on_disk_rules_by_id = _collect_on_disk_rules_by_id(root, applicability, on_disk_rule_errors)
     kql_runtime_verified_rules = _build_kql_runtime_verified_rules(
         root,
         applicability,
@@ -3432,6 +3531,7 @@ def run_pr_qualification_checks(
         **qual_ev,
         "_kqlRuntimeVerifiedRules": kql_runtime_verified_rules,
         "_onDiskRulesById": on_disk_rules_by_id,
+        "_onDiskRuleErrors": on_disk_rule_errors,
     }
 
     validation_results = _evaluate_validation_checks(

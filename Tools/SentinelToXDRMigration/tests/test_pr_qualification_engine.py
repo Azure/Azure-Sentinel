@@ -239,6 +239,20 @@ def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str,
             "querySha256": hashlib.sha256(default_xdr_q.encode("utf-8")).hexdigest(),
         },
     ]
+    lifecycle_detections: list[dict[str, Any]] = [
+        {
+            "id": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "initialDisabled": True,
+            "alertsFired": 1,
+            "returnedToDisabled": True,
+        },
+        {
+            "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "initialDisabled": True,
+            "alertsFired": 1,
+            "returnedToDisabled": True,
+        },
+    ]
     if sol_dir is not None and sol_dir.is_dir():
         for folder_name in ("Analytic Rules", "XDR Detections"):
             folder = sol_dir / folder_name
@@ -266,9 +280,18 @@ def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str,
                         "status": "PASS",
                         "querySha256": hashlib.sha256(q_str.encode("utf-8")).hexdigest(),
                     }
+                    lifecycle_entry: dict[str, Any] = {
+                        "id": rid,
+                        "ruleId": rid,
+                        "initialDisabled": True,
+                        "alertsFired": 1,
+                        "returnedToDisabled": True,
+                    }
                     if orig_id:
                         entry["originalRuleId"] = orig_id
+                        lifecycle_entry["originalRuleId"] = orig_id
                     verified_rules.append(entry)
+                    lifecycle_detections.append(lifecycle_entry)
     return {
         "simulated": False,
         "dryRun": False,
@@ -292,20 +315,7 @@ def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str,
             "recordCount": 6,
         },
         "alertLifecycle": {
-            "detections": [
-                {
-                    "id": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
-                    "initialDisabled": True,
-                    "alertsFired": 1,
-                    "returnedToDisabled": True,
-                },
-                {
-                    "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
-                    "initialDisabled": True,
-                    "alertsFired": 1,
-                    "returnedToDisabled": True,
-                },
-            ]
+            "detections": lifecycle_detections,
         },
         "workbookQualification": {
             "queries": [
@@ -1274,8 +1284,128 @@ def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: 
     assert res_bad_entries["kqlRuntimeVerifiedRules"] == []
     assert res_bad_entries["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
 
+    # Round 3 Item 1: E2E-Q02 empty detections list must not fall through to aggregate scalar fields
+    qual_ev_empty_dets = dict(qual_ev)
+    qual_ev_empty_dets["alertLifecycle"] = {
+        "detections": [],
+        "initialDisabled": True,
+        "alertsFired": 5,
+        "returnedToDisabled": True,
+    }
+    res_empty_dets = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_empty_dets,
+        run_number=1,
+    )
+    assert res_empty_dets["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # Round 3 Item 1b: E2E-Q02 partial detections list missing second on-disk detection must fail
+    rule2_id = "22222222-8104-41eb-bad3-26054a3ad5f0"
+    ar2_sha = _build_valid_analytic_rule(sol / "Analytic Rules" / "SecondRule.yaml", rule_id=rule2_id)
+    _build_valid_xdr_detection(
+        sol / "XDR Detections" / "SecondRule.yaml",
+        source_rule_id=rule2_id,
+        source_rule_path="Analytic Rules/SecondRule.yaml",
+        source_rule_sha256=ar2_sha,
+    )
+    qual_ev_multi = _build_live_qualification_evidence(sol)
+    qual_ev_partial_dets = dict(qual_ev_multi)
+    qual_ev_partial_dets["alertLifecycle"] = {
+        "detections": [
+            {
+                "id": f"xdr-{rule_id}",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            }
+        ]
+    }
+    res_partial_dets = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_partial_dets,
+        run_number=1,
+    )
+    assert res_partial_dets["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # Round 3 Item 2: _discover_on_disk_xdr_detections fails QUAL-RUNTIME-01 on duplicate IDs or malformed YAML
+    dup_file = sol / "XDR Detections" / "DuplicateId.yaml"
+    _build_valid_xdr_detection(
+        dup_file,
+        source_rule_id=rule2_id,
+        source_rule_path="Analytic Rules/SecondRule.yaml",
+        source_rule_sha256=ar2_sha,
+    )
+    res_dup = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_multi,
+        run_number=1,
+    )
+    assert res_dup["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
+    assert res_dup["kqlRuntimeVerifiedRules"] == []
+    dup_file.unlink()
+
+    malformed_file = sol / "XDR Detections" / "Malformed.yaml"
+    malformed_file.write_text("id: [unterminated\n", encoding="utf-8")
+    res_malformed = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_multi,
+        run_number=1,
+    )
+    assert res_malformed["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
+    assert res_malformed["kqlRuntimeVerifiedRules"] == []
+    malformed_file.unlink()
+
+
+def test_round3_kql_subquery_and_retry_after_fixes() -> None:
+    from solution_manager.authoring.validator import validate_kql_query_static
+    from solution_manager.qualification.deployment import _parse_retry_after_seconds
+
+    # mv-apply and partition operator-only subqueries should pass
+    res_mv = validate_kql_query_static(
+        "DeviceProcessEvents | mv-apply x=dynamic([1,2]) on (where x > 0 | project x)"
+    )
+    assert res_mv["valid"] is True, f"Expected mv-apply subquery to pass, got {res_mv['errors']}"
+
+    res_part = validate_kql_query_static(
+        "DeviceProcessEvents | partition hint.strategy=native by AccountName (where isnotempty(FileName) | summarize count())"
+    )
+    assert res_part["valid"] is True, f"Expected partition subquery to pass, got {res_part['errors']}"
+
+    # Invalid operator inside mv-apply subquery must fail
+    res_bad_mv = validate_kql_query_static(
+        "DeviceProcessEvents | mv-apply x=dynamic([1,2]) on (notanoperator x > 0 | project x)"
+    )
+    assert res_bad_mv["valid"] is False and any("notanoperator" in e for e in res_bad_mv["errors"])
+
+    # Single-token join (MissingTable) and lookup (MissingLookupTable) must fail
+    res_join = validate_kql_query_static(
+        "DeviceProcessEvents | join kind=inner (MissingTable) on DeviceId"
+    )
+    assert res_join["valid"] is False and any("MissingTable" in e for e in res_join["errors"])
+
+    res_lookup = validate_kql_query_static(
+        "DeviceProcessEvents | lookup kind=leftouter (MissingLookupTable) on DeviceId"
+    )
+    assert res_lookup["valid"] is False and any("MissingLookupTable" in e for e in res_lookup["errors"])
+
+    # _parse_retry_after_seconds handles inf/nan, <1s remaining, and Retry-After > remaining budget
+    assert _parse_retry_after_seconds("inf", default_seconds=2, remaining_budget_seconds=120.0) == 2
+    assert _parse_retry_after_seconds("-inf", default_seconds=2, remaining_budget_seconds=120.0) == 2
+    assert _parse_retry_after_seconds("nan", default_seconds=2, remaining_budget_seconds=120.0) == 2
+    assert _parse_retry_after_seconds("5", default_seconds=2, remaining_budget_seconds=0.4) is None
+    assert _parse_retry_after_seconds("120", default_seconds=2, remaining_budget_seconds=30.0) is None
+    assert _parse_retry_after_seconds("45", default_seconds=2, remaining_budget_seconds=120.0) == 45
+
 
 class TestPrQualificationEngineUnittest(unittest.TestCase):
     def test_kql_runtime_verified_rules_and_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             test_kql_runtime_verified_rules_projection_and_val_ci_01_override(Path(tmp))
+
+    def test_round3_kql_and_retry_fixes(self) -> None:
+        test_round3_kql_subquery_and_retry_after_fixes()
+
