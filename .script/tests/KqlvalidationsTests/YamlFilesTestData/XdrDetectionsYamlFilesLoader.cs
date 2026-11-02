@@ -16,8 +16,9 @@ namespace Kqlvalidations.Tests
                 return new List<string>();
             }
 
-            return Directory.GetDirectories(solutionsDir, "XDR Detections", SearchOption.AllDirectories)
-                .Where(dir => !Utils.IsPrivateSolutionContentPath(dir))
+            return Directory.EnumerateDirectories(solutionsDir)
+                .Select(solDir => Path.Combine(solDir, "XDR Detections"))
+                .Where(dir => Directory.Exists(dir) && !Utils.IsPrivateSolutionContentPath(dir))
                 .ToList();
         }
     }

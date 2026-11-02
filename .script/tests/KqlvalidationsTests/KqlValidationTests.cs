@@ -1,10 +1,12 @@
-﻿using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Microsoft.Azure.Sentinel.KustoServices.Contract;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Xunit;
 using YamlDotNet.Serialization;
 using Microsoft.Azure.Sentinel.KustoServices.Implementation;
@@ -19,6 +21,10 @@ namespace Kqlvalidations.Tests
 {
     public class KqlValidationTests
     {
+        private static readonly Lazy<IKqlQueryAnalyzer> SharedQueryValidator = new Lazy<IKqlQueryAnalyzer>(
+            BuildQueryValidator,
+            LazyThreadSafetyMode.ExecutionAndPublication);
+
         private readonly IKqlQueryAnalyzer _queryValidator;
         private const int TestFolderDepth = 3;
         private const string UserMessageTemplate = "Template Id:{0} is valid but it is in the skipped validation templates. Please remove it from the templates that are skipped since it is valid.";
@@ -26,10 +32,15 @@ namespace Kqlvalidations.Tests
 
         public KqlValidationTests()
         {
+            _queryValidator = SharedQueryValidator.Value;
+        }
+
+        private static IKqlQueryAnalyzer BuildQueryValidator()
+        {
             var customTablesPath = Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomTables");
             var customFunctionsPath = Path.Combine(Utils.GetTestDirectory(TestFolderDepth), "CustomFunctions");
 
-            _queryValidator = new KqlQueryAnalyzerBuilder()
+            return new KqlQueryAnalyzerBuilder()
                .WithCustomTableSchemasLoader(new LocalOverrideTablesLoader(customTablesPath))
                .WithCustomFunctionSchemasLoader(new SentinelDefaultFunctionsLoader())
                .WithCustomFunctionSchemasLoader(new CustomJsonDirectoryFunctionsLoader(customFunctionsPath))
@@ -483,12 +494,15 @@ namespace Kqlvalidations.Tests
             var validationResult = _queryValidator.ValidateSyntax(queryStr);
             var listOfDiagnostics = validationResult.Diagnostics ?? Enumerable.Empty<Diagnostic>();
 
-            bool isRuntimeQualified = IsRuntimeQualifiedQuery(filePath, id, queryStr);
             var filteredDiagnostics = (from p in listOfDiagnostics
                                        where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
                                        && !p.Message.Contains("let forwarder_host_names") //We do not validate the static list of hostnames, used for syslog parsers
-                                       where !isRuntimeQualified || !IsSemanticSchemaDiagnostic(p)
                                        select p).ToList();
+
+            if (filteredDiagnostics.Any(IsSemanticSchemaDiagnostic) && IsRuntimeQualifiedQuery(filePath, id, queryStr))
+            {
+                filteredDiagnostics = filteredDiagnostics.Where(p => !IsSemanticSchemaDiagnostic(p)).ToList();
+            }
 
             var firstErrorLocation = (Line: 0, Col: 0);
             var firstErrorDiag = filteredDiagnostics.FirstOrDefault(d => d.Severity == "Error") ?? filteredDiagnostics.FirstOrDefault();
@@ -532,9 +546,18 @@ namespace Kqlvalidations.Tests
             return AllowedRuntimeOverridableDiagnosticCodes.Contains(code);
         }
 
+        private sealed class RuntimeVerifiedRuleRecord
+        {
+            public string QuerySha256 { get; set; }
+            public string[] RuleIds { get; set; }
+        }
+
+        private static readonly ConcurrentDictionary<string, IReadOnlyList<RuntimeVerifiedRuleRecord>> VerifiedRulesBySolutionCache =
+            new ConcurrentDictionary<string, IReadOnlyList<RuntimeVerifiedRuleRecord>>(StringComparer.OrdinalIgnoreCase);
+
         public static bool IsRuntimeQualifiedQuery(string filePath, string templateId, string queryStr)
         {
-            if (string.IsNullOrWhiteSpace(filePath) || string.IsNullOrWhiteSpace(queryStr))
+            if (string.IsNullOrWhiteSpace(filePath) || string.IsNullOrWhiteSpace(queryStr) || string.IsNullOrWhiteSpace(templateId))
             {
                 return false;
             }
@@ -545,18 +568,54 @@ namespace Kqlvalidations.Tests
                 return false;
             }
 
-            var candidateEvidenceFiles = new[]
+            var records = GetOrLoadVerifiedRuleRecords(solutionDir);
+            if (records.Count == 0)
             {
-                Path.Join(solutionDir, "Evidence", "pr-qualification", "pr-qualification-result.json"),
-                Path.Join(solutionDir, "Evidence", "qualification-evidence.json")
-            };
+                return false;
+            }
 
             var queryHashes = ComputeCandidateQueryHashes(queryStr);
-            var normalizedId = (templateId ?? string.Empty).Trim();
+            var normalizedId = templateId.Trim();
             var strippedId = normalizedId.StartsWith("xdr-", StringComparison.OrdinalIgnoreCase)
                 ? normalizedId.Substring(4)
                 : normalizedId;
 
+            foreach (var record in records)
+            {
+                if (!queryHashes.Contains(record.QuerySha256))
+                {
+                    continue;
+                }
+
+                if (record.RuleIds.Any(r =>
+                    r.Equals(normalizedId, StringComparison.OrdinalIgnoreCase)
+                    || r.Equals(strippedId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static IReadOnlyList<RuntimeVerifiedRuleRecord> GetOrLoadVerifiedRuleRecords(string solutionDir)
+        {
+            var prQualPath = Path.Join(solutionDir, "Evidence", "pr-qualification", "pr-qualification-result.json");
+            var qualEvidencePath = Path.Join(solutionDir, "Evidence", "qualification-evidence.json");
+            var ticks1 = File.Exists(prQualPath) ? File.GetLastWriteTimeUtc(prQualPath).Ticks : 0L;
+            var ticks2 = File.Exists(qualEvidencePath) ? File.GetLastWriteTimeUtc(qualEvidencePath).Ticks : 0L;
+            if (ticks1 == 0L && ticks2 == 0L)
+            {
+                return Array.Empty<RuntimeVerifiedRuleRecord>();
+            }
+
+            var cacheKey = $"{solutionDir}|{ticks1}|{ticks2}";
+            return VerifiedRulesBySolutionCache.GetOrAdd(cacheKey, _ => LoadVerifiedRuleRecords(prQualPath, qualEvidencePath));
+        }
+
+        private static IReadOnlyList<RuntimeVerifiedRuleRecord> LoadVerifiedRuleRecords(params string[] candidateEvidenceFiles)
+        {
+            var results = new List<RuntimeVerifiedRuleRecord>();
             foreach (var evidencePath in candidateEvidenceFiles)
             {
                 if (!File.Exists(evidencePath))
@@ -567,10 +626,7 @@ namespace Kqlvalidations.Tests
                 try
                 {
                     var root = JObject.Parse(File.ReadAllText(evidencePath));
-                    if (MatchesRuntimeQualifiedEvidence(root, normalizedId, strippedId, queryHashes))
-                    {
-                        return true;
-                    }
+                    ExtractVerifiedRuleRecordsFromRoot(root, results);
                 }
                 catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is JsonException)
                 {
@@ -578,7 +634,62 @@ namespace Kqlvalidations.Tests
                 }
             }
 
-            return false;
+            return results;
+        }
+
+        private static void ExtractVerifiedRuleRecordsFromRoot(JObject root, List<RuntimeVerifiedRuleRecord> results)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            var candidateArrays = new[]
+            {
+                root["kqlRuntimeVerifiedRules"] as JArray,
+                root["qualification_evidence"]?["kqlRuntimeVerifiedRules"] as JArray,
+                root["runtimeKql"]?["kqlRuntimeVerifiedRules"] as JArray
+            };
+
+            foreach (var arr in candidateArrays.Where(a => a != null))
+            {
+                foreach (var obj in arr.OfType<JObject>())
+                {
+                    var status = ((string)obj["status"] ?? (string)obj["result"] ?? string.Empty).Trim();
+                    if (!status.Equals("PASS", StringComparison.OrdinalIgnoreCase)
+                        && !status.Equals("passed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var entryHash = ((string)obj["querySha256"] ?? (string)obj["queryHash"] ?? (string)obj["sha256"] ?? string.Empty).Trim();
+                    if (string.IsNullOrEmpty(entryHash))
+                    {
+                        continue;
+                    }
+
+                    var ruleIds = new[]
+                    {
+                        (string)obj["ruleId"],
+                        (string)obj["id"],
+                        (string)obj["originalRuleId"],
+                        (string)obj["sourceRuleId"]
+                    }
+                    .Where(r => !string.IsNullOrWhiteSpace(r))
+                    .Select(r => r.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+                    if (ruleIds.Length > 0)
+                    {
+                        results.Add(new RuntimeVerifiedRuleRecord
+                        {
+                            QuerySha256 = entryHash,
+                            RuleIds = ruleIds
+                        });
+                    }
+                }
+            }
         }
 
         private static string FindEnclosingSolutionDirectory(string filePath)
@@ -629,50 +740,6 @@ namespace Kqlvalidations.Tests
                 var hashBytes = sha.ComputeHash(bytes);
                 return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
             }
-        }
-
-        private static bool MatchesRuntimeQualifiedEvidence(JObject root, string normalizedId, string strippedId, HashSet<string> queryHashes)
-        {
-            if (root == null || string.IsNullOrWhiteSpace(normalizedId) || queryHashes == null || queryHashes.Count == 0)
-            {
-                return false;
-            }
-
-            var verifiedRulesTokens = root.SelectTokens("$..kqlRuntimeVerifiedRules");
-            foreach (var arr in verifiedRulesTokens.OfType<JArray>())
-            {
-                foreach (var obj in arr.OfType<JObject>())
-                {
-                    var status = ((string)obj["status"] ?? (string)obj["result"] ?? string.Empty).Trim();
-                    if (!status.Equals("PASS", StringComparison.OrdinalIgnoreCase)
-                        && !status.Equals("passed", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var entryHash = ((string)obj["querySha256"] ?? (string)obj["queryHash"] ?? (string)obj["sha256"] ?? string.Empty).Trim();
-                    if (string.IsNullOrEmpty(entryHash) || !queryHashes.Contains(entryHash))
-                    {
-                        continue;
-                    }
-
-                    var ruleIds = new[]
-                    {
-                        (string)obj["ruleId"],
-                        (string)obj["id"],
-                        (string)obj["originalRuleId"],
-                        (string)obj["sourceRuleId"]
-                    };
-                    if (ruleIds.Any(r => !string.IsNullOrWhiteSpace(r) &&
-                        (r.Trim().Equals(normalizedId, StringComparison.OrdinalIgnoreCase)
-                         || r.Trim().Equals(strippedId, StringComparison.OrdinalIgnoreCase))))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         private static string ExtractXdrRuleId(Dictionary<object, object> yaml, string fallbackFileName)

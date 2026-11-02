@@ -221,10 +221,58 @@ def _build_valid_xdr_detection(
     )
 
 
-def _build_live_qualification_evidence() -> dict[str, Any]:
+def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str, Any]:
+    default_ar_q = "AzureDiagnostics | where Category == 'DDoSMitigationFlowLogs' | project TimeGenerated, sourcePublicIpAddress_s"
+    default_xdr_q = "AzureDiagnostics | where Category == 'DDoSMitigationFlowLogs' | project TimeGenerated, Timestamp=TimeGenerated, ReportId=tostring( _ItemId ), sourcePublicIpAddress_s"
+    verified_rules: list[dict[str, Any]] = [
+        {
+            "id": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "ruleId": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "status": "PASS",
+            "querySha256": hashlib.sha256(default_ar_q.encode("utf-8")).hexdigest(),
+        },
+        {
+            "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "ruleId": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "originalRuleId": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "status": "PASS",
+            "querySha256": hashlib.sha256(default_xdr_q.encode("utf-8")).hexdigest(),
+        },
+    ]
+    if sol_dir is not None and sol_dir.is_dir():
+        for folder_name in ("Analytic Rules", "XDR Detections"):
+            folder = sol_dir / folder_name
+            if not folder.is_dir():
+                continue
+            for yml in sorted(folder.rglob("*.y*ml")):
+                doc = yaml.safe_load(yml.read_text(encoding="utf-8-sig")) or {}
+                props = doc.get("properties") if isinstance(doc.get("properties"), dict) else {}
+                rid = str(doc.get("id") or props.get("id") or yml.stem).strip()
+                orig_id = str(
+                    doc.get("originalRuleId")
+                    or props.get("originalRuleId")
+                    or (doc.get("conversion") or {}).get("sourceRuleId")
+                    or ""
+                ).strip()
+                q_str = str(
+                    doc.get("query")
+                    or ((props.get("queryCondition") or {}).get("queryText") if isinstance(props.get("queryCondition"), dict) else "")
+                    or ""
+                ).replace("\r\n", "\n").strip()
+                if rid and q_str:
+                    entry: dict[str, Any] = {
+                        "id": rid,
+                        "ruleId": rid,
+                        "status": "PASS",
+                        "querySha256": hashlib.sha256(q_str.encode("utf-8")).hexdigest(),
+                    }
+                    if orig_id:
+                        entry["originalRuleId"] = orig_id
+                    verified_rules.append(entry)
     return {
         "simulated": False,
         "dryRun": False,
+        "kqlRuntimeVerifiedRules": verified_rules,
         "providerReceipts": [
             {"provider": "azure-arm", "operation": "deployment-readback", "mode": "live", "simulated": False},
             {"provider": "azure-monitor-dcr", "operation": "logs-ingestion", "mode": "live", "simulated": False},
@@ -743,7 +791,7 @@ def test_real_solution_azure_ddos_protection_integration(tmp_path: Path) -> None
 
     ddos_qual = run_pr_qualification_checks(
         ddos_copy,
-        qualification_evidence=_build_live_qualification_evidence(),
+        qualification_evidence=_build_live_qualification_evidence(ddos_copy),
     )
     _assert_check_schema(ddos_qual)
     assert ddos_qual["isMigration"] is True
@@ -812,7 +860,7 @@ def test_cli_pr_qualify_command_and_report_generation(tmp_path: Path, capsys: An
 
     # Provide live evidence where E2E-Q04 has 0 rows, and waive E2E-Q04 + E2E-V02 + E2E-V03 via --waivers-file
     evidence_dir = tmp_path / "evidence-input"
-    ev_payload = _build_live_qualification_evidence()
+    ev_payload = _build_live_qualification_evidence(ddos_copy)
     ev_payload["workbookQualification"] = {
         "queries": [{"id": "ddos-wb-q1", "rowCount": 0, "status": "passed"}]
     }
@@ -1156,8 +1204,32 @@ def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: 
     )
     assert res_str_err["checksById"]["VAL-CI-01"]["status"] == "FAIL"
 
-    # Ensure stale receipts with mismatched querySha256 do not mint fresh PASS hashes for edited queries
+    # Ensure mixed failure lists (covered kqlStaticErrors + non-KQL errors) fail VAL-CI-01
+    qual_ev_mixed = dict(qual_ev)
+    qual_ev_mixed["ciChecks"] = {
+        "passed": False,
+        "reason": "Mixed KQL schema warning and ARM failure",
+        "kqlStaticErrors": [
+            {
+                "id": f"xdr-{rule_id}",
+                "originalRuleId": rule_id,
+                "code": "KS142",
+                "querySha256": xdr_query_sha,
+            }
+        ],
+        "errors": ["ARM deployment validation failed"],
+    }
+    res_mixed = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_mixed,
+        run_number=1,
+    )
+    assert res_mixed["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+
+    # Ensure stale receipts with mismatched querySha256 do not mint fresh PASS hashes and fail QUAL-RUNTIME-01
     qual_ev_stale = dict(qual_ev)
+    qual_ev_stale.pop("kqlRuntimeVerifiedRules", None)
     qual_ev_stale["runtimeKql"] = {
         "status": "passed",
         "passed": True,
@@ -1176,7 +1248,31 @@ def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: 
         run_number=1,
     )
     assert res_stale["kqlRuntimeVerifiedRules"] == []
+    assert res_stale["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
     assert res_stale["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+
+    # Ensure kqlRuntimeVerifiedRules entries missing explicit status or for removed rule IDs are rejected
+    qual_ev_bad_entries = dict(qual_ev)
+    qual_ev_bad_entries["kqlRuntimeVerifiedRules"] = [
+        {
+            "id": rule_id,
+            "querySha256": ar_query_sha,
+        },
+        {
+            "id": "non-existent-rule-id",
+            "status": "PASS",
+            "querySha256": xdr_query_sha,
+        },
+    ]
+    qual_ev_bad_entries["runtimeKql"] = {"status": "passed", "passed": True}
+    res_bad_entries = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_bad_entries,
+        run_number=1,
+    )
+    assert res_bad_entries["kqlRuntimeVerifiedRules"] == []
+    assert res_bad_entries["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
 
 
 class TestPrQualificationEngineUnittest(unittest.TestCase):

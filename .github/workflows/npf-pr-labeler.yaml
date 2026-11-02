@@ -85,22 +85,41 @@ jobs:
               return false;
             }
 
+            const ALLOWED_VERDICTS = new Set([
+              'Qualified',
+              'Conditionally Qualified',
+              'Not Qualified',
+              'Validated',
+              'Partially Validated',
+              'Failed',
+              'Validation Failed',
+              'Qualification Failed'
+            ]);
+
+            const sortedSolutions = [...solutionNames].sort();
+
             let hasXdrContent = activePaths.some(p =>
               /^Solutions\/[^/]+\/(XDR Detections|XDR Workbooks)\//.test(p)
             ) || existing.has('XDR');
 
             if (!hasXdrContent) {
-              for (const sol of solutionNames) {
-                const touchesPackage = activePaths.some(
+              const packageTouchedSols = sortedSolutions.filter(sol =>
+                activePaths.some(
                   p => p === `Solutions/${sol}/Package/mainTemplate.json` || p.startsWith(`Solutions/${sol}/Package/`)
+                )
+              );
+              if (packageTouchedSols.length > 0) {
+                const xdrChecks = await Promise.all(
+                  packageTouchedSols.map(async sol => {
+                    const [hasXdrDet, hasXdrWb] = await Promise.all([
+                      pathExistsAtHead(`Solutions/${sol}/XDR Detections`),
+                      pathExistsAtHead(`Solutions/${sol}/XDR Workbooks`)
+                    ]);
+                    return hasXdrDet || hasXdrWb;
+                  })
                 );
-                if (touchesPackage) {
-                  const hasXdrDet = await pathExistsAtHead(`Solutions/${sol}/XDR Detections`);
-                  const hasXdrWb = !hasXdrDet && (await pathExistsAtHead(`Solutions/${sol}/XDR Workbooks`));
-                  if (hasXdrDet || hasXdrWb) {
-                    hasXdrContent = true;
-                    break;
-                  }
+                if (xdrChecks.some(Boolean)) {
+                  hasXdrContent = true;
                 }
               }
             }
@@ -113,66 +132,123 @@ jobs:
             );
 
             const verdicts = {};
-            for (const sol of [...solutionNames].sort()) {
-              const qualResultCandidates = activePaths.filter(
-                p =>
-                  p === `Solutions/${sol}/Evidence/pr-qualification/pr-qualification-result.json` ||
-                  p === `Solutions/${sol}/Evidence/pr-qualification-result.json`
-              );
-              let solVerdict = null;
-              for (const cand of qualResultCandidates) {
-                const rawJson = await fetchFileText(cand);
-                if (!rawJson) continue;
-                try {
-                  const parsed = JSON.parse(rawJson.replace(/^\uFEFF/, ''));
-                  const modeVal = String(parsed?.mode || parsed?.workflowProfile || '').trim().toLowerCase();
-                  const qualStatus = String(parsed?.qualificationStatus || '').trim();
-                  const verdictVal = String(parsed?.verdict || parsed?.overallVerdict || '').trim();
-                  if (
-                    modeVal === 'qualification' ||
-                    modeVal === 'full' ||
-                    qualStatus === 'Qualified' ||
-                    qualStatus === 'Conditionally Qualified' ||
-                    verdictVal === 'Qualified' ||
-                    verdictVal === 'Conditionally Qualified'
-                  ) {
-                    hasQualificationEvidence = true;
-                  }
-                  if (verdictVal) {
-                    solVerdict = verdictVal;
-                    break;
-                  }
-                } catch (_) {
-                  // Ignore parse errors
-                }
-              }
+            const structuredPassesValues = [];
+            const publisherTiers = new Set();
+            const solutionDetails = [];
 
-              const summaryCandidates = activePaths.filter(
-                p =>
-                  p === `Solutions/${sol}/Evidence/pr-qualification/qualification-summary.md` ||
-                  p === `Solutions/${sol}/Evidence/qualification-summary.md`
-              );
-              for (const cand of summaryCandidates) {
-                const mdText = await fetchFileText(cand);
-                if (!mdText) continue;
-                if (/\bConditionally Qualified\b/i.test(mdText)) {
-                  hasQualificationEvidence = true;
-                  if (!solVerdict) solVerdict = 'Conditionally Qualified';
-                } else if (/\bNot\s+Qualified\b/i.test(mdText)) {
-                  if (!solVerdict) solVerdict = 'Not Qualified';
-                } else if (/(?<!Not\s)\bQualified\b/i.test(mdText)) {
-                  hasQualificationEvidence = true;
-                  if (!solVerdict) solVerdict = 'Qualified';
-                } else if (!solVerdict && /\bPartially Validated\b/i.test(mdText)) {
-                  solVerdict = 'Partially Validated';
-                } else if (!solVerdict && /\bValidated\b/i.test(mdText)) {
-                  solVerdict = 'Validated';
-                }
-              }
+            const perSolutionData = await Promise.all(
+              sortedSolutions.map(async sol => {
+                const qualResultCandidates = activePaths.filter(
+                  p =>
+                    p === `Solutions/${sol}/Evidence/pr-qualification/pr-qualification-result.json` ||
+                    p === `Solutions/${sol}/Evidence/pr-qualification-result.json`
+                );
+                const summaryCandidates = activePaths.filter(
+                  p =>
+                    p === `Solutions/${sol}/Evidence/pr-qualification/qualification-summary.md` ||
+                    p === `Solutions/${sol}/Evidence/qualification-summary.md`
+                );
+                const metaPath = `Solutions/${sol}/SolutionMetadata.json`;
 
-              if (solVerdict) {
-                verdicts[sol] = solVerdict;
+                const [qualTexts, metaText] = await Promise.all([
+                  Promise.all(qualResultCandidates.map(cand => fetchFileText(cand))),
+                  fetchFileText(metaPath)
+                ]);
+
+                let solVerdict = null;
+                let solHasQual = false;
+                let solPasses = null;
+
+                for (const rawJson of qualTexts) {
+                  if (!rawJson) continue;
+                  try {
+                    const parsed = JSON.parse(rawJson.replace(/^\uFEFF/, ''));
+                    const modeVal = String(parsed?.mode || parsed?.workflowProfile || '').trim().toLowerCase();
+                    const qualStatus = String(parsed?.qualificationStatus || '').trim();
+                    const verdictVal = String(parsed?.verdict || parsed?.overallVerdict || '').trim();
+                    const rawPasses = Number(parsed?.passesPerSolution ?? parsed?.runNumber);
+                    if (Number.isFinite(rawPasses) && rawPasses >= 1 && solPasses === null) {
+                      solPasses = rawPasses;
+                    }
+                    if (
+                      modeVal === 'qualification' ||
+                      modeVal === 'full' ||
+                      qualStatus === 'Qualified' ||
+                      qualStatus === 'Conditionally Qualified' ||
+                      verdictVal === 'Qualified' ||
+                      verdictVal === 'Conditionally Qualified'
+                    ) {
+                      solHasQual = true;
+                    }
+                    if (verdictVal && ALLOWED_VERDICTS.has(verdictVal)) {
+                      solVerdict = verdictVal;
+                      break;
+                    }
+                  } catch (_) {
+                    // Ignore parse errors
+                  }
+                }
+
+                if (!solVerdict && summaryCandidates.length > 0) {
+                  const mdTexts = await Promise.all(summaryCandidates.map(cand => fetchFileText(cand)));
+                  for (const mdText of mdTexts) {
+                    if (!mdText) continue;
+                    if (
+                      /\b(?:Not\s+Qualified|Non-Qualified|Not\s+Conditionally\s+Qualified|Qualification\s+Failed|Validation\s+Failed|Failed)\b/i.test(
+                        mdText
+                      )
+                    ) {
+                      if (!solVerdict) solVerdict = 'Not Qualified';
+                    } else if (/\bConditionally Qualified\b/i.test(mdText)) {
+                      solHasQual = true;
+                      if (!solVerdict) solVerdict = 'Conditionally Qualified';
+                    } else if (/\bQualified\b/i.test(mdText)) {
+                      solHasQual = true;
+                      if (!solVerdict) solVerdict = 'Qualified';
+                    } else if (!solVerdict && /\bPartially Validated\b/i.test(mdText)) {
+                      solVerdict = 'Partially Validated';
+                    } else if (!solVerdict && /\bValidated\b/i.test(mdText)) {
+                      solVerdict = 'Validated';
+                    }
+                  }
+                }
+
+                let tierLabel = 'Unknown';
+                if (metaText) {
+                  try {
+                    const meta = JSON.parse(metaText.replace(/^\uFEFF/, ''));
+                    const tier = String(meta?.support?.tier || '').trim().toLowerCase();
+                    const pub = String(meta?.publisherId || '').trim().toLowerCase();
+                    if (tier === 'community' || pub === 'microsoftsentinelcommunity') {
+                      tierLabel = 'Community Solution';
+                    } else if (tier === 'partner') {
+                      tierLabel = 'ISV Solution';
+                    } else if (tier === 'microsoft' || pub === 'azuresentinel' || pub === 'microsoftcorporation') {
+                      tierLabel = '1P Solution';
+                    }
+                  } catch (e) {
+                    core.warning(`Failed to parse ${metaPath}: ${e.message}`);
+                  }
+                }
+
+                return { sol, solVerdict, solHasQual, solPasses, tierLabel };
+              })
+            );
+
+            for (const item of perSolutionData) {
+              if (item.solHasQual) {
+                hasQualificationEvidence = true;
               }
+              if (item.solVerdict) {
+                verdicts[item.sol] = item.solVerdict;
+              }
+              if (item.solPasses !== null) {
+                structuredPassesValues.push(item.solPasses);
+              }
+              if (item.tierLabel !== 'Unknown') {
+                publisherTiers.add(item.tierLabel);
+              }
+              solutionDetails.push({ name: item.sol, tier: item.tierLabel });
             }
 
             const desired = new Set();
@@ -193,36 +269,8 @@ jobs:
               desired.add('Qualification');
               npfModes.push('Qualification');
             }
-
-            // Determine 1P Solution / ISV Solution / Community Solution from SolutionMetadata.json
-            const publisherTiers = new Set();
-            const solutionDetails = [];
-
-            for (const sol of [...solutionNames].sort()) {
-              const metaPath = `Solutions/${sol}/SolutionMetadata.json`;
-              const metaText = await fetchFileText(metaPath);
-              let tierLabel = 'Unknown';
-              if (metaText) {
-                try {
-                  const meta = JSON.parse(metaText.replace(/^\uFEFF/, ''));
-                  const tier = String(meta?.support?.tier || '').trim().toLowerCase();
-                  const pub = String(meta?.publisherId || '').trim().toLowerCase();
-                  if (tier === 'community' || pub === 'microsoftsentinelcommunity') {
-                    tierLabel = 'Community Solution';
-                  } else if (tier === 'partner') {
-                    tierLabel = 'ISV Solution';
-                  } else if (tier === 'microsoft' || pub === 'azuresentinel' || pub === 'microsoftcorporation') {
-                    tierLabel = '1P Solution';
-                  }
-                  if (tierLabel !== 'Unknown') {
-                    desired.add(tierLabel);
-                    publisherTiers.add(tierLabel);
-                  }
-                } catch (e) {
-                  core.warning(`Failed to parse ${metaPath}: ${e.message}`);
-                }
-              }
-              solutionDetails.push({ name: sol, tier: tierLabel });
+            for (const tierLabel of publisherTiers) {
+              desired.add(tierLabel);
             }
 
             if (desired.size === 0) {
@@ -253,22 +301,16 @@ jobs:
               ? 'Qualification'
               : (npfModes.includes('Validation') ? 'Validation' : 'Migration');
 
-            let commitPasses = Number(context.payload.pull_request?.commits || 0);
-            if (!commitPasses || commitPasses < 1) {
-              try {
-                const prCommits = await github.paginate(github.rest.pulls.listCommits, {
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: context.issue.number,
-                  per_page: 100
-                });
-                commitPasses = Math.max(1, prCommits.length);
-              } catch (_) {
-                commitPasses = 1;
-              }
-            }
-            const solCount = Math.max(1, solutionDetails.length);
-            const passesPerSolution = Number((commitPasses / solCount).toFixed(2));
+            const commitPasses = Math.max(1, Number(context.payload.pull_request?.commits || 1));
+            const passesPerSolution =
+              structuredPassesValues.length > 0
+                ? Number(
+                    (
+                      structuredPassesValues.reduce((acc, v) => acc + v, 0) /
+                      structuredPassesValues.length
+                    ).toFixed(2)
+                  )
+                : null;
 
             // Build machine-readable npf-meta block for PR body and step summary
             const currentBody = context.payload.pull_request?.body || '';
@@ -302,7 +344,7 @@ jobs:
 
             let updatedBody = currentBody;
             if (metaRegex.test(currentBody)) {
-              updatedBody = currentBody.replace(metaRegex, metaComment);
+              updatedBody = currentBody.replace(metaRegex, () => metaComment);
             } else {
               updatedBody = currentBody.trimEnd() + `\n\n${metaComment}\n`;
             }

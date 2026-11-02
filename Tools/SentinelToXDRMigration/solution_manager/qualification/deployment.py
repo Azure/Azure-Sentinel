@@ -266,6 +266,23 @@ def _deployment_token(
 
 MAX_GRAPH_DEPLOY_WORKERS = 3
 MAX_GRAPH_REQUEST_RETRIES = 3
+MAX_GRAPH_RETRY_BUDGET_SECONDS = 300
+
+
+def _parse_retry_after_seconds(
+    retry_header: str | None,
+    *,
+    default_seconds: int,
+    remaining_budget_seconds: float,
+) -> int:
+    budget_cap = max(1, int(remaining_budget_seconds))
+    if not retry_header:
+        return max(1, min(budget_cap, default_seconds))
+    try:
+        parsed_seconds = int(float(retry_header.strip()))
+    except ValueError:
+        return max(1, min(budget_cap, default_seconds))
+    return max(1, min(budget_cap, parsed_seconds))
 
 
 def _graph_request(
@@ -294,11 +311,13 @@ def _graph_request(
         except json.JSONDecodeError:
             parsed = {"error": {"message": content[:4000]}}
         if exc.code in (429, 502, 503, 504):
+            retry_deadline = time.monotonic() + float(MAX_GRAPH_RETRY_BUDGET_SECONDS)
             retry_header = exc.headers.get("Retry-After") if exc.headers else None
-            try:
-                wait_seconds = max(1, min(60, int(retry_header))) if retry_header else 2
-            except ValueError:
-                wait_seconds = 2
+            wait_seconds = _parse_retry_after_seconds(
+                retry_header,
+                default_seconds=2,
+                remaining_budget_seconds=retry_deadline - time.monotonic(),
+            )
             for retry_attempt in range(MAX_GRAPH_REQUEST_RETRIES):
                 time.sleep(wait_seconds)
                 try:
@@ -311,13 +330,19 @@ def _graph_request(
                         parsed = json.loads(retry_content)
                     except json.JSONDecodeError:
                         parsed = {"error": {"message": retry_content[:4000]}}
-                    if retry_exc.code not in (429, 502, 503, 504) or retry_attempt + 1 == MAX_GRAPH_REQUEST_RETRIES:
+                    remaining_budget = retry_deadline - time.monotonic()
+                    if (
+                        retry_exc.code not in (429, 502, 503, 504)
+                        or retry_attempt + 1 == MAX_GRAPH_REQUEST_RETRIES
+                        or remaining_budget <= 0
+                    ):
                         return retry_exc.code, parsed
                     retry_header = retry_exc.headers.get("Retry-After") if retry_exc.headers else None
-                    try:
-                        wait_seconds = max(1, min(60, int(retry_header))) if retry_header else 2 ** (retry_attempt + 2)
-                    except ValueError:
-                        wait_seconds = 2 ** (retry_attempt + 2)
+                    wait_seconds = _parse_retry_after_seconds(
+                        retry_header,
+                        default_seconds=2 ** (retry_attempt + 2),
+                        remaining_budget_seconds=remaining_budget,
+                    )
         return exc.code, parsed
 
 

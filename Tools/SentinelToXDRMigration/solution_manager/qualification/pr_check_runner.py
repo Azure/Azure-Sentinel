@@ -971,14 +971,16 @@ def _evaluate_validation_checks(
                             verified_by_id.setdefault(rid_val, set()).add(q_sha)
 
                 allowed_kql_override_codes = {"KS107", "KS141", "KS142", "KS204"}
-                raw_failures = (
-                    ci_info.get("kqlStaticErrors")
-                    or ci_info.get("failedRules")
-                    or ci_info.get("errors")
-                    or ci_info.get("failures")
-                    or []
-                )
-                failure_items = raw_failures if isinstance(raw_failures, list) else []
+                failure_items: list[Any] = []
+                has_non_list_failure_field = False
+                for list_key in ("kqlStaticErrors", "failedRules", "errors", "failures"):
+                    raw_val = ci_info.get(list_key)
+                    if raw_val is None:
+                        continue
+                    if isinstance(raw_val, list):
+                        failure_items.extend(raw_val)
+                    elif raw_val:
+                        has_non_list_failure_field = True
                 error_codes: list[str] = []
                 if isinstance(ci_info.get("errorCodes"), list):
                     error_codes.extend(str(c).strip() for c in ci_info["errorCodes"] if str(c).strip())
@@ -988,7 +990,7 @@ def _evaluate_validation_checks(
                     or ci_info.get("syntaxErrors")
                     or ci_info.get("parseErrors")
                 )
-                all_failures_covered = bool(verified_by_id) and bool(failure_items)
+                all_failures_covered = bool(verified_by_id) and bool(failure_items) and not has_non_list_failure_field
 
                 for item in failure_items:
                     if isinstance(item, Mapping):
@@ -2412,37 +2414,40 @@ def _evaluate_qualification_checks(
                 or {}
             )
             wb_ev = qualification_evidence.get("workbookQualification") or {}
-            verified_rules = (
-                qualification_evidence.get("_kqlRuntimeVerifiedRules")
-                if isinstance(qualification_evidence.get("_kqlRuntimeVerifiedRules"), list)
-                else (
-                    qualification_evidence.get("kqlRuntimeVerifiedRules")
-                    if isinstance(qualification_evidence.get("kqlRuntimeVerifiedRules"), list)
-                    else []
-                )
+            if "_kqlRuntimeVerifiedRules" in qualification_evidence and isinstance(
+                qualification_evidence.get("_kqlRuntimeVerifiedRules"), list
+            ):
+                verified_rules = qualification_evidence["_kqlRuntimeVerifiedRules"]
+            elif isinstance(qualification_evidence.get("kqlRuntimeVerifiedRules"), list):
+                verified_rules = qualification_evidence["kqlRuntimeVerifiedRules"]
+            else:
+                verified_rules = []
+            on_disk_rules_by_id = (
+                qualification_evidence.get("_onDiskRulesById")
+                if isinstance(qualification_evidence.get("_onDiskRulesById"), Mapping)
+                else _collect_on_disk_rules_by_id(solution_root, applicability)
             )
             rt_passed = False
             if not simulated_flag:
-                if verified_rules and all(
-                    isinstance(r, Mapping) and str(r.get("status") or "PASS").upper() == "PASS"
-                    for r in verified_rules
-                ):
-                    rt_passed = True
-                elif isinstance(rt_ev, Mapping) and (
-                    rt_ev.get("passed") is True
-                    or rt_ev.get("status") == "passed"
-                    or rt_ev.get("dualSurfaceVerified") is True
-                    or rt_ev.get("runtimeKqlVerified") is True
-                    or (rt_ev.get("sentinelKqlPassed") is True and rt_ev.get("xdrKqlPassed") is True)
-                ):
-                    rt_passed = True
-                elif isinstance(parity_ev, Mapping) and (
-                    parity_ev.get("alertParityVerified") is True
-                    or parity_ev.get("parityPassed") is True
-                    or parity_ev.get("passed") is True
-                    or (parity_ev.get("status") == "passed" and parity_ev.get("alertParityVerified") is not False)
-                ):
-                    rt_passed = True
+                if on_disk_rules_by_id:
+                    verified_by_rule_id: dict[str, str] = {}
+                    all_entries_valid = bool(verified_rules)
+                    for r in verified_rules:
+                        if not isinstance(r, Mapping):
+                            all_entries_valid = False
+                            break
+                        r_status = str(r.get("status") or "").strip().upper()
+                        r_id = str(r.get("id") or "").strip()
+                        r_sha = str(r.get("querySha256") or "").strip().lower()
+                        if r_status not in {"PASS", "PASSED"} or not r_id or not r_sha:
+                            all_entries_valid = False
+                            break
+                        verified_by_rule_id[r_id] = r_sha
+                    if all_entries_valid and all(
+                        verified_by_rule_id.get(rid) == str(info.get("querySha256") or "").strip().lower()
+                        for rid, info in on_disk_rules_by_id.items()
+                    ):
+                        rt_passed = True
                 elif isinstance(wb_ev, Mapping) and (
                     wb_ev.get("passed") is True
                     or wb_ev.get("status") == "passed"
@@ -2450,15 +2455,13 @@ def _evaluate_qualification_checks(
                         isinstance(wb_ev.get("queries"), list)
                         and bool(wb_ev.get("queries"))
                         and all(
-                            isinstance(q, Mapping) and q.get("status") in ("passed", "PASS", None)
+                            isinstance(q, Mapping) and str(q.get("status") or "").lower() in ("passed", "pass")
                             for q in wb_ev.get("queries", [])
                         )
                     )
                 ):
                     rt_passed = True
-                elif (qual_stages.get("rule_parity") or {}).get("status") == "passed" or (
-                    qual_stages.get("workbook_qualification") or {}
-                ).get("status") == "passed":
+                elif (qual_stages.get("workbook_qualification") or {}).get("status") == "passed":
                     rt_passed = True
 
             refs = [_make_evidence_ref("runtimeKql", "qualification_evidence.dualSurfaceKql", kind="receipt")]
@@ -3011,20 +3014,10 @@ def _compute_overall_verdict(
     return "Qualified"
 
 
-def _build_kql_runtime_verified_rules(
+def _collect_on_disk_rules_by_id(
     solution_root: Path,
     applicability: Mapping[str, Any],
-    *,
-    workflow_state: Mapping[str, Any],
-    qualification_evidence: Mapping[str, Any],
-) -> list[dict[str, Any]]:
-    simulated_flag, _ = _has_simulated_or_dry_run_evidence(qualification_evidence, workflow_state)
-    if simulated_flag:
-        return []
-
-    verified: list[dict[str, Any]] = []
-    seen_keys: set[tuple[str, str]] = set()
-
+) -> dict[str, dict[str, str | None]]:
     files_by_type = applicability.get("filesByContentType", {})
     on_disk_rules_by_id: dict[str, dict[str, str | None]] = {}
 
@@ -3060,6 +3053,24 @@ def _build_kql_runtime_verified_rules(
                 "querySha256": q_sha,
             }
 
+    return on_disk_rules_by_id
+
+
+def _build_kql_runtime_verified_rules(
+    solution_root: Path,
+    applicability: Mapping[str, Any],
+    *,
+    workflow_state: Mapping[str, Any],
+    qualification_evidence: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    simulated_flag, _ = _has_simulated_or_dry_run_evidence(qualification_evidence, workflow_state)
+    if simulated_flag:
+        return []
+
+    verified: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability)
+
     def _add_entry(
         rule_id: str,
         query_sha256: str,
@@ -3078,14 +3089,16 @@ def _build_kql_runtime_verified_rules(
         if st_norm != "PASS":
             return
         disk_info = on_disk_rules_by_id.get(rid)
-        if disk_info is not None:
-            if disk_info.get("querySha256") != qsha:
-                # Reject stale receipt when on-disk query was edited after live qualification.
-                return
-            if not original_rule_id and disk_info.get("originalRuleId"):
-                original_rule_id = disk_info["originalRuleId"]
-            if not file_rel and disk_info.get("file"):
-                file_rel = disk_info["file"]
+        if disk_info is None:
+            # Drop receipts for rule IDs that do not exist on disk in the solution.
+            return
+        if disk_info.get("querySha256") != qsha:
+            # Reject stale receipt when on-disk query was edited after live qualification.
+            return
+        if not original_rule_id and disk_info.get("originalRuleId"):
+            original_rule_id = disk_info["originalRuleId"]
+        if not file_rel and disk_info.get("file"):
+            file_rel = disk_info["file"]
         key = (rid, qsha)
         if key in seen_keys:
             return
@@ -3406,14 +3419,18 @@ def run_pr_qualification_checks(
     exceptions_by_id = _normalize_author_exceptions(author_exceptions, decision_manifest=dec_manifest)
     quartet = _extract_version_quartet(root, target_version=target_version)
 
+    on_disk_rules_by_id = _collect_on_disk_rules_by_id(root, applicability)
     kql_runtime_verified_rules = _build_kql_runtime_verified_rules(
         root,
         applicability,
         workflow_state=wf_state,
         qualification_evidence=qual_ev,
     )
-    if kql_runtime_verified_rules and "_kqlRuntimeVerifiedRules" not in qual_ev:
-        qual_ev = {**qual_ev, "_kqlRuntimeVerifiedRules": kql_runtime_verified_rules}
+    qual_ev = {
+        **qual_ev,
+        "_kqlRuntimeVerifiedRules": kql_runtime_verified_rules,
+        "_onDiskRulesById": on_disk_rules_by_id,
+    }
 
     validation_results = _evaluate_validation_checks(
         root,

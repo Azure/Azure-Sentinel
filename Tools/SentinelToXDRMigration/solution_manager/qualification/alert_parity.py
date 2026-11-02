@@ -1456,10 +1456,17 @@ def poll_alert_parity_batch(
             comparison_error = str(exc)
     finally:
         if should_disable:
-            raw_cleanup = _disable_all(state, state_dir=state_dir)
-            cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
-                state, raw_cleanup
-            )
+            try:
+                raw_cleanup = _disable_all(state, state_dir=state_dir)
+                cleanup, lifecycle, tk_q11_passed = _normalize_cleanup_and_lifecycle(
+                    state, raw_cleanup
+                )
+            except Exception as cleanup_exc:
+                cleanup = []
+                lifecycle = {"initialDisabled": False, "returnedToDisabled": False}
+                tk_q11_passed = False
+                if comparison_error is None:
+                    comparison_error = f"cleanup failed: {cleanup_exc}"
 
     cleanup_ok = bool(cleanup) and all(item["disabled"] for item in cleanup)
     passed = (

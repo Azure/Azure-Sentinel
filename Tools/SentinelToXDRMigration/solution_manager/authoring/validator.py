@@ -450,9 +450,16 @@ def validate_kql_query_static(
                 view_match = re.match(r"^(?:view\s*)?\([^)]*\)\s*\{([\s\S]*)\}\s*$", rhs, re.IGNORECASE)
                 if view_match:
                     rhs = view_match.group(1).strip()
-                if "|" in _split_top_level(rhs, "|") or len(_split_top_level(rhs, "|")) > 1:
+                unwrapped_rhs = rhs
+                while unwrapped_rhs.startswith("(") and unwrapped_rhs.endswith(")"):
+                    inner_rhs = unwrapped_rhs[1:-1].strip()
+                    _, inner_errs = _scan_lexical_structure(inner_rhs)
+                    if inner_errs:
+                        break
+                    unwrapped_rhs = inner_rhs
+                if len(_split_top_level(unwrapped_rhs, "|")) > 1:
                     _validate_pipeline_stages(
-                        rhs,
+                        unwrapped_rhs,
                         stmt_label=f"let {let_name}",
                         known_table_map=known_table_map,
                         let_bindings=let_bindings,
@@ -462,7 +469,19 @@ def validate_kql_query_static(
                         errors=errors,
                     )
                 else:
-                    head_ident_match = re.match(r"^(?:\(\s*)*([A-Za-z_][A-Za-z0-9_]*)", rhs)
+                    for sub_group in _extract_top_level_parenthesized_groups(unwrapped_rhs):
+                        if len(_split_top_level(sub_group, "|")) > 1:
+                            _validate_pipeline_stages(
+                                sub_group,
+                                stmt_label=f"let {let_name} subquery",
+                                known_table_map=known_table_map,
+                                let_bindings=let_bindings,
+                                approved_fn_set=approved_fn_set | builtin_asim,
+                                operators_seen=operators_seen,
+                                referenced_tables=referenced_tables,
+                                errors=errors,
+                            )
+                    head_ident_match = re.match(r"^(?:\(\s*)*([A-Za-z_][A-Za-z0-9_]*)", unwrapped_rhs)
                     if head_ident_match:
                         ident = head_ident_match.group(1)
                         if ident.casefold() in known_table_map:
@@ -503,6 +522,80 @@ def validate_kql_query_static(
     }
 
 
+_NON_FUNCTION_KEYWORDS_BEFORE_PARENS = frozenset(
+    {
+        "and",
+        "or",
+        "not",
+        "in",
+        "!in",
+        "in~",
+        "!in~",
+        "has",
+        "!has",
+        "has_any",
+        "has_all",
+        "contains",
+        "!contains",
+        "startswith",
+        "!startswith",
+        "endswith",
+        "!endswith",
+        "matches",
+        "regex",
+        "between",
+        "by",
+        "on",
+        "where",
+        "extend",
+        "project",
+        "summarize",
+        "join",
+        "lookup",
+        "union",
+        "top",
+        "take",
+        "limit",
+        "sort",
+        "order",
+        "parse",
+        "mv-expand",
+        "mvexpand",
+    }
+)
+
+
+def _has_empty_parenthesized_expression(rest: str) -> bool:
+    for m in re.finditer(r"\(\s*\)", rest):
+        prefix = rest[: m.start()].rstrip()
+        if not prefix:
+            return True
+        ident_match = re.search(r"([A-Za-z_!][A-Za-z0-9_-]*)$", prefix)
+        if not ident_match:
+            return True
+        if ident_match.group(1).casefold() in _NON_FUNCTION_KEYWORDS_BEFORE_PARENS:
+            return True
+    return False
+
+
+def _extract_top_level_parenthesized_groups(text: str) -> list[str]:
+    groups: list[str] = []
+    depth = 0
+    start_idx = -1
+    for idx, ch in enumerate(text):
+        if ch == "(":
+            if depth == 0:
+                start_idx = idx + 1
+            depth += 1
+        elif ch == ")":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start_idx >= 0:
+                    groups.append(text[start_idx:idx].strip())
+                    start_idx = -1
+    return groups
+
+
 def _validate_pipeline_stages(
     expr: str,
     *,
@@ -531,6 +624,18 @@ def _validate_pipeline_stages(
                 referenced_tables=referenced_tables,
                 errors=errors,
             )
+            for sub_group in _extract_top_level_parenthesized_groups(stage):
+                if len(_split_top_level(sub_group, "|")) > 1:
+                    _validate_pipeline_stages(
+                        sub_group,
+                        stmt_label=f"{stmt_label} stage #{stage_idx + 1} subquery",
+                        known_table_map=known_table_map,
+                        let_bindings=let_bindings,
+                        approved_fn_set=approved_fn_set,
+                        operators_seen=operators_seen,
+                        referenced_tables=referenced_tables,
+                        errors=errors,
+                    )
         else:
             op_match = re.match(r"^([A-Za-z_][A-Za-z0-9_-]*)", stage)
             if not op_match:
@@ -546,7 +651,7 @@ def _validate_pipeline_stages(
                     if not rest:
                         errors.append(f"KQL operator '{op_match.group(1)}' is missing required arguments in {stmt_label} at stage #{stage_idx + 1}")
                     else:
-                        if re.search(r"(?<![A-Za-z0-9_])\(\s*\)", rest):
+                        if _has_empty_parenthesized_expression(rest):
                             errors.append(
                                 f"KQL operator '{op_match.group(1)}' contains an empty parenthesized expression in {stmt_label} at stage #{stage_idx + 1}"
                             )
@@ -558,6 +663,18 @@ def _validate_pipeline_stages(
                             errors.append(
                                 f"KQL operator '{op_match.group(1)}' has an incomplete trailing expression in {stmt_label} at stage #{stage_idx + 1}"
                             )
+                for sub_group in _extract_top_level_parenthesized_groups(rest):
+                    if len(_split_top_level(sub_group, "|")) > 1:
+                        _validate_pipeline_stages(
+                            sub_group,
+                            stmt_label=f"{stmt_label} stage #{stage_idx + 1} ({op_match.group(1)}) subquery",
+                            known_table_map=known_table_map,
+                            let_bindings=let_bindings,
+                            approved_fn_set=approved_fn_set,
+                            operators_seen=operators_seen,
+                            referenced_tables=referenced_tables,
+                            errors=errors,
+                        )
 
 
 def _validate_pipeline_source(
@@ -659,15 +776,8 @@ def validate_xdr_detection_kql(
     if query_text is None:
         query_text = doc.get("query")
 
-    prov = doc.get("contentProvenance") if isinstance(doc.get("contentProvenance"), dict) else {}
     declared_tables: set[str] = set(known_tables)
-
     fn_aliases: set[str] = set(known_functions)
-    for fn_rec in prov.get("requiredWorkspaceFunctions") or []:
-        if isinstance(fn_rec, dict) and isinstance(fn_rec.get("functionAlias"), str):
-            fn_aliases.add(fn_rec["functionAlias"])
-        elif isinstance(fn_rec, str):
-            fn_aliases.add(fn_rec)
 
     return validate_kql_query_static(
         query_text if isinstance(query_text, str) else "",
@@ -688,15 +798,8 @@ def validate_xdr_workbook_kql(
     if not isinstance(doc, dict):
         return {"valid": False, "errors": ["XDR Workbook document must be a JSON object"], "queries": []}
 
-    prov = doc.get("contentProvenance") if isinstance(doc.get("contentProvenance"), dict) else {}
     declared_tables: set[str] = set(known_tables)
-
     fn_aliases: set[str] = set(known_functions)
-    for fn_rec in prov.get("requiredWorkspaceFunctions") or []:
-        if isinstance(fn_rec, dict) and isinstance(fn_rec.get("functionAlias"), str):
-            fn_aliases.add(fn_rec["functionAlias"])
-        elif isinstance(fn_rec, str):
-            fn_aliases.add(fn_rec)
 
     surfaces = workbook.query_surfaces(doc)
     errors: list[str] = []

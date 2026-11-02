@@ -132,6 +132,55 @@ class AuthoringKqlValidatorTests(unittest.TestCase):
         det_res = validate_xdr_detection_kql(det_doc)
         self.assertTrue(det_res["valid"])
 
+    def test_validate_kql_empty_parens_vs_zero_arg_function_and_subqueries(self) -> None:
+        # Zero-arg function call with space before () must be accepted
+        valid_count_space = """
+        DeviceProcessEvents
+        | summarize Total = count (), AvgVal = rand () by DeviceName
+        """
+        res_valid = validate_kql_query_static(valid_count_space, surface="advancedHunting")
+        self.assertTrue(res_valid["valid"], res_valid["errors"])
+
+        # Empty parenthesized expressions after where / boolean operators must be rejected
+        invalid_where_parens = "DeviceProcessEvents | where ()"
+        res_where = validate_kql_query_static(invalid_where_parens, surface="advancedHunting")
+        self.assertFalse(res_where["valid"])
+        self.assertTrue(any("contains an empty parenthesized expression" in err for err in res_where["errors"]))
+
+        invalid_and_parens = "DeviceProcessEvents | where Timestamp > ago(1h) and ()"
+        res_and = validate_kql_query_static(invalid_and_parens, surface="advancedHunting")
+        self.assertFalse(res_and["valid"])
+        self.assertTrue(any("contains an empty parenthesized expression" in err for err in res_and["errors"]))
+
+        # Invalid operator or unknown table inside a parenthesized join subquery must be caught
+        invalid_subquery = """
+        DeviceProcessEvents
+        | join kind=inner (
+            DeviceNetworkEvents
+            | frobnicate Timestamp > ago(1h)
+        ) on DeviceId
+        | project Timestamp, DeviceId, ReportId
+        """
+        res_sub = validate_kql_query_static(invalid_subquery, surface="advancedHunting")
+        self.assertFalse(res_sub["valid"])
+        self.assertTrue(any("Unknown KQL tabular operator 'frobnicate'" in err for err in res_sub["errors"]))
+
+    def test_author_supplied_required_workspace_functions_are_not_trusted_as_known_tables(self) -> None:
+        det_doc = {
+            "properties": {
+                "displayName": "Untrusted Function Rule",
+                "contentProvenance": {
+                    "requiredWorkspaceFunctions": ["AuthorInventedParserFunc"],
+                },
+                "queryCondition": {
+                    "queryText": "AuthorInventedParserFunc\n| where Timestamp > ago(1h)\n| project Timestamp, DeviceId, ReportId\n"
+                },
+            }
+        }
+        det_res = validate_xdr_detection_kql(det_doc)
+        self.assertFalse(det_res["valid"])
+        self.assertTrue(any("AuthorInventedParserFunc" in err for err in det_res["errors"]))
+
 
 if __name__ == "__main__":
     unittest.main()
