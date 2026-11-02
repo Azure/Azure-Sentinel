@@ -1414,6 +1414,189 @@ def test_round3_kql_subquery_and_retry_after_fixes() -> None:
     assert _parse_retry_after_seconds("45", default_seconds=2, remaining_budget_seconds=120.0) == 45
 
 
+def test_round4_e2e_q02_bipartite_matching_and_kql_regressions(tmp_path: Path) -> None:
+    import copy
+    from solution_manager.authoring.validator import validate_kql_query_static
+
+    # 1. Multi-statement scalar function let f = () { let y = 1; 42 } must pass, while invalid operator/generator bodies fail
+    res_scalar_fn = validate_kql_query_static(
+        "let f = () { let y = 1; 42 };\n"
+        "DeviceProcessEvents | extend z = f()"
+    )
+    assert res_scalar_fn["valid"] is True, f"Expected multi-statement scalar function to pass, got {res_scalar_fn['errors']}"
+
+    res_bad_let_body = validate_kql_query_static(
+        "let f = () { let y = 1; where x == 1 };\n"
+        "DeviceProcessEvents | extend z = f()"
+    )
+    assert res_bad_let_body["valid"] is False
+
+    res_bad_let_union = validate_kql_query_static(
+        "let f = () { let y = 1; union notanoperator };\n"
+        "DeviceProcessEvents | extend z = f()"
+    )
+    assert res_bad_let_union["valid"] is False
+
+    # 2. join (materialize(T | notanoperator x)) and extra parenthesized pipelines must fail
+    res_join_mat = validate_kql_query_static(
+        "DeviceProcessEvents | join kind=inner (materialize(DeviceProcessEvents | notanoperator x)) on DeviceId"
+    )
+    assert res_join_mat["valid"] is False and any("notanoperator" in e for e in res_join_mat["errors"])
+
+    res_join_mat_extra = validate_kql_query_static(
+        "DeviceProcessEvents | join kind=inner (materialize(DeviceProcessEvents) (DeviceProcessEvents | notanoperator x)) on DeviceId"
+    )
+    assert res_join_mat_extra["valid"] is False and any("notanoperator" in e for e in res_join_mat_extra["errors"])
+
+    # 3. E2E-Q02 scalar fallback disabled when detections exist on disk, 1:1 receipt matching, and QUAL-RUNTIME-01 FAIL on on-disk errors without runtime evidence
+    sol = tmp_path / "Round4Sol"
+    _build_base_package(
+        sol,
+        version="3.2.2",
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/Rule1.yaml", "Analytic Rules/Rule2.yaml"],
+            "XDR Detections": ["XDR Detections/Rule1.yaml", "XDR Detections/Rule2.yaml"],
+        },
+    )
+    _build_valid_analytic_rule(sol / "Analytic Rules" / "Rule1.yaml")
+    _build_valid_xdr_detection(sol / "XDR Detections" / "Rule1.yaml")
+    ar2_id = "7e76fd9d-8104-41eb-bad3-26054a3ad5f2"
+    xdr2_id = "xdr-7e76fd9d-8104-41eb-bad3-26054a3ad5f2"
+    rule1_ar_text = (sol / "Analytic Rules" / "Rule1.yaml").read_text(encoding="utf-8")
+    (sol / "Analytic Rules" / "Rule2.yaml").write_text(
+        rule1_ar_text.replace("6e76fd9d-8104-41eb-bad3-26054a3ad5f0", ar2_id),
+        encoding="utf-8",
+    )
+    rule1_xdr_text = (sol / "XDR Detections" / "Rule1.yaml").read_text(encoding="utf-8")
+    (sol / "XDR Detections" / "Rule2.yaml").write_text(
+        rule1_xdr_text.replace("xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0", xdr2_id).replace(
+            "6e76fd9d-8104-41eb-bad3-26054a3ad5f0", ar2_id
+        ),
+        encoding="utf-8",
+    )
+    _write_json(
+        sol / "mock.json",
+        {
+            "tables": {
+                "AzureDiagnostics": [
+                    {
+                        "TimeGenerated": "2026-10-19T12:00:00Z",
+                        "Category": "DDoSMitigationFlowLogs",
+                        "sourcePublicIpAddress_s": "203.0.113.5",
+                    }
+                ]
+            }
+        },
+    )
+
+    qual_ev_base = _build_live_qualification_evidence(sol)
+    wf_state = {"qualification": {"stages": {"rule_parity": {"status": "passed"}}}}
+
+    # (a) Omitting both detections and rules (or detections: null) must fail E2E-Q02
+    qual_ev_no_list = copy.deepcopy(qual_ev_base)
+    qual_ev_no_list["alertLifecycle"] = {
+        "initialDisabled": True,
+        "alertsFired": 4,
+        "returnedToDisabled": True,
+        "detections": None,
+    }
+    res_no_list = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_no_list, run_number=1)
+    assert res_no_list["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # (b) One receipt carrying both XDR IDs + one dummy receipt must fail 1:1 matching
+    qual_ev_spoof = copy.deepcopy(qual_ev_base)
+    qual_ev_spoof["alertLifecycle"] = {
+        "detections": [
+            {
+                "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+                "targetRuleId": xdr2_id,
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+            {
+                "id": "dummy-unrelated-id",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+        ]
+    }
+    res_spoof = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_spoof, run_number=1)
+    assert res_spoof["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # (b2) Duplicate id-less receipts for a shared displayName across two distinct XDR detections must fail
+    qual_ev_dup_name = copy.deepcopy(qual_ev_base)
+    qual_ev_dup_name["alertLifecycle"] = {
+        "detections": [
+            {
+                "name": "Test XDR Rule 1",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+            {
+                "name": "Test XDR Rule 1",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+        ]
+    }
+    res_dup_name = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_dup_name, run_number=1)
+    assert res_dup_name["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # (b3) Disambiguated id-less receipts using distinct file stems (Rule1, Rule2) must pass
+    qual_ev_stems = copy.deepcopy(qual_ev_base)
+    qual_ev_stems["alertLifecycle"] = {
+        "detections": [
+            {
+                "name": "Rule1",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+            {
+                "name": "Rule2",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+        ]
+    }
+    res_stems = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_stems, run_number=1)
+    assert res_stems["checksById"]["E2E-Q02"]["status"] == "PASS"
+
+    # (c) Uppercase GUIDs in receipts must match lowercase on-disk IDs cleanly
+    qual_ev_upper = copy.deepcopy(qual_ev_base)
+    qual_ev_upper["alertLifecycle"] = {
+        "detections": [
+            {
+                "id": "XDR-6E76FD9D-8104-41EB-BAD3-26054A3AD5F0",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+            {
+                "id": xdr2_id.upper(),
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+        ]
+    }
+    res_upper = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_upper, run_number=1)
+    assert res_upper["checksById"]["E2E-Q02"]["status"] == "PASS"
+
+    # (d) QUAL-RUNTIME-01 must return FAIL (not SKIPPED) when on-disk rule errors exist without runtime evidence
+    dup_file = sol / "XDR Detections" / "Rule2Dup.yaml"
+    dup_file.write_text((sol / "XDR Detections" / "Rule2.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    res_dup_no_ev = run_pr_qualification_checks(sol, workflow_state={}, qualification_evidence={}, run_number=1)
+    assert res_dup_no_ev["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
+    dup_file.unlink()
+
+
+
 class TestPrQualificationEngineUnittest(unittest.TestCase):
     def test_kql_runtime_verified_rules_and_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

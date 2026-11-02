@@ -2138,7 +2138,8 @@ def _evaluate_qualification_checks(
                     if "detections" in lc_ev and lc_ev.get("detections") is not None
                     else lc_ev.get("rules")
                 )
-                if has_rules_list_key:
+                require_per_detection_receipts = det_count > 0 or bool(on_disk_rules_by_id) or bool(on_disk_rule_errors)
+                if has_rules_list_key or require_per_detection_receipts:
                     mapping_rules = (
                         [r for r in rules_list if isinstance(r, Mapping)]
                         if isinstance(rules_list, list) and len(rules_list) > 0 and all(isinstance(r, Mapping) for r in rules_list)
@@ -2151,10 +2152,10 @@ def _evaluate_qualification_checks(
                             bool(r.get("returnedToDisabled") is True or str(r.get("finalState") or "").lower() == "disabled")
                             for r in mapping_rules
                         )
-                        covered_ids: set[str] = set()
-                        covered_idless_names: set[str] = set()
+                        receipt_ids_by_idx: list[set[str]] = []
+                        receipt_names_by_idx: list[set[str]] = []
                         for r in mapping_rules:
-                            entry_has_id = False
+                            r_ids: set[str] = set()
                             for id_key in (
                                 "id",
                                 "ruleId",
@@ -2165,52 +2166,105 @@ def _evaluate_qualification_checks(
                                 "originalRuleId",
                                 "analyticRuleId",
                             ):
-                                val = str(r.get(id_key) or "").strip()
+                                val = str(r.get(id_key) or "").strip().lower()
                                 if val:
-                                    covered_ids.add(val)
-                                    entry_has_id = True
-                            if not entry_has_id:
+                                    r_ids.add(val)
+                            r_names: set[str] = set()
+                            if not r_ids:
                                 for name_key in ("name", "detection", "ruleName", "displayName"):
                                     n_val = str(r.get(name_key) or "").strip()
                                     if n_val:
-                                        covered_idless_names.add(n_val.casefold())
-                                        covered_idless_names.add(Path(n_val).stem.casefold())
-                        xdr_disk_ids = {
+                                        r_names.add(n_val.casefold())
+                                        r_names.add(Path(n_val).stem.casefold())
+                            receipt_ids_by_idx.append(r_ids)
+                            receipt_names_by_idx.append(r_names)
+
+                        xdr_disk_ids = sorted(
                             rid
                             for rid, info in on_disk_rules_by_id.items()
                             if str(info.get("file") or "").replace("\\", "/").startswith("XDR Detections/")
-                        }
-                        ar_disk_ids = {
+                        )
+                        ar_disk_ids = sorted(
                             rid
                             for rid, info in on_disk_rules_by_id.items()
                             if str(info.get("file") or "").replace("\\", "/").startswith("Analytic Rules/")
+                        )
+
+                        linked_ar_ids_by_xdr: dict[str, str] = {}
+                        orig_id_xdr_counts: dict[str, int] = {}
+                        for rid in xdr_disk_ids:
+                            orig_low = str((on_disk_rules_by_id.get(rid) or {}).get("originalRuleId") or "").strip().lower()
+                            if orig_low:
+                                linked_ar_ids_by_xdr[rid] = orig_low
+                                orig_id_xdr_counts[orig_low] = orig_id_xdr_counts.get(orig_low, 0) + 1
+
+                        unambiguously_linked_ar_ids_low = {
+                            orig_low for orig_low, cnt in orig_id_xdr_counts.items() if cnt == 1
                         }
-                        covered_xdr_ids = {
-                            rid
-                            for rid in xdr_disk_ids
-                            if rid in covered_ids
-                            or str((on_disk_rules_by_id.get(rid) or {}).get("originalRuleId") or "").strip() in covered_ids
-                            or str((on_disk_rules_by_id.get(rid) or {}).get("stem") or "").strip().casefold() in covered_idless_names
-                            or str((on_disk_rules_by_id.get(rid) or {}).get("name") or "").strip().casefold() in covered_idless_names
-                        }
-                        linked_ar_ids = {
-                            str((on_disk_rules_by_id.get(rid) or {}).get("originalRuleId") or "").strip()
-                            for rid in covered_xdr_ids
-                            if (on_disk_rules_by_id.get(rid) or {}).get("originalRuleId")
-                        }
-                        covered_ar_ids = {
-                            rid
-                            for rid in ar_disk_ids
-                            if rid in covered_ids
-                            or rid in linked_ar_ids
-                            or str((on_disk_rules_by_id.get(rid) or {}).get("stem") or "").strip().casefold() in covered_idless_names
-                            or str((on_disk_rules_by_id.get(rid) or {}).get("name") or "").strip().casefold() in covered_idless_names
-                        }
+                        unlinked_ar_ids = [
+                            rid for rid in ar_disk_ids if rid.strip().lower() not in unambiguously_linked_ar_ids_low
+                        ]
+                        target_rule_ids = xdr_disk_ids + unlinked_ar_ids
+
+                        fallback_token_owners: dict[str, set[str]] = {}
+                        for rid in target_rule_ids:
+                            info = on_disk_rules_by_id.get(rid) or {}
+                            for tok in (
+                                str(info.get("stem") or "").strip().casefold(),
+                                str(info.get("name") or "").strip().casefold(),
+                            ):
+                                if tok:
+                                    fallback_token_owners.setdefault(tok, set()).add(rid)
+
+                        def _candidate_receipts_for_rule(rid: str) -> set[int]:
+                            info = on_disk_rules_by_id.get(rid) or {}
+                            rid_low = rid.strip().lower()
+                            orig_low = str(info.get("originalRuleId") or "").strip().lower()
+                            allow_orig_id = bool(orig_low and orig_id_xdr_counts.get(orig_low, 0) == 1)
+                            stem_cf = str(info.get("stem") or "").strip().casefold()
+                            name_cf = str(info.get("name") or "").strip().casefold()
+                            allow_stem = bool(stem_cf and len(fallback_token_owners.get(stem_cf, ())) == 1)
+                            allow_name = bool(name_cf and len(fallback_token_owners.get(name_cf, ())) == 1)
+                            cands: set[int] = set()
+                            for idx, r_ids in enumerate(receipt_ids_by_idx):
+                                if r_ids:
+                                    if rid_low in r_ids or (allow_orig_id and orig_low in r_ids):
+                                        cands.add(idx)
+                                else:
+                                    r_names = receipt_names_by_idx[idx]
+                                    if (allow_stem and stem_cf in r_names) or (allow_name and name_cf in r_names):
+                                        cands.add(idx)
+                            return cands
+
+                        def _has_bipartite_match(
+                            items: list[str],
+                            candidates_map: dict[str, set[int]],
+                        ) -> bool:
+                            assigned_by_receipt: dict[int, str] = {}
+
+                            def _try_assign(item: str, visited: set[int]) -> bool:
+                                for r_idx in sorted(candidates_map.get(item, ())):
+                                    if r_idx in visited:
+                                        continue
+                                    visited.add(r_idx)
+                                    prev_item = assigned_by_receipt.get(r_idx)
+                                    if prev_item is None or _try_assign(prev_item, visited):
+                                        assigned_by_receipt[r_idx] = item
+                                        return True
+                                return False
+
+                            for item in items:
+                                if not _try_assign(item, set()):
+                                    return False
+                            return True
+
+                        all_candidates = {rid: _candidate_receipts_for_rule(rid) for rid in target_rule_ids}
+                        all_matched = _has_bipartite_match(target_rule_ids, all_candidates)
+
                         all_disk_covered = (
                             not on_disk_rule_errors
-                            and xdr_disk_ids.issubset(covered_xdr_ids)
-                            and ar_disk_ids.issubset(covered_ar_ids)
-                            and (len(mapping_rules) >= max(1, len(xdr_disk_ids) or len(ar_disk_ids)))
+                            and bool(xdr_disk_ids or ar_disk_ids)
+                            and all_matched
                         )
                         total_alerts = sum(int(r.get("alertsFired") or r.get("alertCount") or 0) for r in mapping_rules)
                         lc_ok = all_initial_disabled and all_fired and all_returned_disabled and all_disk_covered
@@ -2533,14 +2587,14 @@ def _evaluate_qualification_checks(
                             all_entries_valid = False
                             break
                         r_status = str(r.get("status") or "").strip().upper()
-                        r_id = str(r.get("id") or "").strip()
+                        r_id = str(r.get("id") or "").strip().lower()
                         r_sha = str(r.get("querySha256") or "").strip().lower()
                         if r_status not in {"PASS", "PASSED"} or not r_id or not r_sha:
                             all_entries_valid = False
                             break
                         verified_by_rule_id[r_id] = r_sha
                     if all_entries_valid and all(
-                        verified_by_rule_id.get(rid) == str(info.get("querySha256") or "").strip().lower()
+                        verified_by_rule_id.get(rid.lower()) == str(info.get("querySha256") or "").strip().lower()
                         for rid, info in on_disk_rules_by_id.items()
                     ):
                         rt_passed = True
@@ -2573,7 +2627,7 @@ def _evaluate_qualification_checks(
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
                 )
-            elif not (qualification_evidence.get("providerReceipts") or qual_stages or rt_ev or parity_ev or wb_ev):
+            elif not on_disk_rule_errors and not (qualification_evidence.get("providerReceipts") or qual_stages or rt_ev or parity_ev or wb_ev):
                 results.append(
                     _build_check_result(
                         cdef,
@@ -3117,7 +3171,8 @@ def _collect_on_disk_rules_by_id(
 ) -> dict[str, dict[str, str | None]]:
     files_by_type = applicability.get("filesByContentType", {})
     on_disk_rules_by_id: dict[str, dict[str, str | None]] = {}
-    duplicate_ids: set[str] = set()
+    key_by_lower: dict[str, str] = {}
+    duplicate_ids_low: set[str] = set()
 
     for rel in files_by_type.get("analytic-rules", []):
         doc, err = _load_yaml_safe(solution_root / rel)
@@ -3126,19 +3181,21 @@ def _collect_on_disk_rules_by_id(
                 errors_out.append(f"Failed to parse Analytic Rule YAML '{rel}': {err or 'document is not a mapping'}")
             continue
         rid = str(doc.get("id") or "").strip()
+        rid_low = rid.lower()
         q_text = str(doc.get("query") or "").replace("\r\n", "\n").strip()
         if not rid or not q_text:
             if errors_out is not None:
                 errors_out.append(f"Analytic Rule '{rel}' is missing required 'id' or 'query'")
             continue
-        if rid in on_disk_rules_by_id or rid in duplicate_ids:
-            duplicate_ids.add(rid)
-            existing_file = (on_disk_rules_by_id.get(rid) or {}).get("file") or "<duplicate>"
-            on_disk_rules_by_id.pop(rid, None)
+        if rid_low in key_by_lower or rid_low in duplicate_ids_low:
+            duplicate_ids_low.add(rid_low)
+            existing_key = key_by_lower.pop(rid_low, None)
+            existing_file = (on_disk_rules_by_id.pop(existing_key, None) or {}).get("file") if existing_key else "<duplicate>"
             if errors_out is not None:
                 errors_out.append(f"Duplicate rule ID '{rid}' across '{existing_file}' and '{rel}'")
             continue
         q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
+        key_by_lower[rid_low] = rid
         on_disk_rules_by_id[rid] = {
             "id": rid,
             "originalRuleId": None,
@@ -3156,20 +3213,22 @@ def _collect_on_disk_rules_by_id(
             continue
         xdr_fields = _extract_xdr_detection_fields(doc)
         rid = str(xdr_fields.get("id") or "").strip()
+        rid_low = rid.lower()
         orig_id = str(xdr_fields.get("sourceRuleId") or "").strip() or None
         q_text = str(xdr_fields.get("query") or "").replace("\r\n", "\n").strip()
         if not rid or not q_text:
             if errors_out is not None:
                 errors_out.append(f"XDR Detection '{rel}' is missing required 'id' or 'query'")
             continue
-        if rid in on_disk_rules_by_id or rid in duplicate_ids:
-            duplicate_ids.add(rid)
-            existing_file = (on_disk_rules_by_id.get(rid) or {}).get("file") or "<duplicate>"
-            on_disk_rules_by_id.pop(rid, None)
+        if rid_low in key_by_lower or rid_low in duplicate_ids_low:
+            duplicate_ids_low.add(rid_low)
+            existing_key = key_by_lower.pop(rid_low, None)
+            existing_file = (on_disk_rules_by_id.pop(existing_key, None) or {}).get("file") if existing_key else "<duplicate>"
             if errors_out is not None:
                 errors_out.append(f"Duplicate rule ID '{rid}' across '{existing_file}' and '{rel}'")
             continue
         q_sha = hashlib.sha256(q_text.encode("utf-8")).hexdigest()
+        key_by_lower[rid_low] = rid
         on_disk_rules_by_id[rid] = {
             "id": rid,
             "originalRuleId": orig_id,
@@ -3199,6 +3258,7 @@ def _build_kql_runtime_verified_rules(
     on_disk_rules_by_id = _collect_on_disk_rules_by_id(solution_root, applicability, on_disk_rule_errors)
     if on_disk_rule_errors:
         return []
+    on_disk_rules_by_lower = {k.lower(): v for k, v in on_disk_rules_by_id.items()}
 
     def _add_entry(
         rule_id: str,
@@ -3217,10 +3277,11 @@ def _build_kql_runtime_verified_rules(
             st_norm = "PASS"
         if st_norm != "PASS":
             return
-        disk_info = on_disk_rules_by_id.get(rid)
+        disk_info = on_disk_rules_by_lower.get(rid.lower())
         if disk_info is None:
             # Drop receipts for rule IDs that do not exist on disk in the solution.
             return
+        canonical_id = str(disk_info.get("id") or rid).strip()
         if disk_info.get("querySha256") != qsha:
             # Reject stale receipt when on-disk query was edited after live qualification.
             return
@@ -3228,12 +3289,12 @@ def _build_kql_runtime_verified_rules(
             original_rule_id = disk_info["originalRuleId"]
         if not file_rel and disk_info.get("file"):
             file_rel = disk_info["file"]
-        key = (rid, qsha)
+        key = (canonical_id.lower(), qsha)
         if key in seen_keys:
             return
         seen_keys.add(key)
         entry: dict[str, Any] = {
-            "id": rid,
+            "id": canonical_id,
             "querySha256": qsha,
             "status": "PASS",
         }

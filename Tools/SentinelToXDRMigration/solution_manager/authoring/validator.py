@@ -641,16 +641,51 @@ def _validate_let_statement(
                             stmt_label_prefix=f"{let_label} ",
                         )
                     continue
-                _validate_pipeline_stages(
-                    inner_stmt,
-                    stmt_label=let_label,
-                    known_table_map=known_table_map,
-                    let_bindings=scoped_bindings,
-                    approved_fn_set=approved_fn_set,
-                    operators_seen=operators_seen,
-                    referenced_tables=referenced_tables,
-                    errors=errors,
+                unwrapped_inner = inner_stmt
+                while unwrapped_inner.startswith("(") and unwrapped_inner.endswith(")"):
+                    cand_inner = unwrapped_inner[1:-1].strip()
+                    _, inner_errs = _scan_lexical_structure(cand_inner)
+                    if inner_errs:
+                        break
+                    unwrapped_inner = cand_inner
+                head_ident_match = re.match(r"^(?:\(\s*)*([A-Za-z_][A-Za-z0-9_-]*)", unwrapped_inner)
+                head_ident_low = head_ident_match.group(1).casefold() if head_ident_match else ""
+                is_tabular_stmt = (
+                    len(_split_top_level(unwrapped_inner, "|")) > 1
+                    or head_ident_low in KNOWN_TABULAR_OPERATORS
+                    or head_ident_low in TABULAR_GENERATOR_KEYWORDS
+                    or inner_idx < len(inner_stmts) - 1
                 )
+                if is_tabular_stmt:
+                    _validate_pipeline_stages(
+                        unwrapped_inner,
+                        stmt_label=let_label,
+                        known_table_map=known_table_map,
+                        let_bindings=scoped_bindings,
+                        approved_fn_set=approved_fn_set,
+                        operators_seen=operators_seen,
+                        referenced_tables=referenced_tables,
+                        errors=errors,
+                    )
+                else:
+                    for sub_group in _extract_top_level_parenthesized_groups(unwrapped_inner):
+                        if len(_split_top_level(sub_group, "|")) > 1:
+                            _validate_pipeline_stages(
+                                sub_group,
+                                stmt_label=f"{let_label} subquery",
+                                known_table_map=known_table_map,
+                                let_bindings=scoped_bindings,
+                                approved_fn_set=approved_fn_set,
+                                operators_seen=operators_seen,
+                                referenced_tables=referenced_tables,
+                                errors=errors,
+                            )
+                    if head_ident_match:
+                        ident = head_ident_match.group(1)
+                        if ident.casefold() in known_table_map:
+                            referenced_tables.add(known_table_map[ident.casefold()])
+                        elif re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*_CL", ident, re.IGNORECASE):
+                            referenced_tables.add(ident)
             return
         rhs = body_raw
         let_bindings = scoped_bindings
@@ -864,6 +899,31 @@ def _validate_pipeline_source(
     ident = head_match.group(1)
     lowered = ident.casefold()
     after = unwrapped[head_match.end() :].strip()
+
+    sub_groups = _extract_top_level_parenthesized_groups(unwrapped)
+    for idx, sub_group in enumerate(sub_groups):
+        if idx == 0 and lowered in {"materialize", "toscalar"}:
+            if sub_group:
+                _validate_pipeline_source(
+                    sub_group,
+                    stmt_label=f"{stmt_label} ({ident})",
+                    known_table_map=known_table_map,
+                    let_bindings=let_bindings,
+                    approved_fn_set=approved_fn_set,
+                    referenced_tables=referenced_tables,
+                    errors=errors,
+                )
+        elif len(_split_top_level(sub_group, "|")) > 1:
+            _validate_pipeline_stages(
+                sub_group,
+                stmt_label=f"{stmt_label} subquery",
+                known_table_map=known_table_map,
+                let_bindings=let_bindings,
+                approved_fn_set=approved_fn_set,
+                operators_seen=[],
+                referenced_tables=referenced_tables,
+                errors=errors,
+            )
 
     if lowered in TABULAR_GENERATOR_KEYWORDS:
         if lowered == "union":
