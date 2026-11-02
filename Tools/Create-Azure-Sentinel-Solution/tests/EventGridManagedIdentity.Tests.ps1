@@ -38,6 +38,26 @@ function Assert-Throws([scriptblock]$Action, [string]$Message) {
     throw "Expected exception: $Message"
 }
 
+function Assert-ArmTtkAutomationExitCode([scriptblock]$TestBody, [int]$Expected) {
+    $repoRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
+    $runner = Join-Path $repoRoot 'Tools\Create-Azure-Sentinel-Solution\arm-ttk\run-arm-ttk-in-automation.ps1'
+    $command = @"
+`$ErrorActionPreference = 'Stop'
+function Test-AzTemplate {
+    [CmdletBinding()]
+    param([string]`$TemplatePath, [hashtable]`$TestParameter)
+    if (`$TemplatePath -like '*Templates') { return }
+    $TestBody
+}
+& '$($runner.Replace("'", "''"))' -SolutionName 'Cloudflare'
+"@
+    $output = & pwsh -NoProfile -Command $command 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne $Expected) {
+        throw "Expected ARM-TTK exit $Expected, got ${exitCode}:`n$($output -join "`n")"
+    }
+}
+
 function Assert-Equivalent($Actual, $Expected, [string]$Path = '$') {
     try {
         if ($Expected -is [System.Collections.IDictionary]) {
@@ -105,23 +125,62 @@ function Remove-CollectorRbac($Deployment) {
 }
 
 $tests = [ordered]@{
+    'ARM-TTK automation succeeds with passing results and no execution errors' = {
+        Assert-ArmTtkAutomationExitCode {
+            [pscustomobject]@{ Name = 'Passing test'; Passed = $true; Errors = @() }
+        } 0
+    }
+    'ARM-TTK automation does not fail on internally handled exceptions' = {
+        Assert-ArmTtkAutomationExitCode {
+            try { throw 'Internally handled exception' }
+            catch { }
+            [pscustomobject]@{ Name = 'Passing test'; Passed = $true; Errors = @() }
+        } 0
+    }
+    'ARM-TTK automation still fails on structured validation failures' = {
+        Assert-ArmTtkAutomationExitCode {
+            [pscustomobject]@{ Name = 'Failed test'; Passed = $false; Errors = @('Invalid template') }
+        } 1
+    }
+    'ARM-TTK automation fails on an execution error alongside passing results' = {
+        Assert-ArmTtkAutomationExitCode {
+            Write-Error 'Unexpected template extraction failure'
+            [pscustomobject]@{ Name = 'Passing test'; Passed = $true; Errors = @() }
+        } 1
+    }
+    'ARM-TTK automation preserves correlated metadata-ID exemptions' = {
+        Assert-ArmTtkAutomationExitCode {
+            $metadataError = [System.Management.Automation.ErrorRecord]::new(
+                [System.Exception]::new('Property: "contentProductId" must use a resourceId expression'),
+                'ResourceId.Should.Contain.Proper.Expression',
+                [System.Management.Automation.ErrorCategory]::InvalidData,
+                [pscustomobject]@{ PropertyName = 'contentProductId'; JSONPath = 'resources[0].properties.contentProductId' }
+            )
+            Write-Error -ErrorRecord $metadataError
+            [pscustomobject]@{ Name = 'IDs Should Be Derived From ResourceIDs'; Passed = $false; Errors = @($metadataError) }
+        } 0
+    }
+    'ARM-TTK automation fails on unexpected errors alongside exempted ID results' = {
+        Assert-ArmTtkAutomationExitCode {
+            $metadataError = [System.Management.Automation.ErrorRecord]::new(
+                [System.Exception]::new('Property: "id" must use a resourceId expression'),
+                'ResourceId.Should.Contain.Proper.Expression',
+                [System.Management.Automation.ErrorCategory]::InvalidData,
+                [pscustomobject]@{ PropertyName = 'id'; JSONPath = 'resources[0].properties.id' }
+            )
+            Write-Error -ErrorRecord $metadataError
+            Write-Error 'Unexpected template extraction failure'
+            [pscustomobject]@{ Name = 'IDs Should Be Derived From ResourceIDs'; Passed = $false; Errors = @($metadataError) }
+        } 1
+    }
+    'ARM-TTK automation does not exempt metadata-shaped errors without an ID test result' = {
+        Assert-ArmTtkAutomationExitCode {
+            Write-Error 'Property: "id" failed outside the ID validation test'
+            [pscustomobject]@{ Name = 'Passing test'; Passed = $true; Errors = @() }
+        } 1
+    }
     'ARM-TTK automation fails closed when the test command returns no results' = {
-        $repoRoot = Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent
-        $runner = Join-Path $repoRoot 'Tools\Create-Azure-Sentinel-Solution\arm-ttk\run-arm-ttk-in-automation.ps1'
-        $command = @"
-function Test-AzTemplate {
-    param(
-        [string]`$TemplatePath,
-        [hashtable]`$TestParameter,
-        [string]`$File,
-        [string[]]`$Test,
-        [string[]]`$Skip
-    )
-}
-& '$($runner.Replace("'", "''"))' -SolutionName 'Cloudflare'
-"@
-        & pwsh -NoProfile -Command $command *> $null
-        Assert-Equal $LASTEXITCODE 1
+        Assert-ArmTtkAutomationExitCode { } 1
     }
     'V3 routing detects only declared nonempty XDR content' = {
         foreach ($propertyName in @(
