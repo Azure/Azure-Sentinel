@@ -1,6 +1,6 @@
 # VerifyASimParserTemplate.py
 #
-# Validates the YAML template of modified ASIM parsers (both ASim and vim variants).
+# Validates the YAML template of modified ASIM query-time parsers (both ASim and vim variants).
 # For each modified parser, the following checks are performed against the parser
 # YAML and its corresponding union parser YAML:
 #
@@ -41,6 +41,7 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
 
 import yaml
 import re
@@ -93,7 +94,7 @@ def run():
     repo_root = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
     modified_files = get_modified_files(current_directory)
     sample_data_path = os.path.join(repo_root, SAMPLE_DATA_PATH)
-    parser_yaml_files = filter_yaml_files(modified_files)
+    parser_yaml_files = filter_query_time_parser_files(modified_files)
     has_failures = False
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
@@ -380,10 +381,6 @@ def validate_vim_parser_params(parser_file, union_parser_file):
         f'{RED}ParserParams must match the schema union parser parameters; optional: {", ".join(sorted(optional_params))}{RESET}',
         f'{RED}Fail{RESET}'
     )
-
-def filter_yaml_files(modified_files):
-    # Take only the YAML files
-    return [line for line in modified_files if line.endswith('.yaml')]
 
 def get_modified_files(current_directory):
 
