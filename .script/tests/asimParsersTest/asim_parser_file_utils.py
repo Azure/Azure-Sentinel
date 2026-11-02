@@ -24,3 +24,10 @@ def is_union_parser(parser_filename, schema_name):
 
 def is_empty_parser(parser_filename):
     return parser_filename.startswith('vim') and parser_filename.endswith('Empty.yaml')
+
+def filter_query_time_parser_files(modified_files):
+    return [
+        path for path in modified_files
+        if path.endswith('.yaml')
+        and 'IngestTimeParsers' not in path.replace('\\', '/').split('/')
+    ]

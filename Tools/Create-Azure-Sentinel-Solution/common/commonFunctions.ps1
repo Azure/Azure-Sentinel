@@ -3369,7 +3369,9 @@ function GeneratePackage(
         if ($IncludeXdrDetections -and $xdrDetectionCount -gt 0) {
             $mainTemplateJson = ConvertTo-CustomDetectionTemplateJson -Json $mainTemplateJson
         }
-        $mainTemplateJson | Out-File $mainTemplateOutputPath -Encoding utf8
+
+        $mainTemplateJson -replace '("defaultValue"\s*:\s*)\[\s*("(?:[^"\\]|\\.)*")\s*\]', '$1[$2]' |
+            Out-File $mainTemplateOutputPath -Encoding utf8
 
         # create testParameters json file which will be used for test case automation
         $testParametersOutputPath = "$solutionFolder/testParameters.json"
