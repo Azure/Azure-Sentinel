@@ -17,6 +17,7 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
 
 __unittest = True #prevents stacktrace during most assertions
 
@@ -291,8 +292,7 @@ def main():
         print(f"::error::An error occurred while executing the command: {e}")
         sys.stdout.flush()  # Explicitly flush stdout
     
-    # Get only YAML files
-    modified_yaml_files = [line for line in modified_files.stdout.splitlines() if line.endswith('.yaml')]
+    modified_yaml_files = filter_query_time_parser_files(modified_files.stdout.splitlines())
     print(f"{YELLOW}Following files has been detected as modified:{RESET}")
     sys.stdout.flush()  # Explicitly flush stdout
     for file in modified_yaml_files:
