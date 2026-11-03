@@ -468,6 +468,95 @@ class AlertParityTests(unittest.TestCase):
             ["event-1"],
         )
 
+    @mock.patch(
+        "sentinel_xdr_migration.alert_parity._ingest",
+        return_value={"status": "accepted", "recordsAccepted": 2},
+    )
+    @mock.patch(
+        "sentinel_xdr_migration.alert_parity._set_pair_enabled",
+        return_value=[],
+    )
+    @mock.patch("sentinel_xdr_migration.alert_parity._read_rule_states")
+    @mock.patch(
+        "sentinel_xdr_migration.alert_parity._deployment_token",
+        return_value="graph-token",
+    )
+    @mock.patch(
+        "sentinel_xdr_migration.alert_parity._arm_token",
+        return_value="arm-token",
+    )
+    @mock.patch(
+        "sentinel_xdr_migration.alert_parity.require_locked_target",
+        return_value=TARGET,
+    )
+    def test_batch_start_combines_payloads_for_shared_contract(
+        self,
+        _target: mock.Mock,
+        _arm: mock.Mock,
+        _graph: mock.Mock,
+        _read: mock.Mock,
+        enable: mock.Mock,
+        ingest: mock.Mock,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            output = root / "XDR Detections"
+            output.mkdir()
+            shared_contract = root / "shared-contract.json"
+            shared_contract.write_text("{}", encoding="utf-8")
+            fixtures = []
+            pairs = []
+            for index, name in enumerate(("One.yaml", "Two.yaml"), start=1):
+                payload = root / f"payload-{index}.json"
+                payload.write_text(
+                    json.dumps([{"marker": f"scenario-{index}"}]),
+                    encoding="utf-8",
+                )
+                fixtures.append(
+                    {
+                        "detection": name,
+                        "contract": shared_contract.name,
+                        "payload": payload.name,
+                        "scenarioMarker": f"scenario-{index}",
+                        "expectedMatchKeys": [f"event-{index}"],
+                    }
+                )
+                pairs.append(
+                    {
+                        "detection": name,
+                        "displayName": name,
+                        "analyticRuleId": f"source-{index}",
+                        "customDetectionId": f"detection-{index}",
+                        "entityMappings": {},
+                    }
+                )
+            plan = root / "plan.json"
+            plan.write_text(json.dumps({"fixtures": fixtures}), encoding="utf-8")
+
+            with mock.patch(
+                "sentinel_xdr_migration.alert_parity._load_pairs",
+                return_value=(root, pairs),
+            ):
+                result = start_alert_parity_batch(
+                    root,
+                    workspace_resource_id=TARGET["workspaceResourceId"],
+                    plan_path=plan,
+                )
+
+            ingest.assert_called_once()
+            combined_payload_path = Path(ingest.call_args.args[1])
+            combined_records = json.loads(
+                combined_payload_path.read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(result["rulesEnabled"], 2)
+        self.assertEqual(result["fixturesIngested"], 2)
+        self.assertEqual(enable.call_count, 2)
+        self.assertEqual(
+            combined_records,
+            [{"marker": "scenario-1"}, {"marker": "scenario-2"}],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

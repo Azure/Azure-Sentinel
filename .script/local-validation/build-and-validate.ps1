@@ -1034,8 +1034,8 @@ if (-not $SkipValidation) {
         if ($has80 -and (Test-Path $kqlProject)) {
             # Collect all YAML/JSON content files from the solution for scoping
             $kqlFiles = Get-SolutionContentFiles -SolPath $solutionPath `
-                -SubDirs @("Analytic Rules", "Hunting Queries", "Parsers", "Data Connectors") `
-                -Extensions @("*.yaml", "*.json")
+                -SubDirs @("Analytic Rules", "XDR Detections", "Hunting Queries", "Parsers", "Data Connectors") `
+                -Extensions @("*.yaml", "*.yml", "*.json")
 
             if ($kqlFiles.Count -gt 0) {
                 $kqlFilter = Build-DotnetTestFilter -Files $kqlFiles -UseEncodedPath
@@ -1124,9 +1124,9 @@ if (-not $SkipValidation) {
                 }
             }
             else {
-                $xdrKqlCheckFiles = Get-SolutionContentFiles -SolPath $solutionPath -SubDirs @("XDR Detections", "XDR Workbooks") -Extensions @("*.yaml", "*.yml", "*.json")
+                $xdrKqlCheckFiles = Get-SolutionContentFiles -SolPath $solutionPath -SubDirs @("XDR Workbooks") -Extensions @("*.json")
                 $noKqlReason = if ($xdrKqlCheckFiles.Count -gt 0) {
-                    "No legacy Sentinel KQL files found (.NET KQL validator does not support XDR Detections or XDR Workbooks)"
+                    "No Sentinel or XDR Detection KQL files found (.NET KQL validator does not support XDR Workbooks; validated via static XDR KQL validator)"
                 }
                 else {
                     "No content files found"

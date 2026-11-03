@@ -1,0 +1,151 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureSecurityCenter
+  dataTypes:
+  - SecurityAlert
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityAlert
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+    - SecurityAlert
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4b451ade-ed28-48e2-8fe7-60ae83ab2fa5
+    path: Analytic Rules/EmailEntity_SecurityAlert.yaml
+    version: 1.2.12
+    querySha256: e6e090f428e890e1e82fba9289aff119c7804d4c88ee74ffbc02a9e67bb231ae
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.2.12
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `EntityEmail`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `EntityEmail` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 708f43f8cad7f97be639dff13f2c83f345c4cfd9d077823a9c17bc283265ba89
+      targetQuerySha256: f4cb190ec51ddeb227bae502aa2199523a0971b3ab6c27ef3347bdd4638a529e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: EntityEmail
+      column: EntityEmail
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-4b451ade-ed28-48e2-8fe7-60ae83ab2fa5
+  displayName: TI Map Email entity to SecurityAlert
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\\
+      .[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n//Filtering the table for Email related\
+      \ IOCs\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"email-addr\"\n| extend EmailSenderAddress\
+      \ = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress,\
+      \ indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress,\
+      \ \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | extend IndicatorId = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey\
+      \ == \"url:value\", ObservableValue, \"\")\n| where TimeGenerated >= ago(ioc_lookBack)\n\
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n  | project-reorder\
+      \ *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type\n\
+      // using innerunique to keep perf fast and result set low, we only need one\
+      \ match to indicate potential malicious activity that needs to be investigated\n\
+      | join kind=innerunique (\n    SecurityAlert\n    | where TimeGenerated >= ago(dt_lookBack)\n\
+      \    | extend MSTI = case(AlertName has \"TI map\" and VendorName == \"Microsoft\"\
+      \ and ProductName == 'Azure Sentinel', true, false)\n    | where MSTI == false\n\
+      \    // Converting Entities into dynamic data type and use mv-expand to unpack\
+      \ the array\n    | extend EntitiesDynamicArray = parse_json(Entities) | mv-expand\
+      \ EntitiesDynamicArray\n    // Parsing relevant entity column to filter type\
+      \ account and creating new column by combining account and UPNSuffix\n    |\
+      \ extend Entitytype = tostring(parse_json(EntitiesDynamicArray).Type), EntityName\
+      \ = tostring(parse_json(EntitiesDynamicArray).Name),\n    EntityUPNSuffix =\
+      \ tostring(parse_json(EntitiesDynamicArray).UPNSuffix)\n    | where Entitytype\
+      \ =~ \"account\"\n    | extend EntityEmail = tolower(strcat(EntityName, \"@\"\
+      , EntityUPNSuffix))\n    | where EntityEmail matches regex emailregex\n    |\
+      \ extend Alert_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress\
+      \ == $right.EntityEmail\n| where Alert_TimeGenerated < ValidUntil\n| summarize\
+      \ Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by Id, AlertName\n|\
+      \ extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames\
+      \ = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project Alert_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil,\
+      \ Confidence,\nEmailSenderAddress, EntityEmail, AlertName, AlertType,\nAlertSeverity,\
+      \ Entities, ProviderName, VendorName,Url//, EmailRecipient, EmailSourceDomain,\
+      \ EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType,\n| extend\
+      \ Name = tostring(split(EntityEmail, '@', 0)[0]), UPNSuffix = tostring(split(EntityEmail,\
+      \ '@', 1)[0])\n| extend timestamp = Alert_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Email entity to SecurityAlert
+      description: '''Identifies a match in SecurityAlert table from any Email IOC
+        from TI which will extend coverage to datatypes such as MCAS, StorageThreatProtection
+        and many others'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      customDetails:
+        AccountFullName: EntityEmail

@@ -1,0 +1,119 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mda
+    dataTypes:
+    - CloudAppEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 16a45aee-5e39-4d1b-b508-40f847c99353
+    path: Analytic Rules/IPEntity_CloudAppEvents_Updated.yaml
+    version: 1.0.8
+    querySha256: 3b719baf177b0613529db0b30960819e3d322a23ac2b6f122dbfb5d87d929310
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.8
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 323bcea16bb8e615a9a05457791e74a4726afb7d259a9d3e316ac9c4c231b318
+      targetQuerySha256: cb3d2d0c812d9b18b732daabf64fa089c62e03306575a500a88125da680fbfae
+properties:
+  id: xdr-16a45aee-5e39-4d1b-b508-40f847c99353
+  displayName: TI Map IP entity to Cloud App Events
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1d;\nlet ioc_lookBack = 14d;\nlet IP_Indicators\
+      \ = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\"\
+      )\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated\
+      \ >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated,\
+      \ *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n\
+      \  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP,\
+      \ NetworkSourceIP)\n  | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP),\
+      \ NetworkSourceIP, TI_ipEntity);\n//  | extend TIipEntity = iff(isempty(TI_ipEntity)\
+      \ and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity);\n\
+      IP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP,\
+      \ Type, TI_ipEntity\n  | join kind=innerunique (\n  CloudAppEvents\n    | where\
+      \ TimeGenerated >= ago(dt_lookBack)\n    | extend CloudAppEvents_TimeGenerated\
+      \ = TimeGenerated) on $left.TI_ipEntity == $right.IPAddress\n    | where CloudAppEvents_TimeGenerated\
+      \ < ValidUntil\n    | summarize CloudAppEventsTimeGenerated = argmax(CloudAppEvents_TimeGenerated,\
+      \ *) by Id, IPAddress\n    | extend\n      Description = column_ifexists(\"\
+      max_CloudAppEvents_TimeGenerated_Description\", \"\"),\n      ActivityGroupNames\
+      \ = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ActivityGroupNames\"\
+      , \"\"),\n      ThreatType = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatType\"\
+      , \"\"),\n      ExpirationDateTime = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ExpirationDateTime\"\
+      , \"\"),\n      ConfidenceScore = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ConfidenceScore\"\
+      , \"\"),\n      TI_ipEntity = column_ifexists(\"max_CloudAppEvents_TimeGenerated_TI_ipEntity\"\
+      , \"\"),\n      NetworkDestinationIP = column_ifexists(\"max_CloudAppEvents_TimeGenerated_NetworkDestinationIP\"\
+      , \"\"),\n      NetworkSourceIP = column_ifexists(\"max_CloudAppEvents_TimeGenerated_NetworkSourceIP\"\
+      , \"\"),\n      EmailSourceIPAddress = column_ifexists(\"max_CloudAppEvents_TimeGenerated_EmailSourceIpAddress\"\
+      , \"\")\n    | project CloudAppEventsTimeGenerated, Description, ActivityGroupNames,\
+      \ Id, ThreatType, ExpirationDateTime, ConfidenceScore, TI_ipEntity, NetworkDestinationIP,\
+      \ NetworkSourceIP, EmailSourceIPAddress"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP entity to Cloud App Events
+      description: '''Identifies compromises and attacks and detect malicious activities
+        in one''s IP entity from TI'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: TI_ipEntity
+        - id: ip2
+          addressColumn: NetworkDestinationIP
+        - id: ip3
+          addressColumn: NetworkSourceIP
+        - id: ip4
+          addressColumn: EmailSourceIPAddress
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

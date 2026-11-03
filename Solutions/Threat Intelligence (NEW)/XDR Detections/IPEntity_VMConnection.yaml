@@ -1,0 +1,134 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: AzureMonitor(VMInsights)
+  dataTypes:
+  - VMConnection
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ThreatIntelIndicators
+    - VMConnection
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+    - VMConnection
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: aed70d71-adb2-4f73-becd-02150b13950b
+    path: Analytic Rules/IPEntity_VMConnection.yaml
+    version: 1.4.6
+    querySha256: ca239725d576896c808b9ef1de30490a729b17f6f71e56b4426c5eaf5afd4905
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.4.6
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 2a42702f1861050bd2a68de6e862d8de1654e421584d9d6b7e5b71d4aea8b44c
+      targetQuerySha256: abe98439b9cb71724b50cd83a39561a491db1581612497014ac052b28b9450cd
+properties:
+  id: xdr-aed70d71-adb2-4f73-becd-02150b13950b
+  displayName: TI Map IP Entity to VMConnection
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\n\
+      let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n\
+      // Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators\
+      \ = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\"\
+      )\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated\
+      \ >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP),\
+      \ NetworkSourceIP, NetworkSourceIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity)\
+      \ and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend\
+      \ Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n  | where\
+      \ ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\"\
+      \ and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n\
+      \  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      \  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Perform\
+      \ a join between IP indicators and VMConnection events\nIP_Indicators\n   |\
+      \ project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type,\
+      \ TI_ipEntity\n  // Use innerunique to keep performance fast and result set\
+      \ low, as we only need one match to indicate potential malicious activity that\
+      \ needs investigation\n  | join kind=innerunique (\n      VMConnection\n   \
+      \   | where TimeGenerated >= ago(dt_lookBack)\n      | extend VMConnection_TimeGenerated\
+      \ = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.RemoteIp\n  // Filter\
+      \ out VMConnection events that occurred after the expiration of the corresponding\
+      \ indicator\n  | where VMConnection_TimeGenerated < ValidUntil\n  // Group the\
+      \ results by IndicatorId and keep the VMConnection event with the latest timestamp\n\
+      \  | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated,\
+      \ *) by Id, RemoteIp\n  // Select the desired output fields\n  | extend Description\
+      \ = tostring(parse_json(Data).description)\n  | extend ActivityGroupNames =\
+      \ extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      \  | project VMConnection_TimeGenerated, Description, ActivityGroupNames, Id,\
+      \ ValidUntil, Confidence,\n    TI_ipEntity, Computer, Direction, ProcessName,\
+      \ SourceIp, DestinationIp, RemoteIp, Protocol, DestinationPort, NetworkSourceIP,\
+      \ Type, Url\n  | extend timestamp = VMConnection_TimeGenerated, HostName = tostring(split(Computer,\
+      \ '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer,\
+      \ '.'), 1, -1), '.'))"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP Entity to VMConnection
+      description: This query maps any IP indicators of compromise (IOCs) from threat
+        intelligence (TI), by searching for matches in VMConnection.
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: RemoteIp
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
