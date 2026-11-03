@@ -1,12 +1,19 @@
+import ast
 import csv
 import importlib.util
+import io
+import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[1]
     / "asim_parser_file_utils.py"
 )
 SPEC = importlib.util.spec_from_file_location(
@@ -21,6 +28,13 @@ TEMPLATE_SPEC = importlib.util.spec_from_file_location(
 )
 TEMPLATE_VERIFIER = importlib.util.module_from_spec(TEMPLATE_SPEC)
 TEMPLATE_SPEC.loader.exec_module(TEMPLATE_VERIFIER)
+
+FILTERING_SPEC = importlib.util.spec_from_file_location(
+    "asim_filtering_routing",
+    MODULE_PATH.with_name("ASimFilteringTest.py"),
+)
+FILTERING_VALIDATOR = importlib.util.module_from_spec(FILTERING_SPEC)
+FILTERING_SPEC.loader.exec_module(FILTERING_VALIDATOR)
 
 
 class QueryTimeParserFileSelectionTests(unittest.TestCase):
@@ -64,6 +78,176 @@ class QueryTimeParserFileSelectionTests(unittest.TestCase):
         )
 
 
+class QueryTimeParserExecutionRoutingTests(unittest.TestCase):
+    query_time_files = [
+        "Parsers/ASimDns/Parsers/ASimDnsContoso.yaml",
+        "Parsers/ASimDns/Parsers/vimDnsContoso.yaml",
+        "Parsers\\ASimDns\\Parsers\\ASimDnsWindows.yaml",
+        "Parsers/ASimDns/Parsers/ASimDnsIngestTimeParsersContoso.yaml",
+        "Parsers/ASimDns/IngestTimeParsersArchive/ASimDnsContoso.yaml",
+    ]
+    ingestion_time_files = [
+        "Parsers/ASimDns/IngestTimeParsers/ASimDnsContoso.yaml",
+        "Parsers\\ASimEmailEvent\\IngestTimeParsers\\ASimEmailEventContoso.yaml",
+        "Parsers/ASimAuditEvent/IngestTimeParsers/Nested/ASimAuditEventContoso.yaml",
+    ]
+    selection_cases = [
+        (
+            query_time_files + ingestion_time_files + [
+                "Parsers/ASimDns/Parsers/notes.txt",
+                "Parsers/ASimDns/Parsers/ASimDnsContoso.yml",
+            ],
+            query_time_files,
+        ),
+        (ingestion_time_files, []),
+        (query_time_files, query_time_files),
+    ]
+
+    def test_sample_ingestion_selects_only_query_time_parsers(self):
+        script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
+        tree = ast.parse(script_path.read_text(encoding="utf-8"))
+        selection = next(
+            node for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "parser_yaml_files"
+                for target in node.targets
+            )
+        )
+        helper_aliases = [
+            node for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "filter_query_time_parser_files"
+                for target in node.targets
+            )
+        ]
+        code = compile(
+            ast.Module(body=helper_aliases + [selection], type_ignores=[]),
+            str(script_path),
+            "exec",
+        )
+        for changed_files, expected in self.selection_cases:
+            with self.subTest(changed_files=changed_files):
+                namespace = {
+                    "modified_files": changed_files,
+                    "parser_file_utils": PARSER_FILE_UTILS,
+                }
+                exec(code, namespace)
+                self.assertEqual(namespace["parser_yaml_files"], expected)
+
+    def test_filtering_main_selects_only_query_time_parsers(self):
+        for changed_files, expected in self.selection_cases:
+            with self.subTest(changed_files=changed_files):
+                git_results = [
+                    SimpleNamespace(stdout="upstream\n"),
+                    SimpleNamespace(stdout=""),
+                    SimpleNamespace(stdout="\n".join(changed_files)),
+                ]
+                with (
+                    patch.object(FILTERING_VALIDATOR, "attempt_to_connect"),
+                    patch.object(
+                        FILTERING_VALIDATOR.subprocess, "run",
+                        side_effect=git_results,
+                    ),
+                    patch.object(FILTERING_VALIDATOR, "FilteringTest") as test,
+                    patch.object(FILTERING_VALIDATOR.unittest, "TestSuite"),
+                    patch.object(
+                        FILTERING_VALIDATOR.unittest, "TextTestRunner",
+                    ) as runner,
+                    patch.object(FILTERING_VALIDATOR.sys, "stdout", io.StringIO()),
+                ):
+                    runner.return_value.run.return_value.wasSuccessful.return_value = True
+                    FILTERING_VALIDATOR.main()
+                self.assertEqual(
+                    [call.args[1] for call in test.call_args_list],
+                    expected,
+                )
+
+    @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 is required")
+    def test_workflow_schema_data_runner_selects_only_query_time_parsers(self):
+        repo_root = MODULE_PATH.parents[3]
+        workflow_path = (
+            repo_root / ".github" / "workflows" / "runAsimSchemaAndDataTesters.yaml"
+        )
+        workflow = TEMPLATE_VERIFIER.yaml.safe_load(
+            workflow_path.read_text(encoding="utf-8")
+        )
+        script_step = next(
+            step
+            for step in workflow["jobs"]["Run-ASim-Schema-Data-tests"]["steps"]
+            if "inlineScript" in step.get("with", {})
+        )
+        self.assertIn(
+            '.script/tests/asimParsersTest/runAsimTesters.ps1',
+            script_step["with"]["inlineScript"],
+        )
+        self.assertIn("& $filePath", script_step["with"]["inlineScript"])
+        script_path = str(MODULE_PATH.with_name("runAsimTesters.ps1")).replace("'", "''")
+        command = r"""
+$ErrorActionPreference = 'Stop'
+$tokens = $null
+$errors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile(
+    '__SCRIPT_PATH__', [ref]$tokens, [ref]$errors
+)
+if ($errors.Count) { throw ($errors | Out-String) }
+$runFunction = $ast.Find({
+    param($node)
+    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -eq 'run'
+}, $true)
+Invoke-Expression $runFunction.Extent.Text
+$global:statusLines = @([Console]::In.ReadToEnd() | ConvertFrom-Json)
+$global:selected = @()
+$global:testErrors = @()
+function Invoke-Expression([string]$Command) {
+    if ($Command -eq 'git remote') { return 'upstream' }
+    if ($Command -eq 'git fetch upstream') { return }
+    if ($Command.StartsWith('git diff --name-status ')) {
+        return $global:statusLines
+    }
+    throw "Unexpected command: $Command"
+}
+function testSchema([string]$ParserFile) {
+    $global:selected += $ParserFile
+}
+run
+[Console]::Out.WriteLine(
+    'SELECTED_JSON=' + (ConvertTo-Json -InputObject @($global:selected) -Compress)
+)
+""".replace("__SCRIPT_PATH__", script_path)
+        status_cases = [
+            ([f"M\t{path}" for path in changed], expected)
+            for changed, expected in self.selection_cases
+        ]
+        status_cases.append((
+            [
+                "R100\tParsers/ASimDns/Parsers/Old.yaml\t"
+                "Parsers/ASimDns/IngestTimeParsers/New.yaml",
+                "R100\tParsers/ASimDns/IngestTimeParsers/Old.yaml\t",
+                "Parsers/ASimDns/Parsers/New.yaml",
+            ],
+            ["Parsers/ASimDns/Parsers/New.yaml"],
+        ))
+        for statuses, expected in status_cases:
+            with self.subTest(statuses=statuses):
+                result = subprocess.run(
+                    ["pwsh", "-NoProfile", "-NonInteractive", "-Command", command],
+                    input=json.dumps(statuses),
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                )
+                selected = next(
+                    line.removeprefix("SELECTED_JSON=")
+                    for line in result.stdout.splitlines()
+                    if line.startswith("SELECTED_JSON=")
+                )
+                self.assertEqual(json.loads(selected), expected)
+
+
 class SampleFixtureSelectionTests(unittest.TestCase):
     def setUp(self):
         temporary_directory = tempfile.TemporaryDirectory()
@@ -87,7 +271,7 @@ class SampleFixtureSelectionTests(unittest.TestCase):
 
     def template_results(self):
         parser_dir = (
-            Path(__file__).resolve().parents[5]
+            MODULE_PATH.parents[3]
             / "Parsers" / "ASimEmailEvent" / "Parsers"
         )
         parser = TEMPLATE_VERIFIER.read_local_yaml(
