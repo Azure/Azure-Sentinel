@@ -19,6 +19,7 @@
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |---|---|---|
+| 3.0.6 | 29-10-2026 | Migrated connector from **api.visa.com** to the **vtip.visa.com** Cloud Service per the VTIP API Client Onboarding Guide: updated endpoints to `/ioc/entries/search` and `/ioc/entries/search/scroll`, and changed authentication from API Key + Shared Secret (X-Pay Token) to a single API key sent in the `x-api-key` header. Note: VTIP also requires a Visa-issued mTLS client certificate for all API access, which this declarative connector cannot present — confirm with the VTIP team whether this connector's traffic is permitted before relying on it |
 | 3.0.5 | 05-05-2026 | Updated description in **createUiDefinition** |
 | 3.0.4 | 29-04-2026 | Fixed **mainTemplate** to use `uri` instead of `concat` for VTI URL variables |
 | 3.0.3 | 04/21/2026 | Updated **createUiDefinition** to include connector information|
