@@ -644,7 +644,13 @@ function New-IntegrationSuiteConnectionRequestBody {
         [string]$RfcDestinationName = "",
         
         [Parameter(Mandatory=$false)]
-        [int]$PollingFrequencyMinutes = 5
+        [int]$PollingFrequencyMinutes = 5,
+
+        [Parameter(Mandatory=$false)]
+        [string]$FixedWindowStartUtc = "",
+
+        [Parameter(Mandatory=$false)]
+        [string]$FixedWindowEndUtc = ""
     )
     
     try {
@@ -658,6 +664,27 @@ function New-IntegrationSuiteConnectionRequestBody {
         
         # Build API endpoint for SAP log trigger
         $apiEndpoint = "$($Credentials.IntegrationServerUrl)/http$ApiPathSuffix"
+
+        $hasFixedStart = -not [string]::IsNullOrWhiteSpace($FixedWindowStartUtc)
+        $hasFixedEnd = -not [string]::IsNullOrWhiteSpace($FixedWindowEndUtc)
+        if ($hasFixedStart -ne $hasFixedEnd) {
+            throw "FixedWindowStartUtc and FixedWindowEndUtc must be provided together."
+        }
+
+        $useFixedWindow = $hasFixedStart -and $hasFixedEnd
+        if ($useFixedWindow) {
+            $fixedStart = [DateTimeOffset]::Parse($FixedWindowStartUtc).ToUniversalTime()
+            $fixedEnd = [DateTimeOffset]::Parse($FixedWindowEndUtc).ToUniversalTime()
+            if ($fixedStart -ge $fixedEnd) {
+                throw "FixedWindowStartUtc must be earlier than FixedWindowEndUtc."
+            }
+
+            $timeFormat = "yyyy-MM-ddTHH:mm:ss.000000+00:00"
+            $encodedStart = [Uri]::EscapeDataString($fixedStart.ToString($timeFormat))
+            $encodedEnd = [Uri]::EscapeDataString($fixedEnd.ToString($timeFormat))
+            $separator = if ($apiEndpoint.Contains("?")) { "&" } else { "?" }
+            $apiEndpoint = "$apiEndpoint${separator}startTimeUTC=$encodedStart&endTimeUTC=$encodedEnd"
+        }
         
         # Build headers including optional RFC destination
         $requestHeaders = @{
@@ -710,6 +737,22 @@ function New-IntegrationSuiteConnectionRequestBody {
             }
         }
         
+        $requestConfig = @{
+            apiEndpoint = $apiEndpoint
+            httpMethod = "GET"
+            rateLimitQps = 2
+            retryCount = 1
+            timeoutInSeconds = 180
+            headers = $requestHeaders
+        }
+
+        if (-not $useFixedWindow) {
+            $requestConfig.queryWindowInMin = $PollingFrequencyMinutes
+            $requestConfig.queryTimeFormat = "yyyy-MM-ddTHH:mm:ss.000000+00:00"
+            $requestConfig.startTimeAttributeName = "startTimeUTC"
+            $requestConfig.endTimeAttributeName = "endTimeUTC"
+        }
+
         # Build request body matching SAPCC connector template
         $body = @{
             kind = "RestApiPoller"
@@ -724,18 +767,7 @@ function New-IntegrationSuiteConnectionRequestBody {
                     streamName = "SENTINEL_HEALTH"
                 }
                 auth = $authConfig
-                request = @{
-                    apiEndpoint = $apiEndpoint
-                    httpMethod = "GET"
-                    queryWindowInMin = $PollingFrequencyMinutes
-                    queryTimeFormat = "yyyy-MM-ddTHH:mm:ss.000000+00:00"
-                    startTimeAttributeName = "startTimeUTC"
-                    endTimeAttributeName = "endTimeUTC"
-                    rateLimitQps = 2
-                    retryCount = 1
-                    timeoutInSeconds = 180
-                    headers = $requestHeaders
-                }
+                request = $requestConfig
                 response = @{
                     eventsJsonPaths = @('$')
                     format = "json"
@@ -750,6 +782,9 @@ function New-IntegrationSuiteConnectionRequestBody {
         Write-Log "Built connection request body with DCR configuration"
         Write-Log "  Auth Type: $authType"
         Write-Log "  API Endpoint: $apiEndpoint"
+        if ($useFixedWindow) {
+            Write-Log "  Fixed window: $($fixedStart.ToString('u')) through $($fixedEnd.ToString('u'))" -Level "WARNING"
+        }
         if ($authType -ne "Basic") {
             Write-Log "  Token Endpoint: $tokenEndpoint"
         }
@@ -783,6 +818,10 @@ function New-SentinelIntegrationSuiteConnection {
         [string]$RfcDestinationName = "",
         [Parameter(Mandatory=$false)]
         [int]$PollingFrequencyMinutes = 5,
+        [Parameter(Mandatory=$false)]
+        [string]$FixedWindowStartUtc = "",
+        [Parameter(Mandatory=$false)]
+        [string]$FixedWindowEndUtc = "",
         [Parameter(Mandatory=$false)]
         [string]$ApiVersion = "2025-07-01-preview",
         [Parameter(Mandatory=$false)]
@@ -836,7 +875,9 @@ function New-SentinelIntegrationSuiteConnection {
             -DcrConfig $DcrConfig `
             -ApiPathSuffix $ApiPathSuffix `
             -RfcDestinationName $RfcDestinationName `
-            -PollingFrequencyMinutes $PollingFrequencyMinutes
+            -PollingFrequencyMinutes $PollingFrequencyMinutes `
+            -FixedWindowStartUtc $FixedWindowStartUtc `
+            -FixedWindowEndUtc $FixedWindowEndUtc
         
         if ($null -eq $bodyObject) {
             return $false
