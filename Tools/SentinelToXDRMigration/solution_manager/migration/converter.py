@@ -104,6 +104,8 @@ NRT_SUPPORTED_TABLES = frozenset(
         "OfficeActivity",
         "Okta_CL",
         "OktaV2_CL",
+        "PowerBIActivity",
+        "PowerPlatformAdminActivity",
         "ProofpointPOD",
         "ProofPointTAPClicksPermitted_CL",
         "ProofPointTAPMessagesDelivered_CL",

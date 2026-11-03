@@ -14,7 +14,8 @@ For related automation and response content, see the [SAP playbooks](./Playbooks
 
 We gratefully recognize the community contributions that help improve the Microsoft Sentinel solution for SAP applications:
 
-- **[ukk1](https://github.com/ukk1)** — Donated KQL queries for analyzing SAP audit log usage in Microsoft Sentinel and optimizing truncation behavior.
+- **[Niklas](https://github.com/ukk1)** — Donated KQL queries for analyzing SAP audit log usage in Microsoft Sentinel and optimizing truncation behavior.
+- **[Janik](https://github.com/DrLeot)** — Donated integration artifacts and KQL queries for improved detection precision.
 
 ## Contribute
 
