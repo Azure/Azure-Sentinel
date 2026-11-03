@@ -50,13 +50,91 @@ contentProvenance:
     - T1068
     reviewScope:
       sourceDocumentSha256: a6b89c6fbdc7dba7fd9266e639d47c2e33fbb9c6a6dff201067f7945ce90c962
-      targetQuerySha256: 2423d88917549d7f112afbca4ebe386adf51cdcebf9e090c136a72ed9893c2ad
+      targetQuerySha256: 1567b889723cf6a99b8f809b5624c6fdbbfcd14f643875bcfd026a942f58c4ac
 properties:
   id: xdr-1267d53d-f5fd-418b-b8da-34453a5994c2
   displayName: Google DNS - CVE-2020-1350 (SIGRED) exploitation pattern
   status: disabled
   queryCondition:
     queryText: |-
+      let GCPCloudDNS = view () {
+          let DNSQuery_GcpDns_empty = datatable(
+              TimeGenerated:datetime,
+              Query:string,
+              QueryTypeName:string,
+              ResponseName:string,
+              EventResultDetails:string,
+              NetworkProtocol:string,
+              SrcIpAddr:string,
+              EventOriginalUid:string,
+              EventSeverity:string,
+              EventCount:int,
+              EventProduct:string,
+              EventVendor:string,
+              EventSchemaVersion:string,
+              Dvc:string,
+              EventType:string,
+              EventResult:string,
+              EventSubType:string,
+              EventEndTime:datetime,
+              ResponseCodeName:string,
+              Domain:string,
+              IpAddr:string,
+              EventStartTime:datetime,
+              payload_serverLatency_d:real
+          )[];
+          let DNSQuery_GcpDns = union isfuzzy=true GCP_DNS_CL, DNSQuery_GcpDns_empty
+          | extend
+              Query=column_ifexists('payload_queryName_s', ''),
+              QueryTypeName=column_ifexists('payload_queryType_s', ''),
+              ResponseName=column_ifexists('payload_rdata_s', ''),
+              EventResultDetails=column_ifexists('payload_responseCode_s', ''),
+              NetworkProtocol=column_ifexists('payload_protocol_s', ''),
+              SrcIpAddr=column_ifexists('payload_sourceIP_s', ''),
+              EventOriginalUid=column_ifexists('insert_id_s', ''),
+              EventSeverity=column_ifexists('severity_s', ''),
+              EventCount=(1),
+              EventProduct="Cloud DNS",
+              EventVendor="GCP",
+              EventSchemaVersion="0.1.0",
+              Dvc="GCPDNS",
+              EventType=iif(column_ifexists('resource_type_s', '') == "dns_query", "lookup", column_ifexists('resource_type_s', '')),
+              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
+              EventSubType='response',
+              EventEndTime=todatetime(column_ifexists('timestamp_t', ''))
+          | extend
+              ResponseCodeName=EventResultDetails,
+              Domain=Query,
+              IpAddr=SrcIpAddr,
+              EventStartTime=EventEndTime;
+          let DNSQuery_GcpDnsV2 = union isfuzzy=true GCPDNS, DNSQuery_GcpDns_empty
+          | extend
+              Query=column_ifexists('QueryName', ''),
+              QueryTypeName=column_ifexists('QueryType', ''),
+              ResponseName=column_ifexists('Rdata', ''),
+              EventResultDetails=column_ifexists('ResponseCode', ''),
+              NetworkProtocol=column_ifexists('Protocol', ''),
+              SrcIpAddr=column_ifexists('SourceIP', ''),
+              EventOriginalUid=column_ifexists('InsertId', ''),
+              EventSeverity=column_ifexists('Severity', ''),
+              EventCount=(1),
+              EventProduct="Cloud DNS",
+              EventVendor="GCP",
+              EventSchemaVersion="0.1.0",
+              Dvc="GCPDNS",
+              EventType=iif(column_ifexists('ResourceType', '') == "dns_query", "lookup", column_ifexists('ResourceType', '')),
+              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
+              EventSubType='response',
+              EventEndTime=todatetime(column_ifexists('Timestamp', ''))
+          | extend
+              ResponseCodeName=EventResultDetails,
+              Domain=Query,
+              IpAddr=SrcIpAddr,
+              EventStartTime=EventEndTime,
+              payload_serverLatency_d=toreal(column_ifexists('ServerLatency', ''));
+          union isfuzzy=true DNSQuery_GcpDns, DNSQuery_GcpDnsV2
+          | project-reorder Query, QueryTypeName, ResponseName, EventResultDetails, NetworkProtocol, SrcIpAddr, EventOriginalUid, EventSeverity, EventCount, EventProduct, EventVendor, EventSchemaVersion, Dvc, EventType, EventResult, EventSubType, EventEndTime, ResponseCodeName, Domain, IpAddr, EventStartTime
+      };
       let threshold = 15;
       GCPCloudDNS
       | where QueryTypeName in~ ('SIG', 'RRSIG')

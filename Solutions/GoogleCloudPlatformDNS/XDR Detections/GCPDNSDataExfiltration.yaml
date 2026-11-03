@@ -42,7 +42,9 @@ contentProvenance:
     warnings:
     - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
       mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
-    informational: []
+    informational:
+    - 'Supplemental customDetails preserved from unmapped Sentinel entities: DNSDomainName=DNSCustomEntity (from DNS.DomainName;
+      Defender XDR ''dns'' entity mapping requires domainNameColumn + serverIpColumn + hostIpAddressColumn).'
     errors: []
     originalTactics:
     - Exfiltration
@@ -50,13 +52,97 @@ contentProvenance:
     - T1567
     reviewScope:
       sourceDocumentSha256: 768fac88d973da9b06a102c85b655443b13220bbeb22dae1bb684b0f4ccdc4da
-      targetQuerySha256: 49928e2fe210e602b4b4c51af74c93d8bcc635b88715c2b12b13dede6d9e45dd
+      targetQuerySha256: 0c31fdd29360993d53c21cce1716ce5c04deb85b3003d7590ee1d97cf9f79318
+    preservedEntityCustomDetails:
+      DNSDomainName:
+        column: DNSCustomEntity
+        origin: entityMappings
+        entityType: DNS
+        fieldType: DomainName
 properties:
   id: xdr-705bed63-668f-4508-9d2d-26faf4010700
   displayName: Google DNS - Possible data exfiltration
   status: disabled
   queryCondition:
     queryText: |-
+      let GCPCloudDNS = view () {
+          let DNSQuery_GcpDns_empty = datatable(
+              TimeGenerated:datetime,
+              Query:string,
+              QueryTypeName:string,
+              ResponseName:string,
+              EventResultDetails:string,
+              NetworkProtocol:string,
+              SrcIpAddr:string,
+              EventOriginalUid:string,
+              EventSeverity:string,
+              EventCount:int,
+              EventProduct:string,
+              EventVendor:string,
+              EventSchemaVersion:string,
+              Dvc:string,
+              EventType:string,
+              EventResult:string,
+              EventSubType:string,
+              EventEndTime:datetime,
+              ResponseCodeName:string,
+              Domain:string,
+              IpAddr:string,
+              EventStartTime:datetime,
+              payload_serverLatency_d:real
+          )[];
+          let DNSQuery_GcpDns = union isfuzzy=true GCP_DNS_CL, DNSQuery_GcpDns_empty
+          | extend
+              Query=column_ifexists('payload_queryName_s', ''),
+              QueryTypeName=column_ifexists('payload_queryType_s', ''),
+              ResponseName=column_ifexists('payload_rdata_s', ''),
+              EventResultDetails=column_ifexists('payload_responseCode_s', ''),
+              NetworkProtocol=column_ifexists('payload_protocol_s', ''),
+              SrcIpAddr=column_ifexists('payload_sourceIP_s', ''),
+              EventOriginalUid=column_ifexists('insert_id_s', ''),
+              EventSeverity=column_ifexists('severity_s', ''),
+              EventCount=(1),
+              EventProduct="Cloud DNS",
+              EventVendor="GCP",
+              EventSchemaVersion="0.1.0",
+              Dvc="GCPDNS",
+              EventType=iif(column_ifexists('resource_type_s', '') == "dns_query", "lookup", column_ifexists('resource_type_s', '')),
+              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
+              EventSubType='response',
+              EventEndTime=todatetime(column_ifexists('timestamp_t', ''))
+          | extend
+              ResponseCodeName=EventResultDetails,
+              Domain=Query,
+              IpAddr=SrcIpAddr,
+              EventStartTime=EventEndTime;
+          let DNSQuery_GcpDnsV2 = union isfuzzy=true GCPDNS, DNSQuery_GcpDns_empty
+          | extend
+              Query=column_ifexists('QueryName', ''),
+              QueryTypeName=column_ifexists('QueryType', ''),
+              ResponseName=column_ifexists('Rdata', ''),
+              EventResultDetails=column_ifexists('ResponseCode', ''),
+              NetworkProtocol=column_ifexists('Protocol', ''),
+              SrcIpAddr=column_ifexists('SourceIP', ''),
+              EventOriginalUid=column_ifexists('InsertId', ''),
+              EventSeverity=column_ifexists('Severity', ''),
+              EventCount=(1),
+              EventProduct="Cloud DNS",
+              EventVendor="GCP",
+              EventSchemaVersion="0.1.0",
+              Dvc="GCPDNS",
+              EventType=iif(column_ifexists('ResourceType', '') == "dns_query", "lookup", column_ifexists('ResourceType', '')),
+              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
+              EventSubType='response',
+              EventEndTime=todatetime(column_ifexists('Timestamp', ''))
+          | extend
+              ResponseCodeName=EventResultDetails,
+              Domain=Query,
+              IpAddr=SrcIpAddr,
+              EventStartTime=EventEndTime,
+              payload_serverLatency_d=toreal(column_ifexists('ServerLatency', ''));
+          union isfuzzy=true DNSQuery_GcpDns, DNSQuery_GcpDnsV2
+          | project-reorder Query, QueryTypeName, ResponseName, EventResultDetails, NetworkProtocol, SrcIpAddr, EventOriginalUid, EventSeverity, EventCount, EventProduct, EventVendor, EventSchemaVersion, Dvc, EventType, EventResult, EventSubType, EventEndTime, ResponseCodeName, Domain, IpAddr, EventStartTime
+      };
       GCPCloudDNS
       | where Query has 'webhook.site'
       | extend DNSCustomEntity = Query, IPCustomEntity = SrcIpAddr
@@ -68,9 +154,6 @@ properties:
       description: '''Detects possible data exfiltration.'''
       severity: high
       entityMappings:
-        dns:
-        - id: dn1
-          domainNameColumn: DNSCustomEntity
         ips:
         - id: ip1
           addressColumn: IPCustomEntity
@@ -78,3 +161,5 @@ properties:
       - tactic: Exfiltration
         techniques:
         - technique: T1567
+      customDetails:
+        DNSDomainName: DNSCustomEntity
