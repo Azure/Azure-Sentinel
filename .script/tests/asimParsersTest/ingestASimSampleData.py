@@ -5,7 +5,7 @@
 # It expects the Azure-Sentinel repo to be checked out locally and works as follows:
 #   1. Detects modified ASIM parser YAML files by comparing the current branch against upstream/master.
 #   2. Reads each parser YAML from the local repo to extract schema, vendor, and product info.
-#   3. Prefers source-specific sample CSVs, with legacy vendor/product/schema fallback.
+#   3. Retains matching legacy sample CSVs, using source-specific files for target collisions.
 #   4. For custom log tables: creates the table and a Data Collection Rule (DCR), then ingests data.
 #   5. For built-in tables: creates a DCR (handling GUID column mismatches) and ingests data.
 #

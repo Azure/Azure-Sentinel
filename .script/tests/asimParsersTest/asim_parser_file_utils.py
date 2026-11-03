@@ -35,7 +35,7 @@ def filter_query_time_parser_files(modified_files):
     ]
 
 def resolve_sample_data_path(sample_data_dir, event_vendor, event_product, schema, parser_query):
-    """Prefer a literal source pipeline's fixture, retaining legacy discovery."""
+    """Keep matching legacy data; use source-specific data for target collisions."""
     ignored_tokens = (
         r"//[^\r\n]*|/\*.*?\*/|```.*?```"
         r"|@'(?:''|[^'])*'"
@@ -56,6 +56,7 @@ def resolve_sample_data_path(sample_data_dir, event_vendor, event_product, schem
     ))
     sample_data_dir = Path(sample_data_dir)
     prefix = f"{event_vendor}_{event_product}_{schema}"
+    legacy_path = sample_data_dir / f"{prefix}_IngestedLogs.csv"
     candidates = [
         (sample_data_dir / f"{prefix}_{table}_IngestedLogs.csv", table)
         for table in sorted(source_tables)
@@ -68,6 +69,11 @@ def resolve_sample_data_path(sample_data_dir, event_vendor, event_product, schem
         )
     if candidates:
         sample_path, source_table = candidates[0]
+        if legacy_path.is_file():
+            with legacy_path.open(newline="", encoding="utf-8-sig") as legacy_file:
+                legacy_types = {row.get("Type") for row in csv.DictReader(legacy_file)}
+            if legacy_types == {source_table}:
+                return legacy_path
         with sample_path.open(newline="", encoding="utf-8-sig") as sample_file:
             fixture_types = {row.get("Type") for row in csv.DictReader(sample_file)}
         if fixture_types != {source_table}:
@@ -77,7 +83,6 @@ def resolve_sample_data_path(sample_data_dir, event_vendor, event_product, schem
             )
         return sample_path
 
-    legacy_path = sample_data_dir / f"{prefix}_IngestedLogs.csv"
     if not legacy_path.is_file():
         raise FileNotFoundError(
             f"No matching source-specific sample fixture or legacy fixture {legacy_path}"

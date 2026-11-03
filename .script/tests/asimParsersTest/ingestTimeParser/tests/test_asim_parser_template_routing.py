@@ -78,7 +78,7 @@ class SampleFixtureSelectionTests(unittest.TestCase):
             self.sample_dir, "Proofpoint", "TAP", "EmailEvent", query
         )
 
-    def test_selects_each_source_without_overwriting_the_shared_fixture(self):
+    def test_only_switches_the_source_that_mismatches_the_legacy_fixture(self):
         legacy = self.fixture(types=["ProofPointTAPClicksPermittedV2_CL"])
         legacy_contents = legacy.read_bytes()
         sources = [
@@ -92,8 +92,26 @@ class SampleFixtureSelectionTests(unittest.TestCase):
                 f"let parser = () {{ {source} | where true }}; parser()",
             ):
                 with self.subTest(source=source, query=query):
-                    self.assertEqual(self.resolve(query), fixtures[source])
+                    expected = (
+                        legacy if source == "ProofPointTAPClicksPermittedV2_CL"
+                        else fixtures[source]
+                    )
+                    self.assertEqual(self.resolve(query), expected)
         self.assertEqual(legacy.read_bytes(), legacy_contents)
+
+    def test_matching_legacy_is_kept_even_if_source_specific_data_is_invalid(self):
+        source = "ProofPointTAPClicksPermittedV2_CL"
+        legacy = self.fixture(types=[source])
+        self.fixture(source, types=["Wrong_CL"])
+        self.assertEqual(self.resolve(f"{source} | where true"), legacy)
+
+    def test_source_specific_is_used_for_empty_or_mixed_legacy_types(self):
+        source = "ProofPointTAPClicksBlockedV2_CL"
+        selected = self.fixture(source)
+        for types in ([], [""], [source, "Other_CL"]):
+            with self.subTest(types=types):
+                self.fixture(types=types)
+                self.assertEqual(self.resolve(f"{source} | where true"), selected)
 
     def test_source_specific_fixture_does_not_require_a_legacy_fixture(self):
         source = "ProofPointTAPClicksBlockedV2_CL"
