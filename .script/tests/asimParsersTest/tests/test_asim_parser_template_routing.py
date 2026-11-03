@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 
 MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[1]
     / "asim_parser_file_utils.py"
 )
 SPEC = importlib.util.spec_from_file_location(
@@ -271,7 +271,7 @@ class SampleFixtureSelectionTests(unittest.TestCase):
 
     def template_results(self):
         parser_dir = (
-            Path(__file__).resolve().parents[5]
+            MODULE_PATH.parents[3]
             / "Parsers" / "ASimEmailEvent" / "Parsers"
         )
         parser = TEMPLATE_VERIFIER.read_local_yaml(
