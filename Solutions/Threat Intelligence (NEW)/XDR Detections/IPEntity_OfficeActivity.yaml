@@ -1,0 +1,145 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f50280e5-5eb1-4e95-99fd-9d584a987bdd
+    path: Analytic Rules/IPEntity_OfficeActivity.yaml
+    version: 1.4.8
+    querySha256: 750e668b41271a7dc7d6bf2838bcc740cdfedff78d10831fff57027fc9bacb08
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.4.8
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserId` cannot be proven after a destructive
+      projection; no supplemental customDetails binding was added and KQL was not
+      rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 22161a71d4721888ce0b7a4fc78ccc219c9aaa5ac995b54108b4b9294d72e4ec
+      targetQuerySha256: 05099b3860dc470f4bc9fd1fdc19d7d587780991c4798a295db6809554a235a9
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-f50280e5-5eb1-4e95-99fd-9d584a987bdd
+  displayName: TI Map IP entity to OfficeActivity
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h; // Look back 1 hour for OfficeActivity events\n\
+      let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n\
+      let OfficeActivity_ = materialize(OfficeActivity\n  | where isnotempty(ClientIP)\n\
+      \  | where TimeGenerated >= ago(dt_lookBack)\n  | extend ClientIPValues = extract_all(@'\\\
+      [?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]%]+)(%\\d+)?\\]?([-:](?P<Port>\\\
+      d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n  | extend IPAddress\
+      \ = iff(array_length(ClientIPValues) > 0, tostring(ClientIPValues[0]), '')\n\
+      \  | project-rename OfficeActivity_TimeGenerated = TimeGenerated);\nlet ActivityIPs\
+      \ = OfficeActivity_ | summarize IPs = make_list(IPAddress);\n// Fetch threat\
+      \ intelligence indicators related to IP addresses\nlet IP_Indicators = materialize(ThreatIntelIndicators\n\
+      //extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\\
+      ]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType\
+      \ in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP\
+      \ = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      \  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = NetworkSourceIP\n\
+      \  | where TI_ipEntity in (ActivityIPs)\n  | extend Url = iff(ObservableKey\
+      \ == \"url:value\", ObservableValue, \"\")\n  | summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and\
+      \ (ValidUntil > now() or isempty(ValidUntil))\n  | extend Description = tostring(parse_json(Data).description)\n\
+      \  | where Description !contains_cs \"State: inactive;\" and Description !contains_cs\
+      \ \"State: falsepos;\");\nIP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel,\
+      \ NetworkSourceIP, Type, TI_ipEntity\n// Use innerunique to keep performance\
+      \ fast and result set low, as we only need one match to indicate potential malicious\
+      \ activity that needs investigation\n| join kind=innerunique (OfficeActivity_)\n\
+      \  on $left.TI_ipEntity == $right.IPAddress\n// Filter out OfficeActivity events\
+      \ that occurred after the expiration of the corresponding indicator\n| where\
+      \ OfficeActivity_TimeGenerated < ValidUntil\n// Group the results by IndicatorId\
+      \ and keep the OfficeActivity event with the latest timestamp\n| summarize OfficeActivity_TimeGenerated\
+      \ = arg_max(OfficeActivity_TimeGenerated, *) by Id\n// Select the desired output\
+      \ fields\n| extend Description = tostring(parse_json(Data).description)\n| extend\
+      \ ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, Id,\
+      \ ValidUntil, Confidence, TI_ipEntity, ClientIP, UserId, Operation, ResultStatus,\
+      \ RecordType, OfficeObjectId, NetworkSourceIP, Type, Url\n| extend timestamp\
+      \ = OfficeActivity_TimeGenerated, Name = tostring(split(UserId, '@', 0)[0]),\
+      \ UPNSuffix = tostring(split(UserId, '@', 1)[0])"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP entity to OfficeActivity
+      description: This query maps any IP indicators of compromise (IOCs) from threat
+        intelligence (TI), by searching for matches in OfficeActivity.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: TI_ipEntity
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
