@@ -23,9 +23,9 @@ locals {
   workspace_name      = var.workspace != "" ? var.workspace : local.computed_workspace_name
   resource_group_name = var.resource_group_name != "" ? var.resource_group_name : local.computed_resource_group
 
-  # Reference the existing Workday DCE (shared with workday connector)
-  dce_name = var.data_collection_endpoint_name != "" ? var.data_collection_endpoint_name : "dce-workday-${var.environment}-${var.location_short}"
-  dcr_name = var.data_collection_rule_name != "" ? var.data_collection_rule_name : "dcr-workday-email-${var.environment}-${var.location_short}"
+  existing_dce_resource_id = var.existing_data_collection_endpoint_resource_id != "" ? var.existing_data_collection_endpoint_resource_id : (
+    var.data_collection_endpoint_name != "" ? "/subscriptions/${var.subscription_id}/resourceGroups/${local.resource_group_name}/providers/Microsoft.Insights/dataCollectionEndpoints/${var.data_collection_endpoint_name}" : ""
+  )
 
   # Use location from the actual workspace (DCR must be in same region as workspace)
   actual_workspace_location = data.azurerm_log_analytics_workspace.sentinel.location

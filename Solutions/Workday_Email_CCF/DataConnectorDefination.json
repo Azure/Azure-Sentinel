@@ -1,108 +1,133 @@
 {
-    "name": "WorkdayEmailCCPDefinition",
-    "apiVersion": "2022-09-01-preview",
-    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
-    "location": "{{location}}",
-    "kind": "Customizable",
-    "properties": {
-        "connectorUiConfig": {
-            "id": "WorkdayEmailCCPDefinition",
-            "title": "Workday Email Activity",
-            "publisher": "Microsoft",
-            "descriptionMarkdown": "The [Workday](https://www.workday.com/) Email Activity data connector provides the capability to ingest Email Activity reports from [Workday Custom Reports API](https://community.workday.com/sites/default/files/file-hosting/restapi/index.html) into Microsoft Sentinel.",
-            "graphQueriesTableName": "ASimAuditEventLogs",
-            "graphQueries": [
-                {
-                    "metricName": "Total data received",
-                    "legend": "Workday Email Activity logs",
-                    "baseQuery": "{{graphQueriesTableName}}\n| where EventProduct == \"Workday\" and Operation == \"Email Activity\""
-                }
-            ],
-            "sampleQueries": [
-                {
-                    "description": "Get a sample of Workday Email Activity logs",
-                    "query": "{{graphQueriesTableName}}\n | where EventProduct == \"Workday\" and Operation == \"Email Activity\" | take 10"
-                }
-            ],
-            "dataTypes": [
-                {
-                    "name": "{{graphQueriesTableName}}",
-                    "lastDataReceivedQuery": "{{graphQueriesTableName}}\n | where EventProduct == \"Workday\" and Operation == \"Email Activity\" |summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
-                }
-            ],
-            "availability": {
-                "isPreview": false
-            },
-            "connectivityCriteria": [
-                {
-                    "type": "HasDataConnectors"
-                }
-            ],
-            "permissions": {
-                "resourceProvider": [
-                    {
-                        "provider": "Microsoft.OperationalInsights/workspaces",
-                        "permissionsDisplayText": "Read and Write permissions are required.",
-                        "providerDisplayName": "Workspace",
-                        "scope": "Workspace",
-                        "requiredPermissions": {
-                            "write": true,
-                            "read": true,
-                            "delete": true
-                        }
-                    }
-                ],
-                "customs": [
-                    {
-                        "name": "Workday Custom Report API access",
-                        "description": "Access to the Workday Custom Report API through OAuth is required. The API Client needs access to the ISU_MS_Sentinel integration system user and the CR_Sentinel_Email_ID_Change custom report."
-                    }
-                ]
-            },
-            "instructionSteps": [
-                {
-                    "description": "1) In Workday, access the \"Edit Tenant Setup - Security\" task, verify \"OAuth 2.0 Settings\" section, make sure that the \"OAuth 2.0 Clients Enabled\" check box is ticked. \n 2) Access the \"Register API Client\" task.\n 3) Define the Client Name, select the \"Client Grant Type\": \"Authorization Code Grant\" and then select \"Access Token Type\": \"Bearer\"\n 4) Enter the \"Redirection URI\" found in the form below \n 5) In section \"Scope (Functional Areas)\", select the appropriate scope for the custom report and click OK at the bottom \n 6) Copy the Client ID and Client Secret before navigating away from the page, and store it securely. \n 7) In Sentinel, in the connector page - provide required Token, Authorization and Email Activity Report Endpoints, along with Client ID and Client Secret from previous step. Then click \"Connect\". \n",
-                    "instructions": [
-                        {
-                            "type": "Textbox",
-                            "parameters": {
-                                "label": "Token Endpoint",
-                                "placeholder": "https://wd3-impl-services1.workday.com/ccx/oauth2/stellantis1/token",
-                                "type": "text",
-                                "name": "tokenEndpoint"
-                            }
-                        },
-                        {
-                            "type": "Textbox",
-                            "parameters": {
-                                "label": "Authorization Endpoint",
-                                "placeholder": "https://wd3-impl.workday.com/stellantis1/authorize?redirect=n",
-                                "type": "text",
-                                "name": "authorizationEndpoint"
-                            }
-                        },
-                        {
-                            "type": "Textbox",
-                            "parameters": {
-                                "label": "Email Activity Report Endpoint",
-                                "placeholder": "https://wd3-impl-services1.workday.com/ccx/service/customreport2/stellantis1/ISU_MS_Sentinel/CR_Sentinel_Email_ID_Change?format=json",
-                                "type": "text",
-                                "name": "apiEndpoint"
-                            }
-                        },
-                        {
-                            "type": "OAuthForm",
-                            "parameters": {
-                                "clientIdLabel": "MDMyMTA4YTEtMTliZC00NmVmLTg2MjEtNTIzNmYyZDQ0YzQz",
-                                "clientSecretLabel": "12b8tuixrlokjvgzvvp8stwr4kgz5bmpo93gnypglnfe2zyo3qv8hln1c1c7nhrdvzuja0ihqzfa7ep7y7587xpsd6txugrsib50",
-                                "connectButtonLabel": "Connect",
-                                "disconnectButtonLabel": "Disconnect"
-                            }
-                        }
-                    ],
-                    "title": "Connect to Workday to start collecting Email Activity logs in Microsoft Sentinel"
-                }
-            ]
+  "name": "WorkdayEmailCCPDefinition",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "WorkdayEmailCCPDefinition",
+      "title": "Workday Email Activity (via Codeless Connector Framework)",
+      "publisher": "CSA Team",
+      "descriptionMarkdown": "Collect completed Email ID Change events from a Workday Report-as-a-Service (RaaS) custom report into ASimAuditEventLogs. This custom connector is not the Microsoft Workday User Activity connector and does not support WQL endpoints. The report must return all matching rows in one Report_Entry array and honor After_Date_Time and Before_Date_Time prompts.",
+      "graphQueriesTableName": "ASimAuditEventLogs",
+      "graphQueries": [
+        {
+          "metricName": "Total events received",
+          "legend": "Workday Email Activity",
+          "baseQuery": "{{graphQueriesTableName}}\n| where EventProduct == \"Workday\" and Operation == \"Email Activity\""
         }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Recent Workday email address changes",
+          "query": "{{graphQueriesTableName}}\n| where EventProduct == \"Workday\" and Operation == \"Email Activity\"\n| project TimeGenerated, ActorUserId, ActorUsername, Object, OldValue, NewValue, EventOriginalUid\n| take 100"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| where EventProduct == \"Workday\" and Operation == \"Email Activity\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Workspace read, write, and delete permissions.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Azure data collection resources",
+            "description": "Permission to create data collection rules in the resource group. The ARM installer creates a data collection endpoint unless an existing endpoint resource ID is supplied."
+          },
+          {
+            "name": "Workday RaaS and OAuth access",
+            "description": "An OAuth authorization-code API client with a Bearer access token, report access for the authorizing user, and the Workday functional-area permissions required by the custom report."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Prepare the Workday custom report and API client",
+          "description": "1. Enable OAuth 2.0 clients in Workday tenant security settings.\n2. Enable the Email ID Change report as a web service. Confirm it returns Report_Entry with DateTimeStamp, EmailIDAfter, EmailIDBefore, Employee_ID, Login_ID, TargetID, and Worker. DateTimeStamp must be an ISO 8601 timestamp with a time zone. Configure After_Date_Time and Before_Date_Time prompts to return the complete five-minute interval without pagination or truncation.\n3. Register an API client with Authorization Code Grant and Bearer access tokens. Grant the functional-area permissions required by this report and authorize with a user permitted to run it.\n4. Register exactly this redirect URI: https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights\n5. Retrieve token and authorization URLs from View API Clients in the same Workday tenant. Do not copy example hosts or use a WQL URL.\n6. Enter credentials only in the OAuth form below. Click Connect once and complete Workday consent. Each attempt must obtain a fresh authorization code; do not deploy placeholder or previously redeemed codes."
+        },
+        {
+          "title": "Connect the Workday Email ID Change report",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Token endpoint",
+                "placeholder": "https://<services-host>/ccx/oauth2/<tenant>/token",
+                "type": "text",
+                "name": "tokenEndpoint",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Authorization endpoint (without query parameters)",
+                "placeholder": "https://<authorization-host>/<tenant>/authorize",
+                "type": "text",
+                "name": "authorizationEndpoint",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "RaaS report endpoint (without query parameters)",
+                "placeholder": "https://<services-host>/ccx/service/customreport2/<tenant>/<report-owner>/<report-name>",
+                "type": "text",
+                "name": "apiEndpoint",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "OAuth scope (only if required by your Workday API client)",
+                "placeholder": "Use the exact OAuth scope confirmed by your Workday administrator, or leave empty",
+                "type": "text",
+                "name": "scope"
+              }
+            },
+            {
+              "type": "OAuthForm",
+              "parameters": {
+                "clientIdLabel": "Client ID",
+                "clientSecretLabel": "Client Secret",
+                "connectButtonLabel": "Connect",
+                "disconnectButtonLabel": "Disconnect"
+              }
+            }
+          ]
+        }
+      ]
     }
+  }
 }
