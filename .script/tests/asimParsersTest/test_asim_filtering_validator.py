@@ -36,6 +36,19 @@ def response(rows):
     return SimpleNamespace(tables=[SimpleNamespace(rows=rows)])
 
 
+class IdentityComparedRow:
+    """Model SDK rows that iterate over values but retain object equality."""
+
+    def __init__(self, values):
+        self.values = values
+
+    def __iter__(self):
+        return iter(self.values)
+
+    def __repr__(self):
+        return repr(self.values)
+
+
 def filtered_rows_for_query(query, parameter_name, rows):
     parameter_match = re.search(rf"{parameter_name}=dynamic\(\[([^\]]*)\]\)", query)
     if parameter_match is None:
@@ -383,6 +396,56 @@ class EmailEventFilteringValidatorTests(unittest.TestCase):
                     test.get_response_for_query_with_parameters(
                         "response_has_any_prefix", "", "DnsResponseName", ["203.0.113."]
                     )
+
+    def test_prefix_results_compare_sdk_row_values_without_ordering(self):
+        cases = [
+            ("identical", [["198.51.100.10", 2]], [["198.51.100.10", 2]]),
+            ("reordered",
+             [["198.51.100.10", 2], ["198.51.100.20", 1]],
+             [["198.51.100.20", 1], ["198.51.100.10", 2]]),
+            ("empty", [], []),
+            ("duplicates",
+             [["198.51.100.10", 2], ["198.51.100.10", 2]],
+             [["198.51.100.10", 2], ["198.51.100.10", 2]]),
+        ]
+        for test_class in self.validator_classes():
+            for name, actual, expected in cases:
+                with self.subTest(validator=test_class, case=name):
+                    test = test_class()
+                    test.send_query = Mock(side_effect=[
+                        response([IdentityComparedRow(row) for row in actual]),
+                        response([IdentityComparedRow(row) for row in expected]),
+                    ])
+                    test.get_response_for_query_with_parameters(
+                        "srcipaddr_has_any_prefix", "", "SrcIpAddr", ["198.51.100."]
+                    )
+                    self.assertEqual(test.send_query.call_count, 2)
+
+    def test_prefix_results_reject_sdk_row_value_and_multiplicity_differences(self):
+        cases = [
+            ("address", [["198.51.100.10", 2]], [["198.51.100.20", 2]]),
+            ("count", [["198.51.100.10", 2]], [["198.51.100.10", 3]]),
+            ("missing", [], [["198.51.100.10", 2]]),
+            ("extra", [["198.51.100.10", 2]], []),
+            ("duplicate missing",
+             [["198.51.100.10", 2]],
+             [["198.51.100.10", 2], ["198.51.100.10", 2]]),
+            ("duplicate extra",
+             [["198.51.100.10", 2], ["198.51.100.10", 2]],
+             [["198.51.100.10", 2]]),
+        ]
+        for test_class in self.validator_classes():
+            for name, actual, expected in cases:
+                with self.subTest(validator=test_class, case=name):
+                    test = test_class()
+                    test.send_query = Mock(side_effect=[
+                        response([IdentityComparedRow(row) for row in actual]),
+                        response([IdentityComparedRow(row) for row in expected]),
+                    ])
+                    with self.assertRaisesRegex(AssertionError, "KQL IPv4-prefix"):
+                        test.get_response_for_query_with_parameters(
+                            "srcipaddr_has_any_prefix", "", "SrcIpAddr", ["198.51.100."]
+                        )
 
     def test_multifield_aliases_do_not_reject_destination_only_matches(self):
         for test_class in self.validator_classes():
