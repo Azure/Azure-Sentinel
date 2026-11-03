@@ -1,0 +1,130 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - Tomcat_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - TomcatEvent
+    - Tomcat_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - TomcatEvent
+    - Tomcat_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 875da588-4875-11ec-81d3-0242ac130003
+    path: Analytic Rules/TomcatServerErrorsAfterMultipleRequestsFromSameIP.yaml
+    version: 1.0.2
+    querySha256: e681b44b325997bc4be23a443ca6b9bb61694b7aa25d052a2abfe9d1e7d30981
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+    sha256: 08193b30582afed1d94b04888597fa29b1ead5cb808727a3d60bb0af0ea54c06
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a single tactic.
+    errors: []
+    originalTactics:
+    - Impact
+    - InitialAccess
+    originalTechniques:
+    - T1498
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 343ea406e792519dc3d971f689ca9baa11e6d56ca13960a172a4bda9791dcb87
+      targetQuerySha256: 754bc808691c3f31549b8a6a7be5c3c99cd7d65edda9d4fed08af81f0ee09bb8
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 343ea406e792519dc3d971f689ca9baa11e6d56ca13960a172a4bda9791dcb87
+      targetQuerySha256: 754bc808691c3f31549b8a6a7be5c3c99cd7d65edda9d4fed08af81f0ee09bb8
+properties:
+  id: xdr-875da588-4875-11ec-81d3-0242ac130003
+  displayName: Tomcat - Server errors after multiple requests from same IP
+  status: disabled
+  queryCondition:
+    queryText: 'let multi_errors = TomcatEvent
+
+      | where toint(HttpStatusCode) >= 500 and toint(HttpStatusCode) <= 599
+
+      | sort by EventStartTime asc
+
+      | summarize MultipleServerErrors = count() by SrcIpAddr, bin(EventStartTime, 5m)
+
+      | where MultipleServerErrors > 10;
+
+      let error_time_table = TomcatEvent
+
+      | where toint(HttpStatusCode) >= 500 and toint(HttpStatusCode) <= 599
+
+      | summarize error_time=min(EventStartTime) by SrcIpAddr
+
+      | join kind=innerunique (multi_errors) on SrcIpAddr;
+
+      TomcatEvent
+
+      | where toint(HttpStatusCode) >= 100 and toint(HttpStatusCode) <= 399
+
+      | summarize success_time=max(EventStartTime) by SrcIpAddr
+
+      | join kind=innerunique (error_time_table) on SrcIpAddr
+
+      | extend time_between_error_and_success = datetime_diff(''second'', error_time, success_time)
+
+      | where time_between_error_and_success between (1 .. 300)
+
+      | project time_between_error_and_success, error_time, success_time, SrcIpAddr
+
+      | extend IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Tomcat - Server errors after multiple requests from same IP
+      description: '''Detects server errors after multiple requests from same IP address.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1498
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133

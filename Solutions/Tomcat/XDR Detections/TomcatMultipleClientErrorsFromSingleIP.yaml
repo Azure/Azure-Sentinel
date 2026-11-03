@@ -1,0 +1,102 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - Tomcat_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - TomcatEvent
+    - Tomcat_CL
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - TomcatEvent
+    - Tomcat_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4fa66058-4870-11ec-81d3-0242ac130003
+    path: Analytic Rules/TomcatMultipleClientErrorsFromSingleIP.yaml
+    version: 1.0.2
+    querySha256: 51f127234aa1c824fd73497aeac47f31e8f6c3851dff48f7d6c34a6ad34158e8
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+    sha256: 827d6a65a60fe51b262aa87b94cea9f753f92ccc8be4395c538c982b5315aa8d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: f284ef6223b5242efda015da175e632d78b457d3822680b2109a05cb780ed3be
+      targetQuerySha256: 5e73cc05e3e36e4717e9002064a1be547048379e480a4e581defa841751faf18
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: f284ef6223b5242efda015da175e632d78b457d3822680b2109a05cb780ed3be
+      targetQuerySha256: 5e73cc05e3e36e4717e9002064a1be547048379e480a4e581defa841751faf18
+properties:
+  id: xdr-4fa66058-4870-11ec-81d3-0242ac130003
+  displayName: Tomcat - Multiple client errors from single IP address
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 100;
+
+      TomcatEvent
+
+      | where HttpStatusCode >= 400 and HttpStatusCode <= 499
+
+      | summarize MultipleClientErrors = count() by SrcIpAddr, bin(TimeGenerated, 5m)
+
+      | where MultipleClientErrors > threshold
+
+      | extend IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Tomcat - Multiple client errors from single IP address
+      description: '''Detects multiple client errors from one source in short timeframe'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
