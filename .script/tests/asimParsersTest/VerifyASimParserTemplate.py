@@ -16,7 +16,7 @@
 # 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
 # 11. ParserName format - must match ^[a-zA-Z][a-zA-Z0-9_]+$ and start with <FileType><Schema>
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
-# 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
+# 13. Sample data file - must resolve using the same legacy/source-specific rules as ingestion (ASim only)
 # 14. vim ParserParams - must match the schema union parser parameters
 #     (pack is optional; eventresultdetails_has_any is also optional for WebSession)
 #
@@ -42,6 +42,7 @@ extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
 filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
+resolve_sample_data_path = parser_file_utils.resolve_sample_data_path
 
 import yaml
 import re
@@ -49,7 +50,6 @@ import subprocess
 import csv
 from datetime import datetime
 from urllib.parse import urlparse
-from tabulate import tabulate
 
 # Constants
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
@@ -163,7 +163,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - References include correct schema-specific and ASIM doc links
     - ParserName matches ^[a-zA-Z][a-zA-Z0-9_]+$ and starts with <FileType><Schema>
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
-    - Sample data CSV file exists locally (ASim parsers only)
+    - Sample data CSV resolves locally using the ingestion selection rules (ASim parsers only)
     - vim ParserParams match the parameters supported by the schema union parser
 
     Args:
@@ -330,14 +330,18 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     # Check if sample data files exists or not (Only applicable for ASim FileType)
     
     if FileType == "ASim":
-        # construct filename
-        SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
-        SampleDataFilePath = os.path.join(ASIMSampleDataURL, SampleDataFile)
-        # check if file exists locally
-        if os.path.exists(SampleDataFilePath):
-            results.append((SampleDataFile, 'Sample data file exists', 'Pass'))
+        try:
+            sample_path = resolve_sample_data_path(
+                ASIMSampleDataURL, event_vendor, event_product, schema, parser_query
+            )
+        except (FileNotFoundError, ValueError) as error:
+            results.append((
+                f'{RED}Sample data file resolution failed{RESET}',
+                f'{RED}Sample data file resolution failed: {error}{RESET}',
+                f'{RED}Fail{RESET}',
+            ))
         else:
-            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}"{RESET}', f'{RED}Fail{RESET}'))
+            results.append((sample_path.name, 'Sample data file exists', 'Pass'))
     return results
 
 def validate_vim_parser_params(parser_file, union_parser_file):
@@ -425,6 +429,8 @@ def print_test_header(parser_name):
     print("***********************************")
 
 def print_results_table(results):
+    from tabulate import tabulate
+
     table = [[index + 1] + list(result) for index, result in enumerate(results)]
     print(tabulate(table, headers=['S.No', 'Test Value', 'Test Name', 'Result'], tablefmt="grid"))
 
