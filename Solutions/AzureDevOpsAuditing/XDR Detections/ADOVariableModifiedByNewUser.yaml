@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ADOAuditLogs_CL
+  requiredDataConnectors:
+  - connectorId: AzureDevOpsAuditLogs
+    dataTypes:
+    - ADOAuditLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3b9a44d7-c651-45ed-816c-eae583a6f2f1
+    path: Analytic Rules/ADOVariableModifiedByNewUser.yaml
+    version: 1.0.6
+    querySha256: fec00285367c586e95e9cc207c1296b4e6336235863dea99e4b2ae5e67e4f1aa
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `ActorUPN` cannot be proven after a destructive projection; no supplemental customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1578
+    reviewScope:
+      sourceDocumentSha256: d69e53933fc8311b3bfc0a4ea6819f081be393346137282f47ff4d0a82e0a840
+      targetQuerySha256: dc536000502f5f8935bc151dfafce2b54e31e9294c78a18c1f47fdd7cc52245c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorUPN
+      column: ActorUPN
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    dependencyReviewRequired: false
+properties:
+  id: xdr-3b9a44d7-c651-45ed-816c-eae583a6f2f1
+  displayName: Azure DevOps Build Variable Modified by New User
+  status: disabled
+  queryCondition:
+    queryText: 'let lookback = 14d;
+
+      let timeframe = 1d;
+
+      let historical_data =
+
+      AzureDevOpsAuditing
+
+      | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+
+      | where OperationName =~ "Library.VariableGroupModified"
+
+      | extend variables = Data.Variables
+
+      | extend VariableGroupId = tostring(Data.VariableGroupId)
+
+      | extend UserKey = strcat(VariableGroupId, "-", ActorUserId)
+
+      | project UserKey;
+
+      AzureDevOpsAuditing
+
+      | where TimeGenerated > ago(timeframe)
+
+      | where OperationName =~ "Library.VariableGroupModified"
+
+      | extend VariableGroupName = tostring(Data.VariableGroupName)
+
+      | extend VariableGroupId = tostring(Data.VariableGroupId)
+
+      | extend UserKey = strcat(VariableGroupId, "-", ActorUserId)
+
+      | where UserKey !in (historical_data)
+
+      | project-away UserKey
+
+      | project-reorder TimeGenerated, VariableGroupName, ActorUPN, IpAddress, UserAgent
+
+      | extend timestamp = TimeGenerated
+
+      | extend AccountName = tostring(split(ActorUPN, "@")[0]), AccountUPNSuffix = tostring(split(ActorUPN, "@")[1])'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Azure DevOps Build Variable Modified by New User
+      description: '''Variables can be configured and used at any stage of the build process in Azure DevOps to inject values. An attacker with the required permissions could modify or add to these variables to conduct malicious activity such as changing paths or remote endpoints called during the build.
+
+        As variables are often changed by users, just detecting these changes would have a high false positive rate. This detection looks for modifications to variable groups where that user has not been observed modifying them before.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1578

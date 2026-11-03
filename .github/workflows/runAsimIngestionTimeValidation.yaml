@@ -1,0 +1,1095 @@
+# Validates ASIM ingestion-time parsers in the shared canary workspace.
+#
+# SECURITY BOUNDARIES:
+# - OIDC federated identity (AZURE_ASIM_CLIENT_ID) is scoped to canary workspace only:
+#   Workspace: ASIM-SchemaDataTester-GithubShared-Canary
+#   Resource Group: asim-schemadatatester-githubshared-canary
+#   Identity permissions: Canary RG/workspace only; deny cross-workspace and out-of-RG access
+# - Runs under pull_request_target so privileged workflow code comes from master.
+# - Fork PRs require explicit "SafeToRun" label approval from maintainer
+# - Label is auto-removed on new commits (synchronize event) to prevent TOCTOU
+# - All validation scripts are re-downloaded from master branch before execution
+# - PR parser YAML, KQL, schemas, and fixtures are treated only as untrusted data.
+name: Run ASIM ingest-time parser validation
+on:
+  pull_request_target:
+    types: [opened, reopened, labeled, synchronize]
+    branches:
+      - master
+    paths:
+      - "Parsers/ASim*/Parsers/ASim*.yaml"
+      - "Parsers/ASim*/IngestTimeParsers/*.yaml"
+      - "Sample Data/ASIM/*_IngestedLogs.csv"
+
+permissions:
+  contents: read
+
+env:
+  ASIM_INGESTION_MAX_TARGETS: "25"
+  ASIM_INGESTION_MAX_FIXTURE_BYTES: "5242880"
+
+concurrency:
+  # group: asim-tests-${{ github.event.pull_request.number || github.sha }}
+  # cancel-in-progress: true
+  group: >-
+    asim-ingestion-tests-${{ github.event.pull_request.head.repo.fork
+      && format('pr-{0}', github.event.pull_request.number)
+      || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event.pull_request.head.repo.fork }}
+
+jobs:
+  # Security gate: Fork PRs require manual approval via "SafeToRun" label
+  # Internal PRs (same repo) can proceed without labels
+  security-gate:
+    name: Security approval gate for fork PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    outputs:
+      approved: ${{ steps.check-approval.outputs.approved }}
+    steps:
+      - name: Verify approver has write access (fork + SafeToRun)
+        # SECURITY: the dynamic equivalent of an Environment's "required reviewers".
+        # Only collaborators can add labels, but a triage-only account could still apply
+        # SafeToRun; this rejects anyone without write/maintain/admin from approving a
+        # fork PR test run that uses the canary Azure credentials. Failing here fails the
+        # whole security-gate job, so every downstream (needs: security-gate) job is skipped.
+        if: |
+          github.event.pull_request.head.repo.fork == true &&
+          github.event.action == 'labeled' &&
+          github.event.label.name == 'SafeToRun'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            const approver = context.payload.sender.login;
+            log('info', `Validating approver permissions for @${approver}`);
+
+            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: approver,
+            });
+
+            // Legacy `permission` maps maintain->write and triage->read, so this
+            // allowlist authorizes admin/maintain/write and rejects triage/read/none.
+            const allowed = ['admin', 'maintain', 'write'];
+            log('info', `@${approver} permission level: ${perm.permission}`);
+
+            if (!allowed.includes(perm.permission)) {
+              core.setFailed(`@${approver} lacks write access (has '${perm.permission}') and is not authorized to approve fork PR test runs`);
+            } else {
+              log('success', `@${approver} is authorized to approve fork PR test runs`);
+            }
+
+      - name: Check if PR needs approval
+        id: check-approval
+        run: |
+          # Function to log with consistent formatting
+          log_info() { echo "ℹ️  $1"; }
+          log_success() { echo "✅ $1"; }
+
+          log_info "Starting PR approval check..."
+
+          # Check if this is a fork PR
+          is_fork="${{ github.event.pull_request.head.repo.fork }}"
+          log_info "Fork PR: $is_fork"
+
+          if [ "$is_fork" = "true" ]; then
+            log_info "FORK PR DETECTED - Proceeding with security checks"
+
+            # Check if "SafeToRun" label is present
+            labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+            log_info "Available labels: $labels"
+
+            # For fork PRs, only approve on 'labeled' events where SafeToRun is being added
+            trigger_event="${{ github.event.action }}"
+            log_info "Workflow triggered by event: $trigger_event"
+
+            if [ "$trigger_event" = "labeled" ]; then
+              # Check if the label being added is 'SafeToRun'
+              label_added="${{ github.event.label.name }}"
+              log_info "Label event: $label_added"
+
+              if [ "$label_added" = "SafeToRun" ]; then
+                log_success "SafeToRun label being added on fork PR - approving"
+                echo "approved=true" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=false" >> $GITHUB_OUTPUT
+              else
+                log_info "Different label applied, not SafeToRun"
+                echo "approved=false" >> $GITHUB_OUTPUT
+                echo "needs_approval=false" >> $GITHUB_OUTPUT
+                echo "comment_needed=false" >> $GITHUB_OUTPUT
+              fi
+            elif [ "$trigger_event" = "opened" ] ||
+                 [ "$trigger_event" = "reopened" ]; then
+              log_info "Fork PR requires SafeToRun approval"
+              echo "approved=false" >> $GITHUB_OUTPUT
+              echo "needs_approval=true" >> $GITHUB_OUTPUT
+              echo "comment_needed=true" >> $GITHUB_OUTPUT
+              exit 1
+            elif [ "$trigger_event" = "synchronize" ]; then
+              log_info "New commits detected (synchronize event) - SafeToRun label will be auto-removed"
+              echo "approved=false" >> $GITHUB_OUTPUT
+              echo "needs_approval=false" >> $GITHUB_OUTPUT
+              echo "comment_needed=false" >> $GITHUB_OUTPUT
+              echo "should_remove_label=true" >> $GITHUB_OUTPUT
+              exit 1
+            else
+              log_info "Unexpected event for fork PR: $trigger_event"
+              echo "approved=false" >> $GITHUB_OUTPUT
+              echo "needs_approval=false" >> $GITHUB_OUTPUT
+              echo "comment_needed=false" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+          else
+            log_success "Internal PR - auto-approved"
+            echo "approved=true" >> $GITHUB_OUTPUT
+            echo "needs_approval=false" >> $GITHUB_OUTPUT
+            echo "comment_needed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Auto-remove SafeToRun label on synchronize for fork PRs
+        if: |
+          always() &&
+          github.event.pull_request.head.repo.fork == true &&
+          github.event.action == 'synchronize' &&
+          steps.check-approval.outputs.should_remove_label == 'true'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            try {
+              log('info', 'Attempting to remove stale SafeToRun label on synchronize event');
+
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+              });
+
+              const hasLabel = pr.labels.some(label => label.name === 'SafeToRun');
+
+              if (hasLabel) {
+                log('info', 'SafeToRun label found, removing it...');
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: 'SafeToRun'
+                });
+                log('success', 'SafeToRun label removed due to new commits');
+              } else {
+                log('info', 'SafeToRun label not present, nothing to remove');
+              }
+            } catch (error) {
+              log('error', `Failed to remove label: ${error.message}`);
+              if (error.status === 404) {
+                log('info', 'Label or PR not found, continuing...');
+              } else {
+                throw error;
+              }
+            }
+
+      - name: Prevent fork modifications to test infrastructure
+        if: github.event.pull_request.head.repo.fork == true
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            log('info', 'Checking for modifications to asimParsersTest folder in fork PR...');
+
+            // Paginate through all changed files in the PR
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const forbiddenFiles = files
+              .map(f => f.filename)
+              .filter(name => name.startsWith('.script/tests/asimParsersTest/'));
+
+            if (forbiddenFiles.length > 0) {
+              log('error', 'Fork PRs cannot modify the asimParsersTest test infrastructure folder');
+              log('error', 'Modified test files detected:');
+              forbiddenFiles.forEach(f => console.log(`  - ${f}`));
+              core.setFailed('Fork PR modifies protected test infrastructure files');
+            } else {
+              log('success', 'No modifications to asimParsersTest folder detected');
+            }
+
+      - name: Comment on fork PR for approval guidance
+        if: |
+          always() &&
+          github.event.pull_request.head.repo.fork == true &&
+          steps.check-approval.outputs.comment_needed == 'true'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            // Helper function for consistent logging
+            const log = (level, message) => {
+              const icons = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+              console.log(`${icons[level] || 'ℹ️'} ${message}`);
+            };
+
+            log('info', 'Comment step triggered for fork PR approval guidance');
+
+            try {
+              // Fetch existing comments
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              });
+
+              // Look for existing security guidance comments
+              const botComments = comments.filter(comment =>
+                comment.user.login === 'github-actions[bot]' &&
+                (comment.body.includes('🔒 **Security Approval Required**') ||
+                 comment.body.includes('🔒 **Security Re-approval Required**'))
+              );
+
+              // Create approval message
+              const timestamp = new Date().toISOString();
+
+              let commentBody;
+              if ('${{ steps.check-approval.outputs.needs_approval }}' === 'true') {
+                // Initial approval scenario
+                commentBody = `🔒 **Security Approval Required**
+
+              This fork PR requires manual approval before automated testing can run.
+
+              **For security, a maintainer must:**
+              1. 📝 Review the code changes carefully
+              2. ✅ **Verify file types** - This PR should only contain \`.yml\`, \`.yaml\`, or \`.json\` files. Check for any executable scripts (.ps1, .py, .sh, .exe, etc.) which are not allowed in this context.
+              3. 🏷️ Add the \`SafeToRun\` label if the changes are safe to execute
+
+              **Note**: If new commits are added later, simply remove and re-add the \`SafeToRun\` label.
+
+              ---
+              *🤖 Automated security check • Created: ${timestamp}*
+              *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
+              } else {
+                // Re-approval scenario (new commits OR pr edits with existing label)
+                commentBody = `🔒 **Security Re-approval Required**
+
+              ⚠️ **Fork PR verification needed**: This fork PR has been updated.
+
+              **For security, a maintainer must:**
+              1. 📝 Review the latest commits carefully for any security concerns
+              2. ✅ **Verify file types** - Ensure commits only contain \`.yml\`, \`.yaml\`, or \`.json\` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.
+              3. 🏷️ Remove the \`SafeToRun\` label
+              4. 🏷️ Re-add the \`SafeToRun\` label if the latest commits are safe
+
+              This simple process ensures that all commits have been properly reviewed before testing with repository secrets.
+
+              ---
+              *🤖 Automated security check • Updated: ${timestamp}*
+              *Learn more: [GitHub Security Lab - Preventing PWN Requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/)*`;
+              }
+
+              // Always create a new comment for maximum visibility
+              // Keep existing comments for audit trail - don't delete them
+              // Update security guidance to emphasize KQL and CSV review
+              let enhancedCommentBody = commentBody;
+              if (enhancedCommentBody.includes('**Verify file types**')) {
+                enhancedCommentBody = enhancedCommentBody.replace(
+                  '2. ✅ **Verify file types** - This PR should only contain `.yml`, `.yaml`, or `.json` files. Check for any executable scripts (.ps1, .py, .sh, .exe, etc.) which are not allowed in this context.',
+                  '2. ✅ **Verify file types** - This PR should only contain `.yml`, `.yaml`, `.json`, or `.csv` files. Reject any executable scripts (.ps1, .py, .sh, .exe, etc.).\n   ⚠️ **CRITICAL: Review KQL and CSV content for abuse:**\n      - Read the **ParserQuery** KQL for unauthorized data access/manipulation and reject cross-workspace/cluster references (e.g. `workspace(...)`, `cluster(...)`, `externaldata`)\n      - Inspect the **sample-data** CSV `Type` column for path-traversal-shaped or non-allowlisted table names (must match the builtin allowlist or a `_CL` suffix)\n      - Examine **sample-data** CSVs for injection attempts or sensitive data disclosure\n      - Check that queries are read-only and target only the fixed test/canary workspace'
+                );
+              }
+              if (enhancedCommentBody.includes('**Verify file types** - Ensure')) {
+                enhancedCommentBody = enhancedCommentBody.replace(
+                  '2. ✅ **Verify file types** - Ensure commits only contain `.yml`, `.yaml`, or `.json` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.',
+                  '2. ✅ **Verify file types** - Ensure commits only contain `.yml`, `.yaml`, `.json`, or `.csv` files. Reject if any executable scripts (.ps1, .py, .sh, .exe, etc.) are included.\n   ⚠️ **CRITICAL: Review KQL and CSV content for abuse:**\n      - Read the **ParserQuery** KQL for unauthorized data access/manipulation and reject cross-workspace/cluster references (e.g. `workspace(...)`, `cluster(...)`, `externaldata`)\n      - Inspect the **sample-data** CSV `Type` column for path-traversal-shaped or non-allowlisted table names (must match the builtin allowlist or a `_CL` suffix)\n      - Examine **sample-data** CSVs for injection attempts or sensitive data disclosure\n      - Check that queries are read-only and target only the fixed test/canary workspace'
+                );
+              }
+
+              log('info', 'Creating new security guidance comment (preserving audit trail)');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: enhancedCommentBody
+              });
+              log('success', 'Created new security guidance comment');
+
+              log('success', 'Comment operation completed successfully');
+
+            } catch (error) {
+              log('error', `Failed to post comment: ${error.message}`);
+              if (error.response) {
+                log('error', `API Response: ${error.response.status} - ${error.response.data?.message || 'Unknown error'}`);
+              }
+              // Don't fail the step if comment posting fails
+              log('warning', 'Comment posting failed, but continuing workflow...');
+            }
+
+  discover:
+    name: Discover ASIM ingestion validation targets
+    needs: security-gate
+    if: |
+      needs.security-gate.outputs.approved == 'true' &&
+      (github.event.pull_request.head.repo.fork == false ||
+       (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      discovery_failed: ${{ steps.discovery.outputs.discovery_failed }}
+      has_targets: ${{ steps.discovery.outputs.has_targets }}
+      target_ids: ${{ steps.discovery.outputs.target_ids }}
+    steps:
+      - name: Checkout trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          repository: ${{ github.repository }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Materialize pull request content as untrusted data
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request base SHA."
+            exit 1
+          fi
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
+          pr_data_dir="$RUNNER_TEMP/asim-pr-data"
+          trusted_base_ref="refs/remotes/origin/asim-trusted-base"
+          pr_head_ref="refs/remotes/origin/asim-pr-head"
+          merge_base=""
+
+          # Fetch only the pinned base and PR histories, deepening until Git
+          # can establish their relationship.
+          for depth in 1 32 128 512 2048 8192; do
+            echo "Fetching ASIM comparison refs at depth $depth."
+            git fetch --force --no-tags --filter=blob:none \
+              --depth="$depth" origin \
+              "+$BASE_SHA:$trusted_base_ref" \
+              "+refs/pull/$PR_NUMBER/head:$pr_head_ref"
+
+            fetched_base_sha="$(
+              git rev-parse --verify "$trusted_base_ref^{commit}"
+            )"
+            fetched_head_sha="$(
+              git rev-parse --verify "$pr_head_ref^{commit}"
+            )"
+            if [ "$fetched_base_sha" != "$BASE_SHA" ]; then
+              echo "::error::Trusted base revision does not match the workflow event."
+              exit 1
+            fi
+            if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+              echo "::error::Pull request head changed after this workflow was triggered."
+              exit 1
+            fi
+
+            if merge_base="$(
+              git merge-base "$trusted_base_ref" "$pr_head_ref"
+            )"; then
+              echo "Found merge base $merge_base at depth $depth."
+              break
+            fi
+          done
+
+          if [ -z "$merge_base" ]; then
+            echo "::error::Unable to establish a merge base within 8192 commits."
+            exit 1
+          fi
+
+          git worktree add --detach \
+            "$pr_data_dir" "$pr_head_ref"
+          git -C "$pr_data_dir" config user.name "github-actions[bot]"
+          git -C "$pr_data_dir" config user.email "<>"
+          set +e
+          git -C "$pr_data_dir" merge \
+            --no-edit \
+            --no-commit \
+            "$trusted_base_ref"
+          merge_exit=$?
+          set -e
+          conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
+          if [ "$conflicts" -gt 0 ]; then
+            echo "There is a merge conflict. Aborting"
+            git -C "$pr_data_dir" merge --abort
+            exit 1
+          fi
+          if [ "$merge_exit" -ne 0 ]; then
+            exit "$merge_exit"
+          fi
+          echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_BASE_REF=$trusted_base_ref" >> "$GITHUB_ENV"
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.x"
+
+      - name: Install trusted helper dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --quiet \
+            requests PyYAML
+
+      - name: Restore trusted ingestion validation helpers
+        run: |
+          trusted_root="$RUNNER_TEMP/asim-trusted-repo"
+          mkdir -p "$trusted_root"
+          git archive "$ASIM_TRUSTED_BASE_REF" \
+            .script/tests/asimParsersTest/ingestTimeParser \
+            | tar -x -C "$trusted_root"
+          trusted_dir="$trusted_root/.script/tests/asimParsersTest/ingestTimeParser"
+          echo "ASIM_TRUSTED_DIR=$trusted_dir" >> "$GITHUB_ENV"
+          echo "PYTHONPATH=$trusted_dir" >> "$GITHUB_ENV"
+
+      - name: Discover changed ITP targets
+        id: discovery
+        run: |
+          mkdir -p asim-workflow
+
+          set +e
+          python "$ASIM_TRUSTED_DIR/asim_ingest_time_validation.py" \
+            discover \
+            --repo-root "$ASIM_PR_DATA_DIR" \
+            --base-ref "$ASIM_TRUSTED_BASE_REF" \
+            --output asim-workflow/discovery.json
+          discovery_exit=$?
+          if [ "$discovery_exit" -eq 0 ]; then
+            python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
+              matrix \
+              --manifest asim-workflow/discovery.json \
+              --repo-root "$ASIM_PR_DATA_DIR" \
+              --max-targets "$ASIM_INGESTION_MAX_TARGETS" \
+              --max-fixture-bytes "$ASIM_INGESTION_MAX_FIXTURE_BYTES" \
+              --output asim-workflow/matrix.json \
+              --github-output "$GITHUB_OUTPUT" \
+              --summary "$GITHUB_STEP_SUMMARY"
+            matrix_exit=$?
+          else
+            matrix_exit=$discovery_exit
+          fi
+          set -e
+
+          if [ "$matrix_exit" -ne 0 ]; then
+            printf '%s\n' \
+              '{"version":1,"targets":[],"discoveryFailure":true}' \
+              > asim-workflow/matrix.json
+            echo "discovery_failed=true" >> "$GITHUB_OUTPUT"
+            echo "has_targets=false" >> "$GITHUB_OUTPUT"
+            echo 'target_ids=[]' >> "$GITHUB_OUTPUT"
+            {
+              echo "## ASIM ingestion target discovery"
+              echo
+              echo "⚠️ Discovery failed before a target matrix could be produced."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$matrix_exit"
+          else
+            echo "discovery_failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload ingestion discovery artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: asim-ingestion-discovery-${{ github.run_id }}
+          path: asim-workflow
+          if-no-files-found: error
+
+  templateValidate:
+    name: Static template validation (${{ matrix.target_id }})
+    needs:
+      - security-gate
+      - discover
+    if: |
+      needs.security-gate.outputs.approved == 'true' &&
+      needs.discover.outputs.has_targets == 'true' &&
+      (github.event.pull_request.head.repo.fork == false ||
+       (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        target_id: ${{ fromJSON(needs.discover.outputs.target_ids) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      TARGET_ID: ${{ matrix.target_id }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          repository: ${{ github.repository }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Materialize pull request content as untrusted data
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request base SHA."
+            exit 1
+          fi
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
+          pr_data_dir="$RUNNER_TEMP/asim-pr-data"
+          trusted_base_ref="refs/remotes/origin/asim-trusted-base"
+          pr_head_ref="refs/remotes/origin/asim-pr-head"
+          merge_base=""
+
+          # Fetch only the pinned base and PR histories, deepening until Git
+          # can establish their relationship.
+          for depth in 1 32 128 512 2048 8192; do
+            echo "Fetching ASIM comparison refs at depth $depth."
+            git fetch --force --no-tags --filter=blob:none \
+              --depth="$depth" origin \
+              "+$BASE_SHA:$trusted_base_ref" \
+              "+refs/pull/$PR_NUMBER/head:$pr_head_ref"
+
+            fetched_base_sha="$(
+              git rev-parse --verify "$trusted_base_ref^{commit}"
+            )"
+            fetched_head_sha="$(
+              git rev-parse --verify "$pr_head_ref^{commit}"
+            )"
+            if [ "$fetched_base_sha" != "$BASE_SHA" ]; then
+              echo "::error::Trusted base revision does not match the workflow event."
+              exit 1
+            fi
+            if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+              echo "::error::Pull request head changed after this workflow was triggered."
+              exit 1
+            fi
+
+            if merge_base="$(
+              git merge-base "$trusted_base_ref" "$pr_head_ref"
+            )"; then
+              echo "Found merge base $merge_base at depth $depth."
+              break
+            fi
+          done
+
+          if [ -z "$merge_base" ]; then
+            echo "::error::Unable to establish a merge base within 8192 commits."
+            exit 1
+          fi
+
+          git worktree add --detach \
+            "$pr_data_dir" "$pr_head_ref"
+          git -C "$pr_data_dir" config user.name "github-actions[bot]"
+          git -C "$pr_data_dir" config user.email "<>"
+          set +e
+          git -C "$pr_data_dir" merge \
+            --no-edit \
+            --no-commit \
+            "$trusted_base_ref"
+          merge_exit=$?
+          set -e
+          conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
+          if [ "$conflicts" -gt 0 ]; then
+            echo "There is a merge conflict. Aborting"
+            git -C "$pr_data_dir" merge --abort
+            exit 1
+          fi
+          if [ "$merge_exit" -ne 0 ]; then
+            exit "$merge_exit"
+          fi
+          echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_BASE_REF=$trusted_base_ref" >> "$GITHUB_ENV"
+
+      - name: Download ingestion discovery artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: asim-ingestion-discovery-${{ github.run_id }}
+          path: asim-workflow
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.x"
+
+      - name: Install trusted helper dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --quiet \
+            requests PyYAML
+
+      - name: Restore trusted ingestion validation helpers
+        run: |
+          trusted_root="$RUNNER_TEMP/asim-trusted-repo"
+          mkdir -p "$trusted_root"
+          git archive "$ASIM_TRUSTED_BASE_REF" \
+            .script/tests/asimParsersTest/ingestTimeParser \
+            | tar -x -C "$trusted_root"
+          trusted_dir="$trusted_root/.script/tests/asimParsersTest/ingestTimeParser"
+          echo "ASIM_TRUSTED_DIR=$trusted_dir" >> "$GITHUB_ENV"
+          echo "PYTHONPATH=$trusted_dir" >> "$GITHUB_ENV"
+
+      - name: Initialize template validation artifacts
+        run: |
+          artifact_dir="$GITHUB_WORKSPACE/asim-template-artifacts/$TARGET_ID"
+          mkdir -p "$artifact_dir"
+          echo "ARTIFACT_DIR=$artifact_dir" >> "$GITHUB_ENV"
+
+      - name: Export target contract
+        id: target
+        run: |
+          python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
+            export-target \
+            --manifest asim-workflow/matrix.json \
+            --target-id "$TARGET_ID" \
+            --output "$ARTIFACT_DIR/target.json" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Run static ITP and optional QTP eligibility validation
+        id: static-validation
+        if: steps.target.outputs.discovery_valid == 'true'
+        env:
+          ITP_PATH: ${{ steps.target.outputs.ingest_time_path }}
+          QTP_PATH: ${{ steps.target.outputs.query_time_path }}
+        run: |
+          args=(
+            validate
+            "$ITP_PATH"
+            --repo-root "$ASIM_PR_DATA_DIR"
+            --output "$ARTIFACT_DIR/static-validation.json"
+          )
+          if [ -n "$QTP_PATH" ]; then
+            args+=(--query-time-path "$QTP_PATH")
+          fi
+          python "$ASIM_TRUSTED_DIR/asim_ingest_time_validation.py" \
+            "${args[@]}"
+
+      - name: Export static validation decision
+        id: static-decision
+        if: always()
+        run: |
+          if [ -f "$ARTIFACT_DIR/static-validation.json" ]; then
+            python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
+              export-static \
+              --result "$ARTIFACT_DIR/static-validation.json" \
+              --github-output "$GITHUB_OUTPUT"
+          else
+            echo "itp_valid=false" >> "$GITHUB_OUTPUT"
+            echo "qtp_status=blocked" >> "$GITHUB_OUTPUT"
+            echo "qtp_eligible=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare immutable source-specific fixture
+        id: prepare
+        if: steps.static-decision.outputs.itp_valid == 'true'
+        env:
+          FIXTURE_PATH: ${{ steps.target.outputs.fixture_path }}
+          SOURCE_RAW_TABLE: ${{ steps.target.outputs.source_raw_table }}
+          TARGET_ASIM_TABLE: ${{ steps.target.outputs.target_asim_table }}
+          TARGET_SLOT: ${{ steps.target.outputs.target_slot }}
+          TARGET_COUNT: ${{ steps.target.outputs.target_count }}
+        run: |
+          python "$ASIM_TRUSTED_DIR/asim_fixture_preparation.py" \
+            prepare \
+            "$ASIM_PR_DATA_DIR/$FIXTURE_PATH" \
+            --expected-source-raw-table "$SOURCE_RAW_TABLE" \
+            --target-id "$TARGET_ID" \
+            --target-group "$TARGET_ASIM_TABLE" \
+            --repository "$GITHUB_REPOSITORY" \
+            --pull-request "$PR_NUMBER" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --target-slot "$TARGET_SLOT" \
+            --target-count "$TARGET_COUNT" \
+            --output "$ARTIFACT_DIR/prepared-fixture.json"
+
+      - name: Copy validated parser inputs as untrusted data artifacts
+        if: always()
+        env:
+          ITP_PATH: ${{ steps.target.outputs.ingest_time_path }}
+          QTP_PATH: ${{ steps.target.outputs.query_time_path }}
+        run: |
+          if [ -n "$ITP_PATH" ] &&
+             [ -f "$ASIM_PR_DATA_DIR/$ITP_PATH" ]; then
+            cp -- \
+              "$ASIM_PR_DATA_DIR/$ITP_PATH" \
+              "$ARTIFACT_DIR/ingest-time-parser.yaml"
+          fi
+          if [ -n "$QTP_PATH" ] &&
+             [ -f "$ASIM_PR_DATA_DIR/$QTP_PATH" ]; then
+            cp -- \
+              "$ASIM_PR_DATA_DIR/$QTP_PATH" \
+              "$ARTIFACT_DIR/query-time-parser.yaml"
+          fi
+
+      - name: Upload template validation artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: asim-ingestion-template-${{ matrix.target_id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ARTIFACT_DIR }}
+          if-no-files-found: error
+
+  ingestionValidation:
+    name: Ingested data validation (${{ matrix.target_id }})
+    needs:
+      - security-gate
+      - discover
+      - templateValidate
+    if: |
+      always() &&
+      needs.security-gate.outputs.approved == 'true' &&
+      needs.discover.outputs.has_targets == 'true' &&
+      (github.event.pull_request.head.repo.fork == false ||
+       (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        target_id: ${{ fromJSON(needs.discover.outputs.target_ids) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TARGET_ID: ${{ matrix.target_id }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      ENFORCEMENT_REQUIRED: ${{ vars.ASIM_INGESTION_VALIDATION_REQUIRED }}
+    steps:
+      - name: Checkout trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          repository: ${{ github.repository }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Initialize ingestion validation artifacts
+        run: |
+          artifact_dir="$GITHUB_WORKSPACE/asim-artifacts/$TARGET_ID"
+          mkdir -p "$artifact_dir"
+          echo "ARTIFACT_DIR=$artifact_dir" >> "$GITHUB_ENV"
+
+      - name: Download ingestion discovery artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: asim-ingestion-discovery-${{ github.run_id }}
+          path: asim-workflow
+
+      - name: Download template validation artifact
+        id: template-artifact
+        if: always()
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: asim-ingestion-template-${{ matrix.target_id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ARTIFACT_DIR }}
+
+      - name: Set up Python
+        if: always()
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.x"
+
+      - name: Install trusted helper dependencies
+        if: always()
+        run: |
+          python -m pip install --disable-pip-version-check --quiet \
+            azure-identity requests PyYAML
+
+      - name: Restore trusted ingestion validation helpers
+        if: always()
+        run: |
+          trusted_root="$RUNNER_TEMP/asim-trusted-root"
+          mkdir -p "$trusted_root"
+          git archive HEAD \
+            .script/tests/asimParsersTest/ingestTimeParser \
+            ASIM/dev/ASimTester/Testers/ASimDataTester.yaml \
+            | tar -x -C "$trusted_root"
+          trusted_dir="$trusted_root/.script/tests/asimParsersTest/ingestTimeParser"
+          echo "ASIM_TRUSTED_DIR=$trusted_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_ROOT=$trusted_root" >> "$GITHUB_ENV"
+          echo "PYTHONPATH=$trusted_dir" >> "$GITHUB_ENV"
+
+      - name: Export target contract
+        id: target
+        if: always()
+        run: |
+          python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
+            export-target \
+            --manifest asim-workflow/matrix.json \
+            --target-id "$TARGET_ID" \
+            --output "$ARTIFACT_DIR/target.json" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Inspect template validation artifacts
+        id: template-decision
+        if: always()
+        env:
+          QTP_PATH: ${{ steps.target.outputs.query_time_path }}
+        run: |
+          if [ -f "$ARTIFACT_DIR/static-validation.json" ]; then
+            python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
+              export-static \
+              --result "$ARTIFACT_DIR/static-validation.json" \
+              --github-output "$GITHUB_OUTPUT"
+          else
+            echo "itp_valid=false" >> "$GITHUB_OUTPUT"
+            echo "qtp_status=blocked" >> "$GITHUB_OUTPUT"
+            echo "qtp_eligible=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -f "$ARTIFACT_DIR/prepared-fixture.json" ]; then
+            echo "fixture_prepared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "fixture_prepared=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -f "$ARTIFACT_DIR/ingest-time-parser.yaml" ]; then
+            echo "parser_input_prepared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "parser_input_prepared=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ -z "$QTP_PATH" ] ||
+             [ -f "$ARTIFACT_DIR/query-time-parser.yaml" ]; then
+            echo "qtp_input_prepared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "qtp_input_prepared=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login to Azure Public Cloud
+        id: azure-login
+        if: |
+          steps.template-decision.outputs.itp_valid == 'true' &&
+          steps.template-decision.outputs.fixture_prepared == 'true' &&
+          steps.template-decision.outputs.parser_input_prepared == 'true' &&
+          steps.template-decision.outputs.qtp_input_prepared == 'true'
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Execute ingestion-time data validation and optional parity
+        id: ingestion-validation
+        if: steps.azure-login.outcome == 'success'
+        env:
+          QTP_ELIGIBLE: ${{ steps.template-decision.outputs.qtp_eligible }}
+        run: |
+          args=(
+            "$ARTIFACT_DIR/prepared-fixture.json"
+            "$ARTIFACT_DIR/ingest-time-parser.yaml"
+            --repo-root "$ASIM_TRUSTED_ROOT"
+            --snapshot-output "$ARTIFACT_DIR/source-snapshot.json"
+            --result-output "$ARTIFACT_DIR/validation-result.json"
+            --deadline-seconds 900
+          )
+          if [ "$QTP_ELIGIBLE" = "true" ] &&
+             [ -f "$ARTIFACT_DIR/query-time-parser.yaml" ]; then
+            args+=(
+              --query-time-yaml
+              "$ARTIFACT_DIR/query-time-parser.yaml"
+            )
+          fi
+          python "$ASIM_TRUSTED_DIR/asim_ingestion_validation.py" \
+            "${args[@]}"
+
+      - name: Record pre-validation workflow failure
+        if: always()
+        env:
+          ITP_VALID: ${{ steps.template-decision.outputs.itp_valid }}
+          FIXTURE_PREPARED: ${{ steps.template-decision.outputs.fixture_prepared }}
+          PARSER_INPUT_PREPARED: ${{ steps.template-decision.outputs.parser_input_prepared }}
+          QTP_INPUT_PREPARED: ${{ steps.template-decision.outputs.qtp_input_prepared }}
+          AZURE_LOGIN_OUTCOME: ${{ steps.azure-login.outcome }}
+          VALIDATION_OUTCOME: ${{ steps.ingestion-validation.outcome }}
+        run: |
+          if [ -f "$ARTIFACT_DIR/validation-result.json" ] ||
+             [ "$ITP_VALID" != "true" ]; then
+            exit 0
+          fi
+
+          if [ "$FIXTURE_PREPARED" != "true" ]; then
+            stage="fixture-preparation"
+            message="Source-specific fixture preparation failed."
+          elif [ "$PARSER_INPUT_PREPARED" != "true" ]; then
+            stage="template-artifact"
+            message="Validated parser input artifact is missing."
+          elif [ "$QTP_INPUT_PREPARED" != "true" ]; then
+            stage="template-artifact"
+            message="Mapped query-time parser artifact is missing."
+          elif [ "$AZURE_LOGIN_OUTCOME" != "success" ]; then
+            stage="azure-login"
+            message="Azure OIDC login failed or did not complete."
+          elif [ "$VALIDATION_OUTCOME" != "success" ]; then
+            stage="validation-runner"
+            message="Ingestion validation exited without a result artifact."
+          else
+            exit 0
+          fi
+
+          python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
+            error-result \
+            --stage "$stage" \
+            --message "$message" \
+            --output "$ARTIFACT_DIR/validation-result.json"
+
+      - name: Always attempt deterministic DCR cleanup
+        id: cleanup
+        if: always() && steps.azure-login.outcome == 'success'
+        run: |
+          python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
+            cleanup \
+            --target-id "$TARGET_ID" \
+            --pull-request "$PR_NUMBER" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --deadline-seconds 120 \
+            --output "$ARTIFACT_DIR/cleanup-result.json"
+
+      - name: Publish target report
+        id: target-report
+        if: always()
+        run: |
+          python "$ASIM_TRUSTED_DIR/asim_ingestion_workflow.py" \
+            report \
+            --target "$ARTIFACT_DIR/target.json" \
+            --static-result "$ARTIFACT_DIR/static-validation.json" \
+            --prepared-fixture "$ARTIFACT_DIR/prepared-fixture.json" \
+            --validation-result "$ARTIFACT_DIR/validation-result.json" \
+            --cleanup-result "$ARTIFACT_DIR/cleanup-result.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --pull-request "$PR_NUMBER" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --enforcement-required "${ENFORCEMENT_REQUIRED:-false}" \
+            --output "$ARTIFACT_DIR/report.json" \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Upload target validation artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: asim-ingestion-${{ matrix.target_id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ARTIFACT_DIR }}
+          if-no-files-found: error
+
+      - name: Enforce validation result
+        if: always()
+        env:
+          REQUIRED_FAILURE: ${{ steps.target-report.outputs.required_failure }}
+          REPORT_OUTCOME: ${{ steps.target-report.outcome }}
+        run: |
+          if [ "$REPORT_OUTCOME" != "success" ]; then
+            echo "::error::ASIM ingestion validation report generation failed."
+            exit 1
+          fi
+          if [ "$REQUIRED_FAILURE" = "true" ]; then
+            mode="${ENFORCEMENT_REQUIRED:-false}"
+            mode="${mode,,}"
+            if [ "$mode" = "true" ]; then
+              mode="required"
+            else
+              mode="shadow"
+            fi
+            echo "::error::ASIM ingestion validation failed in $mode mode."
+            exit 1
+          fi
+
+  report:
+    name: ASIM ingestion-time parser validation report
+    needs:
+      - security-gate
+      - discover
+      - templateValidate
+      - ingestionValidation
+    if: |
+      always() &&
+      needs.security-gate.outputs.approved == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ENFORCEMENT_REQUIRED: ${{ vars.ASIM_INGESTION_VALIDATION_REQUIRED }}
+      DISCOVERY_RESULT: ${{ needs.discover.result }}
+      DISCOVERY_FAILED: ${{ needs.discover.outputs.discovery_failed }}
+      HAS_TARGETS: ${{ needs.discover.outputs.has_targets }}
+      TEMPLATE_RESULT: ${{ needs.templateValidate.result }}
+      INGESTION_RESULT: ${{ needs.ingestionValidation.result }}
+    steps:
+      - name: Summarize ingestion validation report
+        run: |
+          required="${ENFORCEMENT_REQUIRED:-false}"
+          required="${required,,}"
+          {
+            echo "## ASIM ingestion-time parser validation report"
+            echo
+            echo "- Mode: \`$([ "$required" = "true" ] && echo required || echo shadow)\`"
+            echo "- Discovery job: \`${DISCOVERY_RESULT:-skipped}\`"
+            echo "- Discovery failed: \`${DISCOVERY_FAILED:-false}\`"
+            echo "- Targets selected: \`${HAS_TARGETS:-false}\`"
+            echo "- Template validation: \`${TEMPLATE_RESULT:-skipped}\`"
+            echo "- Ingestion validation: \`${INGESTION_RESULT:-skipped}\`"
+            echo "- Merge blocking: controlled by branch protection required-check configuration"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failed=false
+          if [ "${DISCOVERY_RESULT:-skipped}" = "failure" ] ||
+             [ "${DISCOVERY_RESULT:-skipped}" = "cancelled" ]; then
+            failed=true
+          fi
+          if [ "${DISCOVERY_FAILED:-false}" = "true" ]; then
+            failed=true
+          fi
+          if [ "${HAS_TARGETS:-false}" = "true" ] &&
+             [ "${TEMPLATE_RESULT:-skipped}" != "success" ]; then
+            failed=true
+          fi
+          if [ "${HAS_TARGETS:-false}" = "true" ] &&
+             [ "${INGESTION_RESULT:-skipped}" != "success" ]; then
+            failed=true
+          fi
+
+          if [ "$failed" = "true" ]; then
+            mode="$([ "$required" = "true" ] && echo required || echo shadow)"
+            echo "::error::ASIM ingestion-time parser validation failed in $mode mode."
+            exit 1
+          fi

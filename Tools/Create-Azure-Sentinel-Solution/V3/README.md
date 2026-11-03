@@ -6,6 +6,11 @@ The packaging tool detailed below provides an easy way to generate your solution
 
 ## Setup
 
+For hybrid Sentinel/XDR packages and the current CI entry point, use
+[`createSolutionV3_1.ps1` (V3.1)](README-V3_1.md). That guide also describes the
+optional, packaging-only `trackingId` field in `SolutionMetadata.json`.
+`createSolutionV3.ps1` remains the legacy Sentinel-only entry point.
+
 - Install PowerShell 7.1+
 
   - If you already have PowerShell 5.1, please follow this [upgrade guide](https://docs.microsoft.com/powershell/scripting/install/migrating-from-windows-powershell-51-to-powershell-7?view=powershell-7.1).
@@ -249,7 +254,7 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 
 ### Generate Solution Package
 
-NOTE: It is now recommended to use 'createSolutionV3.ps1' file instead of 'createSolutionV2.ps1'. 'createSolutionV2.ps1' is not recommended going forward. 'createSolutionV4.ps1' file is used for GitHub pipeline and is not used for local use. `'createSolutionV3.ps1' requires 'commonFunctions.ps1' file which is placed under 'Tools\Create-Azure-Sentinel-Solution\common' path and this file 'commonFunctions.ps1' has all core logic to create package.`
+NOTE: Use `createSolutionV3.ps1` for legacy Sentinel-only local packaging and `createSolutionV3_1.ps1` for hybrid XDR local packaging or GitHub CI. `createSolutionV2.ps1` is not recommended going forward. Both supported entry points share core logic in `Tools\Create-Azure-Sentinel-Solution\common\commonFunctions.ps1`.
 
 The `createSolutionV3.ps1` script supports two version management modes:
 

@@ -1,0 +1,127 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 666fef96-1bb8-4abf-ad72-e5cb49561381
+    path: Analytic Rules/Dataverse - Login from IP in the block list.yaml
+    version: 3.2.0
+    querySha256: 156329b6cf09ccb69dcf9f3056dc411990e2fa5e06f3e6607a1d011de164c296
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 6a563fc9371212e52a56a10aec34b625fdaedbdac9ce2e71466ce2649dae23c8
+      targetQuerySha256: 6e73692c0e6a30320101121bf36ffa623725ed648f1cc785201d9c7b1ba6bbdd
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-666fef96-1bb8-4abf-ad72-e5cb49561381
+  displayName: Dataverse - Login from IP in the block list
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Use static IP address or CIDR list specified in the
+      // NetworkAddresses watchlist (from watchlist template)
+      // with tag "BlockDataverse"
+      let query_frequency = 1h;
+      let blocked_networks = MSBizAppsNetworkAddresses()
+          | where Tags has "BlockDataverse"
+          | summarize by IPSubnet;
+      let watchlist_entries_count = toscalar (blocked_networks
+          | summarize count());
+      DataverseActivity
+      | where watchlist_entries_count > 0
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "UserSignIn" and isnotempty(ClientIp)
+      | summarize FirstEvent = arg_min(TimeGenerated, *) by UserId, ClientIp, InstanceUrl
+      | evaluate ipv4_lookup(blocked_networks, ClientIp, IPSubnet)
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          FirstEvent,
+          UserId,
+          ClientIp,
+          Message,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Login from IP in the block list
+      description: Identifies Dataverse sign-in activity from IPv4 addresses which are on a predefined block list. Blocked
+        network ranges are maintained in the NetworkAddresses watchlist template.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+        - technique: T1078
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

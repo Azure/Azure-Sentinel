@@ -4,6 +4,8 @@
 
 This playbook is triggered via HTTP request and is designed to be used as a sub-playbook by other Censys playbooks (CensysIncidentEnrichment, CensysEntityEnrichmentHost, CensysEntityEnrichmentCertificate, CensysEntityEnrichmentWebProperty, CensysAlertEnrichment). It receives enrichment data (host, web_property, certificate) along with the incident ARM ID and parent playbook name. The playbook processes each data type, extracts relevant fields (IP, autonomous system, WHOIS, location, DNS, services, threats, vulnerabilities, labels, software), formats them into HTML tables, and adds them as comments to the Microsoft Sentinel incident. It handles comment character limits (splitting into multiple comments if needed) and enforces a maximum of 100 comments per incident. The enrichment data is also ingested into Azure Log Analytics custom tables (Incident_Enrich_Host_Data_CL, Incident_Enrich_WebProperty_Data_CL, Incident_Enrich_Certificate_Data_CL) for historical analysis. The playbook includes comprehensive error handling and returns appropriate HTTP responses.
 
+Host comments additionally render the Censys reputation (label, score, class probabilities and top signals) and, when present in the payload, the GreyNoise, IPinfo (network and privacy) and Mallory data returned by the Censys Host Enrichment API, each as its own HTML table. Sections are only added when the corresponding data exists, so hosts retrieved from the standard host API render exactly as before. The calling playbook's name is passed in the `parent_playbook` field (set dynamically from `workflow()['name']` by the parent playbooks).
+
 ### Prerequisites
 
 1. This playbook is intended to be called as a sub-playbook by other Censys playbooks.

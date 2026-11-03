@@ -1,0 +1,186 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPAuditLogsDefinition
+  dataTypes:
+  - GCPAuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPAuditLogs
+  requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+    - GCPAuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b7da45ce-fcc8-43c7-a37c-c08454579d26
+    path: Analytic Rules/GCPDataAccessLoggingExemption.yaml
+    version: 1.0.0
+    querySha256: 093b4ce45e0ae165fb1e35e9a2571c76bd9c99ce66f389f14497a886a39b3de3
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved
+      as customDetails.AccountFullName from query column `PrincipalEmail`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    - CloudApplication.InstanceName mismatch is informational because its original
+      value is preserved as customDetails.CloudApplicationInstanceName from query
+      column `ResourceName`; supplemental details do not restore entity identity,
+      correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1562.008
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 74a020bc3152f7220120ceea8b3b028cb88524916dd7ef20788de327e3848f15
+      targetQuerySha256: 39bb7b489d1641bb2ba201f4206aee329a15a410def7bdd99f2d1b5ec4386da8
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 74a020bc3152f7220120ceea8b3b028cb88524916dd7ef20788de327e3848f15
+      targetQuerySha256: 39bb7b489d1641bb2ba201f4206aee329a15a410def7bdd99f2d1b5ec4386da8
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PrincipalEmail
+      column: PrincipalEmail
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: ResourceName
+      column: ResourceName
+      status: available
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-b7da45ce-fcc8-43c7-a37c-c08454579d26
+  displayName: GCP Audit Logs - Data Access Logging Exemption Added for Principal
+  status: disabled
+  queryCondition:
+    queryText: "GCPAuditLogs\n | where ServiceName == \"cloudresourcemanager.googleapis.com\"\
+      \n | where MethodName == \"SetIamPolicy\"\n | where GCPResourceType == \"project\"\
+      \ and Severity == \"NOTICE\"\n | where isnotempty(ServiceData)\n | extend ServiceDataJson\
+      \ = parse_json(ServiceData)\n | extend PolicyDelta = ServiceDataJson.policyDelta.auditConfigDeltas\n\
+      \ | where isnotempty(PolicyDelta)\n | mv-expand ConfigDelta = PolicyDelta\n\
+      \ | where ConfigDelta.action == \"ADD\"\n | extend LogType = tostring(ConfigDelta.logType)\n\
+      \ | where LogType in (\"ADMIN_READ\", \"DATA_READ\", \"DATA_WRITE\")\n | extend\n\
+      \     ExemptedMember = tostring(ConfigDelta.exemptedMember),\n     ServiceAffected\
+      \ = tostring(ConfigDelta.service),\n     RequestMetadataJson = parse_json(RequestMetadata),\n\
+      \     AuthInfoJson = parse_json(AuthenticationInfo)\n | where isnotempty(ExemptedMember)\n\
+      \ | extend\n     CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n\
+      \     UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n \
+      \    AuthEmail = tostring(AuthInfoJson.principalEmail),\n     ExemptedAccountName\
+      \ = tostring(split(ExemptedMember, \":\")[1])\n | summarize\n     ExemptedLogTypes\
+      \ = make_set(LogType, 10),\n     ExemptedServices = make_set(ServiceAffected,\
+      \ 50),\n     FirstExemption = min(TimeGenerated),\n     LastExemption = max(TimeGenerated)\n\
+      \     by PrincipalEmail, ProjectId, GCPResourceName, ExemptedMember,\n     \
+      \   CallerIpAddress, UserAgent, LogName, ExemptedAccountName, MethodName, ServiceName,\
+      \ AuthEmail\n | extend\n     AccountName = tostring(split(PrincipalEmail, \"\
+      @\")[0]),\n     AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n\
+      \ | project TimeGenerated = LastExemption,\n     PrincipalEmail,\n     ProjectId,\n\
+      \     ResourceName = GCPResourceName,\n     ExemptedMember,\n     ExemptedAccountName,\n\
+      \     ExemptedLogTypes,\n     ExemptedServices,\n     FirstExemption,\n    \
+      \ LastExemption,\n     CallerIpAddress,\n     UserAgent,\n     AuthEmail,\n\
+      \     MethodName,\n     ServiceName,\n     LogName,\n     AccountName,\n   \
+      \  AccountUPNSuffix"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Audit Logs - Data Access Logging Exemption Added for Principal
+      description: '''Detects when a principal (user or service account) is exempted
+        from GCP data access audit logging.
+
+        This is a critical security event as it reduces visibility into privileged
+        operations and may indicate an attempt to hide malicious activity.
+
+        Adversaries may exempt their accounts from audit logging to evade detection
+        while performing reconnaissance, privilege escalation, or data exfiltration.
+
+        This rule monitors SetIamPolicy operations that add audit log exemptions for
+        ADMIN_READ, DATA_READ, or DATA_WRITE log types.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ProjectId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.008
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        ProjectId: ProjectId
+        ExemptedMember: ExemptedMember
+        ExemptedAccountName: ExemptedAccountName
+        ExemptedLogTypes: ExemptedLogTypes
+        ExemptedServices: ExemptedServices
+        UserAgent: UserAgent
+        AccountFullName: PrincipalEmail
+        CloudApplicationInstanceName: ResourceName
+status: Available

@@ -1,5 +1,10 @@
 # Changelog for ASimAuditEvent.yaml
 
+## Version 0.1.13
+
+- (2026-10-23) Add the CrowdStrike Falcon Data Replicator AuditEvent parser - [PR #15414](https://github.com/Azure/Azure-Sentinel/pull/15414)
+- Forward pack and honor its source-specific disable watchlist key.
+
 ## Version 0.1.12
 
 - (2026-10-08) Corrected the Microsoft Event parser disable watchlist key - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)

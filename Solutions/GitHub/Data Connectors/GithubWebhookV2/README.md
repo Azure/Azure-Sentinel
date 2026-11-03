@@ -56,11 +56,35 @@ DCR → Log Analytics Workspace → GitHubAdvancedSecurityAlerts_CL table
 
 > **Best practice:** Create a new Resource Group for this connector — all provisioned resources (Function App, Storage Account, DCE, DCR, App Insights) will reside there.
 
+## Azure public cloud and Azure Government
+
+Choose the deployment link for your workspace's cloud. No additional cloud,
+token-scope, or authority parameters are required: ARM supplies the deployed
+DCE's ingestion endpoint, and the Function App selects the matching authentication
+settings automatically.
+
+| Cloud | DCE endpoint suffix | Microsoft Entra authority | Azure Monitor token scope |
+|---|---|---|---|
+| Azure public cloud | `.ingest.monitor.azure.com` | `login.microsoftonline.com` | `https://monitor.azure.com//.default` |
+| Azure Government | `.ingest.monitor.azure.us` | `login.microsoftonline.us` | `https://monitor.azure.us/.default` |
+
+For manual deployments, copy the actual **Logs ingestion** endpoint from your
+DCE into `DCE_ENDPOINT`. Do not change an endpoint's suffix to move it between
+clouds. Keep the Function App, DCE, DCR, and workspace in the same cloud. Invalid
+or unsupported endpoint hosts fail at startup instead of falling back to the
+public-cloud authentication scope. See the
+[Azure Monitor SDK's non-public cloud configuration](https://learn.microsoft.com/python/api/overview/azure/monitor-ingestion-readme#configure-clients-for-non-public-azure-clouds).
+
+GitHub must be able to reach the Function App's HTTPS webhook URL. This connector
+uses webhooks, not GitHub audit-log streaming to Blob Storage; the Azure Government
+restriction on the Azure Storage audit-log connector does not apply to this path.
+
 ## Deployment
 
 ### Option 1 — ARM Template (Recommended)
 
 [![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGitHub%2FData%2520Connectors%2FGithubWebhookV2%2Fazuredeploy_GithubWebhookV2_API_FunctionApp.json)
+[![Deploy to Azure Government](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGitHub%2FData%2520Connectors%2FGithubWebhookV2%2Fazuredeploy_GithubWebhookV2_API_FunctionApp.json)
 
 **Required parameters:**
 
@@ -89,7 +113,7 @@ The template automatically provisions:
 
 | Setting | Value |
 |---|---|
-| `DCE_ENDPOINT` | Logs ingestion endpoint URL from your DCE |
+| `DCE_ENDPOINT` | Actual Logs ingestion endpoint from a DCE in your cloud: `https://<dce-host>.ingest.monitor.azure.com` for Azure public cloud or `https://<dce-host>.ingest.monitor.azure.us` for Azure Government. Authentication settings are selected automatically. |
 | `DCR_RULE_ID` | `immutableId` of your DCR |
 | `DCR_STREAM_NAME` | `Custom-GitHubAdvancedSecurityAlerts_CL` |
 | `GithubWebhookSecret` | *(Optional)* Your GitHub webhook secret |
@@ -107,7 +131,11 @@ The template automatically provisions:
    ![Function App Complete URL](../GithubWebhook/Images/functionappcompleteurl.jpg)
 
 3. *(Optional)* Generate a new function key and substitute it into the URL as the `code` query parameter.  
-   Example: `https://fngithubwebhookv2.azurewebsites.net/api/GithubWebhookConnectorV2?code={apikey}`
+   Public-cloud example: `https://<function-app>.azurewebsites.net/github/GithubWebhookConnectorV2?code={apikey}`.
+
+   Azure Government example: `https://<function-app>.azurewebsites.us/github/GithubWebhookConnectorV2?code={apikey}`.
+
+   Always copy the actual **Get Function URL** value rather than constructing it.
 
    ![Function App Key](../GithubWebhook/Images/FunctionAppfunctionKey.jpg)
 
@@ -196,6 +224,26 @@ GithubWebhookV2/
 ├── requirements.txt         # Python dependencies
 └── README.md                # This file
 ```
+
+## Local verification
+
+Install `requirements.txt` in a Python 3.11 virtual environment, then run:
+
+```powershell
+python -m unittest discover -s "Solutions\GitHub\Data Connectors\GithubWebhookV2\tests" -v
+```
+
+The tests exercise both clouds using the real ingestion SDK with a local,
+no-network transport, including token scopes, webhook signatures, error handling,
+and the deployment ZIP's source contents. They do not replace an end-to-end
+deployment in Azure Government.
+
+After changing the Function App code, rebuild `GithubWebhookV2.zip` with
+Linux-compatible Python 3.11 dependencies from `requirements.txt`. The archive root
+must contain `host.json`, `requirements.txt`, `GithubWebhookConnectorV2/`, and
+`.python_packages/lib/site-packages/`. Do not include tests or a parent directory.
+The ARM template's `WEBSITE_RUN_FROM_PACKAGE` and the manual-download link must
+resolve to this updated package when the change is published.
 
 ## Related Resources
 

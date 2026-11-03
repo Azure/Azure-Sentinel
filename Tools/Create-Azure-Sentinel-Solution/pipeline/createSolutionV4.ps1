@@ -207,7 +207,7 @@ try {
                             'data connectors' {
                                 $isCCPConnectorFile = $false
                                 foreach ($item in $ccpDict) {
-                                    if ($item.DCDefinitionFullPath -eq $finalPath) { $isCCPConnectorFile = $true; break }
+                                    if ($item.DCDefinitionFullPath.Replace('\', '/') -eq $finalPath.Replace('\', '/')) { $isCCPConnectorFile = $true; break }
                                 }
                                 if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
                                     GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
@@ -221,7 +221,7 @@ try {
                             'dataconnectors' {
                                 $isCCPConnectorFile = $false
                                 foreach ($item in $ccpDict) {
-                                    if ($item.DCDefinitionFullPath -eq $finalPath) { $isCCPConnectorFile = $true; break }
+                                    if ($item.DCDefinitionFullPath.Replace('\', '/') -eq $finalPath.Replace('\', '/')) { $isCCPConnectorFile = $true; break }
                                 }
                                 if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
                                     GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter

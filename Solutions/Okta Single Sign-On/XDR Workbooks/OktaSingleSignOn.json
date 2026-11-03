@@ -1,0 +1,2057 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Okta Single Sign-On Workbook\n\n**Purpose:** Monitor and investigate Okta authentication, session, and administrative activity in Microsoft Sentinel.\n\n**Data source:** This workbook uses data from the OktaSSO table.\n\n**Prerequisites:**\n- Deploy and configure the Okta data connector \n- Verify that data is ingesting into the OktaSSO table\n- Ensure you have read access to the selected Microsoft Sentinel workspace\n\n**How to use:** Select Subscription, Workspace, Time Range, and Domain at the top of the workbook, then use the Administrative, Application, and Session/User Analysis tabs for investigation.\n\n---"
+      },
+      "name": "introduction"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "23197862-8ab5-4aa4-8e78-bb26fbf1a6bc",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 2419200000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "9df846cc-3ff1-4608-ac3a-7dddc6c709a7",
+            "version": "KqlParameterItem/1.0",
+            "name": "Domain",
+            "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OktaSSO\n| summarize by domain_s",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::1"
+              ],
+              "showDefault": false
+            },
+            "defaultValue": "value::1",
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "above"
+      },
+      "name": "parameters - 2"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Administrative",
+            "subTarget": "General",
+            "preText": "Session/User Analysis",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Application",
+            "subTarget": "Application",
+            "style": "link"
+          },
+          {
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Session/User Analysis",
+            "subTarget": "Analysis",
+            "preText": "Session/User Analysis",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "links - 13"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "fc39a4b9-f38a-4a3e-bf83-845441828fb8",
+            "version": "KqlParameterItem/1.0",
+            "name": "ApplicationList",
+            "label": "Application",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| mv-expand todynamic(target_s)\r\n| where target_s.type == \"AppInstance\"\r\n| distinct tostring(target_s.alternateId)\r\n| sort by target_s_alternateId asc",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ]
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "above"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Application"
+      },
+      "name": "parameters - 15"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where eventType_s == \"user.session.start\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| summarize Count = count() by Results = outcome_result_s, bin(TimeGenerated, {TimeRange:grain})",
+        "size": 0,
+        "title": "Console Login by Result",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "Results",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "FAILURE",
+              "color": "red"
+            },
+            {
+              "seriesName": "SUCCESS",
+              "color": "green"
+            }
+          ]
+        },
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "exportParameterName": "SelectedRow_0",
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "General"
+      },
+      "customWidth": "50",
+      "name": "query - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where eventType_s == \"user.session.start\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where outcome_result_s == \"FAILURE\"\r\n| summarize Total = count() by User = actor_alternateId_s\r\n| top 10 by Total",
+        "size": 0,
+        "title": "Top 10 Failed Console Logins by User",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Total",
+              "formatter": 3,
+              "formatOptions": {
+                "palette": "coldHot"
+              }
+            }
+          ],
+          "showExportToExcel": true
+        },
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "Results",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "FAILURE",
+              "color": "red"
+            },
+            {
+              "seriesName": "SUCCESS",
+              "color": "green"
+            }
+          ]
+        },
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_1"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "General"
+      },
+      "customWidth": "50",
+      "name": "query - 5 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where eventType_s == \"user.authentication.auth_via_mfa\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where outcome_result_s == \"FAILURE\"\r\n| summarize count() by actor_alternateId_s\r\n| top 10 by count_",
+        "size": 0,
+        "title": "Top 10 Failed MFA Authentications by User",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "count_",
+              "formatter": 3,
+              "formatOptions": {
+                "palette": "coldHot"
+              }
+            },
+            {
+              "columnMatch": "Total",
+              "formatter": 3,
+              "formatOptions": {
+                "palette": "coldHot"
+              }
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "actor_alternateId_s",
+              "label": "User"
+            },
+            {
+              "columnId": "count_",
+              "label": "Total"
+            }
+          ],
+          "showExportToExcel": true
+        },
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "Results",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "FAILURE",
+              "color": "red"
+            },
+            {
+              "seriesName": "SUCCESS",
+              "color": "green"
+            }
+          ]
+        },
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true,
+        "exportParameterName": "SelectedRow_2"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "General"
+      },
+      "customWidth": "50",
+      "name": "query - 5 - Copy - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where eventType_s == \"user.authentication.auth_via_mfa\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| summarize Count=count() by Results = outcome_result_s, bin(TimeGenerated, {TimeRange:grain})",
+        "size": 0,
+        "title": "MFA Authentications by Result",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "Results",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "SUCCESS",
+              "color": "green"
+            },
+            {
+              "seriesName": "FAILURE",
+              "color": "red"
+            }
+          ]
+        },
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "exportParameterName": "SelectedRow_0",
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "General"
+      },
+      "customWidth": "50",
+      "name": "query - 5 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where target_s.type == \"AppInstance\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| summarize count() by tostring(target_s.displayName)\r\n| top 10 by count_",
+        "size": 0,
+        "title": "Active Applications",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "Users",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "exportParameterName": "SelectedRow_1",
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "General"
+      },
+      "customWidth": "50",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where target_s.type == \"AppInstance\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| summarize count() by tostring(target_s.displayName), bin(TimeGenerated, {TimeRange:grain})",
+        "size": 0,
+        "title": "Active Applications",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "areachart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "Users",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "exportParameterName": "SelectedRow_2",
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "General"
+      },
+      "customWidth": "50",
+      "name": "Events by Application"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where eventType_s == \"application.user_membership.add\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| extend TargetUser = tostring(parse_json(target_s)[0].alternateId)\r\n| extend Application = tostring(parse_json(target_s)[1].alternateId)\r\n| summarize count() by ['Event Time'] = column_ifexists('published_t', now()), ['Source User'] = actor_alternateId_s, Application, ['Target User'] = TargetUser\r\n| project-away count_\r\n| sort by ['Event Time'] desc",
+        "size": 0,
+        "title": "Users Added to Application",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "General"
+      },
+      "customWidth": "50",
+      "name": "query - 18"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where eventType_s == \"application.user_membership.remove\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| extend TargetUser = tostring(parse_json(target_s)[0].alternateId)\r\n| extend Application = tostring(parse_json(target_s)[1].alternateId)\r\n| summarize count() by column_ifexists('published_t', now()), SourceUser = actor_alternateId_s, Application, TargetUser\r\n| project-away count_\r\n| sort by column_ifexists('published_t', now()) desc\r\n",
+        "size": 0,
+        "title": "Users Removed from Application",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "General"
+      },
+      "customWidth": "50",
+      "name": "query - 18 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where target_s.type == \"AppInstance\"\r\n| where target_s.alternateId in ({ApplicationList}) or '*' in ({ApplicationList})\r\n| summarize count() by tostring(target_s.alternateId), bin(TimeGenerated,{TimeRange:grain})",
+        "size": 0,
+        "title": "Total Events by Application",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Application"
+      },
+      "customWidth": "50",
+      "name": "query - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where target_s.type == \"AppInstance\"\r\n| where target_s.alternateId in ({ApplicationList}) or '*' in ({ApplicationList})\r\n| where eventType_s has \"authentication\"\r\n| where outcome_result_s == \"FAILURE\"\r\n| summarize count() by tostring(target_s.alternateId), bin(TimeGenerated,{TimeRange:grain})",
+        "size": 0,
+        "title": "Failed Logins by Application",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Application"
+      },
+      "customWidth": "50",
+      "name": "query - 12 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where target_s.type == \"AppInstance\"\r\n| where target_s.alternateId in ({ApplicationList}) or '*' in ({ApplicationList})\r\n| summarize Total = count() by Application = tostring(target_s.alternateId)\r\n| top 10 by Total",
+        "size": 0,
+        "title": "Top 10 Event Count by Application",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Application"
+      },
+      "customWidth": "50",
+      "name": "query - 12 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where target_s.type == \"AppInstance\"\r\n| where eventType_s has \"authentication\"\r\n| where target_s.alternateId in ({ApplicationList}) or '*' in ({ApplicationList})\r\n| summarize SUCCESS = countif(outcome_result_s == \"SUCCESS\"), FAILURE = countif(outcome_result_s == \"FAILURE\"), Total = count() by User = actor_alternateId_s\r\n| top 10 by Total\r\n",
+        "size": 0,
+        "title": "Top 10 User Authentications",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SUCCESS",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "red"
+              }
+            },
+            {
+              "columnMatch": "FAILURE",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "green"
+              }
+            },
+            {
+              "columnMatch": "Total",
+              "formatter": 3,
+              "formatOptions": {
+                "palette": "coldHot"
+              }
+            }
+          ],
+          "showExportToExcel": true
+        },
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Application"
+      },
+      "customWidth": "50",
+      "name": "query - 12 - Copy - Copy"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "427470db-f8f8-461c-adc7-47fe5202b5d1",
+            "version": "KqlParameterItem/1.0",
+            "name": "SessionID",
+            "label": "Session ID",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OktaSSO\r\n| where actor_alternateId_s !in (\"system@okta.com\")\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| distinct authenticationContext_externalSessionId_s\r\n| sort by authenticationContext_externalSessionId_s asc",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ]
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          },
+          {
+            "id": "939a52ae-0662-4483-a52b-35287b151074",
+            "version": "KqlParameterItem/1.0",
+            "name": "User",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OktaSSO\r\n| where actor_alternateId_s !in (\"system@okta.com\")\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| distinct actor_alternateId_s\r\n| sort by actor_alternateId_s asc",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ]
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          },
+          {
+            "id": "059ad6dc-5f2f-490d-941a-d9f87cf71723",
+            "version": "KqlParameterItem/1.0",
+            "name": "EventTypes",
+            "label": "Event Type",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| distinct eventType_s\r\n| sort by eventType_s asc",
+            "value": [
+              "user.session.start"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ]
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "above"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Analysis"
+      },
+      "name": "parameters - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where authenticationContext_externalSessionId_s in ({SessionID})\r\n| extend actor_alternateId_s=replace_string(actor_alternateId_s,@'\\','')\r\n| where actor_alternateId_s in ({User}) or '*' in ({User})\r\n| where eventType_s in ({EventTypes}) or '*' in ({EventTypes})\r\n| summarize count(eventType_s) by actor_alternateId_s, bin(column_ifexists('published_t', now()), {TimeRange:grain})",
+        "size": 0,
+        "showAnnotations": true,
+        "title": "User Events Timeline",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "actor_alternateId_s",
+              "sortOrder": 2
+            }
+          ],
+          "showExportToExcel": true
+        },
+        "sortBy": [
+          {
+            "itemKey": "actor_alternateId_s",
+            "sortOrder": 2
+          }
+        ],
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Analysis"
+      },
+      "customWidth": "50",
+      "name": "query - 8 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where authenticationContext_externalSessionId_s in ({SessionID})\r\n| extend actor_alternateId_s=replace_string(actor_alternateId_s,@'\\','')\r\n| where actor_alternateId_s in ({User}) or '*' in ({User})\r\n| where eventType_s in ({EventTypes}) or '*' in ({EventTypes})\r\n| summarize count() by authenticationContext_externalSessionId_s, column_ifexists('published_t', now()), eventType_s, actor_alternateId_s\r\n| sort by authenticationContext_externalSessionId_s asc, column_ifexists('published_t', now()) asc",
+        "size": 0,
+        "title": "User Event Details",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "actor_alternateId_s",
+              "sortOrder": 2
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "authenticationContext_externalSessionId_s",
+              "label": "Session ID"
+            },
+            {
+              "columnId": "published_t",
+              "label": "Event Time"
+            },
+            {
+              "columnId": "eventType_s",
+              "label": "Event Type"
+            },
+            {
+              "columnId": "actor_alternateId_s",
+              "label": "User"
+            },
+            {
+              "columnId": "count_",
+              "label": "Total"
+            }
+          ],
+          "showExportToExcel": true
+        },
+        "sortBy": [
+          {
+            "itemKey": "actor_alternateId_s",
+            "sortOrder": 2
+          }
+        ],
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Analysis"
+      },
+      "customWidth": "50",
+      "name": "query - 8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| mv-expand todynamic(target_s)\r\n| where target_s.type == \"AppInstance\"\r\n| where eventType_s has \"authentication\"\r\n| where authenticationContext_externalSessionId_s in ({SessionID})\r\n| extend actor_alternateId_s=replace_string(actor_alternateId_s,@'\\','')\r\n| where actor_alternateId_s in ({User}) or '*' in ({User})\r\n| where eventType_s in ({EventTypes}) or '*' in ({EventTypes})\r\n| summarize SUCCESS = countif(outcome_result_s == \"SUCCESS\"), FAILURE = countif(outcome_result_s == \"FAILURE\"), Total = count() by actor_alternateId_s, tostring(target_s.alternateId)\r\n| sort by actor_alternateId_s asc, target_s_alternateId asc\r\n\r\n",
+        "size": 0,
+        "title": "Application Authentications",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SUCCESS",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "green"
+              }
+            },
+            {
+              "columnMatch": "FAILURE",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "red"
+              }
+            },
+            {
+              "columnMatch": "Total",
+              "formatter": 3,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "actor_alternateId_s",
+              "label": "User"
+            },
+            {
+              "columnId": "target_s_alternateId",
+              "label": "Application"
+            },
+            {
+              "columnId": "SUCCESS"
+            },
+            {
+              "columnId": "FAILURE"
+            },
+            {
+              "columnId": "Total"
+            }
+          ],
+          "showExportToExcel": true
+        },
+        "sortBy": [],
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Analysis"
+      },
+      "customWidth": "50",
+      "name": "query - 8 - Copy"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n//| where authenticationContext_externalSessionId_s in ({SessionID})\r\n//| extend actor_alternateId_s=replace_string(actor_alternateId_s,@'\\','')\r\n| where actor_alternateId_s in ({User}) or '*' in ({User})\r\n//| where eventType_s in ({EventTypes}) or '*' in ({EventTypes})\r\n| summarize count(eventType_s) by \tCity = client_geographicalContext_city_s, actor_alternateId_s, Country = client_geographicalContext_country_s, latitude = client_geographicalContext_geolocation_lat_d, longitude = client_geographicalContext_geolocation_lon_d,  Results = outcome_result_s",
+        "size": 0,
+        "title": "User Events by Geo-Location",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "map",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "Users",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "mapSettings": {
+          "locInfo": "LatLong",
+          "latitude": "latitude",
+          "longitude": "longitude",
+          "sizeSettings": "count_eventType_s",
+          "sizeAggregation": "Sum",
+          "labelSettings": "actor_alternateId_s",
+          "legendMetric": "count_eventType_s",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "nodeColorField": "count_eventType_s",
+            "colorAggregation": "Sum",
+            "type": "heatmap",
+            "heatmapPalette": "greenRed"
+          }
+        },
+        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+        "noDataMessageStyle": 3,
+        "showExportToExcel": true
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "Analysis"
+      },
+      "customWidth": "50",
+      "name": "query - 3 - Copy - Copy"
+    }
+  ],
+  "fromTemplateId": "sentinel-SSOWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "xdrMetadata": {
+    "contentId": "5f45c040-f93a-5821-88b3-98703519f076",
+    "instanceId": "7a55ba4a-2363-5416-95c3-306a418177d1",
+    "version": "3.2.1",
+    "schemaVersion": "1.0.0",
+    "displayName": "OktaSingleSignOn"
+  },
+  "contentProvenance": {
+    "source": {
+      "path": "Workbooks/OktaSingleSignOn.json",
+      "sha256": "3f938c73c72330cf79e4195cfa5d607cf97022435116b1460082a3fb2b1f59e3",
+      "contentId": "sentinel-SSOWorkbook",
+      "originalMetadataVersion": null
+    },
+    "conversion": {
+      "tool": "sentinel-xdr-migration",
+      "version": "0.1.0",
+      "reviewRequired": false,
+      "queries": [
+        {
+          "sourcePath": "/items/1/content/parameters/0/query",
+          "status": "removed-scope-helper",
+          "outputPath": null,
+          "sourceSha256": "5946994a15739302ed2d73d8352ad7807cf022400d0fb4ada7deacc6a80a4362",
+          "targetSha256": null
+        },
+        {
+          "sourcePath": "/items/1/content/parameters/1/query",
+          "status": "removed-scope-helper",
+          "outputPath": null,
+          "sourceSha256": "585ab90d1327ac3449b4f326020eab6b072d57ccd0b314cdeae5de42e954843a",
+          "targetSha256": null
+        },
+        {
+          "sourcePath": "/items/1/content/parameters/2/query",
+          "status": "removed-scope-helper",
+          "outputPath": null,
+          "sourceSha256": "56eef1e41ffd63bb7f195a0c7d184ade2ebdb3350d5187cbbf020dae67af9c7c",
+          "targetSha256": null
+        },
+        {
+          "sourcePath": "/items/1/content/parameters/4/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "fef9aaa73713916d2b58de937ed07ba59bbae0fffec399c67d1940cdb6332017"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/1/content/parameters/4/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\n| summarize by domain_s",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/1/content/parameters/1/query",
+          "sourceSha256": "fef9aaa73713916d2b58de937ed07ba59bbae0fffec399c67d1940cdb6332017",
+          "targetSha256": "fef9aaa73713916d2b58de937ed07ba59bbae0fffec399c67d1940cdb6332017"
+        },
+        {
+          "sourcePath": "/items/3/content/parameters/0/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "9e6d926a612a6c7057e9d2f77f1e732c9fb96c015d5340d58ab7fadc34b49b7c"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/3/content/parameters/0/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| mv-expand todynamic(target_s)\r\n| where target_s.type == \"AppInstance\"\r\n| distinct tostring(target_s.alternateId)\r\n| sort by target_s_alternateId asc",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/3/content/parameters/0/query",
+          "sourceSha256": "9e6d926a612a6c7057e9d2f77f1e732c9fb96c015d5340d58ab7fadc34b49b7c",
+          "targetSha256": "9e6d926a612a6c7057e9d2f77f1e732c9fb96c015d5340d58ab7fadc34b49b7c"
+        },
+        {
+          "sourcePath": "/items/4/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "de83ef0833c2e149e89ecacc8dcf23517288918b8e24d2941ef7546dbb6a77a2"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/4/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where eventType_s == \"user.session.start\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| summarize Count = count() by Results = outcome_result_s, bin(TimeGenerated, {TimeRange:grain})",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/4/content/query",
+          "sourceSha256": "de83ef0833c2e149e89ecacc8dcf23517288918b8e24d2941ef7546dbb6a77a2",
+          "targetSha256": "de83ef0833c2e149e89ecacc8dcf23517288918b8e24d2941ef7546dbb6a77a2"
+        },
+        {
+          "sourcePath": "/items/5/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "a95d1c26a0512694caffb5e13e8004335606d647dbf16a3bf88ea7582995a262"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/5/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where eventType_s == \"user.session.start\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where outcome_result_s == \"FAILURE\"\r\n| summarize Total = count() by User = actor_alternateId_s\r\n| top 10 by Total",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/5/content/query",
+          "sourceSha256": "a95d1c26a0512694caffb5e13e8004335606d647dbf16a3bf88ea7582995a262",
+          "targetSha256": "a95d1c26a0512694caffb5e13e8004335606d647dbf16a3bf88ea7582995a262"
+        },
+        {
+          "sourcePath": "/items/6/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "b850cd23553e498cf6059ef4564afd31ce4feab2ce80a7c43c29d2b4d15b7347"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/6/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where eventType_s == \"user.authentication.auth_via_mfa\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where outcome_result_s == \"FAILURE\"\r\n| summarize count() by actor_alternateId_s\r\n| top 10 by count_",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/6/content/query",
+          "sourceSha256": "b850cd23553e498cf6059ef4564afd31ce4feab2ce80a7c43c29d2b4d15b7347",
+          "targetSha256": "b850cd23553e498cf6059ef4564afd31ce4feab2ce80a7c43c29d2b4d15b7347"
+        },
+        {
+          "sourcePath": "/items/7/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "8c82b208c242477343b769bc91b24178ba349d811ea7a59d53c5cbbbce6e1ea1"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/7/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where eventType_s == \"user.authentication.auth_via_mfa\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| summarize Count=count() by Results = outcome_result_s, bin(TimeGenerated, {TimeRange:grain})",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/7/content/query",
+          "sourceSha256": "8c82b208c242477343b769bc91b24178ba349d811ea7a59d53c5cbbbce6e1ea1",
+          "targetSha256": "8c82b208c242477343b769bc91b24178ba349d811ea7a59d53c5cbbbce6e1ea1"
+        },
+        {
+          "sourcePath": "/items/8/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "242fb570f1112a4b055e938dd5b2a3a8b66f943a35f9290c75abcff842cbc380"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/8/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where target_s.type == \"AppInstance\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| summarize count() by tostring(target_s.displayName)\r\n| top 10 by count_",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/8/content/query",
+          "sourceSha256": "242fb570f1112a4b055e938dd5b2a3a8b66f943a35f9290c75abcff842cbc380",
+          "targetSha256": "242fb570f1112a4b055e938dd5b2a3a8b66f943a35f9290c75abcff842cbc380"
+        },
+        {
+          "sourcePath": "/items/9/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "29b9568820d218988081a08a7994d9a6c9c7f852a9e9ef7092ccdd6c7010acd7"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/9/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where target_s.type == \"AppInstance\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| summarize count() by tostring(target_s.displayName), bin(TimeGenerated, {TimeRange:grain})",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/9/content/query",
+          "sourceSha256": "29b9568820d218988081a08a7994d9a6c9c7f852a9e9ef7092ccdd6c7010acd7",
+          "targetSha256": "29b9568820d218988081a08a7994d9a6c9c7f852a9e9ef7092ccdd6c7010acd7"
+        },
+        {
+          "sourcePath": "/items/10/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "7ba781769ade18383a9e12f5f0947d614e4a256b0688373c74108d87e2160b17"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/10/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where eventType_s == \"application.user_membership.add\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| extend TargetUser = tostring(parse_json(target_s)[0].alternateId)\r\n| extend Application = tostring(parse_json(target_s)[1].alternateId)\r\n| summarize count() by ['Event Time'] = column_ifexists('published_t', now()), ['Source User'] = actor_alternateId_s, Application, ['Target User'] = TargetUser\r\n| project-away count_\r\n| sort by ['Event Time'] desc",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/10/content/query",
+          "sourceSha256": "7ba781769ade18383a9e12f5f0947d614e4a256b0688373c74108d87e2160b17",
+          "targetSha256": "7ba781769ade18383a9e12f5f0947d614e4a256b0688373c74108d87e2160b17"
+        },
+        {
+          "sourcePath": "/items/11/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "3a48cdf5afa9603b4b49c0b2370ab9d14f20c176814ee638e72cba525041a139"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/11/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where eventType_s == \"application.user_membership.remove\"\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| extend TargetUser = tostring(parse_json(target_s)[0].alternateId)\r\n| extend Application = tostring(parse_json(target_s)[1].alternateId)\r\n| summarize count() by column_ifexists('published_t', now()), SourceUser = actor_alternateId_s, Application, TargetUser\r\n| project-away count_\r\n| sort by column_ifexists('published_t', now()) desc\r\n",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/11/content/query",
+          "sourceSha256": "3a48cdf5afa9603b4b49c0b2370ab9d14f20c176814ee638e72cba525041a139",
+          "targetSha256": "3a48cdf5afa9603b4b49c0b2370ab9d14f20c176814ee638e72cba525041a139"
+        },
+        {
+          "sourcePath": "/items/12/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "341dcf2ff7c7f871e20bc5a36bd95e274dc8423950ab225f45cd78275267ed94"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/12/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where target_s.type == \"AppInstance\"\r\n| where target_s.alternateId in ({ApplicationList}) or '*' in ({ApplicationList})\r\n| summarize count() by tostring(target_s.alternateId), bin(TimeGenerated,{TimeRange:grain})",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/12/content/query",
+          "sourceSha256": "341dcf2ff7c7f871e20bc5a36bd95e274dc8423950ab225f45cd78275267ed94",
+          "targetSha256": "341dcf2ff7c7f871e20bc5a36bd95e274dc8423950ab225f45cd78275267ed94"
+        },
+        {
+          "sourcePath": "/items/13/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "c18fdd9514ca700d5da9d904be795d183ab42e206b7c80c80576b9fbe89ed872"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/13/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where target_s.type == \"AppInstance\"\r\n| where target_s.alternateId in ({ApplicationList}) or '*' in ({ApplicationList})\r\n| where eventType_s has \"authentication\"\r\n| where outcome_result_s == \"FAILURE\"\r\n| summarize count() by tostring(target_s.alternateId), bin(TimeGenerated,{TimeRange:grain})",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/13/content/query",
+          "sourceSha256": "c18fdd9514ca700d5da9d904be795d183ab42e206b7c80c80576b9fbe89ed872",
+          "targetSha256": "c18fdd9514ca700d5da9d904be795d183ab42e206b7c80c80576b9fbe89ed872"
+        },
+        {
+          "sourcePath": "/items/14/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "28caa8a32d75ad7cee90282c077cdc2d1275544370a258c916a48c33cb21e8da"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/14/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where target_s.type == \"AppInstance\"\r\n| where target_s.alternateId in ({ApplicationList}) or '*' in ({ApplicationList})\r\n| summarize Total = count() by Application = tostring(target_s.alternateId)\r\n| top 10 by Total",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/14/content/query",
+          "sourceSha256": "28caa8a32d75ad7cee90282c077cdc2d1275544370a258c916a48c33cb21e8da",
+          "targetSha256": "28caa8a32d75ad7cee90282c077cdc2d1275544370a258c916a48c33cb21e8da"
+        },
+        {
+          "sourcePath": "/items/15/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "689bfe89e37b1afe6ffb2be1cc8474741d783d2c1b52d5fa9a66252befbe2ea8"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/15/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| mv-expand todynamic(target_s)\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where target_s.type == \"AppInstance\"\r\n| where eventType_s has \"authentication\"\r\n| where target_s.alternateId in ({ApplicationList}) or '*' in ({ApplicationList})\r\n| summarize SUCCESS = countif(outcome_result_s == \"SUCCESS\"), FAILURE = countif(outcome_result_s == \"FAILURE\"), Total = count() by User = actor_alternateId_s\r\n| top 10 by Total\r\n",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/15/content/query",
+          "sourceSha256": "689bfe89e37b1afe6ffb2be1cc8474741d783d2c1b52d5fa9a66252befbe2ea8",
+          "targetSha256": "689bfe89e37b1afe6ffb2be1cc8474741d783d2c1b52d5fa9a66252befbe2ea8"
+        },
+        {
+          "sourcePath": "/items/16/content/parameters/0/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "1d34c79b44cc75ee86ced378e8126d0cc8e3f0f65eedd175e76c15f44f91e751"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/16/content/parameters/0/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where actor_alternateId_s !in (\"system@okta.com\")\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| distinct authenticationContext_externalSessionId_s\r\n| sort by authenticationContext_externalSessionId_s asc",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/16/content/parameters/0/query",
+          "sourceSha256": "1d34c79b44cc75ee86ced378e8126d0cc8e3f0f65eedd175e76c15f44f91e751",
+          "targetSha256": "1d34c79b44cc75ee86ced378e8126d0cc8e3f0f65eedd175e76c15f44f91e751"
+        },
+        {
+          "sourcePath": "/items/16/content/parameters/1/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "9345788c98377791a1c05da6d3ac47eca4c3bed24370907f4bccb724eeacda4d"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/16/content/parameters/1/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where actor_alternateId_s !in (\"system@okta.com\")\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| distinct actor_alternateId_s\r\n| sort by actor_alternateId_s asc",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/16/content/parameters/1/query",
+          "sourceSha256": "9345788c98377791a1c05da6d3ac47eca4c3bed24370907f4bccb724eeacda4d",
+          "targetSha256": "9345788c98377791a1c05da6d3ac47eca4c3bed24370907f4bccb724eeacda4d"
+        },
+        {
+          "sourcePath": "/items/16/content/parameters/2/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "579060982d182e77125f8bd12790e42e419ac03ea10dcee6efbdd4bf7fb62f94"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/16/content/parameters/2/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| distinct eventType_s\r\n| sort by eventType_s asc",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/16/content/parameters/2/query",
+          "sourceSha256": "579060982d182e77125f8bd12790e42e419ac03ea10dcee6efbdd4bf7fb62f94",
+          "targetSha256": "579060982d182e77125f8bd12790e42e419ac03ea10dcee6efbdd4bf7fb62f94"
+        },
+        {
+          "sourcePath": "/items/17/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "5cced929946ef143ab0c5281681bb4e490178e7783d51df6f07c40beb24a0f6d"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/17/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where authenticationContext_externalSessionId_s in ({SessionID})\r\n| extend actor_alternateId_s=replace_string(actor_alternateId_s,@'\\','')\r\n| where actor_alternateId_s in ({User}) or '*' in ({User})\r\n| where eventType_s in ({EventTypes}) or '*' in ({EventTypes})\r\n| summarize count(eventType_s) by actor_alternateId_s, bin(column_ifexists('published_t', now()), {TimeRange:grain})",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/17/content/query",
+          "sourceSha256": "5cced929946ef143ab0c5281681bb4e490178e7783d51df6f07c40beb24a0f6d",
+          "targetSha256": "5cced929946ef143ab0c5281681bb4e490178e7783d51df6f07c40beb24a0f6d"
+        },
+        {
+          "sourcePath": "/items/18/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "2c692432726ce0ed6644f0eb21a8dbaba00d8655107c7cec639b1df30a5063e8"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/18/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| where authenticationContext_externalSessionId_s in ({SessionID})\r\n| extend actor_alternateId_s=replace_string(actor_alternateId_s,@'\\','')\r\n| where actor_alternateId_s in ({User}) or '*' in ({User})\r\n| where eventType_s in ({EventTypes}) or '*' in ({EventTypes})\r\n| summarize count() by authenticationContext_externalSessionId_s, column_ifexists('published_t', now()), eventType_s, actor_alternateId_s\r\n| sort by authenticationContext_externalSessionId_s asc, column_ifexists('published_t', now()) asc",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/18/content/query",
+          "sourceSha256": "2c692432726ce0ed6644f0eb21a8dbaba00d8655107c7cec639b1df30a5063e8",
+          "targetSha256": "2c692432726ce0ed6644f0eb21a8dbaba00d8655107c7cec639b1df30a5063e8"
+        },
+        {
+          "sourcePath": "/items/19/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "2a2ec0590f918c32c3347d6d7a682a30e7ce6ed271a3bcff4415c5a47b979d7e"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/19/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n| mv-expand todynamic(target_s)\r\n| where target_s.type == \"AppInstance\"\r\n| where eventType_s has \"authentication\"\r\n| where authenticationContext_externalSessionId_s in ({SessionID})\r\n| extend actor_alternateId_s=replace_string(actor_alternateId_s,@'\\','')\r\n| where actor_alternateId_s in ({User}) or '*' in ({User})\r\n| where eventType_s in ({EventTypes}) or '*' in ({EventTypes})\r\n| summarize SUCCESS = countif(outcome_result_s == \"SUCCESS\"), FAILURE = countif(outcome_result_s == \"FAILURE\"), Total = count() by actor_alternateId_s, tostring(target_s.alternateId)\r\n| sort by actor_alternateId_s asc, target_s_alternateId asc\r\n\r\n",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/19/content/query",
+          "sourceSha256": "2a2ec0590f918c32c3347d6d7a682a30e7ce6ed271a3bcff4415c5a47b979d7e",
+          "targetSha256": "2a2ec0590f918c32c3347d6d7a682a30e7ce6ed271a3bcff4415c5a47b979d7e"
+        },
+        {
+          "sourcePath": "/items/20/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferInbar",
+            "reference": "consolidated-batch-review-2026-10-15",
+            "planSha256": "9af1ff4a7821ad7bb6efc4b61ca9ce3396b794bb8085b3ca1b2cf6414bec8101",
+            "decision": "change",
+            "querySha256": "21adb4e653cdbd45b3f832028de52f273f14432efdb2f4dacea1718701676e14"
+          },
+          "workspaceFunctions": [
+            "OktaSSO"
+          ],
+          "conversion": {
+            "sourceId": "/items/20/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "OktaSSO\r\n| where domain_s in ({Domain}) or '*' in ({Domain})\r\n//| where authenticationContext_externalSessionId_s in ({SessionID})\r\n//| extend actor_alternateId_s=replace_string(actor_alternateId_s,@'\\','')\r\n| where actor_alternateId_s in ({User}) or '*' in ({User})\r\n//| where eventType_s in ({EventTypes}) or '*' in ({EventTypes})\r\n| summarize count(eventType_s) by \tCity = client_geographicalContext_city_s, actor_alternateId_s, Country = client_geographicalContext_country_s, latitude = client_geographicalContext_geolocation_lat_d, longitude = client_geographicalContext_geolocation_lon_d,  Results = outcome_result_s",
+            "resolvedTables": [
+              "OktaV2_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "OktaV2_CL",
+                "ahTable": "OktaV2_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/20/content/query",
+          "sourceSha256": "21adb4e653cdbd45b3f832028de52f273f14432efdb2f4dacea1718701676e14",
+          "targetSha256": "21adb4e653cdbd45b3f832028de52f273f14432efdb2f4dacea1718701676e14"
+        }
+      ]
+    },
+    "requiredWorkloads": [
+      {
+        "workload": "sentinel",
+        "dataTypes": [
+          "OktaV2_CL"
+        ]
+      }
+    ],
+    "requiredDataConnectors": [
+      {
+        "connectorId": "OktaSSOv2",
+        "dataTypes": [
+          "OktaV2_CL"
+        ]
+      }
+    ],
+    "dependencyReviewRequired": false,
+    "requiredWorkspaceFunctions": [
+      {
+        "functionAlias": "OktaSSO",
+        "sourcePath": "Parsers/OktaSSO.yaml",
+        "sourceSha256": "ee71c0dae81f146d6266048130f657bdeff93b89201f7e77ef3ed84373d172c9"
+      }
+    ]
+  }
+}

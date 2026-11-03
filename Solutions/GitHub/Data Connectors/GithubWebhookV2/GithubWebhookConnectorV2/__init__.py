@@ -4,18 +4,41 @@ import os
 import json
 import hashlib
 import hmac
+from urllib.parse import urlparse
 import azure.functions as func
-from azure.identity import DefaultAzureCredential
+from azure.identity import AzureAuthorityHosts, DefaultAzureCredential
 from azure.monitor.ingestion import LogsIngestionClient
 from azure.core.exceptions import HttpResponseError
+
+
+def get_cloud_authentication(endpoint):
+    parsed_endpoint = urlparse(endpoint or '')
+    hostname = parsed_endpoint.hostname or ''
+    if parsed_endpoint.scheme == 'https':
+        if hostname.endswith('.ingest.monitor.azure.us'):
+            return AzureAuthorityHosts.AZURE_GOVERNMENT, 'https://monitor.azure.us/.default'
+        if hostname.endswith('.ingest.monitor.azure.com'):
+            return AzureAuthorityHosts.AZURE_PUBLIC_CLOUD, 'https://monitor.azure.com//.default'
+
+    message = (
+        'DCE_ENDPOINT must be an HTTPS logs ingestion endpoint ending in '
+        '.ingest.monitor.azure.com (Azure public cloud) or '
+        '.ingest.monitor.azure.us (Azure Government).'
+    )
+    logging.error(message)
+    raise ValueError(message)
+
 
 github_webhook_secret = os.environ.get('GithubWebhookSecret')
 dce_endpoint = os.environ.get('DCE_ENDPOINT')
 dcr_rule_id = os.environ.get('DCR_RULE_ID')
 dcr_stream_name = os.environ.get('DCR_STREAM_NAME', 'Custom-GitHubAdvancedSecurityAlerts_CL')
 
-credential = DefaultAzureCredential()
-client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential)
+authority, credential_scope = get_cloud_authentication(dce_endpoint)
+credential = DefaultAzureCredential(authority=authority)
+client = LogsIngestionClient(
+    endpoint=dce_endpoint, credential=credential, credential_scopes=[credential_scope]
+)
 
 logging.info("GithubWebhookV2: DCE_ENDPOINT=%s, DCR_STREAM_NAME=%s", dce_endpoint, dcr_stream_name)
 

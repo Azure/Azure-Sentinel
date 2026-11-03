@@ -1,4 +1,4 @@
-param($runId, $pullRequestNumber, $instrumentationKey, $baseFolderPath)
+param($runId, $pullRequestNumber, $instrumentationKey, $baseFolderPath, $SolutionPath)
 Write-Host "Starting execution of Hyperlink Validation"
 $global:counterInvalid =0
 $global:counterTimeout =0
@@ -10,41 +10,77 @@ class UrlDetail {
 
 try {
 	$urlDetailList = New-Object 'System.Collections.Generic.List[PSObject]'
-    $baseFolderPath = $baseFolderPath + "/"
-    $baseFolderPath = $baseFolderPath.replace("//", "/")
+    $contentRoot = if ($baseFolderPath) {
+      [System.IO.Path]::GetFullPath($baseFolderPath)
+    } else {
+      [System.IO.Path]::GetFullPath((Get-Location).Path)
+    }
 
-	Write-Host "====Identifying Solution Name===="
-  #Get Solution Name
-  . $PSScriptRoot/getSolutionName.ps1 $runId $pullRequestNumber $instrumentationKey
-  #outputs: solutionName
-
-  if ($solutionName -eq '')
-  {
-    exit 0
+  function Test-PrivateSolutionContentPath([string]$filePath) {
+    $segments = $filePath -split '[\\/]'
+    if ($segments.Count -lt 3 -or -not $segments[0].Equals("Solutions", [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $false
+    }
+    foreach ($segment in $segments | Select-Object -Skip 2) {
+      if ($segment.Equals("Logs", [System.StringComparison]::OrdinalIgnoreCase) -or
+          $segment.Equals("Reports", [System.StringComparison]::OrdinalIgnoreCase) -or
+          $segment.Equals("Evidence", [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+      }
+    }
+    return $false
   }
 
-  Write-Host "SolutionName is $solutionName"
+  if ($SolutionPath) {
+    $solutionsRoot = [System.IO.Path]::GetFullPath((Join-Path $contentRoot "Solutions")).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $resolvedSolutionPath = [System.IO.Path]::GetFullPath($SolutionPath)
+    if ([System.IO.Path]::GetDirectoryName($resolvedSolutionPath) -ne $solutionsRoot -or
+        -not (Test-Path $resolvedSolutionPath -PathType Container) -or
+        ((Get-Item $resolvedSolutionPath).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+      throw "Invalid solution folder '$SolutionPath'. Expected an existing direct child of '$solutionsRoot'."
+    }
+    $filesList = @(Get-ChildItem $resolvedSolutionPath -Recurse -File |
+      ForEach-Object { [System.IO.Path]::GetRelativePath($contentRoot, $_.FullName).Replace('\', '/') } |
+      Where-Object {
+        $_ -notlike 'Solutions/Images/*' -and
+        $_ -notlike 'Solutions/*.md' -and
+        $_ -notlike '*/Package/*' -and
+        $_ -notlike '*system_generated_metadata.json' -and
+        $_ -notlike '*testParameters.json'
+      })
+    Write-Host "Hyperlink validation scoped to current files under $resolvedSolutionPath"
+  }
+  else {
+    Write-Host "====Identifying Solution Name===="
+    # Preserve CI's commit-diff based solution discovery when no folder scope is supplied.
+    . $PSScriptRoot/getSolutionName.ps1 $runId $pullRequestNumber $instrumentationKey
+    if ($solutionName -eq '') {
+      exit 0
+    }
+    Write-Host "SolutionName is $solutionName"
+    $prFiles = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+    $solutionFolderPath = 'Solutions/' + $solutionName + "/"
+    $filesList = $prFiles | Where-Object { $_ -like "$solutionFolderPath*" }
+  }
+  $filesList = @($filesList | Where-Object { -not (Test-PrivateSolutionContentPath $_) })
+  function Resolve-ContentFilePath($filePath) {
+    $resolvedPath = if ([System.IO.Path]::IsPathRooted($filePath)) {
+      [System.IO.Path]::GetFullPath($filePath)
+    } else {
+      [System.IO.Path]::GetFullPath((Join-Path $contentRoot $filePath))
+    }
+    $relativePath = [System.IO.Path]::GetRelativePath($contentRoot, $resolvedPath)
+    if ($relativePath -eq ".." -or $relativePath.StartsWith(".." + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::Ordinal)) {
+      throw "Content file path escapes the selected content root: '$filePath'."
+    }
+    if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
+      throw "Content file does not exist under the selected content root: '$resolvedPath'."
+    }
+    return $resolvedPath
+  }
   function ReadFileContent($filePath) {
-    try {
-        if (!(Test-Path -Path "$filePath")) {
-            return $null;
-        }
-
-        $stream = New-Object System.IO.StreamReader -Arg "$filePath";
-        $content = $stream.ReadToEnd();
-        $stream.Close();
-
-        if ($null -eq $content) {
-            Write-Host "Error in reading file $filePath"
-            return $null;
-        } else {
-            return $content;
-        }
-    }
-    catch {
-        Write-Host "Error occurred in ReadFileContent. Error details : $_"
-        return $null;
-    }
+    $resolvedPath = Resolve-ContentFilePath $filePath
+    return [System.IO.File]::ReadAllText($resolvedPath)
 }
 
 function validateLink($urlList,$filePath)
@@ -92,16 +128,14 @@ function validateLink($urlList,$filePath)
 		$urlDetailList.Add($objURlDetail)
 	}
 }
-$prFiles = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
-$solutionFolderPath = 'Solutions/' + $solutionName + "/"
-$filesList =$prFiles| Where-Object { $_ -like "$solutionFolderPath*" }
 $filteredFiles = $filesList | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' } | Where-Object { $_ -notmatch ('Package') }
 
 $finalFilteredFiles = @()
 # Remove the files which does not contain url
 foreach($item in $filteredFiles)
 {
-	$temp = Select-String -Path $item -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?'-AllMatches
+	$resolvedItem = Resolve-ContentFilePath $item
+	$temp = Select-String -LiteralPath $resolvedItem -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.@?^=%&amp;:/~\+#\{\}]*[\w\-\@?^=%&amp;/~\+#\{\}])?'-AllMatches -ErrorAction Stop
 	if ($null -ne $temp) {
 		$finalFilteredFiles += $item
 	}
@@ -117,10 +151,10 @@ foreach ($currentFile in $filterOutExclusionList)
 {
   $urlList = @()
 		$fileContent = ReadFileContent -filePath $currentfile
-        $list = $fileContent | Select-String -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?' -AllMatches 
+        $list = $fileContent | Select-String -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.@?^=%&amp;:/~\+#\{\}]*[\w\-\@?^=%&amp;/~\+#\{\}])?' -AllMatches 
         $urlList += $list.Matches.Value
 		$urlList = $urlList | Select-Object -Unique
-		$filterOutExclusionUrlList = $urlList | Where-Object { $_ -notmatch ($exclusionDomainList -join '|')  }
+		$filterOutExclusionUrlList = $urlList | Where-Object { $_ -notmatch ($exclusionDomainList -join '|') -and $_ -notmatch '\{[^}]+\}' }
 		If ($null -ne $filterOutExclusionUrlList) {
 		validateLink $filterOutExclusionUrlList $currentFile
 		}

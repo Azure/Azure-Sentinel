@@ -1,6 +1,6 @@
 # VerifyASimParserTemplate.py
 #
-# Validates the YAML template of modified ASIM parsers (both ASim and vim variants).
+# Validates the YAML template of modified ASIM query-time parsers (both ASim and vim variants).
 # For each modified parser, the following checks are performed against the parser
 # YAML and its corresponding union parser YAML:
 #
@@ -14,10 +14,11 @@
 # 8.  Normalization.Schema - must match a known ASIM schema name from SCHEMA_INFO
 # 9.  Normalization.Version - must use X.X.X format and match the expected schema version
 # 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
-# 11. ParserName format - must match <FileType><Schema>... (e.g. ASimDnsMyProduct)
+# 11. ParserName format - must match ^[a-zA-Z][a-zA-Z0-9_]+$ and start with <FileType><Schema>
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
 # 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
-# 14. vim ParserParams - must match the schema union parser parameters (pack is optional)
+# 14. vim ParserParams - must match the schema union parser parameters
+#     (pack is optional; eventresultdetails_has_any is also optional for WebSession)
 #
 # Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
 
@@ -40,6 +41,7 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
 
 import yaml
 import re
@@ -92,7 +94,7 @@ def run():
     repo_root = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
     modified_files = get_modified_files(current_directory)
     sample_data_path = os.path.join(repo_root, SAMPLE_DATA_PATH)
-    parser_yaml_files = filter_yaml_files(modified_files)
+    parser_yaml_files = filter_query_time_parser_files(modified_files)
     has_failures = False
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
@@ -159,7 +161,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - Normalization.Schema matches a known ASIM schema name
     - Normalization.Version uses X.X.X format and matches the expected schema version
     - References include correct schema-specific and ASIM doc links
-    - ParserName follows the naming convention <FileType><Schema>...
+    - ParserName matches ^[a-zA-Z][a-zA-Z0-9_]+$ and starts with <FileType><Schema>
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
     - Sample data CSV file exists locally (ASim parsers only)
     - vim ParserParams match the parameters supported by the schema union parser
@@ -306,12 +308,12 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     else:
         results.append((f'{RED}References{RESET}', f'{RED}References{RESET}', f'{RED}Fail{RESET}'))
 
-    # Check if ParserName exists in yaml_file and matches the format ASIMAuditEvent<ProductName>
+    # Check ParserName characters and the schema-specific prefix.
     if parser_name:
-        if re.match(rf'{FileType}{schema}', parser_name):
+        if re.fullmatch(r'^[a-zA-Z][a-zA-Z0-9_]+$', parser_name) and re.match(rf'{FileType}{schema}', parser_name):
             results.append((parser_name, 'ParserName is in correct format', 'Pass'))
         else:
-            results.append((f'{RED}' + str(parser_name) + f'{RESET}', f'{RED}ParserName is not in correct format{RESET}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}' + str(parser_name) + f'{RESET}', f'{RED}ParserName must match ^[a-zA-Z][a-zA-Z0-9_]+$ and start with {FileType}{schema}{RESET}', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}ParserName{RESET}', f'{RED}ParserName not found{RESET}', f'{RED}Fail{RESET}'))
 
@@ -352,7 +354,13 @@ def validate_vim_parser_params(parser_file, union_parser_file):
     parser_params.discard(None)
     supported_params.discard(None)
 
-    missing_params = supported_params - OPTIONAL_VIM_PARSER_PARAMS - parser_params
+    optional_params = OPTIONAL_VIM_PARSER_PARAMS.copy()
+    # Temporary exception for WebSession.
+    # TODO: Remove eventresultdetails_has_any from the WebSession vim YAML and remove this exception.
+    if parser_file.get('Normalization', {}).get('Schema') == 'WebSession':
+        optional_params.add('eventresultdetails_has_any')
+
+    missing_params = supported_params - optional_params - parser_params
     unsupported_params = parser_params - supported_params - VIM_CONTROL_PARAMS
 
     if not missing_params and not unsupported_params:
@@ -370,13 +378,9 @@ def validate_vim_parser_params(parser_file, union_parser_file):
 
     return (
         f'{RED}{", ".join(differences)}{RESET}',
-        f'{RED}ParserParams must match the schema union parser parameters; "pack" is optional{RESET}',
+        f'{RED}ParserParams must match the schema union parser parameters; optional: {", ".join(sorted(optional_params))}{RESET}',
         f'{RED}Fail{RESET}'
     )
-
-def filter_yaml_files(modified_files):
-    # Take only the YAML files
-    return [line for line in modified_files if line.endswith('.yaml')]
 
 def get_modified_files(current_directory):
 

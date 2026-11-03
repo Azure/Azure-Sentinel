@@ -1,0 +1,113 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureSecurityCenter
+  dataTypes:
+  - SecurityAlert
+- connectorId: MicrosoftDefenderForCloudTenantBased
+  dataTypes:
+  - SecurityAlert
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityAlert
+  requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+    - SecurityAlert
+  - connectorId: MicrosoftDefenderForCloudTenantBased
+    dataTypes:
+    - SecurityAlert
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 011c84d8-85f0-4370-b864-24c13455aa94
+    path: Analytic Rules/CoreBackupDeletionwithSecurityAlert.yaml
+    version: 1.0.2
+    querySha256: 2f7005d4fbb8c90fc15c2d0edbcd88a41e796a5a66dd149e01f49d3f94fab4e8
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1496
+    reviewScope:
+      sourceDocumentSha256: 9bfb86ebaddb9138d556726bfa426dd9bb5735613bdb411d719d62b587453b70
+      targetQuerySha256: 8f62b7180feeb0e4929cf347b720eb6acaa74c2cb2db70ae6aed49d5c3a3ca1b
+properties:
+  id: xdr-011c84d8-85f0-4370-b864-24c13455aa94
+  displayName: Detect CoreBackUp Deletion Activity from related Security Alerts
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityAlert
+      | extend Extprop = parse_json(ExtendedProperties)
+      | mv-expand todynamic(Entities)
+      | extend HostName = iff(isnotempty(tostring(Extprop["Compromised Host"])), tolower(tostring(Extprop["Compromised Host"])), tolower(tostring(parse_json(Entities).HostName)))
+      | where isnotempty(HostName)
+      | mv-expand todynamic(split(HostName, ','))
+      | extend DnsDomain = iff(isnotempty(tostring(Extprop["Machine Domain"])), tostring(Extprop["Machine Domain"]), tostring(parse_json(Entities).DnsDomain))
+      | extend UserName = iff(isnotempty(tostring(Extprop["User Name"])), tostring(Extprop["User Name"]), iff(tostring(parse_json(Entities).Type) == 'account', tostring(parse_json(Entities).Name), ''))
+      | extend NTDomain = iff(isnotempty(tostring(Extprop["User Domain"])), tostring(Extprop["User Domain"]), tostring(parse_json(Entities).NTDomain))
+      | extend IpAddress = iff(tostring(parse_json(Entities).Type) == 'ip', tostring(parse_json(Entities).Address), tostring(parse_json(Extprop).["IpAddress"]))
+      | summarize timestamp = arg_max(TimeGenerated, *) by AlertName, tostring(HostName)
+      | project timestamp, AlertName, UserName, NTDomain, tostring(HostName), DnsDomain, IpAddress
+      | join kind=inner
+      (
+      CoreAzureBackup
+      | where State =~ "Deleted"
+      | where OperationName =~ "BackupItem"
+      | extend data = split(BackupItemUniqueId, ";")
+      | extend AzureLocation = data[0], VaultId=data[1], HostName=tolower(tostring(data[2])), DrivesBackedUp=data[3]
+      | project timestamp = TimeGenerated, AzureLocation, VaultId, HostName, DrivesBackedUp, State, BackupItemUniqueId, _ResourceId, OperationName, BackupItemFriendlyName
+      )
+      on HostName
+      | project timestamp, AlertName, HostName, DnsDomain, UserName, NTDomain, _ResourceId, IpAddress, VaultId, AzureLocation, DrivesBackedUp, State, BackupItemUniqueId, OperationName, BackupItemFriendlyName
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Detect CoreBackUp Deletion Activity from related Security Alerts
+      description: "'The query identifies any efforts by an attacker to delete backup containers, while also searching for\
+        \ any security alerts that may be linked to the same activity, in order to uncover additional information about the\
+        \ attacker's actions.' \nThough such an activity could be legitimate as part of business operation, some ransomware\
+        \ actors may perform such operation to cause interruption to regular business services.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: UserName
+          ntDomainColumn: NTDomain
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: _ResourceId
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1496

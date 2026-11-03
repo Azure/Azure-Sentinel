@@ -48,7 +48,9 @@ namespace Kqlvalidations.Tests
 
                 foreach (var directoryPath in directoryPaths)
                 {
-                    var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories);
+                    var files = Directory.GetFiles(directoryPath, "*.json", SearchOption.AllDirectories)
+                        .Where(file => !Utils.IsPrivateSolutionContentPath(file))
+                        .ToArray();
 
                     if (prNumber != 0 && prFilesListModified != null && prFilesListModified.Count != 0)
                     {

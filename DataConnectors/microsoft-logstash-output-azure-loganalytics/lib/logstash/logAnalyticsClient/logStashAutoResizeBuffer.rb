@@ -37,6 +37,7 @@ class LogStashAutoResizeBuffer
             return
         end
 
+        max_bytes = @logstashLoganalyticsConfiguration.MAX_SIZE_BYTES
         # We send Json in the REST request 
         documents_json = documents.to_json
         # Setting resizing to true will cause changing the max size
@@ -44,7 +45,18 @@ class LogStashAutoResizeBuffer
             # Resizing the amount of messages according to size of message received and amount of messages
             change_message_limit_size(documents.length, documents_json.bytesize)
         end
-        send_message_to_loganalytics(documents_json, documents.length)
+
+        if documents_json.bytesize <= max_bytes
+            send_message_to_loganalytics(documents_json, documents.length)
+        else
+            if documents.length == 1
+                @logger.error("Single document for log type #{@logstashLoganalyticsConfiguration.custom_log_table_name} exceeds maximum allowed payload size (#{documents_json.bytesize} > #{max_bytes} bytes). Dropping document.")
+                return
+            end
+            mid = documents.length / 2
+            flush(documents[0...mid], close)
+            flush(documents[mid..-1], close)
+        end
     end # def flush
 
     # Private methods 
@@ -58,7 +70,7 @@ class LogStashAutoResizeBuffer
             if is_successfully_posted(response)
                 @logger.info("Successfully posted #{amount_of_documents} logs into custom log analytics table[#{@logstashLoganalyticsConfiguration.custom_log_table_name}].")
             else
-                @logger.error("DataCollector API request failure: error code: #{response.code}, data=>" + (documents.to_json).to_s)
+                @logger.error("DataCollector API request failure: error code: #{response.code}, amount_of_documents=>#{amount_of_documents}")
                 resend_message(documents_json, amount_of_documents, @logstashLoganalyticsConfiguration.retransmission_time)
             end
             rescue Exception => ex

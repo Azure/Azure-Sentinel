@@ -1,0 +1,92 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - CiscoISEEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 548a2eda-d3eb-46cc-8d4b-1601551629e4
+    path: Analytic Rules/CiscoISEDevicePostureStatusChanged.yaml
+    version: 1.0.3
+    querySha256: 36f2cb5cde14e870da2be2bdeeae965daf3d0ba23b18650292070a59f006f327
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    - Persistence
+    originalTechniques:
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 5b4cabc1873db21f4d91c2c881b65bb55f11d95d1b1d140c4e19960094f49a1e
+      targetQuerySha256: 5cf99b5aa99a9da6903532a0f160852571f91d3574ba275ef8b52b3a18bd8167
+properties:
+  id: xdr-548a2eda-d3eb-46cc-8d4b-1601551629e4
+  displayName: CiscoISE - Device PostureStatus changed to non-compliant
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lbtime_48h = 48h;
+      let lbtime_24h = 24h;
+      let lbtime_now = now();
+      let compliantIPs = CiscoISEEvent
+      | where TimeGenerated between (ago(lbtime_48h) .. ago(lbtime_24h))
+      | where PostureStatus == 'Compliant'
+      | summarize makelist(DstIpAddr)
+      ;
+      CiscoISEEvent
+      | where TimeGenerated between (ago(lbtime_24h) .. lbtime_now)
+      | where PostureStatus != 'Compliant'
+      | where DstIpAddr in (compliantIPs)
+      | project DstIpAddr
+      | extend IPCustomEntity = DstIpAddr
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: CiscoISE - Device PostureStatus changed to non-compliant
+      description: '''Detects when device changes PostureStatus from "Compliant".'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+      - tactic: Persistence
+        techniques:
+        - technique: T1098

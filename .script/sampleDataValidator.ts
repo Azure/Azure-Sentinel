@@ -2,12 +2,28 @@ import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
 import { ExitCode } from "./utils/exitCode.js";
 import * as logger from "./utils/logger.js";
-import { isValidSampleData } from "./utils/sampleDataCheckers/sampleDataCheckers.js";
+import {
+  isAllowedCatalogEmail,
+  isTableCatalogSampleDataPath,
+  isValidSampleData,
+  isValidTableCatalogSampleData,
+} from "./utils/sampleDataCheckers/sampleDataCheckers.js";
+
+export {
+  isAllowedCatalogEmail,
+  isTableCatalogSampleDataPath,
+  isValidTableCatalogSampleData,
+};
+
 export async function IsValidSampleDataSchema(filePath: string): Promise<ExitCode> {
-    let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  const jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  if (isTableCatalogSampleDataPath(filePath)) {
+    isValidTableCatalogSampleData(jsonFile, filePath);
+  } else {
     isValidSampleData(jsonFile);
-    return ExitCode.SUCCESS;
-    }
+  }
+  return ExitCode.SUCCESS;
+}
 
 
 let fileTypeSuffixes = ["json"];

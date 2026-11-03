@@ -1,0 +1,116 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: OracleCloudInfrastructureLogsConnector
+  dataTypes:
+  - OCILogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OCILogs
+    - OCI_LogsV2_CL
+    - OCI_Logs_CL
+  requiredDataConnectors:
+  - connectorId: OracleCloudInfrastructureLogsConnector
+    dataTypes:
+    - OCILogs
+    - OCI_LogsV2_CL
+    - OCI_Logs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e087d4fb-af0b-4e08-a067-b9ba9e5f8840
+    path: Analytic Rules/OCISSHScan.yaml
+    version: 1.0.1
+    querySha256: f1efae358a6e738920e4c26ca154e560971bd0e8f39fa56a03598e07c53ec9e7
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Reconnaissance
+    originalTechniques:
+    - T1595
+    reviewScope:
+      sourceDocumentSha256: 9e46599d4db7a21de162621003a75f276e7ab22d577376a932ce8568c02197b3
+      targetQuerySha256: a833fb2d3572f0e139dc8ca3afcd922df8b43f795f0949f5e08ee9bacd0f56d1
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 9e46599d4db7a21de162621003a75f276e7ab22d577376a932ce8568c02197b3
+      targetQuerySha256: a833fb2d3572f0e139dc8ca3afcd922df8b43f795f0949f5e08ee9bacd0f56d1
+    directGraphDeploymentReady: true
+properties:
+  id: xdr-e087d4fb-af0b-4e08-a067-b9ba9e5f8840
+  displayName: OCI - SSH scanner
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 5;
+
+      OCILogs
+
+      | where EventType contains ''vcn.flowlogs''
+
+      | where data_action_s =~ ''REJECT''
+
+      | where ipv4_is_private(DstIpAddr)
+
+      | where ipv4_is_private(SrcIpAddr) == False
+
+      | where DstPortNumber == 22
+
+      | summarize p_count = dcount(DstIpAddr) by SrcIpAddr, bin(TimeGenerated, 5m)
+
+      | where p_count > threshold
+
+      | extend IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: OCI - SSH scanner
+      description: '''Detects possible SSH scanning activity.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1595

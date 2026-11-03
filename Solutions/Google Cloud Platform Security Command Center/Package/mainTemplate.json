@@ -34,6 +34,32 @@
       "minLength": 1,
       "metadata": {
         "description": "Name for the workbook"
+    "DeployAnalyticsRule": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel analytic rules carried by this solution (ContentKind AnalyticsRule and its AnalyticsRuleTemplate registration face)."
+      }
+    },
+    "DeployDataConnector": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the data connectors carried by this solution, together with their metadata and catalog entries (ContentKind DataConnector, ResourceDataConnector and DataType)."
+      }
+    },
+    "DeployCustomDetection": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy the XDR-native custom detection resources and their Content Hub registrations (ContentKind CustomDetection and CustomDetectionTemplate). Independent of DeployAnalyticsRule: both kinds can be selected together. Existing analytic-rule instances are not disabled or removed. CD enabled or disabled status is controlled separately from this deployment switch."
+      }
+    },
+    "DeployHuntingQuery": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel hunting queries carried by this solution."
       }
     }
   },
@@ -42,6 +68,7 @@
     "_email": "[variables('email')]",
     "_solutionName": "Google Cloud Platform Security Command Center",
     "_solutionVersion": "3.0.8",
+    "_solutionVersion": "3.2.2",
     "solutionId": "azuresentinel.azure-sentinel-solution-gcpscclogs-api",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "GoogleSCCDefinition",
@@ -133,6 +160,7 @@
       ],
       "properties": {
         "description": "Google Cloud Platform Security Command Center data connector with template version 3.0.8",
+        "description": "Google Cloud Platform Security Command Center data connector with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -170,6 +198,14 @@
                     {
                       "name": "GoogleCloudSCC",
                       "lastDataReceivedQuery": "GoogleCloudSCC\n            | where TimeGenerated > ago(12h)      | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                      "baseQuery": "\u007b\u007bgraphQueriesTableName\u007d\u007d"
+                    }
+                  ],
+                  "connectivityCriterias": null,
+                  "dataTypes": [
+                    {
+                      "name": "\u007b\u007bgraphQueriesTableName\u007d\u007d",
+                      "lastDataReceivedQuery": "\u007b\u007bgraphQueriesTableName\u007d\u007d\n            | where TimeGenerated > ago(12h)      | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
                     }
                   ]
                 }
@@ -215,6 +251,8 @@
         "id": "[variables('_dataConnectorcontentProductId1')]",
         "version": "[variables('dataConnectorVersion1')]"
       }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -245,6 +283,8 @@
           "link": "https://support.microsoft.com"
         }
       }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
@@ -262,6 +302,7 @@
               "metricName": "Total events received",
               "legend": "Google Security Command Center",
               "baseQuery": "GoogleCloudSCC"
+              "baseQuery": "\u007b\u007bgraphQueriesTableName\u007d\u007d"
             }
           ],
           "dataTypes": [
@@ -276,6 +317,14 @@
               "value": [
                 "GoogleCloudSCC\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(12h)"
               ]
+              "name": "\u007b\u007bgraphQueriesTableName\u007d\u007d",
+              "lastDataReceivedQuery": "\u007b\u007bgraphQueriesTableName\u007d\u007d\n            | where TimeGenerated > ago(12h)      | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors",
+              "value": null
             }
           ],
           "id": "[variables('_uiConfigId1')]"
@@ -369,6 +418,8 @@
         "id": "[variables('_workbookcontentProductId1')]",
         "version": "[variables('workbookVersion1')]"
       }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -380,6 +431,7 @@
       ],
       "properties": {
         "description": "GCPAPIKeyApisUnrestricted_AnalyticalRules Analytics Rule with template version 3.0.8",
+        "description": "GCPAPIKeyApisUnrestricted_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -423,7 +475,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -433,17 +484,21 @@
                         "identifier": "AppId",
                         "columnName": "ProjectId"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
                   "ExternalUri": "ExternalUri",
                   "Description": "Description",
                   "ResourceName": "ResourceName"
+                  "Description": "Description",
+                  "ResourceName": "ResourceName",
+                  "ExternalUri": "ExternalUri"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "GCP project {{ProjectName}} has unrestricted API key(s)",
-                  "alertDescriptionFormat": "Project {{ProjectName}} ({{ProjectId}}) has {{ResourceName}} with unrestricted API keys (API_KEY_APIS_UNRESTRICTED). Review API key restrictions, rotate or remove keys as appropriate, and apply API restrictions to keys."
+                  "alertDescriptionFormat": "Project \u007b\u007bProjectName\u007d\u007d (\u007b\u007bProjectId\u007d\u007d) has \u007b\u007bResourceName\u007d\u007d with unrestricted API keys (API_KEY_APIS_UNRESTRICTED). Review API key restrictions, rotate or remove keys as appropriate, and apply API restrictions to keys.",
+                  "alertDisplayNameFormat": "GCP project \u007b\u007bProjectName\u007d\u007d has unrestricted API key(s)"
                 }
               }
             },
@@ -487,7 +542,8 @@
         "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -499,6 +555,7 @@
       ],
       "properties": {
         "description": "GCPAPIKeyExists_AnalyticalRules Analytics Rule with template version 3.0.8",
+        "description": "GCPAPIKeyExists_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -540,7 +597,6 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -550,7 +606,8 @@
                         "identifier": "AppId",
                         "columnName": "ProjectId"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
@@ -558,11 +615,15 @@
                   "SampleExternalUri": "ExternalUri",
                   "FindingsCount": "FindingsCount",
                   "ProjectName": "ProjectName",
+                  "FindingsCount": "FindingsCount",
+                  "ProjectName": "ProjectName",
+                  "ProjectId": "[if(true(), 'ProjectId', 'ProjectId')]",
+                  "SampleExternalUri": "ExternalUri",
                   "SampleDescription": "Description"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "GCP project {{ProjectName}} has API key(s) present",
-                  "alertDescriptionFormat": "Project {{ProjectName}} ({{ProjectId}}) has {{FindingsCount}} API key finding(s). Review API keys and consider rotating or removing keys and using IAM-based authentication."
+                  "alertDescriptionFormat": "Project \u007b\u007bProjectName\u007d\u007d (\u007b\u007bProjectId\u007d\u007d) has \u007b\u007bFindingsCount\u007d\u007d API key finding(s). Review API keys and consider rotating or removing keys and using IAM-based authentication.",
+                  "alertDisplayNameFormat": "GCP project \u007b\u007bProjectName\u007d\u007d has API key(s) present"
                 }
               }
             },
@@ -606,7 +667,8 @@
         "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -618,6 +680,7 @@
       ],
       "properties": {
         "description": "GCPDNSSECDisabled_AnalyticalRules Analytics Rule with template version 3.0.8",
+        "description": "GCPDNSSECDisabled_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -667,23 +730,25 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
                         "columnName": "ResourceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
                   "ManagedZone": "ManagedZone",
                   "ExternalUri": "ExternalUri",
                   "ProjectName": "ProjectName"
+                  "ProjectName": "ProjectName",
+                  "ExternalUri": "ExternalUri"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "GCP DNS zone {{ManagedZone}} has DNSSEC disabled",
-                  "alertDescriptionFormat": "DNSSEC is disabled for managed zone {{ManagedZone}} in project {{ProjectName}}. Review the zone configuration and enable DNSSEC where appropriate."
+                  "alertDescriptionFormat": "DNSSEC is disabled for managed zone \u007b\u007bManagedZone\u007d\u007d in project \u007b\u007bProjectName\u007d\u007d. Review the zone configuration and enable DNSSEC where appropriate.",
+                  "alertDisplayNameFormat": "GCP DNS zone \u007b\u007bManagedZone\u007d\u007d has DNSSEC disabled"
                 }
               }
             },
@@ -727,7 +792,8 @@
         "contentProductId": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "id": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -739,6 +805,7 @@
       ],
       "properties": {
         "description": "GCPFirewallHighRiskOpenPorts_AnalyticalRules Analytics Rule with template version 3.0.8",
+        "description": "GCPFirewallHighRiskOpenPorts_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -784,13 +851,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
                         "columnName": "ResourceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "customDetails": {
@@ -801,10 +868,17 @@
                   "ProjectName": "ProjectName",
                   "AttackExposureScore": "AttackExposureScore",
                   "ExternalUri": "ExternalUri"
+                  "FindingId": "[if(true(), 'FindingName', 'FindingName')]",
+                  "OpenHighRiskPorts": "OpenHighRiskPorts",
+                  "ProjectName": "ProjectName",
+                  "Protocols": "Protocols",
+                  "ExternalUri": "ExternalUri",
+                  "FirewallName": "FirewallName",
+                  "AttackExposureScore": "AttackExposureScore"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "GCP Firewall {{FirewallName}} allows unrestricted high-risk ports",
-                  "alertDescriptionFormat": "GCP Firewall {{FirewallName}} in project {{ProjectName}} allows unrestricted (0.0.0.0/0) ingress to high-risk ports: {{OpenHighRiskPorts}}."
+                  "alertDescriptionFormat": "GCP Firewall \u007b\u007bFirewallName\u007d\u007d in project \u007b\u007bProjectName\u007d\u007d allows unrestricted (0.0.0.0/0) ingress to high-risk ports: \u007b\u007bOpenHighRiskPorts\u007d\u007d.",
+                  "alertDisplayNameFormat": "GCP Firewall \u007b\u007bFirewallName\u007d\u007d allows unrestricted high-risk ports"
                 }
               }
             },
@@ -848,7 +922,8 @@
         "contentProductId": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "id": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "version": "[variables('analyticRuleObject4').analyticRuleVersion4]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -860,6 +935,7 @@
       ],
       "properties": {
         "description": "GCPLoggingDisabled_AnalyticalRules Analytics Rule with template version 3.0.8",
+        "description": "GCPLoggingDisabled_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -901,13 +977,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "CloudApplication",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
                         "columnName": "ResourceName"
                       }
-                    ]
+                    ],
+                    "entityType": "CloudApplication"
                   }
                 ],
                 "eventGroupingSettings": {
@@ -920,10 +996,16 @@
                   "ResourceType": "ResourceType",
                   "Severity": "Severity",
                   "Description": "Description"
+                  "Description": "Description",
+                  "Severity": "Severity",
+                  "ProjectName": "ProjectName",
+                  "ResourceType": "ResourceType",
+                  "ExternalUri": "ExternalUri",
+                  "FindingCategory": "FindingCategory"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "GCP resources with logging disabled: {{ProjectName}} ({{ResourceType}})",
-                  "alertDescriptionFormat": "Resource {{ResourceName}} in project {{ProjectName}} (type: {{ResourceType}}) has logging disabled."
+                  "alertDescriptionFormat": "Resource \u007b\u007bResourceName\u007d\u007d in project \u007b\u007bProjectName\u007d\u007d (type: \u007b\u007bResourceType\u007d\u007d) has logging disabled.",
+                  "alertDisplayNameFormat": "GCP resources with logging disabled: \u007b\u007bProjectName\u007d\u007d (\u007b\u007bResourceType\u007d\u007d)"
                 }
               }
             },
@@ -967,7 +1049,8 @@
         "contentProductId": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "id": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "version": "[variables('analyticRuleObject5').analyticRuleVersion5]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -979,6 +1062,7 @@
       ],
       "properties": {
         "description": "GCPAdminServiceAccountDetection_HuntingQueries Hunting Query with template version 3.0.8",
+        "description": "GCPAdminServiceAccountDetection_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
@@ -1052,7 +1136,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
         "version": "1.0.0"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1064,6 +1149,7 @@
       ],
       "properties": {
         "description": "GCPComputeSecureBootDisabledDetection_HuntingQueries Hunting Query with template version 3.0.8",
+        "description": "GCPComputeSecureBootDisabledDetection_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject2').huntingQueryVersion2]",
@@ -1137,7 +1223,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.0')))]",
         "version": "1.0.0"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1149,6 +1236,7 @@
       ],
       "properties": {
         "description": "GCPFullAPIAccessDetection_HuntingQueries Hunting Query with template version 3.0.8",
+        "description": "GCPFullAPIAccessDetection_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject3').huntingQueryVersion3]",
@@ -1222,7 +1310,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.0')))]",
         "version": "1.0.0"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1234,6 +1323,7 @@
       ],
       "properties": {
         "description": "GCPPublicBuckets_HuntingQueries Hunting Query with template version 3.0.8",
+        "description": "GCPPublicBuckets_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject4').huntingQueryVersion4]",
@@ -1307,7 +1397,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject4')._huntingQuerycontentId4,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject4')._huntingQuerycontentId4,'-', '1.0.0')))]",
         "version": "1.0.0"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1319,6 +1410,7 @@
       ],
       "properties": {
         "description": "GCPUserManagedServiceAccountKeyDetection_HuntingQueries Hunting Query with template version 3.0.8",
+        "description": "GCPUserManagedServiceAccountKeyDetection_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject5').huntingQueryVersion5]",
@@ -1334,7 +1426,7 @@
                 "eTag": "*",
                 "displayName": "Identify GCP User-Managed Service Account Keys",
                 "category": "Hunting Queries",
-                "query": "GoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingCategory = tostring(Findings.category)\n| where FindingCategory == \"USER_MANAGED_SERVICE_ACCOUNT_KEY\"\n// resourceName format: //iam.googleapis.com/projects/{project}/serviceAccounts/{sa}/keys/{key}\n| extend ResourceName = tostring(Findings.resourceName)\n| extend Project = extract(@\"projects/([^/]+)/\", 1, ResourceName),\n         ServiceAccountSegment = extract(@\"serviceAccounts/([^/]+)/\", 1, ResourceName),\n         KeyId = extract(@\"keys/([^/]+)$\", 1, ResourceName)\n| extend ServiceAccountEmail = iff(ServiceAccountSegment contains \"@\", ServiceAccountSegment, strcat(ServiceAccountSegment, \"@\", Project, \".iam.gserviceaccount.com\"))\n| extend Severity = tostring(Findings.severity),\n         CloudResource = coalesce(tostring(FindingsResource.name), tostring(FindingsResource.displayName))\n| summarize TimeGenerated = max(TimeGenerated) by Project, ServiceAccountEmail, ServiceAccountId = ServiceAccountSegment, KeyId, Severity, CloudResource\n",
+                "query": "GoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingCategory = tostring(Findings.category)\n| where FindingCategory == \"USER_MANAGED_SERVICE_ACCOUNT_KEY\"\n// resourceName format: //iam.googleapis.com/projects/\u007bproject\u007d/serviceAccounts/\u007bsa\u007d/keys/\u007bkey\u007d\n| extend ResourceName = tostring(Findings.resourceName)\n| extend Project = extract(@\"projects/([^/]+)/\", 1, ResourceName),\n         ServiceAccountSegment = extract(@\"serviceAccounts/([^/]+)/\", 1, ResourceName),\n         KeyId = extract(@\"keys/([^/]+)$\", 1, ResourceName)\n| extend ServiceAccountEmail = iff(ServiceAccountSegment contains \"@\", ServiceAccountSegment, strcat(ServiceAccountSegment, \"@\", Project, \".iam.gserviceaccount.com\"))\n| extend Severity = tostring(Findings.severity),\n         CloudResource = coalesce(tostring(FindingsResource.name), tostring(FindingsResource.displayName))\n| summarize TimeGenerated = max(TimeGenerated) by Project, ServiceAccountEmail, ServiceAccountId = ServiceAccountSegment, KeyId, Severity, CloudResource\n",
                 "version": 2,
                 "tags": [
                   {
@@ -1392,7 +1484,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject5')._huntingQuerycontentId5,'-', '1.0.0')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject5')._huntingQuerycontentId5,'-', '1.0.0')))]",
         "version": "1.0.0"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
@@ -1400,11 +1493,13 @@
       "location": "[parameters('workspace-location')]",
       "properties": {
         "version": "3.0.8",
+        "version": "3.2.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Google Cloud Platform Security Command Center",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
         "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Google Cloud Platform (GCP) Security Command Center is a comprehensive security and risk management platform for Google Cloud, ingested from Sentinel's connector. It offers features such as asset inventory and discovery, vulnerability and threat detection, and risk mitigation and remediation to help you gain insight into your organization's security and data attack surface. This integration enables you to perform tasks related to findings and assets more effectively.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 5, <strong>Hunting Queries:</strong> 5</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Google%20Cloud%20Platform%20Security%20Command%20Center/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Google Cloud Platform (GCP) Security Command Center is a comprehensive security and risk management platform for Google Cloud, ingested from Sentinel's connector. It offers features such as asset inventory and discovery, vulnerability and threat detection, and risk mitigation and remediation to help you gain insight into your organization's security and data attack surface. This integration enables you to perform tasks related to findings and assets more effectively.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 5, <strong>XDR Detections:</strong> 5, <strong>Hunting Queries:</strong> 5</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -1488,6 +1583,31 @@
               "kind": "HuntingQuery",
               "contentId": "[variables('huntingQueryObject5')._huntingQuerycontentId5]",
               "version": "[variables('huntingQueryObject5').huntingQueryVersion5]"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729",
+              "version": "3.1.0"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e",
+              "version": "3.1.0"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af",
+              "version": "3.1.0"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651",
+              "version": "3.1.0"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d",
+              "version": "3.1.0"
             }
           ]
         },
@@ -1502,6 +1622,1051 @@
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GoogleCloudPlatformSecurityCommandCenter-CD-xdr-d8e3011-f320bafd",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect Open/Unrestricted API Keys",
+                "id": "[if(true(), 'xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729', 'xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "Detects Google Cloud projects that have API keys with unrestricted API access using Security Command Center API_KEY_APIS_UNRESTRICTED findings.\nThese findings indicate API keys that are not restricted to specific APIs and may allow broader access than intended.",
+                    "severity": "medium",
+                    "title": "GCP Security Command Center - Detect Open/Unrestricted API Keys",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "appIdColumn": "ProjectId",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]",
+                          "nameColumn": "ProjectName"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "Description": "Description",
+                      "ResourceName": "ResourceName",
+                      "ExternalUri": "ExternalUri"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "GoogleCloudSCC\n | where tostring(Findings.state) == \"ACTIVE\"\n | extend FindingCategory = tostring(Findings.category)\n | where FindingCategory == \"API_KEY_APIS_UNRESTRICTED\"\n | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)\n | extend ResourceName = tostring(FindingsJson.resourceName)\n | extend ProjectId = extract(@\"projects/([^/]+)\", 1, ResourceName)\n | extend ProjectName = tostring(FindingsResourceJson.displayName)\n | extend Severity = tostring(FindingsJson.severity),\n          FindingName = tostring(FindingsJson.name),\n          ExternalUri = tostring(FindingsJson.externalUri),\n          Description = tostring(FindingsJson.description)\n // produce one row per project that has unrestricted API key findings\n | summarize TimeGenerated = max(TimeGenerated),\n             FindingsCount = count(),\n             ExternalUri = any(ExternalUri),\n             Description = any(Description)\n   by ProjectId, ProjectName, Severity, ResourceName\n | project TimeGenerated, ProjectId, ProjectName, ResourceName, Severity, ExternalUri, Description"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GoogleCloudPlatformSecurityCommandCenter-CD-xdr-d8e3011-f320bafd')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects Google Cloud projects that have API keys with unrestricted API access using Security Command Center API_KEY_APIS_UNRESTRICTED findings.\nThese findings indicate API keys that are not restricted to specific APIs and may allow broader access than intended.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect Open/Unrestricted API Keys",
+                "id": "[if(true(), 'xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729', 'xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "Detects Google Cloud projects that have API keys with unrestricted API access using Security Command Center API_KEY_APIS_UNRESTRICTED findings.\nThese findings indicate API keys that are not restricted to specific APIs and may allow broader access than intended.",
+                    "severity": "medium",
+                    "title": "GCP Security Command Center - Detect Open/Unrestricted API Keys",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "appIdColumn": "ProjectId",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]",
+                          "nameColumn": "ProjectName"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "Description": "Description",
+                      "ResourceName": "ResourceName",
+                      "ExternalUri": "ExternalUri"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "GoogleCloudSCC\n | where tostring(Findings.state) == \"ACTIVE\"\n | extend FindingCategory = tostring(Findings.category)\n | where FindingCategory == \"API_KEY_APIS_UNRESTRICTED\"\n | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)\n | extend ResourceName = tostring(FindingsJson.resourceName)\n | extend ProjectId = extract(@\"projects/([^/]+)\", 1, ResourceName)\n | extend ProjectName = tostring(FindingsResourceJson.displayName)\n | extend Severity = tostring(FindingsJson.severity),\n          FindingName = tostring(FindingsJson.name),\n          ExternalUri = tostring(FindingsJson.externalUri),\n          Description = tostring(FindingsJson.description)\n // produce one row per project that has unrestricted API key findings\n | summarize TimeGenerated = max(TimeGenerated),\n             FindingsCount = count(),\n             ExternalUri = any(ExternalUri),\n             Description = any(Description)\n   by ProjectId, ProjectName, Severity, ResourceName\n | project TimeGenerated, ProjectId, ProjectName, ResourceName, Severity, ExternalUri, Description"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729",
+        "contentKind": "CustomDetection",
+        "displayName": "GCP Security Command Center - Detect Open/Unrestricted API Keys",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729','-','3.1.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729','-','3.1.0')))]",
+        "version": "3.1.0",
+        "contentProvenance": {
+          "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-d8e30113-373a-4f49-a0ad-1a5d8b95b729",
+          "contentVersion": "3.1.0",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "GoogleSCCDefinition",
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GoogleCloudPlatformSecurityCommandCenter-CD-xdr-395f3ce-d8b7467a",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect projects with API Keys present",
+                "id": "[if(true(), 'xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e', 'xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "Detects Google Cloud projects that have API Keys present using Security Command Center API_KEY_EXISTS findings.\nProjects with API Keys may expose credentials that enable unauthorized access if keys are leaked.",
+                    "severity": "medium",
+                    "title": "GCP Security Command Center - Detect projects with API Keys present",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "appIdColumn": "ProjectId",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]",
+                          "nameColumn": "ProjectName"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "SampleDescription": "Description",
+                      "FindingsCount": "FindingsCount",
+                      "SampleExternalUri": "ExternalUri",
+                      "ProjectId": "[if(true(), 'ProjectId', 'ProjectId')]",
+                      "ProjectName": "ProjectName"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1552"
+                          }
+                        ],
+                        "tactic": "CredentialAccess"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "GoogleCloudSCC\n | where tostring(Findings.state) == \"ACTIVE\"\n | extend FindingCategory = tostring(Findings.category)\n | where FindingCategory == \"API_KEY_EXISTS\"\n | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)\n | extend ResourceName = tostring(FindingsJson.resourceName)\n | extend ProjectId = extract(@\"projects/([^/]+)\", 1, ResourceName)\n | extend ProjectName = tostring(FindingsResourceJson.displayName)\n | extend Severity = tostring(FindingsJson.severity),\n          FindingName = tostring(FindingsJson.name),\n          ExternalUri = tostring(FindingsJson.externalUri),\n          Description = tostring(FindingsJson.description)\n // Produce one row per project with an API key finding\n | summarize TimeGenerated = max(TimeGenerated),\n             FindingsCount = count(),\n             ExternalUri = any(ExternalUri),\n             Description = any(Description)\n   by ProjectId, ProjectName, Severity, ResourceName\n | project TimeGenerated, ProjectId, ProjectName, ResourceName, FindingsCount, Severity, ExternalUri, Description"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GoogleCloudPlatformSecurityCommandCenter-CD-xdr-395f3ce-d8b7467a')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects Google Cloud projects that have API Keys present using Security Command Center API_KEY_EXISTS findings.\nProjects with API Keys may expose credentials that enable unauthorized access if keys are leaked.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect projects with API Keys present",
+                "id": "[if(true(), 'xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e', 'xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "Detects Google Cloud projects that have API Keys present using Security Command Center API_KEY_EXISTS findings.\nProjects with API Keys may expose credentials that enable unauthorized access if keys are leaked.",
+                    "severity": "medium",
+                    "title": "GCP Security Command Center - Detect projects with API Keys present",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "appIdColumn": "ProjectId",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]",
+                          "nameColumn": "ProjectName"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "SampleDescription": "Description",
+                      "FindingsCount": "FindingsCount",
+                      "SampleExternalUri": "ExternalUri",
+                      "ProjectId": "[if(true(), 'ProjectId', 'ProjectId')]",
+                      "ProjectName": "ProjectName"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1552"
+                          }
+                        ],
+                        "tactic": "CredentialAccess"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "GoogleCloudSCC\n | where tostring(Findings.state) == \"ACTIVE\"\n | extend FindingCategory = tostring(Findings.category)\n | where FindingCategory == \"API_KEY_EXISTS\"\n | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)\n | extend ResourceName = tostring(FindingsJson.resourceName)\n | extend ProjectId = extract(@\"projects/([^/]+)\", 1, ResourceName)\n | extend ProjectName = tostring(FindingsResourceJson.displayName)\n | extend Severity = tostring(FindingsJson.severity),\n          FindingName = tostring(FindingsJson.name),\n          ExternalUri = tostring(FindingsJson.externalUri),\n          Description = tostring(FindingsJson.description)\n // Produce one row per project with an API key finding\n | summarize TimeGenerated = max(TimeGenerated),\n             FindingsCount = count(),\n             ExternalUri = any(ExternalUri),\n             Description = any(Description)\n   by ProjectId, ProjectName, Severity, ResourceName\n | project TimeGenerated, ProjectId, ProjectName, ResourceName, FindingsCount, Severity, ExternalUri, Description"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e",
+        "contentKind": "CustomDetection",
+        "displayName": "GCP Security Command Center - Detect projects with API Keys present",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e','-','3.1.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e','-','3.1.0')))]",
+        "version": "3.1.0",
+        "contentProvenance": {
+          "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e",
+          "contentVersion": "3.1.0",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "GoogleSCCDefinition",
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GoogleCloudPlatformSecurityCommandCenter-CD-xdr-a9c7a4b-bf096b1d",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect DNSSEC disabled for DNS zones",
+                "id": "[if(true(), 'xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af', 'xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "Detects Google Cloud DNS zones where DNSSEC is disabled using Security Command Center findings (DNSSEC_DISABLED).\nDisabling DNSSEC increases risk of DNS hijacking and man-in-the-middle attacks. This analytic rule alerts on findings where DNSSEC is reported as disabled for a managed zone.",
+                    "severity": "medium",
+                    "title": "GCP Security Command Center - Detect DNSSEC disabled for DNS zones",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "ManagedZone": "ManagedZone",
+                      "ProjectName": "ProjectName",
+                      "ExternalUri": "ExternalUri"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1557"
+                          }
+                        ],
+                        "tactic": "Collection"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "GoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingsJson = parse_json(Findings)\n| extend FindingCategory = tostring(FindingsJson.category)\n| where FindingCategory == \"DNSSEC_DISABLED\"\n| extend ResourceName = tostring(FindingsJson.resourceName)\n| extend\n  ResourceType = tostring(FindingsResource.type),\n  ExternalUri = tostring(FindingsJson.externalUri),\n  SourceProps = parse_json(tostring(FindingsJson.sourceProperties)),\n  GcpResource = parse_json(tostring(FindingsJson.resource))\n// Extract project and managed zone from resourceName like //dns.googleapis.com/projects/PROJECT/managedZones/ZONE\n| extend ProjectName = extract(@\"projects/([^/]+)\", 1, ResourceName)\n| extend ManagedZone = extract(@\"managedZones/([^/]+)\", 1, ResourceName)\n| extend Severity = tostring(FindingsJson.severity)\n| summarize\n  TimeGenerated = max(TimeGenerated)\n  by ProjectName, ManagedZone, ResourceType, ResourceName, Severity, ExternalUri"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GoogleCloudPlatformSecurityCommandCenter-CD-xdr-a9c7a4b-bf096b1d')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects Google Cloud DNS zones where DNSSEC is disabled using Security Command Center findings (DNSSEC_DISABLED).\nDisabling DNSSEC increases risk of DNS hijacking and man-in-the-middle attacks. This analytic rule alerts on findings where DNSSEC is reported as disabled for a managed zone.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect DNSSEC disabled for DNS zones",
+                "id": "[if(true(), 'xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af', 'xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "Detects Google Cloud DNS zones where DNSSEC is disabled using Security Command Center findings (DNSSEC_DISABLED).\nDisabling DNSSEC increases risk of DNS hijacking and man-in-the-middle attacks. This analytic rule alerts on findings where DNSSEC is reported as disabled for a managed zone.",
+                    "severity": "medium",
+                    "title": "GCP Security Command Center - Detect DNSSEC disabled for DNS zones",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "ManagedZone": "ManagedZone",
+                      "ProjectName": "ProjectName",
+                      "ExternalUri": "ExternalUri"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1557"
+                          }
+                        ],
+                        "tactic": "Collection"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "GoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingsJson = parse_json(Findings)\n| extend FindingCategory = tostring(FindingsJson.category)\n| where FindingCategory == \"DNSSEC_DISABLED\"\n| extend ResourceName = tostring(FindingsJson.resourceName)\n| extend\n  ResourceType = tostring(FindingsResource.type),\n  ExternalUri = tostring(FindingsJson.externalUri),\n  SourceProps = parse_json(tostring(FindingsJson.sourceProperties)),\n  GcpResource = parse_json(tostring(FindingsJson.resource))\n// Extract project and managed zone from resourceName like //dns.googleapis.com/projects/PROJECT/managedZones/ZONE\n| extend ProjectName = extract(@\"projects/([^/]+)\", 1, ResourceName)\n| extend ManagedZone = extract(@\"managedZones/([^/]+)\", 1, ResourceName)\n| extend Severity = tostring(FindingsJson.severity)\n| summarize\n  TimeGenerated = max(TimeGenerated)\n  by ProjectName, ManagedZone, ResourceType, ResourceName, Severity, ExternalUri"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af",
+        "contentKind": "CustomDetection",
+        "displayName": "GCP Security Command Center - Detect DNSSEC disabled for DNS zones",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af','-','3.1.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af','-','3.1.0')))]",
+        "version": "3.1.0",
+        "contentProvenance": {
+          "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af",
+          "contentVersion": "3.1.0",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "GoogleSCCDefinition",
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GoogleCloudPlatformSecurityCommandCenter-CD-xdr-f4f92ca-8d5aefb1",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports",
+                "id": "[if(true(), 'xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651', 'xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "This query detects GCP Firewall rules that allow unrestricted (0.0.0.0/0) ingress to high-risk ports using Google Cloud Security Command Center OPEN_FIREWALL findings.\nPublicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.",
+                    "severity": "high",
+                    "title": "GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "FindingId": "[if(true(), 'FindingName', 'FindingName')]",
+                      "OpenHighRiskPorts": "OpenHighRiskPorts",
+                      "ProjectName": "ProjectName",
+                      "Protocols": "Protocols",
+                      "ExternalUri": "ExternalUri",
+                      "FirewallName": "FirewallName",
+                      "AttackExposureScore": "AttackExposureScore"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);\nGoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingCategory = tostring(Findings.category)\n| where FindingCategory == \"OPEN_FIREWALL\"\n| extend FindingsJson = parse_json(Findings)\n| extend SourcePropertiesJson = parse_json(tostring(FindingsJson.sourceProperties))\n| extend IpRulesJson = parse_json(tostring(FindingsJson.ipRules))\n| where tostring(FindingsJson.state) == \"ACTIVE\"\n| where tostring(SourcePropertiesJson.ExternalSourceRanges) contains \"0.0.0.0/0\"\n| extend AllowedIpRules = parse_json(tostring(IpRulesJson.allowed.ipRules))\n| mv-expand IpRule = AllowedIpRules\n| extend PortRanges = parse_json(tostring(IpRule.portRanges))\n| mv-expand PortRange = PortRanges\n| extend MinPort = toint(PortRange.min), MaxPort = toint(PortRange.max)\n| where MinPort in (HighRiskPorts) or MaxPort in (HighRiskPorts)\n| extend\n    ResourceName = tostring(FindingsJson.resourceName),\n    FindingName = tostring(FindingsJson.name),\n    Protocol = tostring(IpRule.protocol),\n    Severity = tostring(FindingsJson.severity),\n    Description = tostring(FindingsJson.description),\n    ExternalUri = tostring(FindingsJson.externalUri),\n    AttackExposureScore = todouble(FindingsJson.attackExposure.score),\n    ProjectName = extract(@\"projects/([^/]+)\", 1, tostring(FindingsJson.resourceName)),\n    FirewallName = extract(@\"firewalls/([^/]+)\", 1, tostring(FindingsJson.resourceName))\n| extend PortInfo = case(\n    MinPort == MaxPort, tostring(MinPort),\n    strcat(tostring(MinPort), \"-\", tostring(MaxPort))\n)\n| summarize\n    TimeGenerated = max(TimeGenerated),\n    OpenHighRiskPorts = make_set(PortInfo),\n    Protocols = make_set(Protocol),\n    AttackExposureScore = max(AttackExposureScore)\n    by ProjectName, FirewallName, ResourceName, FindingName, Severity, Description, ExternalUri\n| extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, \", \")\n| extend Protocols = strcat_array(Protocols, \", \")"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GoogleCloudPlatformSecurityCommandCenter-CD-xdr-f4f92ca-8d5aefb1')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "This query detects GCP Firewall rules that allow unrestricted (0.0.0.0/0) ingress to high-risk ports using Google Cloud Security Command Center OPEN_FIREWALL findings.\nPublicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports",
+                "id": "[if(true(), 'xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651', 'xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "This query detects GCP Firewall rules that allow unrestricted (0.0.0.0/0) ingress to high-risk ports using Google Cloud Security Command Center OPEN_FIREWALL findings.\nPublicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.",
+                    "severity": "high",
+                    "title": "GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "FindingId": "[if(true(), 'FindingName', 'FindingName')]",
+                      "OpenHighRiskPorts": "OpenHighRiskPorts",
+                      "ProjectName": "ProjectName",
+                      "Protocols": "Protocols",
+                      "ExternalUri": "ExternalUri",
+                      "FirewallName": "FirewallName",
+                      "AttackExposureScore": "AttackExposureScore"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);\nGoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingCategory = tostring(Findings.category)\n| where FindingCategory == \"OPEN_FIREWALL\"\n| extend FindingsJson = parse_json(Findings)\n| extend SourcePropertiesJson = parse_json(tostring(FindingsJson.sourceProperties))\n| extend IpRulesJson = parse_json(tostring(FindingsJson.ipRules))\n| where tostring(FindingsJson.state) == \"ACTIVE\"\n| where tostring(SourcePropertiesJson.ExternalSourceRanges) contains \"0.0.0.0/0\"\n| extend AllowedIpRules = parse_json(tostring(IpRulesJson.allowed.ipRules))\n| mv-expand IpRule = AllowedIpRules\n| extend PortRanges = parse_json(tostring(IpRule.portRanges))\n| mv-expand PortRange = PortRanges\n| extend MinPort = toint(PortRange.min), MaxPort = toint(PortRange.max)\n| where MinPort in (HighRiskPorts) or MaxPort in (HighRiskPorts)\n| extend\n    ResourceName = tostring(FindingsJson.resourceName),\n    FindingName = tostring(FindingsJson.name),\n    Protocol = tostring(IpRule.protocol),\n    Severity = tostring(FindingsJson.severity),\n    Description = tostring(FindingsJson.description),\n    ExternalUri = tostring(FindingsJson.externalUri),\n    AttackExposureScore = todouble(FindingsJson.attackExposure.score),\n    ProjectName = extract(@\"projects/([^/]+)\", 1, tostring(FindingsJson.resourceName)),\n    FirewallName = extract(@\"firewalls/([^/]+)\", 1, tostring(FindingsJson.resourceName))\n| extend PortInfo = case(\n    MinPort == MaxPort, tostring(MinPort),\n    strcat(tostring(MinPort), \"-\", tostring(MaxPort))\n)\n| summarize\n    TimeGenerated = max(TimeGenerated),\n    OpenHighRiskPorts = make_set(PortInfo),\n    Protocols = make_set(Protocol),\n    AttackExposureScore = max(AttackExposureScore)\n    by ProjectName, FirewallName, ResourceName, FindingName, Severity, Description, ExternalUri\n| extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, \", \")\n| extend Protocols = strcat_array(Protocols, \", \")"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651",
+        "contentKind": "CustomDetection",
+        "displayName": "GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651','-','3.1.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651','-','3.1.0')))]",
+        "version": "3.1.0",
+        "contentProvenance": {
+          "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651",
+          "contentVersion": "3.1.0",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "GoogleSCCDefinition",
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "GoogleCloudPlatformSecurityCommandCenter-CD-xdr-d1fe8d3-17bc9697",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect Resources with Logging Disabled",
+                "id": "[if(true(), 'xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d', 'xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "Detects Google Cloud resources where logging is disabled for services like (Cloud Storage buckets, Firewall rules, Cloud DNS networks) based on Google Cloud Security Command Center findings.",
+                    "severity": "medium",
+                    "title": "GCP Security Command Center - Detect Resources with Logging Disabled",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "Description": "Description",
+                      "Severity": "Severity",
+                      "ProjectName": "ProjectName",
+                      "ResourceType": "ResourceType",
+                      "ExternalUri": "ExternalUri",
+                      "FindingCategory": "FindingCategory"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1562"
+                          }
+                        ],
+                        "tactic": "DefenseEvasion"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "GoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingCategory = tostring(Findings.category)\n| where FindingCategory in (\"BUCKET_LOGGING_DISABLED\", \"FIREWALL_RULE_LOGGING_DISABLED\", \"DNS_LOGGING_DISABLED\")\n| extend FindingsJson = parse_json(Findings)\n| extend Resource = tostring(FindingsJson.resourceName),\n         ExternalUri = tostring(FindingsJson.externalUri),\n         Description = tostring(FindingsJson.description),\n         Severity = tostring(FindingsJson.severity),\n         ProjectName = extract(@\"projects/([^/]+)\", 1, tostring(FindingsJson.resourceName)),\n         ResourceType = extract(@\"//([a-z0-9_.-]+)/\", 1, tostring(FindingsJson.resourceName)),\n         SourceProps = parse_json(tostring(FindingsJson.sourceProperties))\n// Normalize display-friendly resource id\n| extend ResourceName = case(\n    Resource contains \"firewalls/\", extract(@\"firewalls/([^/]+)\", 1, Resource),\n    Resource contains \"storage.googleapis.com/\", extract(@'storage.googleapis.com/([^/\\\"]+)', 1, Resource),\n    Resource contains \"networks/\", extract(@\"networks/([^/]+)\", 1, Resource),\n    Resource\n  )\n| project TimeGenerated, ProjectName, ResourceType, ResourceName, Resource, FindingCategory, Severity, ExternalUri, Description"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'GoogleCloudPlatformSecurityCommandCenter-CD-xdr-d1fe8d3-17bc9697')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects Google Cloud resources where logging is disabled for services like (Cloud Storage buckets, Firewall rules, Cloud DNS networks) based on Google Cloud Security Command Center findings.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "displayName": "GCP Security Command Center - Detect Resources with Logging Disabled",
+                "id": "[if(true(), 'xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d', 'xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d')]",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "description": "Detects Google Cloud resources where logging is disabled for services like (Cloud Storage buckets, Firewall rules, Cloud DNS networks) based on Google Cloud Security Command Center findings.",
+                    "severity": "medium",
+                    "title": "GCP Security Command Center - Detect Resources with Logging Disabled",
+                    "entityMappings": {
+                      "cloudApplications": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'cloudApplication1', 'cloudApplication1')]"
+                        }
+                      ],
+                      "hosts": [
+                        {
+                          "nameColumn": "ResourceName",
+                          "id": "[if(true(), 'host1', 'host1')]"
+                        }
+                      ]
+                    },
+                    "customDetails": {
+                      "Description": "Description",
+                      "Severity": "Severity",
+                      "ProjectName": "ProjectName",
+                      "ResourceType": "ResourceType",
+                      "ExternalUri": "ExternalUri",
+                      "FindingCategory": "FindingCategory"
+                    },
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1562"
+                          }
+                        ],
+                        "tactic": "DefenseEvasion"
+                      }
+                    ]
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "queryCondition": {
+                  "queryText": "GoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingCategory = tostring(Findings.category)\n| where FindingCategory in (\"BUCKET_LOGGING_DISABLED\", \"FIREWALL_RULE_LOGGING_DISABLED\", \"DNS_LOGGING_DISABLED\")\n| extend FindingsJson = parse_json(Findings)\n| extend Resource = tostring(FindingsJson.resourceName),\n         ExternalUri = tostring(FindingsJson.externalUri),\n         Description = tostring(FindingsJson.description),\n         Severity = tostring(FindingsJson.severity),\n         ProjectName = extract(@\"projects/([^/]+)\", 1, tostring(FindingsJson.resourceName)),\n         ResourceType = extract(@\"//([a-z0-9_.-]+)/\", 1, tostring(FindingsJson.resourceName)),\n         SourceProps = parse_json(tostring(FindingsJson.sourceProperties))\n// Normalize display-friendly resource id\n| extend ResourceName = case(\n    Resource contains \"firewalls/\", extract(@\"firewalls/([^/]+)\", 1, Resource),\n    Resource contains \"storage.googleapis.com/\", extract(@'storage.googleapis.com/([^/\\\"]+)', 1, Resource),\n    Resource contains \"networks/\", extract(@\"networks/([^/]+)\", 1, Resource),\n    Resource\n  )\n| project TimeGenerated, ProjectName, ResourceType, ResourceName, Resource, FindingCategory, Severity, ExternalUri, Description"
+                },
+                "status": "disabled",
+                "contentProvenance": {
+                  "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d",
+                  "contentVersion": "3.1.0"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d",
+        "contentKind": "CustomDetection",
+        "displayName": "GCP Security Command Center - Detect Resources with Logging Disabled",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d','-','3.1.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d','-','3.1.0')))]",
+        "version": "3.1.0",
+        "contentProvenance": {
+          "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-gcpscclogs-api', 'azuresentinel.azure-sentinel-solution-gcpscclogs-api')]",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d",
+          "contentVersion": "3.1.0",
+          "requiredWorkloads": [
+            {
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ],
+              "workload": "sentinel"
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "GoogleSCCDefinition",
+              "dataTypes": [
+                "GoogleCloudSCC"
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "pid-c7d52c81-336e-4d9f-8654-3aa144a97c48-partnercenter",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": []
+        }
+      }
     }
   ],
   "outputs": {}

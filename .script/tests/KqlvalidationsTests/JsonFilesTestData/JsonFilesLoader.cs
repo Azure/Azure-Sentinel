@@ -29,6 +29,7 @@ namespace Kqlvalidations.Tests
 
                 return directoryPaths
                     .SelectMany(directoryPath => Directory.GetFiles(directoryPath, FileExtensionFilter, SearchOption.AllDirectories))
+                    .Where(file => !Utils.IsPrivateSolutionContentPath(file))
                     .Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)))
                     .ToList();
             }

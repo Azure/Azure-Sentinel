@@ -1,0 +1,58 @@
+id: d945aaaf-39a1-46b2-8046-4f982eaa9839
+name: Netcraft Takedown - Latest record inventory
+description: |
+  Latest takedown record state per `subject` for the last 7 days via
+  `NetcraftTakedown_Latest` (`EventType == "takedown"` rolled up by Subject).
+requiredDataConnectors:
+  - connectorId: NetcraftIntegrationGatewayDefinition
+    dataTypes:
+      - NetcraftTakedown_Latest
+tactics:
+  - ResourceDevelopment
+  - InitialAccess
+relevantTechniques:
+  - T1583
+  - T1566
+query: |
+  NetcraftTakedown_Latest
+  | where TimeGenerated > ago(7d)
+  | extend
+      ThreatUrl = iff(Threat matches regex @"(?i)^https?://", Threat, ""),
+      ThreatIp = iff(isnotempty(parse_ipv4(Threat)) or isnotempty(parse_ipv6(Threat)), Threat, "")
+  | extend
+      ThreatDomain = iff(isempty(ThreatUrl) and isempty(ThreatIp) and Threat !has "@" and Threat matches regex @"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", Threat, "")
+  | project
+      TimeGenerated,
+      ChangeType,
+      Subject,
+      TakedownId,
+      GroupId,
+      AttackType,
+      Threat,
+      ThreatUrl,
+      ThreatIp,
+      ThreatDomain,
+      Status,
+      IsMaliciousDomain,
+      IsMaliciousHostname,
+      IsAuthorized,
+      IsEscalated,
+      ActionRequired,
+      CustomerLabel,
+      EventId,
+      CloudEventType
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ThreatUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ThreatIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: ThreatDomain
+version: 1.0.0

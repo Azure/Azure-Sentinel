@@ -34,6 +34,49 @@ Connectors used: ***RecordedFuture-CustomConnector*** see [Connector authorizati
 Import Recorded Future Malware Threat Map data and stores it in a custom table. Display the report in the workbook imported from the Recorded Future Threat Intelligence Solution. The Workbook shows Malware Threat from Recorded Future, their intent towards your company, and their opportunity.
 
 
+## Threat Map table schema (V1 → V2)
+> [!IMPORTANT]
+> **Breaking change in 3.2.22.** The Threat Map playbooks now write through the Logs Ingestion API (DCE/DCR) to the `RecordedFutureThreatMap_V2_CL` and `RecordedFutureThreatMapMalware_V2_CL` tables. The old `RecordedFutureThreatMap_CL` and `RecordedFutureThreatMapMalware_CL` tables do not receive new data.
+
+The row layout is different:
+
+| | V1 (`*_CL`, legacy HTTP Data Collector API) | V2 (`*_V2_CL`, DCE/DCR) |
+|---|---|---|
+| Rows | One row per threat actor or malware | One row per playbook run |
+| Columns | Flattened, typed columns (`id_s`, `name_s`, `intent_d`, `opportunity_d`, `prevalence_d`, `categories_s`, `log_entries_s`, `alias_s`, ...) | `TimeGenerated`, plus `data` (dynamic): an array with every entity on the threat map |
+
+The bundled workbooks already read the V2 layout. To get one row per entity with the same column names as V1, put `mv-expand` on `data` in your own queries, hunting queries and analytic rules.
+
+**Actor Threat Map**
+```kusto
+RecordedFutureThreatMap_V2_CL
+| mv-expand actor = todynamic(data)
+| extend id_s = tostring(actor.id),
+         name_s = tostring(actor.name),
+         intent_d = toreal(actor.intent),
+         opportunity_d = toreal(actor.opportunity),
+         categories_s = tostring(actor.categories),
+         log_entries_s = tostring(actor.log_entries),
+         alias_s = tostring(actor.alias)
+| project-away data, actor
+```
+
+**Malware Threat Map**
+```kusto
+RecordedFutureThreatMapMalware_V2_CL
+| mv-expand malware = todynamic(data)
+| extend id_s = tostring(malware.id),
+         name_s = tostring(malware.name),
+         prevalence_d = toreal(malware.prevalence),
+         opportunity_d = toreal(malware.opportunity),
+         categories_s = tostring(malware.categories),
+         log_entries_s = tostring(malware.log_entries),
+         alias_s = tostring(malware.alias)
+| project-away data, malware
+```
+
+Each run stores a full snapshot of the threat map. To get only the latest snapshot, add `| where TimeGenerated == toscalar(<table> | summarize max(TimeGenerated))` before the `mv-expand`, replacing `<table>` with the table name. Tip: save either query as a [Log Analytics function](https://learn.microsoft.com/azure/azure-monitor/logs/functions) (for example `RecordedFutureThreatMap`) and use that function in place of the table name.
+
 ## RecordedFuture-ActorThreatHunt-IndicatorImport
 Type: **Threat Hunt**\
 Included in Recorded Future Intelligence Solution: **Yes**\

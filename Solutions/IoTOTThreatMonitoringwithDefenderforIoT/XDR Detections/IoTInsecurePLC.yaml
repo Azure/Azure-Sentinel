@@ -1,0 +1,140 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: IoT
+  dataTypes:
+  - SecurityAlert (ASC for IoT)
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertInfo
+  requiredDataConnectors:
+  - connectorId: IoT
+    dataTypes:
+    - SecurityAlert (ASC for IoT)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f9df500a-e2a4-4104-a517-dc1d85bb654f
+    path: Analytic Rules/IoTInsecurePLC.yaml
+    version: 1.0.3
+    querySha256: caa51b2d117b9cda3c039138060ca1666f2129b4543ca8cddc2204cf87434cf9
+    schedule:
+      queryFrequency: 3h
+      queryPeriod: 3h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    - 'Schedule assessment: source frequency=3h, lookback=3h; target frequency=PT3H, native lookback=43200s; effective event
+      windows source=10800s, target=10800s; event-time window constrained to original Sentinel lookback. The XDR service window
+      remains 43200s and is not identical to the Sentinel service window; late-ingestion risk remains and cadence/service-window
+      parity is not established. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - No valid source mapping survived; inferred entities from projected columns
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    - 'Schedule assessment: source frequency=3h, lookback=3h; target frequency=PT3H, native lookback=43200s; effective event
+      windows source=10800s, target=10800s; event-time window constrained to original Sentinel lookback. The XDR service window
+      remains 43200s and is not identical to the Sentinel service window; late-ingestion risk remains and cadence/service-window
+      parity is not established. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    notes:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T0858
+    reviewScope:
+      sourceDocumentSha256: a11b81bab353e1e512a30ebc9a8db5cc198fb3fb6303227e3b348a41bbb9fbed
+      targetQuerySha256: 3275d0e6d436159e003e2ec37610c968b818a061c46cc611abd828d300290b51
+    eventTimeWindow:
+      status: constrained
+      originalSentinelLookbackSeconds: 10800
+      effectiveEventWindowSeconds: 10800
+      xdrServiceWindowSeconds: 43200
+      sourceTimeColumn: TimeGenerated
+      targetTimeColumn: Timestamp
+      filterInjected: true
+      rationale: A conservative single-native-table pipeline proof established the source and target input and time-column
+        binding. The target Timestamp filter is placed immediately after the table input and before all filters, projections,
+        and aggregations.
+      lateIngestionRisk: 'Late-ingestion risk: events ingested after their Timestamp falls outside this constrained event-time
+        window can be missed; runtime qualification is required.'
+properties:
+  id: xdr-f9df500a-e2a4-4104-a517-dc1d85bb654f
+  displayName: PLC unsecure key state (Microsoft Defender for IoT)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AlertInfo | where Timestamp >= ago(3h)
+      | join kind=leftouter AlertEvidence on AlertId
+      | extend AlertName = Title, AlertSeverity = Severity, ProviderName = DetectionSource, ProductName = ServiceSource, Tactics = AttackTechniques, Description = Title, Entities = AdditionalFields, ExtendedProperties = AdditionalFields, RemediationSteps = "[]", ProductComponentName = ServiceSource, VendorOriginalId = AlertId, AlertLink = "", Techniques = AttackTechniques
+      | where DetectionSource == "IoTSecurity"
+      | where Title has "PLC Operating Mode Changed"
+      | extend ExtendedProperties = parse_json(ExtendedProperties)
+      | where tostring(ExtendedProperties.isNew) == "True"
+      | extend DeviceId = tostring(ExtendedProperties.DeviceId),
+               SourceDeviceAddress = tostring(ExtendedProperties.SourceDeviceAddress),
+               DestDeviceAddress = tostring(ExtendedProperties.DestinationDeviceAddress),
+               RemediationSteps = tostring(parse_json(RemediationSteps)[0]),
+               Protocol = tostring(ExtendedProperties.Protocol),
+               AlertManagementUri = tostring(ExtendedProperties.AlertManagementUri)
+      | project
+        Timestamp,
+        DeviceId,
+        ProductName,
+        ProductComponentName,
+        AlertSeverity,
+        AlertName,
+        Description,
+        Protocol,
+        SourceDeviceAddress,
+        DestDeviceAddress,
+        RemediationSteps,
+        Tactics,
+        Entities,
+        VendorOriginalId,
+        AlertLink,
+        AlertManagementUri,
+        Techniques, Title, Severity, ServiceSource, AttackTechniques, AdditionalFields
+  schedule:
+    frequency: PT3H
+  detectionAction:
+    alertTemplate:
+      title: PLC unsecure key state (Microsoft Defender for IoT)
+      description: '''This alert leverages Defender for IoT to detect PLC operating mode changes indicating the PLC is potentially
+        insecure. If the PLC is compromised, devices that interact with it may be impacted. This may affect overall system
+        security and safety.'''
+      severity: low
+      entityMappings:
+        hosts:
+        - id: host1
+          deviceIdColumn: DeviceId
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T0858
+      customDetails:
+        Sensor: DeviceId
+        Protocol: Protocol
+        VendorOriginalKey: VendorOriginalId
+        AlertManagementUri: AlertManagementUri

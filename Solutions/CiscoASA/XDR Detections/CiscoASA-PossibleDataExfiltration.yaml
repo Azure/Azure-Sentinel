@@ -1,0 +1,136 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoAsaAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CiscoAsaAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f3a8c2d0-7b41-4e9a-9f6a-2d8a1c4e5b72
+    path: Analytic Rules/CiscoASA-PossibleDataExfiltration.yaml
+    version: 1.0.2
+    querySha256: f1d897203ad69c043b0c39637d5d5453043c2a5125da58fb4661ee7cfaf54712
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1041
+    - T1048
+    reviewScope:
+      sourceDocumentSha256: 8c396f191884d39b0116322d96829140ed5bec7fd7de3118579390ebd7129728
+      targetQuerySha256: 6a81fb5eae70a7441a378b0a8cf6e5073747c7376befbedf5b36f6bb601dad64
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 8c396f191884d39b0116322d96829140ed5bec7fd7de3118579390ebd7129728
+      targetQuerySha256: 6a81fb5eae70a7441a378b0a8cf6e5073747c7376befbedf5b36f6bb601dad64
+properties:
+  id: xdr-f3a8c2d0-7b41-4e9a-9f6a-2d8a1c4e5b72
+  displayName: Cisco ASA - Possible Data Exfiltration Detection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Lookback = 1h;
+      let MinUploadBytes = 1073741824;
+      let MinUploadRatio = 95.0;
+      CommonSecurityLog
+      | where TimeGenerated > ago(Lookback)
+      | where DeviceProduct has_any ("ASA", "FTD")
+      | where isnotempty(SourceIP) and isnotempty(DestinationIP)
+      | where ipv4_is_private(SourceIP)
+      | where not(ipv4_is_private(DestinationIP))
+      | where DeviceAction in~ ("allow", "allowed", "accept", "accepted", "permitted")
+      | extend SentBytesLong = tolong(SentBytes)
+      | extend ReceivedBytesLong = tolong(ReceivedBytes)
+      | where isnotnull(SentBytesLong)
+      | summarize
+          TotalBytesSent = sum(SentBytesLong),
+          TotalBytesReceived = sum(coalesce(ReceivedBytesLong, 0)),
+          Connections = count(),
+          DestinationPorts = make_set(DestinationPort, 20),
+          Applications = make_set(ApplicationProtocol, 20),
+          FirstSeen = min(TimeGenerated),
+          LastSeen = max(TimeGenerated)
+          by SourceIP, DestinationIP
+      | where TotalBytesSent >= MinUploadBytes
+      | extend TotalGBSent = round(TotalBytesSent / 1024.0 / 1024.0 / 1024.0, 2)
+      | extend TotalGBReceived = round(TotalBytesReceived / 1024.0 / 1024.0 / 1024.0, 2)
+      | extend UploadRatio = round(todouble(TotalBytesSent) / todouble(TotalBytesSent + TotalBytesReceived) * 100, 2)
+      | where UploadRatio >= MinUploadRatio
+      | project
+          TimeGenerated = LastSeen,
+          SourceIP,
+          DestinationIP,
+          TotalGBSent,
+          TotalGBReceived,
+          UploadRatio,
+          Connections,
+          DestinationPorts,
+          Applications,
+          FirstSeen,
+          LastSeen
+      | order by TotalGBSent desc
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco ASA - Possible Data Exfiltration Detection
+      description: '''Detects potential data exfiltration when an internal source IP sends a large amount of outbound data
+        to the internet, especially when the volume is significantly higher than its normal behavior.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+        - id: ip2
+          addressColumn: DestinationIP
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1041
+        - technique: T1048

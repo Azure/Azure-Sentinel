@@ -1,0 +1,127 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7
+    path: Analytic Rules/SharePoint_Downloads_byNewIP.yaml
+    version: 2.0.4
+    querySha256: 17a6c175918ed13cf669729b4ab1f9852a78584f043eaf190c795a67cc4bf570
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserId`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1030
+    reviewScope:
+      sourceDocumentSha256: 5788277fa673e99ee1e6e3edf461818b9fac976f5a9e23fa7a2518a15ca8c126
+      targetQuerySha256: 4ccf17f1810987d474799c093ec60f2bd6edf9445ff21c2c3263b75ed2d21e75
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7
+  displayName: SharePointFileOperation via previously unseen IPs
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Define a threshold for significant deviations
+      let threshold = 25;
+      // Define the name for the SharePoint File Operation record type
+      let szSharePointFileOperation = "SharePointFileOperation";
+      // Define an array of SharePoint operations of interest
+      let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+      // Define the start and end time for the analysis period
+      let starttime = 14d;
+      let endtime = 1d;
+      // Define a baseline of normal user behavior
+      let userBaseline = OfficeActivity
+      | where TimeGenerated between(ago(starttime)..ago(endtime))
+      | where RecordType =~ szSharePointFileOperation
+      | where Operation in~ (szOperations)
+      | where isnotempty(UserAgent)
+      | summarize Count = count() by UserId, Operation, Site_Url, ClientIP
+      | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIP;
+      // Get recent user activity
+      let recentUserActivity = OfficeActivity
+      | where TimeGenerated > ago(endtime)
+      | where RecordType =~ szSharePointFileOperation
+      | where Operation in~ (szOperations)
+      | where isnotempty(UserAgent)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;
+      // Join the baseline and recent activity, and calculate the deviation
+      let UserBehaviorAnalysis = userBaseline | join kind=inner (recentUserActivity) on UserId, Operation, Site_Url, ClientIP
+      | extend Deviation = abs(RecentCount - AvgCount) / AvgCount;
+      // Filter for significant deviations
+      UserBehaviorAnalysis
+      | where Deviation > threshold
+      | project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count=RecentCount
+      | order by Count desc, ClientIP asc, Operation asc, UserId asc
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: SharePointFileOperation via previously unseen IPs
+      description: '''Identifies anomalies using user behavior by setting a threshold for significant changes in file upload/download
+        activities from new IP addresses. It establishes a baseline of typical behavior, compares it to recent activity, and
+        flags deviations exceeding a default threshold of 25.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+        urls:
+        - id: url1
+          addressColumn: Site_Url
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1030
+      customDetails:
+        AccountFullName: UserId

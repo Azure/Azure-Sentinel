@@ -1,0 +1,630 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "parameters": [
+          {
+            "id": "52bfbd84-1639-480c-bda5-bfc87fd81832",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            }
+          },
+          {
+            "id": "eeb5dcf9-e898-46af-9c12-d91d97e13cd3",
+            "version": "KqlParameterItem/1.0",
+            "name": "Caller",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "AzureActivity\r\n| summarize by Caller",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          },
+          {
+            "id": "46375a76-7ae1-4d7e-9082-4191531198a9",
+            "version": "KqlParameterItem/1.0",
+            "name": "ResourceGroup",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "AzureActivity\r\n| summarize by ResourceGroup",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.resources/resourcegroups": true
+              },
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = AzureActivity\r\n| where \"{Caller:lable}\" == \"All\" or \"{Caller:lable}\" == \"All\" or Caller in ({Caller})\r\n| where \"{ResourceGroup:lable}\" == \"All\" or \"{ResourceGroup:lable}\" == \"All\" or ResourceGroup in ({ResourceGroup});\r\ndata\r\n| summarize Count = count() by ResourceGroup\r\n| join kind = fullouter (datatable(ResourceGroup:string)['Medium', 'high', 'low']) on ResourceGroup\r\n| project ResourceGroup = iff(ResourceGroup == '', ResourceGroup1, ResourceGroup), Count = iff(ResourceGroup == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by ResourceGroup)\r\n on ResourceGroup\r\n| project-away ResourceGroup1, TimeGenerated\r\n| extend ResourceGroups = ResourceGroup\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend ResourceGroup = 'All', ResourceGroups = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportToExcelOptions": "visible",
+        "title": "Top 10 active resource groups",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "ResourceGroup",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "palette": "blueOrange",
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\r\n| where \"{Caller:lable}\" == \"All\" or Caller in ({Caller})\r\n| where \"{ResourceGroup:lable}\" == \"All\" or ResourceGroup in ({ResourceGroup})\r\n| summarize deletions = countif(OperationNameValue hassuffix \"delete\"), creations = countif(OperationNameValue hassuffix \"write\"), updates = countif(OperationNameValue hassuffix \"write\"), Activities = count(OperationNameValue) by bin_at(TimeGenerated, 1h, now())\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Activities over time",
+        "color": "gray",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "linechart",
+        "graphSettings": {
+          "type": 0
+        }
+      },
+      "name": "query - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\r\n| where \"{Caller:lable}\" == \"All\" or Caller in ({Caller})\r\n| where \"{ResourceGroup:lable}\" == \"All\" or ResourceGroup in ({ResourceGroup})\r\n| summarize deletions = countif(OperationNameValue hassuffix \"Delete\"), creations = countif(OperationNameValue hassuffix \"write\"), updates = countif(OperationNameValue hassuffix \"write\"), Activities = count() by Caller\r\n",
+        "size": 1,
+        "exportToExcelOptions": "visible",
+        "title": "Caller activities",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Caller",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "deletions",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true,
+                "aggregation": "Count"
+              }
+            },
+            {
+              "columnMatch": "creations",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "purple",
+                "showIcon": true,
+                "aggregation": "Count"
+              }
+            },
+            {
+              "columnMatch": "updates",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "gray",
+                "showIcon": true,
+                "aggregation": "Count"
+              }
+            },
+            {
+              "columnMatch": "Activities",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "greenDark",
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true,
+                "aggregation": "Count",
+                "workbookContext": {
+                  "componentIdSource": "workbook",
+                  "resourceIdsSource": "workbook",
+                  "templateIdSource": "static",
+                  "templateId": "https://go.microsoft.com/fwlink/?linkid=874159&resourceId=%2Fsubscriptions%2F44e4eff8-1fcb-4a22-a7d6-992ac7286382%2FresourceGroups%2FSOC&featureName=Workbooks&itemId=%2Fsubscriptions%2F44e4eff8-1fcb-4a22-a7d6-992ac7286382%2Fresourcegroups%2Fsoc%2Fproviders%2Fmicrosoft.insights%2Fworkbooks%2F4c195aec-747f-40bb-addb-934acb3ec646&name=CiscoASA&func=NavigateToPortalFeature&type=workbook",
+                  "typeSource": "workbook",
+                  "gallerySource": "workbook"
+                }
+              }
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "$gen_bar_updates_3",
+              "sortOrder": 2
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "name": "query - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity \r\n| where \"{Caller:lable}\" == \"All\" or Caller in ({Caller})\r\n| where \"{ResourceGroup:lable}\" == \"All\" or ResourceGroup in ({ResourceGroup})\r\n| summarize Informational = countif(Level == \"Informational\"), Warning = countif(Level == \"Warning\"), Error = countif(Level == \"Error\") by bin_at(TimeGenerated, 1h, now())\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Activities by log level over time",
+        "color": "redBright",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "scatterchart",
+        "tileSettings": {
+          "showBorder": false
+        },
+        "graphSettings": {
+          "type": 2,
+          "topContent": {
+            "columnMatch": "Error",
+            "formatter": 12,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "hivesContent": {
+            "columnMatch": "TimeGenerated",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "nodeIdField": "Error",
+          "sourceIdField": "Error",
+          "targetIdField": "Error",
+          "nodeSize": null,
+          "staticNodeSize": 100,
+          "colorSettings": null,
+          "groupByField": "TimeGenerated",
+          "hivesMargin": 5
+        }
+      },
+      "name": "query - 4"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-AzureActivity",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "xdrMetadata": {
+    "contentId": "8aefdd4e-a1c4-5766-a1a9-1cbbf154cc87",
+    "instanceId": "2dee2a56-8a89-578c-b43b-3e71e11d70a5",
+    "version": "3.2.1",
+    "schemaVersion": "1.0.0",
+    "displayName": "AzureActivity"
+  },
+  "contentProvenance": {
+    "source": {
+      "path": "Workbooks/AzureActivity.json",
+      "sha256": "55104fe974c23912da0e590705313bfb0a6b339031f9bd51fc839076aac8fe45",
+      "contentId": "sentinel-AzureActivity",
+      "originalMetadataVersion": null
+    },
+    "conversion": {
+      "tool": "sentinel-xdr-migration",
+      "version": "0.1.0",
+      "reviewRequired": false,
+      "queries": [
+        {
+          "sourcePath": "/items/0/content/parameters/1/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "oferinbar",
+            "reference": "user-approved-azure-activity-3.2.1-workbook-dependencies",
+            "planSha256": "0fe1d70798e35529367160b47c5dbeaf480f0d1d3706921fc018018592e9ecfe",
+            "decision": "accept",
+            "querySha256": "e12d4a81ecaf06a51c1142940dd528fe08d58fe6ce70ecf0e56dbf1ba88020a5"
+          },
+          "conversion": {
+            "sourceId": "/items/0/content/parameters/1/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AzureActivity\r\n| summarize by Caller",
+            "resolvedTables": [
+              "AzureActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AzureActivity",
+                "ahTable": "AzureActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 30,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/0/content/parameters/1/query",
+          "sourceSha256": "e12d4a81ecaf06a51c1142940dd528fe08d58fe6ce70ecf0e56dbf1ba88020a5",
+          "targetSha256": "e12d4a81ecaf06a51c1142940dd528fe08d58fe6ce70ecf0e56dbf1ba88020a5"
+        },
+        {
+          "sourcePath": "/items/0/content/parameters/2/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "oferinbar",
+            "reference": "user-approved-azure-activity-3.2.1-workbook-dependencies",
+            "planSha256": "0fe1d70798e35529367160b47c5dbeaf480f0d1d3706921fc018018592e9ecfe",
+            "decision": "accept",
+            "querySha256": "c3e30555e6885b3618e2f1d5dff9ba3709fb0e0330b1907313e100f847c7ee20"
+          },
+          "conversion": {
+            "sourceId": "/items/0/content/parameters/2/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AzureActivity\r\n| summarize by ResourceGroup",
+            "resolvedTables": [
+              "AzureActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AzureActivity",
+                "ahTable": "AzureActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 30,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/0/content/parameters/2/query",
+          "sourceSha256": "c3e30555e6885b3618e2f1d5dff9ba3709fb0e0330b1907313e100f847c7ee20",
+          "targetSha256": "c3e30555e6885b3618e2f1d5dff9ba3709fb0e0330b1907313e100f847c7ee20"
+        },
+        {
+          "sourcePath": "/items/1/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferinbar",
+            "reference": "user-approved-azure-activity-3.2.1-workbook-dependencies",
+            "planSha256": "0fe1d70798e35529367160b47c5dbeaf480f0d1d3706921fc018018592e9ecfe",
+            "decision": "accept",
+            "querySha256": "de0959bdc3b91bb83e22bd9c98bc0be11f4d3d08513191cd9eb0bf2c96097139"
+          },
+          "conversion": {
+            "sourceId": "/items/1/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = AzureActivity\r\n| where \"{Caller:lable}\" == \"All\" or \"{Caller:lable}\" == \"All\" or Caller in ({Caller})\r\n| where \"{ResourceGroup:lable}\" == \"All\" or \"{ResourceGroup:lable}\" == \"All\" or ResourceGroup in ({ResourceGroup});\r\ndata\r\n| summarize Count = count() by ResourceGroup\r\n| join kind = fullouter (datatable(ResourceGroup:string)['Medium', 'high', 'low']) on ResourceGroup\r\n| project ResourceGroup = iff(ResourceGroup == '', ResourceGroup1, ResourceGroup), Count = iff(ResourceGroup == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by ResourceGroup)\r\n on ResourceGroup\r\n| project-away ResourceGroup1, TimeGenerated\r\n| extend ResourceGroups = ResourceGroup\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend ResourceGroup = 'All', ResourceGroups = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+            "resolvedTables": [
+              "AzureActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AzureActivity",
+                "ahTable": "AzureActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 30,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/1/content/query",
+          "sourceSha256": "de0959bdc3b91bb83e22bd9c98bc0be11f4d3d08513191cd9eb0bf2c96097139",
+          "targetSha256": "de0959bdc3b91bb83e22bd9c98bc0be11f4d3d08513191cd9eb0bf2c96097139"
+        },
+        {
+          "sourcePath": "/items/2/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferinbar",
+            "reference": "user-approved-azure-activity-3.2.1-workbook-dependencies",
+            "planSha256": "0fe1d70798e35529367160b47c5dbeaf480f0d1d3706921fc018018592e9ecfe",
+            "decision": "accept",
+            "querySha256": "f016dfdeb390416d7c094e73d3956956e765ed3241f1042f4a4897d55c4332f8"
+          },
+          "conversion": {
+            "sourceId": "/items/2/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AzureActivity\r\n| where \"{Caller:lable}\" == \"All\" or Caller in ({Caller})\r\n| where \"{ResourceGroup:lable}\" == \"All\" or ResourceGroup in ({ResourceGroup})\r\n| summarize deletions = countif(OperationNameValue hassuffix \"delete\"), creations = countif(OperationNameValue hassuffix \"write\"), updates = countif(OperationNameValue hassuffix \"write\"), Activities = count(OperationNameValue) by bin_at(TimeGenerated, 1h, now())\r\n",
+            "resolvedTables": [
+              "AzureActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AzureActivity",
+                "ahTable": "AzureActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 30,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/2/content/query",
+          "sourceSha256": "f016dfdeb390416d7c094e73d3956956e765ed3241f1042f4a4897d55c4332f8",
+          "targetSha256": "f016dfdeb390416d7c094e73d3956956e765ed3241f1042f4a4897d55c4332f8"
+        },
+        {
+          "sourcePath": "/items/3/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferinbar",
+            "reference": "user-approved-azure-activity-3.2.1-workbook-dependencies",
+            "planSha256": "0fe1d70798e35529367160b47c5dbeaf480f0d1d3706921fc018018592e9ecfe",
+            "decision": "accept",
+            "querySha256": "640401293c5ddd5cec73a77b28103107a501fc075bbd8b825fdd9d16122efd37"
+          },
+          "conversion": {
+            "sourceId": "/items/3/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AzureActivity\r\n| where \"{Caller:lable}\" == \"All\" or Caller in ({Caller})\r\n| where \"{ResourceGroup:lable}\" == \"All\" or ResourceGroup in ({ResourceGroup})\r\n| summarize deletions = countif(OperationNameValue hassuffix \"Delete\"), creations = countif(OperationNameValue hassuffix \"write\"), updates = countif(OperationNameValue hassuffix \"write\"), Activities = count() by Caller\r\n",
+            "resolvedTables": [
+              "AzureActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AzureActivity",
+                "ahTable": "AzureActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 30,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/3/content/query",
+          "sourceSha256": "640401293c5ddd5cec73a77b28103107a501fc075bbd8b825fdd9d16122efd37",
+          "targetSha256": "640401293c5ddd5cec73a77b28103107a501fc075bbd8b825fdd9d16122efd37"
+        },
+        {
+          "sourcePath": "/items/4/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "oferinbar",
+            "reference": "user-approved-azure-activity-3.2.1-workbook-dependencies",
+            "planSha256": "0fe1d70798e35529367160b47c5dbeaf480f0d1d3706921fc018018592e9ecfe",
+            "decision": "accept",
+            "querySha256": "06e9830b7583a2df560b22962e036629cb07900035f6dfc1e2062686686cc403"
+          },
+          "conversion": {
+            "sourceId": "/items/4/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AzureActivity \r\n| where \"{Caller:lable}\" == \"All\" or Caller in ({Caller})\r\n| where \"{ResourceGroup:lable}\" == \"All\" or ResourceGroup in ({ResourceGroup})\r\n| summarize Informational = countif(Level == \"Informational\"), Warning = countif(Level == \"Warning\"), Error = countif(Level == \"Error\") by bin_at(TimeGenerated, 1h, now())\r\n",
+            "resolvedTables": [
+              "AzureActivity"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AzureActivity",
+                "ahTable": "AzureActivity",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 30,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/4/content/query",
+          "sourceSha256": "06e9830b7583a2df560b22962e036629cb07900035f6dfc1e2062686686cc403",
+          "targetSha256": "06e9830b7583a2df560b22962e036629cb07900035f6dfc1e2062686686cc403"
+        }
+      ]
+    },
+    "requiredWorkloads": [
+      {
+        "workload": "sentinel",
+        "dataTypes": [
+          "AzureActivity"
+        ]
+      }
+    ],
+    "requiredDataConnectors": [
+      {
+        "connectorId": "AzureActivity",
+        "dataTypes": [
+          "AzureActivity"
+        ]
+      }
+    ],
+    "dependencyReviewRequired": false
+  }
+}

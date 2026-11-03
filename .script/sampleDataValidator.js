@@ -1,10 +1,16 @@
 import fs from "fs";
 import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
 import * as logger from "./utils/logger.js";
-import { isValidSampleData } from "./utils/sampleDataCheckers/sampleDataCheckers.js";
+import { isAllowedCatalogEmail, isTableCatalogSampleDataPath, isValidSampleData, isValidTableCatalogSampleData, } from "./utils/sampleDataCheckers/sampleDataCheckers.js";
+export { isAllowedCatalogEmail, isTableCatalogSampleDataPath, isValidTableCatalogSampleData, };
 export async function IsValidSampleDataSchema(filePath) {
-    let jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    isValidSampleData(jsonFile);
+    const jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    if (isTableCatalogSampleDataPath(filePath)) {
+        isValidTableCatalogSampleData(jsonFile, filePath);
+    }
+    else {
+        isValidSampleData(jsonFile);
+    }
     return 0 /* ExitCode.SUCCESS */;
 }
 let fileTypeSuffixes = ["json"];

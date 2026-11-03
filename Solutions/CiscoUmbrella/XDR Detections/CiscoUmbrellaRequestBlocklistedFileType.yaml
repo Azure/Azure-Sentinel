@@ -1,0 +1,89 @@
+schemaVersion: 1.0.0
+version: 3.3.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoUmbrellaDataConnector
+  dataTypes:
+  - Cisco_Umbrella_proxy_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoUmbrellaWebTraffic_CL
+  requiredDataConnectors:
+  - connectorId: CiscoUmbrellaConnector
+    dataTypes:
+    - CiscoUmbrellaWebTraffic_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: de58ee9e-b229-4252-8537-41a4c2f4045e
+    path: Analytic Rules/CiscoUmbrellaRequestBlocklistedFileType.yaml
+    version: 1.0.2
+    querySha256: 3471c30bae109420780d3f2ab7be6e9c0f795c7821083357aa629a53bfcb1a88
+    schedule:
+      queryFrequency: 10m
+      queryPeriod: 10m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10m, lookback=10m; target frequency=PT10M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - CommandAndControl
+    originalTechniques:
+    - T1189
+    - T1105
+    reviewScope:
+      sourceDocumentSha256: 1e9957b1ec417585cecb8c0f7d4a7214fbd5cfc106b8baf29e6108cfe8c8437a
+      targetQuerySha256: 30e60f82c1f2728e8ddb152fcc578694aac90916ea17f0dd3af7e5f3d9152919
+properties:
+  id: xdr-de58ee9e-b229-4252-8537-41a4c2f4045e
+  displayName: Cisco Cloud Security - Request to blocklisted file type
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
+      Cisco_Umbrella
+      | where EventType == 'proxylogs'
+      | where DvcAction =~ 'Allowed'
+      | extend file_ext = extract(@'.*(\.\w+)$', 1, UrlOriginal)
+      | extend Filename = extract(@'.*\/*\/(.*\.\w+)$', 1, UrlOriginal)
+      | where file_ext in (file_ext_blocklist)
+      | project TimeGenerated, SrcIpAddr, DstIpAddr, Identities, Filename, UrlOriginal
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: Cisco Cloud Security - Request to blocklisted file type
+      description: '''Detects request to potentially harmful file types (.ps1, .bat, .vbs, etc.).'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: UrlOriginal
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1189
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1105

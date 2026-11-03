@@ -1,0 +1,88 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ADOAuditLogs_CL
+  requiredDataConnectors:
+  - connectorId: AzureDevOpsAuditLogs
+    dataTypes:
+    - ADOAuditLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4d8de9e6-263e-4845-8618-cd23a4f58b70
+    path: Analytic Rules/AzDOHistoricPrPolicyBypassing.yaml
+    version: 1.0.6
+    querySha256: b65c0b68dcea5f8868c620758621487b48a6675d00e1499a35ae3003426dfb90
+    schedule:
+      queryFrequency: 3h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=3h, lookback=14d; target frequency=PT3H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `ActorUPN`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `ActorUPN` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 1a8afc252eb17aecb10a524ab44d68e2b353047bef933490dc695f32a17f2232
+      targetQuerySha256: f0c7dafeb88fb7aebfa95523571b744d6f6a77b04e417429de572752b7c62ef1
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorUPN
+      column: ActorUPN
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    dependencyReviewRequired: false
+properties:
+  id: xdr-4d8de9e6-263e-4845-8618-cd23a4f58b70
+  displayName: Azure DevOps Pull Request Policy Bypassing - Historic allow list
+  status: disabled
+  queryCondition:
+    queryText: "let starttime = 14d;\nlet endtime = 3h;\n// Add full UPN (user@domain.com) to Authorized Bypassers to ignore policy bypasses by certain authorized users\nlet AuthorizedBypassers = dynamic(['foo@baz.com', 'test@foo.com']);\nlet historicBypassers = AzureDevOpsAuditing\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where OperationName == 'Git.RefUpdatePoliciesBypassed'\n| distinct ActorUPN;\nAzureDevOpsAuditing\n| where TimeGenerated >= ago(endtime)\n| where OperationName == 'Git.RefUpdatePoliciesBypassed'\n| where ActorUPN !in (historicBypassers) and ActorUPN !in (AuthorizedBypassers)\n| parse ScopeDisplayName with OrganizationName '(Organization)'\n| project TimeGenerated, ActorUPN, IpAddress, UserAgent, OrganizationName, ProjectName, RepoName = Data.RepoName, AlertDetails = Details, Branch = Data.Name,\n  BypassReason = Data.BypassReason, PRLink = strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_git/', Data.RepoName, '/pullrequest/',\
+      \ Data.PullRequestId)\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])"
+  schedule:
+    frequency: PT3H
+  detectionAction:
+    alertTemplate:
+      title: Azure DevOps Pull Request Policy Bypassing - Historic allow list
+      description: '''This detection builds an allow list of historic PR policy bypasses and compares to recent history, flagging pull request bypasses that are not manually in the allow list and not historically included in the allow list.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+        urls:
+        - id: url1
+          addressColumn: PRLink
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      customDetails:
+        AccountFullName: ActorUPN

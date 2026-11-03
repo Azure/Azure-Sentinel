@@ -1,0 +1,207 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+    - ThreatIntelligenceIndicator
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d88a0e22-3b6a-40c2-af28-c064b44d03b7
+    path: Analytic Rules/Dataverse - TI map URL to DataverseActivity.yaml
+    version: 3.2.0
+    querySha256: f6c3d20415d16dd2ddf53f68af0b79d198e0bd9465f9710252210d283c6c91e4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Execution
+    - Persistence
+    originalTechniques:
+    - T1566
+    - T1456
+    - T1474
+    - T0819
+    - T0865
+    - T0862
+    - T0863
+    - T1204
+    - T1574
+    - T0873
+    reviewScope:
+      sourceDocumentSha256: 1abff7e1e33b1e486b1f5180a29af88ff3094965cceaf21103f31cc033b8298b
+      targetQuerySha256: a5e2aee10180dc9cc676518dc9d27c86d44046a71ab1f69d007f80c973733d25
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 4
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-d88a0e22-3b6a-40c2-af28-c064b44d03b7
+  displayName: Dataverse - TI map URL to DataverseActivity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let dt_lookBack = 1h;
+      let ioc_lookBack = 14d;
+      ThreatIntelligenceIndicator
+      | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true
+      | where isnotempty(Url)
+      | join kind=innerunique (
+          DataverseActivity
+          | where TimeGenerated >= ago(dt_lookBack)
+          | where Message in ("Create", "Update")
+          | where isnotempty(Fields) and Fields has "http"
+          | extend
+              ExtractedUrls = extract_all("(http[s]?://(?:[a-zA-Z\\.-]|[0-9])+)", tostring(Fields)),
+              DataverseActivity_TimeGenerated = TimeGenerated
+          | mv-expand Url = ExtractedUrls
+          | project
+              DataverseActivity_TimeGenerated,
+              tostring(Url),
+              UserId,
+              ClientIp,
+              InstanceUrl,
+              EntityName
+          )
+          on Url
+      | where DataverseActivity_TimeGenerated < ExpirationDateTime
+      | summarize DataverseActivity_TimeGenerated  = arg_max(DataverseActivity_TimeGenerated, *) by IndicatorId, Url
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          DataverseActivity_TimeGenerated,
+          Description,
+          ActivityGroupNames,
+          IndicatorId,
+          ThreatType,
+          ExpirationDateTime,
+          ConfidenceScore,
+          UserId,
+          ClientIp,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix,
+          Url
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - TI map URL to DataverseActivity
+      description: Identifies a match in DataverseActivity from any URL IOC from Microsoft Sentinel Threat Intelligence.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        urls:
+        - id: url1
+          addressColumn: Url
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+        - technique: T1456
+        - technique: T1474
+        - technique: T0819
+        - technique: T0865
+        - technique: T0862
+      - tactic: Execution
+        techniques:
+        - technique: T0863
+        - technique: T1204
+      - tactic: Persistence
+        techniques:
+        - technique: T1574
+        - technique: T0873
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

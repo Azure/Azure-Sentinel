@@ -1,0 +1,164 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GoogleSCCDefinition
+  dataTypes:
+  - GoogleCloudSCC
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GoogleCloudSCC
+  requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+    - GoogleCloudSCC
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f4f92ca4-6ebe-4f2a-90e5-b0d04b709651
+    path: Analytic Rules/GCPFirewallHighRiskOpenPorts.yaml
+    version: 1.0.0
+    querySha256: 7644842f2e7a8bec934221dd7701853d6dbe4371a0df3856e1e8c18f8aea5a51
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'ProjectName' column `ProjectName` requires runtime output-schema binding verification
+    - customDetails 'FirewallName' column `FirewallName` requires runtime output-schema binding verification
+    - customDetails 'FindingId' column `FindingName` requires runtime output-schema binding verification
+    - customDetails 'OpenHighRiskPorts' column `OpenHighRiskPorts` requires runtime output-schema binding verification
+    - customDetails 'Protocols' column `Protocols` requires runtime output-schema binding verification
+    - customDetails 'AttackExposureScore' column `AttackExposureScore` requires runtime output-schema binding verification
+    - customDetails 'ExternalUri' column `ExternalUri` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - LateralMovement
+    - Discovery
+    originalTechniques:
+    - T1133
+    - T1021
+    - T1046
+    reviewScope:
+      sourceDocumentSha256: 6618e9a5d2c637939f66ad003bd9f87cbc206c9cabe16640cbba81a3022c03a4
+      targetQuerySha256: 818261f634f9b8d96d3fb99453603a59d779e219d2e44c294ca8258e40b6cf15
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 6618e9a5d2c637939f66ad003bd9f87cbc206c9cabe16640cbba81a3022c03a4
+      targetQuerySha256: 818261f634f9b8d96d3fb99453603a59d779e219d2e44c294ca8258e40b6cf15
+properties:
+  id: xdr-f4f92ca4-6ebe-4f2a-90e5-b0d04b709651
+  displayName: GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);
+      GoogleCloudSCC
+      | where tostring(Findings.state) == "ACTIVE"
+      | extend FindingCategory = tostring(Findings.category)
+      | where FindingCategory == "OPEN_FIREWALL"
+      | extend FindingsJson = parse_json(Findings)
+      | extend SourcePropertiesJson = parse_json(tostring(FindingsJson.sourceProperties))
+      | extend IpRulesJson = parse_json(tostring(FindingsJson.ipRules))
+      | where tostring(FindingsJson.state) == "ACTIVE"
+      | where tostring(SourcePropertiesJson.ExternalSourceRanges) contains "0.0.0.0/0"
+      | extend AllowedIpRules = parse_json(tostring(IpRulesJson.allowed.ipRules))
+      | mv-expand IpRule = AllowedIpRules
+      | extend PortRanges = parse_json(tostring(IpRule.portRanges))
+      | mv-expand PortRange = PortRanges
+      | extend MinPort = toint(PortRange.min), MaxPort = toint(PortRange.max)
+      | where MinPort in (HighRiskPorts) or MaxPort in (HighRiskPorts)
+      | extend
+          ResourceName = tostring(FindingsJson.resourceName),
+          FindingName = tostring(FindingsJson.name),
+          Protocol = tostring(IpRule.protocol),
+          Severity = tostring(FindingsJson.severity),
+          Description = tostring(FindingsJson.description),
+          ExternalUri = tostring(FindingsJson.externalUri),
+          AttackExposureScore = todouble(FindingsJson.attackExposure.score),
+          ProjectName = extract(@"projects/([^/]+)", 1, tostring(FindingsJson.resourceName)),
+          FirewallName = extract(@"firewalls/([^/]+)", 1, tostring(FindingsJson.resourceName))
+      | extend PortInfo = case(
+          MinPort == MaxPort, tostring(MinPort),
+          strcat(tostring(MinPort), "-", tostring(MaxPort))
+      )
+      | summarize
+          TimeGenerated = max(TimeGenerated),
+          OpenHighRiskPorts = make_set(PortInfo),
+          Protocols = make_set(Protocol),
+          AttackExposureScore = max(AttackExposureScore)
+          by ProjectName, FirewallName, ResourceName, FindingName, Severity, Description, ExternalUri
+      | extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, ", ")
+      | extend Protocols = strcat_array(Protocols, ", ")
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Security Command Center - Detect Firewall rules allowing unrestricted high-risk ports
+      description: |-
+        This query detects GCP Firewall rules that allow unrestricted (0.0.0.0/0) ingress to high-risk ports using Google Cloud Security Command Center OPEN_FIREWALL findings.
+        Publicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.
+      severity: high
+      entityMappings:
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ResourceName
+        hosts:
+        - id: host1
+          nameColumn: ResourceName
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1133
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1021
+      - tactic: Discovery
+        techniques:
+        - technique: T1046
+      customDetails:
+        ProjectName: ProjectName
+        FirewallName: FirewallName
+        FindingId: FindingName
+        OpenHighRiskPorts: OpenHighRiskPorts
+        Protocols: Protocols
+        AttackExposureScore: AttackExposureScore
+        ExternalUri: ExternalUri

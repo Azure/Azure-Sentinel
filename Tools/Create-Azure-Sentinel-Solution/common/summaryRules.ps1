@@ -46,6 +46,7 @@ function GenerateSummaryRules($solutionName, $file, $rawData, $contentResourceDe
     $requiredDataConnectors = $yaml.requiredDataConnectors
     $type = 'Microsoft.OperationalInsights/workspaces/summaryLogs'
     $calculatedSummaryRuleVersion = ($null -ne $yaml.version) ? "$($yaml.version)" : "1.0.0"
+    Assert-V31ReleaseVersion -Version $calculatedSummaryRuleVersion -ContentKind SummaryRule -ContentPath $file
 
     $objSummaryRules = [PSCustomObject]@{}
     $objSummaryRules | Add-Member -NotePropertyName "summaryRuleName$global:summaryRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($displayName)')]"

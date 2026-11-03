@@ -1,0 +1,152 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Event
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a7b9df32-1367-402d-b385-882daf6e3020
+    path: Analytic Rules/DumpingLSASSProcessIntoaFile.yaml
+    version: 1.0.3
+    querySha256: 0de46f393e18390635007b90d927cd482cb4ceb149d74d5aebc158b043c88449
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Process.CommandLine value is retained as customDetails.ProcessCommandLine from query column `SourceImage`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.ProcessCommandLine column `SourceImage` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1003.001
+    reviewScope:
+      sourceDocumentSha256: 6428d2cb61c9c0175ada1906f6bd056da37d6498c56cb6bc07edf0efcd4d3b78
+      targetQuerySha256: 2ea0ba73127186363713fe7eaefdeb536e321069130b2b6c4801c595e062bb66
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 6428d2cb61c9c0175ada1906f6bd056da37d6498c56cb6bc07edf0efcd4d3b78
+      targetQuerySha256: 2ea0ba73127186363713fe7eaefdeb536e321069130b2b6c4801c595e062bb66
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 6428d2cb61c9c0175ada1906f6bd056da37d6498c56cb6bc07edf0efcd4d3b78
+      targetQuerySha256: 2ea0ba73127186363713fe7eaefdeb536e321069130b2b6c4801c595e062bb66
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    - entityType: Process
+      entityIndex: 2
+      identifier: CommandLine
+      sourceColumn: SourceImage
+      column: SourceImage
+      status: runtime-binding-pending
+      customDetailKey: ProcessCommandLine
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-a7b9df32-1367-402d-b385-882daf6e3020
+  displayName: Dumping LSASS Process Into a File
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Event
+      | where EventLog =~ "Microsoft-Windows-Sysmon/Operational" and EventID==10
+      | parse EventData with * 'TargetImage">' TargetImage "<" * 'GrantedAccess">' GrantedAccess "<" * 'CallTrace">' CallTrace "<" *
+      | where GrantedAccess =~ "0x1FFFFF" and TargetImage =~ "C:\\Windows\\System32\\lsass.exe" and CallTrace has_any ("dbghelp.dll","dbgcore.dll")
+      | parse EventData with * 'SourceProcessGUID">' SourceProcessGUID "<" * 'SourceImage">' SourceImage "<" *
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, SourceProcessGUID, SourceImage, GrantedAccess, TargetImage, CallTrace
+      | extend HostName = iif(Computer has '.',substring(Computer,0,indexof(Computer,'.')),Computer) , DnsDomain = iif(Computer has '.',substring(Computer,indexof(Computer,'.')+1),'')
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dumping LSASS Process Into a File
+      description: |-
+        'Adversaries may attempt to access credential material stored in the process memory of the Local Security Authority Subsystem Service (LSASS).
+        After a user logs on, the system generates and stores a variety of credential materials in LSASS process memory.
+        These credential materials can be harvested by an administrative user or system and used to conduct lateral movement using alternate authentication materials.
+        As well as in-memory techniques, the LSASS process memory can be dumped from the target host and analyzed on a local system.
+        Ref: https://attack.mitre.org/techniques/T1003/001/'
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1003
+          subTechniques:
+          - T1003.001
+      customDetails:
+        HostFullName: Computer
+        ProcessCommandLine: SourceImage

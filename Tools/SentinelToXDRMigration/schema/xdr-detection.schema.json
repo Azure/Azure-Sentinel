@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Azure/Azure-Sentinel/Tools/SentinelToXDRMigration/schema/xdr-detection.schema.json",
+  "title": "Defender XDR Custom Detection source",
+  "$defs": {
+    "sentinelTemplateId": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "pattern": "^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+    },
+    "sentinelDetectionId": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 40,
+      "pattern": "^xdr-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["contentProvenance"],
+        "properties": {
+          "contentProvenance": {
+            "anyOf": [
+              {
+                "required": ["source"],
+                "properties": {
+                  "source": {
+                    "required": ["platform", "kind"],
+                    "properties": {
+                      "platform": {"const": "Microsoft Sentinel"},
+                      "kind": {"const": "AnalyticsRule"}
+                    }
+                  }
+                }
+              },
+              {
+                "required": ["conversion"],
+                "properties": {
+                  "conversion": {
+                    "required": ["tool"],
+                    "properties": {
+                      "tool": {"const": "sentinel-to-xdr-migration"}
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "contentProvenance": {
+            "properties": {
+              "source": {
+                "properties": {
+                  "id": {"$ref": "#/$defs/sentinelTemplateId"}
+                }
+              }
+            }
+          },
+          "properties": {
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/sentinelDetectionId",
+                "description": "Graph-compatible xdr- prefix followed by the exact originating Sentinel template GUID in contentProvenance.source.id. Cross-field equality is enforced by structural validation and packaging."
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "version",
+    "kind",
+    "resourceType",
+    "apiVersion",
+    "contentProvenance",
+    "properties"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "version": {
+      "description": "Independent XDR content release version (>= 3.1.0 and < 4.0.0), not the source Sentinel rule or schema version.",
+      "type": "string",
+      "pattern": "^3\\.[1-9][0-9]*\\.(0|[1-9][0-9]*)$"
+    },
+    "kind": {
+      "const": "CustomDetection"
+    },
+    "resourceType": {
+      "const": "Microsoft.Security/detectionRules"
+    },
+    "apiVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requiredDataConnectors": {
+      "description": "Source authoring dependencies preserved unchanged, not Graph or ARM detection-rule properties. Omitted when absent in the source; an explicit empty array is preserved.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["connectorId", "dataTypes"],
+        "properties": {
+          "connectorId": {"type": "string"},
+          "dataTypes": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "contentProvenance": {
+      "type": "object",
+      "required": [
+        "source",
+        "conversion",
+        "requiredWorkloads",
+        "requiredDataConnectors"
+      ],
+      "properties": {
+        "requiredWorkloads": {
+          "description": "Authored runtime telemetry prerequisites, not legacy conversion workload labels.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["workload", "dataTypes"],
+            "properties": {
+              "workload": {
+                "enum": ["mde", "mdo", "mdi", "mda", "mdc", "entraid", "purview", "appgovernance", "sentinel", "mtp"]
+              },
+              "dataTypes": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1}
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "requiredDataConnectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["connectorId", "dataTypes"],
+            "properties": {
+              "connectorId": {"type": "string", "minLength": 1},
+              "dataTypes": {
+                "type": "array",
+                "items": {"type": "string", "minLength": 1}
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "dependencyReviewRequired": {"type": "boolean"},
+        "source": {
+          "type": "object",
+          "required": [
+            "platform",
+            "kind",
+            "id",
+            "path",
+            "querySha256",
+            "schedule"
+          ]
+        },
+        "conversion": {
+          "type": "object",
+          "properties": {
+            "identityChange": {
+              "description": "Persisted local-only legacy ID transition; not evidence of deployed rule migration.",
+              "type": "object",
+              "required": ["previousId", "currentId", "scope"],
+              "properties": {
+                "previousId": {"type": "string"},
+                "currentId": {"$ref": "#/$defs/sentinelDetectionId"},
+                "scope": {"const": "local-artifact-only"}
+              }
+            },
+            "informational": {
+              "description": "Nonblocking explanations of proven preserved equivalents; never review reasons or errors.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "tool",
+            "version",
+            "status",
+            "reviewRequired",
+            "reviewReasons",
+            "requiredWorkloads",
+            "warnings"
+          ]
+        }
+      }
+    },
+    "properties": {
+      "type": "object",
+      "properties": {
+        "detectionAction": {
+          "type": "object",
+          "properties": {
+            "alertTemplate": {
+              "type": "object",
+              "properties": {
+                "customDetails": {
+                  "description": "Open alert detail key-to-query-output-column bindings. At most 20 pairs; runtime values together must fit the documented 4 KB per-alert limit.",
+                  "type": "object",
+                  "maxProperties": 20,
+                  "propertyNames": {"type": "string", "minLength": 1},
+                  "additionalProperties": {"type": "string", "minLength": 1}
+                },
+                "tactics": {
+                  "description": "Authoring retains all source tactics in order. V3.1 ARM packaging emits only the first entry. Direct Graph deployment requires at most one entry.",
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["tactic"],
+                    "properties": {
+                      "tactic": {"type": "string", "minLength": 1},
+                      "techniques": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": ["technique"],
+                          "properties": {
+                            "technique": {"type": "string", "pattern": "^T[0-9]{4}$"},
+                            "subTechniques": {
+                              "type": "array",
+                              "items": {"type": "string", "pattern": "^T[0-9]{4}\\.[0-9]{3}$"}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "status",
+        "queryCondition",
+        "schedule",
+        "detectionAction"
+      ]
+    }
+  }
+}

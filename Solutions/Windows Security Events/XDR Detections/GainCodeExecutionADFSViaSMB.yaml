@@ -1,0 +1,180 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityEvent
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 12dcea64-bec2-41c9-9df2-9f28461b1295
+    path: Analytic Rules/GainCodeExecutionADFSViaSMB.yaml
+    version: 1.2.1
+    querySha256: db343782486018684a450f42ca5c1ce5ee9982b05f2d96fc9d2d003986e034f1
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.NTDomain column `AccountNTDomain` is not produced by the query
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Account`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Account` requires runtime output-schema binding verification
+    - Account.Name value is retained as customDetails.AccountName from query column `AccountName`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountName` requires runtime output-schema binding verification
+    - 'Account.NTDomain value is not preserved: column `AccountNTDomain` is missing from the final query output. No invalid
+      customDetails binding was added and KQL was not rewritten'
+    - Host.FullName value is retained as customDetails.HostFullName from query column `Computer`, but its target output binding
+      requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - LateralMovement
+    originalTechniques:
+    - T1210
+    reviewScope:
+      sourceDocumentSha256: c434a44b52bb2def3be096c09e26e41f84f6afe86431dd554176bbcd433f7b9d
+      targetQuerySha256: 650effc65c59b8b2e61370f3746dba2703425ceff415458cc850c2bbccf02a09
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented
+        by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also
+        retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: c434a44b52bb2def3be096c09e26e41f84f6afe86431dd554176bbcd433f7b9d
+      targetQuerySha256: 650effc65c59b8b2e61370f3746dba2703425ceff415458cc850c2bbccf02a09
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Account
+      column: Account
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountName
+      column: AccountName
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 1
+      identifier: NTDomain
+      sourceColumn: AccountNTDomain
+      column: AccountNTDomain
+      status: not-preserved
+      reason: missing
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by
+      hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption does not prove entity parity'
+properties:
+  id: xdr-12dcea64-bec2-41c9-9df2-9f28461b1295
+  displayName: Gain Code Execution on ADFS Server via SMB + Remote Service or Scheduled Task
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let timeframe = 1d;
+      // Adjust for a longer timeframe for identifying ADFS Servers
+      let lookback = 6d;
+      // Identify ADFS Servers
+      let ADFS_Servers = (
+      SecurityEvent
+      | where TimeGenerated > ago(timeframe+lookback)
+      | where EventID == 4688 and SubjectLogonId != "0x3e4"
+      | where NewProcessName has "Microsoft.IdentityServer.ServiceHost.exe"
+      | distinct Computer
+      );
+      SecurityEvent
+      | where TimeGenerated > ago(timeframe)
+      | where Computer in~ (ADFS_Servers)
+      | where Account !endswith "$"
+      // Check for scheduled task events
+      | where EventID in (4697, 4698, 4699, 4700, 4701, 4702)
+      | extend EventDataParsed = parse_xml(EventData)
+      | extend SubjectLogonId = tostring(EventDataParsed.EventData.Data[3]["#text"])
+      // Check specifically for access to IPC$ share and PIPE\svcctl and PIPE\atsvc for Service Control Services and Schedule Control Services
+      | union (
+          SecurityEvent
+          | where TimeGenerated > ago(timeframe)
+          | where Computer in~ (ADFS_Servers)
+          | where Account !endswith "$"
+          | where EventID == 5145
+          | where RelativeTargetName =~ "svcctl" or RelativeTargetName  =~ "atsvc"
+      )
+      // Check for lateral movement
+      | join kind=inner
+      (SecurityEvent
+      | where TimeGenerated > ago(timeframe)
+      | where Account !endswith "$"
+      | where EventID == 4624 and LogonType == 3
+      ) on $left.SubjectLogonId == $right.TargetLogonId
+      | project TimeGenerated, Account, Computer, EventID, RelativeTargetName
+      | extend timestamp = TimeGenerated
+      | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+      | extend AccountName = tostring(split(Account, @'\')[1]), AccountNTDomain = tostring(split(Account, @'\')[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Gain Code Execution on ADFS Server via SMB + Remote Service or Scheduled Task
+      description: '''This query detects instances where an attacker has gained the ability to execute code on an ADFS Server
+        through SMB and Remote Service or Scheduled Task.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+      tactics:
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1210
+      customDetails:
+        AccountFullName: Account
+        AccountName: AccountName
+        HostFullName: Computer

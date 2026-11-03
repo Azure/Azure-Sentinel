@@ -4,9 +4,36 @@ import json
 import asyncio
 import aiohttp
 import nest_asyncio
+import re
+from urllib.parse import quote, urlparse
 import azure.functions as func
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+
+_VALID_HOST_ITEM_RE = re.compile(r"^[A-Za-z0-9._:\-]+$")
+
+
+def _validate_host_item(item: str) -> str:
+    if not isinstance(item, str):
+        raise ValueError("Invalid host item.")
+    cleaned = item.strip()
+    if (
+        not cleaned
+        or ".." in cleaned
+        or "/" in cleaned
+        or "\\" in cleaned
+        or not _VALID_HOST_ITEM_RE.fullmatch(cleaned)
+    ):
+        raise ValueError("Invalid host item.")
+    return quote(cleaned, safe="")
+
+
+def _validate_graph_next_link(next_link: str) -> str:
+    parsed = urlparse(next_link)
+    if parsed.scheme != "https" or parsed.netloc.lower() != "graph.microsoft.com":
+        raise ValueError("Untrusted pagination link.")
+    return next_link
+
 
 @app.function_name(name="MDTIActor")
 @app.route(route="MDTIActor")
@@ -28,7 +55,15 @@ async def main_function(req: func.HttpRequest) -> func.HttpResponse:
             status_code=400
         )
 
-    combined_results = await main(item)
+    try:
+        safe_item = _validate_host_item(item)
+    except ValueError:
+        return func.HttpResponse(
+            "Invalid 'item' parameter. Provide a valid hostname or IP address.",
+            status_code=400
+        )
+
+    combined_results = await main(safe_item)
     return func.HttpResponse(json.dumps(combined_results), status_code=200)
 
 client_id = "<MDTI_CLIENT_ID>"
@@ -45,10 +80,6 @@ def get_access_token(client_id, client_secret, tenant_id):
         "scope": "https://graph.microsoft.com/.default"
     }
     response = requests.post(url, headers=headers, data=data)
-    
-    # Log the response for debugging
-    logging.info(f"Token response: {response.json()}")
-    
     response.raise_for_status()
     return response.json()["access_token"]
 
@@ -57,7 +88,8 @@ access_token = get_access_token(client_id, client_secret, tenant_id)
 headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
 def list_grab(item):
-    services = f"https://graph.microsoft.com/beta/security/threatIntelligence/hosts/{item}/passivedns?$top=1000"
+    safe_item = _validate_host_item(item)
+    services = f"https://graph.microsoft.com/beta/security/threatIntelligence/hosts/{safe_item}/passivedns?$top=1000"
     headers = {
         'Authorization': f'Bearer {access_token}'
     }
@@ -78,10 +110,12 @@ def list_grab(item):
             continue
         
         # Check for the presence of @odata.nextLink
-        services = data.get('@odata.nextLink', None)
-        if services:
+        next_link = data.get('@odata.nextLink', None)
+        if next_link:
+            services = _validate_graph_next_link(next_link)
             logging.info(f"Next link found: {services}")
         else:
+            services = None
             logging.info("No next link found, ending pagination.")
     
     return artifact_list
@@ -89,7 +123,10 @@ def list_grab(item):
 URL = "https://graph.microsoft.com/beta/security/threatIntelligence/hosts/{}/reputation"
 
 def get_tasks(session, artifact_list):
-    tasks = [session.get(URL.format(artifact_id), headers=headers, ssl=False) for artifact_id in artifact_list]
+    tasks = [
+        session.get(URL.format(_validate_host_item(str(artifact_id))), headers=headers, ssl=True)
+        for artifact_id in artifact_list
+    ]
     return tasks
 
 async def run_tasks(session, artifact_list):
