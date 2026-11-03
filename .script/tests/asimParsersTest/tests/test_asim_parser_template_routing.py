@@ -226,7 +226,7 @@ run
             [
                 "R100\tParsers/ASimDns/Parsers/Old.yaml\t"
                 "Parsers/ASimDns/IngestTimeParsers/New.yaml",
-                "R100\tParsers/ASimDns/IngestTimeParsers/Old.yaml\t"
+                "R100\tParsers/ASimDns/IngestTimeParsers/Old.yaml\t",
                 "Parsers/ASimDns/Parsers/New.yaml",
             ],
             ["Parsers/ASimDns/Parsers/New.yaml"],
