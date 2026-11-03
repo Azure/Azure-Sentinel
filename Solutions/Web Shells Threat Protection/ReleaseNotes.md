@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                            |
 |-------------|--------------------------------|-------------------------------------------------------------------------------|
+| 3.2.2       | 28-10-2026                     | Added 3 Defender XDR Custom Detections (`MaliciousAlertLinkedWebRequests`, `PotentialMercury_Webshell`, and `Supernovawebshell`). |
 | 3.0.4       | 10-06-2024                     | Added missing AMA **Data Connector** reference in **Analytic rules**     |
 | 3.0.3       | 12-04-2024                     | Updated Entity Mapping and Query of **Analytic Rule** Supernovawebshell.yaml and MaliciousAlertLinkedWebRequests.yaml                              |
 | 3.0.2       | 22-02-2024                     | Tagged for dependent Solutions for deployment                                 |

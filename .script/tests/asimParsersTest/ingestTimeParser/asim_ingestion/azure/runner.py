@@ -11,6 +11,7 @@ from .common import (
     HARNESS_RESULT_VERSION,
     HarnessError,
     ValidationRunner,
+    _query_timestamp_counts,
     _validate_timestamp,
     _write_json_no_clobber,
     build_fixture_snapshot,
@@ -20,9 +21,17 @@ from .common import (
 )
 
 
-def _error_payload(exc: HarnessError) -> dict[str, Any]:
+def _error_payload(
+    exc: HarnessError,
+    *,
+    include_observed_query_table: bool = False,
+) -> dict[str, Any]:
     details = exc.details
-    if isinstance(details, Mapping) and "observedQueryTable" in details:
+    if (
+        not include_observed_query_table
+        and isinstance(details, Mapping)
+        and "observedQueryTable" in details
+    ):
         details = dict(details)
         details.pop("observedQueryTable", None)
     return {
@@ -173,6 +182,7 @@ class AsimIngestionHarness(AzureMonitorClient):
             "parserDcr": None,
             "rawUpload": [],
             "parserUpload": [],
+            "targetVisibility": {"status": "not-run"},
             "snapshotPath": str(snapshot_output),
             "filterValidation": None,
             "outputValidation": None,
@@ -273,13 +283,36 @@ class AsimIngestionHarness(AzureMonitorClient):
                     reconcile_table=target_table,
                     expected_counts_by_timestamp=normalized_target_counts,
                 )
-            with self._stage("target-visibility"):
-                self.wait_for_exact_rows(
-                    target_table,
-                    list(normalized_target_counts),
-                    normalized_target_counts,
-                    stage="target-visibility",
-                )
+            try:
+                with self._stage("target-visibility"):
+                    observed_query_table = self.wait_for_exact_rows(
+                        target_table,
+                        list(normalized_target_counts),
+                        normalized_target_counts,
+                        stage="target-visibility",
+                    )
+            except HarnessError as exc:
+                result["targetVisibility"] = {
+                    "status": "failed",
+                    "error": _error_payload(
+                        exc,
+                        include_observed_query_table=True,
+                    ),
+                }
+                raise
+            observed_counts = _query_timestamp_counts(
+                observed_query_table,
+                "target-visibility",
+            )
+            result["targetVisibility"] = {
+                "status": "passed",
+                "expectedCounts": normalized_target_counts,
+                "observedCounts": {
+                    timestamp: observed_counts.get(timestamp, 0)
+                    for timestamp in normalized_target_counts
+                },
+                "missingTimestamps": [],
+            }
 
             if validation_runner is not None:
                 with self._stage("output-validation"):

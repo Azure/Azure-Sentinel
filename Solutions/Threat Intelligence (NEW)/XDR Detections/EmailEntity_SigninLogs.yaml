@@ -1,0 +1,159 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+    - SigninLogs
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4b5a7f32-899d-4d22-8de2-0ec90b911a72
+    path: Analytic Rules/EmailEntity_SigninLogs.yaml
+    version: 1.2.12
+    querySha256: caab13303b000356ce94649c945ae2f2990de8b68d90dcfc8d3573733a084234
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.2.12
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `UserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: b01b8ab92e788865a0eb92e5476f5d39ad25f00d0b1404e7d031e067f35a7e20
+      targetQuerySha256: 39ff78ddb8ca9946d5763e63b98cf12e294b6cd4b0f2929667ceaaec9851f945
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-4b5a7f32-899d-4d22-8de2-0ec90b911a72
+  displayName: TI Map Email entity to SigninLogs
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\\
+      .[a-zA-Z0-9-.]+$';\nlet Signins = materialize(union isfuzzy=true\n( SigninLogs\
+      \ | where TimeGenerated >= ago(dt_lookBack)),\n( AADNonInteractiveUserSignInLogs\
+      \ | where TimeGenerated >= ago(dt_lookBack)\n    | extend Status = todynamic(Status),\
+      \ LocationDetails = todynamic(LocationDetails))\n| where isnotempty(UserPrincipalName)\
+      \ and UserPrincipalName matches regex emailregex\n| extend UserPrincipalName\
+      \ = tolower(UserPrincipalName)\n| extend Status = todynamic(Status), LocationDetails\
+      \ = todynamic(LocationDetails)\n| extend StatusCode = tostring(Status.errorCode),\
+      \ StatusDetails = tostring(Status.additionalDetails)\n| extend State = tostring(LocationDetails.state),\
+      \ City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n\
+      | extend SigninLogs_TimeGenerated = TimeGenerated);\nlet SigninUPNs = Signins\
+      \ | distinct UserPrincipalName | summarize make_list(UserPrincipalName);\nThreatIntelIndicators\n\
+      //Filtering the table for Email related IOCs\n| extend IndicatorType = replace(@\"\
+      \\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType\
+      \ == \"email-addr\"\n| extend EmailSenderAddress = ObservableValue\n| extend\
+      \ EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress,\
+      \ \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\"\
+      ) - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | extend Id = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey\
+      \ == \"url:value\", ObservableValue, \"\")\n| where TimeGenerated >= ago(ioc_lookBack)\n\
+      | where EmailSenderAddress in (SigninUPNs)\n| summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil\
+      \ > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n\
+      | where Description !contains_cs \"State: inactive;\" and Description !contains_cs\
+      \ \"State: falsepos;\"\n  | project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress,\
+      \ EmailSourceDomain, Type\n| join kind=innerunique (Signins) on $left.EmailSenderAddress\
+      \ == $right.UserPrincipalName\n| where SigninLogs_TimeGenerated < ValidUntil\n\
+      | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *)\
+      \ by Id, UserPrincipalName\n| extend Description = tostring(parse_json(Data).description)\n\
+      | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil,\
+      \ Confidence, EmailSenderAddress, IPAddress, UserPrincipalName, AppDisplayName,\
+      \ StatusCode, StatusDetails, NetworkLocationDetails, Type, Url\n| extend Name\
+      \ = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName,\
+      \ '@', 1)[0])\n| extend timestamp = SigninLogs_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Email entity to SigninLogs
+      description: '''Identifies a match in SigninLogs table from any Email IOC from
+        TI'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      customDetails:
+        AccountFullName: UserPrincipalName

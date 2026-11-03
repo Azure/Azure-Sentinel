@@ -1,0 +1,144 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: CiscoDuoSecurity
+  dataTypes:
+  - CiscoDuo
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoDuo
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+    - CiscoDuo
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4988c238-a118-442c-80bd-6c689a1b2e97
+    path: Analytic Rules/IPEntity_DuoSecurity.yaml
+    version: 1.0.10
+    querySha256: c0e3d0fe887cbd5e59eb4d2770364cd196d9eda2aae301f05954099116a163d2
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.10
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `DstUserName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `DstUserName` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: b2729d71e47910172540a9e78d927ef16a5b390bf3fc65777f5e017200a2a9f7
+      targetQuerySha256: 8859c1aedb23bab277474d967d666269741cc37d59193812d4474a094f15061b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: DstUserName
+      column: DstUserName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-4988c238-a118-442c-80bd-6c689a1b2e97
+  displayName: TI Map IP Entity to Duo Security
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet CiscoDuo = datatable(TimeGenerated:datetime,\
+      \ AccessDvcIpAddr:string, IsoTimestamp:datetime, DstUserName:string, AuthFactor:string,\
+      \ EventResult:string, SrcAppName:string, EventType:string, TransactionId:string,\
+      \ SrcUserId:string, SrcGeoCity:string, AccessDvcLocationState:string, SrcGeoCountry:string)[];\n\
+      ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\"\
+      )\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n// Picking up only IOC's\
+      \ that contain the entities we want\n| where TimeGenerated >= ago(ioc_lookBack)\n\
+      // As there is potentially more than 1 indicator type for matching IP, taking\
+      \ NetworkIP first, then others if that is empty.\n// Taking the first non-empty\
+      \ value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkSourceIP),\
+      \ NetworkSourceIP, NetworkSourceIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity)\
+      \ and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| summarize\
+      \ LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n|\
+      \ where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n | join (\n\
+      \     CiscoDuo\n     | where TimeGenerated >= ago(dt_lookBack)\n     | where\
+      \ isnotempty(AccessDvcIpAddr)\n     | extend Duo_TimeGenerated = IsoTimestamp\n\
+      \ )\n on $left.TI_ipEntity == $right.AccessDvcIpAddr\n | where TimeGenerated\
+      \ >= ago(ioc_lookBack)\n | summarize LatestIndicatorTime = arg_max(TimeGenerated,\
+      \ *) by Id, ObservableValue\n | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n\
+      \ | extend Description = tostring(parse_json(Data).description)\n | extend ActivityGroupNames\
+      \ = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      \ | project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil,\
+      \ Confidence, Duo_TimeGenerated,\n TI_ipEntity, DstUserName, AuthFactor, EventResult,\
+      \ SrcAppName, EventType, TransactionId, SrcUserId, AccessDvcIpAddr, SrcGeoCity,\
+      \ AccessDvcLocationState, SrcGeoCountry\n | extend timestamp = Duo_TimeGenerated,\
+      \ Name = tostring(split(DstUserName, '@', 0)[0]), UPNSuffix = tostring(split(DstUserName,\
+      \ '@', 1)[0])"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP Entity to Duo Security
+      description: '''This query maps any IP indicators of compromise (IOCs) from
+        threat intelligence (TI), by searching for matches in DuoSecurity.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: AccessDvcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountFullName: DstUserName

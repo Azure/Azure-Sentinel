@@ -34,8 +34,9 @@ def execution_profile(state_dir: str | Path | None = None) -> str:
     from solution_manager.qualification.graph_client_config import configured_azure_cli_profile
     from solution_manager.core.onboarding import _state_dir
 
-    configured = configured_azure_cli_profile(_state_dir(state_dir))
-    return str(Path(configured or os.environ.get("AZURE_CONFIG_DIR") or Path.home() / ".azure").resolve())
+    state_root = _state_dir(state_dir)
+    configured = configured_azure_cli_profile(state_root)
+    return str(Path(configured or (state_root / "azure-cli-profile")).resolve())
 
 
 def current_plan(solution: str | Path) -> dict[str, Any]:

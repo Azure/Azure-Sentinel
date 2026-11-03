@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,9 @@ from solution_manager.core.artifacts import artifact_path, write_json_artifact
 from solution_manager.qualification.alert_parity import _arm_request, _arm_token, _sentinel_rule_url
 from solution_manager.migration.converter import analytic_rule_files, iso_duration, solution_paths
 from solution_manager.core.target_context import require_locked_target
+
+
+MAX_ANALYTIC_DEPLOY_WORKERS = 8
 
 
 TRIGGER_OPERATORS = {
@@ -92,6 +96,7 @@ def deploy_analytic_rules(
     solution: str | Path,
     *,
     workspace_resource_id: str | None = None,
+    verify_readback: bool = False,
 ) -> dict[str, Any]:
     root, _, output = solution_paths(solution)
     report_path = artifact_path(root, "deployment.sentinel.json", create_parent=True)
@@ -121,7 +126,8 @@ def deploy_analytic_rules(
             raise ValueError("current applied package selection has missing Analytic Rule files")
         source_files = [source_by_path[path] for path in sorted(selected_paths)]
     token = _arm_token()
-    for source_path in source_files:
+
+    def _deploy_one(source_path: Path) -> dict[str, Any]:
         result: dict[str, Any] = {
             "source": str(source_path),
             "id": None,
@@ -147,22 +153,55 @@ def deploy_analytic_rules(
             )
             result["statusCode"] = status
             result["success"] = status in (200, 201)
+            result["initialDisabled"] = False
+            result["readbackVerified"] = False
             if result["success"]:
-                result["enabled"] = bool(
-                    (response.get("properties") or {}).get("enabled", False)
-                )
-                if result["enabled"]:
-                    result["success"] = False
-                    result["error"] = {
-                        "code": "UnexpectedEnabledState",
-                        "message": "deployed analytic rule was not disabled",
-                        "response": response,
-                    }
+                read_response = response if isinstance(response, dict) else {}
+                props = read_response.get("properties") if isinstance(read_response, dict) else None
+                if verify_readback or not (isinstance(props, dict) and "enabled" in props):
+                    read_status, get_body = _arm_request(
+                        "GET",
+                        _sentinel_rule_url(workspace_resource_id, rule_id),
+                        token,
+                    )
+                    if read_status != 200 or not isinstance(get_body, dict):
+                        result["success"] = False
+                        result["error"] = {
+                            "code": "ReadbackVerificationFailed",
+                            "message": "failed GET readback for deployed analytic rule",
+                            "statusCode": read_status,
+                            "response": get_body,
+                        }
+                    else:
+                        read_response = get_body
+                if result["success"]:
+                    result["enabled"] = bool(
+                        (read_response.get("properties") or {}).get("enabled", False)
+                    )
+                    if result["enabled"]:
+                        result["success"] = False
+                        result["error"] = {
+                            "code": "UnexpectedEnabledState",
+                            "message": "deployed analytic rule was not disabled",
+                            "response": read_response,
+                        }
+                    else:
+                        result["initialDisabled"] = True
+                        result["readbackVerified"] = True
             else:
                 result["error"] = response.get("error") or response
         except (OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+            result["initialDisabled"] = False
+            result["readbackVerified"] = False
             result["error"] = {"code": type(exc).__name__, "message": str(exc)}
-        results.append(result)
+        return result
+
+    if len(source_files) <= 1:
+        results = [_deploy_one(path) for path in source_files]
+    else:
+        workers = max(1, min(MAX_ANALYTIC_DEPLOY_WORKERS, len(source_files)))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            results = list(executor.map(_deploy_one, source_files))
 
     report = {
         "provider": "azure-resource-manager",
@@ -172,6 +211,7 @@ def deploy_analytic_rules(
         "total": len(results),
         "succeeded": sum(bool(item["success"]) for item in results),
         "failed": sum(not item["success"] for item in results),
+        "initialDisabled": bool(results) and all(bool(item.get("initialDisabled")) for item in results),
         "results": results,
     }
     if applied_selection is not None:
