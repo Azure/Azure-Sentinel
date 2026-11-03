@@ -1,5 +1,6 @@
-| **Version** | **Date Modified (DD-MM-YYY)**  | **Change History**                                                                         |
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.2.2       | 29-10-2026                     | Migrated 3 **Workbooks** (`AutomationHealth`, `SecurityOperationsEfficiency`, `IncidentTasksWorkbook`) to Microsoft Defender XDR and updated the solution package to V3.1. |
 | 3.0.8       | 05-03-2026                     | Enhanced the *Incident-Trigger-Entity-Analyzer* **Playbook** with intelligent user identifier detection (objectGuid, aadUserId, UPN, and Name+UPNSuffix) for reliable user resolution, and added handling to skip and comment on incidents when no valid user identifier is present. |
 | 3.0.7       | 13-01-2026                     | Removed the redundant *IncidentOverview* **workbook** from SentinelSOAREssentianls |
 | 3.0.6       | 24-12-2025                     | Added new **playbooks** for the incident alerting.|

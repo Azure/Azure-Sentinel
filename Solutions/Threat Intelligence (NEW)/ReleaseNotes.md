@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.2       | 26-10-2026                     | Added 52 Defender XDR Custom Detections. Updated **Analytic Rule** (`DomainEntity_PaloAlto.yaml`) and **Workbook** (`ThreatIntelligenceNew.json`).                     |
 | 3.0.21      | 29-07-2026                     | Removed the `Premium Microsoft Defender Threat Intelligence` Data Connector from the **Threat Intelligence (NEW)** Solution.  |
 | 3.0.20      | 21-07-2026                     | Updated the URLEntity AuditLogs analytic rule to 1.2.11 and refine its URL extraction and lowercase normalization so URL IoC matches in AuditLogs are more reliable. |
 | 3.0.19      | 21-06-2026                     | Standardized naming and corrected the incorrect mapping for `dataTypes: EmailEvents` and `dataTypes: EmailUrlInfo` with `connectorId: Office365` and `connectorId: AzureActiveDirectory` across multiple **Analytic Rules**.  |
