@@ -10,7 +10,7 @@ function Set-UriProperty {
     if (-not ($armResource.properties.PSObject.Properties.Name -contains 'request')) {
         $armResource.properties | Add-Member -MemberType NoteProperty -Name 'request' -Value ([PSCustomObject]@{})
     }
-
+    
     $request = $armResource.properties.request
 
     # If the property already exists, remove it
