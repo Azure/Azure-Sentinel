@@ -1,0 +1,93 @@
+[
+    {
+        "name": "CybleVisionIOCDCR",
+        "apiVersion": "2021-09-01-preview",
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "location": "{{location}}",
+        "properties": {
+            "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
+            "streamDeclarations": {
+                "Custom-CybleVisionIOC": {
+                    "columns": [
+                        {
+                            "name": "ioc",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ioc_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "real"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "real"
+                        },
+                        {
+                            "name": "risk_score",
+                            "type": "int"
+                        },
+                        {
+                            "name": "sources",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "behaviour_tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "confidence_rating",
+                            "type": "string"
+                        },
+                        {
+                            "name": "target_countries",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "target_regions",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "target_industries",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "related_malware",
+                            "type": "string"
+                        },
+                        {
+                            "name": "related_threat_actors",
+                            "type": "string"
+                        },
+                        {
+                            "name": "is_whitelisted",
+                            "type": "boolean"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [
+                    {
+                        "workspaceResourceId": "{{workspaceResourceId}}",
+                        "name": "clv2ws1"
+                    }
+                ]
+            },
+            "dataFlows": [
+                {
+                    "streams": [
+                        "Custom-CybleVisionIOC"
+                    ],
+                    "destinations": [
+                        "clv2ws1"
+                    ],
+                    "outputStream": "Microsoft-ThreatIntelIndicators",
+                    "transformKql": "source\n| where isnotempty(ioc) and coalesce(tobool(is_whitelisted), false) == false\n| extend ObservableValue = trim(@\"\\s+\", tostring(ioc))\n| extend IocType = tolower(tostring(ioc_type))\n| extend ObservableKey = case(\n    IocType in ('ipv4', 'ipv4address', 'ipv4-addr', 'ip'), 'ipv4-addr:value',\n    IocType in ('ipv6', 'ipv6address', 'ipv6-addr'), 'ipv6-addr:value',\n    IocType in ('domain', 'domain-name', 'hostname', 'fqdn'), 'domain-name:value',\n    IocType in ('url', 'uri'), 'url:value',\n    IocType in ('email', 'email-addr'), 'email-addr:value',\n    IocType in ('filehash-md5', 'md5'), 'file:hashes.MD5',\n    IocType in ('filehash-sha1', 'sha1', 'sha-1'), \"file:hashes.'SHA-1'\",\n    IocType in ('filehash-sha256', 'sha256', 'sha-256'), \"file:hashes.'SHA-256'\",\n    '')\n| where isnotempty(ObservableKey)\n| extend FirstSeenEpoch = tolong(first_seen), LastSeenEpoch = tolong(last_seen)\n| extend FirstSeen = iff(FirstSeenEpoch > 100000000000, unixtime_milliseconds_todatetime(FirstSeenEpoch), unixtime_seconds_todatetime(FirstSeenEpoch))\n| extend LastSeen = iff(LastSeenEpoch > 100000000000, unixtime_milliseconds_todatetime(LastSeenEpoch), unixtime_seconds_todatetime(LastSeenEpoch))\n| extend TimeGenerated = now()\n| extend ValidFrom = coalesce(FirstSeen, now())\n| extend Modified = coalesce(LastSeen, now())\n| extend ValidUntil = datetime_add('day', 30, coalesce(LastSeen, now()))\n| extend Created = ValidFrom\n| extend RiskScore = toint(risk_score)\n| extend Confidence = iff(isnull(RiskScore), 50, iff(RiskScore < 0, 0, iff(RiskScore > 100, 100, RiskScore)))\n| extend Labels = iff(isnull(behaviour_tags), dynamic([]), behaviour_tags)\n| extend patternValue = replace(@\"'\", @\"\\\\'\", replace(@\"\\\\\", @\"\\\\\\\\\", ObservableValue))\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", patternValue, \"']\")\n| extend idHex = substring(tostring(hash_sha256(strcat('CybleVision|', ObservableKey, '|', ObservableValue))), 0, 32)\n| extend Id = strcat('indicator--', substring(idHex, 0, 8), '-', substring(idHex, 8, 4), '-', substring(idHex, 12, 4), '-', substring(idHex, 16, 4), '-', substring(idHex, 20, 12))\n| extend SourceSystem = 'CybleVision'\n| extend LastUpdateMethod = 'Cyble Vision IOC CCF'\n| extend IsActive = true, IsDeleted = false, Revoked = false\n| extend AdditionalFields = pack('iocType', tostring(ioc_type), 'riskScore', RiskScore, 'confidenceRating', tostring(confidence_rating), 'sources', sources, 'behaviourTags', Labels, 'targetCountries', target_countries, 'targetRegions', target_regions, 'targetIndustries', target_industries, 'relatedMalware', tostring(related_malware), 'relatedThreatActors', tostring(related_threat_actors), 'firstSeen', FirstSeen, 'lastSeen', LastSeen)\n| extend Data = pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', ObservableValue, 'description', strcat('Cyble Vision IOC (', tostring(ioc_type), '), risk score ', tostring(RiskScore), ', confidence ', tostring(confidence_rating)), 'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'confidence', Confidence, 'labels', Labels)\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
+                }
+            ]
+        }
+    }
+]
