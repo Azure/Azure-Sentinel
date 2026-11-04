@@ -654,6 +654,21 @@ Describe 'AzureSentinelCost offline calculation regressions' {
         $actual | Should -Be ($DailyGrantGB / 2.0)
     }
 
+    It 'prorates the allowance on both sides of UTC midnight in <ItemName>' -ForEach @(
+        @{ ItemName = 'EligibleE5Ingestion'; Licenses = 100.0; DataType = 'SigninLogs' }
+        @{ ItemName = 'DfSP2GrantUsed'; Licenses = 1.0; DataType = 'SecurityEvent' }
+    ) {
+        $start = [datetimeoffset]'2026-10-01T23:55:00Z'
+        $end = [datetimeoffset]'2026-10-02T00:05:00Z'
+        $records = @(
+            @{ TimeGenerated = $start; StartTime = $start; EndTime = $start.AddMinutes(5); Quantity = 500.0; IsBillable = $true; DataType = $DataType; Plan = 'Analytics' }
+            @{ TimeGenerated = $start.AddMinutes(5); StartTime = $start.AddMinutes(5); EndTime = $end; Quantity = 500.0; IsBillable = $true; DataType = $DataType; Plan = 'Analytics' }
+        )
+        $actual = Get-FixtureGrantUsed -Query (Get-WorkbookQuery -ItemName $ItemName) -Records $records `
+            -LicenseCount $Licenses -Start $start -End $end
+        [math]::Abs($actual - (0.5 / 288.0 * 2.0)) | Should -BeLessThan 0.000000001
+    }
+
     It 'bases <ItemName> savings on daily-capped use at the selected price' -ForEach @(
         @{ ItemName = 'EstimateE5Discount' }
         @{ ItemName = 'DfSP2EstimatedSavings' }
