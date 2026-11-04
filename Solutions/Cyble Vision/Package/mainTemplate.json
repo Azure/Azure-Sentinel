@@ -53,11 +53,11 @@
   },
   "variables": {
     "_solutionName": "Cyble Vision",
-    "_solutionVersion": "3.0.1",
+    "_solutionVersion": "3.0.4",
     "solutionId": "cybleinc1737472004964.cybleinc1737472004964-azure-sentinel-offerid",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.0.1",
+    "dataConnectorCCPVersion": "3.0.4",
     "_dataConnectorContentIdConnectorDefinition1": "CybleVisionAlerts",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "CybleVisionAlertsConnections",
@@ -1874,6 +1874,56 @@
                         {
                           "type": "Textbox",
                           "parameters": {
+                            "label": "IOC Types",
+                            "name": "iocType",
+                            "type": "text",
+                            "defaultValue": "Domain, FileHash-MD5, FileHash-SHA1, FileHash-SHA256, IPv4, IPv6, URL, Email",
+                            "description": "Comma-separated. Supported: Domain, FileHash-MD5, FileHash-SHA1, FileHash-SHA256, IPv4, IPv6, URL, Email",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Minimum Risk Score (0-100)",
+                            "name": "riskRatinglow",
+                            "type": "number",
+                            "defaultValue": "70",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Maximum Risk Score (0-100)",
+                            "name": "riskRatinghigh",
+                            "type": "number",
+                            "defaultValue": "100",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Confidence Rating",
+                            "name": "confidenceRating",
+                            "type": "text",
+                            "defaultValue": "High",
+                            "description": "Comma-separated: Low, Medium, High",
+                            "validations": {
+                              "required": true
+                            }
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
                             "label": "Query Interval (in minutes)",
                             "placeholder": "Enter Time in Minutes (e.g., 60)",
                             "type": "Textbox",
@@ -2014,7 +2064,7 @@
                       "clv2ws1"
                     ],
                     "outputStream": "Microsoft-ThreatIntelIndicators",
-                    "transformKql": "source\n| where isnotempty(ioc) and coalesce(tobool(is_whitelisted), false) == false\n| extend IocType = tolower(tostring(ioc_type))\n| extend ObservableKey = case(\n    IocType == 'ipv4', 'ipv4-addr:value',\n    IocType == 'ipv6', 'ipv6-addr:value',\n    IocType == 'domain', 'domain-name:value',\n    IocType == 'url', 'url:value',\n    IocType == 'email', 'email-addr:value',\n    IocType == 'filehash-md5', 'file:hashes.MD5',\n    IocType == 'filehash-sha1', \"file:hashes.'SHA-1'\",\n    IocType == 'filehash-sha256', \"file:hashes.'SHA-256'\",\n    '')\n| where isnotempty(ObservableKey)\n| extend RawValue = trim(@\"\\s+\", tostring(ioc))\n| extend ObservableValue = iff(IocType == 'url', RawValue, tolower(RawValue))\n| extend FirstSeen = unixtime_seconds_todatetime(tolong(first_seen))\n| extend LastSeen = unixtime_seconds_todatetime(tolong(last_seen))\n| extend TimeGenerated = now()\n| extend ValidFrom = coalesce(FirstSeen, now())\n| extend Modified = coalesce(LastSeen, now())\n| extend ValidUntil = datetime_add('day', 30, coalesce(LastSeen, now()))\n| extend Created = ValidFrom\n| extend RiskScore = toint(risk_score)\n| extend Confidence = iff(isnull(RiskScore), 50, iff(RiskScore < 0, 0, iff(RiskScore > 100, 100, RiskScore)))\n| extend Labels = iff(isnull(behaviour_tags), dynamic([]), behaviour_tags)\n| extend Malware = iff(isnull(related_malware), dynamic([]), related_malware)\n| extend ThreatActors = iff(isnull(related_threat_actors), dynamic([]), related_threat_actors)\n| extend patternValue = replace(@\"'\", @\"\\\\'\", replace(@\"\\\\\", @\"\\\\\\\\\", ObservableValue))\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", patternValue, \"']\")\n| extend idHex = substring(tostring(hash_sha256(strcat('CybleVisionIOC|', ObservableKey, '|', ObservableValue))), 0, 32)\n| extend Id = strcat('indicator--', substring(idHex, 0, 8), '-', substring(idHex, 8, 4), '-', substring(idHex, 12, 4), '-', substring(idHex, 16, 4), '-', substring(idHex, 20, 12))\n| extend SourceSystem = 'CybleVisionIOC'\n| extend LastUpdateMethod = 'Cyble Vision IOC CCF'\n| extend IsActive = true, IsDeleted = false, Revoked = false\n| extend AdditionalFields = pack('iocType', tostring(ioc_type), 'riskScore', RiskScore, 'confidenceRating', tostring(confidence_rating), 'sources', sources, 'behaviourTags', Labels, 'targetCountries', target_countries, 'targetRegions', target_regions, 'targetIndustries', target_industries, 'relatedMalware', Malware, 'relatedThreatActors', ThreatActors, 'firstSeen', FirstSeen, 'lastSeen', LastSeen)\n| extend Data = pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', ObservableValue, 'description', strcat('Cyble Vision IOC (', tostring(ioc_type), '), risk score ', tostring(RiskScore), ', confidence ', tostring(confidence_rating), iff(array_length(Malware) > 0, strcat(', malware: ', strcat_array(Malware, ', ')), ''), iff(array_length(ThreatActors) > 0, strcat(', threat actors: ', strcat_array(ThreatActors, ', ')), '')),'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'confidence', Confidence, 'labels', Labels)\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
+                    "transformKql": "source\n| where isnotempty(ioc) and (isnull(is_whitelisted) or tobool(is_whitelisted) == false)\n| extend IocType = tolower(tostring(ioc_type))\n| extend ObservableKey = case(\n    IocType == 'ipv4', 'ipv4-addr:value',\n    IocType == 'ipv6', 'ipv6-addr:value',\n    IocType == 'domain', 'domain-name:value',\n    IocType == 'url', 'url:value',\n    IocType == 'email', 'email-addr:value',\n    IocType == 'filehash-md5', 'file:hashes.MD5',\n    IocType == 'filehash-sha1', \"file:hashes.'SHA-1'\",\n    IocType == 'filehash-sha256', \"file:hashes.'SHA-256'\",\n    '')\n| where isnotempty(ObservableKey)\n| extend RawValue = replace(@\"^\\s+|\\s+$\", \"\", tostring(ioc))\n| extend ObservableValue = iff(IocType == 'url', RawValue, tolower(RawValue))\n| extend FirstSeen = datetime(1970-01-01) + tolong(first_seen) * 1sec\n| extend LastSeen = datetime(1970-01-01) + tolong(last_seen) * 1sec\n| extend TimeGenerated = now()\n| extend ValidFrom = iff(isnull(FirstSeen), now(), FirstSeen)\n| extend Modified = iff(isnull(LastSeen), now(), LastSeen)\n| extend ValidUntil = datetime_add('day', 30, Modified)\n| extend Created = ValidFrom\n| extend Confidence = risk_score\n| extend Labels = iff(isnull(behaviour_tags), parse_json('[]'), behaviour_tags), Malware = related_malware, ThreatActors = related_threat_actors\n| extend MalwareText = replace(@'[\\[\\]\"]', '', tostring(Malware)), ThreatActorsText = replace(@'[\\[\\]\"]', '', tostring(ThreatActors))\n| extend patternValue = replace(@\"'\", @\"\\\\'\", replace(@\"\\\\\", @\"\\\\\\\\\", ObservableValue))\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", patternValue, \"']\")\n| extend idHex = substring(tostring(hash_sha256(strcat('CybleVisionIOC|', ObservableKey, '|', ObservableValue))), 0, 32)\n| extend Id = strcat('indicator--', substring(idHex, 0, 8), '-', substring(idHex, 8, 4), '-', substring(idHex, 12, 4), '-', substring(idHex, 16, 4), '-', substring(idHex, 20, 12))\n| extend SourceSystem = 'CybleVisionIOC'\n| extend LastUpdateMethod = 'Cyble Vision IOC CCF'\n| extend IsActive = true, IsDeleted = false, Revoked = false\n| extend AdditionalFields = pack('iocType', tostring(ioc_type), 'riskScore', risk_score, 'confidenceRating', confidence_rating, 'sources', sources, 'behaviourTags', Labels, 'targetCountries', target_countries, 'targetRegions', target_regions, 'targetIndustries', target_industries, 'relatedMalware', Malware, 'relatedThreatActors', ThreatActors, 'firstSeen', FirstSeen, 'lastSeen', LastSeen)\n| extend Data = pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', ObservableValue, 'description', strcat('Cyble Vision IOC (', tostring(ioc_type), '), risk score ', tostring(risk_score), ', confidence ', tostring(confidence_rating), iff(isnotempty(MalwareText), strcat(', malware: ', MalwareText), ''), iff(isnotempty(ThreatActorsText), strcat(', threat actors: ', ThreatActorsText), '')),'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'confidence', Confidence, 'labels', Labels)\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
                   }
                 ]
               }
@@ -2120,6 +2170,56 @@
                 {
                   "type": "Textbox",
                   "parameters": {
+                    "label": "IOC Types",
+                    "name": "iocType",
+                    "type": "text",
+                    "defaultValue": "Domain, FileHash-MD5, FileHash-SHA1, FileHash-SHA256, IPv4, IPv6, URL, Email",
+                    "description": "Comma-separated. Supported: Domain, FileHash-MD5, FileHash-SHA1, FileHash-SHA256, IPv4, IPv6, URL, Email",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Minimum Risk Score (0-100)",
+                    "name": "riskRatinglow",
+                    "type": "number",
+                    "defaultValue": "70",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Maximum Risk Score (0-100)",
+                    "name": "riskRatinghigh",
+                    "type": "number",
+                    "defaultValue": "100",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Confidence Rating",
+                    "name": "confidenceRating",
+                    "type": "text",
+                    "defaultValue": "High",
+                    "description": "Comma-separated: Low, Medium, High",
+                    "validations": {
+                      "required": true
+                    }
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
                     "label": "Query Interval (in minutes)",
                     "placeholder": "Enter Time in Minutes (e.g., 60)",
                     "type": "Textbox",
@@ -2218,6 +2318,26 @@
               "type": "securestring",
               "minLength": 1
             },
+            "iocType": {
+              "defaultValue": "iocType",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "riskRatinglow": {
+              "defaultValue": "riskRatinglow",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "riskRatinghigh": {
+              "defaultValue": "riskRatinghigh",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "confidenceRating": {
+              "defaultValue": "confidenceRating",
+              "type": "securestring",
+              "minLength": 1
+            },
             "querywindow": {
               "defaultValue": "querywindow",
               "type": "securestring",
@@ -2286,7 +2406,7 @@
                     "Accept": "application/json"
                   },
                   "isPostPayloadJson": true,
-                  "queryParametersTemplate": "{\"startDate\": \"{_QueryWindowStartTime}\", \"endDate\": \"{_QueryWindowEndTime}\", \"dateFilterBy\": \"last_seen\", \"sortBy\": \"last_seen\", \"order\": \"desc\", \"iocType\": \"Domain, FileHash-MD5, FileHash-SHA1, FileHash-SHA256, IPv4, IPv6, URL, Email\", \"riskRating\": {\"gte\": \"70\", \"lte\": \"100\"}, \"confidentRating\": \"High\", \"countOnly\": false, \"page\": 1, \"limit\": 100}"
+                  "queryParametersTemplate": "[[concat('{\"startDate\": \"{_QueryWindowStartTime}\", \"endDate\": \"{_QueryWindowEndTime}\", \"dateFilterBy\": \"last_seen\", \"sortBy\": \"last_seen\", \"order\": \"desc\", \"iocType\": \"',parameters('iocType'),'\", \"riskRating\": {\"gte\": \"',parameters('riskRatinglow'),'\", \"lte\": \"',parameters('riskRatinghigh'),'\"}, \"confidentRating\": \"',parameters('confidenceRating'),'\", \"countOnly\": false, \"page\": 1, \"limit\": 100}')]"
                 },
                 "response": {
                   "format": "json",
@@ -2324,7 +2444,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Assets_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Assets_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -2457,7 +2577,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_BitBucket_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_BitBucket_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -2618,7 +2738,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Cloud_Storage_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Cloud_Storage_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -2764,7 +2884,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Compromised_Endpoints_Cookies_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Compromised_Endpoints_Cookies_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -2905,7 +3025,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Compromised_Files_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Compromised_Files_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -3036,7 +3156,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Cyber_Crime_Forum_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Cyber_Crime_Forum_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
@@ -3196,7 +3316,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Darkweb_Data_Breaches_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Darkweb_Data_Breaches_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
@@ -3365,7 +3485,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Darkweb_Marketplace_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Darkweb_Marketplace_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject8').analyticRuleVersion8]",
@@ -3532,7 +3652,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_darkweb_ransomware_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_darkweb_ransomware_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject9').analyticRuleVersion9]",
@@ -3672,7 +3792,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Defacement_Content_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Defacement_Content_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject10').analyticRuleVersion10]",
@@ -3753,7 +3873,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Defacement Activity Detected {{DC_DomainName}}",
                   "createIncident": true
                 }
@@ -3809,7 +3928,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_defacement_keyword_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_defacement_keyword_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject11').analyticRuleVersion11]",
@@ -3893,7 +4012,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Defacement Keyword Detected {{DK_Keyword}} on {{DK_DomainName}}",
                   "createIncident": true
                 }
@@ -3949,7 +4067,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_defacement_url_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_defacement_url_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject12').analyticRuleVersion12]",
@@ -4031,7 +4149,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "URL Content Change Detected {{DU_DomainName}}",
                   "createIncident": true
                 }
@@ -4087,7 +4204,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_discord_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_discord_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject13').analyticRuleVersion13]",
@@ -4175,7 +4292,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Discord Alert Risky Content by {{DC_AuthorUsername}}",
                   "createIncident": true
                 }
@@ -4231,7 +4347,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Docker_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Docker_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject14').analyticRuleVersion14]",
@@ -4319,7 +4435,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Docker Image Identified {{DK_Title}}",
                   "createIncident": true
                 }
@@ -4375,7 +4490,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_domain_expiry_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_domain_expiry_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject15').analyticRuleVersion15]",
@@ -4447,7 +4562,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Domain Expiration Imminent {{DE_Domain}}",
                   "createIncident": true
                 }
@@ -4503,7 +4617,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_domain_watchlist_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_domain_watchlist_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject16').analyticRuleVersion16]",
@@ -4574,7 +4688,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "DNS Record Change Detected for {{DW_New_Domain}}",
                   "createIncident": true
                 }
@@ -4630,7 +4743,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Flash_Report_Alerts_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Flash_Report_Alerts_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject17').analyticRuleVersion17]",
@@ -4760,7 +4873,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_github_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_github_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject18').analyticRuleVersion18]",
@@ -4919,7 +5032,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_hacktivism_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_hacktivism_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject19').analyticRuleVersion19]",
@@ -5091,7 +5204,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_i2p_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_i2p_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject20').analyticRuleVersion20]",
@@ -5162,7 +5275,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "I2P Content Alert Hidden Service Activity for Keyword {{I2P_SearchKeyword}}",
                   "createIncident": true
                 }
@@ -5218,7 +5330,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_IOC'S_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_IOC'S_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject21').analyticRuleVersion21]",
@@ -5363,7 +5475,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_ip_risk_score_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_ip_risk_score_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject22').analyticRuleVersion22]",
@@ -5434,7 +5546,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Risk Score Increased for IP {{IPRS_IP}}",
                   "createIncident": true
                 }
@@ -5490,7 +5601,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Leaked_Credentials_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Leaked_Credentials_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject23').analyticRuleVersion23]",
@@ -5643,7 +5754,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Malicious_ads_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Malicious_ads_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject24').analyticRuleVersion24]",
@@ -5726,7 +5837,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Malicious Ad Detected  {{MA_DomainName_Nested}}",
                   "createIncident": true
                 }
@@ -5782,7 +5892,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Mobile_Apps_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Mobile_Apps_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject25').analyticRuleVersion25]",
@@ -5937,7 +6047,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_new_vulnerability_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_new_vulnerability_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject26').analyticRuleVersion26]",
@@ -5990,7 +6100,6 @@
                 "incidentConfiguration": {
                   "severityColumnName": "MappedSeverity",
                   "alertDisplayNameFormat": "New Vulnerability Identified {{NV_CVE}}",
-                  "alertDetailsOverride": null,
                   "groupingConfiguration": {
                     "matchingMethod": "AllEntities",
                     "enabled": false,
@@ -6052,7 +6161,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_News_Feed_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_News_Feed_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject27').analyticRuleVersion27]",
@@ -6133,7 +6242,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Relevant Cybersecurity News {{NF_PostTitle}}",
                   "createIncident": true
                 }
@@ -6189,7 +6297,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_osint_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_osint_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject28').analyticRuleVersion28]",
@@ -6292,7 +6400,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "OSINT Mention Identified for Monitored Keyword {{KeywordName}}",
                   "createIncident": true
                 }
@@ -6348,7 +6455,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_ot_ics_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_ot_ics_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject29').analyticRuleVersion29]",
@@ -6423,7 +6530,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "OT/ICS Activity Detected from {{OT_SourceIP}}",
                   "createIncident": true,
                   "description": "Cyble detected industrial control system related traffic involving protocol {{OT_DataType}} from IP {{OT_SourceIP}}. Destination port {{OT_DestPort}}. Country. {{OT_Country}}. This may indicate reconnaissance or hostile probing of OT/ICS infrastructure.\n"
@@ -6480,7 +6586,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_pastebin_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_pastebin_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject30').analyticRuleVersion30]",
@@ -6579,7 +6685,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Pastebin/Gist Exposure for Keyword {{KeywordName}}",
                   "createIncident": true
                 }
@@ -6635,7 +6740,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_phishing_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_phishing_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject31').analyticRuleVersion31]",
@@ -6727,7 +6832,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Phishing Detected {{PH_PhishingKeyword}} on {{PH_DomainName}}",
                   "createIncident": true
                 }
@@ -6783,7 +6887,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Physical_Threats_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Physical_Threats_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject32').analyticRuleVersion32]",
@@ -6914,7 +7018,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Postman_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Postman_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject33').analyticRuleVersion33]",
@@ -7001,7 +7105,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Exposed Postman API Request {{PM_Title}}",
                   "createIncident": true
                 }
@@ -7057,7 +7160,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_product_vulnerability_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_product_vulnerability_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject34').analyticRuleVersion34]",
@@ -7157,7 +7260,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "Product Vulnerability {{PV_Product}} {{PV_Version}} {{PV_CVE_ID}}",
                   "createIncident": true
                 }
@@ -7213,7 +7315,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Social_Media_Monitoring_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Social_Media_Monitoring_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject35').analyticRuleVersion35]",
@@ -7377,7 +7479,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_ssl_expiry_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_ssl_expiry_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject36').analyticRuleVersion36]",
@@ -7470,7 +7572,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "SSL Certificate Expiry  {{DC_ServerName}}",
                   "createIncident": true
                 }
@@ -7526,7 +7627,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Stealer_Logs_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Stealer_Logs_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject37').analyticRuleVersion37]",
@@ -7702,7 +7803,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_subdomains_rule_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_subdomains_rule_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject38').analyticRuleVersion38]",
@@ -7774,7 +7875,6 @@
                     "reopenClosedIncident": false,
                     "lookbackDuration": "PT5H"
                   },
-                  "alertDetailsOverride": null,
                   "alertDisplayNameFormat": "New Subdomain Detected {{SD_Subdomain}}",
                   "createIncident": true
                 }
@@ -7830,7 +7930,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Suspicious_Domain_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Suspicious_Domain_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject39').analyticRuleVersion39]",
@@ -7966,7 +8066,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Telegram_Mentions_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Telegram_Mentions_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject40').analyticRuleVersion40]",
@@ -8114,7 +8214,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_TOR_Links_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_TOR_Links_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject41').analyticRuleVersion41]",
@@ -8267,7 +8367,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Vulnerability_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Vulnerability_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject42').analyticRuleVersion42]",
@@ -8413,7 +8513,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_Web_Applications_AnalyticalRules Analytics Rule with template version 3.0.1",
+        "description": "Alerts_Web_Applications_AnalyticalRules Analytics Rule with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject43').analyticRuleVersion43]",
@@ -8551,7 +8651,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_advisory Data Parser with template version 3.0.1",
+        "description": "Alerts_advisory Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -8681,7 +8781,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_assets Data Parser with template version 3.0.1",
+        "description": "Alerts_assets Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject2').parserVersion2]",
@@ -8811,7 +8911,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_bit_bucket Data Parser with template version 3.0.1",
+        "description": "Alerts_bit_bucket Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject3').parserVersion3]",
@@ -8941,7 +9041,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_cloud_storage Data Parser with template version 3.0.1",
+        "description": "Alerts_cloud_storage Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject4').parserVersion4]",
@@ -9071,7 +9171,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_compromised_endpoints_cookies Data Parser with template version 3.0.1",
+        "description": "Alerts_compromised_endpoints_cookies Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject5').parserVersion5]",
@@ -9201,7 +9301,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_compromised_files Data Parser with template version 3.0.1",
+        "description": "Alerts_compromised_files Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject6').parserVersion6]",
@@ -9331,7 +9431,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_cyber_crime_forums Data Parser with template version 3.0.1",
+        "description": "Alerts_cyber_crime_forums Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject7').parserVersion7]",
@@ -9461,7 +9561,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_darkweb_data_breaches Data Parser with template version 3.0.1",
+        "description": "Alerts_darkweb_data_breaches Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject8').parserVersion8]",
@@ -9591,7 +9691,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_darkweb_marketplaces Data Parser with template version 3.0.1",
+        "description": "Alerts_darkweb_marketplaces Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject9').parserVersion9]",
@@ -9721,7 +9821,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_darkweb_ransomware Data Parser with template version 3.0.1",
+        "description": "Alerts_darkweb_ransomware Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject10').parserVersion10]",
@@ -9851,7 +9951,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_defacement_content Data Parser with template version 3.0.1",
+        "description": "Alerts_defacement_content Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject11').parserVersion11]",
@@ -9981,7 +10081,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_defacement_keyword Data Parser with template version 3.0.1",
+        "description": "Alerts_defacement_keyword Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject12').parserVersion12]",
@@ -10111,7 +10211,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_defacement_url Data Parser with template version 3.0.1",
+        "description": "Alerts_defacement_url Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject13').parserVersion13]",
@@ -10241,7 +10341,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_discord Data Parser with template version 3.0.1",
+        "description": "Alerts_discord Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject14').parserVersion14]",
@@ -10371,7 +10471,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_docker Data Parser with template version 3.0.1",
+        "description": "Alerts_docker Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject15').parserVersion15]",
@@ -10501,7 +10601,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_domain_expiry Data Parser with template version 3.0.1",
+        "description": "Alerts_domain_expiry Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject16').parserVersion16]",
@@ -10631,7 +10731,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_domain_watchlist Data Parser with template version 3.0.1",
+        "description": "Alerts_domain_watchlist Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject17').parserVersion17]",
@@ -10761,7 +10861,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_flash_report Data Parser with template version 3.0.1",
+        "description": "Alerts_flash_report Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject18').parserVersion18]",
@@ -10891,7 +10991,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_github Data Parser with template version 3.0.1",
+        "description": "Alerts_github Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject19').parserVersion19]",
@@ -11021,7 +11121,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_hacktivism Data Parser with template version 3.0.1",
+        "description": "Alerts_hacktivism Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject20').parserVersion20]",
@@ -11151,7 +11251,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_i2p Data Parser with template version 3.0.1",
+        "description": "Alerts_i2p Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject21').parserVersion21]",
@@ -11281,7 +11381,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_iocs Data Parser with template version 3.0.1",
+        "description": "Alerts_iocs Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject22').parserVersion22]",
@@ -11411,7 +11511,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_ip_risk_score Data Parser with template version 3.0.1",
+        "description": "Alerts_ip_risk_score Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject23').parserVersion23]",
@@ -11541,7 +11641,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_leaked_credentials Data Parser with template version 3.0.1",
+        "description": "Alerts_leaked_credentials Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject24').parserVersion24]",
@@ -11671,7 +11771,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_malicious_ads Data Parser with template version 3.0.1",
+        "description": "Alerts_malicious_ads Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject25').parserVersion25]",
@@ -11801,7 +11901,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_mobile_apps Data Parser with template version 3.0.1",
+        "description": "Alerts_mobile_apps Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject26').parserVersion26]",
@@ -11931,7 +12031,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_new_vulnerability Data Parser with template version 3.0.1",
+        "description": "Alerts_new_vulnerability Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject27').parserVersion27]",
@@ -12061,7 +12161,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_news_feed Data Parser with template version 3.0.1",
+        "description": "Alerts_news_feed Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject28').parserVersion28]",
@@ -12191,7 +12291,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_osint Data Parser with template version 3.0.1",
+        "description": "Alerts_osint Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject29').parserVersion29]",
@@ -12321,7 +12421,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_ot_ics Data Parser with template version 3.0.1",
+        "description": "Alerts_ot_ics Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject30').parserVersion30]",
@@ -12451,7 +12551,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_pastebin Data Parser with template version 3.0.1",
+        "description": "Alerts_pastebin Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject31').parserVersion31]",
@@ -12581,7 +12681,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_phishing Data Parser with template version 3.0.1",
+        "description": "Alerts_phishing Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject32').parserVersion32]",
@@ -12711,7 +12811,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_physical_threats Data Parser with template version 3.0.1",
+        "description": "Alerts_physical_threats Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject33').parserVersion33]",
@@ -12841,7 +12941,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_postman Data Parser with template version 3.0.1",
+        "description": "Alerts_postman Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject34').parserVersion34]",
@@ -12971,7 +13071,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_product_vulnerability Data Parser with template version 3.0.1",
+        "description": "Alerts_product_vulnerability Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject35').parserVersion35]",
@@ -13101,7 +13201,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_ransomware_updates Data Parser with template version 3.0.1",
+        "description": "Alerts_ransomware_updates Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject36').parserVersion36]",
@@ -13231,7 +13331,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_social_media_monitoring Data Parser with template version 3.0.1",
+        "description": "Alerts_social_media_monitoring Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject37').parserVersion37]",
@@ -13361,7 +13461,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_ssl_expiry Data Parser with template version 3.0.1",
+        "description": "Alerts_ssl_expiry Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject38').parserVersion38]",
@@ -13491,7 +13591,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_stealer_logs Data Parser with template version 3.0.1",
+        "description": "Alerts_stealer_logs Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject39').parserVersion39]",
@@ -13621,7 +13721,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_subdomains Data Parser with template version 3.0.1",
+        "description": "Alerts_subdomains Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject40').parserVersion40]",
@@ -13751,7 +13851,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_suspicious_domains Data Parser with template version 3.0.1",
+        "description": "Alerts_suspicious_domains Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject41').parserVersion41]",
@@ -13881,7 +13981,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_telegram_mentions Data Parser with template version 3.0.1",
+        "description": "Alerts_telegram_mentions Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject42').parserVersion42]",
@@ -14011,7 +14111,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_tor_links Data Parser with template version 3.0.1",
+        "description": "Alerts_tor_links Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject43').parserVersion43]",
@@ -14141,7 +14241,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_vulnerability Data Parser with template version 3.0.1",
+        "description": "Alerts_vulnerability Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject44').parserVersion44]",
@@ -14271,7 +14371,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Alerts_web_applications Data Parser with template version 3.0.1",
+        "description": "Alerts_web_applications Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject45').parserVersion45]",
@@ -14401,7 +14501,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cyble-IOC-Enrichment-Playbook Playbook with template version 3.0.1",
+        "description": "Cyble-IOC-Enrichment-Playbook Playbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -14863,7 +14963,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Cyble-TI-Ingest-Playbook Playbook with template version 3.0.1",
+        "description": "Cyble-TI-Ingest-Playbook Playbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -15610,7 +15710,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CybleVisionAlert_Status_Update Playbook with template version 3.0.1",
+        "description": "CybleVisionAlert_Status_Update Playbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -16142,7 +16242,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CybleVisionAlertsWorkbook Workbook with template version 3.0.1",
+        "description": "CybleVisionAlertsWorkbook Workbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -16225,7 +16325,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.1",
+        "version": "3.0.4",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Cyble Vision",
