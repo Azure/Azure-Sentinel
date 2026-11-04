@@ -543,7 +543,8 @@ def _dedupe_summarize_keys(kql: str) -> Tuple[str, List[str]]:
 def rewrite(kql: str, tables: Optional[List[str]],
             catalog: Optional[dict] = None,
             *,
-            preserve_sentinel_tables: bool = False) -> dict:
+            preserve_sentinel_tables: bool = False,
+            allowed_tables: Optional[List[str]] = None) -> dict:
     """Deterministically rewrite a Sentinel query for Advanced Hunting.
 
     Returns:
@@ -629,9 +630,10 @@ def rewrite(kql: str, tables: Optional[List[str]],
     int_cols: Dict[str, List[str]] = {}
     removed_cols: Dict[str, List[str]] = {}
 
+    allowed_table_set = {t for t in (allowed_tables or ()) if isinstance(t, str) and t}
     for t in tables:
         entry = tbl_map.get(t)
-        if not entry and isinstance(t, str) and t.endswith("_CL"):
+        if not entry and isinstance(t, str) and (t.endswith("_CL") or t in allowed_table_set):
             entry = {"tier": "1to1", "ahTable": t, "applyGlobalDropColumns": True}
         tier = entry["tier"] if entry else "unknown"
         tiers[t] = tier

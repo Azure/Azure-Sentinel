@@ -664,6 +664,35 @@ def test_other_unknown_tables_are_not_hidden_by_platform_reference_classificatio
     assert convert(solution, settings)["blocked"] == 1
 
 
+def test_reviewed_unknown_sentinel_table_with_connector_converts_and_validates(solution):
+    folder = solution / "Data Connectors"
+    folder.mkdir(exist_ok=True)
+    (folder / "template_UnknownSource.json").write_text(
+        json.dumps({"id": "UnknownSourceConnector", "dataTypes": [{"name": "UnknownSource"}]})
+    )
+    data_path = solution / "Data/Solution_Fixture.json"
+    data = json.loads(data_path.read_bytes())
+    data["Data Connectors"] = ["Data Connectors/template_UnknownSource.json"]
+    data_path.write_text(json.dumps(data))
+
+    write_query(solution, "UnknownSource | where TimeGenerated > ago(1d) | count")
+    plan = dependencies.plan_workbook_dependencies(solution)
+    value = decisions(plan, tables=["UnknownSource"])
+    value["workbooks"][0]["requiredWorkloads"] = [{"workload": "sentinel", "dataTypes": ["UnknownSource"]}]
+    value["workbooks"][0]["requiredDataConnectors"] = [
+        {"connectorId": "UnknownSourceConnector", "dataTypes": ["UnknownSource"]}
+    ]
+    result = review(solution, plan, value)
+    assert result["dependencyReviewRequired"] is False
+    settings = json.loads((solution / "Logs/review-1/conversion-config.json").read_bytes())
+    converted = convert(solution, settings)
+    assert converted["converted"] == 1
+    assert converted["blocked"] == 0
+    validation = workbooks.validate_workbooks(solution)
+    assert validation["valid"] == 1
+    assert validation["invalid"] == 0
+
+
 def test_metadata_time_binding_cannot_misstate_declared_range(solution):
     write_query(solution, "DeviceEvents | where Timestamp >= {TimeRange:start}")
     plan = dependencies.plan_workbook_dependencies(solution)

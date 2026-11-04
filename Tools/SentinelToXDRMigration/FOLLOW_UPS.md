@@ -196,6 +196,28 @@ themselves establish a toolkit fix is required.
   lab sign-off.** Completed: `workflow-init`, `initialize_workflow`, canonical
   workflow docs, and all agent adapters now default to `qualification` with
   `authoring` preserved as an explicit offline/ISV fallback.
+- [ ] **Unblock the six explicitly blocked identity/risk tables in the mapping
+  catalog.** Change `AADProvisioningLogs`, `AADRiskyUsers`, `AADUserRiskEvents`,
+  `ADFSSignInLogs`, `RiskyUsers`, and `UserRiskEvents` from `tier: "blocked"` to
+  `tier: "1to1"` (same-name Advanced Hunting parser support).
+- [ ] **Allow working KQL queries in Defender workbooks even when a table is not
+  listed in the static catalog.** Ensure a missing static catalog entry never
+  blocks workbook conversion, validation replay, publication, or V3.1 packaging
+  when the query works in Advanced Hunting or has reviewed dependency/runtime
+  evidence.
+- [ ] **Assume Sentinel table exposure in Defender XDR once the required data
+  connector is connected.** Reflect across dependency and validation checks that
+  a table belonging to the `sentinel` workload with a declared/connected data
+  connector is exposed in the unified Defender XDR environment.
+- [ ] **Preserve `TimeGenerated` everywhere without rewriting to `Timestamp`.**
+  Remove `TimeGenerated -> Timestamp` column rewrites across detection and
+  workbook conversion, catalog renames, and validators, because Defender XDR
+  Advanced Hunting virtually maps `TimeGenerated` to `Timestamp` on all tables.
+- [ ] **Let live lab or Data Connector table evidence override static table
+  lists.** Treat evidence of a table in the live lab or in a solution Data
+  Connector definition file (`dataTypes`) as sufficient to override static table
+  catalogs, distinguishing "unknown to our offline snapshot" from "unsupported in
+  this environment."
 
 Any future environment write remains separately gated by explicit approval
 immediately before the exact operation. No cloud action is authorized by this

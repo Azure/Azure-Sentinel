@@ -53,7 +53,8 @@ def convert(kql: str, tables: Optional[List[str]] = None,
             source_id: Optional[str] = None, artifact_type: str = "analyticRule",
             resolve: bool = False,
             *,
-            preserve_sentinel_tables: bool = False) -> dict:
+            preserve_sentinel_tables: bool = False,
+            allowed_tables: Optional[List[str]] = None) -> dict:
     """Convert one Sentinel KQL query and return the output contract.
 
     tables   - resolved data sources; pass them for offline/batch use.
@@ -64,7 +65,8 @@ def convert(kql: str, tables: Optional[List[str]] = None,
     if resolve:
         raise ValueError("Live resolution is not supported by the offline converter.")
 
-    res = rewrite.rewrite(kql, tables, preserve_sentinel_tables=preserve_sentinel_tables)
+    res = rewrite.rewrite(kql, tables, preserve_sentinel_tables=preserve_sentinel_tables,
+                          allowed_tables=allowed_tables)
     effective_tables = list(tables) if tables is not None else (
         sorted(res["renamedTables"].keys()) if res.get("renamedTables") else None
     )

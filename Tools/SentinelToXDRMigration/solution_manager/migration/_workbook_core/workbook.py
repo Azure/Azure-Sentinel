@@ -597,7 +597,8 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
                      tables: list[str] | None = None,
                      allowed_workspace_functions=(),
                      *,
-                     preserve_sentinel_tables: bool = False) -> dict:
+                     preserve_sentinel_tables: bool = False,
+                     allowed_tables=()) -> dict:
     """Return an intact review draft and report. Never resolves or executes live.
 
     resolutions maps original query pointers to {querySha256, tables, evidence}.
@@ -736,7 +737,8 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
                 continue
         contract = migrator.convert(raw, tables=resolved, source_id=path,
                                     artifact_type="workbook", resolve=False,
-                                    preserve_sentinel_tables=preserve_sentinel_tables)
+                                    preserve_sentinel_tables=preserve_sentinel_tables,
+                                    allowed_tables=list(allowed_tables) if allowed_tables else None)
         entry["conversion"] = contract
         if contract.get("notes"):
             entry["notes"] = list(contract["notes"])

@@ -52,7 +52,11 @@ def validate_public_document(solution, document):
                     if row["workload"] == "sentinel" for table in row["dataTypes"]}
         connectors = {table for row in provenance["requiredDataConnectors"] for table in row["dataTypes"]}
         used = set()
-        known = set(TABLE_WORKLOADS) | set(mapping_catalog.load_mapping_catalog()["tables"])
+        known = (
+            set(TABLE_WORKLOADS)
+            | set(mapping_catalog.load_mapping_catalog()["tables"])
+            | (sentinel & connectors)
+        )
         if not declared <= known:
             errors.append("Unknown public dependency tables: " + ", ".join(sorted(declared - known)))
         if not connectors <= declared:

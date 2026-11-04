@@ -358,8 +358,26 @@ def review_workbook_dependencies(solution, *, plan_path, decisions_path, expecte
         config["workbookResolutions"].setdefault(path, {})[row["path"]] = resolution
         blockers = list(row["technicalBlockers"])
         if not preserved_provider:
+            declared_workloads = settings.get("requiredWorkloads", [])
+            declared_connectors = settings.get("requiredDataConnectors") or []
+            has_sentinel = any(
+                isinstance(r, dict) and r.get("workload") == "sentinel"
+                for r in declared_workloads
+            )
+            allowed_review_tables = (
+                sorted({
+                    t
+                    for r in declared_workloads
+                    if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
+                    for t in r["dataTypes"]
+                    if isinstance(t, str) and t
+                })
+                if (not has_sentinel or declared_connectors)
+                else None
+            )
             contract = migrator.convert(row["queryKql"], tables=tables, source_id=row["path"],
-                                        artifact_type="workbook", resolve=False)
+                                        artifact_type="workbook", resolve=False,
+                                        allowed_tables=allowed_review_tables)
             if not row["scopeHelper"] and (contract["status"] != "converted" or contract["unsupported"]):
                 blockers.append(contract["blockedReason"] or "Shared conversion requires technical review.")
             if aliases and contract["convertedKql"] != row["queryKql"]:

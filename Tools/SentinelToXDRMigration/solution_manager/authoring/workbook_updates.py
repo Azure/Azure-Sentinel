@@ -95,7 +95,11 @@ def _queries(document, provenance, baseline):
     sentinel = {table for record in provenance["requiredWorkloads"]
                 if record["workload"] == "sentinel" for table in record["dataTypes"]}
     connectors = {table for record in provenance["requiredDataConnectors"] for table in record["dataTypes"]}
-    known = set(TABLE_WORKLOADS) | set(mapping_catalog.load_mapping_catalog()["tables"])
+    known = (
+        set(TABLE_WORKLOADS)
+        | set(mapping_catalog.load_mapping_catalog()["tables"])
+        | (sentinel & connectors)
+    )
     historical = {surface["path"]: surface for surface in workbook.query_surfaces(baseline)}
     queries, used = [], set()
     for surface in workbook.query_surfaces(document):
