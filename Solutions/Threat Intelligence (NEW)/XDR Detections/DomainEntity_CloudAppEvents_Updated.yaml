@@ -1,0 +1,120 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mda
+    dataTypes:
+    - CloudAppEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a7d2b1e4-dd9c-40fd-9651-1a136eb8f0df
+    path: Analytic Rules/DomainEntity_CloudAppEvents_Updated.yaml
+    version: 1.0.7
+    querySha256: 1809ed38d525ee121dc25b5773b6c300956dedc502800773f30f0ec9b4f0b6be
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.7
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 168f13ad27975abddb6f4479dceeddb48d0455bcc8905277e0e9bce56e8dc7c9
+      targetQuerySha256: 5372a2d3467f493d1b1648ffe7c156c0dcaad752328458efb785f623e4b85913
+properties:
+  id: xdr-a7d2b1e4-dd9c-40fd-9651-1a136eb8f0df
+  displayName: TI Map Domain entity to Cloud App Events
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet list_tlds =\n\
+      \  ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookBack)\n \
+      \   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      \    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n    //extract\
+      \ key part of kv pair\n    | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\
+      \", \"\", tostring(split(ObservableKey, \":\", 0)))\n    | where IndicatorType\
+      \ == \"domain-name\"\n    | extend DomainName = tolower(IndicatorType)\n   \
+      \ | extend parts = split(DomainName, '.')\n    | extend tld = parts[(array_length(parts)\
+      \ - 1)]\n    | extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | summarize\
+      \ count() by tostring(tld)\n    | summarize make_set(tld);\nlet Domain_Indicators\
+      \ =\n  ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookBack)\n\
+      \    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      \    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n    |\
+      \ extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n    | where IndicatorType == \"domain-name\"\n    | extend DomainName\
+      \ = tolower(ObservableValue)\n    | extend IndicatorId = tostring(split(Id,\
+      \ \"--\")[2])\n    | project-reorder *, IndicatorType, DomainName, Type;\n \
+      \ Domain_Indicators\n    | join kind=innerunique (\n  CloudAppEvents\n    |\
+      \ extend IngestionTime = ingestion_time()\n    | where IngestionTime > ago(dt_lookBack)\n\
+      \    | extend PAUrl = columnifexists(\"RequestURL\", \"None\")\n    | extend\
+      \ Domain = tolower(trim('\"', tostring(parseurl(PAUrl).Host)))\n    | extend\
+      \ parts = split(Domain, '.')\n    | extend tld = parts[(array_length(parts)\
+      \ - 1)]\n    | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.DomainName\
+      \ == $right.Domain\n    | where CloudAppEvents_TimeGenerated < ValidUntil\n\
+      \    | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated,\
+      \ *) by IndicatorId\n    | extend\n          Description = tostring(parse_json(max_CloudAppEvents_TimeGenerated_Data).description),\n\
+      \          ActivityGroupNames = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ActivityGroupNames\"\
+      , \"\"),\n          ThreatType = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatType\"\
+      , \"\"),\n          ExpirationDateTime = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ExpirationDateTime\"\
+      , \"\"),\n          ConfidenceScore = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ConfidenceScore\"\
+      , \"\"),\n          DomainName = column_ifexists(\"max_CloudAppEvents_TimeGenerated_DomainName\"\
+      , \"\"),\n          ProviderName = column_ifexists(\"max_CloudAppEvents_TimeGenerated_IndicatorProvider\"\
+      , \"\"),\n          AlertSeverity = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatSeverity\"\
+      , \"\"),\n          IPAddress = column_ifexists(\"max_CloudAppEvents_TimeGenerated_IPAddress\"\
+      , \"\")\n    | project CloudAppEvents_TimeGenerated, Description, ActivityGroupNames,\
+      \ IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName,\
+      \ ProviderName, AlertSeverity, IPAddress"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Domain entity to Cloud App Events
+      description: '''Identifies compromises and attacks and detect malicious activities
+        in one''s domain entity from TI.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

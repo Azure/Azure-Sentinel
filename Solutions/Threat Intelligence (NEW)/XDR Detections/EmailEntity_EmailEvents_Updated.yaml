@@ -1,0 +1,138 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mdo
+    dataTypes:
+    - EmailEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - EmailEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 18b61c3f-55fa-4eb9-8721-72dabd1eb3cb
+    path: Analytic Rules/EmailEntity_EmailEvents_Updated.yaml
+    version: 1.0.6
+    querySha256: 4248a3b3f402029a07c76b36b1a7667ed9ea4d2b58dd81b21e3dd884838b9d4a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.6
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `RecipientEmailAddress` cannot be proven after
+      a destructive projection; no supplemental customDetails binding was added and
+      KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: e00aa96d8b08f5cfd76bdf48c298c9f0d920c8cad3388ee842efbc53c00c3509
+      targetQuerySha256: a87b0995073793c613044ce0408c5c0d8a0faaa5fdb0dd26aa63630c63f2b2f7
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: RecipientEmailAddress
+      column: RecipientEmailAddress
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-18b61c3f-55fa-4eb9-8721-72dabd1eb3cb
+  displayName: TI Map Email entity to EmailEvents
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailEvents_ =\
+      \ materialize(EmailEvents | where isnotempty(RecipientEmailAddress) and isnotempty(SenderFromAddress)\
+      \ and TimeGenerated >= ago(dt_lookBack) and DeliveryAction !has \"Blocked\"\
+      \ | project-rename  EmailEvents_TimeGenerated = TimeGenerated | extend SenderFromAddress\
+      \ = tolower(SenderFromAddress) | extend RecipientEmailAddress = tolower(RecipientEmailAddress));\n\
+      let SenderAddresses = EmailEvents_ | distinct  SenderFromAddress | summarize\
+      \ make_list(SenderFromAddress);\nlet RecipientAddresses = EmailEvents_ | distinct\
+      \  RecipientEmailAddress | summarize make_list(RecipientEmailAddress);\nlet\
+      \ TI = materialize(ThreatIntelIndicators\n| where TimeGenerated >= ago(ioc_lookBack)\n\
+      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"email-addr\"\n| extend EmailSenderAddress\
+      \ = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress,\
+      \ indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress,\
+      \ \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | extend TI_EmailAddress = tolower(EmailSenderAddress)\n| where TI_EmailAddress\
+      \ in (SenderAddresses) or TI_EmailAddress in (RecipientAddresses)\n| summarize\
+      \ LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n|\
+      \ where IsActive and (ValidUntil > now() or isempty(ValidUntil)));\n(union\n\
+      \  (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.SenderFromAddress),\n\
+      \  (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.RecipientEmailAddress))\n\
+      | where EmailEvents_TimeGenerated < ValidUntil\n| extend Description = tostring(parse_json(Data).description)\n\
+      | extend ActivityGroupNames = extract(\"ActivityGroup:([^,]+)\", 1, tostring(parse_json(Data).labels))\n\
+      | summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *)\
+      \ by Id, TI_EmailAddress\n| extend DomainName = EmailSourceDomain\n| extend\
+      \ Url = DomainName\n| project EmailEvents_TimeGenerated, Description, ActivityGroupNames,\
+      \ Id, ValidUntil, Confidence, DomainName, RecipientEmailAddress, SenderFromAddress,\
+      \ Subject, ConfidenceLevel, Url, Type, TI_EmailAddress, TrafficLightProtocolLevel,\
+      \ DeliveryAction, DeliveryLocation, EmailDirection\n| extend Name = tostring(split(RecipientEmailAddress,\
+      \ '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n\
+      | extend timestamp = EmailEvents_TimeGenerated\n| project-reorder *, TrafficLightProtocolLevel,\
+      \ DomainName, Type, TI_EmailAddress"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Email entity to EmailEvents
+      description: '''Identifies a match in EmailEvents table from any Email IOC from
+        TI'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
