@@ -1,0 +1,119 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PowerPlatformAdmin
+  dataTypes:
+  - PowerPlatformAdminActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - PowerPlatformAdminActivity
+  requiredDataConnectors:
+  - connectorId: PowerPlatformAdmin
+    dataTypes:
+    - PowerPlatformAdminActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 886a5655-3d12-42f1-8927-4095789c575e
+    path: Analytic Rules/Power Platform - Connector added to a sensitive environment.yaml
+    version: 3.2.0
+    querySha256: 1c989ef7d58fb63e7bed90105af21dff713cd1668b3e7c103187a5f519f118df
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'Environment' column `EnvironmentId` requires runtime output-schema binding verification
+    - customDetails 'Connection' column `ConnectionId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - Exfiltration
+    originalTechniques:
+    - T0871
+    - T1567
+    - T1537
+    reviewScope:
+      sourceDocumentSha256: 3e6ad39af5225aef16e10777c1b1a2e69f18267a4b10d0554e5e5d3fc286cca6
+      targetQuerySha256: 31c9838a49bce0008d685e407ed7903b2ddad82f09103675546950a2a344a2c8
+properties:
+  id: xdr-886a5655-3d12-42f1-8927-4095789c575e
+  displayName: Power Platform - Connector added to a sensitive environment
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let sensitive_environment_id = dynamic([
+          // Specify the list of sensitive power platform environment ID's to monitor here.
+          // Example: "10e72012-8886-41ec-b973-250286419b38", "183c7056-7ed0-426f-8ae6-69819cf72259"
+          ]);
+      let query_frequency = 11h;
+      PowerPlatformAdminActivity
+      | where TimeGenerated >= ago (query_frequency)
+      | where EventOriginalType == "PutConnection"
+      | extend Properties = tostring(PropertyCollection)
+      | extend SrcIpAddr = extract(@'"enduser.ip_address","Value":"([^"]+)"', 1, Properties)
+      | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string('::ffff:', '', SrcIpAddr), SrcIpAddr)
+      | extend
+          EnvironmentId = extract(@'"powerplatform.analytics.resource.environment.id","Value":"([^"]+)"', 1, Properties),
+          ConnectionId = extract(@'"powerplatform.analytics.resource.connection.id","Value":"([^"]+)"', 1, Properties)
+      | where EnvironmentId in~ (sensitive_environment_id)
+      | extend
+          AccountName = tostring(split(ActorName, "@")[0]),
+          UPNSuffix = tostring(split(ActorName, "@")[1])
+      | project
+          TimeGenerated,
+          EventOriginalType,
+          ActorName,
+          SrcIpAddr,
+          ConnectionId,
+          EnvironmentId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Power Platform - Connector added to a sensitive environment
+      description: Identifies occurrences of new API connector creations within Power Platform, specifically targeting a predefined
+        list of sensitive environments.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T0871
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+        - technique: T1537
+      customDetails:
+        Environment: EnvironmentId
+        Connection: ConnectionId

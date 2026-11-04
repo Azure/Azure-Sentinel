@@ -1,6 +1,6 @@
 # VerifyASimParserTemplate.py
 #
-# Validates the YAML template of modified ASIM parsers (both ASim and vim variants).
+# Validates the YAML template of modified ASIM query-time parsers (both ASim and vim variants).
 # For each modified parser, the following checks are performed against the parser
 # YAML and its corresponding union parser YAML:
 #
@@ -16,8 +16,9 @@
 # 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
 # 11. ParserName format - must match ^[a-zA-Z][a-zA-Z0-9_]+$ and start with <FileType><Schema>
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
-# 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
-# 14. vim ParserParams - must match the schema union parser parameters (pack is optional)
+# 13. Sample data file - must resolve using the same legacy/source-specific rules as ingestion (ASim only)
+# 14. vim ParserParams - must match the schema union parser parameters
+#     (pack is optional; eventresultdetails_has_any is also optional for WebSession)
 #
 # Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
 
@@ -40,6 +41,8 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
+resolve_sample_data_path = parser_file_utils.resolve_sample_data_path
 
 import yaml
 import re
@@ -47,7 +50,6 @@ import subprocess
 import csv
 from datetime import datetime
 from urllib.parse import urlparse
-from tabulate import tabulate
 
 # Constants
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
@@ -92,7 +94,7 @@ def run():
     repo_root = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
     modified_files = get_modified_files(current_directory)
     sample_data_path = os.path.join(repo_root, SAMPLE_DATA_PATH)
-    parser_yaml_files = filter_yaml_files(modified_files)
+    parser_yaml_files = filter_query_time_parser_files(modified_files)
     has_failures = False
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
@@ -161,7 +163,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - References include correct schema-specific and ASIM doc links
     - ParserName matches ^[a-zA-Z][a-zA-Z0-9_]+$ and starts with <FileType><Schema>
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
-    - Sample data CSV file exists locally (ASim parsers only)
+    - Sample data CSV resolves locally using the ingestion selection rules (ASim parsers only)
     - vim ParserParams match the parameters supported by the schema union parser
 
     Args:
@@ -328,14 +330,18 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     # Check if sample data files exists or not (Only applicable for ASim FileType)
     
     if FileType == "ASim":
-        # construct filename
-        SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
-        SampleDataFilePath = os.path.join(ASIMSampleDataURL, SampleDataFile)
-        # check if file exists locally
-        if os.path.exists(SampleDataFilePath):
-            results.append((SampleDataFile, 'Sample data file exists', 'Pass'))
+        try:
+            sample_path = resolve_sample_data_path(
+                ASIMSampleDataURL, event_vendor, event_product, schema, parser_query
+            )
+        except (FileNotFoundError, ValueError) as error:
+            results.append((
+                f'{RED}Sample data file resolution failed{RESET}',
+                f'{RED}Sample data file resolution failed: {error}{RESET}',
+                f'{RED}Fail{RESET}',
+            ))
         else:
-            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}"{RESET}', f'{RED}Fail{RESET}'))
+            results.append((sample_path.name, 'Sample data file exists', 'Pass'))
     return results
 
 def validate_vim_parser_params(parser_file, union_parser_file):
@@ -352,7 +358,13 @@ def validate_vim_parser_params(parser_file, union_parser_file):
     parser_params.discard(None)
     supported_params.discard(None)
 
-    missing_params = supported_params - OPTIONAL_VIM_PARSER_PARAMS - parser_params
+    optional_params = OPTIONAL_VIM_PARSER_PARAMS.copy()
+    # Temporary exception for WebSession.
+    # TODO: Remove eventresultdetails_has_any from the WebSession vim YAML and remove this exception.
+    if parser_file.get('Normalization', {}).get('Schema') == 'WebSession':
+        optional_params.add('eventresultdetails_has_any')
+
+    missing_params = supported_params - optional_params - parser_params
     unsupported_params = parser_params - supported_params - VIM_CONTROL_PARAMS
 
     if not missing_params and not unsupported_params:
@@ -370,13 +382,9 @@ def validate_vim_parser_params(parser_file, union_parser_file):
 
     return (
         f'{RED}{", ".join(differences)}{RESET}',
-        f'{RED}ParserParams must match the schema union parser parameters; "pack" is optional{RESET}',
+        f'{RED}ParserParams must match the schema union parser parameters; optional: {", ".join(sorted(optional_params))}{RESET}',
         f'{RED}Fail{RESET}'
     )
-
-def filter_yaml_files(modified_files):
-    # Take only the YAML files
-    return [line for line in modified_files if line.endswith('.yaml')]
 
 def get_modified_files(current_directory):
 
@@ -421,6 +429,8 @@ def print_test_header(parser_name):
     print("***********************************")
 
 def print_results_table(results):
+    from tabulate import tabulate
+
     table = [[index + 1] + list(result) for index, result in enumerate(results)]
     print(tabulate(table, headers=['S.No', 'Test Value', 'Test Name', 'Result'], tablefmt="grid"))
 

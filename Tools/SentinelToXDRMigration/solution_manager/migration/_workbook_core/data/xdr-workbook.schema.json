@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Authored Defender XDR Workbook",
+  "description": "Complete Notebook with additive authoring identity and provenance. Not an installed deployment payload.",
+  "type": "object",
+  "required": ["version", "items", "xdrMetadata", "contentProvenance"],
+  "properties": {
+    "version": {"const": "Notebook/1.0"},
+    "items": {"type": "array", "items": {"type": "object"}},
+    "xdrMetadata": {
+      "type": "object",
+      "required": ["contentId", "instanceId", "version", "schemaVersion", "displayName"],
+      "properties": {
+        "contentId": {"$ref": "#/$defs/guid"},
+        "instanceId": {"$ref": "#/$defs/guid"},
+        "version": {"type": "string", "pattern": "^3\\.[1-9][0-9]*\\.(0|[1-9][0-9]*)$"},
+        "schemaVersion": {"const": "1.0.0"},
+        "displayName": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "contentProvenance": {
+      "oneOf": [{"$ref": "#/$defs/publicProvenance"}, {"$ref": "#/$defs/legacyProvenance"}]
+    }
+  },
+  "$defs": {
+    "publicProvenance": {
+      "type": "object",
+      "required": ["format", "origin", "requiredWorkloads", "requiredDataConnectors", "requiredWorkspaceFunctions"],
+      "properties": {
+        "format": {"const": "public-workbook-v1"},
+        "origin": {"enum": ["native-xdr", "sentinel-migration"]},
+        "requiredWorkloads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["workload", "dataTypes"],
+            "properties": {
+              "workload": {"enum": ["mde", "mdo", "mdi", "mda", "mdc", "entraid", "purview", "appgovernance", "sentinel", "mtp"]},
+              "dataTypes": {"$ref": "#/$defs/dataTypes"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "requiredDataConnectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["connectorId", "dataTypes"],
+            "properties": {
+              "connectorId": {"type": "string", "minLength": 1},
+              "dataTypes": {"$ref": "#/$defs/dataTypes"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "requiredWorkspaceFunctions": {"type": "array", "items": {"$ref": "#/$defs/workspaceFunction"}}
+      },
+      "additionalProperties": false
+    },
+    "legacyProvenance": {
+      "type": "object",
+      "required": ["source", "requiredWorkloads", "requiredDataConnectors", "dependencyReviewRequired"],
+      "allOf": [{
+        "if": {"required": ["origin"], "properties": {"origin": {"const": "native-xdr"}}},
+        "then": {
+          "required": ["nativeReview", "canonicalPayloadSha256"],
+          "not": {"anyOf": [{"required": ["conversion"]}, {"required": ["requiredWorkspaceFunctions"]}]},
+          "properties": {"source": {"properties": {"path": {"pattern": "^Workbook Sources/Native/[^\\\\]+\\.[jJ][sS][oO][nN]$"}}}}
+        },
+        "else": {
+          "required": ["conversion"],
+          "not": {"required": ["nativeReview"]},
+          "properties": {"source": {"properties": {"path": {"pattern": "^Workbooks/[^\\\\]+\\.[jJ][sS][oO][nN]$"}}}}
+        }
+      }],
+      "properties": {
+        "authoredReview": {"$ref": "#/$defs/authoredReview"},
+        "origin": {"enum": ["native-xdr", "sentinel-migration"]},
+        "canonicalPayloadSha256": {"$ref": "#/$defs/sha256"},
+        "nativeReview": {
+          "type": "object",
+          "required": ["origin", "source", "canonicalPayloadSha256", "displayName", "actor", "reference", "requiredWorkloads", "requiredDataConnectors", "queries"],
+          "properties": {
+            "origin": {"const": "native-xdr"},
+            "source": {"type": "object"},
+            "canonicalPayloadSha256": {"$ref": "#/$defs/sha256"},
+            "displayName": {"type": "string", "minLength": 1},
+            "actor": {"type": "string", "minLength": 1},
+            "reference": {"type": "string", "minLength": 1},
+            "requiredWorkloads": {"type": "array"},
+            "requiredDataConnectors": {"type": "array"},
+            "queries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["path", "querySha256", "tables", "decision", "evidence", "blockers"],
+                "properties": {
+                  "path": {"type": "string", "pattern": "^/"},
+                  "querySha256": {"$ref": "#/$defs/sha256"},
+                  "tables": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+                  "decision": {"const": "accept"},
+                  "evidence": {"type": "string", "minLength": 1},
+                  "blockers": {"const": []}
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "source": {
+          "type": "object",
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"type": "string"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "contentId": {"type": ["string", "null"]},
+            "originalMetadataVersion": {"type": ["string", "null"]}
+          }
+        },
+        "conversion": {
+          "type": "object",
+          "required": ["tool", "version", "reviewRequired", "queries"],
+          "properties": {
+            "tool": {"const": "sentinel-xdr-migration"},
+            "version": {"type": "string", "minLength": 1},
+            "reviewRequired": {"const": false},
+            "queries": {"type": "array", "items": {"$ref": "#/$defs/query"}}
+          }
+        },
+        "requiredWorkloads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["workload", "dataTypes"],
+            "properties": {
+              "workload": {"enum": ["mde", "mdo", "mdi", "mda", "mdc", "entraid", "purview", "appgovernance", "sentinel", "mtp"]},
+              "dataTypes": {"$ref": "#/$defs/dataTypes"}
+            }
+          }
+        },
+        "requiredDataConnectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["connectorId", "dataTypes"],
+            "properties": {
+              "connectorId": {"type": "string", "minLength": 1},
+              "dataTypes": {"$ref": "#/$defs/dataTypes"}
+            }
+          }
+        },
+        "requiredWorkspaceFunctions": {"type": "array", "items": {"$ref": "#/$defs/workspaceFunction"}},
+        "dependencyReviewRequired": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "authoredReview": {
+      "type": "object",
+      "required": ["schemaVersion", "baseline", "baselineMetadata", "reversePayloadChanges", "canonicalPayloadSha256", "canonicalDocumentSha256", "queries", "changedQueries", "actor", "reference", "decision", "reviewSha256"],
+      "properties": {
+        "schemaVersion": {"const": "1.0.0"},
+        "reviewSha256": {"$ref": "#/$defs/sha256"},
+        "baseline": {
+          "type": "object",
+          "required": ["reference", "sha256", "canonicalDocumentSha256"],
+          "properties": {
+            "reference": {"type": "string", "minLength": 1},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "canonicalDocumentSha256": {"$ref": "#/$defs/sha256"}
+          },
+          "additionalProperties": false
+        },
+        "baselineMetadata": {"$ref": "#/properties/xdrMetadata"},
+        "reversePayloadChanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "op"],
+            "properties": {
+              "path": {"type": "array", "minItems": 1, "items": {"type": ["string", "integer"]}},
+              "op": {"enum": ["add", "remove", "replace"]},
+              "value": {}
+            },
+            "additionalProperties": false
+          }
+        },
+        "canonicalPayloadSha256": {"$ref": "#/$defs/sha256"},
+        "canonicalDocumentSha256": {"$ref": "#/$defs/sha256"},
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "querySha256", "tables", "workspaceFunctions", "builtinAsimParsers"],
+            "properties": {
+              "path": {"type": "string", "pattern": "^/"},
+              "querySha256": {"$ref": "#/$defs/sha256"},
+              "tables": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+              "workspaceFunctions": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+              "builtinAsimParsers": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+            },
+            "additionalProperties": false
+          }
+        },
+        "changedQueries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "baselineQuerySha256", "querySha256", "decision", "evidence"],
+            "properties": {
+              "path": {"type": "string", "pattern": "^/"},
+              "baselineQuerySha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+              "querySha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+              "decision": {"const": "accept"},
+              "evidence": {"type": "string", "minLength": 1}
+            },
+            "additionalProperties": false
+          }
+        },
+        "actor": {"type": "string", "minLength": 1},
+        "reference": {"type": "string", "minLength": 1},
+        "decision": {"const": "accept"}
+      },
+      "additionalProperties": false
+    },
+    "workspaceFunction": {
+      "type": "object",
+      "required": ["functionAlias", "sourcePath", "sourceSha256"],
+      "properties": {
+        "functionAlias": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "sourcePath": {"type": "string", "pattern": "^(Parsers|Workspace Functions)/(?!/|\\.{1,2}/)(?!.*(?:/\\.{1,2}/|//))[^\\\\]+\\.yaml$"},
+        "sourceSha256": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "guid": {"type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "dataTypes": {"type": "array", "items": {"type": "string", "minLength": 1, "not": {"const": "Watchlist"}}},
+    "query": {
+      "type": "object",
+      "required": ["sourcePath", "outputPath", "sourceSha256", "targetSha256", "status"],
+      "properties": {
+        "sourcePath": {"type": "string", "pattern": "^/"},
+        "outputPath": {"type": ["string", "null"]},
+        "sourceSha256": {"$ref": "#/$defs/sha256"},
+        "targetSha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "status": {"enum": ["converted", "removed-scope-helper"]},
+        "workspaceFunctions": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}},
+        "referenceInputs": {"type": "array", "uniqueItems": true, "items": {"const": "Watchlist"}}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "removed-scope-helper"}}},
+        "then": {"properties": {"outputPath": {"type": "null"}, "targetSha256": {"type": "null"}}},
+        "else": {"properties": {"outputPath": {"type": "string", "pattern": "^/"}, "targetSha256": {"$ref": "#/$defs/sha256"}}}
+      }]
+    }
+  }
+}

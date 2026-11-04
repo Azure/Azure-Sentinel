@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 427e4c9e-8cf4-4094-a684-a2d060dbca38
+    path: Analytic Rules/PortScanDetected.yaml
+    version: 1.0.4
+    querySha256: 913ab9770b607dad07fd6852cf9601611c38792236129444c9ded2fa9e7aa450
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1046
+    reviewScope:
+      sourceDocumentSha256: f775913433f58ed9976f8f500865ba359355c9baacf8922fb3fb1a423c17d82e
+      targetQuerySha256: 70266ce10de9e7a6f14b73ccdcb8b872b4d4e84b1f463a669890247d5469f088
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: f775913433f58ed9976f8f500865ba359355c9baacf8922fb3fb1a423c17d82e
+      targetQuerySha256: 70266ce10de9e7a6f14b73ccdcb8b872b4d4e84b1f463a669890247d5469f088
+properties:
+  id: xdr-427e4c9e-8cf4-4094-a684-a2d060dbca38
+  displayName: Port Scan Detected
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 50;
+      let forwarder_host_names = dynamic(["hostname1", "hostname2"]);
+      // SophosXGFirewall parser inlined: Defender XDR Custom Detections cannot be enabled when the query calls a workspace function.
+      Syslog
+      | where Facility == "local0"
+      | where CollectorHostName in (forwarder_host_names) or Computer in (forwarder_host_names)
+      | extend Log_Type = extract(@'log_type=\"?([\w\s]+)\"?', 1, SyslogMessage),
+          Src_IP = extract(@'src_ip=\"?([\w\.]+)\"?', 1, SyslogMessage),
+          Dst_Port = extract(@'dst_port=\"?(\d+)\"?', 1, SyslogMessage)
+      | where Log_Type =~ "Firewall"
+      | where not(ipv4_is_match("10.0.0.0",Src_IP,8) or ipv4_is_match("172.16.0.0",Src_IP,12) or ipv4_is_match("192.168.0.0",Src_IP,16))
+      | summarize dcount(Dst_Port) by Src_IP, bin(TimeGenerated, 5m)
+      | where dcount_Dst_Port > threshold
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Port Scan Detected
+      description: '''This alert creates an incident when a source IP addresses attempt to communicate with a large amount
+        of distinct ports within a short period.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: Src_IP
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1046

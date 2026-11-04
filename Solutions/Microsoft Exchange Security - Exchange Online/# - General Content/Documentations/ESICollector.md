@@ -1,71 +1,77 @@
-# Exchange Security Insights Collectors
+# Exchange Security Insights Online Collector prerequisites and permissions
 
-**Synopsis**
-    This script generates a photography of the Exchange Configuration for Microsoft Exchange Security solution for Microsoft Sentinel.
-**DESCRIPTION**
-    This script has to be scheduled once a day at minimum to generate a snapshot of the Exchange configuration that will be imported into Microsoft Sentinel by using Log Analytics APIs.
+This guide describes the Azure Automation modules, managed identity permissions, Microsoft Entra role, and network access required by the Exchange Security Insights Online Collector.
 
-    Multiple Exchange Cmdlets and Active-Directory/Microsoft Graph cmdlets are used to extract information that will be used by Microsoft Exchange Security for Microsoft Sentinel to create a secure posture in your Exchange On-Premises/Online environment.
+For deployment and Azure Monitor configuration, see [Configure the Exchange Security Insights Online Collector with Azure Monitor](./README_LogIngestionAPI.md). For package version and upgrade information, see the [collector package and upgrade guide](../Solutions/ESICollector/README.md). For individual settings, see the [configuration parameter reference](../Solutions/ESICollector/Parameters.md).
 
-    Parameters are described in the Configuration file. Explanation of the parameters is available in the [the Parameters description document](./Parameters.md)
+## Prerequisites
 
-## On-Premises Collector
+### Azure Automation PowerShell modules
 
-### Mandatory Permissions
+In the Azure portal, open the Automation account and verify that the following modules are available for the PowerShell 5.1 runtime:
 
-The account used to launch the script has to be Organization Management.
+- `ExchangeOnlineManagement`
+- `Microsoft.Graph.Authentication`
+- `Microsoft.Graph.Users`
+- `Microsoft.Graph.Groups`
 
-  > The collector has to read Active-Directory groups and members, especially "Administrative" groups in 'Microsoft Exchange Security Groups' Organization Units.
+Import or update missing modules from the Automation account's module gallery. When importing the Microsoft Graph modules, wait for `Microsoft.Graph.Authentication` to finish importing before importing `Microsoft.Graph.Users` and `Microsoft.Graph.Groups`.
 
-  > The collector must be able to contact every Exchange Server in WMI and in Remote PowerShell.
+If collector summary logs are stored in an Azure Storage account, the `Az.Storage` module must also be imported into the Automation account.
 
-(Normally the Organization Management group allow the above rights excepted if you have brake inheritance in AD or made custom **unsupported** hardening between Exchange Servers.)
+## Required permissions
 
-USD Logs (Summary of logs of the Collector) :
+The required Microsoft Graph and Exchange Online application permissions are not assigned automatically during deployment. Use the [`ExchangeOnlinePermSetup.ps1`](../Solutions/ESICollector/OnlineDeployment/ExchangeOnlinePermSetup.ps1) script to assign them to the managed identity of the Azure Automation account.
 
-  > If the USD Logs storage is AzureStorageAccount, the ManagedIdentity or the created Entra ID Application needs to have the Storage Blob Data Contributor role at minimum to be able to write logs in the storage account.
+### Assign application permissions
 
-### Network Access
+Run the script from a workstation where the `Microsoft.Graph.Authentication` and `Microsoft.Graph.Applications` PowerShell modules are available. The account used to run the script must be a **Global Administrator** and must grant admin consent for the following delegated Microsoft Graph scopes requested by the script:
 
-    **Internet**
-    
-        Direct Access to the following URLs or by using a proxy
-        If a proxy is used, configuration has to be done in .\Config\CollectExchSecConfiguration.json file
-        Attention, Explicit Authentication is not supported.
+- `AppRoleAssignment.ReadWrite.All`
+- `Application.Read.All`
 
-        URLs :
-            https://*.ods.opinsights.azure.com
-            https://raw.githubusercontent.com
+Retrieve the object ID of the Automation account's managed identity from **Automation account** > **Account Settings** > **Identity**, and then run:
 
-    **Exchange Servers**
-        
-        The script needs accessing to all Exchange Servers using Remote PowerShell and WMI
+```powershell
+.\ExchangeOnlinePermSetup.ps1 `
+    -MIIDParam "<managed-identity-object-id>" `
+    -TenantId "<tenant-id>" `
+    -InteractiveAuth
+```
 
-    **Active Directory**
+The parameters are:
 
-        The script needs accessing to Domain Controllers using the Active-Directory Management Shell
+- `MIIDParam`: Object ID of the Automation account's managed identity. Use this parameter instead of modifying the `$MI_ID` placeholder in the script.
+- `TenantId`: Optional tenant ID used for the Microsoft Graph connection.
+- `InteractiveAuth`: Uses interactive authentication. Omit this switch to use device authentication.
 
-## Online Collector
+The script assigns:
 
-### Mandatory Permissions
+- `Group.Read.All`
+- `User.Read.All`
+- `AuditLog.Read.All`
+- `Exchange.ManageAsApp`
 
-Permissions are added to the Managed Identity of the Automation accounts that you create at the installation. A script was created to help you assigning permissions for Microsoft Graph and Exchange Online API.
+The script creates app role assignments directly on the managed identity. It does not assign a Microsoft Entra directory role.
 
-Microsoft Graph Permissions :
+### Assign a Microsoft Entra role manually
 
-  > The collector needs Groups.Read permission to be able to retrieve groups that have rights in Exchange Online for audit.
+Assign at least the **Global Reader** or **Security Reader** Microsoft Entra role to the managed identity so that the collector can read the Exchange Online configuration. For more information, see [Assign Microsoft Entra roles to the application](https://learn.microsoft.com/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps#assign-microsoft-entra-roles-to-the-application).
 
-  > The collector needs Users.Read permission to be able to retrieve members of group information
+## Network access
 
-  > The collector needs Auditing.Read permission to be able to retrieve the last Sign-in date in the infrastructure for permission audit
+The Azure Automation account must be able to reach:
 
+- Microsoft Entra ID authentication endpoints
+- Exchange Online
+- Microsoft Graph
+- `https://raw.githubusercontent.com`
+- `https://*.ods.opinsights.azure.com`
+- The configured Azure Monitor Data Collection Endpoint when the Log Ingestion API is enabled
 
-Exchange Online permissions :
+## Collector summary logs in Azure Storage
 
-  > The collector has to have Exchange.ManageAsApp permission to be able to connect to Exchange. [learn more](https://learn.microsoft.com/en-us/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps)
+When the UDS log destination is `AzureStorageAccount`:
 
-  > The collector must be **Global Reader** or **Security Reader** at minimum to be able to read Exchange Online configuration. This permission has to assigned manually after Managed account creation. [learn more on available roles for ManageAsApp permission](https://learn.microsoft.com/en-us/powershell/exchange/app-only-auth-powershell-v2?view=exchange-ps#assign-microsoft-entra-roles-to-the-application)
-
-USD Logs (Summary of logs of the Collector) :
-
-  > If the USD Logs storage is AzureStorageAccount, the ManagedIdentity or the created Entra ID Application needs to have the Storage Blob Data Contributor role at minimum to be able to write logs in the storage account.
+- The `Az.Storage` PowerShell module must be available in the Automation account.
+- The Automation account managed identity must have at least the **Storage Blob Data Contributor** role on the target storage account.

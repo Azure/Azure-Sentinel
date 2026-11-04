@@ -108,7 +108,7 @@ function New-ParametersForConnectorInstuctions($instructions) {
                 $templateParameter | Add-Member -MemberType NoteProperty -Name "redirectUri" -Value $newParameter
             }
         }
-        elseif ($instruction.type -eq "ContextPane") {
+        elseif ($instruction.type -eq "ContextPane" -or $instruction.type -eq "InstructionStepsGroup") {
             New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
         }
         elseif ($instruction.type -eq "Dropdown") {
@@ -118,8 +118,12 @@ function New-ParametersForConnectorInstuctions($instructions) {
                 }
             }
             else {
+                if (-not $instruction.parameters.options -or [string]::IsNullOrWhiteSpace($instruction.parameters.options[0].key)) {
+                    throw "Dropdown '$($instruction.parameters.name)' must define at least one option with a non-empty key."
+                }
+
                 $newParameter = [PSCustomObject]@{
-                    defaultValue = $instruction.parameters.name;
+                    defaultValue = @($instruction.parameters.options[0].key);
                     type         = "array";
                 }
             }
@@ -437,6 +441,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     if (!$global:baseMainTemplate.variables.dataConnectorCCPVersion) {
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue ($dataFileMetadata.DataConnectorCCFVersion ?? $dataFileMetadata.Version)
     }
+    Assert-V31ReleaseVersion -Version $global:baseMainTemplate.variables.dataConnectorCCPVersion -ContentKind 'CCF DataConnector/Connections' -ContentPath "$solutionName/$dcFolderName (DataConnectorCCFVersion)"
 
     try {
         foreach ($ccpItem in $ccpDict) {
@@ -464,7 +469,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                 if ($TemplateCounter -eq 1) {
                     #========start:dc definition resource===========
-                    $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath.Replace($solutionName + "/", "").Replace($dcFolderName + "/", "")
+                    $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath -replace "^$([regex]::Escape($solutionName + '/'))", "" -replace "^$([regex]::Escape($dcFolderName + '/'))", ""
                     $ccpDataDefinitionFilePath = $solutionBasePath + "/" + $solutionName + "/" + $dcFolderName + "/" + $dcDefinitionFilteredPath
                     $ccpDataDefinitionFilePath = $ccpDataDefinitionFilePath.Replace("//", "/")
                     Write-Host "CCP DataDefinition File Path : $ccpDataDefinitionFilePath"
@@ -769,7 +774,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     elseif ($armResource.kind.ToLower() -eq 'storageaccountblobcontainer') {
                         . "$PSScriptRoot/storageAccountDeploymentTemplate.ps1" # load storage resource creator
-                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
+                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType -instructionParameters $paramItems
                     }
                     elseif ($armResource.kind.ToLower() -eq 'oci') {                        
                         CreateOciResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
@@ -848,6 +853,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $fileContent.name = "[concat('" + $nameWithoutPlaceHolder + "', parameters('workspace'))]"
                 }
                 $armResource = Get-ArmResource $fileContent.name $fileContent.type $fileContent.kind $fileContent.properties
+
+                if ($fileContent.PSObject.Properties.Name -contains "dependsOn") {
+                    $armResource | Add-Member -NotePropertyName "dependsOn" -NotePropertyValue @($fileContent.dependsOn)
+                }
 
                 # location
                 ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $false -propertyObject $armResource -propertyName 'location' -isInnerObject $false -innerObjectName $null -kindType $null -isSecret $true -isRequired $false -fileType 'dataCollectionRules' -minLength 1
@@ -1100,6 +1109,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     }
     catch {
         Write-Host "Error occurred in createCCPConnector file. Error Details $_" -ForegroundColor Red
+        throw
     }
 }
 

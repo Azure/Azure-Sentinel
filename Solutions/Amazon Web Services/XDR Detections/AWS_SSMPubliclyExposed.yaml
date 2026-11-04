@@ -1,0 +1,102 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 75647b58-bcc8-4eb5-9658-46698d3fa153
+    path: Analytic Rules/AWS_SSMPubliclyExposed.yaml
+    version: 1.0.2
+    querySha256: 7680273d2b0bd9b6eeb7c44eaa07dfa0a78b33eb0590291d2ecd1d25b1a7bc2f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.CloudAppAccountId mismatch is informational because its original value is preserved as customDetails.AccountCloudAppAccountId
+      from query column `RecipientAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1526
+    reviewScope:
+      sourceDocumentSha256: 799af30f5334eb8c70bebeeca0a7807e874a4078ea05a2e4eb537da4814a21df
+      targetQuerySha256: b4853b959fc0ca405c3f9df77b26a42219b46b6b3672e06dc42d0acc1ed1e51c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: available
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-75647b58-bcc8-4eb5-9658-46698d3fa153
+  displayName: AWSCloudTrail - SSM document is publicly exposed
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where  EventName == "ModifyDocumentPermission" and isempty(ErrorCode) and isempty(ErrorMessage)
+      | where todynamic(parse_json(RequestParameters).["accountIdsToAdd"]) == '["all"]'
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, RecipientAccountId, AccountName, AccountUPNSuffix, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, ResponseElements, UserIdentityArn
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - SSM document is publicly exposed
+      description: Detects an AWS Systems Manager (SSM) document that has been made publicly accessible, which could lead
+        to sensitive information exposure. Verify the document configurations and confirm the change was authorized.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1526
+      customDetails:
+        EventName: EventName
+        AWSRegion: AWSRegion
+        UserAgent: UserAgent
+        RequestParameters: RequestParameters
+        AccountCloudAppAccountId: RecipientAccountId

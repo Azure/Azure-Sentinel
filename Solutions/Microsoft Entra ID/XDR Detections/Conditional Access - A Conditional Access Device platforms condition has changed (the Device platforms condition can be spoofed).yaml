@@ -1,0 +1,98 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - Update
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e3368079-a2c0-4f1c-9fb7-287e907393ef
+    path: Analytic Rules/Conditional Access - A Conditional Access Device platforms condition has changed (the Device platforms
+      condition can be spoofed).yaml
+    version: 1.0.2
+    querySha256: 7cf9c5c4bfb998edd79b381cd1ecdba1d583a4ba643a1b0e32f8b6e4219ff5a9
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.007
+    reviewScope:
+      sourceDocumentSha256: 2a54328e7c26177348d8fb18efbccfd47aa42b1f196a4267b09c3acba3d078d4
+      targetQuerySha256: 485291f756fe9a6849cd68700b64f89522ecbfce809853466129054d079746b1
+properties:
+  id: xdr-e3368079-a2c0-4f1c-9fb7-287e907393ef
+  displayName: 'Conditional Access - A Conditional Access Device platforms condition has changed (the Device platforms condition
+    can be '
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // A Conditional Access Device platforms condition has changed (the Device platforms condition can be spoofed).
+      AuditLogs
+      | where OperationName in ("Update conditional access policy")
+      | extend excludePlatformsOld = extractjson("$.conditions.platforms.excludePlatforms", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+      | extend excludePlatformsNew = extractjson("$.conditions.platforms.excludePlatforms", tostring(TargetResources[0].modifiedProperties[0].newValue))
+      | where excludePlatformsOld != excludePlatformsNew
+      | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+      | extend accountName = tostring(split(modifiedBy, "@")[0])
+      | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+      | project
+          TimeGenerated,
+          OperationName,
+          policy = TargetResources[0].displayName,
+          modifiedBy,
+          accountName,
+          upnSuffix,
+          result = Result,
+          excludePlatformsOld,
+          excludePlatformsNew
+      | order by TimeGenerated desc
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: 'Conditional Access - A Conditional Access Device platforms condition has changed (the Device platforms condition
+        can be '
+      description: A Conditional Access Device platforms condition has changed (the Device platforms condition can be spoofed)
+        in Entra ID.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: accountName
+          upnSuffixColumn: upnSuffix
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.007

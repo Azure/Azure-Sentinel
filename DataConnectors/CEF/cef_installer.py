@@ -29,11 +29,16 @@ import time
 import sys
 import os
 import re
+import hashlib
 
 rsyslog_daemon_name = "rsyslog"
 syslog_ng_daemon_name = "syslog-ng"
 omsagent_file_name = "onboard_agent.sh"
 oms_agent_url = "https://raw.githubusercontent.com/Microsoft/OMS-Agent-for-Linux/master/installer/scripts/" + omsagent_file_name
+oms_agent_expected_sha256 = os.environ.get(
+    "OMS_ONBOARD_AGENT_SHA256",
+    "b8f5dbb6d363516b3d99c48ee888e357dc0b879c184f021a83b7ab7bbdc0516f"
+)
 help_text = "Optional arguments for the python script are:\n\t-T: for TCP\n\t-U: for UDP which is the default value.\n\t-F: for no facility restrictions.\n\t-p: for changing default port from 25226"
 omsagent_default_incoming_port = "25226"
 daemon_default_incoming_port = "514"
@@ -99,6 +104,35 @@ def print_command_response(input_str):
     print("\033[1;34;40m" + input_str + "\033[0m")
 
 
+def verify_omsagent_sha256(file_path, expected_sha256):
+    '''
+    Verify the SHA-256 digest of the downloaded omsagent onboarding script
+    :param file_path: path to the downloaded script
+    :param expected_sha256: expected SHA-256 hex digest
+    :return: True if the digest matches, False otherwise
+    '''
+    if not os.path.isfile(file_path):
+        print_error("Error: downloaded omsagent file not found at " + file_path)
+        return False
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            sha256_hash.update(chunk)
+    actual_sha256 = sha256_hash.hexdigest().lower()
+    if actual_sha256 != expected_sha256.lower():
+        print_error(
+            "Error: SHA-256 verification failed for "
+            + file_path
+            + " (expected "
+            + expected_sha256
+            + ", got "
+            + actual_sha256
+            + ")."
+        )
+        return False
+    return True
+
+
 def download_omsagent():
     '''
     Download omsagent this downloaded file would be installed
@@ -109,8 +143,10 @@ def download_omsagent():
     download_command = subprocess.Popen(["wget", "-O", omsagent_file_name, oms_agent_url], stdout=subprocess.PIPE)
     o, e = download_command.communicate()
     time.sleep(3)
-    if e is not None:
-        handle_error(e, error_response_str="Error: could not download omsagent.")
+    if e is not None or download_command.returncode != 0:
+        handle_error(e if e is not None else o, error_response_str="Error: could not download omsagent.")
+        return False
+    if not verify_omsagent_sha256(omsagent_file_name, oms_agent_expected_sha256):
         return False
     print_ok("Downloaded omsagent successfully.")
     return True
@@ -153,6 +189,8 @@ def install_omsagent(workspace_id, primary_key, oms_agent_install_url):
     :param primary_key:
     :return:
     '''
+    if not verify_omsagent_sha256(omsagent_file_name, oms_agent_expected_sha256):
+        sys.exit(1)
     print("Installing omsagent")
     omsagent_proxy_conf = os.getenv('https_proxy')
     if omsagent_proxy_conf is not None:

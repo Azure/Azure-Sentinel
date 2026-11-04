@@ -1,0 +1,125 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GoogleWorkspaceReportsAPI
+  dataTypes:
+  - GWorkspaceActivityReports
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GWorkspaceActivityReports
+  requiredDataConnectors:
+  - connectorId: GoogleWorkspaceReportsAPI
+    dataTypes:
+    - GWorkspaceActivityReports
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c02b0c8e-5da6-11ec-bf63-0242ac130002
+    path: Analytic Rules/GWorkspaceUnexpectedOSUpdate.yaml
+    version: 1.0.2
+    querySha256: 05d7956d03515d67c5bec5016f67fa592e40a3c5256e383ef71bead6bbdad579
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - Account.Name output column `AccountCustomEntity` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Persistence
+    originalTechniques:
+    - T1036
+    - T1554
+    reviewScope:
+      sourceDocumentSha256: f973d2a8717b7eac0c41a364ca61b2bdc66064643a71d7a5f72421a97e8b8262
+      targetQuerySha256: 4fb4be1c2b688640b489970396ddea934baef855e09e6f001003e8d5dfcdfd74
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: f973d2a8717b7eac0c41a364ca61b2bdc66064643a71d7a5f72421a97e8b8262
+      targetQuerySha256: 4fb4be1c2b688640b489970396ddea934baef855e09e6f001003e8d5dfcdfd74
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+properties:
+  id: xdr-c02b0c8e-5da6-11ec-bf63-0242ac130002
+  displayName: GWorkspace - Unexpected OS update
+  status: disabled
+  queryCondition:
+    queryText: |-
+      GWorkspaceActivityReports
+      | where EventMessage has "os_updated"
+      | where isnotempty(NeqValue) and isnotempty(OldValue)
+      | extend NewVersion1 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 1, NeqValue)
+      | extend NewVersion2 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 2, NeqValue)
+      | extend NewVersion3 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 3, NeqValue)
+      | extend OldVersion1 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 1, OldValue)
+      | extend OldVersion2 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 2, OldValue)
+      | extend OldVersion3 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 3, OldValue)
+      | extend NewVersion3Comparision = iff(isempty(NewVersion3), 0, tolong(NewVersion3))
+      | extend OldVersion3Comparision = iff(isempty(OldVersion3), 0, tolong(OldVersion3))
+      | extend Comparision1 = iff(tolong(NewVersion3Comparision) > tolong(OldVersion3Comparision), 'Expected version', 'Unexpected version')
+      | extend Comparision2 = iff(tolong(NewVersion2) > tolong(OldVersion2), 'Expected version', Comparision1)
+      | extend VersionCheck = iff(tolong(NewVersion1) > tolong(OldVersion1), 'Expected version', Comparision2)
+      | project-away NewVersion1, NewVersion2, NewVersion3, NewVersion3Comparision, OldVersion1, OldVersion2, OldVersion3, OldVersion3Comparision, Comparision1, Comparision2
+      | extend AccountCustomEntity = ActorEmail
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GWorkspace - Unexpected OS update
+      description: '''Detects unexpected OS update.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1036
+      - tactic: Persistence
+        techniques:
+        - technique: T1554

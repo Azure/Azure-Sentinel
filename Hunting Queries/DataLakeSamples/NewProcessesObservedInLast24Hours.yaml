@@ -1,0 +1,64 @@
+id: 582d0a02-f931-4198-8b48-82b0537ec976
+name: New processes observed in last 24 hours
+description: |
+  New processes in stable environments may indicate malicious activity. Analyzing sign-in sessions where these binaries ran can help identify attacks.
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+relevantTechniques:
+  - T1059
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let ProcessCreationEvents = () {
+      SecurityEvent
+      | where TimeGenerated between(lookback..endtime)
+      | where EventID == 4688
+      | project
+          TimeGenerated,
+          Computer,
+          Account,
+          FileName = tostring(split(NewProcessName, '\\')[-1]),
+          NewProcessName,
+          ProcessCommandLine = CommandLine,
+          InitiatingProcessFileName = ParentProcessName
+  };
+  ProcessCreationEvents()
+  | where TimeGenerated between(lookback..starttime)
+  | summarize HostCount = dcount(Computer) by FileName
+  | join kind=rightanti (
+      ProcessCreationEvents()
+      | where TimeGenerated between(starttime..endtime)
+      | summarize
+          StartTime = min(TimeGenerated),
+          EndTime = max(TimeGenerated),
+          Computers = make_set(Computer, 1000),
+          HostCount = dcount(Computer)
+          by Account, NewProcessName, FileName, ProcessCommandLine, InitiatingProcessFileName
+  ) on FileName
+  | extend timestamp = StartTime
+  | extend NTDomain = tostring(split(Account, '\\', 0)[0]), Name = tostring(split(Account, '\\', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Account_0_Name
+      - identifier: NTDomain
+        columnName: Account_0_NTDomain
+version: 1.0.0
+metadata:
+  source:
+    kind: Microsoft
+  author:
+    name: Microsoft Sentinel Team
+  support:
+    tier: Microsoft
+  categories:
+    domains:
+      - Security - Others

@@ -79,7 +79,10 @@ module Fluent
 	@severity = tag.split(".")[2]
 	@program = @programaccessor.call(record)
 	@hostname = @hostnameaccessor.call(record)
-        @formatter.format(tag, time, r)
+        formatted = @formatter.format(tag, time, r).to_s
+        has_trailing_newline = formatted.end_with?("\n")
+        sanitized = formatted.chomp.gsub(/[\r\n]+/, ' ')
+        has_trailing_newline ? "#{sanitized}\n" : sanitized
       end
 
       def write(chunk)

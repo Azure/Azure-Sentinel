@@ -1,0 +1,138 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5c768e7d-7e5e-4d57-80d4-3f50c96fbf70
+    path: Analytic Rules/Dataverse - New Dataverse application user activity type.yaml
+    version: 3.2.0
+    querySha256: 2a2b76a6185afe2cfb4ac57e896295c7b379e063e3391a5b3f54e6cf8804fbea
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - Execution
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1635
+    - T0871
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: d6af6dd1e936ca5bc6251eda2325e0bc80b3acfbc80e3e674ca644f8d1d6f9e7
+      targetQuerySha256: fd7e5b67583330c8b8a06c1abf9518e30b5971b274be20079718dd06b101e4e0
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-5c768e7d-7e5e-4d57-80d4-3f50c96fbf70
+  displayName: Dataverse - New Dataverse application user activity type
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      let query_lookback = 14d;
+      let app_user_regex = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\.com$";
+      let guid_regex = "([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})";
+      let application_users = DataverseActivity
+          | where UserId !endswith "@onmicrosoft.com" and UserId != "Unknown"
+          | summarize by UserId
+          | where split(UserId, "@")[1] matches regex app_user_regex;
+      let historical_app_activity = application_users
+          | join kind = inner (
+              DataverseActivity
+              | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+              | summarize by UserId, EntityName, Message, InstanceUrl)
+              on
+              UserId;
+      let current_activity = application_users
+          | join kind= inner (
+              DataverseActivity
+              | where TimeGenerated >= ago(query_frequency)
+              | summarize by UserId, EntityName, Message, InstanceUrl)
+              on
+              UserId;
+      current_activity
+      | join kind = leftanti (historical_app_activity) on UserId, Message, EntityName, InstanceUrl
+      | summarize NewActivities = make_set(strcat(Message, " ", EntityName), 1000) by UserId, InstanceUrl
+      | extend
+          AadUserId = extract(guid_regex, 1, tostring(split(UserId, "@")[0])),
+          CloudAppId = int(32780)
+      | project
+          UserId,
+          NewActivities,
+          InstanceUrl,
+          AadUserId,
+          CloudAppId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - New Dataverse application user activity type
+      description: Identifies new or previously unseen activity types associated with Dataverse application (non-interactive)
+        user.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          aadUserIdColumn: AadUserId
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1635
+      - tactic: Execution
+        techniques:
+        - technique: T0871
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

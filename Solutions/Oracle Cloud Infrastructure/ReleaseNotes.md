@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                          |
 |-------------|--------------------------------|-----------------------------------------------------------------------------|
+| 3.2.2       | 22-10-2026                     | Added Defender XDR custom detections and Defender XDR workbook support. |
 | 3.0.11       | 21-08-2026                     | Prevent identity credential ingestion. |
 | 3.0.10      | 26-05-2026                     | Updated OCI connector UI to include IAM permissions guidance and removed the "Important -" label. |
 | 3.0.9       | 10-02-2026                     | Add support for group Cursor                                                |

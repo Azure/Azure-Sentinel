@@ -1,0 +1,87 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - SecurityRecommendation
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e1bb07c4-066b-4069-9b8e-f5275c592b6d
+    path: Analytic Rules/M2131EventLogManagementPostureChangedEL2.yaml
+    version: 1.0.0
+    querySha256: 26b5659702ff881124b95d0d47ab703653776fa9b930d0127668bf04c771db4b
+    schedule:
+      queryFrequency: 7d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=7d, lookback=7d; target frequency=P7D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1082
+    reviewScope:
+      sourceDocumentSha256: ce5fd316ef5d9fd51102150445a37bcd499b7def59769d9940e2c4ee43f1bed7
+      targetQuerySha256: e718003a296887ed05f5e2641d4eb3add468d44de1e7e3aa6937d7d750378338
+properties:
+  id: xdr-e1bb07c4-066b-4069-9b8e-f5275c592b6d
+  displayName: M2131_EventLogManagementPostureChanged_EL2
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let _event_schema = Event | where false | summarize by TimeGenerated;
+      SecurityRecommendation
+      | where RecommendationDisplayName <> ""
+      | extend MaturityLevel=iff(RecommendationDisplayName has_any("agent","extension","retention","logs encryption","collect","retained","log profile","CloudTrail","metric","AWS","GCP","DNS","Auditing","Flow","logging","usage"), "Event Logging (EL0)",
+      iff(RecommendationDisplayName has_any("container registries","logic apps","Enhanced monitoring","IoT Hub","Event Hub","App Service", "Kubernetes","updates","email", "automation", "adaptive"), "Advanced Event Logging (EL3)",
+      iff(RecommendationDisplayName has_any("signatures","CMK","CMEK","double encryption","managed key","KMS","container","Watcher"), "Intermediate Event Logging (EL2)",
+      iff(RecommendationDisplayName has_any("Exploit Guard","endpoint protection","Antimalware","health","VPC","Defender","Vulnerabilities","vulnerability","diagnostic","Key","activity log alert",""), "Basic Event Logging (EL1)","Other"))))
+      | summarize arg_max(TimeGenerated, *) by RecommendationDisplayName, AssessedResourceId, MaturityLevel
+      | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by MaturityLevel
+      | extend PassedControls = (Passed/todouble(Total))*100
+      | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+      | project MaturityLevel, Total, PassedControls, Passed, Failed, RemediationLink, LastObserved=now()
+      | where MaturityLevel <> ''
+      | where MaturityLevel == "Intermediate Event Logging (EL2)"
+      | where PassedControls < 70
+      //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within   Organizational Needs
+      | sort by PassedControls desc
+      | extend URLCustomEntity = RemediationLink, HostCustomEntity = MaturityLevel
+  schedule:
+    frequency: P7D
+  detectionAction:
+    alertTemplate:
+      title: M2131_EventLogManagementPostureChanged_EL2
+      description: '''This alert is designed to monitor Azure policies aligned with the Maturity Model for Event Log Management
+        (M-21-31) standard. The alert triggers when EL2 policy compliance falls below 70% within a 1 week timeframe.'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: URLCustomEntity
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1082

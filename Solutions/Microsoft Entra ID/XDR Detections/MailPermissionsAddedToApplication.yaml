@@ -1,0 +1,132 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2560515c-07d1-434e-87fb-ebe3af267760
+    path: Analytic Rules/MailPermissionsAddedToApplication.yaml
+    version: 1.0.4
+    querySha256: 39894d9246eef92dbbcae34d70be77eff96a49ab2e44e6fade0a5ce6177ef1ac
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `InitiatingUserPrincipalName` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 7ee1ce9b890b326f54dd8912e596d27d000b046aaacf8dc165dec7e5f63ec206
+      targetQuerySha256: 6bb1bcfdd35bd6b612cbba885365645d8f1e69f2869215d1680792b3582032c8
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-2560515c-07d1-434e-87fb-ebe3af267760
+  displayName: Mail.Read Permissions Granted to Application
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AuditLogs
+      | where Category =~ "ApplicationManagement"
+      | where ActivityDisplayName has_any ("Add delegated permission grant","Add app role assignment to service principal")
+      | where Result =~ "success"
+      | where tostring(InitiatedBy.user.userPrincipalName) has "@" or tostring(InitiatedBy.app.displayName) has "@"
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type =~ "ServicePrincipal" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)
+            | extend props = TargetResource.modifiedProperties,
+                     Type = tostring(TargetResource.type),
+                     PermissionsAddedTo = tostring(TargetResource.displayName)
+        )
+      | mv-apply Property = props on
+        (
+            where Property.displayName =~ "DelegatedPermissionGrant.Scope"
+            | extend DisplayName = tostring(Property.displayName), Permissions = trim('"',tostring(Property.newValue))
+        )
+      | where Permissions has_any ("Mail.Read", "Mail.ReadWrite")
+      | mv-apply AdditionalDetail = AdditionalDetails on
+        (
+            where AdditionalDetail.key =~ "User-Agent"
+            | extend InitiatingUserAgent = tostring(AdditionalDetail.value)
+        )
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | project-away props, TargetResource, AdditionalDetail, Property
+      | join kind=leftouter(
+        AuditLogs
+        | where ActivityDisplayName has "Consent to application"
+        | mv-apply TargetResource = TargetResources on
+            (
+                where TargetResource.type =~ "ServicePrincipal"
+                | extend AppName = tostring(TargetResource.displayName),
+                         AppId = tostring(TargetResource.id)
+            )
+      | project AppName, AppId, CorrelationId) on CorrelationId
+      | project-away CorrelationId1
+      | project-reorder TimeGenerated, OperationName, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, InitiatingUserAgent, PermissionsAddedTo, Permissions, AppName, AppId, CorrelationId
+      | extend Name = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Mail.Read Permissions Granted to Application
+      description: '''This query look for applications that have been granted (Delegated or App/Role) permissions to Read
+        Mail (Permissions field has Mail.Read) and subsequently has been consented to. This can help identify applications
+        that have been abused to gain access to mailboxes.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account3
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098

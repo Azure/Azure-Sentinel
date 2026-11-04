@@ -1,4 +1,6 @@
-# ExchSecIns
+# Exchange Security Insights Collector script notes
+
+This file contains script usage information and historical release notes. For current deployment and upgrade instructions, see the [collector package and upgrade guide](../README.md) and the [Azure Monitor configuration guide](../../../Documentations/README_LogIngestionAPI.md).
 
 ## Permissions
 
@@ -41,6 +43,20 @@
 **.NOTES**
     Developed by ksangui@microsoft.com and Nicolas Lepagnez
     
+    
+
+    Version : 8.0.0.0 - Current version - nilepagn
+        - Implement Log Ingestion API for Sentinel (DCE/DCR-based ingestion replacing the legacy Log Analytics HTTP Data Collector API).
+        - New LogCollection settings : SentinelLogIngestionAPIActivated, DataCollectionEndpointURI, DCRImmutableId, UseManagedIdentity, TargetLogTenantID, TargetLogAppID, TargetLogCertificateThumbprint, TargetLogAppSecretReference.
+        - Both APIs are supported simultaneously, controlled by the SentinelLogIngestionAPIActivated toggle, to enable a phased migration.
+        - Adding runtime warning banner when the collector still uses the legacy Log Analytics HTTP Data Collector API.
+          See [Upgrade an existing deployment](../../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment) for the migration procedure.
+        - New Identity sub-property columns exposed by the DCR transformKql : Identity_Depth_d, Identity_DistinguishedName_s, Identity_DomainId_s, Identity_IsDeleted_b, Identity_IsRelativeDn_b, Identity_Name_s, Identity_ObjectGuid_g, Identity_Parent_s, Identity_PartitionFQDN_s, Identity_PartitionGuid_g, Identity_Rdn_s.
+        - Create $Script:ESIDataPath to store data in a specific folder and become independent from CSV configuration.
+        - Move ExportDomainsInformation to LogCollection Section in configuration. If set to true, the Domain Information will be exported in the Log Collection. Default Value is True as before.
+        - Change GitHub link for Configuration file to use the new repository.
+        - Adding possibility to use GitHub API instead of direct download for configuration file.
+
     Version : 7.6.0.1 - Released : 26/07/2024 - nilepagn
         - Adding Try-Catch on Get-AutomationVariable Test
         - Correct a bug on Get-LastVersion with Write-LogMessage
@@ -58,16 +74,16 @@
 
     Version : 7.5.2 - Released : 17/08/2023 - nilepagn
         - Implement a minimal config version
-        - Correct multiple bugs on regex configuration filteging and categorization
+        - Correct multiple bugs in regex configuration filtering and categorization
         - Enhancement of the Audit function loop by adding protection on malformed data
-        - Possibiltiy to launch the Collector for Microsoft Online from a server instead of a Runbook
+        - Ability to launch the Collector for Microsoft Online from a server instead of a Runbook
         - Adding a "ResetType" on the DateStorageInformation Section to be able to start on a specific date if needed. Possible values : 
             "CurrentDate" : Start from current date
             "LastDateOfScript" : Start from last date stored in the file for the script
             "Standard" : "Apply the same rule as the script : Current date minus "DefaultDurationTracking" parameter in days
             "SpecificDate[YourDate]" : Start from a specific date specified in the parameter "YourDate"
             "Current-AddUnit[YourNumber]" : Start from current date plus/minus a number of unit (replace unit by Days, months, Years, hours, minutes, seconds as desired) specified in the parameter "YourNumber"
-        - In the very little case where 'Get-AutomationVariable' is an existing function outside Azure Automation, we check the precense of a module Orchestrator*. We now offer the possibility to force execution outside Azure Automation by passing the switch IsOutsideAzureAutomation for script execution.
+        - In the unlikely case where 'Get-AutomationVariable' exists outside Azure Automation, check for an Orchestrator* module. Execution outside Azure Automation can be forced by passing the IsOutsideAzureAutomation switch.
 
     Version : 7.5.1.1 - Released : 12/07/2023 - nilepagn
         - Correct a bug IdentityString information.
@@ -113,7 +129,7 @@
         - Complete Get-Group when Get-ADGroupMember not available
         - Get-ESIADGroupMember for external usage that can use Get-ADGroupMember or Get-ADGroup
         - Avoid Loop in GetInfo with members of groups.
-        - Add a Group cache to avoid to many retreival
+        - Add a group cache to avoid excessive retrievals
 
     Version : 7.3.2 - Released : 09/12/2022 - nilepagn
         - Correct a bug when Without Internet and using Folder Add-ons
@@ -145,7 +161,7 @@
         - ESI Collector retrieve Online configuration by default.
         - ESI Collector verify Checksum of files and download Online version in case of bad validation (Issue known invalidating cache each time)
         - Multiple Instance capability added in beginning version 7.1
-        - Internal GetO365Info implemented for retreiving Group Membership like AD
+        - Internal GetO365Info implemented for retrieving group membership like AD
             => MGGraph module is needed. Permission for Microsoft Graph needed : "group.read.all","user.read.all", "AuditLog.Read.All"
 
     Version : 7.0 - Released : 03/10/2022 - nilepagn
@@ -171,7 +187,7 @@
         - Modify the end of script to correctly ends the logging
 
     Version : 6.2.2 - Released : 12/09/2022 - Ksangui
-        -Add Get-inboundConnecot and Get OutboungConnector for Online
+        - Add Get-InboundConnector and Get-OutboundConnector for Online
 
     Version : 6.2.1 - Released : 10/09/2022 - nilepagn
         - Possibility to display TargetServer on Select (It was a regression from 4.x version)
@@ -197,23 +213,23 @@
         - Reorganization of functions in the code by category
 
     Version : 5.0 - Released : 24/08/2022 - nilepagn
-        - Version Cloud with autonomous Azure Log Monitor loading. No more dependant of a script.
+        - Cloud version with autonomous Azure Monitor log upload. No longer dependent on another script.
         - Be able to work on an Azure Automation Runbook
         - Connect Exchange Online to retrieve Information
 
     Version : 4.2 - Released : 15/08/2022 - Nilepagn
-        - Adding an automous Sentinel log upload mechanism to be able to be independant from Log Analytics Agents.
+        - Adding an autonomous Microsoft Sentinel log upload mechanism independent of Log Analytics agents.
             The Upload-AzMonitorLog Script is needed and can be installed here : https://www.powershellgallery.com/packages/Upload-AzMonitorLog
-            The system needs to be explicitally enabled in the config file with the Sentinel Workspace Id and Workspace
+            The system must be explicitly enabled in the configuration file with the Microsoft Sentinel workspace ID and key.
 
     Version : 4.1 - Released : 15/08/2022 - Nilepagn
-        - Testing Function transfert into JSON File
+        - Testing function transfer into a JSON file
         - Adding possibility to activate only specific function of to deactivate a specific function
             => "Deactivated":"false" on function level
             => "OnlyExplicitActivation":"True" on "Advanced" level + "ExplicitActivation":"true" on function level
         - Adding Default Exchange Path on JSON Config
         - Transforming all the parallelism system to use Runspace on multi-threading
-        - Adding the possibility to explicitally fill Exchange Server list to use
+        - Adding the ability to explicitly define the Exchange Server list
         - Insert multiple variables that can be used on functions : 
             "#LastDateTracking#" = $script:LastDateTracking; 
             "#ForestDN#" = $script:ForestDN; 
@@ -236,7 +252,7 @@
         - Add Search-MailboxAuditlog
         - Add DatabaseAvailabilityGroup
     Version : 2.6 - Released : 17/03/2022
-        - Add ReceiveConnector : AuthMecnismstring and Permissions Group string
+        - Add ReceiveConnector: AuthMechanismString and permission group string
         - ExchangeServer : AdminDisplayVersion
         -Transport Rule SentoString,CopytoString,RedirecttoString,BlindCopyToString
     Version : 2.5 - Released : 17/03/2022
@@ -254,7 +270,7 @@
         - Correct a bug on Transform for each object switch
         - Align Member object properties to have same information
     Version : 2.0 - Released : 11/02/2022
-        - Adding Tranformation Function possibility before injecting data
+        - Adding a transformation function before injecting data
         - Adding Group Hierarchy Calculation
     Version : 1.3 - Released : 04/01/2021
         - Adding Exchange Server information

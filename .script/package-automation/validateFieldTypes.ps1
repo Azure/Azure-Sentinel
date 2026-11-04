@@ -1,4 +1,4 @@
-param($runId, $pullRequestNumber, $instrumentationKey, $baseFolderPath, $isPRMerged)
+param($runId, $pullRequestNumber, $instrumentationKey, $baseFolderPath, $isPRMerged, $SolutionPath)
 
 try {
   Write-Host "Inside of Validate Parameter Field Types!"
@@ -6,11 +6,34 @@ try {
   $baseFolderPath = $baseFolderPath + "/"
   $baseFolderPath = $baseFolderPath.replace("//", "/")
 
-  # Get Solution Name
-  . $PSScriptRoot/getSolutionName.ps1 $runId $pullRequestNumber $instrumentationKey $false
-  if ($solutionName -eq '')
-  {
-    exit 0 
+  if ($SolutionPath) {
+    $solutionsRoot = [System.IO.Path]::GetFullPath((Join-Path $baseFolderPath "Solutions")).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $resolvedSolutionPath = [System.IO.Path]::GetFullPath($SolutionPath)
+    if ([System.IO.Path]::GetDirectoryName($resolvedSolutionPath) -ne $solutionsRoot -or
+        -not (Test-Path $resolvedSolutionPath -PathType Container) -or
+        ((Get-Item $resolvedSolutionPath).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+      throw "Invalid solution folder '$SolutionPath'. Expected an existing direct child of '$solutionsRoot'."
+    }
+    $solutionMainTemplatePath = Join-Path $resolvedSolutionPath "Package/mainTemplate.json"
+    if (-not (Test-Path $solutionMainTemplatePath -PathType Leaf)) {
+      Write-Host "Skipping validation as there is no current Package/mainTemplate.json in $resolvedSolutionPath"
+      exit 0
+    }
+  }
+  else {
+    # Preserve CI's commit-diff based solution discovery when no folder scope is supplied.
+    . $PSScriptRoot/getSolutionName.ps1 $runId $pullRequestNumber $instrumentationKey $false
+    if ($solutionName -eq '') {
+      exit 0
+    }
+    $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+    Write-Host "List of files in PR: $diff"
+    $solutionMainTemplatePath = 'Solutions/' + $solutionName + "/Package/mainTemplate.json"
+    $hasMainTemplateFile = $diff | Where-Object { $_ -match "$solutionMainTemplatePath" }
+    if ($null -eq $hasMainTemplateFile) {
+      Write-Host "Skipping validation as there is no change in maintemplate.json file for solution $solutionName"
+      exit 0
+    }
   }
 
   function GetInvalidFields($resourceParameterProp) {
@@ -42,19 +65,10 @@ try {
     return $invalidFields;
   }
 
-  $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
-  Write-Host "List of files in PR: $diff"
+  $mainTemplateFileContent = Get-Content "$solutionMainTemplatePath" -Raw | ConvertFrom-Json
 
-  $solutionMainTemplatePath = 'Solutions/' + $solutionName + "/Package/mainTemplate.json"
-  $hasMainTemplateFile = $diff | Where-Object {$_ -match "$solutionMainTemplatePath"}
-
-  if ($null -eq $hasMainTemplateFile) {
-    Write-Host "Skipping validation as there is no change in maintemplate.json file for solution $solutionName"
-  } else {
-    $mainTemplateFileContent = Get-Content "$solutionMainTemplatePath" | ConvertFrom-Json
-
-    $hasInvalidGlobalParameterType = $false
-    $hasInvalidResourceParameterType = $false
+  $hasInvalidGlobalParameterType = $false
+  $hasInvalidResourceParameterType = $false
     # identify in global parameters
     $globalParameters = $mainTemplateFileContent.parameters
     if ($null -ne $globalParameters -and $globalParameters.Count -gt 0) {
@@ -95,9 +109,8 @@ try {
       }
     }
 
-    if ($hasInvalidResourceParameterType -or $hasInvalidGlobalParameterType) {
-      exit 1
-    }
+  if ($hasInvalidResourceParameterType -or $hasInvalidGlobalParameterType) {
+    exit 1
   }
 }
 catch {

@@ -1,0 +1,73 @@
+id: 8c4c718b-bc09-4524-ad41-6c76c0d1433b
+name: SharePoint file operation via previously unseen IPs
+description: |
+  Identify SharePoint uploads and downloads from previously unseen IPs whose volume differs by more than 25% from the user's historical daily per-IP activity for the same operation and site.
+description-detailed: |
+  Compare the last day of activity with the preceding 13 days. Exclude IPs previously used by the same user for the same operation and site. Compare each new IP's total volume with the historical average daily per-IP volume, including inactive days. Users without a historical baseline are excluded.
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+  // Define a percentage threshold for significant deviations
+  let threshold = 25;
+  // Define the name for the SharePoint File Operation record type
+  let szSharePointFileOperation = "SharePointFileOperation";
+  // Define an array of SharePoint operations of interest
+  let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+  // Define the start and end time for the analysis period
+  let starttime = 14d;
+  let endtime = 1d;
+  let baselineDays = (starttime - endtime) / 1d;
+  let historicalIPActivity = OfficeActivity
+  | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in~ (szOperations)
+  | where isnotempty(UserAgent)
+  | summarize Count = count() by UserId, Operation, Site_Url, ClientIP;
+  let userBaseline = historicalIPActivity
+  | summarize AvgCount = avg(toreal(Count) / baselineDays) by UserId, Operation, Site_Url;
+  // Get recent user activity
+  let recentUserActivity = OfficeActivity
+  | where TimeGenerated >= ago(endtime)
+  | where RecordType =~ szSharePointFileOperation
+  | where Operation in~ (szOperations)
+  | where isnotempty(UserAgent)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;
+  // Compare total activity per new IP, not individual files or user agents.
+  let UserBehaviorAnalysis = recentUserActivity
+  | summarize RecentIPCount = sum(RecentCount) by UserId, Operation, Site_Url, ClientIP
+  | join kind=leftanti (historicalIPActivity) on UserId, Operation, Site_Url, ClientIP
+  | join kind=inner (userBaseline) on UserId, Operation, Site_Url
+  | extend Deviation = 100.0 * abs(RecentIPCount - AvgCount) / AvgCount
+  | where Deviation > threshold;
+  recentUserActivity
+  | join kind=inner (UserBehaviorAnalysis) on UserId, Operation, Site_Url, ClientIP
+  | project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count = RecentCount, RecentIPCount, AvgCount
+  | order by Count desc, ClientIP asc, Operation asc, UserId asc
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  | extend AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+metadata:
+  source:
+    kind: Microsoft
+  author:
+    name: Microsoft Sentinel Team
+  support:
+    tier: Microsoft
+  categories:
+    domains:
+      - Security - Others

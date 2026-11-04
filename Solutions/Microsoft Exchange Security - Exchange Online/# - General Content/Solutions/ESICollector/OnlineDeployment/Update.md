@@ -1,70 +1,61 @@
-# ESI Collector - Update
-
-- [ESI Collector - Update](#esi-collector---update)
-  - [Overview](#overview)
-  - [Azure Automation Manual Update -- For Runbook Deployment](#azure-automation-manual-update----for-runbook-deployment)
-    - [Runbook update](#runbook-update)
-    - [Configuration update](#configuration-update)
-  - [On-Premises Script Manual Update -- For On-Premises Deployment](#on-premises-script-manual-update----for-on-premises-deployment)
-    - [Script update](#script-update)
-    - [Script Configuration update](#script-configuration-update)
-  - [Install ESI Collector Updater](#install-esi-collector-updater)
+# Update the Exchange Security Insights Collector
 
 ## Overview
 
-The ESI Collector is a PowerShell script that collects security-related data from Exchange Online and sends it to a Log Analytics workspace. The script is designed to be run as a scheduled task and can be configured to collect data at different intervals.
+The Exchange Security Insights Collector supports two execution models:
 
-## Azure Automation Manual Update -- For Runbook Deployment
+- Exchange Online runs as the `Start-ESICollector` runbook in Azure Automation.
+- Exchange On-Premises runs as `CollectExchSecIns.ps1`, normally through a Windows scheduled task.
 
-### Runbook update
+Review the [collector package and upgrade guide](../README.md) before updating. It identifies the current version, required configuration changes, and supported migration path.
 
-If you are using Azure Automation to run the ESI Collector, you can update the script by following these steps:
+## Before updating
 
-1. Download the latest version of the ESI Collector script from the [GitHub repository](https://aka.ms/ESI-ExchangeCollector-RawScript).
-2. Open the Automation account in the Azure portal.
-3. Navigate to the "Runbooks" section and select the ESI Collector runbook.
-4. Click on "Edit" to open the runbook editor.
-5. Replace the existing script with the new version of the ESI Collector.
-6. Publish the Runbook to save the changes.
-7. Test the updated script to ensure that it is working correctly.
+1. Record the currently deployed collector version.
+2. Review the version-specific changes in the [package and upgrade guide](../README.md).
+3. Back up the current configuration:
+   - Exchange Online: export the `GlobalConfiguration` Automation variable.
+   - Exchange On-Premises: copy `Config\CollectExchSecConfiguration.json` to a secure backup location.
+4. Preserve custom instance, add-on, scheduling, proxy, and storage settings.
+5. If migrating to the Azure Monitor Log Ingestion API, deploy the updated Microsoft Sentinel solution and connector resources before enabling the new ingestion settings.
 
-### Configuration update
+For setting definitions, see the [configuration parameter reference](../Parameters.md).
 
-After updating the script, you may need to update the configuration settings if needed to add new features or fix issues. The configuration can be found in the GlobalConfiguration variable of your Automation Account.
+## Update an Exchange Online runbook
 
-The new version of the ESI Collector may introduce new configuration settings or change the existing ones. You can find the new configuration settings in GitHub repository or in the release notes : [GitHub repository](./../../ESICollector/README.md).
+1. Download the latest [`CollectExchSecIns.ps1`](./CollectExchSecIns.ps1).
+2. In the Azure portal, open the Automation account.
+3. Open **Runbooks** and select `Start-ESICollector`.
+4. Select **Edit**, replace the runbook content with the latest script, and save it.
+5. Publish the runbook.
+6. Update `GlobalConfiguration` only after comparing it with the new parameter reference. Preserve unrelated settings.
+7. Verify that the required PowerShell modules, managed identity permissions, Microsoft Graph permissions, Exchange Online permissions, and Microsoft Entra directory role are still configured.
+8. Run `Start-ESICollector` manually and confirm that the job completes successfully.
+9. Verify that new data reaches the expected Log Analytics table before relying on the schedule.
 
-To update the configuration settings:
+For a complete Azure Monitor deployment or migration, follow the [solution-specific Azure Monitor guide](../../../Documentations/README_LogIngestionAPI.md).
 
-1. Open the Automation account in the Azure portal.
-2. Navigate to the "Variables" section and select the GlobalConfiguration variable.
-3. Update the configuration settings as needed.
-4. Save the changes.
-5. Test the updated script to ensure that it is working correctly.
+## Update an Exchange On-Premises deployment
 
-## On-Premises Script Manual Update -- For On-Premises Deployment
+1. Download and unblock the latest `CollectExchSecIns.zip` package from the [collector package folder](../).
+2. Extract the package to a new directory.
+3. Follow the replacement procedure in the [collector package and upgrade guide](../README.md).
+4. Preserve the backed-up `Config\CollectExchSecConfiguration.json` file unless the upgrade guide requires a schema change.
+5. Apply the required configuration changes with [`setup.ps1`](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20On-Premises/%23%20-%20General%20Content/Documentations/ReadmeSetup.PS1.md). For an existing deployment, select configuration-only update mode.
+6. Verify that the scheduled task points to the updated collector path.
+7. Run the collector manually and confirm that it completes successfully.
+8. Verify that new data reaches the expected Log Analytics table before relying on the scheduled task.
 
-### Script update
+For a complete Azure Monitor deployment or migration, follow the [solution-specific Azure Monitor guide](../../../Documentations/README_LogIngestionAPI.md).
 
-If you are running the ESI Collector as a scheduled script on a VM or server, you can update the script by following these steps:
+## Validate the update
 
-1. Download the latest version of the ESI Collector script (CollectExchSecIns.zip) from the [GitHub repository](./../../ESICollector).
-2. Replace the existing PS1 scripts with the new version of the ESI Collector found in the downloaded ZIP (CollectExchSecIns.ps1, setup.ps1, Updater.ps1).
-3. Test the updated script to ensure that it is working correctly.
+After either update:
 
-### Script Configuration update
+1. Confirm that the collector reports the expected version.
+2. Review the collector or Automation job logs for authentication, permission, configuration, and ingestion errors.
+3. Confirm that the most recent collection appears in Microsoft Sentinel.
+4. Confirm that the scheduled task or Automation schedule is enabled.
+5. Retain the backup until several scheduled executions have completed successfully.
 
-After updating the script, you may need to update the configuration settings if needed to add new features or fix issues. The configuration can be found in the Config\CollectExchSecConfiguration.json file.
-
-The new version of the ESI Collector may introduce new configuration settings or change the existing ones. You can find the new configuration settings in GitHub repository or in the release notes : [GitHub repository](./../../ESICollector).
-
-To update the configuration settings:
-
-1. Open the CollectExchSecConfiguration.json file.
-3. Update the configuration settings as needed.
-4. Save the changes.
-5. Test the updated script to ensure that it is working correctly.
-
-## Install ESI Collector Updater
-
-**Under Construction**
+If validation fails, stop the schedule, restore the backed-up configuration and previous collector version, and investigate the error before retrying the update.

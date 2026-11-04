@@ -1,0 +1,127 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7d2ed1c7-da26-45fd-b4ea-b6f2bbeccea7
+    path: Analytic Rules/ThreatInfoFoundInWebRequests.yaml
+    version: 1.0.0
+    querySha256: 4c8a9d7332a5f8eae761798f2ad67c72a3289b5b9dcb3bec8cb6c436e15bfcba
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'ThreatCategory' column `ThreatCategory` requires runtime output-schema binding verification
+    - customDetails 'ThreatConfidence' column `ThreatOriginalConfidence` requires runtime output-schema binding verification
+    - customDetails 'ThreatName' column `ThreatName` requires runtime output-schema binding verification
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EvenEndTime' column `EvenEndTime` requires runtime output-schema binding verification
+    - customDetails 'EventCount' column `EventCount` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: bcd7d9e1dec110e36cdb7c3aa86edcb02978ad9cacd9fdf6c5e916d1b05a1e43
+      targetQuerySha256: 2a47cde80e253093e2d3004672bcdc3a3303e943d5d9917bf95d97c6316cb04f
+properties:
+  id: xdr-7d2ed1c7-da26-45fd-b4ea-b6f2bbeccea7
+  displayName: Detect threat information in web requests (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback= 5m;
+      _Im_WebSession(starttime=ago(lookback))
+      | project
+          EventSeverity,
+          ThreatName,
+          ThreatCategory,
+          ThreatRiskLevel,
+          ThreatOriginalConfidence,
+          ThreatField,
+          TimeGenerated,
+          SrcIpAddr,
+          SrcUsername,
+          SrcHostname,
+          Url,
+          DstIpAddr
+      | where ThreatRiskLevel >= 90
+          or toint(ThreatOriginalConfidence) >= 90
+          or EventSeverity =~ "High"
+      | summarize
+          EventCount = count(),
+          EventStartTime=min(TimeGenerated),
+          EvenEndTime=max(TimeGenerated)
+          by
+          SrcIpAddr,
+          SrcUsername,
+          SrcHostname,
+          Url,
+          DstIpAddr,
+          ThreatName,
+          ThreatCategory,
+          ThreatRiskLevel,
+          ThreatOriginalConfidence,
+          ThreatField
+      | extend
+          Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+          UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Detect threat information in web requests (ASIM Web Session)
+      description: '''This rule would generate an alert if EvenSeverity is ''High'' or ''ThreatRiskLevel'' or ''ThreatOriginalConfidence''
+        value is greater than 90.'
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: SrcHostname
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        - id: ip2
+          addressColumn: DstIpAddr
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+      customDetails:
+        ThreatCategory: ThreatCategory
+        ThreatConfidence: ThreatOriginalConfidence
+        ThreatName: ThreatName
+        EventStartTime: EventStartTime
+        EvenEndTime: EvenEndTime
+        EventCount: EventCount

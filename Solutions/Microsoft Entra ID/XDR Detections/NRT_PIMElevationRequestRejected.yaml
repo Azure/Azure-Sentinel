@@ -1,0 +1,142 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5db427b2-f406-4274-b413-e9fcb29412f8
+    path: Analytic Rules/NRT_PIMElevationRequestRejected.yaml
+    version: 1.0.4
+    querySha256: eeb5204cf35c576981dde00204d1b47daf481553317c720a7effd2d1c8ae5d6a
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `TargetUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore
+      entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `TargetUserPrincipalName` requires runtime output-schema
+      binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore
+      entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `InitiatingUserPrincipalName` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values
+      are unverified and the service drops all custom details if exceeded
+    informational:
+    - 'Schedule assessment: source kind=NRT; target frequency=PT0S (Continuous); single-table Continuous
+      (NRT) execution is supported in Defender XDR. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: e44c851bcace50e43fc8a5a3016da407b8081fbd59b94fb01211706c3525fba4
+      targetQuerySha256: 70e73cf82046efe1d58794e439df6ced8033d189693ad767e27c49df544cc8ca
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+  targetQuerySha256: 70e73cf82046efe1d58794e439df6ced8033d189693ad767e27c49df544cc8ca
+properties:
+  id: xdr-5db427b2-f406-4274-b413-e9fcb29412f8
+  displayName: NRT PIM Elevation Request Rejected
+  status: disabled
+  queryCondition:
+    queryText: "AuditLogs\n| where ActivityDisplayName =~ 'Add member to role request denied (PIM activation)'\n\
+      | mv-apply ResourceItem = TargetResources on\n  (\n      where ResourceItem.type =~ \"Role\"\n \
+      \     | extend Role = trim(@'\"',tostring(ResourceItem.displayName))\n  )\n| mv-apply ResourceItem\
+      \ = TargetResources on\n  (\n      where ResourceItem.type =~ \"User\"\n      | extend TargetUserPrincipalName\
+      \ = trim(@'\"',tostring(ResourceItem.userPrincipalName))\n  )\n| where ResultReason != \"RoleAssignmentExists\"\
+      \n| where isnotempty(InitiatedBy.user)\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n\
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend\
+      \ InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId\
+      \ = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress),\
+      \ InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]),\
+      \ TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend InitiatedByName\
+      \ = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n\
+      | project-reorder TimeGenerated, TargetUserPrincipalName, Role, OperationName, Result, ResultDescription"
+  schedule:
+    frequency: PT0S
+  detectionAction:
+    alertTemplate:
+      title: NRT PIM Elevation Request Rejected
+      description: '''Identifies when a user is rejected for a privileged role elevation via PIM. Monitor
+        rejections for indicators of attacker compromise of the requesting account.
+
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account2
+          nameColumn: InitiatedByName
+          upnSuffixColumn: InitiatedByUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: TargetUserPrincipalName
+        AccountFullName_2: InitiatingUserPrincipalName
+queryText: "AuditLogs\n| where ActivityDisplayName =~ 'Add member to role request denied (PIM activation)'\n\
+  | mv-apply ResourceItem = TargetResources on\n  (\n      where ResourceItem.type =~ \"Role\"\n     \
+  \ | extend Role = trim(@'\"',tostring(ResourceItem.displayName))\n  )\n| mv-apply ResourceItem = TargetResources\
+  \ on\n  (\n      where ResourceItem.type =~ \"User\"\n      | extend TargetUserPrincipalName = trim(@'\"\
+  ',tostring(ResourceItem.userPrincipalName))\n  )\n| where ResultReason != \"RoleAssignmentExists\"\n\
+  | where isnotempty(InitiatedBy.user)\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n\
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName\
+  \ = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n\
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress,\
+  \ InitiatedBy.app.ipAddress))\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]),\
+  \ TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]),\
+  \ InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n| project-reorder TimeGenerated,\
+  \ TargetUserPrincipalName, Role, OperationName, Result, ResultDescription"

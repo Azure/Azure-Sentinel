@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 269435e3-1db8-4423-9dfc-9bf59997da1c
+    path: Analytic Rules/PrivlegedRoleAssignedOutsidePIM.yaml
+    version: 1.0.6
+    querySha256: ace48ed75eca781d37b18d9d73ed6e0847ce388be4d31f642173f5d088c0d7b6
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `TargetUserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `TargetUserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 283bb4b5e1c66fddbad40ac1e2b128ef034c00d9c7a09e599917caef81681495
+      targetQuerySha256: e61e3e9e9196ce41f64c569e12a019457c9fb595b61df3bd4bdab0f470ab5658
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-269435e3-1db8-4423-9dfc-9bf59997da1c
+  displayName: Privileged Role Assigned Outside PIM
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AuditLogs
+      | where Category =~ "RoleManagement"
+      | where OperationName has "Add member to role outside of PIM"
+              or (LoggedByService =~ "Core Directory" and OperationName =~ "Add member to role" and Identity != "MS-PIM" and Identity != "MS-PIM-Fairfax")
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type =~ "User"
+            | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName)
+        )
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+      | extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Privileged Role Assigned Outside PIM
+      description: |-
+        'Identifies a privileged role being assigned to a user outside of PIM
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatedByName
+          upnSuffixColumn: InitiatedByUPNSuffix
+        - id: account2
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName
+        AccountFullName_2: TargetUserPrincipalName
