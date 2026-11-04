@@ -1,0 +1,84 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: &id001
+- connectorId: BoxDataConnector
+  dataTypes:
+  - BoxEvents_CL
+- connectorId: BoxEventsCCPDefinition
+  dataTypes:
+  - BoxEventsV2_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - BoxEvents
+    - BoxEventsV2_CL
+    - BoxEvents_CL
+  requiredDataConnectors: *id001
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 174c31c9-22ec-42e5-8226-814391c08200
+    path: Analytic Rules/BoxUserRoleChangedToOwner.yaml
+    version: 1.0.1
+    querySha256: 72f51e8b7cf39a66f1498b10aadf1edff0e090f71ad6aff0bd85a30c7c5bfc5a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - entity mappings were resolved by the configured per-rule override
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: ae5bff9dbe031b52b7d7e523201e1a77205d545e57956edf0dee5c5b9bf5a4b5
+      targetQuerySha256: b5d8cf22cad5d6105ab3f07f3bd9362639c3c067c0829a4482cdf7237c44ec51
+properties:
+  id: xdr-174c31c9-22ec-42e5-8226-814391c08200
+  displayName: Box - User role changed to owner
+  status: disabled
+  queryCondition:
+    queryText: "let lbperiod = 14d;\nlet lbtime = 1h;\nBoxEvents\n| where EventEndTime\
+      \ between (ago(lbperiod) .. ago(lbtime))\n| where EventType =~ 'COLLABORATION_INVITE'\n\
+      | where AdditionalDetailsRole !~ 'Owner'\n| summarize min(EventEndTime) by AccessibleByName,\
+      \ FileDirectory, AdditionalDetailsRole\n| project AccessibleByName, FileDirectory,\
+      \ InitialRole = AdditionalDetailsRole\n|join (BoxEvents\n          | where EventType\
+      \ =~ 'COLLABORATION_ROLE_CHANGE'\n          | summarize max(EventEndTime) by\
+      \ AccessibleByName, FileDirectory, AdditionalDetailsRole\n          | project\
+      \ AccessibleByName, FileDirectory, NewRole = AdditionalDetailsRole\n       \
+      \   ) on FileDirectory, AccessibleByName\n| where NewRole =~ 'Owner'\n| project\
+      \ AccessibleByName, FileDirectory\n| extend AccountCustomEntity = AccessibleByName"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Box - User role changed to owner
+      description: '''Detects when user collaboration role is changed to owner.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078

@@ -1,0 +1,138 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SentinelOneCCP
+  dataTypes:
+  - SentinelOneActivities_CL
+  - SentinelOneAgents_CL
+  - SentinelOneAlerts_CL
+  - SentinelOneGroups_CL
+  - SentinelOneThreats_CL
+- connectorId: SentinelOneV2Connector
+  dataTypes:
+  - SentinelOneActivities_CL
+  - SentinelOneAgents_CL
+  - SentinelOneAlertsV2_CL
+  - SentinelOneGroups_CL
+  - SentinelOneThreats_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertInfo
+  - workload: sentinel
+    dataTypes:
+    - SentinelOne
+    - SentinelOneActivities_CL
+    - SentinelOneAgents_CL
+    - SentinelOneAlertsV2_CL
+    - SentinelOneAlerts_CL
+    - SentinelOneGroups_CL
+    - SentinelOneThreats_CL
+    - SentinelOne_CL
+  requiredDataConnectors:
+  - connectorId: SentinelOne
+    dataTypes:
+    - SentinelOne
+  - connectorId: SentinelOneCCP
+    dataTypes:
+    - SentinelOneActivities_CL
+    - SentinelOneAgents_CL
+    - SentinelOneAlerts_CL
+    - SentinelOneGroups_CL
+    - SentinelOneThreats_CL
+    - SentinelOneAlertsV2_CL
+  - connectorId: SentinelOneV2Connector
+    dataTypes:
+    - SentinelOne_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 382f37b3-b49a-492f-b436-a4717c8c5c3e
+    path: Analytic Rules/SentinelOneAdminLoginNewIP.yaml
+    version: 1.0.1
+    querySha256: 9a3c290762652b4f3a09e3d33ac1a1ea8b0503fdaa4e5dee1e1375298da258af
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - mtp
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required
+      Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 59b5de4bcd3441c165fc83f9afdedae7e8ec3b6f540f1b1406822f2c5eaa47f5
+      targetQuerySha256: 84cb1a9d52a14d120d6e3b46eef451bde5c9e15636bc6e23b168b741d692f0df
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-382f37b3-b49a-492f-b436-a4717c8c5c3e
+  displayName: Sentinel One - Admin login from new location
+  status: disabled
+  queryCondition:
+    queryText: "let lback_period = 14d;\nlet lback_time = 1h;\nSentinelOne\n| where\
+      \ TimeGenerated between(ago(lback_period)..ago(lback_time))\n| where ActivityType\
+      \ == 27\n| where DataRole =~ 'Admin'\n| extend SrcIpAddr = extract(@'Address\\\
+      s(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})', 1, EventOriginalMessage)\n| where\
+      \ isnotempty(SrcIpAddr)\n| summarize ip_lst = makeset(SrcIpAddr) by SrcUserName\n\
+      | join (SentinelOne\n        | where ActivityType == 27\n        | where DataRole\
+      \ =~ 'Admin'\n        | extend SrcIpAddr = extract(@'Address\\s(\\d{1,3}\\.\\\
+      d{1,3}\\.\\d{1,3}\\.\\d{1,3})', 1, EventOriginalMessage)\n        | where isnotempty(SrcIpAddr))\
+      \ on SrcUserName\n| where ip_lst !has SrcIpAddr\n| extend AccountCustomEntity\
+      \ = SrcUserName, IPCustomEntity = SrcIpAddr"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Sentinel One - Admin login from new location
+      description: '''Detects admin user login from new location (IP address).'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity
