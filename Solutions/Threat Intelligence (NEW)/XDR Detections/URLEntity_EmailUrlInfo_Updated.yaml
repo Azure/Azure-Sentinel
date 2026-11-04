@@ -1,0 +1,144 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailUrlInfo
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mdo
+    dataTypes:
+    - EmailEvents
+    - EmailUrlInfo
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - EmailUrlInfo
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9e32e545-e60c-47de-9941-f9ca1ada0a42
+    path: Analytic Rules/URLEntity_EmailUrlInfo_Updated.yaml
+    version: 1.0.5
+    querySha256: 42790bb19db00eff59e1ed8194cbd655e4e36af46ead57c9e6f1fbe0e96741a4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.5
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `RecipientEmailAddress`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `RecipientEmailAddress` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 2a9157a27196c0b12bff1c79a4b68cfc7ca4d774ebf90611169f54dc9fa72625
+      targetQuerySha256: e910b3ce1c8e4b6d90e6f3405e7b394adad0b0943102ea140110bd64f67a12eb
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: RecipientEmailAddress
+      column: RecipientEmailAddress
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-9e32e545-e60c-47de-9941-f9ca1ada0a42
+  displayName: TI Map URL Entity to EmailUrlInfo
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailUrlInfo_\
+      \ = materialize(EmailUrlInfo\n    | where TimeGenerated >= ago(dt_lookBack)\n\
+      \    | extend EmailUrlInfo_TimeGenerated = TimeGenerated);\nlet EmailUrls =\
+      \ EmailUrlInfo_ | distinct Url | summarize make_list(Url);\nlet EmailUrlDomains\
+      \ = EmailUrlInfo_ | distinct UrlDomain | summarize make_list(UrlDomain);\nlet\
+      \ EmailEvents_ = materialize(EmailEvents\n    | where TimeGenerated >= ago(dt_lookBack));\n\
+      let TI = materialize(ThreatIntelIndicators\n   //extract key part of kv pair\n\
+      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n\
+      | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | where TimeGenerated\
+      \ >= ago(ioc_lookBack)\n    | where tolower(Url) in (EmailUrls) or tolower(Url)\
+      \ in (EmailUrlDomains)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated,\
+      \ *) by Id, ObservableValue\n    | where IsActive and (ValidUntil > now() or\
+      \ isempty(ValidUntil)));\n(union\n    (TI | join kind=innerunique (EmailUrlInfo_)\
+      \ on Url),\n    (TI | join kind=innerunique (EmailUrlInfo_) on $left.Url ==\
+      \ $right.UrlDomain))\n| where EmailUrlInfo_TimeGenerated < ValidUntil\n| summarize\
+      \ EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId,\
+      \ Url\n| extend Description = tostring(parse_json(Data).description)\n| extend\
+      \ ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId,\
+      \ Type, ValidUntil, Confidence, Url, UrlDomain, UrlLocation, NetworkMessageId\n\
+      | extend timestamp = EmailUrlInfo_TimeGenerated\n| join kind=inner (EmailEvents_)\
+      \ on NetworkMessageId\n| where DeliveryAction !has \"Blocked\"\n| extend Name\
+      \ = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress,\
+      \ '@', 1)[0])"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map URL Entity to EmailUrlInfo
+      description: '''This query identifies any URL indicators of compromise (IOCs)
+        from threat intelligence (TI) by searching for matches in EmailUrlInfo.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountFullName: RecipientEmailAddress
