@@ -486,6 +486,7 @@ current_directory = os.path.dirname(os.path.abspath(__file__))
 modified_files = get_modified_files(current_directory)
 
 parser_yaml_files = filter_query_time_parser_files(modified_files)
+ingested_fixtures = set()
 
 prnumber = sys.argv[1]
 
@@ -524,6 +525,10 @@ for file in parser_yaml_files:
     except Exception as e:
         print(f"::error::An error occurred while trying to read Sample Data file at {sample_data_path}: {e}")
     data_result,table_name,datetime_keys = convert_data_csv_to_json('tempfile.csv')
+    fixture_key = (os.path.normcase(os.path.realpath(sample_data_path)), table_name)
+    if fixture_key in ingested_fixtures:
+        print(f"Skipping sample fixture already ingested into {table_name}: {sample_data_path}")
+        continue
     data_result = rebase_time_generated(data_result)
     print(f"Table Name : {table_name}")
     log_ingestion_supported,table_type=check_for_custom_table(table_name)
@@ -580,7 +585,8 @@ for file in parser_yaml_files:
                 break 
         print(f"Ingestion started for {table_name}") 
         print(f"{immutable_id},{stream_name},{table_name}")      
-        senddtosentinel(immutable_id,data_result,stream_name,flag)
+        if senddtosentinel(immutable_id,data_result,stream_name,flag):
+            ingested_fixtures.add(fixture_key)
     elif log_ingestion_supported == True and table_type == "builtin":
         flag=0 #flag value is used to check if DCR is created for the table or not
         #create dcr for ingestion
@@ -624,7 +630,8 @@ for file in parser_yaml_files:
                 break
         print(dcr_directory)    
         print(f"Ingestion started for {table_name}")       
-        senddtosentinel(immutable_id,data_result,stream_name,flag)
+        if senddtosentinel(immutable_id,data_result,stream_name,flag):
+            ingested_fixtures.add(fixture_key)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
         continue
