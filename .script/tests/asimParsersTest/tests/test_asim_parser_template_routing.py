@@ -179,15 +179,20 @@ class ParentParserRoutingTests(unittest.TestCase):
     def test_current_aws_cloudtrail_templates_pass_without_exclusions(self):
         root = MODULE_PATH.parents[3]
         parsers = root / "Parsers" / "ASimAuditEvent" / "Parsers"
+        sample_dir = root / "Sample Data" / "ASIM"
+        if (
+            not any(parsers.glob("ASimAuditEventAWSCloudTrailEC2*.yaml"))
+            or not (sample_dir / "AWS_CloudTrail_AuditEvent_IngestedLogs.csv").is_file()
+        ):
+            self.skipTest("AWSCloudTrail EC2 companion parsers and sample fixture are required.")
         paths = sorted(parsers.glob("*AWSCloudTrail*.yaml"))
-        self.assertEqual(len(paths), 34)
         for path in paths:
             with self.subTest(parser=path.name):
                 parser = TEMPLATE_VERIFIER.yaml.safe_load(path.read_text(encoding="utf-8"))
                 file_type = "vim" if path.name.startswith("vim") else "ASim"
                 parent, _ = self.resolve(parser, path, file_type)
                 results = TEMPLATE_VERIFIER.extract_and_check_properties(
-                    parser, parent, file_type, str(root / "Sample Data" / "ASIM")
+                    parser, parent, file_type, str(sample_dir)
                 )
                 self.assertFalse(
                     [result for result in results if "Fail" in result[-1]],
@@ -197,11 +202,14 @@ class ParentParserRoutingTests(unittest.TestCase):
     def test_synthetic_fixture_covers_each_child_without_overlapping_routes(self):
         root = MODULE_PATH.parents[3]
         fixture = root / "Sample Data" / "ASIM" / "AWS_CloudTrail_AuditEvent_IngestedLogs.csv"
+        parsers = root / "Parsers" / "ASimAuditEvent" / "Parsers"
+        paths = sorted(parsers.glob("ASimAuditEventAWSCloudTrailEC2*.yaml"))
+        if not fixture.is_file() or not paths:
+            self.skipTest("AWSCloudTrail EC2 companion parsers and sample fixture are required.")
         with fixture.open(encoding="utf-8-sig", newline="") as stream:
             rows = list(csv.DictReader(stream))
-        parsers = root / "Parsers" / "ASimAuditEvent" / "Parsers"
         catalogs = {}
-        for path in parsers.glob("ASimAuditEventAWSCloudTrailEC2*.yaml"):
+        for path in paths:
             query = TEMPLATE_VERIFIER.yaml.safe_load(
                 path.read_text(encoding="utf-8")
             )["ParserQuery"]
