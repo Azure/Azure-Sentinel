@@ -40,8 +40,13 @@ query: |
       or FileName =~ "claude_desktop_config.json"
       or FileName =~ ".claude.json"
   | where not(tolower(InitiatingProcessFileName) in (ExpectedWriters))
-  // Claude Code installed through npm runs as node; keep node writes that do not come from Claude Code itself.
-  | where not(InitiatingProcessFileName in~ ("node", "node.exe") and InitiatingProcessCommandLine has "claude")
+  // Older npm installs of Claude Code run as node, with the package's cli.js (or the claude bin link to it on
+  // macOS and Linux) as the script; newer ones run the claude binary listed above. Only that entrypoint is
+  // exempt, so other node processes writing these files stay in the results.
+  | where not(InitiatingProcessFileName in~ ("node", "node.exe")
+      and (InitiatingProcessCommandLine contains "@anthropic-ai/claude-code/cli."
+          or InitiatingProcessCommandLine contains @"@anthropic-ai\claude-code\cli."
+          or InitiatingProcessCommandLine matches regex @"^\S*node\s+\S*/claude(\s|$)"))
   | extend AccountCustomEntity = InitiatingProcessAccountName
   | extend HostCustomEntity = DeviceName
   | project
