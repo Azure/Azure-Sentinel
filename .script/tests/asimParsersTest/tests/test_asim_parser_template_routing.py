@@ -3,13 +3,15 @@ import csv
 import importlib.util
 import io
 import json
+import os
+import re
 import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 MODULE_PATH = (
@@ -76,6 +78,156 @@ class QueryTimeParserFileSelectionTests(unittest.TestCase):
                 "Parsers/ASimDns/Parsers/vimDnsContoso.yaml",
             ],
         )
+
+
+class ParentParserRoutingTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.directory = Path(temporary.name)
+
+    def write_parser(self, name, children=(), **properties):
+        document = {
+            "ParserName": name,
+            "EquivalentBuiltInParser": "_" + name,
+            "Normalization": {"Schema": "AuditEvent"},
+            "ParserQuery": "union " + ", ".join(child + "()" for child in children),
+            "Parsers": ["_" + child for child in children],
+            **properties,
+        }
+        path = self.directory / (name + ".yaml")
+        path.write_text(TEMPLATE_VERIFIER.yaml.safe_dump(document), encoding="utf-8")
+        return document, path
+
+    def resolve(self, parser, path, file_type="ASim"):
+        return TEMPLATE_VERIFIER.get_parent_parser(
+            parser, str(path), "AuditEvent", file_type
+        )
+
+    def test_missing_null_and_empty_parent_keep_schema_unifier_defaults(self):
+        for file_type, prefix, root in (
+            ("ASim", "ASim", "ASimAuditEvent"),
+            ("vim", "vim", "imAuditEvent"),
+        ):
+            child_name = prefix + "AuditEventContoso"
+            self.write_parser(root, [child_name])
+            for properties in ({}, {"ParentParser": None}, {"ParentParser": ""}):
+                with self.subTest(file_type=file_type, properties=properties):
+                    parser, path = self.write_parser(child_name, **properties)
+                    parent, _ = self.resolve(parser, path, file_type)
+                    self.assertEqual(parent["ParserName"], root)
+
+    def test_explicit_parent_resolves_each_variant_and_checks_ancestors(self):
+        for file_type, prefix, root in (
+            ("ASim", "ASim", "ASimAuditEvent"),
+            ("vim", "vim", "imAuditEvent"),
+        ):
+            with self.subTest(file_type=file_type):
+                parent_name = prefix + "AuditEventContoso"
+                child_name = parent_name + "Child"
+                self.write_parser(root, [parent_name])
+                self.write_parser(parent_name, [child_name])
+                parser, path = self.write_parser(child_name, ParentParser=parent_name)
+                parent, _ = self.resolve(parser, path, file_type)
+                self.assertEqual(parent["ParserName"], parent_name)
+                self.write_parser(root)
+                with self.assertRaisesRegex(ValueError, "must be registered"):
+                    self.resolve(parser, path, file_type)
+
+    def test_invalid_missing_mismatched_and_cross_schema_parents_fail(self):
+        name = "ASimAuditEventContosoChild"
+        for parent_name in ("../outside", "vimAuditEventContoso", 42, []):
+            with self.subTest(parent_name=parent_name):
+                parser, path = self.write_parser(name, ParentParser=parent_name)
+                with self.assertRaises(ValueError):
+                    self.resolve(parser, path)
+        parent_name = "ASimAuditEventContoso"
+        parser, path = self.write_parser(name, ParentParser=parent_name)
+        with patch.object(TEMPLATE_VERIFIER, "read_local_yaml", return_value=None):
+            with self.assertRaisesRegex(ValueError, "missing"):
+                self.resolve(parser, path)
+        self.write_parser(parent_name, [name], ParserName="ASimAuditEventWrong")
+        with self.assertRaisesRegex(ValueError, "mismatched ParserName"):
+            self.resolve(parser, path)
+        self.write_parser(parent_name, [name], Normalization={"Schema": "Dns"})
+        with self.assertRaisesRegex(ValueError, "must use schema"):
+            self.resolve(parser, path)
+
+    def test_self_parent_and_indirect_cycles_fail(self):
+        name = "ASimAuditEventContosoChild"
+        parser, path = self.write_parser(name, [name], ParentParser=name)
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            self.resolve(parser, path)
+        parent_name = "ASimAuditEventContoso"
+        parser, path = self.write_parser(name, [parent_name], ParentParser=parent_name)
+        self.write_parser(parent_name, [name], ParentParser=name)
+        with self.assertRaisesRegex(ValueError, "cycle"):
+            self.resolve(parser, path)
+
+    def test_both_membership_checks_remain_required(self):
+        name = "ASimAuditEventContoso"
+        parser, path = self.write_parser(name, ParentParser="ASimAuditEvent")
+        for properties in (
+            {"ParserQuery": name + "Other()"},
+            {"Parsers": []},
+        ):
+            with self.subTest(properties=properties):
+                self.write_parser("ASimAuditEvent", [name], **properties)
+                with self.assertRaisesRegex(ValueError, "must be registered"):
+                    self.resolve(parser, path)
+
+    def test_current_aws_cloudtrail_templates_pass_without_exclusions(self):
+        root = MODULE_PATH.parents[3]
+        parsers = root / "Parsers" / "ASimAuditEvent" / "Parsers"
+        sample_dir = root / "Sample Data" / "ASIM"
+        if (
+            not any(parsers.glob("ASimAuditEventAWSCloudTrailEC2*.yaml"))
+            or not (sample_dir / "AWS_CloudTrail_AuditEvent_IngestedLogs.csv").is_file()
+        ):
+            self.skipTest("AWSCloudTrail EC2 companion parsers and sample fixture are required.")
+        paths = sorted(parsers.glob("*AWSCloudTrail*.yaml"))
+        for path in paths:
+            with self.subTest(parser=path.name):
+                parser = TEMPLATE_VERIFIER.yaml.safe_load(path.read_text(encoding="utf-8"))
+                file_type = "vim" if path.name.startswith("vim") else "ASim"
+                parent, _ = self.resolve(parser, path, file_type)
+                results = TEMPLATE_VERIFIER.extract_and_check_properties(
+                    parser, parent, file_type, str(sample_dir)
+                )
+                self.assertFalse(
+                    [result for result in results if "Fail" in result[-1]],
+                    results,
+                )
+
+    def test_synthetic_fixture_covers_each_child_without_overlapping_routes(self):
+        root = MODULE_PATH.parents[3]
+        fixture = root / "Sample Data" / "ASIM" / "AWS_CloudTrail_AuditEvent_IngestedLogs.csv"
+        parsers = root / "Parsers" / "ASimAuditEvent" / "Parsers"
+        paths = sorted(parsers.glob("ASimAuditEventAWSCloudTrailEC2*.yaml"))
+        if not fixture.is_file() or not paths:
+            self.skipTest("AWSCloudTrail EC2 companion parsers and sample fixture are required.")
+        with fixture.open(encoding="utf-8-sig", newline="") as stream:
+            rows = list(csv.DictReader(stream))
+        catalogs = {}
+        for path in paths:
+            query = TEMPLATE_VERIFIER.yaml.safe_load(
+                path.read_text(encoding="utf-8")
+            )["ParserQuery"]
+            catalogs[path.stem] = set(re.findall(
+                r'^\s*"([^"]+)", "[^"]+", "[^"]+"', query, re.MULTILINE
+            ))
+        self.assertEqual(len(rows), 2 * len(catalogs))
+        self.assertEqual(len({row["AwsEventId"] for row in rows}), len(rows))
+        for name, events in catalogs.items():
+            matching = [row for row in rows if row["EventName"] in events]
+            self.assertEqual(len(matching), 2, name)
+            self.assertEqual({bool(row["ErrorCode"]) for row in matching}, {False, True})
+        for row in rows:
+            self.assertEqual(row["Type"], "AWSCloudTrail")
+            self.assertEqual(row["EventSource"], "ec2.amazonaws.com")
+            self.assertEqual(sum(row["EventName"] in events for events in catalogs.values()), 1)
+            self.assertTrue(json.loads(row["RequestParameters"]))
+            self.assertIsInstance(json.loads(row["ResponseElements"]), dict)
 
 
 class QueryTimeParserExecutionRoutingTests(unittest.TestCase):
@@ -246,6 +398,117 @@ run
                     if line.startswith("SELECTED_JSON=")
                 )
                 self.assertEqual(json.loads(selected), expected)
+
+
+class SampleFixtureIngestionTests(unittest.TestCase):
+    def run_ingestion(self, fixtures, tables, table_type="builtin", upload_results=None):
+        script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
+        tree = ast.parse(script_path.read_text(encoding="utf-8"))
+        initialization = next(
+            node for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "ingested_fixtures"
+                for target in node.targets
+            )
+        )
+        ingestion_loop = next(node for node in tree.body if isinstance(node, ast.For))
+        code = compile(
+            ast.Module(body=[initialization, ingestion_loop], type_ignores=[]),
+            str(script_path),
+            "exec",
+        )
+        parser = {
+            "ParserQuery": "AWSCloudTrail | where true",
+            "Normalization": {"Schema": "AuditEvent"},
+            "EquivalentBuiltInParser": "_ASim_AuditEvent_Contoso",
+        }
+
+        def open_file(path, mode="r", **kwargs):
+            if str(path).endswith(".yaml"):
+                return io.StringIO(TEMPLATE_VERIFIER.yaml.safe_dump(parser))
+            return io.BytesIO(b"synthetic fixture" if mode == "rb" else b"")
+
+        response = SimpleNamespace(
+            status_code=200,
+            text=json.dumps({"properties": {"immutableId": "synthetic-dcr"}}),
+        )
+        namespace = {
+            "os": os,
+            "json": json,
+            "yaml": TEMPLATE_VERIFIER.yaml,
+            "current_directory": str(MODULE_PATH.parent),
+            "parser_yaml_files": [
+                f"Parsers/ASimAuditEvent/Parsers/ASimAuditEventContoso{index}.yaml"
+                for index in range(len(fixtures))
+            ],
+            "extract_schema_name": PARSER_FILE_UTILS.extract_schema_name,
+            "is_union_parser": PARSER_FILE_UTILS.is_union_parser,
+            "is_empty_parser": PARSER_FILE_UTILS.is_empty_parser,
+            "extract_event_vendor_product": Mock(return_value=("AWS", "CloudTrail", "AuditEvent")),
+            "resolve_sample_data_path": Mock(side_effect=fixtures),
+            "convert_data_csv_to_json": Mock(side_effect=[
+                ([{"id": index}], table, []) for index, table in enumerate(tables)
+            ]),
+            "rebase_time_generated": Mock(side_effect=lambda rows: rows),
+            "check_for_custom_table": Mock(return_value=(True, table_type)),
+            "get_schema_for_builtin": Mock(return_value=[]),
+            "infer_schema_from_data": Mock(return_value=[]),
+            "convert_data_type": Mock(side_effect=lambda schema, rows: rows),
+            "create_table": Mock(return_value=({}, "table-url", "PUT")),
+            "get_table_status": Mock(),
+            "create_dcr": Mock(return_value=({}, "dcr-url", "PUT", "synthetic-stream")),
+            "hit_api": Mock(return_value=response),
+            "senddtosentinel": Mock(
+                side_effect=upload_results if upload_results is not None else None,
+                return_value=True,
+            ),
+            "dcr_directory": [],
+            "prnumber": "15531",
+        }
+        with (
+            patch("builtins.open", side_effect=open_file),
+            patch("sys.stdout", io.StringIO()),
+        ):
+            exec(code, namespace)
+        return namespace
+
+    def test_shared_fixture_is_ingested_once_for_all_changed_parsers(self):
+        for table_type in ("builtin", "custom_log"):
+            with self.subTest(table_type=table_type):
+                fixtures = [Path("fixtures/shared.csv")] * 34
+                fixtures[1] = Path("fixtures/subdirectory/../shared.csv")
+                result = self.run_ingestion(
+                    fixtures, ["Synthetic_CL"] * len(fixtures), table_type
+                )
+                result["senddtosentinel"].assert_called_once()
+                result["create_dcr"].assert_called_once()
+                result["rebase_time_generated"].assert_called_once()
+
+    def test_distinct_fixtures_and_destinations_are_not_deduplicated(self):
+        for fixtures, tables in (
+            ([Path("fixtures/first.csv"), Path("fixtures/second.csv")],
+             ["Synthetic_CL", "Synthetic_CL"]),
+            ([Path("fixtures/shared.csv")] * 2,
+             ["First_CL", "Second_CL"]),
+        ):
+            for table_type in ("builtin", "custom_log"):
+                with self.subTest(fixtures=fixtures, tables=tables, table_type=table_type):
+                    result = self.run_ingestion(fixtures, tables, table_type)
+                    self.assertEqual(result["senddtosentinel"].call_count, 2)
+                    self.assertEqual(result["create_dcr"].call_count, 2)
+
+    def test_failed_upload_does_not_mark_fixture_as_ingested(self):
+        for table_type in ("builtin", "custom_log"):
+            with self.subTest(table_type=table_type):
+                result = self.run_ingestion(
+                    [Path("fixtures/shared.csv")] * 3,
+                    ["Synthetic_CL"] * 3,
+                    table_type,
+                    upload_results=[False, True],
+                )
+                self.assertEqual(result["senddtosentinel"].call_count, 2)
+                self.assertEqual(result["create_dcr"].call_count, 2)
 
 
 class SampleFixtureSelectionTests(unittest.TestCase):
