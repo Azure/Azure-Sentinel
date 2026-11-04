@@ -1,0 +1,359 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "IsMalicious Enrich Incident IPs",
+    "description": "Enrich incident IP entities with IsMalicious evidence, scores, freshness and lookup outcomes in an incident comment.",
+    "prerequisites": [
+      "A Microsoft Sentinel workspace and permission to deploy Logic Apps and API connections in the selected resource group.",
+      "An IsMalicious account with API quota sufficient for the selected IP cap. See https://ismalicious.com/api-docs.",
+      "The complete X-API-KEY credential, Base64(apiKey:apiSecret), supplied through the secure deployment parameter. Do not place credentials in incident comments or logs."
+    ],
+    "postDeployment": [
+      "Assign the playbook's system-assigned managed identity the Microsoft Sentinel Responder role on the Sentinel workspace so it can read incident entities and add comments.",
+      "Grant the Microsoft Sentinel service account the Microsoft Sentinel Automation Contributor role on the playbook resource group before using an incident automation rule. See https://learn.microsoft.com/azure/sentinel/automation/automate-responses-with-playbooks#extra-permissions-required-for-microsoft-sentinel-to-run-playbooks.",
+      "Keep the workflow Disabled until its trigger, API connection and permissions are verified. Enable it for an isolated test incident, inspect the enrichment comment and lookup outcomes, then configure and enable the incident automation rule.",
+      "Restrict the automation rule scope and MaxIPsPerIncident before production use. Each selected IP consumes one IsMalicious API request."
+    ],
+    "lastUpdateTime": "2026-10-08T00:00:00.000Z",
+    "entities": [
+      "Ip"
+    ],
+    "tags": [
+      "Enrichment"
+    ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "IsMalicious"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Initial community playbook",
+        "notes": [
+          "IP enrichment with explicit unknown/error outcomes and secure credentials."
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "IsMalicious-EnrichIncidentIPs",
+      "metadata": {
+        "description": "Name of the playbook (Logic Apps resource) to create."
+      }
+    },
+    "IsMaliciousCredential": {
+      "type": "secureString",
+      "metadata": {
+        "description": "Complete X-API-KEY credential: Base64(apiKey:apiSecret), not a raw API key."
+      }
+    },
+    "MaxIPsPerIncident": {
+      "type": "int",
+      "defaultValue": 10,
+      "minValue": 1,
+      "maxValue": 50,
+      "metadata": {
+        "description": "Maximum IP entities to enrich per incident, from 1 to 50. Lookups run sequentially and each selected IP consumes one IsMalicious API request."
+      }
+    },
+    "WorkflowState": {
+      "type": "string",
+      "defaultValue": "Disabled",
+      "allowedValues": [
+        "Disabled",
+        "Enabled"
+      ],
+      "metadata": {
+        "description": "Initial workflow state. Keep Disabled until permissions and connections are configured, then enable for a test incident before activating the automation rule."
+      }
+    }
+  },
+  "variables": {
+    "SentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('SentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('SentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security",
+        "hidden-SentinelTemplateName": "IsMalicious-EnrichIncidentIPs",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]"
+      ],
+      "properties": {
+        "state": "[parameters('WorkflowState')]",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "IsMaliciousCredential": {
+              "type": "SecureString"
+            },
+            "MaxIPsPerIncident": {
+              "type": "Int"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Get_IP_entities": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/ip",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']"
+              },
+              "runAfter": {
+                "Initialize_results": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Initialize_results": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Results",
+                    "type": "Array",
+                    "value": []
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "For_each_IP": {
+              "type": "Foreach",
+              "foreach": "@take(body('Get_IP_entities')?['IPs'], parameters('MaxIPsPerIncident'))",
+              "actions": {
+                "Check_IP": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@concat('https://api.ismalicious.com/check?query=', uriComponent(items('For_each_IP')?['Address']), '&enrichment=standard')",
+                    "headers": {
+                      "X-API-KEY": "@parameters('IsMaliciousCredential')",
+                      "Accept": "application/json"
+                    },
+                    "retryPolicy": {
+                      "type": "none"
+                    }
+                  },
+                  "runAfter": {},
+                  "limit": {
+                    "timeout": "PT30S"
+                  },
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "inputs",
+                        "outputs"
+                      ]
+                    }
+                  }
+                },
+                "Validate_response": {
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@body('Check_IP')",
+                    "schema": {
+                      "type": "object",
+                      "required": [
+                        "malicious",
+                        "evidence"
+                      ],
+                      "properties": {
+                        "malicious": {
+                          "type": "boolean"
+                        },
+                        "evidence": {
+                          "type": "object",
+                          "required": [
+                            "verdict"
+                          ],
+                          "properties": {
+                            "verdict": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Check_IP": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Append_result": {
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "Results",
+                    "value": {
+                      "Indicator": "@items('For_each_IP')?['Address']",
+                      "Status": "lookup succeeded",
+                      "Verdict": "@coalesce(body('Check_IP')?['evidence']?['verdict'], 'unknown')",
+                      "Risk score": "@body('Check_IP')?['riskScore']?['score']",
+                      "Confidence": "@body('Check_IP')?['confidence']?['score']",
+                      "Blocklist hits": "@body('Check_IP')?['blocklistHits']",
+                      "Observed at": "@body('Check_IP')?['evidence']?['observedAt']",
+                      "Freshness": "@body('Check_IP')?['dataTrust']?['freshness']",
+                      "Reasons": "@string(body('Check_IP')?['evidence']?['reasons'])",
+                      "Contradictions": "@string(body('Check_IP')?['evidence']?['contradictorySignals'])",
+                      "Reviewed/delisted": "@body('Check_IP')?['delisted']",
+                      "Report": "@concat('https://ismalicious.com/report?query=', uriComponent(items('For_each_IP')?['Address']))"
+                    }
+                  },
+                  "runAfter": {
+                    "Validate_response": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Append_failure": {
+                  "type": "AppendToArrayVariable",
+                  "inputs": {
+                    "name": "Results",
+                    "value": {
+                      "Indicator": "@items('For_each_IP')?['Address']",
+                      "Status": "@concat('Lookup ', coalesce(actions('Check_IP')?['status'], 'not executed'), ' or response invalid (HTTP ', string(coalesce(actions('Check_IP')?['outputs']?['statusCode'], 0)), '); check authentication, quota or timeout')",
+                      "Verdict": "unknown"
+                    }
+                  },
+                  "runAfter": {
+                    "Validate_response": [
+                      "Failed",
+                      "TimedOut",
+                      "Skipped"
+                    ]
+                  }
+                }
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              },
+              "runAfter": {
+                "Get_IP_entities": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Create_result_table": {
+              "type": "Table",
+              "inputs": {
+                "from": "@variables('Results')",
+                "format": "HTML"
+              },
+              "runAfter": {
+                "For_each_IP": [
+                  "Succeeded",
+                  "Failed",
+                  "TimedOut",
+                  "Skipped"
+                ]
+              }
+            },
+            "Add_incident_comment": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/Comment",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p>IsMalicious IP enrichment. Advisory results only; no blocking action is performed. At most @{parameters('MaxIPsPerIncident')} IPs are checked. Entity lookup status: @{actions('Get_IP_entities')?['status']}. Enrichment loop status: @{actions('For_each_IP')?['status']}. Results may be partial when either status is not Succeeded. Missing evidence stays unknown. Errors require retry/investigation.</p>@{body('Create_result_table')}"
+                }
+              },
+              "runAfter": {
+                "Create_result_table": [
+                  "Succeeded"
+                ]
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "IsMaliciousCredential": {
+            "value": "[parameters('IsMaliciousCredential')]"
+          },
+          "MaxIPsPerIncident": {
+            "value": "[parameters('MaxIPsPerIncident')]"
+          },
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SentinelConnectionName'))]",
+                "connectionName": "[variables('SentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
