@@ -1,10 +1,10 @@
 id: a48850af-8d89-4f31-9a6c-d0217f5ea4f6
 name: Entra ID successful sign-in after account disabled
 description: |
-  Identifies successful interactive or non-interactive sign-ins for a user after an admin or sync disabled the account and before it was re-enabled. A disabled account should not sign in, so a hit can mean containment failed or was undone.
+  Identifies successful interactive or non-interactive sign-ins for a user after a "Disable account" audit event and before a later "Enable account" event. A disabled account should not sign in, so a hit can mean containment failed or was undone.
 description-detailed: |
   When an Entra ID account is disabled during incident response, offboarding, or containment, new sign-ins for that account should fail. This hunt pairs each successful "Disable account" audit event with any successful sign-in for the same user that happens after a short grace period and before a later "Enable account" event.
-  Results can point to a containment step that did not take effect, a re-enable that was not logged in the lookback window, or a gap between on-premises and cloud account state in hybrid environments. Sign-ins inside the grace period are excluded because changes can take a few minutes to apply. Tune the lookback and grace period for your environment.
+  Results can point to a containment step that did not take effect, a re-enable that was not recorded as an "Enable account" event, or a gap between on-premises and cloud account state in hybrid environments. Sign-ins inside the grace period are excluded because changes can take a few minutes to apply. Tune the lookback and grace period for your environment.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -17,12 +17,11 @@ tactics:
   - DefenseEvasion
 relevantTechniques:
   - T1078.004
-  - T1550.001
 query: |
   let lookback = 7d;
   // Sign-ins inside this window after the disable are excluded while the change applies
   let gracePeriod = 15m;
-  let AccountStateChanges =
+  let AccountStateChanges = materialize(
       AuditLogs
       | where TimeGenerated >= ago(lookback)
       | where OperationName in~ ("Disable account", "Enable account")
@@ -34,11 +33,12 @@ query: |
       | extend ChangedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)),
                                tostring(InitiatedBy.user.userPrincipalName),
                                tostring(InitiatedBy.app.displayName))
-      | project TimeGenerated, OperationName, TargetUpn, ChangedBy;
+      | project TimeGenerated, OperationName, TargetUpn, ChangedBy);
   let Disables =
       AccountStateChanges
       | where OperationName =~ "Disable account"
       | project DisabledTime = TimeGenerated, TargetUpn, DisabledBy = ChangedBy;
+  let DisabledUpns = Disables | distinct TargetUpn;
   let Enables =
       AccountStateChanges
       | where OperationName =~ "Enable account"
@@ -53,10 +53,12 @@ query: |
       (SigninLogs
       | where TimeGenerated >= ago(lookback)
       | where ResultType == "0"
+      | where UserPrincipalName in~ (DisabledUpns)
       | extend SignInType = "Interactive"),
       (AADNonInteractiveUserSignInLogs
       | where TimeGenerated >= ago(lookback)
       | where ResultType == "0"
+      | where UserPrincipalName in~ (DisabledUpns)
       | extend SignInType = "NonInteractive")
   | extend UserUpn = tolower(UserPrincipalName)
   | join kind=inner DisabledWindows on $left.UserUpn == $right.TargetUpn
@@ -69,7 +71,7 @@ query: |
       SignInTypes = make_set(SignInType, 2),
       Apps = make_set(AppDisplayName, 20),
       IPAddresses = make_set(IPAddress, 20),
-      FirstIPAddress = take_any(IPAddress)
+      SampleIPAddress = take_any(IPAddress)
       by UserUpn, DisabledTime, DisabledBy, ReEnabledTime
   | extend AccountName = tostring(split(UserUpn, "@")[0])
   | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
@@ -86,7 +88,7 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: FirstIPAddress
+        columnName: SampleIPAddress
 customDetails:
   DisabledTime: DisabledTime
   DisabledBy: DisabledBy
