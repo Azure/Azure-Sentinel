@@ -162,24 +162,43 @@ BeforeAll {
             [datetimeoffset]$End
         )
 
-        $dailyPipeline = '\|\s*summarize DailyEligibleGB = sum\(Quantity\) / 1024\.0 by bin\(TimeGenerated, 1d\)\s*\|\s*summarize sum\(min_of\(DailyEligibleGB, dailyGrantGB\)\)'
+        $dailyPipeline = '\|\s*summarize DailyEligibleGB = sum\(CoveredQuantity\) / 1000\.0 by GrantDay = bin\(StartTime, 1d\)\s*\|\s*extend CoveredDays = \(min_of\(GrantDay \+ 1d, selectedEnd\) - max_of\(GrantDay, selectedStart\)\) / 1d\s*\|\s*summarize sum\(min_of\(DailyEligibleGB, dailyGrantGB \* CoveredDays\)\)'
         if ($Query -notmatch $dailyPipeline) {
-            throw 'The embedded query must cap each UTC day before summing grant use.'
+            throw 'The embedded query must clip source intervals, use decimal GB, and prorate each UTC-day grant cap.'
         }
-        if ($Query -notmatch 'TimeGenerated >= \{TimeRange:start\} and TimeGenerated < \{TimeRange:end\}') {
-            throw 'Grant queries must exclude the next UTC day at the selected end boundary.'
+        if ($Query -notmatch 'TimeGenerated >= selectedStart - 1h and TimeGenerated < selectedEnd \+ 1h' -or
+            $Query -notmatch 'StartTime < selectedEnd and EndTime > selectedStart' -or
+            $Query -notmatch 'extend CoveredQuantity = Quantity \* \(\(min_of\(EndTime, selectedEnd\) - max_of\(StartTime, selectedStart\)\) / \(EndTime - StartTime\)\)' -or
+            $Query -notmatch 'IsBillable == true and DataType in \(eligibleTables\)' -or
+            $Query -notmatch "where tostring\(column_ifexists\('Plan', ''\)\) =~ 'Analytics'") {
+            throw 'Grant queries must include overlapping source intervals and Analytics-plan data only.'
         }
         $allowance = Get-QueryExpression -Query $Query -Pattern 'let dailyGrantGB = (?<expression>[^;]+);'
         $dailyGrantGB = Invoke-WorkbookArithmetic -Expression $allowance -Bindings @{ licenseCount = $LicenseCount }
         $eligibleTables = Get-EligibleTables -Query $Query
         $selected = @($Records | Where-Object {
-            $_.IsBillable -and $_.DataType -in $eligibleTables -and
-            $_.TimeGenerated -ge $Start -and $_.TimeGenerated -lt $End
+            $_.TimeGenerated -ge $Start.AddHours(-1) -and $_.TimeGenerated -lt $End.AddHours(1) -and
+            $_.StartTime -lt $End -and $_.EndTime -gt $Start -and $_.EndTime -gt $_.StartTime -and
+            $_.IsBillable -and $_.DataType -in $eligibleTables -and $_.Plan -eq 'Analytics'
         })
+        $daily = @{}
+        foreach ($record in $selected) {
+            $coveredStart = if ($record.StartTime -gt $Start) { $record.StartTime } else { $Start }
+            $coveredEnd = if ($record.EndTime -lt $End) { $record.EndTime } else { $End }
+            $coveredQuantity = $record.Quantity * ($coveredEnd - $coveredStart).Ticks /
+                ($record.EndTime - $record.StartTime).Ticks
+            $dayTicks = $record.StartTime.UtcTicks - ($record.StartTime.UtcTicks % [timespan]::TicksPerDay)
+            $daily[$dayTicks] += $coveredQuantity
+        }
         $total = 0.0
-        foreach ($day in $selected | Group-Object { $_.TimeGenerated.UtcDateTime.Date }) {
-            $dailyGB = [double](($day.Group | Measure-Object -Property Quantity -Sum).Sum) / 1024.0
-            $total += [math]::Min($dailyGB, $dailyGrantGB)
+        foreach ($dayTicks in $daily.Keys) {
+            $dayStart = [datetimeoffset]::new($dayTicks, [timespan]::Zero)
+            $coveredStart = if ($dayStart -gt $Start) { $dayStart } else { $Start }
+            $dayEnd = $dayStart.AddDays(1)
+            $coveredEnd = if ($dayEnd -lt $End) { $dayEnd } else { $End }
+            $coveredDays = ($coveredEnd - $coveredStart).TotalDays
+            $dailyGB = [double]$daily[$dayTicks] / 1000.0
+            $total += [math]::Min($dailyGB, $dailyGrantGB * $coveredDays)
         }
         $total
     }
@@ -590,12 +609,13 @@ Describe 'AzureSentinelCost offline calculation regressions' {
         @{ ItemName = 'DfSP2EstimatedSavings'; Licenses = 1.0; DataType = 'SecurityEvent' }
     ) {
         $query = Get-WorkbookQuery -ItemName $ItemName
+        $start = [datetimeoffset]'2026-10-01T00:00:00Z'
         $records = @(
-            @{ TimeGenerated = [datetimeoffset]'2026-10-01T12:00:00Z'; Quantity = 1000.0; IsBillable = $true; DataType = $DataType }
+            @{ TimeGenerated = $start.AddHours(12); StartTime = $start.AddHours(12); EndTime = $start.AddHours(13); Quantity = 1000.0; IsBillable = $true; DataType = $DataType; Plan = 'Analytics' }
         )
         $actual = Get-FixtureGrantUsed -Query $query -Records $records -LicenseCount $Licenses `
-            -Start '2026-10-01T00:00:00Z' -End '2026-10-03T00:00:00Z'
-        $actual | Should -Be (500.0 / 1024.0)
+            -Start $start -End $start.AddDays(2)
+        $actual | Should -Be 0.5
         $query | Should -Match "iif\(isnull\(licenseCount\), 'N/A',"
     }
 
@@ -605,17 +625,33 @@ Describe 'AzureSentinelCost offline calculation regressions' {
     ) {
         $query = Get-WorkbookQuery -ItemName $ItemName
         $records = @(
-            @{ TimeGenerated = [datetimeoffset]'2026-10-01T23:30:00Z'; Quantity = 1000.0; IsBillable = $true; DataType = $DataType }
-            @{ TimeGenerated = [datetimeoffset]'2026-10-02T03:30:00+02:00'; Quantity = 100.0; IsBillable = $true; DataType = $DataType }
-            @{ TimeGenerated = [datetimeoffset]'2026-10-02T12:00:00Z'; Quantity = 900.0; IsBillable = $false; DataType = $DataType }
-            @{ TimeGenerated = [datetimeoffset]'2026-10-02T12:00:00Z'; Quantity = 900.0; IsBillable = $true; DataType = 'NotEligible' }
-            @{ TimeGenerated = [datetimeoffset]'2026-10-03T00:00:00Z'; Quantity = 900.0; IsBillable = $true; DataType = $DataType }
+            @{ TimeGenerated = [datetimeoffset]'2026-10-01T23:30:00Z'; StartTime = [datetimeoffset]'2026-10-01T23:30:00Z'; EndTime = [datetimeoffset]'2026-10-02T00:30:00Z'; Quantity = 1000.0; IsBillable = $true; DataType = $DataType; Plan = 'Analytics' }
+            @{ TimeGenerated = [datetimeoffset]'2026-10-02T03:30:00+02:00'; StartTime = [datetimeoffset]'2026-10-02T03:30:00+02:00'; EndTime = [datetimeoffset]'2026-10-02T04:30:00+02:00'; Quantity = 100.0; IsBillable = $true; DataType = $DataType; Plan = 'Analytics' }
+            @{ TimeGenerated = [datetimeoffset]'2026-10-02T12:00:00Z'; StartTime = [datetimeoffset]'2026-10-02T12:00:00Z'; EndTime = [datetimeoffset]'2026-10-02T13:00:00Z'; Quantity = 900.0; IsBillable = $false; DataType = $DataType; Plan = 'Analytics' }
+            @{ TimeGenerated = [datetimeoffset]'2026-10-02T12:00:00Z'; StartTime = [datetimeoffset]'2026-10-02T12:00:00Z'; EndTime = [datetimeoffset]'2026-10-02T13:00:00Z'; Quantity = 900.0; IsBillable = $true; DataType = 'NotEligible'; Plan = 'Analytics' }
+            @{ TimeGenerated = [datetimeoffset]'2026-10-02T12:00:00Z'; StartTime = [datetimeoffset]'2026-10-02T12:00:00Z'; EndTime = [datetimeoffset]'2026-10-02T13:00:00Z'; Quantity = 900.0; IsBillable = $true; DataType = $DataType; Plan = 'Basic' }
+            @{ TimeGenerated = [datetimeoffset]'2026-10-03T00:00:00Z'; StartTime = [datetimeoffset]'2026-10-03T00:00:00Z'; EndTime = [datetimeoffset]'2026-10-03T01:00:00Z'; Quantity = 900.0; IsBillable = $true; DataType = $DataType; Plan = 'Analytics' }
         )
         $actual = Get-FixtureGrantUsed -Query $query -Records $records -LicenseCount $Licenses `
             -Start '2026-10-01T00:00:00Z' -End '2026-10-03T00:00:00Z'
-        $actual | Should -Be (600.0 / 1024.0)
+        $actual | Should -Be 0.6
         (Get-FixtureGrantUsed -Query $query -Records @() -LicenseCount $Licenses `
             -Start '2026-10-01T00:00:00Z' -End '2026-10-03T00:00:00Z') | Should -Be 0.0
+    }
+
+    It 'clips overlapping source intervals and prorates grant caps in <ItemName>' -ForEach @(
+        @{ ItemName = 'EligibleE5Ingestion'; Licenses = 100.0; DataType = 'SigninLogs'; DailyGrantGB = 0.5 }
+        @{ ItemName = 'DfSP2GrantUsed'; Licenses = 1.0; DataType = 'SecurityEvent'; DailyGrantGB = 0.5 }
+    ) {
+        $query = Get-WorkbookQuery -ItemName $ItemName
+        $start = [datetimeoffset]'2026-10-01T12:00:00Z'
+        $records = @(
+            @{ TimeGenerated = $start; StartTime = $start.AddMinutes(-30); EndTime = $start.AddMinutes(30); Quantity = 1000.0; IsBillable = $true; DataType = $DataType; Plan = 'Analytics' }
+            @{ TimeGenerated = [datetimeoffset]'2026-10-01T23:30:00Z'; StartTime = [datetimeoffset]'2026-10-01T23:30:00Z'; EndTime = [datetimeoffset]'2026-10-02T00:30:00Z'; Quantity = 1000.0; IsBillable = $true; DataType = $DataType; Plan = 'Analytics' }
+        )
+        $actual = Get-FixtureGrantUsed -Query $query -Records $records -LicenseCount $Licenses `
+            -Start $start -End '2026-10-02T00:00:00Z'
+        $actual | Should -Be ($DailyGrantGB / 2.0)
     }
 
     It 'bases <ItemName> savings on daily-capped use at the selected price' -ForEach @(
@@ -624,8 +660,8 @@ Describe 'AzureSentinelCost offline calculation regressions' {
     ) {
         $query = Get-WorkbookQuery -ItemName $ItemName
         $expression = Get-QueryExpression -Query $query -Pattern "round\((?<expression>grantUsedGB \* todouble\('\{Price\}'\)), 2\)"
-        (Invoke-WorkbookArithmetic -Expression $expression -Bindings @{ grantUsedGB = 500.0 / 1024.0; Price = 2.0 }) |
-            Should -Be (1000.0 / 1024.0)
+        (Invoke-WorkbookArithmetic -Expression $expression -Bindings @{ grantUsedGB = 0.5; Price = 2.0 }) |
+            Should -Be 1.0
         (Invoke-WorkbookArithmetic -Expression $expression -Bindings @{ grantUsedGB = 500.0 / 1024.0; Price = 0.0 }) |
             Should -Be 0.0
     }
