@@ -1,0 +1,133 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: edead9b5-243a-466b-ae78-2dae32ab1117
+    path: Analytic Rules/DigitalGuardianFileSentToExternal.yaml
+    version: 1.0.2
+    querySha256: 39112914b5da7b3e58aa1c0cb305c9cb233477d78aaa1569e98436ddba0b11e9
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    reviewDecisions:
+    - reason: 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm
+        that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+      decision: accepted
+      sourceDocumentSha256: 1cb5b67203e8b8d0d98d5435a5984ad1bbaffcba5cf8d2b530abc4b6427c50f8
+      targetQuerySha256: f4b96d443c3c22ac8e97afffcf61938c2522e215d4a735fa6e58bf21296d6f4a
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped to Account.upnColumn. Confirm that the
+      source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved as customDetails.AccountName from query
+      column `AccountCustomEntity`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1048
+    reviewScope:
+      sourceDocumentSha256: 1cb5b67203e8b8d0d98d5435a5984ad1bbaffcba5cf8d2b530abc4b6427c50f8
+      targetQuerySha256: f4b96d443c3c22ac8e97afffcf61938c2522e215d4a735fa6e58bf21296d6f4a
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 1cb5b67203e8b8d0d98d5435a5984ad1bbaffcba5cf8d2b530abc4b6427c50f8
+      targetQuerySha256: f4b96d443c3c22ac8e97afffcf61938c2522e215d4a735fa6e58bf21296d6f4a
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-edead9b5-243a-466b-ae78-2dae32ab1117
+  displayName: Digital Guardian - Exfiltration to private email
+  status: disabled
+  queryCondition:
+    queryText: "// DigitalGuardianDLPEvent parser inlined: Defender XDR cannot resolve Sentinel workspace functions.\nlet\
+      \ xdr_inline_DigitalGuardianDLPEvent = view () {\nSyslog\n| where SyslogMessage contains \"managed_device_id\" and SyslogMessage\
+      \ contains \"number_of_incidents\"\n| mv-apply ExtractedFields = extract_all(@'\\s(?P<key>[a-zA-Z0-9-_]+)=\\\"?(?P<value>[a-zA-Z0-9-_:/@.,#{}><\
+      \ ]+)\\\"?', dynamic([\"key\",\"value\"]), SyslogMessage) on (\n    project packed = pack(tostring(ExtractedFields[0]),\
+      \ tostring(ExtractedFields[1]))\n    | summarize bag = make_bag(packed)\n)\n| evaluate bag_unpack(bag) : (*, timestamp:string,\
+      \ action_taken:string, destination:string, destination_ip:string, destination_port:string, incident_id:string, incident_status:string,\
+      \ incidents_url:string, matched_policies_by_severity:string, number_of_incidents:string, protocol:string, source:string,\
+      \ source_ip:string, source_port:string, inspected_document:string, computer_name:string, file_name:string, classification:string,\
+      \ was_classified:string, policy:string, severity:string, user:string, domain:string, dns_ParentDomain:string, application:string,\
+      \ email_sender:string, email_subject:string, email_recipient:string, http_url:string)\n| extend EventEndTime=todatetime(timestamp)\n\
+      | project-away timestamp\n| project-rename DvcAvtion=action_taken\n                , DstUserName=destination\n     \
+      \           , DstIpAddr=destination_ip\n                , DstPortNumber=destination_port\n                , IncidentId=incident_id\n\
+      \                , IncidentStatus=incident_status\n                , IncidentsUrl=incidents_url\n                , MatchedPolicies=matched_policies_by_severity\n\
+      \                , EventCount=number_of_incidents\n                , NetworkApplicationProtocol=protocol\n         \
+      \       , SrcUserName=source\n                , SrcIpAddr=source_ip\n                , SrcPortNumber=source_port\n};\n\
+      xdr_inline_DigitalGuardianDLPEvent\n| where NetworkApplicationProtocol =~ 'SMTP'\n| where isnotempty(inspected_document)\n\
+      | extend s_user = substring(SrcUserName, 0, indexof(SrcUserName, '@'))\n| extend d_user = substring(DstUserName, 0,\
+      \ indexof(DstUserName, '@'))\n| extend s_domain = extract(@'@(.*)', 1, SrcUserName)\n| extend d_domain = extract(@'@(.*)',\
+      \ 1, DstUserName)\n| where s_domain != d_domain\n| where s_user == d_user\n| extend AccountCustomEntity = SrcUserName"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Digital Guardian - Exfiltration to private email
+      description: '''Detects exfiltration to private email.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1048
+      customDetails:
+        AccountName: AccountCustomEntity
