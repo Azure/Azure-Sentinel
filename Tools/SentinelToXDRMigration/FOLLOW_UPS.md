@@ -218,6 +218,7 @@ themselves establish a toolkit fix is required.
   Connector definition file (`dataTypes`) as sufficient to override static table
   catalogs, distinguishing "unknown to our offline snapshot" from "unsupported in
   this environment."
+- [ ] **Surface CI `DocumentsLinkValidation` locale failures in validation mode and recommend fixes:** Extend `VAL-URL-01` (`solution_manager/qualification/pr_check_runner.py`) and `validate` mode to scan all solution text files (including `Evidence/`, `Analytic Rules/`, `XDR Detections/`, `SolutionMetadata.json`, and `ReleaseNotes.md`) using the CI regex `/(https:\/\/docs\.microsoft\.com|https:\/\/azure\.microsoft\.com)(\/[a-z]{2}-[a-z]{2})/i` from `.script/documentsLinkValidator.ts` (and optionally `learn.microsoft.com`), surface any matches in validation mode with a recommended locale-stripped URL fix, and normalize recorded `resolvedUrl` values when generating URL verification evidence (`QUAL-URL-01`).
 
 Any future environment write remains separately gated by explicit approval
 immediately before the exact operation. No cloud action is authorized by this
