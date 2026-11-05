@@ -1,0 +1,99 @@
+id: 940baadd-fe19-4c1a-9680-63a9c5d21e1c
+kind: Scheduled
+name: SAP - Sensitive Tables Direct Access By Dialog Logon
+description: |
+  Identifies generic table access by dialog logon, for which authorization did not exist 24 hours ago.
+
+  Source Action: Open table contents using SE11/SE16/SE16N with a user which was unauthorized to do so 24 hours ago.
+
+  **Recommended for Production only**
+
+  Tables should be maintained in ""SAP - Sensitive Tables"" Watchlist.
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersAuthorizations
+      - SAPUsersGetVIP
+queryFrequency: 12h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques: []
+query: |
+  // SAP - Sensitive Tables Direct Access By Dialog Logon
+  // !!!IMPORTANT!!!
+  // Please keep "Lookup data from the last" to be > =2 days to allow reading of historical user authorization data
+  // Actual lookback is set by setting AuditTimeAgo
+  let AuditTimeAgo= 2h;
+  let AuditClasses = dynamic(['DU9']); // Dialog, Audit Log Classes - Generic Table Access
+  let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey, SystemRole;
+  // here you can exclude certain users which are OK to execute this action
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'SensitiveTableDialogOK'
+  // can also specify relevant SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['SensitiveTableDialogOK']);// dynamic(['SensitiveTableDialogOK','SAP_ALL']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  // Get Relevant Tables
+  let SensitiveTables = _GetWatchlist('SAP - Sensitive Tables');
+  // Query logic
+  let TableAccessEvents= materialize(SAPAuditLog
+      | where TimeGenerated > ago(AuditTimeAgo)
+      | where SystemID in ((SelectedSystems | distinct SystemID))
+      | where MessageID in (AuditClasses)
+      | project-rename Table = Variable1, Activity = Variable2
+      | where Table in ((SensitiveTables| distinct SearchKey))
+      | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+      | project TimeGenerated, Instance, SystemID, ClientID, User, TransactionCode, ABAPProgramName, Table, Activity, MessageText, MessageID, Email, TerminalIPv6, Host);
+  // build the authorization snapshot of 1 day ago for the specific table names
+  // this will exclude any authorized access to a specific table given a day earlier
+  let Auths= materialize(SAPUsersAuthorizations(SnapshotAge= 1d)
+  | where Object == "S_TABU_NAM" // table name
+  | where Field == "TABLE"
+  | where User in ((TableAccessEvents| distinct User))
+  | where SystemID in ((TableAccessEvents| distinct SystemID))
+  | project ClientID, SystemID, User, Tables= EQs
+  | mv-expand Tables to typeof(string)
+  | summarize Tables=make_set_if(Tables, isnotempty( Tables),  1000) by SystemID, ClientID, User);
+  TableAccessEvents
+  | lookup Auths on User, SystemID, ClientID
+  | extend WASTableAuthorized= Tables has Table or Tables has '*'
+  | where not(WASTableAuthorized)
+  | extend AlertName= "SAP - Unauthorized Sensitive Tables Direct Access By Dialog Logon"
+  | extend AlertDescription= strcat("User ", User, " has read sensitive table ", Table, ". The system could not find a matching S_TABU_NAM authorization for this table in an authorization snapshot taken a day ago.")
+  | extend AlertRuleUniqueName = 'sensitivetablesdirectaccessbydialoglogon'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{{AlertName}} '
+  alertDescriptionFormat: '{{{AlertDescription}}'
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

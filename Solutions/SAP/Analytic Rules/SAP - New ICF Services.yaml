@@ -1,0 +1,67 @@
+id: 263ea651-10c8-48a6-a5ac-2c9fc0655ebc
+kind: Scheduled
+name: SAP - New ICF Services
+description: |
+  Identifies creation of ICF Services.
+  Source Action: Create a service using SICF.
+  *Data Sources: SAPcon - Table Data Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPGetSourceIdentifier
+      - SAPTableDataLog
+      - SAPUsersHeader
+queryFrequency: 2h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Persistence
+  - LateralMovement
+relevantTechniques: []
+query: |
+  // New ICF Services
+  let TimeAgo= 2h;
+  SAPTableDataLog
+  | where TableName == "ICFSERVLOC"
+  | where TimeGenerated > ago(TimeAgo)
+  | where TableField == "ICF_NAME" // Service name
+  | where OldValue == "" and NewValue != "" // New value is inserted in name -> new service
+  | order by TimeGenerated desc
+  | lookup SAPUsersHeader() on SystemID, $left.UserName== $right.User
+  | extend TerminalIPv6= iff(isnotempty( LastKnownIP), LastKnownIP, PrimaryIP)
+  | project TimeGenerated, Service = NewValue, PrimaryIP, PrimaryEmail, KnownIPs, KnownEmails, LastKnownIP, User= UserName, Host, SystemID, Client, Instance
+  | extend Dummy= ''
+  | extend AlertRuleUniqueName = 'newicfservices'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: PrimaryEmail
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: LastKnownIP
+alertDetailsOverride:
+  alertDisplayNameFormat: (Preview) SAP - High - New ICF Services created by {{User}}
+    in system {{SystemID}}
+  alertDescriptionFormat: |
+    Identifies creation of ICF Services.
+    Source Action: Create a service using SICF.
+    *Data Sources: SAPcon - Table Data Log*
+  alertTacticsColumnName: Dummy
+  alertSeverityColumnName: Dummy
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

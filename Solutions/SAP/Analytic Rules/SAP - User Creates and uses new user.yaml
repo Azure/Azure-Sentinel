@@ -1,0 +1,84 @@
+id: 12509d03-0206-4b85-84b9-6d2349afa42b
+kind: Scheduled
+name: SAP - User Creates and uses new user
+description: |
+  Identifies a user creating and using other users.
+
+  Source Action: Create a user using SU01. Login using the newly created user from the same IP.
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1136
+  - T0859
+query: |
+  // Define Variables
+  let TimeAgo= 1h;
+  let MinutesThreshold = 15; // Difference by minutes between Create and Connect
+  let AuditUserCreated = dynamic(['AU7']); // Message of create user
+  let AuditLogIn = dynamic(['AU1', 'AU5']); // Messages of connect with user
+  // here you can exclude system users which are OK to Create Other Users
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'CreateUserOK'
+  // can also specify SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['CreateUserOK','SAP_ROLE', 'SAP_PROFILE']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  // Query Logic
+  let UserCreated = // Get users created
+  SAPAuditLog
+  | where TimeGenerated > ago(TimeAgo)
+  | where MessageID in (AuditUserCreated)
+  | where isnotempty( TerminalIPv6)
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  | project-rename UserCreationTimeGenerated = TimeGenerated, UserCreated = Variable1;
+  SAPAuditLog // Get users connections
+  | where TimeGenerated > ago(TimeAgo)
+  | where MessageID in (AuditLogIn)
+  | where isnotempty( TerminalIPv6)
+  | lookup kind=inner UserCreated on TerminalIPv6,$left.User == $right.UserCreated, SystemID, ClientID // Lookup of user created to user log in
+  | where abs(datetime_diff('Minute', TimeGenerated, UserCreationTimeGenerated)) <= MinutesThreshold // Connect after creation
+  | summarize by TimeGenerated, Instance ,SystemID, ClientID, UserActing = User1, UserActingEmail= Email1, UserCreated = User, UserCreatedEmail= Email, TerminalIPv6, Host
+  | extend AlertRuleUniqueName = 'usercreatesandusesnewuser'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserActingEmail
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserCreatedEmail
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: UserActing
+  SAP_UserCreated: UserCreated
+version: 3.5.09

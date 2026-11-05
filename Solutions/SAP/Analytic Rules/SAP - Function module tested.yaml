@@ -1,0 +1,102 @@
+id: 7e6cb00d-d7cb-4411-837f-6e62c2fab6e7
+kind: Scheduled
+name: SAP - Function module tested
+description: |
+  Identifies testing of a function module.
+
+  Source Action: Test a function module using  SE37 / SE80.
+
+  **Recommended for Production only**
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+  - DefenseEvasion
+  - LateralMovement
+relevantTechniques: []
+query: |
+  // SAP - Function module tested
+  // !!!IMPORTANT!!!
+  // Please keep "Lookup data from the last" to be 2 days to allow reading of user authorization data
+  // Actual lookback is set by setting AuditTimeAgo
+  let AuditTimeAgo= 75m;
+  let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole;
+  // here you can exclude system users which are OK to test function modules
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'TestFMOK'
+  let excludeUsersTags= dynamic(['TestFMOK']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  // Query logic
+  let FunctionRuns = SAPAuditLog
+      | where TimeGenerated > (AuditTimeAgo + 1h)// cover possible ingestion latency
+      | where MessageID == "BU4"
+      | where ABAPProgramName == "RS_TESTFRAME_CALL"
+      | where Variable3 endswith_cs "FT" // function test
+      | join kind= inner SelectedSystems on SystemID
+      | where UpdatedOn_t > ago(AuditTimeAgo)
+      | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+      | extend Module= tostring(split(trim_end("FT", Variable3),"=",0)[0]);
+  FunctionRuns
+  | project
+      UpdatedOn_t,
+      TransactionCode,
+      SystemID,
+      ClientID,
+      User,
+      Instance,
+      Email= iff(isempty(Email), User, Email),
+      TerminalIPv6,
+      Host= iff(isempty(Host), TerminalIPv6, Host),
+      Module,
+      MessageText,
+      SystemRole
+  | extend UserName= User
+  | extend PackedDetails= pack_all()
+  | extend
+      AlertName= strcat('Function Module ', Module, ' was tested by user ', UserName, ' in a ', tolower(SystemRole), ' system'),
+      Dummy=' '
+  | extend AlertDescription= strcat(AlertName, ".\n ", MessageText)
+  | extend AlertRuleUniqueName = 'functionmoduletested'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}} '
+  alertDescriptionFormat: '{{AlertDescription}}'
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  FunctionModule: Module
+  SAP_User: User
+  TransactionCode: TransactionCode
+version: 3.5.09

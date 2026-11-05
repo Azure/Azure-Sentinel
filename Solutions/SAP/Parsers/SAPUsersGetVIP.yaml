@@ -1,0 +1,58 @@
+Contentkind: Function
+Description: SAPUsersGetVIP
+Function:
+  Title: SAPUsersGetVIP
+  Version: 3.3.0
+  LastUpdated: '2025-02-16'
+Category: SAPFunctions
+FunctionName: SAPUsersGetVIP
+FunctionParams:
+  - Name: SearchForTags
+    Type: dynamic
+    Default: dynamic('All Tags')
+  - Name: SpecialFocusTags
+    Type: dynamic
+    Default: dynamic(["Do not return any in-focus users"])
+FunctionQuery: "// function gets tags which can either be SAP roles, SAP Profiles\
+  \ or tags.\n// let SearchForTags= dynamic(['FireFighters', 'ContainsBoth', 'T-Z1220435']);\n\
+  // // let SearchForTags= todynamic('All Tags');\n// let SpecialFocusTags = split('SpecialAttention;\
+  \ SoonToLeave', ';');\n// get the SAP roles / SAP profiles that are relevant\nlet\
+  \ UserMDTimeAgo = totimespan(toscalar(SAPGetParameters('UserMDLookBack')| project-keep\
+  \ ValueLow));\nlet ChildRoles= SAP_AGR_AGRS\n| where TimeGenerated > ago(UserMDTimeAgo)\n\
+  | where (tostring(SearchForTags) contains 'All Tags' or CHILD_AGR has_any (SearchForTags)\
+  \ or AGR_NAME has_any (SearchForTags))\n| summarize ChildRoles= make_set(CHILD_AGR,\
+  \ 1024), Roles= make_set(AGR_NAME, 1024)\n| project Roles= set_union(ChildRoles,\
+  \ Roles);\nlet UsersOfRoles= SAP_AGR_USERS\n| where TimeGenerated > ago(UserMDTimeAgo)\n\
+  | where (tostring(SearchForTags) contains 'All Tags' or AGR_NAME  has_any (SearchForTags)\
+  \ or AGR_NAME in ((ChildRoles)))\n| summarize Roles= make_set(AGR_NAME,50) by SAPUser=\
+  \ UNAME;\nlet UsersOfProfiles = SAP_UST04\n| where TimeGenerated > ago(UserMDTimeAgo)\n\
+  | where (tostring(SearchForTags) contains 'All Tags' or PROFILE has_any (SearchForTags))\n\
+  | summarize Profiles= make_set(PROFILE, 1024) by SAPUser= BNAME;\nlet SAPUserRolesAndProfiles=\
+  \ union UsersOfProfiles, UsersOfRoles\n| summarize Roles= make_set(Roles, 1024),\
+  \ Profiles= make_set(Profiles, 1024) by SAPUser\n| project RolesAndProfiles= set_union(Roles,\
+  \ Profiles), SAPUser, SearchKey= SAPUser;\nlet WildCards= materialize(_GetWatchlist('SAP_User_Config')\n\
+  | where SearchKey startswith '*' or SearchKey endswith '*' and SearchKey != 'SAP*'\n\
+  | extend SearchKind= case(SearchKey startswith '*' and SearchKey endswith '*', 'Both',\
+  \ SearchKey startswith '*', 'EndsWith', 'StartsWith')\n| extend SearchTerm= replace_string(SearchKey,'*','')\n\
+  | extend DummyJoinField= 1);\nlet UsersFromWildCards= SAP_USR01\n| where TimeGenerated\
+  \ > ago(UserMDTimeAgo)\n| project SAPUser=BNAME\n// uncomment this if you have SAPControl\
+  \ interface for SAP AS JAVA instance\n// | union (SAPJAVAFilesLogs | where TimeGenerated\
+  \ > ago(UserMDTimeAgo)| project SAPUser= User)\n| distinct SAPUser\n| extend DummyJoinField=\
+  \ 1\n| join kind=inner  WildCards on DummyJoinField\n| where SAPUser contains SearchTerm\
+  \ and SearchKind == 'Both' or\nSAPUser startswith SearchTerm and SearchKind == 'StartsWith'\n\
+  or SAPUser endswith SearchTerm and SearchKind == 'EndsWith'\n| extend SearchKey=\
+  \ SAPUser;\n_GetWatchlist('SAP_User_Config') | union UsersFromWildCards\n| extend\
+  \ SearchKey= replace_string(SearchKey, ' ','')\n// remove spaces\n| extend Tags\
+  \ = replace_string(Tags, ' ', '')\n| extend TagsArr= split(Tags,';')\n| summarize\
+  \ Tags=make_set(Tags, 100), TagsList= make_set(TagsArr, 200), arg_max(LastUpdatedTimeUTC,\
+  \ SAPUser, ['User AAD Object Id'],\t['User Identifier'],\t['User On-Prem Sid'],\t\
+  ['User Principal Name']) by SearchKey\n| join kind= fullouter SAPUserRolesAndProfiles\
+  \ on SAPUser\n| extend SAPUser= iff(isnotempty(SAPUser), SAPUser, SAPUser1)\n| extend\
+  \ SearchKey= SAPUser\n| extend TagsList = array_concat(TagsList, RolesAndProfiles)\n\
+  | extend TagsIntersect = set_intersect(TagsList, SearchForTags)\n| extend SpecialFocusTagged\
+  \ = iff(array_length(set_intersect(TagsList, SpecialFocusTags)) > 0, true, false)\n\
+  | extend IntersectionSize = array_length(TagsIntersect)\n| extend Tags= replace_string(tostring(Tags),',',';\
+  \ ')\n| extend Tags= translate('[]\"','', Tags)\n| where (IntersectionSize > 0 or\
+  \ tostring(SearchForTags) == 'All Tags' or SpecialFocusTagged == true)\n| project-away\
+  \ LastUpdatedTimeUTC, SAPUser1, SearchKey1\n| where SearchKey !startswith '*' and\
+  \ not(SearchKey endswith '*' and SearchKey != 'SAP*')\n"
