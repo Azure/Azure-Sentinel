@@ -1,6 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                  |
 |-------------|--------------------------------|-------------------------------------------------------------------------------------|
-| 3.2.2       | 20-04-2026                     | Added **Defender XDR Custom Detections** and **Defender XDR Workbooks**             |
 | 3.0.2       | 10-09-2026                     | Fixed the API version issue |
 | 3.0.1       | 09-12-2024                     | Removed Deprecated **Data connector**                                               |
 | 3.0.0       | 13-08-2024                     | Deprecating data connectors |
