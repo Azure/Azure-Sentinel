@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2020-08-01",
+      "name": "[concat(parameters('Workspace'), '/ASimAlertEventNative')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "properties": {
+        "etag": "*",
+        "displayName": "Alert Event ASIM parser for Microsoft Sentinel native Alert Event table",
+        "category": "ASIM",
+        "FunctionAlias": "ASimAlertEventNative",
+        "query": "let parser = (disabled:bool=false, pack:bool=false) {\n  ASimAlertEventLogs\n  | where not(disabled)\n  | extend\n      EventSchema = \"AlertEvent\",\n      EventStartTime = coalesce(EventStartTime, TimeGenerated),\n      EventEndTime = coalesce(EventEndTime, TimeGenerated),\n      Dvc = coalesce(DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),\n      FileSize = tolong(FileSize),\n      AdditionalFields = iff(pack, AdditionalFields, dynamic({}))\n  | extend\n      AlertId = EventUid,\n      AlertDescription = EventMessage,\n      Hostname = DvcHostname,\n      IpAddr = DvcIpAddr,\n      User = Username,\n      Rule = coalesce(RuleName, tostring(RuleNumber))\n  | project\n      TimeGenerated, Type, EventUid, EventOriginalUid, EventSchema, EventSchemaVersion,\n      EventStartTime, EventEndTime, EventCount, EventVendor, EventProduct,\n      EventProductVersion, EventType, EventSubType, EventResult, EventResultDetails,\n      EventOriginalType, EventOriginalSubType, EventOriginalResultDetails,\n      EventSeverity, EventOriginalSeverity, EventMessage, EventOwner, EventReportUrl,\n      Dvc, DvcIpAddr, DvcHostname, DvcDomain, DvcDomainType, DvcFQDN,\n      DvcDescription, DvcId, DvcIdType, DvcMacAddr, DvcZone, DvcOs, DvcOsVersion,\n      DvcAction, DvcOriginalAction, DvcInterface, DvcScopeId, DvcScope, DvcEntityKey,\n      AlertId, AlertName, AlertDescription, AlertVerdict, AlertStatus, AlertOriginalStatus,\n      DetectionMethod, Rule, RuleNumber, RuleName, RuleDescription,\n      ThreatId, ThreatName, ThreatFirstReportedTime, ThreatLastReportedTime,\n      ThreatCategory, ThreatOriginalCategory, ThreatIsActive, ThreatRiskLevel,\n      ThreatOriginalRiskLevel, ThreatConfidence, ThreatOriginalConfidence,\n      IndicatorType, IndicatorAssociation, AttackTactics, AttackTechniques,\n      AttackRemediationSteps, UserId, UserIdType, Username, User, UsernameType,\n      UserType, OriginalUserType, UserSessionId, UserScopeId, UserScope,\n      UserEntityKey, UserAdditionalIds, ProcessId, ProcessCommandLine,\n      ProcessName, ProcessFileCompany, ProcessEntityKey, FileName, FilePath,\n      FileSHA1, FileSHA256, FileMD5, FileSize, FileEntityKey, Url,\n      RegistryKey, RegistryValue, RegistryValueData, RegistryValueType,\n      EmailMessageId, EmailSubject, Hostname, IpAddr, AdditionalEntities, AdditionalFields\n};\nparser(disabled=disabled, pack=pack)\n",
+        "version": 1,
+        "functionParameters": "disabled:bool=False,pack:bool=False"
+      }
+    }
+  ]
+}
