@@ -62,11 +62,36 @@ def validate_public_document(solution, document):
         if not connectors <= declared:
             errors.append("Public connector tables must be covered by workload prerequisites.")
         native = provenance["origin"] == "native-xdr"
-        if native and (aliases or connectors or sentinel):
-            errors.append("Native public workbooks cannot declare Sentinel/function prerequisites.")
+        solution_connector_tables: set[str] = set()
+        if native:
+            from .native_workbooks import _solution_connectors_and_tables
+
+            solution_connectors, solution_connector_tables = _solution_connectors_and_tables(root)
+            expected_connectors = []
+            for connector in solution_connectors or ():
+                if not isinstance(connector, dict) or not isinstance(connector.get("connectorId"), str):
+                    continue
+                matched = sorted(
+                    table for table in connector.get("dataTypes", [])
+                    if isinstance(table, str) and table in sentinel
+                )
+                if matched:
+                    expected_connectors.append({"connectorId": connector["connectorId"], "dataTypes": matched})
+            if (
+                aliases
+                or sentinel != connectors
+                or not sentinel <= solution_connector_tables
+                or provenance["requiredDataConnectors"] != expected_connectors
+            ):
+                errors.append("Native public workbooks cannot declare Sentinel/function prerequisites.")
         for surface in workbook.query_surfaces(document):
-            lineage = _query(surface, allowed_tables=declared, allowed_functions=aliases,
-                             allow_sentinel=not native, include_lineage=True)
+            lineage = _query(
+                surface,
+                allowed_tables=declared if not native else (sentinel & connectors & solution_connector_tables),
+                allowed_functions=aliases,
+                allow_sentinel=not native,
+                include_lineage=True,
+            )
             tables = set(lineage["tables"])
             if not tables <= known:
                 errors.append("Unknown public query tables: " + ", ".join(sorted(tables - known)))

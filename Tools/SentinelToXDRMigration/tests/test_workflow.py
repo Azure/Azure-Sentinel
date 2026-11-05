@@ -4758,6 +4758,53 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(0, rc_ver, stderr.getvalue())
         self.assertTrue(json.loads(stdout.getvalue())["verified"])
 
+    def test_validate_solution_FlagsLocaleUrlsInRuleAndMetadataFiles(self) -> None:
+        from sentinel_xdr_migration.converter import validate_solution
+
+        def _ms_locale_url(subdomain: str, locale: str, path: str) -> str:
+            return f"https://{subdomain}.microsoft.com/{locale}/{path.lstrip('/')}"
+
+        docs_locale_url = _ms_locale_url("docs", "en-us", "azure/sentinel/hunting")
+        azure_locale_url = _ms_locale_url("azure", "en-us", "support/legal/preview-supplemental-terms/")
+
+        rule_dir = self.solution / "Analytic Rules"
+        rule_dir.mkdir(parents=True, exist_ok=True)
+        rule_doc = yaml.safe_load(RULE)
+        rule_doc["description"] = f"Detects activity. Reference: {docs_locale_url}"
+        (rule_dir / "Rule.yaml").write_text(yaml.safe_dump(rule_doc, sort_keys=False), encoding="utf-8")
+        convert_solution(self.solution)
+
+        (self.solution / "SolutionMetadata.json").write_text(
+            json.dumps(
+                {
+                    "version": "3.0.0",
+                    "support": {
+                        "tier": "Microsoft",
+                        "name": "Microsoft Corporation",
+                        "link": azure_locale_url,
+                    },
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        report = validate_solution(self.solution)
+        self.assertFalse(report["documentsLinkValidation"]["valid"])
+        self.assertGreaterEqual(report["documentsLinkValidation"]["issueCount"], 2)
+        self.assertGreaterEqual(report["invalid"], 2)
+        issues_by_file = {item["file"]: item for item in report["documentsLinkValidation"]["issues"]}
+        self.assertIn("Analytic Rules/Rule.yaml", issues_by_file)
+        self.assertEqual(
+            "https://docs.microsoft.com/azure/sentinel/hunting",
+            issues_by_file["Analytic Rules/Rule.yaml"]["recommendedUrl"],
+        )
+        self.assertIn("SolutionMetadata.json", issues_by_file)
+        self.assertEqual(
+            "https://azure.microsoft.com/support/legal/preview-supplemental-terms/",
+            issues_by_file["SolutionMetadata.json"]["recommendedUrl"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

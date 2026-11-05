@@ -148,10 +148,7 @@ def _plan_document(document, source, *, connector_tables=(), connectors=()):
             if isinstance(table, str) and table in sentinel_used
         )
         if matched:
-            entry = {"connectorId": connector["connectorId"], "dataTypes": matched}
-            if isinstance(connector.get("title"), str) and connector["title"].strip():
-                entry["title"] = connector["title"]
-            required_connectors.append(entry)
+            required_connectors.append({"connectorId": connector["connectorId"], "dataTypes": matched})
     return {
         "origin": ORIGIN, "source": source,
         "canonicalPayloadSha256": _canonical_payload_sha256(document),

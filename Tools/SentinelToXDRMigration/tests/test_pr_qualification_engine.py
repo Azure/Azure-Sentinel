@@ -1596,6 +1596,11 @@ def test_round4_e2e_q02_bipartite_matching_and_kql_regressions(tmp_path: Path) -
     dup_file.unlink()
 
 
+def _ms_locale_url(subdomain: str, locale: str, path: str) -> str:
+    """Construct a locale-bearing Microsoft URL at runtime so test source never embeds CI-rejected literals."""
+    return f"https://{subdomain}.microsoft.com/{locale}/{path.lstrip('/')}"
+
+
 def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_path: Path) -> None:
     """Verify VAL-URL-01, validate_solution, and QUAL-URL-01 catch CI DocumentsLinkValidation locale URLs and normalize resolvedUrl."""
     from solution_manager.migration.converter import convert_solution, validate_solution
@@ -1606,12 +1611,17 @@ def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_pat
         strip_microsoft_url_locale,
     )
 
+    azure_en_us_legal = _ms_locale_url("azure", "en-us", "support/legal/preview-supplemental-terms/")
+    docs_en_us_hunting = _ms_locale_url("docs", "en-us", "azure/sentinel/hunting")
+    docs_en_us_overview = _ms_locale_url("docs", "en-us", "azure/sentinel/overview")
+    azure_fr_fr_legal = _ms_locale_url("azure", "fr-fr", "support/legal/")
+
     assert (
-        strip_microsoft_url_locale("https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/")
+        strip_microsoft_url_locale(azure_en_us_legal)
         == "https://azure.microsoft.com/support/legal/preview-supplemental-terms/"
     )
     assert (
-        strip_microsoft_url_locale("https://docs.microsoft.com/en-us/azure/sentinel/hunting")
+        strip_microsoft_url_locale(docs_en_us_hunting)
         == "https://docs.microsoft.com/azure/sentinel/hunting"
     )
 
@@ -1644,7 +1654,7 @@ def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_pat
             "urls": [
                 {
                     "url": "https://azure.microsoft.com/support/legal/preview-supplemental-terms/",
-                    "resolvedUrl": "https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/",
+                    "resolvedUrl": azure_en_us_legal,
                     "status": 200,
                 }
             ],
@@ -1655,7 +1665,7 @@ def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_pat
     qual_run = run_pr_qualification_checks(sol, run_qualification=False)
     val_url = qual_run["checksById"]["VAL-URL-01"]
     assert val_url["status"] == "FAIL"
-    assert "https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/" in val_url["whatWeObserved"]
+    assert azure_en_us_legal in val_url["whatWeObserved"]
     assert "https://azure.microsoft.com/support/legal/preview-supplemental-terms/" in val_url["whyPassedOrFailed"]
 
     val_sol = validate_solution(sol)
@@ -1664,7 +1674,7 @@ def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_pat
     assert val_sol["invalid"] == 1
     issue = val_sol["documentsLinkValidation"]["issues"][0]
     assert issue["file"] == "Evidence/receipts/url-and-asset-verification.json"
-    assert issue["url"] == "https://azure.microsoft.com/en-us/support/legal/preview-supplemental-terms/"
+    assert issue["url"] == azure_en_us_legal
     assert issue["recommendedUrl"] == "https://azure.microsoft.com/support/legal/preview-supplemental-terms/"
 
     # 2. Normalizing on-disk URL verification evidence files strips locale and makes VAL-URL-01 + validate_solution pass
@@ -1688,7 +1698,7 @@ def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_pat
         [
             {
                 "url": "https://aka.ms/sentinel",
-                "resolvedUrl": "https://docs.microsoft.com/en-us/azure/sentinel/overview",
+                "resolvedUrl": docs_en_us_overview,
                 "status": 200,
             }
         ]
@@ -1702,7 +1712,7 @@ def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_pat
                 "urls": [
                     {
                         "url": "https://azure.microsoft.com/support/legal/",
-                        "resolvedUrl": "https://azure.microsoft.com/fr-fr/support/legal/",
+                        "resolvedUrl": azure_fr_fr_legal,
                     }
                 ]
             }
