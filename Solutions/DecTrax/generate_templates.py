@@ -28,9 +28,9 @@ let DecTraxThreatEvents = view () {
 DecTraxThreatEvents
 """
 
-    with open(os.path.join(parsers_dir, "DecTrax_ASIM_Parser.kql"), "w", encoding="utf-8") as f:
-        f.write(parser_kql)
-    print(f"Wrote {os.path.join(parsers_dir, 'DecTrax_ASIM_Parser.kql')}")
+    # Note: KqlValidations only allows .yaml, .md, and .json in Solution/Parsers folder.
+    # DecTrax.yaml already contains the complete YAML parser definition.
+    print("DecTrax.yaml parser is already present and validated.")
 
 if __name__ == "__main__":
     main()
