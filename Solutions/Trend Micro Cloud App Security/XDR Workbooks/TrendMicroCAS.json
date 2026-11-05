@@ -1,0 +1,740 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "**NOTE**: This data connector depends on a parser based on Kusto Function **TrendMicroCAS** to work as expected. [Follow steps to get this Kusto Function](https://aka.ms/sentinel-trendmicrocas-parser)"
+      },
+      "name": "text - 8"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "cd8447d9-b096-4673-92d8-2a1e8291a125",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "description": "Sets the time name for analysis",
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain};",
+        "size": 0,
+        "title": "Events Over Time",
+        "color": "lightBlue",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "timechart",
+        "graphSettings": {
+          "type": 0
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 12",
+      "styleSettings": {
+        "maxWidth": "55"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| where isnotempty(EventType)\r\n| summarize count() by EventType\r\n| join kind = inner (TrendMicroCAS\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by EventType)\r\n on EventType\r\n| project-away EventType1, TimeGenerated\r\n| project Trend, count_, EventType = case(EventType =~ 'security_risk_scan', 'Security Risk',\r\n                                   EventType has 'virtual_analyzer', 'Virtual Analyzer',\r\n                                   EventType startswith 'ransomware', 'Ransomware',\r\n                                   EventType contains 'data', 'DLP',\r\n                                   'Other')",
+        "size": 3,
+        "title": "Event types",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "EventType",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 21,
+            "formatOptions": {
+              "palette": "purple"
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "25",
+      "name": "query - 0",
+      "styleSettings": {
+        "maxWidth": "30"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| summarize count() by EventCategoryType",
+        "size": 3,
+        "title": "Events by Service",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart"
+      },
+      "customWidth": "25",
+      "name": "query - 3",
+      "styleSettings": {
+        "margin": "10",
+        "padding": "10"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| where EventCategoryType in~ ('exchange', 'gmail', 'exchangeserver')\r\n| extend Domain = extract(@'@(\\S+)\\>', 1, MailMessageSender)\r\n| summarize MessageCount = count() by Domain",
+        "size": 3,
+        "title": "Top domains",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart",
+        "gridSettings": {
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "customWidth": "30",
+      "name": "query - 8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let t1 = TrendMicroCAS\n| where isnotempty(SecurityRiskName)\n| summarize EventCount=count() by ThreatName=SecurityRiskName;\nlet t2 = TrendMicroCAS\n| where isnotempty(VirusName)\n| order by DetectionTime\n| summarize EventCount=count() by ThreatName=VirusName;\nlet t3 = TrendMicroCAS\n| where isnotempty(RansomwareName)\n| order by DetectionTime\n| summarize EventCount=count() by ThreatName=RansomwareName;\nunion isfuzzy=true t1, t2, t3",
+        "size": 3,
+        "title": "Top Threats",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "query - 10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\n| where EventType =~ 'security_risk_scan'\n| where isnotempty(SecurityRiskName)\n| order by DetectionTime\n| project DetectionTime, File=case(isnotempty(SrcFileName), SrcFileName, MailMessageFileName), Result=strcat(iif(EventOriginalResultDetails contains 'Quarantine' or EventOriginalResultDetails contains 'Block', '✅ - Resolved', '❌ - Unknown'))",
+        "size": 0,
+        "title": "Latest files scanned",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting"
+      },
+      "customWidth": "40",
+      "name": "query - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let m_files = TrendMicroCAS\r\n| where isnotempty(MailMessageFileName)\r\n| summarize count() by MailMessageFileName, EventCategoryType\r\n| project-rename Count=count_, File=MailMessageFileName, Service=EventCategoryType;\r\nlet o_files = TrendMicroCAS\r\n| where isnotempty(SrcFileName)\r\n| summarize count() by SrcFileName, EventCategoryType\r\n| project-rename Count=count_, File=SrcFileName, Service=EventCategoryType;\r\nunion isfuzzy=true m_files, o_files\r\n\r\n",
+        "size": 1,
+        "title": "Files most seen",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "table",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "customWidth": "35",
+      "name": "query - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\r\n| where EventCategoryType in~ ('exchange', 'gmail', 'exchangeserver')\r\n| where isnotempty(MailMessageFileName)\r\n| summarize count() by MailMessageFileName",
+        "size": 3,
+        "title": "Files from emails",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "TotalEvents",
+              "sortOrder": 2
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "TotalEvents",
+            "sortOrder": 2
+          }
+        ]
+      },
+      "customWidth": "33",
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "TrendMicroCAS\n| where EventCategoryType in~ ('sharepoint', 'onedrive', 'dropbox', 'box', 'googledrive')\n| where isnotempty(SrcFileName)\n| summarize count() by SrcFileName\n| project-rename Count=count_, File=SrcFileName",
+        "size": 3,
+        "title": "Files on fileshare services",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let t1 = TrendMicroCAS\r\n| where isnotempty(SecurityRiskName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=SecurityRiskName;\r\nlet t2 = TrendMicroCAS\r\n| where isnotempty(VirusName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=VirusName;\r\nlet t3 = TrendMicroCAS\r\n| where isnotempty(RansomwareName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=RansomwareName;\r\nunion isfuzzy=true t1, t2, t3",
+        "size": 1,
+        "title": "Latest acounts with threats",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "rowLimit": 50,
+          "filter": true
+        }
+      },
+      "customWidth": "40",
+      "name": "query - 12",
+      "styleSettings": {
+        "maxWidth": "33"
+      }
+    }
+  ],
+  "fromTemplateId": "sentinel-TrendMicroCASWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "xdrMetadata": {
+    "contentId": "eff1b646-522e-55ff-b064-75b58f08b3ce",
+    "instanceId": "29a00f15-750b-5f80-9096-0a1759fe2ddb",
+    "version": "3.2.2",
+    "schemaVersion": "1.0.0",
+    "displayName": "TrendMicroCAS"
+  },
+  "contentProvenance": {
+    "source": {
+      "path": "Workbooks/TrendMicroCAS.json",
+      "sha256": "c2d4dad796f1104caec900a374676263e680a54ce81b12a7ad9cb15b5c4fa033",
+      "contentId": "sentinel-TrendMicroCASWorkbook",
+      "originalMetadataVersion": null
+    },
+    "conversion": {
+      "tool": "sentinel-xdr-migration",
+      "version": "0.1.0",
+      "reviewRequired": false,
+      "queries": [
+        {
+          "sourcePath": "/items/2/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/2/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "TrendMicroCAS\r\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain};",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/2/content/query",
+          "sourceSha256": "0689106cdb4d6ef78fbd1a415194c830268d24d7934ed6f7d3b2699eb1e8ab97",
+          "targetSha256": "0689106cdb4d6ef78fbd1a415194c830268d24d7934ed6f7d3b2699eb1e8ab97"
+        },
+        {
+          "sourcePath": "/items/3/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/3/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "TrendMicroCAS\r\n| where isnotempty(EventType)\r\n| summarize count() by EventType\r\n| join kind = inner (TrendMicroCAS\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by EventType)\r\n on EventType\r\n| project-away EventType1, TimeGenerated\r\n| project Trend, count_, EventType = case(EventType =~ 'security_risk_scan', 'Security Risk',\r\n                                   EventType has 'virtual_analyzer', 'Virtual Analyzer',\r\n                                   EventType startswith 'ransomware', 'Ransomware',\r\n                                   EventType contains 'data', 'DLP',\r\n                                   'Other')",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/3/content/query",
+          "sourceSha256": "1645c78c826fe28afd992438337e29d5705cbd7b11939ade0699ab16d4a7a3ce",
+          "targetSha256": "1645c78c826fe28afd992438337e29d5705cbd7b11939ade0699ab16d4a7a3ce"
+        },
+        {
+          "sourcePath": "/items/4/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/4/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "TrendMicroCAS\r\n| summarize count() by EventCategoryType",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/4/content/query",
+          "sourceSha256": "db195c778f308b774541916c1ee38fedb6bbd5662b121407f146a14a6e463a62",
+          "targetSha256": "db195c778f308b774541916c1ee38fedb6bbd5662b121407f146a14a6e463a62"
+        },
+        {
+          "sourcePath": "/items/5/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/5/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "TrendMicroCAS\r\n| where EventCategoryType in~ ('exchange', 'gmail', 'exchangeserver')\r\n| extend Domain = extract(@'@(\\S+)\\>', 1, MailMessageSender)\r\n| summarize MessageCount = count() by Domain",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/5/content/query",
+          "sourceSha256": "d888f834b993b030f727a4700fa2d247ddadc2171a41d0a0765ee1031f14706f",
+          "targetSha256": "d888f834b993b030f727a4700fa2d247ddadc2171a41d0a0765ee1031f14706f"
+        },
+        {
+          "sourcePath": "/items/6/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/6/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let t1 = TrendMicroCAS\n| where isnotempty(SecurityRiskName)\n| summarize EventCount=count() by ThreatName=SecurityRiskName;\nlet t2 = TrendMicroCAS\n| where isnotempty(VirusName)\n| order by DetectionTime\n| summarize EventCount=count() by ThreatName=VirusName;\nlet t3 = TrendMicroCAS\n| where isnotempty(RansomwareName)\n| order by DetectionTime\n| summarize EventCount=count() by ThreatName=RansomwareName;\nunion isfuzzy=true t1, t2, t3",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/6/content/query",
+          "sourceSha256": "5c48796b498e583618fe2b765016025a1f9d3e0a9b5aecc023f5e90ee4a08490",
+          "targetSha256": "5c48796b498e583618fe2b765016025a1f9d3e0a9b5aecc023f5e90ee4a08490"
+        },
+        {
+          "sourcePath": "/items/7/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/7/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "TrendMicroCAS\n| where EventType =~ 'security_risk_scan'\n| where isnotempty(SecurityRiskName)\n| order by DetectionTime\n| project DetectionTime, File=case(isnotempty(SrcFileName), SrcFileName, MailMessageFileName), Result=strcat(iif(EventOriginalResultDetails contains 'Quarantine' or EventOriginalResultDetails contains 'Block', '✅ - Resolved', '❌ - Unknown'))",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/7/content/query",
+          "sourceSha256": "7804d416fbb56d5a0f6df18ab83e728728fae9aab9763ca1861ee7bfb4f827c6",
+          "targetSha256": "7804d416fbb56d5a0f6df18ab83e728728fae9aab9763ca1861ee7bfb4f827c6"
+        },
+        {
+          "sourcePath": "/items/8/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/8/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let m_files = TrendMicroCAS\r\n| where isnotempty(MailMessageFileName)\r\n| summarize count() by MailMessageFileName, EventCategoryType\r\n| project-rename Count=count_, File=MailMessageFileName, Service=EventCategoryType;\r\nlet o_files = TrendMicroCAS\r\n| where isnotempty(SrcFileName)\r\n| summarize count() by SrcFileName, EventCategoryType\r\n| project-rename Count=count_, File=SrcFileName, Service=EventCategoryType;\r\nunion isfuzzy=true m_files, o_files\r\n\r\n",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/8/content/query",
+          "sourceSha256": "a24831f2ff226948d9e61b96b3ea66d18453b26111cefe76ce819a785401bffc",
+          "targetSha256": "a24831f2ff226948d9e61b96b3ea66d18453b26111cefe76ce819a785401bffc"
+        },
+        {
+          "sourcePath": "/items/9/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/9/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "TrendMicroCAS\r\n| where EventCategoryType in~ ('exchange', 'gmail', 'exchangeserver')\r\n| where isnotempty(MailMessageFileName)\r\n| summarize count() by MailMessageFileName",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/9/content/query",
+          "sourceSha256": "6ddbd29379cfd7a028e35f15acabdedcbc2a6168d94417a457915e6a68f43042",
+          "targetSha256": "6ddbd29379cfd7a028e35f15acabdedcbc2a6168d94417a457915e6a68f43042"
+        },
+        {
+          "sourcePath": "/items/10/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/10/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "TrendMicroCAS\n| where EventCategoryType in~ ('sharepoint', 'onedrive', 'dropbox', 'box', 'googledrive')\n| where isnotempty(SrcFileName)\n| summarize count() by SrcFileName\n| project-rename Count=count_, File=SrcFileName",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/10/content/query",
+          "sourceSha256": "c7502caf586c4516e0e3f0840e58173ee93a5914a27234a85b357211cabe0169",
+          "targetSha256": "c7502caf586c4516e0e3f0840e58173ee93a5914a27234a85b357211cabe0169"
+        },
+        {
+          "sourcePath": "/items/11/content/query",
+          "parameter": false,
+          "resolutionEvidence": "Parsers/TrendMicroCAS.yaml -> TrendMicroCAS_CL",
+          "workspaceFunctions": [
+            "TrendMicroCAS"
+          ],
+          "conversion": {
+            "sourceId": "/items/11/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let t1 = TrendMicroCAS\r\n| where isnotempty(SecurityRiskName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=SecurityRiskName;\r\nlet t2 = TrendMicroCAS\r\n| where isnotempty(VirusName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=VirusName;\r\nlet t3 = TrendMicroCAS\r\n| where isnotempty(RansomwareName)\r\n| order by DetectionTime\r\n| project DetectionTime, User=DstUserName, ThreatName=RansomwareName;\r\nunion isfuzzy=true t1, t2, t3",
+            "resolvedTables": [
+              "TrendMicroCAS_CL"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "TrendMicroCAS_CL",
+                "ahTable": "TrendMicroCAS_CL",
+                "identical": null,
+                "columnRenames": {},
+                "note": "no cached schema for either side; catalog renames only"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/11/content/query",
+          "sourceSha256": "c3c26a99a7f84b090bdbe480043ada7f6c4820dada287660ac0f37208835c1b4",
+          "targetSha256": "c3c26a99a7f84b090bdbe480043ada7f6c4820dada287660ac0f37208835c1b4"
+        }
+      ]
+    },
+    "requiredWorkloads": [
+      {
+        "workload": "sentinel",
+        "dataTypes": [
+          "TrendMicroCAS_CL"
+        ]
+      }
+    ],
+    "requiredDataConnectors": [
+      {
+        "connectorId": "TrendMicroCAS",
+        "dataTypes": [
+          "TrendMicroCAS_CL"
+        ]
+      },
+      {
+        "connectorId": "TrendMicroCASCCFDefinition",
+        "dataTypes": [
+          "TrendMicroCAS_CL"
+        ]
+      }
+    ],
+    "dependencyReviewRequired": false,
+    "requiredWorkspaceFunctions": [
+      {
+        "functionAlias": "TrendMicroCAS",
+        "sourcePath": "Parsers/TrendMicroCAS.yaml",
+        "sourceSha256": "f553ea35a3275e492eaa353368de77cf394792e6b6580d23934ba090ec4883fb"
+      }
+    ]
+  }
+}

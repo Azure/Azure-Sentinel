@@ -1,5 +1,6 @@
-| **Version** | **Date Modified (DD-MM-YYY)** | **Change History**                              |
-|-------------|-------------------------------|-------------------------------------------------|
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                     |
+|-------------|--------------------------------|------------------------------------------------------------------------|
+| 3.2.2       | 22-10-2026                     | Added Microsoft Defender XDR **Custom Detections** and **Workbook** migration support. |
 | 3.0.3       | 20-05-2025                    | Updated **Parser** to parse new fields          |
 | 3.0.2       | 04-12-2024                    | Removed Deprecated **Data connectors**          |
 | 3.0.1       | 23-07-2024                    | Deprecated data connectors                      |

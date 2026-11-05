@@ -1,0 +1,157 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d3980830-dd9d-40a5-911f-76b44dfdce16
+    path: Analytic Rules/Sign-in Burst from Multiple Locations.yaml
+    version: 1.0.3
+    querySha256: 21bdf9482ad7e82edecb7d39e0fbcfe0272c72070f1b5b08df7da8211fc4674c
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `UserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: ad968011f909ce9d254964b272ab314ec5fe989bc9d8ec69ce09c1ddf6a1a9b4
+      targetQuerySha256: 21b43d1d942e238317a8a7423130439f799bf38669ad6c0b20319fd7aa3aede3
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: ad968011f909ce9d254964b272ab314ec5fe989bc9d8ec69ce09c1ddf6a1a9b4
+      targetQuerySha256: 21b43d1d942e238317a8a7423130439f799bf38669ad6c0b20319fd7aa3aede3
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: ad968011f909ce9d254964b272ab314ec5fe989bc9d8ec69ce09c1ddf6a1a9b4
+      targetQuerySha256: 21b43d1d942e238317a8a7423130439f799bf38669ad6c0b20319fd7aa3aede3
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-d3980830-dd9d-40a5-911f-76b44dfdce16
+  displayName: GitHub Signin Burst from Multiple Locations
+  status: disabled
+  queryCondition:
+    queryText: 'let locationThreshold = 1;
+
+      let aadFunc = (tableName:string){
+
+      table(tableName)
+
+      | where AppDisplayName =~ "GitHub.com"
+
+      | where ResultType == 0
+
+      | summarize CountOfLocations = dcount(Location), Locations = make_set(Location,100),
+      BurstStartTime = min(TimeGenerated), BurstEndTime = max(TimeGenerated) by UserPrincipalName,
+      Type
+
+      | where CountOfLocations > locationThreshold
+
+      | extend timestamp = BurstStartTime
+
+      };
+
+      let aadSignin = aadFunc("SigninLogs");
+
+      let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+
+      union isfuzzy=true aadSignin, aadNonInt
+
+      | extend Name = tostring(split(UserPrincipalName,''@'',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,''@'',1)[0])'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GitHub Signin Burst from Multiple Locations
+      description: "'This detection triggers when there is a Signin burst from multiple\
+        \ locations in GitHub (Entra ID SSO).\n This detection is based on configurable\
+        \ threshold which can be prone to false positives. To view the anomaly based\
+        \ equivalent of thie detection, please see here https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Entra%20ID/Analytic%20Rules/AnomalousUserAppSigninLocationIncrease-detection.yaml.\
+        \ '"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        AccountFullName: UserPrincipalName

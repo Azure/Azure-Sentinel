@@ -1,5 +1,9 @@
 # Changelog for imWebSession.yaml
 
+## Version 0.6.7
+
+- (2026-10-26) Add filtering parser for Salesforce Real-Time Event Monitoring page view events - [PR #15437](https://github.com/Azure/Azure-Sentinel/pull/15437)
+
 ## Version 0.6.6
 
 - (2026-09-30) Add parser for Cloudflare One logs. - [PR #14982](https://github.com/Azure/Azure-Sentinel/pull/14982)

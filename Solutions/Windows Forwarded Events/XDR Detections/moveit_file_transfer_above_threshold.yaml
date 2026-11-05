@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WindowsForwardedEvents
+  dataTypes:
+  - WindowsEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Event
+  requiredDataConnectors:
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+    - WindowsEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9bd18b63-f1ca-4375-95db-39fda00bfe20
+    path: Analytic Rules/moveit_file_transfer_above_threshold.yaml
+    version: 1.0.2
+    querySha256: 909bfa9077b477d08b708d51bf4124b40e184de8820dfa43d6e9aeec16382ccd
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - customDetails 'TransferCount' column `count_` requires runtime output-schema binding verification
+    - customDetails 'FilesList' column `fileslist` requires runtime output-schema binding verification
+    - Account.Name value is retained as customDetails.AccountName from query column `userdisplayname`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `userdisplayname` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1020
+    reviewScope:
+      sourceDocumentSha256: 8720011e17db61862b7f30649839ac9aee6fc13ab0cec272773364d8f268619d
+      targetQuerySha256: 2e70c477d4afd87bc725dccbc3263fa32174ac00fc2eedd3067834deefd41435
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: userdisplayname
+      column: userdisplayname
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-9bd18b63-f1ca-4375-95db-39fda00bfe20
+  displayName: Progress MOVEIt File transfer above threshold
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 500;
+      Event
+      | where EventID == 0 and Source == "MOVEit DMZ Audit" and EventLog == "Application"
+      | where RenderedDescription has_any ("Downloaded", "Uploaded")
+      | parse RenderedDescription with * "User '" userdisplayname "' (" *
+      | parse RenderedDescription with * "IPAddress: " ipaddress " FileID:" * " FileName: " filename " FolderID: " folderid " FolderPath: " folderpath " Username: " username " AgentBrand: " *
+      | summarize count_=count(), fileslist=make_set(filename) by Computer,userdisplayname,ipaddress,bin(TimeGenerated, 1d)
+      | where count_ >= threshold
+      | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField","_", tostring(hash(tostring(fileslist)))))
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: Progress MOVEIt File transfer above threshold
+      description: |-
+        'Identifies Progress MOVEIt File Transfers above certain threshold in a 15min time period.
+         Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: ipaddress
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020
+      customDetails:
+        TransferCount: count_
+        FilesList: fileslist
+        AccountName: userdisplayname
+        FileSample: FileSample

@@ -1,0 +1,131 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6a4dbcf8-f5e2-4b33-b34f-2db6487613f0
+    path: Analytic Rules/KnownMaliciousUserAgents.yaml
+    version: 1.0.0
+    querySha256: 7a92470b0bb5e26e5d210df63b30409052a5204c0127ec63a7629f51230d3a84
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventCount' column `EventCount` requires runtime output-schema binding verification
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - customDetails 'HttpUserAgent' column `HttpUserAgent` requires runtime output-schema binding verification
+    - customDetails 'UserAgentCategory' column `UserAgentCategory` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - CommandAndControl
+    originalTechniques:
+    - T1190
+    - T1133
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 054018429c5a80d244e29ad53b6a89a9ee2a2b43c6ca3585785aaad42f5b1421
+      targetQuerySha256: deff3ff0f2f9bc837ceb2b2f0692d51da617675214c05a594bb8d14a817fb015
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: 054018429c5a80d244e29ad53b6a89a9ee2a2b43c6ca3585785aaad42f5b1421
+      targetQuerySha256: deff3ff0f2f9bc837ceb2b2f0692d51da617675214c05a594bb8d14a817fb015
+properties:
+  id: xdr-6a4dbcf8-f5e2-4b33-b34f-2db6487613f0
+  displayName: Detect known risky user agents (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback = 5m;
+      let knownUserAgentsIndicators = materialize(externaldata(UserAgent: string, UserAgentCategory: string)
+        [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv"]
+        with(format="csv", ignoreFirstRecord=True)
+        | extend joiner = 1);
+      let CustomUserAgentIndicators = (_ASIM_GetWatchlistRaw("UnusualUserAgents") // Create new Watchlist and add your custom indicators(Optional)
+        | extend
+            UserAgent = tostring(WatchlistItem["UserAgent"]),
+            UserAgentCategory = tostring(WatchlistItem["UserAgentCategory"])
+        | project UserAgent, UserAgentCategory, joiner = 1
+        | where isnotempty(UserAgent) and isnotempty(UserAgentCategory));
+      let CombinedUAList = union knownUserAgentsIndicators, CustomUserAgentIndicators;
+      let knownUserAgents=toscalar(CombinedUAList
+        | where isnotempty(UserAgent)
+        | summarize make_list(UserAgent, 1000));
+      _Im_WebSession (starttime=ago(lookback), httpuseragent_has_any=knownUserAgents)
+      | project SrcIpAddr, SrcUsername, SrcHostname, HttpUserAgent, Url, DstIpAddr, DstPortNumber, TimeGenerated
+      | extend joiner = 1
+      | join kind=inner CombinedUAList on joiner
+      | where HttpUserAgent has UserAgent
+      | summarize
+        EventCount=count(),
+        EventStartTime = min(TimeGenerated),
+        EventEndTime=max(TimeGenerated)
+        by SrcIpAddr, SrcUsername, SrcHostname, Url, HttpUserAgent, DstIpAddr, DstPortNumber, UserAgentCategory
+      | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Detect known risky user agents (ASIM Web Session)
+      description: '''This rule is designed to flag web requests that contain a user agent header that is recognized as malicious.
+        It relies on a predefined list of known user agents, which is referenced from a specific CSV file'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: Url
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        - id: ip2
+          addressColumn: DstIpAddr
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: SrcHostname
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        EventCount: EventCount
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime
+        HttpUserAgent: HttpUserAgent
+        UserAgentCategory: UserAgentCategory

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                  |
 |-------------|--------------------------------|-------------------------------------------------------------------------------------|
+| 3.2.2       | 21-10-2026                     | Added Defender XDR **Custom Detections** for both **Analytic Rules** and a Defender XDR **Workbook** (Sentinel to XDR migration) |
 | 3.0.2       | 05-10-2026                     | Fixed an issue related to the API version                                           |
 | 3.0.1       | 09-12-2024                     | Removed Deprecated **Data Connector**                                               |
 |             |                                | Updated SophosXGFirewall.json **Workbook** to fix missing fields                    |

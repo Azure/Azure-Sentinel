@@ -1,0 +1,125 @@
+Parser:
+  Title: Authentication ASIM parser for CrowdStrike Falcon Data Replicator
+  Version: '0.1.0'
+  LastUpdated: Oct 23, 2026
+Product:
+  Name: CrowdStrike Falcon Data Replicator
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: CrowdStrike Falcon Data Replicator connector
+  Link: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/CrowdStrikeS3FDR_ccp/DataConnectorDefinition.json
+Description: |
+  Normalizes CrowdStrike Falcon Data Replicator authentication events from CrowdStrike_Auth_Events_CL to the ASIM Authentication schema.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimAuthenticationCrowdStrikeFalconDataReplicator
+EquivalentBuiltInParser: _ASim_Authentication_CrowdStrikeFalconDataReplicator
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool = false, pack:bool = false) {
+      CrowdStrike_Auth_Events_CL
+      | where not(disabled)
+      | extend SourceFields = iff(pack, pack_all(), dynamic({}))
+      | extend
+          EventType = iff(event_simpleName startswith "UserLogoff", "Logoff", "Logon"),
+          EventResult = iff(event_simpleName startswith "UserLogonFailed", "Failure", "Success"),
+          EventOriginalSubType = LogonType,
+          EventOriginalResultDetails = strcat(Status, iff(isnotempty(SubStatus), strcat("/", SubStatus), "")),
+          EventStartTime = coalesce(
+              unixtime_seconds_todatetime(ContextTimeStamp),
+              unixtime_milliseconds_todatetime(timestamp),
+              unixtime_seconds_todatetime(iff(event_simpleName startswith "UserLogoff", LogoffTime, LogonTime)),
+              TimeGenerated),
+          DvcIpAddr = coalesce(tostring(AdditionalFields.LocalAddressIP4), tostring(AdditionalFields.LocalAddressIP6), aip),
+          ComputerName = tostring(AdditionalFields.ComputerName),
+          SrcIpAddr = coalesce(RemoteAddressIP4, RemoteAddressIP6),
+          TargetUsername = coalesce(UserPrincipal, UserCanonical, iff(isnotempty(LogonDomain) and isnotempty(UserName) and UserName !contains "\\" and UserName !contains "@", strcat(LogonDomain, "\\", UserName), UserName)),
+          TargetUserId = coalesce(UserSid, UID),
+          TargetUserIdType = case(isnotempty(UserSid), "SID", isnotempty(UID), "UID", ""),
+          TargetUserType = case(UserIsAdmin == "1", "Admin", UserIsAdmin == "0", "Regular", ""),
+          TargetSessionId = coalesce(AuthenticationUuidAsString, AuthenticationUuid, AuthenticationId, AuthenticationIdMac, LogonId, LoginSessionId, SessionId),
+          DvcOs = case(event_platform =~ "Win", "Windows", event_platform =~ "Mac", "macOS", event_platform =~ "Lin", "Linux", event_platform)
+      | extend
+          EventEndTime = EventStartTime,
+          EventSubType = case(LogonType == "0", "System", LogonType in ("2", "7", "11"), "Interactive", LogonType == "3", "Remote", LogonType == "5", "Service", LogonType == "8", "NetworkCleartext", LogonType == "10", "RemoteInteractive", ""),
+          EventResultDetails = iff(EventResult == "Failure", "Other", ""),
+          TargetUsernameType = case(TargetUsername contains "@", "UPN", TargetUsername contains "\\", "Windows", isnotempty(TargetUsername), "Simple", ""),
+          DvcHostname = iff(tostring(split(ComputerName, ".")[0]) matches regex @"^[a-zA-Z0-9-]{1,61}$", tostring(split(ComputerName, ".")[0]), ""),
+          DvcDomain = iff(ComputerName contains ".", substring(ComputerName, indexof(ComputerName, ".") + 1), ""),
+          DvcFQDN = iff(ComputerName contains ".", ComputerName, ""),
+          SrcHostname = iff(tostring(split(ClientComputerName, ".")[0]) matches regex @"^[a-zA-Z0-9-]{1,61}$", tostring(split(ClientComputerName, ".")[0]), ""),
+          SrcDomain = iff(ClientComputerName contains ".", substring(ClientComputerName, indexof(ClientComputerName, ".") + 1), ""),
+          SrcFQDN = iff(ClientComputerName contains ".", ClientComputerName, "")
+      | project-rename
+          EventOriginalType = event_simpleName,
+          DvcId = aid,
+          DvcScopeId = cid,
+          TargetUserSid = UserSid,
+          TargetUserUid = UID,
+          TargetUserUpn = UserPrincipal,
+          TargetUserScope = LogonDomain,
+          TargetOriginalUserType = UserIsAdmin,
+          LogonProtocol = AuthenticationPackage
+      | extend
+          Dvc = coalesce(DvcFQDN, DvcHostname, DvcId, DvcIpAddr, ComputerName),
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          DvcDomainType = iff(isnotempty(DvcDomain), "FQDN", ""),
+          SrcDomainType = iff(isnotempty(SrcDomain), "FQDN", ""),
+          Src = coalesce(SrcIpAddr, SrcFQDN, SrcHostname),
+          TargetHostname = DvcHostname,
+          TargetDomain = DvcDomain,
+          TargetDomainType = iff(isnotempty(DvcDomain), "FQDN", ""),
+          TargetFQDN = DvcFQDN,
+          TargetDvcId = DvcId,
+          TargetDvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          TargetIpAddr = DvcIpAddr,
+          TargetDvcOs = DvcOs,
+          TargetDvcScopeId = DvcScopeId,
+          EventCount = int(1),
+          EventVendor = "CrowdStrike",
+          EventProduct = "Falcon Data Replicator",
+          EventSchema = "Authentication",
+          EventSchemaVersion = "1.0.0",
+          EventSeverity = "Informational",
+          DvcEntityKey = "",
+          ActorUserEntityKey = "",
+          ActorUserAdditionalIds = dynamic([]),
+          TargetUserEntityKey = "",
+          TargetUserAdditionalIds = dynamic([]),
+          SrcSystemEntityKey = "",
+          TargetSystemEntityKey = "",
+          ActingApplicationEntityKey = "",
+          TargetApplicationEntityKey = "",
+          AdditionalEntities = dynamic([]),
+          AdditionalFields = SourceFields
+      | extend Dst = Dvc, User = TargetUsername, IpAddr = SrcIpAddr
+      | project
+          TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+          EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventSeverity,
+          EventType, EventSubType, EventResult, EventResultDetails,
+          EventOriginalType, EventOriginalSubType, EventOriginalResultDetails,
+          Dvc, DvcId, DvcIdType, DvcIpAddr, DvcHostname, DvcDomain, DvcDomainType,
+          DvcFQDN, DvcOs, DvcScopeId, DvcEntityKey,
+          Src, SrcIpAddr, SrcHostname, SrcDomain, SrcDomainType, SrcFQDN,
+          TargetHostname, TargetDomain, TargetDomainType, TargetFQDN,
+          TargetDvcId, TargetDvcIdType, TargetIpAddr, TargetDvcOs, TargetDvcScopeId,
+          TargetUsername, TargetUsernameType, TargetUserId, TargetUserIdType,
+          TargetUserSid, TargetUserUid, TargetUserUpn, TargetUserScope,
+          TargetUserType, TargetOriginalUserType, TargetSessionId, LogonProtocol,
+          Dst, User, IpAddr, ActorUserEntityKey, ActorUserAdditionalIds,
+          TargetUserEntityKey, TargetUserAdditionalIds, SrcSystemEntityKey,
+          TargetSystemEntityKey, ActingApplicationEntityKey, TargetApplicationEntityKey,
+          AdditionalEntities, AdditionalFields
+  };
+  parser(disabled=disabled, pack=pack)

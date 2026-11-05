@@ -1,0 +1,79 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Heartbeat
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4be5b645-1d08-49e4-b58d-07294ff19223
+    path: Analytic Rules/M2131AssetStoppedLogging.yaml
+    version: 1.0.0
+    querySha256: 74e26e26548c1c1afea2591c25c42c2632e702eee576c13ced652bae55108891
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1082
+    reviewScope:
+      sourceDocumentSha256: 49a07401702e464b84ac5708fb1f057416a659ed962dd816bfbdeb5156ecf067
+      targetQuerySha256: 5c285539a1024bde7f2d294b93fce07698e0912c267b8980fbfabad27a87790c
+properties:
+  id: xdr-4be5b645-1d08-49e4-b58d-07294ff19223
+  displayName: M2131_AssetStoppedLogging
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let LastHeartbeatTime = Heartbeat
+      | summarize LastHeartbeat_Time = arg_max(TimeGenerated, *) by ResourceId;
+      Heartbeat
+      | where TimeGenerated > ago(14d)
+      | summarize LastHeartbeat_Hours = datetime_diff("hour",now(), max(TimeGenerated)) by ResourceId
+      | where ResourceId <> ""
+      | where ResourceId <> "None"
+      | join kind=inner (LastHeartbeatTime) on ResourceId
+      | where LastHeartbeat_Hours > 24
+      | project LastHeartbeat_Hours, LastHeartbeat_Time, Computer, ComputerIP, Category, OSType, OSName, ResourceId, SubscriptionId, ResourceGroup, RemoteIPCountry
+      | sort by LastHeartbeat_Hours desc
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: M2131_AssetStoppedLogging
+      description: '''This alert is designed to monitor assets within the Maturity Model for Event Log Management (M-21-31)
+        standard. The alert triggers when a monitored asset fails to provide a heartbeat within 24 hours.'''
+      severity: medium
+      entityMappings:
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: ResourceId
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1082

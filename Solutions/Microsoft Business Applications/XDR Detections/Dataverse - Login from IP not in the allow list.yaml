@@ -1,0 +1,130 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 81c693fe-f6c4-4352-bc10-3526f6e22637
+    path: Analytic Rules/Dataverse - Login from IP not in the allow list.yaml
+    version: 3.2.0
+    querySha256: 27e5aeb5f6d60457577dadf8bc3830153469488b11e842b7932d0b54a43f78d5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: cfaff4b808cc3207c129e71ffd8638d4f0c0519a8e96449fc6494a8409aa4491
+      targetQuerySha256: a593b75467b4d11d0198bfebaabdb2cc9df9603188764d87c2c48aa5748a1d12
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-81c693fe-f6c4-4352-bc10-3526f6e22637
+  displayName: Dataverse - Login from IP not in the allow list
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Use static IP address or CIDR list specified in the
+      // NetworkAddresses watchlist template with tag "AllowDataverse"
+      let allowed_networks = MSBizAppsNetworkAddresses()
+          | where Tags has "AllowDataverse"
+          | summarize by IPSubnet;
+      let query_frequency = 1h;
+      let watchlist_entries_count = toscalar (allowed_networks
+          | summarize count());
+      let dataverse_signin_activity = materialize(
+          DataverseActivity
+          | where watchlist_entries_count > 0
+          | where TimeGenerated >= ago (query_frequency)
+          | where Message == "UserSignIn" and isnotempty(ClientIp)
+          | summarize FirstEvent = arg_min(TimeGenerated, *) by UserId, ClientIp, InstanceUrl
+          );
+      let authorized_ip_addresses = dataverse_signin_activity
+          | evaluate ipv4_lookup(allowed_networks, ClientIp, IPSubnet);
+      dataverse_signin_activity
+      | join kind=leftanti(authorized_ip_addresses) on ClientIp
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          FirstEvent,
+          UserId,
+          ClientIp,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Login from IP not in the allow list
+      description: Identifies logons from IPv4 addresses not matching IPv4 subnets maintained on an allow list. This analytics
+        rule uses the NetworkAddresses watchlist template.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+        - technique: T1190
+        - technique: T1133
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

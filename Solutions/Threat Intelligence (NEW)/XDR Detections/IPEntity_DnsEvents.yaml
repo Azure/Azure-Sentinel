@@ -1,0 +1,157 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: DNS
+  dataTypes:
+  - DnsEvents
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DnsEvents
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: DNS
+    dataTypes:
+    - DnsEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6418fd33-92f2-407b-bd61-91c0d4bbcb8a
+    path: Analytic Rules/IPEntity_DnsEvents.yaml
+    version: 1.4.7
+    querySha256: 5c6eaa58278a2f556d77394253e314f06cbc61d5400017c7bf50c46c134862d3
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.4.7
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer`
+      is provisionally represented by hosts.nameColumn `HostName`; confirm that this
+      column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column
+      `Computer`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `Computer` requires runtime output-schema
+      binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 504e058e1dd6bfce03fc49b9b2063939b41f0542f248b84b4ee39d17cfd9e46d
+      targetQuerySha256: df7df02975ac0b9b93a14d33748ad294ef10939be2c1e459ec0ff3839a639d8d
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+properties:
+  id: xdr-6418fd33-92f2-407b-bd61-91c0d4bbcb8a
+  displayName: TI Map IP Entity to DnsEvents
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h; // Look back 1 hour for DNS events\nlet ioc_lookBack\
+      \ = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat\
+      \ intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelIndicators\n\
+      //extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\
+      \"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType\
+      \ in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP\
+      \ = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      \  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP),\
+      \ NetworkSourceIP, NetworkSourceIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity)\
+      \ and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend\
+      \ Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n  | where\
+      \ ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\"\
+      \ and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n\
+      \  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      \  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Perform\
+      \ a join between IP indicators and DNS events\nIP_Indicators\n   | project-reorder\
+      \ *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n \
+      \ // Use innerunique to keep performance fast and result set low, as we only\
+      \ need one match to indicate potential malicious activity that needs investigation\n\
+      \  | join kind=innerunique (\n      DnsEvents\n      | where TimeGenerated >=\
+      \ ago(dt_lookBack)\n      | where SubType =~ \"LookupQuery\" and isnotempty(IPAddresses)\n\
+      \      | mv-expand SingleIP = split(IPAddresses, \", \") to typeof(string)\n\
+      \      | extend DNS_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity\
+      \ == $right.SingleIP\n  // Filter out DNS events that occurred after the expiration\
+      \ of the corresponding indicator\n  | where DNS_TimeGenerated < ValidUntil\n\
+      \  // Group the results by IndicatorId and SingleIP, and keep the DNS event\
+      \ with the latest timestamp\n  | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated,\
+      \ *) by Id, SingleIP\n  // Select the desired output fields\n  | extend Description\
+      \ = tostring(parse_json(Data).description)\n  | extend ActivityGroupNames =\
+      \ extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      \  | project DNS_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil,\
+      \ Confidence, TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses,\
+      \ NetworkSourceIP, Type, Url\n  | extend timestamp = DNS_TimeGenerated, HostName\
+      \ = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer,\
+      \ '.'), 1, -1), '.'))"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP Entity to DnsEvents
+      description: This query maps any IP indicators of compromise (IOCs) from threat
+        intelligence (TI), by searching for matches in DnsEvents.
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        HostFullName: Computer

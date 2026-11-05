@@ -1,0 +1,116 @@
+Parser:
+  Title: User Management ASIM parser for CrowdStrike Falcon Data Replicator
+  Version: '0.1.0'
+  LastUpdated: Oct 26, 2026
+Product:
+  Name: CrowdStrike Falcon Data Replicator
+Normalization:
+  Schema: UserManagement
+  Version: '1.0.0'
+References:
+- Title: ASIM User Management Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: CrowdStrike Falcon Data Replicator connector
+  Link: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Data%20Connectors/CrowdStrikeS3FDR_ccp/DataConnectorDefinition.json
+Description: |
+  Normalizes account creation, deletion, and group-membership events from CrowdStrike_User_Events_CL to ASIM UserManagement.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimUserManagementCrowdStrikeFalconDataReplicator
+EquivalentBuiltInParser: _ASim_UserManagement_CrowdStrikeFalconDataReplicator
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  CrowdStrike_User_Events_CL
+  | where not(disabled)
+  | where event_simpleName in ("UserAccountCreated", "UserAccountDeleted", "UserAccountAddedToGroup")
+  | extend
+      EventType = case(
+          event_simpleName == "UserAccountCreated", "UserCreated",
+          event_simpleName == "UserAccountDeleted", "UserDeleted",
+          "UserAddedToGroup"),
+      EventStartTime = coalesce(unixtime_milliseconds_todatetime(timestamp), TimeGenerated),
+      TargetUsernameType = case(
+          isempty(UserName), "",
+          UserName startswith "CN=", "DN",
+          UserName contains "@", "UPN",
+          UserName contains "\\", "Windows",
+          "Simple"),
+      TargetUserId = iff(DomainSid startswith "S-1-" and isnotnull(tolong(UserRid)), strcat(DomainSid, "-", UserRid), ""),
+      GroupId = iff(event_simpleName == "UserAccountAddedToGroup" and DomainSid startswith "S-1-" and isnotnull(tolong(GroupRid)), strcat(DomainSid, "-", GroupRid), ""),
+      DvcOs = case(event_platform == "Win", "Windows", event_platform == "Mac", "macOS", event_platform == "Lin", "Linux", ""),
+      AdditionalFields = iff(pack, bag_pack(
+          "SourceAdditionalFields", AdditionalFields,
+          "name", name,
+          "ConfigBuild", ConfigBuild,
+          "ConfigStateHash", ConfigStateHash,
+          "ContextTimeStamp", ContextTimeStamp,
+          "ContextProcessId", ContextProcessId,
+          "ContextThreadId", ContextThreadId,
+          "BoundingLimitCount", BoundingLimitCount,
+          "BoundingLimitDuration", BoundingLimitDuration,
+          "Entitlements", Entitlements,
+          "EffectiveTransmissionClass", EffectiveTransmissionClass,
+          "OciContainerId", OciContainerId,
+          "TreeId", TreeId,
+          "UserRid", UserRid,
+          "GroupRid", GroupRid,
+          "InterfaceVersion", InterfaceVersion,
+          "RpcClientThreadId", RpcClientThreadId,
+          "RpcOpNum", RpcOpNum,
+          "InterfaceGuid", InterfaceGuid,
+          "RpcClientProcessId", RpcClientProcessId,
+          "RpcNestingLevel", RpcNestingLevel,
+          "event_platform", event_platform), dynamic({}))
+  | project-rename
+      EventOriginalType = event_simpleName,
+      EventOriginalUid = CrowdStrikeId,
+      TargetUsername = UserName,
+      TargetUserScopeId = DomainSid,
+      DvcIpAddr = aip,
+      DvcId = aid,
+      DvcScopeId = cid
+  | extend
+      EventEndTime = EventStartTime,
+      EventCount = int(1),
+      EventResult = "Success",
+      EventSeverity = "Informational",
+      EventVendor = "CrowdStrike",
+      EventProduct = "Falcon Data Replicator",
+      EventSchema = "UserManagement",
+      EventSchemaVersion = "1.0.0",
+      EventUid = EventOriginalUid,
+      Dvc = coalesce(DvcId, DvcIpAddr),
+      DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+      TargetUserIdType = iff(isnotempty(TargetUserId), "SID", ""),
+      TargetUserSid = TargetUserId,
+      GroupIdType = iff(isnotempty(GroupId), "SID", ""),
+      ActorUsername = "",
+      ActorUsernameType = "",
+      ActingApplicationEntityKey = "",
+      ActorUserEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      TargetUserEntityKey = "",
+      TargetUserAdditionalIds = dynamic([]),
+      SrcSystemEntityKey = "",
+      DvcEntityKey = "",
+      AdditionalEntities = dynamic([])
+  | extend User = ActorUsername
+  | project
+      TimeGenerated, Type,
+      EventStartTime, EventEndTime, EventCount, EventType, EventResult,
+      EventSeverity, EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+      EventOriginalType, EventOriginalUid, EventUid,
+      Dvc, DvcIpAddr, DvcId, DvcIdType, DvcScopeId, DvcOs,
+      ActorUsername, ActorUsernameType, User,
+      TargetUsername, TargetUsernameType, TargetUserId, TargetUserIdType,
+      TargetUserSid, TargetUserScopeId, GroupId, GroupIdType,
+      ActingApplicationEntityKey, ActorUserEntityKey, ActorUserAdditionalIds,
+      TargetUserEntityKey, TargetUserAdditionalIds, SrcSystemEntityKey,
+      DvcEntityKey, AdditionalEntities, AdditionalFields

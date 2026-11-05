@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - CiscoISEEvent
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1fa0da3e-ec99-484f-aadb-93f59764e158
+    path: Analytic Rules/CiscoISECmdExecutionWithHighestPrivilegesNewIP.yaml
+    version: 1.0.4
+    querySha256: c89209890eb74dd2ddaae7f4a9ac698dfbf0c91c05f25b6f55aa906173b092b0
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `AccountCustomEntity`, but its
+      target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `AccountCustomEntity` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    - PrivilegeEscalation
+    - DefenseEvasion
+    - Execution
+    originalTechniques:
+    - T1133
+    - T1548
+    - T1059
+    reviewScope:
+      sourceDocumentSha256: 970054360d75efa84ad24c544ec4749705e689863720133a285b2e7189cbf8d2
+      targetQuerySha256: 43dda7d87eb3cb624bd137137b2e3abd67cae1926aef383f0c2cf845e6550884
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-1fa0da3e-ec99-484f-aadb-93f59764e158
+  displayName: CiscoISE -  Command executed with the highest privileges from new IP
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lbperiod = 14d;
+      let lbtime = 15m;
+      let knownAdminIpList =
+      CiscoISEEvent
+      | where TimeGenerated between (ago(lbperiod) .. ago(lbtime))
+      | where PrivilegeLevel == '15'
+      | summarize makelist(SrcIpAddr)
+      ;
+      CiscoISEEvent
+      | where TimeGenerated > ago(lbtime)
+      | where PrivilegeLevel == '15'
+      | where SrcIpAddr !in (knownAdminIpList)
+      | project TimeGenerated, SrcIpAddr, DstIpAddr, DstUserName, CmdSet
+      | extend AccountCustomEntity = DstUserName
+      | extend IPCustomEntity = SrcIpAddr
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: CiscoISE -  Command executed with the highest privileges from new IP
+      description: '''Detects command execution with PrivilegeLevel - 15 from new source.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1133
+      - tactic: Persistence
+        techniques:
+        - technique: T1133
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1548
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1548
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      customDetails:
+        AccountFullName: AccountCustomEntity
