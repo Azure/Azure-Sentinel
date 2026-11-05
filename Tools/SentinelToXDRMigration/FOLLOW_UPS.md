@@ -189,6 +189,20 @@ themselves establish a toolkit fix is required.
   `verdicts`, `runNumber`, `stageTimestamps`, `verdict`, `verdictReasons`,
   `overrides[]`, and `operatorHash` across `.github/workflows/npf-pr-labeler.yaml`
   and `solution_manager`.
+- **Unblock six identity/risk tables, preserve `TimeGenerated` everywhere, and
+  allow lab/connector table evidence to override static catalogs.** Changed
+  `AADProvisioningLogs`, `AADRiskyUsers`, `AADUserRiskEvents`, `ADFSSignInLogs`,
+  `RiskyUsers`, and `UserRiskEvents` to `tier: "1to1"`, removed
+  `TimeGenerated -> Timestamp` rewrites across detections and workbooks, and
+  threaded reviewed/lab/connector table evidence (`allowed_tables` /
+  `known_tables`) through dependency planning, workbook conversion, and
+  validators.
+- **Surface CI `DocumentsLinkValidation` locale failures in validation mode and
+  normalize URL verification evidence.** Extended `VAL-URL-01` and `validate`
+  mode (`validate_solution` and `validate_content`) to scan all solution text
+  files with the CI locale regex and recommend locale-stripped URLs, and
+  normalized `url` / `resolvedUrl` fields in URL verification evidence
+  (`QUAL-URL-01`).
 
 ## Candidate follow-ups
 
@@ -196,29 +210,29 @@ themselves establish a toolkit fix is required.
   lab sign-off.** Completed: `workflow-init`, `initialize_workflow`, canonical
   workflow docs, and all agent adapters now default to `qualification` with
   `authoring` preserved as an explicit offline/ISV fallback.
-- [ ] **Unblock the six explicitly blocked identity/risk tables in the mapping
+- [x] **Unblock the six explicitly blocked identity/risk tables in the mapping
   catalog.** Change `AADProvisioningLogs`, `AADRiskyUsers`, `AADUserRiskEvents`,
   `ADFSSignInLogs`, `RiskyUsers`, and `UserRiskEvents` from `tier: "blocked"` to
   `tier: "1to1"` (same-name Advanced Hunting parser support).
-- [ ] **Allow working KQL queries in Defender workbooks even when a table is not
+- [x] **Allow working KQL queries in Defender workbooks even when a table is not
   listed in the static catalog.** Ensure a missing static catalog entry never
   blocks workbook conversion, validation replay, publication, or V3.1 packaging
   when the query works in Advanced Hunting or has reviewed dependency/runtime
   evidence.
-- [ ] **Assume Sentinel table exposure in Defender XDR once the required data
+- [x] **Assume Sentinel table exposure in Defender XDR once the required data
   connector is connected.** Reflect across dependency and validation checks that
   a table belonging to the `sentinel` workload with a declared/connected data
   connector is exposed in the unified Defender XDR environment.
-- [ ] **Preserve `TimeGenerated` everywhere without rewriting to `Timestamp`.**
+- [x] **Preserve `TimeGenerated` everywhere without rewriting to `Timestamp`.**
   Remove `TimeGenerated -> Timestamp` column rewrites across detection and
   workbook conversion, catalog renames, and validators, because Defender XDR
   Advanced Hunting virtually maps `TimeGenerated` to `Timestamp` on all tables.
-- [ ] **Let live lab or Data Connector table evidence override static table
+- [x] **Let live lab or Data Connector table evidence override static table
   lists.** Treat evidence of a table in the live lab or in a solution Data
   Connector definition file (`dataTypes`) as sufficient to override static table
   catalogs, distinguishing "unknown to our offline snapshot" from "unsupported in
   this environment."
-- [ ] **Surface CI `DocumentsLinkValidation` locale failures in validation mode and recommend fixes:** Extend `VAL-URL-01` (`solution_manager/qualification/pr_check_runner.py`) and `validate` mode to scan all solution text files (including `Evidence/`, `Analytic Rules/`, `XDR Detections/`, `SolutionMetadata.json`, and `ReleaseNotes.md`) using the CI regex `/(https:\/\/docs\.microsoft\.com|https:\/\/azure\.microsoft\.com)(\/[a-z]{2}-[a-z]{2})/i` from `.script/documentsLinkValidator.ts` (and optionally `learn.microsoft.com`), surface any matches in validation mode with a recommended locale-stripped URL fix, and normalize recorded `resolvedUrl` values when generating URL verification evidence (`QUAL-URL-01`).
+- [x] **Surface CI `DocumentsLinkValidation` locale failures in validation mode and recommend fixes:** Extend `VAL-URL-01` (`solution_manager/qualification/pr_check_runner.py`) and `validate` mode to scan all solution text files (including `Evidence/`, `Analytic Rules/`, `XDR Detections/`, `SolutionMetadata.json`, and `ReleaseNotes.md`) using the CI regex `/(https:\/\/docs\.microsoft\.com|https:\/\/azure\.microsoft\.com)(\/[a-z]{2}-[a-z]{2})/i` from `.script/documentsLinkValidator.ts` (and optionally `learn.microsoft.com`), surface any matches in validation mode with a recommended locale-stripped URL fix, and normalize recorded `resolvedUrl` values when generating URL verification evidence (`QUAL-URL-01`).
 
 Any future environment write remains separately gated by explicit approval
 immediately before the exact operation. No cloud action is authorized by this

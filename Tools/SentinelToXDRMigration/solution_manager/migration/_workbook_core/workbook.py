@@ -562,7 +562,8 @@ def _parameter_source_or_call_tokens(query: str) -> set[str]:
     return {tok for tok in tokens if re.search(r"[A-Za-z0-9_]", tok)}
 
 
-def opaque_functions(query: str, *, include_bare: bool = True) -> set[str]:
+def opaque_functions(query: str, *, include_bare: bool = True,
+                     allowed_tables=()) -> set[str]:
     """Conservative callable and bare saved-function scanner across all expressions."""
     code = _stripped_code(query)
     quoted_calls, quoted_bare = _quoted_calls_and_table_sources(query)
@@ -587,7 +588,10 @@ def opaque_functions(query: str, *, include_bare: bool = True) -> set[str]:
     result |= _parameter_source_or_call_tokens(query)
     if include_bare:
         bare = _bare_source_identifiers(code) | (quoted_bare - _BUILTINS - _STATEMENT_PREFIXES - local_vars)
-        known_tables = set(migrator.mapping_catalog.load_mapping_catalog()["tables"])
+        known_tables = (
+            set(migrator.mapping_catalog.load_mapping_catalog()["tables"])
+            | {t for t in (allowed_tables or ()) if isinstance(t, str) and t}
+        )
         custom_tables = {name for name in bare if isinstance(name, str) and name.endswith("_CL")}
         result |= (bare - known_tables - custom_tables - local_vars)
     return {name for name in result if not is_standard_builtin_asim_parser(name)}
@@ -691,7 +695,7 @@ def convert_workbook(source: dict, resolutions: dict | None = None,
         reviewed_tables = (evidence.get("tables") if isinstance(evidence, dict)
                            and isinstance(evidence.get("tables"), list) else tables) or ()
         explicit_calls = opaque_functions(raw, include_bare=False)
-        opaque = opaque_functions(raw) - (
+        opaque = opaque_functions(raw, allowed_tables=allowed_tables) - (
             set(reviewed_tables) - explicit_calls - set(allowed_workspace_functions)
             - (set(evidence.get("workspaceFunctions", ()))
                if isinstance(evidence, dict) and isinstance(evidence.get("workspaceFunctions"), list)

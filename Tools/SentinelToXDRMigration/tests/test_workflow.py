@@ -3697,7 +3697,7 @@ class WorkflowTests(unittest.TestCase):
         target_query = yaml.safe_load(
             (self.solution / "XDR Detections/Rule.yaml").read_text()
         )["properties"]["queryCondition"]["queryText"]
-        self.assertIn("Timestamp >= ago(2h)", target_query)
+        self.assertIn("TimeGenerated >= ago(2h)", target_query)
 
         stages = workflow_status(self.solution)["stages"]
         self.assertEqual("blocked", stages["validation"]["status"])

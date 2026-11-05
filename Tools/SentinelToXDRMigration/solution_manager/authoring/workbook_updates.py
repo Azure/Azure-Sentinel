@@ -117,7 +117,7 @@ def _queries(document, provenance, baseline):
                                        allowed_functions=aliases, allow_sentinel=True))
             except ValueError:
                 inherited = set()
-        lineage = _query(surface, allowed_tables=declared | inherited if not native else (),
+        lineage = _query(surface, allowed_tables=declared | inherited if not native else (sentinel & connectors),
                          allowed_functions=aliases, allow_sentinel=not native,
                          include_lineage=True)
         tables = lineage["tables"]

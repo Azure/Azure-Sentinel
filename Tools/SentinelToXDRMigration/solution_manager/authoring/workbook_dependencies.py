@@ -13,7 +13,10 @@ from pathlib import Path
 import os
 import re
 
-from solution_manager.authoring.dependencies import dependency_plan, dependency_validation_errors, TABLE_WORKLOADS, telemetry_data_types
+from solution_manager.authoring.dependencies import (
+    dependency_plan, dependency_validation_errors, TABLE_WORKLOADS,
+    telemetry_data_types, data_source_tables,
+)
 from solution_manager.migration._workbook_core import workbook, mapping_catalog, migrator, rewrite
 from solution_manager.migration.workbooks import _root, _path, _document, _solution_data, _sha, _write, inventory_workbooks
 from solution_manager.authoring.workbook_functions import candidates, validate_functions, function_definition
@@ -138,6 +141,13 @@ def plan_workbook_dependencies(solution, *, results_path=None, workspace_id=None
     rows = []
     mappings = {name: value.get("ahTable") or name
                 for name, value in mapping_catalog.load_mapping_catalog()["tables"].items()}
+    connector_tables = {
+        table
+        for record in connectors
+        if isinstance(record, dict) and isinstance(record.get("dataTypes"), list)
+        for table in record["dataTypes"]
+        if isinstance(table, str) and table.strip()
+    }
     for row in inventory:
         doc = _document(_path(root, row["path"]))
         helper_entries, removed, _ = workbook._scope_parameters(doc)
@@ -164,7 +174,6 @@ def plan_workbook_dependencies(solution, *, results_path=None, workspace_id=None
             code = "".join(text if kind == "code" else " " * len(text) for kind, text in rewrite._segments(raw))
             if re.search(r"\b(?:workspace|app|resource|cluster|database)\s*\(", code, re.I):
                 blockers.append("Explicit cross-resource/scope function cannot be converted by dependency acceptance.")
-            aliases = sorted(workbook.opaque_functions(raw)) if (provider_supported and not preserved_provider) else []
             entry = entries.get((row["path"], surface["path"]))
             metadata = None
             if entry is not None:
@@ -187,7 +196,15 @@ def plan_workbook_dependencies(solution, *, results_path=None, workspace_id=None
                         for key in ("workspaceId", "workspace", "workspaceCustomerId")
                     ):
                         raise ValueError("Metadata dataSources contains cross-workspace input.")
-            proposal = dependency_plan(raw, metadata=metadata, table_mappings=mappings)
+            lab_tables = set(data_source_tables(metadata)) if metadata is not None else set()
+            aliases = (
+                sorted(workbook.opaque_functions(raw, allowed_tables=connector_tables | lab_tables))
+                if (provider_supported and not preserved_provider) else []
+            )
+            proposal = dependency_plan(
+                raw, metadata=metadata, table_mappings=mappings,
+                sentinel_tables=connector_tables | lab_tables,
+            )
             if aliases and metadata is None:
                 proposal["reviewReasons"].append("Underlying function tables need distinct exact-query or manual evidence.")
                 proposal["reviewRequired"] = True
@@ -368,6 +385,12 @@ def review_workbook_dependencies(solution, *, plan_path, decisions_path, expecte
                 sorted({
                     t
                     for r in declared_workloads
+                    if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
+                    for t in r["dataTypes"]
+                    if isinstance(t, str) and t
+                } | {
+                    t
+                    for r in declared_connectors
                     if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
                     for t in r["dataTypes"]
                     if isinstance(t, str) and t

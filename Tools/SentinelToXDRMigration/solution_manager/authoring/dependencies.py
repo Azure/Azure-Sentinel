@@ -41,6 +41,9 @@ TABLE_WORKLOADS = {
         "Syslog", "SecurityAlert", "SecurityIncident", "SecurityEvent", "WindowsEvent", "Event",
         "AzureActivity", "AzureDiagnostics", "CommonSecurityLog", "CopilotActivity", "SigninLogs", "AuditLogs",
         "OfficeActivity", "PowerBIActivity", "PowerPlatformAdminActivity", "AWSCloudTrail", "AWSGuardDuty",
+        "AADProvisioningLogs", "AADRiskyUsers", "AADUserRiskEvents", "ADFSSignInLogs",
+        "RiskyUsers", "UserRiskEvents", "AADManagedIdentitySignInLogs",
+        "AADNonInteractiveUserSignInLogs", "AADServicePrincipalSignInLogs",
     )},
 }
 
@@ -67,13 +70,21 @@ def data_source_tables(metadata: Any) -> list[str]:
     return sorted(tables)
 
 
-def resolve_data_types(query: str, metadata: Any = None) -> dict[str, Any]:
+def resolve_data_types(
+    query: str,
+    metadata: Any = None,
+    *,
+    known_tables: Any = None,
+) -> dict[str, Any]:
     returned = data_source_tables(metadata)
     if 0 < len(returned) <= 10:
         return {"method": "log-analytics", "dataTypes": returned, "returnedDataTypes": returned}
+    known = set(TABLE_WORKLOADS) | {
+        t for t in (known_tables or ()) if isinstance(t, str) and t.strip()
+    }
     tables = sorted({
         str(item["table"])
-        for item in query_table_references(query, known_tables=TABLE_WORKLOADS)
+        for item in query_table_references(query, known_tables=known)
     })
     return {
         "method": "regex",
@@ -83,14 +94,21 @@ def resolve_data_types(query: str, metadata: Any = None) -> dict[str, Any]:
     }
 
 
-def workload_records(tables: list[str]) -> tuple[list[dict[str, Any]], list[str]]:
+def workload_records(
+    tables: list[str],
+    *,
+    sentinel_tables: Any = (),
+) -> tuple[list[dict[str, Any]], list[str]]:
     grouped: dict[str, set[str]] = defaultdict(set)
     unknown = []
+    sentinel_set = {
+        t for t in (sentinel_tables or ()) if isinstance(t, str) and t.strip()
+    }
     for table in tables:
         if table in PLATFORM_REFERENCE_INPUTS:
             continue
         workload = TABLE_WORKLOADS.get(table)
-        if workload is None and table.endswith("_CL"):
+        if workload is None and (table.endswith("_CL") or table in sentinel_set):
             workload = "sentinel"
         if workload is None:
             unknown.append(table)
@@ -125,10 +143,25 @@ def dependency_plan(
     metadata: Any = None,
     connectors: Any = None,
     table_mappings: dict[str, str] | None = None,
+    sentinel_tables: Any = (),
 ) -> dict[str, Any]:
     from solution_manager.migration._workbook_core import rewrite
     source_free_literal = rewrite.is_source_free_literal_query(source_query)
-    resolution = resolve_data_types(source_query, None if source_free_literal else metadata)
+    connector_tables = {
+        table.strip()
+        for record in (connectors if isinstance(connectors, list) else [])
+        if isinstance(record, dict) and isinstance(record.get("dataTypes"), list)
+        for table in record["dataTypes"]
+        if isinstance(table, str) and table.strip()
+    }
+    sentinel_source_tables = connector_tables | {
+        t.strip() for t in (sentinel_tables or ()) if isinstance(t, str) and t.strip()
+    }
+    resolution = resolve_data_types(
+        source_query,
+        None if source_free_literal else metadata,
+        known_tables=sentinel_source_tables,
+    )
     source_types = set(resolution["dataTypes"])
     code = "".join(text if kind == "code" else " " * len(text)
                    for kind, text in rewrite._segments(source_query))
@@ -136,20 +169,18 @@ def dependency_plan(
         source_types.add("Watchlist")
     builtin_asim_parsers = extract_builtin_asim_parsers(source_query)
     if not source_types and builtin_asim_parsers and isinstance(connectors, list):
-        for record in connectors:
-            if isinstance(record, dict) and isinstance(record.get("dataTypes"), list):
-                source_types.update(
-                    table.strip() for table in record["dataTypes"]
-                    if isinstance(table, str) and table.strip()
-                )
+        source_types.update(connector_tables)
     references = sorted(source_types & PLATFORM_REFERENCE_INPUTS)
     resolution["dataTypes"] = telemetry_data_types(source_types)
     mappings = table_mappings or {}
     target_table_names = {mappings.get(table, table) for table in resolution["dataTypes"]}
+    sentinel_target_tables = {mappings.get(table, table) for table in sentinel_source_tables}
     if target_query is not None:
-        target_table_names.update(resolve_data_types(target_query)["dataTypes"])
+        target_table_names.update(
+            resolve_data_types(target_query, known_tables=sentinel_target_tables)["dataTypes"]
+        )
     target_tables = telemetry_data_types(target_table_names)
-    workloads, unknown = workload_records(target_tables)
+    workloads, unknown = workload_records(target_tables, sentinel_tables=sentinel_target_tables)
     reasons = []
     if (not source_types and not source_free_literal
             and not (builtin_asim_parsers and isinstance(connectors, list))):
@@ -230,6 +261,13 @@ def live_dependency_check(
         target_query=((document.get("properties") or {}).get("queryCondition") or {}).get("queryText"),
         connectors=(document.get("contentProvenance") or {}).get("requiredDataConnectors"),
         table_mappings=table_mappings,
+        sentinel_tables=[
+            table
+            for record in (source_connectors if isinstance(source_connectors, list) else [])
+            if isinstance(record, dict) and isinstance(record.get("dataTypes"), list)
+            for table in record["dataTypes"]
+            if isinstance(table, str)
+        ],
     )
     declared = (document.get("contentProvenance") or {}).get("requiredWorkloads") or []
     declared_pairs = {
