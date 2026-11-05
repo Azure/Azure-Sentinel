@@ -1,0 +1,101 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7d4e9f2a-8b1c-4a5d-9e3f-6c2b1a0d8e7f
+    path: Analytic Rules/BTP - User added to privileged Administrators list.yaml
+    version: 1.0.1
+    querySha256: 997e9694cb0a5e148002d935e8f63d25ec154ea8623ce4461d0b1c8232199e7e
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - LateralMovement
+    - PrivilegeEscalation
+    originalTechniques:
+    - T0859
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: ca6fd8c659ee0772f81e00d587bb50e7e531fc8321a611608a32eb67eee24fb6
+      targetQuerySha256: 431a2498c875b51dccd89915990e582dc5adeaaa47e904e15e23fff94eb2877c
+properties:
+  id: xdr-7d4e9f2a-8b1c-4a5d-9e3f-6c2b1a0d8e7f
+  displayName: SAP BTP - User added to Cloud Identity Service privileged Administrators
+    list
+  status: disabled
+  queryCondition:
+    queryText: "let monitored_permissions = dynamic([\"ManageIdP\", \"ManageSP\",\
+      \ \"ManageUsers\", \"ReadUsers\", \"ManageAccess\", \"ManageGroups\"]);\nSAPBTPAuditLog_CL\n\
+      | extend data_s = tostring(Message.data)\n| extend action = extract(@\"action=\"\
+      \"([^\"\"]+)\"\"\", 1, data_s),\n         state = extract(@\"state=\"\"([^\"\
+      \"]+)\"\"\", 1, data_s),\n         changedAttribute = extract(@\"changedAttribute=\"\
+      \"([^\"\"]+)\"\"\", 1, data_s),\n         newValue = extract(@\"newValue=\"\"\
+      ([^\"\"]+)\"\"\", 1, data_s),\n         targetUser = extract(@\"userIdentifier=\"\
+      \"([^\"\"]+)\"\"\", 1, data_s),\n         callerMail = extract(@\"callerMail=\"\
+      \"([^\"\"]+)\"\"\", 1, data_s),\n         ipAddress = extract(@\"ipAddress=\"\
+      \"([^\"\"]+)\"\"\", 1, data_s)\n| where action == \"grantPermissions\"\n| where\
+      \ state == \"successful\"\n| where changedAttribute == \"authorizations\"\n\
+      | where isnotempty(newValue)\n| mv-expand permission = monitored_permissions\n\
+      | where newValue contains tostring(permission)\n| summarize\n    GrantedPermissions\
+      \ = make_set(newValue, 10),\n    MatchedPermissions = make_set(tostring(permission),\
+      \ 10)\n    by UpdatedOn, UserName, callerMail, targetUser, Tenant, ipAddress\n\
+      | project UpdatedOn, UserName, callerMail, targetUser, GrantedPermissions, MatchedPermissions,\
+      \ Tenant, ipAddress, CloudApp = \"SAP Cloud Identity Service\"\n| extend AccountName\
+      \ = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]"
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - User added to Cloud Identity Service privileged Administrators
+        list
+      description: Identifies when a user is granted privileged administrator permissions
+        in SAP Cloud Identity Service. These permissions include managing Identity
+        Providers, Service Providers, Users, Groups, and Access controls.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+        ips:
+        - id: ip1
+          addressColumn: ipAddress
+      tactics:
+      - tactic: LateralMovement
+        techniques:
+        - technique: T0859

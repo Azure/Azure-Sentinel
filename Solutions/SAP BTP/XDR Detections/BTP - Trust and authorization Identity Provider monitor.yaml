@@ -1,0 +1,99 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 62357c23-ecdc-4edc-9349-8338063af1ef
+    path: Analytic Rules/BTP - Trust and authorization Identity Provider monitor.yaml
+    version: 3.0.6
+    querySha256: 18a3d711cfced073574a76cfba7d0be854bf3229794238899020b3bbebc3d814
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1606
+    - T1556
+    - T1134
+    reviewScope:
+      sourceDocumentSha256: e5122f139533ddfb6dc1fbb43284d8608a154957ee5d91165606606b4562a5b5
+      targetQuerySha256: 4f7bb164d0469eb6e5108debe395a7c8ed2728306f70647c32577e29ba18d354
+properties:
+  id: xdr-62357c23-ecdc-4edc-9349-8338063af1ef
+  displayName: SAP BTP - Trust and authorization Identity Provider monitor
+  status: disabled
+  queryCondition:
+    queryText: "SAPBTPAuditLog_CL\n| where isnotnull(Message.object)\n| extend Object\
+      \ = Message.object, Attributes = Message.attributes\n| where Object.type ==\
+      \ \"IdentityProvider\"\n| extend CrudType = tostring(parse_json(tostring(Object.id)).crudType)\n\
+      | mv-expand Attributes\n| extend MessageText = case(\n                     \
+      \      CrudType == \"CREATE\",\n                           \"An identity provider\
+      \ was created\",\n                           CrudType == \"UPDATE\",\n     \
+      \                      \"An identity provider was updated\",\n             \
+      \              CrudType == \"DELETE\",\n                           \"An identity\
+      \ provider was deleted\",\n                           \"Unclassified CRUD operation\
+      \ encountered\"\n                       )\n| extend NewAttributes = parse_json(replace_regex(tostring(Attributes.new),\
+      \ \"\\\\r\", \"\"))\n| extend OldAttributes = parse_json(replace_regex(tostring(Attributes.old),\
+      \ \"\\\\r\", \"\"))\n| extend IdentityProviderName = case(\n               \
+      \                     CrudType == \"CREATE\" or CrudType == \"UPDATE\",\n  \
+      \                                  NewAttributes.name,\n                   \
+      \                 CrudType == \"DELETE\",\n                                \
+      \    OldAttributes.name,\n                                    \"Unknown\"\n\
+      \                                )\n| project\n    UpdatedOn,\n    UserName,\n\
+      \    MessageText,\n    IdentityProviderName,\n    Tenant,\n    SpaceId,\n  \
+      \  CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0],\
+      \ UPNSuffix = split(UserName, \"@\")[1]"
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - Trust and authorization Identity Provider monitor
+      description: Identifies CRUD operations on Identity Provider settings within
+        a sub account.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1606
+        - technique: T1556
