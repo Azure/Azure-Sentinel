@@ -1,5 +1,9 @@
 # Changelog for ASimEmailEvent.yaml
 
+## Version 1.0.6
+
+- (2026-11-04) Added the native parser.
+
 ## Version 1.0.5
 
 - (2026-11-03) Registered the Proofpoint TAP blocked-click interaction parser with packing and watchlist disable controls - [PR #15530](https://github.com/Azure/Azure-Sentinel/pull/15530)

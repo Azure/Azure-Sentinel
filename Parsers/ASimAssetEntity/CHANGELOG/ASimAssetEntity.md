@@ -1,4 +1,8 @@
 # Changelog for ASimAssetEntity.yaml
 
+## Version 0.1.1
+
+- (2026-11-04) Added the native parser.
+
 ## Version 0.1.0
 - (2026-03-03) Added new schema Asset Entity
