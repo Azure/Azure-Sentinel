@@ -11,12 +11,10 @@ contentProvenance:
   requiredWorkloads:
   - workload: sentinel
     dataTypes:
-    - TomcatEvent
     - Tomcat_CL
   requiredDataConnectors:
   - connectorId: CustomLogsAma
     dataTypes:
-    - TomcatEvent
     - Tomcat_CL
   dependencyReviewRequired: false
   source:
@@ -49,7 +47,7 @@ contentProvenance:
     - T1133
     reviewScope:
       sourceDocumentSha256: ef96ecacd9f373384fb8d4402c99976c8b3f3513b1d2c1fec764bab64ba9063b
-      targetQuerySha256: 01dbca3bebcada5abd826fbd49ee94cea059360e7b4c143340b1ffea05d3db55
+      targetQuerySha256: 701a533b652ce408c14c54192a071bb0076e9d65ad34671ae65525730189b832
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -67,37 +65,16 @@ contentProvenance:
       timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
       aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
       sourceDocumentSha256: ef96ecacd9f373384fb8d4402c99976c8b3f3513b1d2c1fec764bab64ba9063b
-      targetQuerySha256: 01dbca3bebcada5abd826fbd49ee94cea059360e7b4c143340b1ffea05d3db55
+      targetQuerySha256: 701a533b652ce408c14c54192a071bb0076e9d65ad34671ae65525730189b832
 properties:
   id: xdr-103d5ada-4874-11ec-81d3-0242ac130003
   displayName: Tomcat - Put file and get file from same IP address
   status: disabled
   queryCondition:
-    queryText: 'let p = TomcatEvent
-
-      | where HttpRequestMethod in~ (''POST'', ''PUT'')
-
-      | sort by EventStartTime asc
-
-      | summarize post_time=min(EventStartTime) by SrcIpAddr, tostring(UrlOriginal);
-
-      TomcatEvent
-
-      | where HttpRequestMethod =~ ''GET''
-
-      | sort by EventStartTime asc
-
-      | summarize get_time=min(EventStartTime) by SrcIpAddr, tostring(UrlOriginal)
-
-      | join kind=innerunique (p) on UrlOriginal, SrcIpAddr
-
-      | extend second = datetime_diff(''second'',get_time,post_time)
-
-      | where second between (1 .. 300)
-
-      | project second, post_time, get_time, SrcIpAddr, UrlOriginal
-
-      | extend IPCustomEntity = SrcIpAddr, UrlCustomEntity = tostring(UrlOriginal)'
+    queryText: "// TomcatEvent parser inlined: Defender XDR Custom Detections cannot be enabled when the query calls a workspace function.\nlet tomcat_accesslog_events = () {\n    Tomcat_CL\n    | where RawData matches regex @'(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}).*\\[.*\\]\\s\\\"(GET|POST).*?\\\"\\s([1-5][0-9]{2})\\s(\\d+|-)(?:\\s\\\"(.*?)\\\")?(?:\\s\\\"(.*?)\\\")?.*'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'AccessLog'\n    | extend EventData = split(RawData, '\"')\n    | extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')\n    | extend SubEventData1 = split(EventData[1], ' ')\n    | extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')\n    | extend SrcIpAddr = tostring(SubEventData0[0])\n    | extend ClientIdentity = SubEventData0[1]\n    | extend SrcUserName = SubEventData0[2]\n    | extend EventStartTime = todatetime(replace(@'\\/', @'-', replace(@'(\\d{2}\\/\\w{3}\\/\\d{4}):(\\\
+      d{2}\\:\\d{2}\\:\\d{2})', @'\\1 \\2', extract(@'\\[(.*?)[-+]\\d+\\]', 1, RawData))))\n    | extend HttpRequestMethod = SubEventData1[0]\n    | extend UrlOriginal = SubEventData1[1]\n    | extend HttpVersion = SubEventData1[2]\n    | extend HttpStatusCode = SubEventData2[0]\n    | extend HttpResponseBodyBytes = SubEventData2[1]\n    | extend HttpReferrerOriginal = EventData[3]\n    | extend HttpUserAgentOriginal = EventData[5]\n};\nlet tomcat_catalina_event1 = () {\n    Tomcat_CL\n    | where RawData matches regex @'\\A\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM)\\sorg.*'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'CatalinaLog'\n    | extend EventStartTime = todatetime(replace(@',', '', extract(@'\\A(\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM))', 0, RawData)))\n    | extend ClassName = extract(@'(PM|AM)\\s(.*?)\\s', 2, RawData)\n    | extend DvcAction = extract(@'(PM|AM)\\sorg.*?\\s(\\S+)', 2, RawData)\n};\nlet tomcat_catalina_event2 = () {\n    Tomcat_CL\n\
+      \    | where RawData matches regex @'\\A(INFO|WARN|ERROR|DEBUG):\\s'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'CatalinaLog'\n    | extend EventSeverity = extract(@'(INFO|ERROR|WARN|DEBUG)', 1, RawData)\n    | extend EventMessage = extract(@'(INFO|ERROR|WARN|DEBUG):\\s(.*)', 2, RawData)\n};\nlet _TomcatEvent = union isfuzzy=true tomcat_accesslog_events, tomcat_catalina_event1, tomcat_catalina_event2\n    | project TimeGenerated, EventProduct, EventType, EventSeverity, EventStartTime, SrcIpAddr, ClientIdentity, SrcUserName, HttpRequestMethod, UrlOriginal, HttpVersion, HttpStatusCode, HttpResponseBodyBytes, HttpReferrerOriginal, HttpUserAgentOriginal, ClassName, DvcAction, EventMessage;\nlet p = _TomcatEvent\n| where HttpRequestMethod in~ ('POST', 'PUT')\n| sort by EventStartTime asc\n| summarize post_time=min(EventStartTime) by SrcIpAddr, tostring(UrlOriginal);\n_TomcatEvent\n| where HttpRequestMethod =~ 'GET'\n| sort by EventStartTime asc\n| summarize get_time=min(EventStartTime)\
+      \ by SrcIpAddr, tostring(UrlOriginal)\n| join kind=innerunique (p) on UrlOriginal, SrcIpAddr\n| extend second = datetime_diff('second',get_time,post_time)\n| where second between (1 .. 300)\n| project second, post_time, get_time, SrcIpAddr, UrlOriginal\n| extend IPCustomEntity = SrcIpAddr, UrlCustomEntity = tostring(UrlOriginal)"
   schedule:
     frequency: PT1H
   detectionAction:

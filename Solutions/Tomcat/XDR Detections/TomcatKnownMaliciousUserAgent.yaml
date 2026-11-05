@@ -11,12 +11,10 @@ contentProvenance:
   requiredWorkloads:
   - workload: sentinel
     dataTypes:
-    - TomcatEvent
     - Tomcat_CL
   requiredDataConnectors:
   - connectorId: CustomLogsAma
     dataTypes:
-    - TomcatEvent
     - Tomcat_CL
   dependencyReviewRequired: false
   source:
@@ -52,7 +50,7 @@ contentProvenance:
     - T1133
     reviewScope:
       sourceDocumentSha256: 801aeba12b31b2a97fa6ef7b1a630b4b58c670215fceaa2b3eb40c2b56f47070
-      targetQuerySha256: 0af0ab236ba25dc6164aad52ddf43918b604d737c1b06230e72f1295f22c75a3
+      targetQuerySha256: 34f336fb60d3635d0fe8d5b9770ee5b3a6c68de34b314e8ed290d7d4ab6e228e
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -70,7 +68,7 @@ contentProvenance:
       timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
       aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on Defender XDR alert deduplication across hourly runs.
       sourceDocumentSha256: 801aeba12b31b2a97fa6ef7b1a630b4b58c670215fceaa2b3eb40c2b56f47070
-      targetQuerySha256: 0af0ab236ba25dc6164aad52ddf43918b604d737c1b06230e72f1295f22c75a3
+      targetQuerySha256: 34f336fb60d3635d0fe8d5b9770ee5b3a6c68de34b314e8ed290d7d4ab6e228e
     supplementalEntityDetails:
     - entityType: Malware
       entityIndex: 1
@@ -84,14 +82,11 @@ properties:
   displayName: Tomcat - Known malicious user agent
   status: disabled
   queryCondition:
-    queryText: 'let malicious_ua = dynamic([''Nikto'', ''hydra'', ''.nasl'', ''absinthe'', ''advanced email extractor'', ''arachni'', ''autogetcontent'', ''bilbo'', ''BFAC'', ''brutus'', ''brutus/aet'', ''bsqlbf'', ''cgichk'', ''cisco-torch'', ''commix'', ''core-project'', ''crimscanner'', ''datacha0s'', ''dirbuster'', ''domino hunter'', ''dotdotpwn'', ''email extractor'', ''fhscan core'', ''floodgate'', ''get-minimal'', ''gootkit auto-rooter scanner'', ''grabber'', ''grendel-scan'', ''havij'', ''inspath'', ''internet ninja'', ''jaascois'', ''zmeu'', ''masscan'', ''metis'', ''morfeus'', ''mysqloit'', ''n-stealth'', ''nessus'', ''netsparker'', ''nmap nse'', ''nmap scripting engine'', ''nmap-nse'', ''nsauditor'', ''openvas'', ''pangolin'', ''paros'', ''pmafind'', ''prog.customcrawler'', ''qualys was'', ''s.t.a.l.k.e.r.'', ''security scan'', ''springenwerk'', ''sql power injector'', ''sqlmap'', ''sqlninja'', ''teh forest lobster'', ''this is an exploit'', ''toata dragostea'', ''toata dragostea
-      mea pentru diavola'', ''uil2pn'', ''vega'', ''voideye'', ''w3af.sf.net'', ''w3af.sourceforge.net'', ''w3af.org'', ''webbandit'', ''webinspect'', ''webshag'', ''webtrends security analyzer'', ''webvulnscan'', ''whatweb'', ''whcc'', ''wordpress hash grabber'', ''xmlrpc exploit'', ''WPScan'', ''XSpider'', ''SF/'', ''FooBar/42'', ''ScanAlert'', ''Webscanner'', ''Webster'', ''fantomCrew'', ''fantomBrowser'', ''visvo'', ''magereport'', ''ltx71'', ''websiteprotection'', ''BigCliqueBOT'', ''BOT for JCE'']);
-
-      TomcatEvent
-
-      | where HttpUserAgentOriginal has_any (malicious_ua)
-
-      | extend MalwareCustomEntity = HttpUserAgentOriginal, IPCustomEntity = SrcIpAddr'
+    queryText: "// TomcatEvent parser inlined: Defender XDR Custom Detections cannot be enabled when the query calls a workspace function.\nlet tomcat_accesslog_events = () {\n    Tomcat_CL\n    | where RawData matches regex @'(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}).*\\[.*\\]\\s\\\"(GET|POST).*?\\\"\\s([1-5][0-9]{2})\\s(\\d+|-)(?:\\s\\\"(.*?)\\\")?(?:\\s\\\"(.*?)\\\")?.*'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'AccessLog'\n    | extend EventData = split(RawData, '\"')\n    | extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')\n    | extend SubEventData1 = split(EventData[1], ' ')\n    | extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')\n    | extend SrcIpAddr = tostring(SubEventData0[0])\n    | extend ClientIdentity = SubEventData0[1]\n    | extend SrcUserName = SubEventData0[2]\n    | extend EventStartTime = todatetime(replace(@'\\/', @'-', replace(@'(\\d{2}\\/\\w{3}\\/\\d{4}):(\\\
+      d{2}\\:\\d{2}\\:\\d{2})', @'\\1 \\2', extract(@'\\[(.*?)[-+]\\d+\\]', 1, RawData))))\n    | extend HttpRequestMethod = SubEventData1[0]\n    | extend UrlOriginal = SubEventData1[1]\n    | extend HttpVersion = SubEventData1[2]\n    | extend HttpStatusCode = SubEventData2[0]\n    | extend HttpResponseBodyBytes = SubEventData2[1]\n    | extend HttpReferrerOriginal = EventData[3]\n    | extend HttpUserAgentOriginal = EventData[5]\n};\nlet tomcat_catalina_event1 = () {\n    Tomcat_CL\n    | where RawData matches regex @'\\A\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM)\\sorg.*'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'CatalinaLog'\n    | extend EventStartTime = todatetime(replace(@',', '', extract(@'\\A(\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM))', 0, RawData)))\n    | extend ClassName = extract(@'(PM|AM)\\s(.*?)\\s', 2, RawData)\n    | extend DvcAction = extract(@'(PM|AM)\\sorg.*?\\s(\\S+)', 2, RawData)\n};\nlet tomcat_catalina_event2 = () {\n    Tomcat_CL\n\
+      \    | where RawData matches regex @'\\A(INFO|WARN|ERROR|DEBUG):\\s'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'CatalinaLog'\n    | extend EventSeverity = extract(@'(INFO|ERROR|WARN|DEBUG)', 1, RawData)\n    | extend EventMessage = extract(@'(INFO|ERROR|WARN|DEBUG):\\s(.*)', 2, RawData)\n};\nlet _TomcatEvent = union isfuzzy=true tomcat_accesslog_events, tomcat_catalina_event1, tomcat_catalina_event2\n    | project TimeGenerated, EventProduct, EventType, EventSeverity, EventStartTime, SrcIpAddr, ClientIdentity, SrcUserName, HttpRequestMethod, UrlOriginal, HttpVersion, HttpStatusCode, HttpResponseBodyBytes, HttpReferrerOriginal, HttpUserAgentOriginal, ClassName, DvcAction, EventMessage;\nlet malicious_ua = dynamic(['Nikto', 'hydra', '.nasl', 'absinthe', 'advanced email extractor', 'arachni', 'autogetcontent', 'bilbo', 'BFAC', 'brutus', 'brutus/aet', 'bsqlbf', 'cgichk', 'cisco-torch', 'commix', 'core-project', 'crimscanner', 'datacha0s', 'dirbuster', 'domino hunter',\
+      \ 'dotdotpwn', 'email extractor', 'fhscan core', 'floodgate', 'get-minimal', 'gootkit auto-rooter scanner', 'grabber', 'grendel-scan', 'havij', 'inspath', 'internet ninja', 'jaascois', 'zmeu', 'masscan', 'metis', 'morfeus', 'mysqloit', 'n-stealth', 'nessus', 'netsparker', 'nmap nse', 'nmap scripting engine', 'nmap-nse', 'nsauditor', 'openvas', 'pangolin', 'paros', 'pmafind', 'prog.customcrawler', 'qualys was', 's.t.a.l.k.e.r.', 'security scan', 'springenwerk', 'sql power injector', 'sqlmap', 'sqlninja', 'teh forest lobster', 'this is an exploit', 'toata dragostea', 'toata dragostea mea pentru diavola', 'uil2pn', 'vega', 'voideye', 'w3af.sf.net', 'w3af.sourceforge.net', 'w3af.org', 'webbandit', 'webinspect', 'webshag', 'webtrends security analyzer', 'webvulnscan', 'whatweb', 'whcc', 'wordpress hash grabber', 'xmlrpc exploit', 'WPScan', 'XSpider', 'SF/', 'FooBar/42', 'ScanAlert', 'Webscanner', 'Webster', 'fantomCrew', 'fantomBrowser', 'visvo', 'magereport', 'ltx71', 'websiteprotection',\
+      \ 'BigCliqueBOT', 'BOT for JCE']);\n_TomcatEvent\n| where HttpUserAgentOriginal has_any (malicious_ua)\n| extend MalwareCustomEntity = HttpUserAgentOriginal, IPCustomEntity = SrcIpAddr"
   schedule:
     frequency: PT1H
   detectionAction:

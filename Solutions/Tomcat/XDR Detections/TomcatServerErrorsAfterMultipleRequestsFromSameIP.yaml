@@ -11,12 +11,10 @@ contentProvenance:
   requiredWorkloads:
   - workload: sentinel
     dataTypes:
-    - TomcatEvent
     - Tomcat_CL
   requiredDataConnectors:
   - connectorId: CustomLogsAma
     dataTypes:
-    - TomcatEvent
     - Tomcat_CL
   dependencyReviewRequired: false
   source:
@@ -52,7 +50,7 @@ contentProvenance:
     - T1133
     reviewScope:
       sourceDocumentSha256: 343ea406e792519dc3d971f689ca9baa11e6d56ca13960a172a4bda9791dcb87
-      targetQuerySha256: 754bc808691c3f31549b8a6a7be5c3c99cd7d65edda9d4fed08af81f0ee09bb8
+      targetQuerySha256: 606ed84d840f5d7eae348e1a0e60bbb281dffc73a8da981f8daffbaadedb0370
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -70,45 +68,16 @@ contentProvenance:
       timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
       aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
       sourceDocumentSha256: 343ea406e792519dc3d971f689ca9baa11e6d56ca13960a172a4bda9791dcb87
-      targetQuerySha256: 754bc808691c3f31549b8a6a7be5c3c99cd7d65edda9d4fed08af81f0ee09bb8
+      targetQuerySha256: 606ed84d840f5d7eae348e1a0e60bbb281dffc73a8da981f8daffbaadedb0370
 properties:
   id: xdr-875da588-4875-11ec-81d3-0242ac130003
   displayName: Tomcat - Server errors after multiple requests from same IP
   status: disabled
   queryCondition:
-    queryText: 'let multi_errors = TomcatEvent
-
-      | where toint(HttpStatusCode) >= 500 and toint(HttpStatusCode) <= 599
-
-      | sort by EventStartTime asc
-
-      | summarize MultipleServerErrors = count() by SrcIpAddr, bin(EventStartTime, 5m)
-
-      | where MultipleServerErrors > 10;
-
-      let error_time_table = TomcatEvent
-
-      | where toint(HttpStatusCode) >= 500 and toint(HttpStatusCode) <= 599
-
-      | summarize error_time=min(EventStartTime) by SrcIpAddr
-
-      | join kind=innerunique (multi_errors) on SrcIpAddr;
-
-      TomcatEvent
-
-      | where toint(HttpStatusCode) >= 100 and toint(HttpStatusCode) <= 399
-
-      | summarize success_time=max(EventStartTime) by SrcIpAddr
-
-      | join kind=innerunique (error_time_table) on SrcIpAddr
-
-      | extend time_between_error_and_success = datetime_diff(''second'', error_time, success_time)
-
-      | where time_between_error_and_success between (1 .. 300)
-
-      | project time_between_error_and_success, error_time, success_time, SrcIpAddr
-
-      | extend IPCustomEntity = SrcIpAddr'
+    queryText: "// TomcatEvent parser inlined: Defender XDR Custom Detections cannot be enabled when the query calls a workspace function.\nlet tomcat_accesslog_events = () {\n    Tomcat_CL\n    | where RawData matches regex @'(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}).*\\[.*\\]\\s\\\"(GET|POST).*?\\\"\\s([1-5][0-9]{2})\\s(\\d+|-)(?:\\s\\\"(.*?)\\\")?(?:\\s\\\"(.*?)\\\")?.*'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'AccessLog'\n    | extend EventData = split(RawData, '\"')\n    | extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')\n    | extend SubEventData1 = split(EventData[1], ' ')\n    | extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')\n    | extend SrcIpAddr = tostring(SubEventData0[0])\n    | extend ClientIdentity = SubEventData0[1]\n    | extend SrcUserName = SubEventData0[2]\n    | extend EventStartTime = todatetime(replace(@'\\/', @'-', replace(@'(\\d{2}\\/\\w{3}\\/\\d{4}):(\\\
+      d{2}\\:\\d{2}\\:\\d{2})', @'\\1 \\2', extract(@'\\[(.*?)[-+]\\d+\\]', 1, RawData))))\n    | extend HttpRequestMethod = SubEventData1[0]\n    | extend UrlOriginal = SubEventData1[1]\n    | extend HttpVersion = SubEventData1[2]\n    | extend HttpStatusCode = SubEventData2[0]\n    | extend HttpResponseBodyBytes = SubEventData2[1]\n    | extend HttpReferrerOriginal = EventData[3]\n    | extend HttpUserAgentOriginal = EventData[5]\n};\nlet tomcat_catalina_event1 = () {\n    Tomcat_CL\n    | where RawData matches regex @'\\A\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM)\\sorg.*'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'CatalinaLog'\n    | extend EventStartTime = todatetime(replace(@',', '', extract(@'\\A(\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM))', 0, RawData)))\n    | extend ClassName = extract(@'(PM|AM)\\s(.*?)\\s', 2, RawData)\n    | extend DvcAction = extract(@'(PM|AM)\\sorg.*?\\s(\\S+)', 2, RawData)\n};\nlet tomcat_catalina_event2 = () {\n    Tomcat_CL\n\
+      \    | where RawData matches regex @'\\A(INFO|WARN|ERROR|DEBUG):\\s'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'CatalinaLog'\n    | extend EventSeverity = extract(@'(INFO|ERROR|WARN|DEBUG)', 1, RawData)\n    | extend EventMessage = extract(@'(INFO|ERROR|WARN|DEBUG):\\s(.*)', 2, RawData)\n};\nlet _TomcatEvent = union isfuzzy=true tomcat_accesslog_events, tomcat_catalina_event1, tomcat_catalina_event2\n    | project TimeGenerated, EventProduct, EventType, EventSeverity, EventStartTime, SrcIpAddr, ClientIdentity, SrcUserName, HttpRequestMethod, UrlOriginal, HttpVersion, HttpStatusCode, HttpResponseBodyBytes, HttpReferrerOriginal, HttpUserAgentOriginal, ClassName, DvcAction, EventMessage;\nlet multi_errors = _TomcatEvent\n| where toint(HttpStatusCode) >= 500 and toint(HttpStatusCode) <= 599\n| sort by EventStartTime asc\n| summarize MultipleServerErrors = count() by SrcIpAddr, bin(EventStartTime, 5m)\n| where MultipleServerErrors > 10;\nlet error_time_table = _TomcatEvent\n\
+      | where toint(HttpStatusCode) >= 500 and toint(HttpStatusCode) <= 599\n| summarize error_time=min(EventStartTime) by SrcIpAddr\n| join kind=innerunique (multi_errors) on SrcIpAddr;\n_TomcatEvent\n| where toint(HttpStatusCode) >= 100 and toint(HttpStatusCode) <= 399\n| summarize success_time=max(EventStartTime) by SrcIpAddr\n| join kind=innerunique (error_time_table) on SrcIpAddr\n| extend time_between_error_and_success = datetime_diff('second', error_time, success_time)\n| where time_between_error_and_success between (1 .. 300)\n| project time_between_error_and_success, error_time, success_time, SrcIpAddr\n| extend IPCustomEntity = SrcIpAddr"
   schedule:
     frequency: PT1H
   detectionAction:

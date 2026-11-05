@@ -11,12 +11,10 @@ contentProvenance:
   requiredWorkloads:
   - workload: sentinel
     dataTypes:
-    - TomcatEvent
     - Tomcat_CL
   requiredDataConnectors:
   - connectorId: CustomLogsAma
     dataTypes:
-    - TomcatEvent
     - Tomcat_CL
   dependencyReviewRequired: false
   source:
@@ -48,7 +46,7 @@ contentProvenance:
     - T1190
     reviewScope:
       sourceDocumentSha256: bb918dda8a71e936f46a8ec3cc422fd917451e9f0cfd6cb7d8a1f37d0430d83a
-      targetQuerySha256: 83afc9ca3d18d263189812e1ca26d54dec042a8205f210a711cd36c09b049145
+      targetQuerySha256: cecbcdd31d43fa9cc5769b5cddf6af3b72678a6b9ef8a7e5dc024be98596d95e
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -66,19 +64,15 @@ contentProvenance:
       timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
       aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on Defender XDR alert deduplication across hourly runs.
       sourceDocumentSha256: bb918dda8a71e936f46a8ec3cc422fd917451e9f0cfd6cb7d8a1f37d0430d83a
-      targetQuerySha256: 83afc9ca3d18d263189812e1ca26d54dec042a8205f210a711cd36c09b049145
+      targetQuerySha256: cecbcdd31d43fa9cc5769b5cddf6af3b72678a6b9ef8a7e5dc024be98596d95e
 properties:
   id: xdr-ce84741e-4875-11ec-81d3-0242ac130003
   displayName: Tomcat - Sql injection patterns
   status: disabled
   queryCondition:
-    queryText: 'let commands = dynamic(["1/*''*/", "1''||''asd''||''", "''1''=''1", "1'' or ''1''=''1", "1 or 1=1", "1=1", "1/*!1111''*/", "''or''''=''"]);
-
-      TomcatEvent
-
-      | where UrlOriginal has_any (commands)
-
-      | extend UrlCustomEntity = UrlOriginal, IPCustomEntity = SrcIpAddr'
+    queryText: "// TomcatEvent parser inlined: Defender XDR Custom Detections cannot be enabled when the query calls a workspace function.\nlet tomcat_accesslog_events = () {\n    Tomcat_CL\n    | where RawData matches regex @'(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}).*\\[.*\\]\\s\\\"(GET|POST).*?\\\"\\s([1-5][0-9]{2})\\s(\\d+|-)(?:\\s\\\"(.*?)\\\")?(?:\\s\\\"(.*?)\\\")?.*'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'AccessLog'\n    | extend EventData = split(RawData, '\"')\n    | extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')\n    | extend SubEventData1 = split(EventData[1], ' ')\n    | extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')\n    | extend SrcIpAddr = tostring(SubEventData0[0])\n    | extend ClientIdentity = SubEventData0[1]\n    | extend SrcUserName = SubEventData0[2]\n    | extend EventStartTime = todatetime(replace(@'\\/', @'-', replace(@'(\\d{2}\\/\\w{3}\\/\\d{4}):(\\\
+      d{2}\\:\\d{2}\\:\\d{2})', @'\\1 \\2', extract(@'\\[(.*?)[-+]\\d+\\]', 1, RawData))))\n    | extend HttpRequestMethod = SubEventData1[0]\n    | extend UrlOriginal = SubEventData1[1]\n    | extend HttpVersion = SubEventData1[2]\n    | extend HttpStatusCode = SubEventData2[0]\n    | extend HttpResponseBodyBytes = SubEventData2[1]\n    | extend HttpReferrerOriginal = EventData[3]\n    | extend HttpUserAgentOriginal = EventData[5]\n};\nlet tomcat_catalina_event1 = () {\n    Tomcat_CL\n    | where RawData matches regex @'\\A\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM)\\sorg.*'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'CatalinaLog'\n    | extend EventStartTime = todatetime(replace(@',', '', extract(@'\\A(\\w+\\s\\d+,\\s\\d{4}\\s\\d+:\\d+:\\d+\\s(PM|AM))', 0, RawData)))\n    | extend ClassName = extract(@'(PM|AM)\\s(.*?)\\s', 2, RawData)\n    | extend DvcAction = extract(@'(PM|AM)\\sorg.*?\\s(\\S+)', 2, RawData)\n};\nlet tomcat_catalina_event2 = () {\n    Tomcat_CL\n\
+      \    | where RawData matches regex @'\\A(INFO|WARN|ERROR|DEBUG):\\s'\n    | extend EventProduct = 'Tomcat'\n    | extend EventType = 'CatalinaLog'\n    | extend EventSeverity = extract(@'(INFO|ERROR|WARN|DEBUG)', 1, RawData)\n    | extend EventMessage = extract(@'(INFO|ERROR|WARN|DEBUG):\\s(.*)', 2, RawData)\n};\nlet _TomcatEvent = union isfuzzy=true tomcat_accesslog_events, tomcat_catalina_event1, tomcat_catalina_event2\n    | project TimeGenerated, EventProduct, EventType, EventSeverity, EventStartTime, SrcIpAddr, ClientIdentity, SrcUserName, HttpRequestMethod, UrlOriginal, HttpVersion, HttpStatusCode, HttpResponseBodyBytes, HttpReferrerOriginal, HttpUserAgentOriginal, ClassName, DvcAction, EventMessage;\nlet commands = dynamic([\"1/*'*/\", \"1'||'asd'||'\", \"'1'='1\", \"1' or '1'='1\", \"1 or 1=1\", \"1=1\", \"1/*!1111'*/\", \"'or''='\"]);\n_TomcatEvent\n| where UrlOriginal has_any (commands)\n| extend UrlCustomEntity = UrlOriginal, IPCustomEntity = SrcIpAddr"
   schedule:
     frequency: PT1H
   detectionAction:
