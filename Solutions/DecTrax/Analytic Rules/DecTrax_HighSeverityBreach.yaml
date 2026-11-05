@@ -1,0 +1,42 @@
+id: 3d6b7978-8318-4217-b765-b10853f65b81
+name: DECTRAX - High Severity Honeypot Breach Detected
+description: |
+  'Identifies critical exploitation attempts, unauthorized shell breakouts, or high-severity attacks intercepted by DECTRAX active deception honeypot sensors.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: DecTraxDefinition
+    dataTypes:
+      - DECTRAXThreats_CL
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+  - LateralMovement
+relevantTechniques:
+  - T1190
+  - T1078
+  - T1021
+query: |
+  DECTRAXThreats_CL
+  | where TimeGenerated >= ago(1h)
+  | where toint(Severity_d) >= 8 or toint(Severity_s) >= 8 or Signature_s has_any ('RCE', 'Exploit', 'Breakout', 'Rootkit', 'Unauthorized Access', 'Privilege Escalation')
+  | extend IPCustomEntity = coalesce(SourceIP_s, tostring(column_ifexists('ip_s', '')))
+  | extend HostCustomEntity = coalesce(NodeID_s, tostring(column_ifexists('node_id_s', '')))
+  | extend ProtocolCustom = coalesce(Protocol_s, tostring(column_ifexists('protocol_s', '')))
+  | extend PortCustom = coalesce(tostring(DestinationPort_d), tostring(column_ifexists('port_d', '')))
+  | project TimeGenerated, IPCustomEntity, HostCustomEntity, ProtocolCustom, PortCustom, Signature_s, Severity_s, SourceCountry_s, SourceCity_s, URL_s, Platform_s
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.0
+kind: Scheduled
