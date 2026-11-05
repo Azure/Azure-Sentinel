@@ -2,7 +2,7 @@
 
 ## Version 1.0.6
 
-- (2026-11-04) Added the native parser.
+- (2026-11-04) Added the native parser - [PR #15556](https://github.com/Azure/Azure-Sentinel/pull/15556)
 
 ## Version 1.0.5
 
