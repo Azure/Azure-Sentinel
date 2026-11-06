@@ -157,8 +157,10 @@ $tests = [ordered]@{
     }
     'RBAC mode allows both choices and defaults only at the outer boundary' = {
         $outerParameter = Get-EventGridRbacModeParameter -IncludeDefault
+        Assert-Equal $outerParameter.type 'securestring'
         Assert-Equal $outerParameter.allowedValues @('CreateRoleAssignment', 'UseExistingRoleAssignment')
         Assert-Equal $outerParameter.defaultValue 'CreateRoleAssignment'
+        Assert-Equal $inner.parameters.eventGridRbacMode.type 'securestring'
         Assert-Equal $inner.parameters.eventGridRbacMode.allowedValues $outerParameter.allowedValues
         Assert-Equal $inner.parameters.eventGridRbacMode.ContainsKey('defaultValue') $false
         Assert-Equal $senderDeployment.condition "[[equals(parameters('eventGridRbacMode'), 'CreateRoleAssignment')]"
@@ -176,7 +178,10 @@ $tests = [ordered]@{
     }
     'Folder filtering is optional and uses a complete container/blob prefix' = {
         Assert-Equal $managed.properties.parameters.blobFolderName.value "[[parameters('blobFolderName')]"
+        Assert-Equal $inner.parameters.StorageAccountLocation.type 'securestring'
+        Assert-Equal $inner.parameters.blobFolderName.type 'securestring'
         Assert-Equal $inner.parameters.blobFolderName.defaultValue ''
+        Assert-Equal $topicTemplate.parameters.StorageAccountLocation.type 'securestring'
         Assert-Equal $subscription.properties.filter.subjectBeginsWith "[[format('{0}/{1}/blobs/{2}', '/blobServices/default/containers', variables('blobContainerName'), if(empty(parameters('blobFolderName')), '', concat(parameters('blobFolderName'),'/')))]"
     }
     'Managed collectors do not create Sentinel collector grants; service-principal collectors retain them' = {
@@ -311,7 +316,7 @@ $tests['CCF packaging preserves source content, optional parameters and both col
             $connector = Get-OnlyResource $connectionTemplate 'Microsoft.OperationalInsights/workspaces/providers/dataConnectors'
             Assert-Equal $connector.properties.auth.type $authType
             if ($authType -eq 'ManagedServicePrincipal') {
-                Assert-Equal $connector.properties.connectorDefinitionName "[[parameters('connectorDefinitionName')]"
+                Assert-Equal $connector.properties.connectorDefinitionName $sourceDefinition.properties.connectorUiConfig.id
             }
             Assert-Equal $connector.ContainsKey('eventGridUseManagedIdentity') $false
             Assert-Equal $connector.ContainsKey('eventGridAdvancedFilters') $false
