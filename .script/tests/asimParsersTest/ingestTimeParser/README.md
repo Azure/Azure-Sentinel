@@ -72,6 +72,16 @@ QTP execution and parity also fail the target when they run and fail.
 Parser ingestion is reported as passed only when both upload and target
 visibility pass.
 
+Before creating the optional raw-replay DCR, the harness queries
+`SourceRawTable | take 0` for destination column types. It casts fixture
+columns whose input types differ from the destination, including string IDs
+to `guid` with `toguid`. DCR input declarations and the immutable fixture
+remain unchanged; matching columns keep the pass-through transform.
+Unavailable or invalid destination metadata follows the existing replay
+setup warning path and blocks QTP/parity. The parser DCR is unaffected.
+Fixture GUID values must be valid GUID strings: `toguid` converts malformed
+values to null, so type alignment alone cannot repair invalid sample IDs.
+
 Before ASIM data testing, the `ASimDnsActivityLogs` table slice normalizes
 `ThreatFirstReportedTime` and `ThreatLastReportedTime` to `datetime` and
 `ThreatOriginalRiskLevel` to `string`. This accommodates the documented
