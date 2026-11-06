@@ -149,6 +149,10 @@ BeforeAll {
 
         $content = $script:workbookItems[$ItemName].content
         $query = $content.query
+        $allocation = Get-QueryExpression -Query $query -Pattern 'extend BinCoveredQuantity = (?<expression>[^|]+)'
+        if ($allocation.Trim() -ne 'CoveredQuantity * ((min_of(BinStart + timeGrain, CoveredEnd) - max_of(BinStart, CoveredStart)) / (CoveredEnd - CoveredStart))') {
+            throw 'Trend queries must prorate each clipped source interval across its intersecting bins.'
+        }
         $startUtc = $Start.ToUniversalTime()
         $endUtc = $End.ToUniversalTime()
         $grain = Get-FixtureTimeGrain -Query $query -Duration ($endUtc - $startUtc)
@@ -194,6 +198,10 @@ BeforeAll {
         $dailyPipeline = '(?s)mv-expand GrantDay = range\(startofday\(OverlapStart\), startofday\(OverlapEnd\), 1d\).*summarize DailyEligibleGB = sum\(CoveredQuantity\) / 1000\.0 by GrantDay.*summarize sum\(min_of\(DailyEligibleGB, dailyGrantGB \* CoveredDays\)\)'
         if ($Query -notmatch $dailyPipeline) {
             throw 'The embedded query must allocate clipped source intervals across UTC days and prorate each cap.'
+        }
+        $dayCoverage = Get-QueryExpression -Query $Query -Pattern 'extend CoveredDays = (?<expression>[^|]+)'
+        if ($dayCoverage.Trim() -ne '(min_of(GrantDay + 1d, selectedEnd) - max_of(GrantDay, selectedStart)) / 1d') {
+            throw 'Grant queries must cap each UTC day using only its selected duration.'
         }
         if ($Query -notmatch 'TimeGenerated >= selectedStart - 1h and TimeGenerated < selectedEnd \+ 1h' -or
             $Query -notmatch 'StartTime < selectedEnd and EndTime > selectedStart' -or
@@ -292,6 +300,45 @@ BeforeAll {
 }
 
 Describe 'AzureSentinelCost offline calculation regressions' {
+    It 'rejects an inflated bin allocation in <ItemName>' -ForEach @(
+        @{ ItemName = 'DataLakeMirroredVolumeTrend' }
+        @{ ItemName = 'E5DailyIngestionVsGrant' }
+        @{ ItemName = 'DfSP2DailyIngestionVsGrant' }
+        @{ ItemName = 'FreeDataVsBillableDataDaily' }
+    ) {
+        $content = $script:workbookItems[$ItemName].content
+        $original = $content.query
+        try {
+            $content.query = $original.Replace('BinCoveredQuantity = CoveredQuantity *', 'BinCoveredQuantity = 2.0 * CoveredQuantity *')
+            $content.query | Should -Not -Be $original
+            {
+                Get-FixtureUsageTrend -ItemName $ItemName -Records @() `
+                    -Start ([datetimeoffset]'2026-10-01T00:05:00Z') -End ([datetimeoffset]'2026-10-01T00:15:00Z')
+            } | Should -Throw '*prorate each clipped source interval*'
+        }
+        finally {
+            $content.query = $original
+        }
+    }
+
+    It 'rejects a full-day cap substituted for a partial UTC day in <ItemName>' -ForEach @(
+        @{ ItemName = 'EligibleE5Ingestion' }
+        @{ ItemName = 'EstimateE5Discount' }
+        @{ ItemName = 'DfSP2GrantUsed' }
+        @{ ItemName = 'DfSP2EstimatedSavings' }
+    ) {
+        $original = Get-WorkbookQuery -ItemName $ItemName
+        $query = $original.Replace(
+            'CoveredDays = (min_of(GrantDay + 1d, selectedEnd) - max_of(GrantDay, selectedStart)) / 1d',
+            'CoveredDays = 1.0'
+        )
+        $query | Should -Not -Be $original
+        {
+            Get-FixtureGrantUsed -Query $query -Records @() -LicenseCount 1 `
+                -Start ([datetimeoffset]'2026-10-01T00:05:00Z') -End ([datetimeoffset]'2026-10-01T00:15:00Z')
+        } | Should -Throw '*cap each UTC day using only its selected duration*'
+    }
+
     It 'defaults the global time filter to 30 days and preserves custom time ranges' {
         $timeRange = @($script:workbook.items | ForEach-Object { $_.content.parameters }) | Where-Object name -eq 'TimeRange'
         $timeRange.value.durationMs | Should -Be 2592000000
