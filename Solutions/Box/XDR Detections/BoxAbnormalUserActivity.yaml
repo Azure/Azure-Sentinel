@@ -1,0 +1,129 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: &id001
+- connectorId: BoxDataConnector
+  dataTypes:
+  - BoxEvents_CL
+- connectorId: BoxEventsCCPDefinition
+  dataTypes:
+  - BoxEventsV2_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - BoxEvents
+    - BoxEventsV2_CL
+    - BoxEvents_CL
+  requiredDataConnectors: *id001
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1139230c-cf10-45db-b616-fed0d1415c05
+    path: Analytic Rules/BoxAbnormalUserActivity.yaml
+    version: 1.0.1
+    querySha256: 70c7eafb7cc18105921eec8e20528484d057b046ed5f802da1148191bab6d0af
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - entity mappings were resolved by the configured per-rule override
+    informational: []
+    errors: []
+    originalTactics:
+    - Collection
+    originalTechniques:
+    - T1530
+    reviewScope:
+      sourceDocumentSha256: 577fbc8cc6804c05bafecfc2d0c6d2773e76b1c942569429e42c81f4d894d982
+      targetQuerySha256: c4eca08365df0e303eda38b640be3e93a389d2e709beb7e5d6736082e1c06194
+properties:
+  id: xdr-1139230c-cf10-45db-b616-fed0d1415c05
+  displayName: Box - Abmormal user activity
+  status: disabled
+  queryCondition:
+    queryText: 'let lbperiod_start = 14d;
+
+      let lbperiod_end = 24h;
+
+      let user_actions_1 = BoxEvents
+
+      | where EventEndTime between (ago(lbperiod_start) .. ago(lbperiod_end))
+
+      | summarize TotalEvents = count() by SourceName
+
+      | project TotalEvents, User = SourceName;
+
+      let user_actions_2 = BoxEvents
+
+      | where EventEndTime between (ago(lbperiod_start) .. ago(lbperiod_end))
+
+      | summarize TotalEvents = count() by SrcUserName
+
+      | project TotalEvents, User = SrcUserName;
+
+      let TotalActions = (union user_actions_1, user_actions_2)
+
+      | summarize TotalEvents = count() by User
+
+      | extend EventsPerDay = TotalEvents / 29
+
+      | extend k = 1;
+
+      let actions1_last_h = BoxEvents
+
+      | summarize TotalEventsH = count() by SourceName
+
+      | project TotalEventsH, User = SourceName;
+
+      let actions2_last_h = BoxEvents
+
+      | summarize TotalEventsH = count() by SourceName
+
+      | project TotalEventsH, User = SourceName;
+
+      let TotalActionsLastHour = (union actions1_last_h, actions2_last_h)
+
+      | summarize TotalEventsH = sum(TotalEventsH) by User
+
+      | extend k = 1;
+
+      TotalActions
+
+      | join (TotalActionsLastHour) on k
+
+      | where EventsPerDay > TotalEventsH
+
+      | project User
+
+      | extend AccountCustomEntity = User'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Box - Abmormal user activity
+      description: '''Detects spikes (deviations from avarage) in user activity.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1530

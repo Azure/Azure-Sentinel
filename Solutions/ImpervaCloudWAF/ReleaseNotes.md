@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                               |
 |-------------|--------------------------------|------------------------------------------------- |
+| 3.2.2       | 03-11-2026                     |  Added Defender XDR **Custom Detections** and **XDR Workbook** |
 | 3.1.3       | 07-07-2026                     |  Promoted the Imperva Cloud WAF CCF Connector to General Availability |
 | 3.1.2       | 10-06-2026                     |  Modify to use `CommonEventFormatTransformer` to fix data ingestion issues |
 | 3.1.1       | 10-04-2026                     |  Add `"CsvEscapeMode": "NoEscape"` to prevent logs with embedded JSON from being dropped during ingestion |
