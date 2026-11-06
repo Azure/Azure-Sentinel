@@ -53,6 +53,32 @@ class FakeQueryClient:
 
 
 class QueryConstructionTests(unittest.TestCase):
+    def test_alert_data_tester_normalizes_physical_file_size(self):
+        query = VALIDATION.build_asim_tester_query(
+            tester_name="ASimDataTester",
+            tester_query="T | project Result = 'test'",
+            target_table="ASimAlertEventLogs",
+            timestamps=[TIMESTAMP_1],
+            schema_name="AlertEvent",
+        )
+
+        target_query, tester_query = query.split(
+            "let _AsimValidationTester", 1
+        )
+        self.assertIn(
+            "ASimAlertEventLogs\n| where TimeGenerated in "
+            f"(datetime({TIMESTAMP_1}))"
+            "\n| extend FileSize = tolong(FileSize));",
+            target_query,
+        )
+        self.assertNotIn("ThreatFirstReportedTime", target_query)
+        self.assertNotIn("ThreatLastReportedTime", target_query)
+        self.assertNotIn("ThreatOriginalRiskLevel", target_query)
+        self.assertIn(
+            "| invoke _AsimValidationTester('AlertEvent')", tester_query
+        )
+        self.assertNotIn("tolong(FileSize)", tester_query)
+
     def test_dns_data_tester_normalizes_physical_threat_columns(self):
         query = VALIDATION.build_asim_tester_query(
             tester_name="ASimDataTester",
@@ -85,11 +111,13 @@ class QueryConstructionTests(unittest.TestCase):
         self.assertIn(
             "| invoke _AsimValidationTester('Dns')", tester_query
         )
+        self.assertNotIn("FileSize", query)
 
     def test_data_tester_leaves_other_target_tables_unchanged(self):
         for table, schema in (
             ("ASimAuthenticationEventLogs", "Authentication"),
             ("CustomDns_CL", "Dns"),
+            ("CustomAlertEvent_CL", "AlertEvent"),
         ):
             with self.subTest(table=table):
                 query = VALIDATION.build_asim_tester_query(
@@ -108,6 +136,7 @@ class QueryConstructionTests(unittest.TestCase):
                 self.assertNotIn("ThreatFirstReportedTime", query)
                 self.assertNotIn("ThreatLastReportedTime", query)
                 self.assertNotIn("ThreatOriginalRiskLevel", query)
+                self.assertNotIn("FileSize", query)
 
     def test_builds_typed_fixture_filter_query(self):
         query = VALIDATION.build_filter_count_query(
