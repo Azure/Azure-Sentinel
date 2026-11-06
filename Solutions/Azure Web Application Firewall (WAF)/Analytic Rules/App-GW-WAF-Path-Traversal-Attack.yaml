@@ -1,7 +1,7 @@
 id: b6c3a8a6-d22c-4882-9c57-abc01690938b
 name: App GW WAF - Path Traversal Attack 
 description: | 
-  'Identifies a match for a Path Traversal based attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+  'Identifies a Path Traversal match on a request blocked by the managed anomaly-score threshold rule. The match contributes to the aggregate anomaly score but does not establish that Path Traversal alone caused the block. The threshold value in the query can be changed as per your infrastructure's requirements.
   References: https://owasp.org/www-community/attacks/Path_Traversal'
 severity: High
 status: Available 
@@ -32,10 +32,11 @@ query:  |
  AGWFirewallLogs
  | where Action == "Matched"
  | where Message has "Path Traversal Attack"
- | project TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message, DetailedMessage, DetailedData
+ | project PolicyId, TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message, DetailedMessage, DetailedData
  | join kind = inner(
  AGWFirewallLogs
- | where Action == "Blocked") on TransactionId
+ | where Action == "Blocked"
+ | where RuleId == "949110") on PolicyId, TransactionId
  | extend Uri = strcat(Hostname,RequestUri)
  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(TransactionId,100), Message = make_set(Message,100), Detail_Message = make_set(DetailedMessage,100), Detail_Data = make_set(DetailedData,100), Total_TransactionId = dcount(TransactionId) by ClientIp, Uri, Action
  | where Total_TransactionId >= Threshold
@@ -49,5 +50,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: ClientIp 
-version: 1.0.3
+version: 1.0.4
 kind: Scheduled
