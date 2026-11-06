@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from ..parser.kql import compact_kql
 from .client import AzureMonitorClient
 from .common import (
     HARNESS_RESULT_VERSION,
@@ -121,9 +120,7 @@ class AsimIngestionHarness(AzureMonitorClient):
         input_stream = str(
             parser_document.get("InputStream") or ""
         ).strip()
-        parser_query = compact_kql(
-            str(parser_document["ParserQuery"])
-        )
+        parser_query = str(parser_document["ParserQuery"])
         if str(parser_document["SourceRawTable"]) != source_table:
             raise ValueError(
                 "Prepared fixture SourceRawTable does not match parser."

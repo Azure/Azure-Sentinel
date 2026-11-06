@@ -64,6 +64,11 @@ parser files under `Parsers/`; its changed-file filter excludes
 workflow above, without requiring query-time union-parser metadata or a
 corresponding `vim*` parser.
 
+`ParserQuery` is submitted to the parser DCR exactly as decoded from YAML.
+Static validation rejects queries longer than 14,800 characters with
+`KQL044`; comments, indentation, and line breaks count toward that limit.
+The workflow does not compact or otherwise rewrite the parser query.
+
 Parser validation does not depend on raw-table replay. QTP source replay is
 optional. If its table or DCR cannot be established, the report records a
 warning and blocks QTP/parity without failing the required parser validation
