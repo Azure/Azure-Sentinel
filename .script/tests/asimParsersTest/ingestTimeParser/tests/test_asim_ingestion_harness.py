@@ -794,8 +794,8 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         parser_flow = dcr_puts[0]["json"]["properties"]["dataFlows"][0]
         self.assertEqual(
             (
-                "source\n"
-                "| project TimeGenerated, Type, Value"
+                "    source // remove this comment\n"
+                "      | project TimeGenerated, Type, Value"
             ),
             parser_flow["transformKql"],
         )
