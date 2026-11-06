@@ -1,0 +1,48 @@
+id: acce9d96-68f1-4d07-a10c-272b43054fbe
+name: PolySwarm - Threat Hunting Domain
+description: |
+  'PolySwarm domain correlation. Joins active PolySwarm domain indicators against
+  observed DNS lookups.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PolySwarmHuntingCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: PolySwarmFeedCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+  - T1568
+tags:
+  - PolySwarm
+query: |
+  _Im_Dns
+  | where isnotempty(Domain)
+  | extend Domain = tolower(Domain)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey == "domain-name:value"
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "PolySwarm"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  | extend ObservableValue = tolower(ObservableValue)
+  ) on $left.Domain == $right.ObservableValue
+  | extend Family = tostring(parse_json(AdditionalFields).family)
+  | extend Permalink = tostring(parse_json(AdditionalFields).permalink)
+  | project Domain, DstIpAddr, Confidence, Family, Permalink
+  | extend DNS_0_DomainName = Domain
+  | extend IP_0_Address = DstIpAddr
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+version: 1.0.1
