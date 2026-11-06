@@ -664,6 +664,35 @@ def test_other_unknown_tables_are_not_hidden_by_platform_reference_classificatio
     assert convert(solution, settings)["blocked"] == 1
 
 
+def test_reviewed_unknown_sentinel_table_with_connector_converts_and_validates(solution):
+    folder = solution / "Data Connectors"
+    folder.mkdir(exist_ok=True)
+    (folder / "template_UnknownSource.json").write_text(
+        json.dumps({"id": "UnknownSourceConnector", "dataTypes": [{"name": "UnknownSource"}]})
+    )
+    data_path = solution / "Data/Solution_Fixture.json"
+    data = json.loads(data_path.read_bytes())
+    data["Data Connectors"] = ["Data Connectors/template_UnknownSource.json"]
+    data_path.write_text(json.dumps(data))
+
+    write_query(solution, "UnknownSource | where TimeGenerated > ago(1d) | count")
+    plan = dependencies.plan_workbook_dependencies(solution)
+    value = decisions(plan, tables=["UnknownSource"])
+    value["workbooks"][0]["requiredWorkloads"] = [{"workload": "sentinel", "dataTypes": ["UnknownSource"]}]
+    value["workbooks"][0]["requiredDataConnectors"] = [
+        {"connectorId": "UnknownSourceConnector", "dataTypes": ["UnknownSource"]}
+    ]
+    result = review(solution, plan, value)
+    assert result["dependencyReviewRequired"] is False
+    settings = json.loads((solution / "Logs/review-1/conversion-config.json").read_bytes())
+    converted = convert(solution, settings)
+    assert converted["converted"] == 1
+    assert converted["blocked"] == 0
+    validation = workbooks.validate_workbooks(solution)
+    assert validation["valid"] == 1
+    assert validation["invalid"] == 0
+
+
 def test_metadata_time_binding_cannot_misstate_declared_range(solution):
     write_query(solution, "DeviceEvents | where Timestamp >= {TimeRange:start}")
     plan = dependencies.plan_workbook_dependencies(solution)
@@ -1068,3 +1097,78 @@ def test_union_withsource_output_names_are_not_dynamic_table_calls(query):
 ])
 def test_dynamic_and_literal_table_calls_keep_existing_scanner_behavior(query, calls, bare):
     assert workbook._quoted_calls_and_table_sources(query) == (calls, bare)
+
+
+@pytest.mark.parametrize("table_name", [
+    "AADProvisioningLogs",
+    "AADRiskyUsers",
+    "AADUserRiskEvents",
+    "ADFSSignInLogs",
+    "RiskyUsers",
+    "UserRiskEvents",
+])
+def test_six_identity_and_risk_tables_are_unblocked_1to1(solution, table_name):
+    from sentinel_xdr_migration._workbook_core.mapping_catalog import tier_of
+    from sentinel_xdr_migration._workbook_core.migrator import classify
+    from sentinel_xdr_migration._workbook_core.recommend import recommend_table
+    assert tier_of(table_name) == "1to1"
+    assert classify({table_name})["overallTier"] == "1to1"
+    rec = recommend_table(table_name)
+    assert rec["recommendations"][0]["ahTable"] == table_name
+    assert rec["recommendations"][0]["basis"] == "catalogSelf"
+    write_query(solution, f"{table_name} | where TimeGenerated > ago(1d) | count")
+    plan = dependencies.plan_workbook_dependencies(solution)
+    result = review(solution, plan, decisions(plan, tables=[table_name]))
+    assert result["dependencyReviewRequired"] is False
+    settings = json.loads((solution / "Logs/review-1/conversion-config.json").read_bytes())
+    converted = convert(solution, settings)
+    assert converted["converted"] == 1
+    assert converted["blocked"] == 0
+
+
+def test_connector_defined_unlisted_table_assumes_sentinel_exposure_and_overrides_static_lists(solution):
+    from sentinel_xdr_migration._workbook_core.mapping_catalog import tier_of
+    from sentinel_xdr_migration._workbook_core.migrator import classify
+    from sentinel_xdr_migration import native_workbooks as native
+    connector_dir = solution / "Data Connectors"
+    connector_dir.mkdir(exist_ok=True)
+    (connector_dir / "CustomVendorConnector.json").write_text(json.dumps({
+        "id": "CustomVendorConnector",
+        "dataTypes": [{"name": "VendorAuditLogs"}],
+    }))
+    data_path = solution / "Data/Solution_Fixture.json"
+    data = json.loads(data_path.read_bytes())
+    data["Data Connectors"] = ["Data Connectors/CustomVendorConnector.json"]
+    data_path.write_text(json.dumps(data))
+    write_query(solution, "VendorAuditLogs | where TimeGenerated > ago(1h) | count")
+    assert tier_of("VendorAuditLogs") == "unknown"
+    assert tier_of("VendorAuditLogs", allowed_tables={"VendorAuditLogs"}) == "1to1"
+    assert classify({"VendorAuditLogs"}, allowed_tables={"VendorAuditLogs"})["overallTier"] == "1to1"
+    assert workbook.opaque_functions("VendorAuditLogs | count", allowed_tables={"VendorAuditLogs"}) == set()
+    plan = dependencies.plan_workbook_dependencies(solution)
+    val = decisions(plan, tables=["VendorAuditLogs"])
+    val["workbooks"][0]["requiredDataConnectors"] = [
+        {"connectorId": "CustomVendorConnector", "dataTypes": ["VendorAuditLogs"]}
+    ]
+    result = review(solution, plan, val)
+    assert result["dependencyReviewRequired"] is False
+    settings = json.loads((solution / "Logs/review-1/conversion-config.json").read_bytes())
+    converted = convert(solution, settings)
+    assert converted["converted"] == 1
+    assert converted["blocked"] == 0
+    target_wb = json.loads(authored(solution).read_bytes())
+    query_text = target_wb["items"][0]["content"]["query"]
+    assert "TimeGenerated" in query_text
+    assert "Timestamp" not in query_text
+    native_plan = native._plan_document(
+        target_wb,
+        {"path": SOURCE, "sha256": "0" * 64},
+        connector_tables=native._solution_connector_tables(solution),
+    )
+    assert native_plan["queries"][0]["blockers"] == []
+    assert native_plan["queries"][0]["tables"] == ["VendorAuditLogs"]
+    assert native_plan["requiredWorkloads"] == [{"workload": "sentinel", "dataTypes": ["VendorAuditLogs"]}]
+    validation = workbooks.validate_workbooks(solution)
+    assert validation["valid"] == 1
+    assert validation["invalid"] == 0
+
