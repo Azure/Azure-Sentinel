@@ -1,0 +1,99 @@
+id: 9e2b4c6d-8f1a-4b3c-a5d7-1f2a3b4c5da4
+name: Cyble IOC - Email
+description: |
+  'Creates an incident when Cyble Vision publishes a new malicious email address indicator to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: CybleVisionIOC
+  dataTypes:
+  - ThreatIntelIndicators
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+- InitialAccess
+relevantTechniques:
+- T1566
+subTechniques:
+- T1566.001
+- T1566.002
+query: |
+  let lookback = 1h;
+  let iocFilter = dynamic(["email-addr:value"]);
+  let known = ThreatIntelIndicators
+      | where TimeGenerated between (ago(14d) .. ago(lookback))
+      | where SourceSystem == "CybleVisionIOC"
+      | distinct Id;
+  ThreatIntelIndicators
+  | where TimeGenerated > ago(lookback)
+  | where SourceSystem == "CybleVisionIOC"
+  | where ObservableKey in (iocFilter)
+  | summarize arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | join kind=leftanti known on Id
+  | extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)
+  | extend AlertSeverity = case(ConfidenceRating =~ "high", "High", ConfidenceRating =~ "medium", "Medium", ConfidenceRating =~ "low", "Low", "Informational")
+  | extend IndicatorId      = Id,
+           IocType          = tostring(AdditionalFields.iocType),
+           RiskScore        = Confidence,
+           Sources          = strcat_array(AdditionalFields.sources, ", "),
+           BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, ", "),
+           RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, ", "),
+           ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, ", "),
+           TargetCountries  = strcat_array(AdditionalFields.targetCountries, ", "),
+           TargetIndustries = strcat_array(AdditionalFields.targetIndustries, ", "),
+           TargetRegions    = strcat_array(AdditionalFields.targetRegions, ", "),
+           FirstSeen        = todatetime(AdditionalFields.firstSeen),
+           LastSeen         = todatetime(AdditionalFields.lastSeen),
+           MalwareName      = tostring(AdditionalFields.relatedMalware[0])
+  | project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, IocType, RiskScore, ConfidenceRating, AlertSeverity,
+            Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,
+            FirstSeen, LastSeen, ValidUntil
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P7D
+    matchingMethod: Selected
+    groupByEntities:
+    - Mailbox
+    groupByCustomDetails:
+    - IndicatorID
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Cyble IOC - Email: {{ObservableValue}}'
+  alertDescriptionFormat: 'Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}'
+  alertSeverityColumnName: AlertSeverity
+  alertDynamicProperties: []
+customDetails:
+  IndicatorID: IndicatorId
+  IocType: IocType
+  RiskScore: RiskScore
+  ConfidenceRating: ConfidenceRating
+  Sources: Sources
+  BehaviourTags: BehaviourTags
+  RelatedMalwares: RelatedMalware
+  ThreatActors: ThreatActors
+  TargetedCountries: TargetCountries
+  TargetedIndustries: TargetIndustries
+  TargetedRegions: TargetRegions
+  FirstSeen: FirstSeen
+  LastSeen: LastSeen
+  ValidUntil: ValidUntil
+entityMappings:
+- entityType: Mailbox
+  fieldMappings:
+  - identifier: MailboxPrimaryAddress
+    columnName: ObservableValue
+- entityType: Malware
+  fieldMappings:
+  - identifier: Name
+    columnName: MalwareName
+version: 1.0.0
+kind: Scheduled
