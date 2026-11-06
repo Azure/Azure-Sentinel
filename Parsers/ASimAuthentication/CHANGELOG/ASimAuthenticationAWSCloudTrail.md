@@ -2,7 +2,7 @@
 
 ## Version 0.2.3
 
-- (2026-11-05) Cast AwsEventId to string when mapping EventOriginalUid to ensure the ASIM field has the expected type.
+- (2026-11-05) Cast AwsEventId to string when mapping EventOriginalUid to ensure the ASIM field has the expected type. - [PR #15564](https://github.com/Azure/Azure-Sentinel/pull/15564)
 
 ## Version 0.2.2
 
