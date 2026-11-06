@@ -1,28 +1,68 @@
 id: 378781a9-aef0-446a-9822-a8beb70835e7
 Function:
   Title: Parser for Exchange events
-  Version: '1.0.0'
-  LastUpdated: '2026-01-01'
+  Version: '1.1.0'
+  LastUpdated: '2026-10-26'
 Category: Microsoft Sentinel Parser
 FunctionName: FilewallM365ExchangeEvent
 FunctionAlias: FilewallM365ExchangeEvent
 FunctionQuery: |
+  // One row per email Filewall processed.
+  // ThreatVerdict separates what a Filewall engine found from what policy did, so severity follows
+  // the verdict and not the block alone:
+  //   Malicious        - an antivirus engine found malware (High)
+  //   Suspicious       - static analysis flagged the file, or its content does not match its type (Medium)
+  //   ProcessingFailed / NotSanitized - the file was not processed or not sanitized (Low)
+  //   Unsanitizable    - CDR could not rebuild the file, so it was blocked (Low)
+  //   PolicyBlocked    - blocked by a file type, size or encryption rule, not a malware verdict (Informational)
+  //   Sanitized        - CDR rebuilt the file and it was delivered (Informational)
+  // A message takes the most severe verdict of its attachments. EmailAttachments carries each
+  // attachment with its own verdict and severity; FilewallM365EmailAttachmentEvent expands it.
+  // FilewallMessageId is Filewall's id for the message: the Graph item id for mailbox mail, and
+  // "<Message-ID>@@<recipient>" for relay mail. It is not the Exchange Online NetworkMessageId.
   FilewallExchange_CL
-  | extend 
-          EventStartTime = TimeGenerated, 
+  | extend IngestionTime = ingestion_time()
+  | extend
+          direction = column_ifexists('direction', ''),
+          source_folder = column_ifexists('source_folder', ''),
+          internet_message_id = column_ifexists('internet_message_id', ''),
+          report_url = column_ifexists('report_url', '')
+  | mv-apply Attachment = attachments on (
+      extend AttachmentStatus = tolower(tostring(Attachment.status)), AttachmentReason = tolower(tostring(Attachment.block_reason))
+      | extend Verdict = case(
+          AttachmentReason == "antivirus", "Malicious",
+          AttachmentReason in ("static_analysis", "type_validation"), "Suspicious",
+          AttachmentReason == "cdr_init_failed" or AttachmentStatus == "failed", "ProcessingFailed",
+          AttachmentStatus in ("not_supported", "not_sanitized"), "NotSanitized",
+          AttachmentReason == "cdr", "Unsanitizable",
+          AttachmentReason in ("file_policy", "size_limitation", "encryption_filter"), "PolicyBlocked",
+          AttachmentStatus == "blocked", "Blocked",
+          AttachmentStatus in ("succeed", "sanitized"), "Sanitized",
+          "Unknown")
+      | extend VerdictRank = case(Verdict == "Malicious", 8, Verdict == "Suspicious", 7, Verdict == "ProcessingFailed", 6, Verdict == "NotSanitized", 5, Verdict == "Unsanitizable", 4, Verdict == "Blocked", 3, Verdict == "PolicyBlocked", 2, Verdict == "Sanitized", 1, 0)
+      | extend VerdictSeverity = case(VerdictRank == 8, "High", VerdictRank == 7, "Medium", VerdictRank >= 3, "Low", "Informational")
+      | summarize arg_max(VerdictRank, Verdict, VerdictSeverity), EmailAttachments = make_list(bag_merge(Attachment, bag_pack("verdict", Verdict, "severity", VerdictSeverity)))
+    )
+  | extend
+          EventStartTime = TimeGenerated,
           EventEndTime = TimeGenerated,
           EventOriginalType = tostring(event_type),
-          EventType = case(status =~ "blocked" or status =~ "failed", "ThreatInfo", status =~ "succeed", "Informational", "Informational"),
-          EventResult = case(status =~ "blocked", 'Blocked', status =~ "failed", "Failure", status =~ "succeed", "Success", "NA"),
+          ThreatVerdict = coalesce(Verdict, "Unknown"),
+          EventSeverity = coalesce(VerdictSeverity, "Informational")
+  | extend
+          EventType = iff(ThreatVerdict in ("Malicious", "Suspicious"), "ThreatInfo", "Informational"),
+          EventResult = case(status =~ "blocked", "Blocked", status =~ "partial_blocked", "Partial", status =~ "failed", "Failure", status in~ ("succeed", "sanitized"), "Success", "NA"),
           EventOriginalResultDetails = coalesce(state, summary),
-          EventSeverity = case(status =~ "blocked", "High", status =~ "failed", "Medium", "Informational"),
           EventVendor = "ODI-X",
           EventProduct = "Filewall for Microsoft 365",
           EventUid = tostring(event_id),
           EmailSubject = subject,
           EmailSenderFrom = sender,
           EmailRecipientTo = recipient,
-          EmailNetworkMessageId = mail_id,
+          EmailDirection = case(direction =~ "incoming", "Inbound", direction =~ "outgoing", "Outbound", ""),
+          EmailInternetMessageId = internet_message_id,
+          FilewallMessageId = mail_id,
+          EventReportUrl = report_url,
           AlertPolicyId = policy_id,
           AlertPolicyName = policy_name,
           User = recipient,
@@ -35,4 +75,4 @@ FunctionQuery: |
           timestamp = todatetime(timestamp),
           release_timestamp = todatetime(release_timestamp),
           release_by_admin = tobool(release_by_admin)
-  | project TimeGenerated, EventStartTime, EventEndTime, EventUid, EventType, EventOriginalType, EventResult, EventOriginalResultDetails, EventSeverity, EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventCount, Dvc, DvcHostname, User, ActorUsername, EmailSubject, EmailSenderFrom, EmailRecipientTo, EmailNetworkMessageId, AlertPolicyId, AlertPolicyName, application, event_id, timestamp, status, state, summary, attachments, release_timestamp, release_by_admin, release_reason
+  | project TimeGenerated, IngestionTime, EventStartTime, EventEndTime, EventUid, EventType, EventOriginalType, EventResult, EventOriginalResultDetails, EventSeverity, ThreatVerdict, EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventCount, Dvc, DvcHostname, User, ActorUsername, EmailSubject, EmailSenderFrom, EmailRecipientTo, EmailDirection, EmailInternetMessageId, FilewallMessageId, EventReportUrl, AlertPolicyId, AlertPolicyName, application, event_id, timestamp, status, state, summary, attachments, EmailAttachments, direction, source_folder, release_timestamp, release_by_admin, release_reason

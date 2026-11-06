@@ -1,0 +1,137 @@
+id: c75ef60d-c480-42ce-9dcf-5806bbec8e4a
+name: Filewall - File Filewall blocked as malicious or suspicious seen on a device
+description: |
+  'Correlates files that Filewall for Microsoft 365 blocked as malicious or suspicious, in email attachments or in SharePoint, OneDrive and Teams, with Microsoft Defender for Endpoint file events.
+  A match means the original file was seen on a device after Filewall recorded it (when the email was received, or when the file was processed), so it reached the device by another path, for example a direct download, a removable drive, another mail flow or a copy released from quarantine.
+  The match is on the original file hash Filewall recorded, by SHA1 (always set in DeviceFileEvents) or SHA256; the sanitized hash is kept in the custom details. Each run alerts on pairs where either side was ingested in the last hour, so a match is found whichever record arrives last. Requires the Microsoft Defender XDR connector to stream DeviceFileEvents into the workspace.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: FilewallM365
+    dataTypes:
+      - FilewallExchange_CL
+      - FilewallFile_CL
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204.002
+query: |
+  // Files Filewall blocked as malicious or suspicious in the last 14 days, keyed by original hash,
+  // matched by SHA1 or SHA256 with device file events seen after Filewall recorded the file.
+  // A pair alerts on the run after its later side is ingested, so late Filewall records still match.
+  let lookback = 14d;
+  let ingestWindow = 1h;
+  let FilewallBlocked = materialize(union
+      (FilewallM365EmailAttachmentEvent()
+      | where TimeGenerated > ago(lookback)
+      | where ThreatVerdict in ("Malicious", "Suspicious")
+      | project FilewallTime = TimeGenerated, FilewallIngested = IngestionTime, OriginalSHA256 = OriginalFileSha256, OriginalSHA1 = OriginalFileSha1, SanitizedSHA256 = SanitizedFileSha256, ThreatVerdict, EventSeverity, FilewallFileName = AttachmentName, FilewallUser = EmailRecipientTo, FilewallSource = "exchange", BlockReason = AttachmentBlockReason, EventReportUrl),
+      (FilewallM365FileEvent()
+      | where TimeGenerated > ago(lookback)
+      | where ThreatVerdict in ("Malicious", "Suspicious")
+      | project FilewallTime = TimeGenerated, FilewallIngested = IngestionTime, OriginalSHA256 = OriginalFileSha256, OriginalSHA1 = OriginalFileSha1, SanitizedSHA256 = SanitizedFileSha256, ThreatVerdict, EventSeverity, FilewallFileName = TargetFileName, FilewallUser = ActorUsername, FilewallSource = TargetFilePathType, BlockReason = block_reason, EventReportUrl)
+    | where isnotempty(OriginalSHA256) or isnotempty(OriginalSHA1)
+    // first Filewall record per file, so a repeat block of a known file does not re-alert old sightings
+    | summarize arg_min(FilewallTime, *) by OriginalSHA256, OriginalSHA1);
+  let Sha256Set = FilewallBlocked | where isnotempty(OriginalSHA256) | distinct OriginalSHA256;
+  let Sha1Set = FilewallBlocked | where isnotempty(OriginalSHA1) | distinct OriginalSHA1;
+  let DeviceSeen = materialize(DeviceFileEvents
+    | where TimeGenerated > ago(lookback)
+    | extend DeviceIngested = ingestion_time(), SHA1 = tolower(SHA1), SHA256 = tolower(SHA256)
+    | where SHA256 in (Sha256Set) or SHA1 in (Sha1Set)
+    | project TimeGenerated, DeviceIngested, DeviceId, DeviceName, ActionType, FileName, FolderPath, SHA1, SHA256, InitiatingProcessFileName, InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain);
+  union
+      (DeviceSeen | where isnotempty(SHA256) | join kind=inner (FilewallBlocked | where isnotempty(OriginalSHA256)) on $left.SHA256 == $right.OriginalSHA256),
+      (DeviceSeen | where isnotempty(SHA1) | join kind=inner (FilewallBlocked | where isnotempty(OriginalSHA1)) on $left.SHA1 == $right.OriginalSHA1)
+  | where TimeGenerated > FilewallTime
+  | where DeviceIngested > ago(ingestWindow) or FilewallIngested > ago(ingestWindow)
+  | summarize arg_min(TimeGenerated, *) by OriginalSHA256, OriginalSHA1, DeviceId
+  | extend DeviceAccountUpn = tostring(InitiatingProcessAccountUpn)
+  | extend
+      DeviceAccountName = iff(isnotempty(DeviceAccountUpn), tostring(split(DeviceAccountUpn, "@")[0]), InitiatingProcessAccountName),
+      DeviceAccountUPNSuffix = iff(isnotempty(DeviceAccountUpn), tostring(split(DeviceAccountUpn, "@")[1]), ""),
+      DeviceAccountNTDomain = iff(isempty(DeviceAccountUpn), InitiatingProcessAccountDomain, ""),
+      FilewallAccountName = tostring(split(FilewallUser, "@")[0]),
+      FilewallUPNSuffix = tostring(split(FilewallUser, "@")[1]),
+      FileDirectory = iff(FolderPath endswith FileName, substring(FolderPath, 0, strlen(FolderPath) - strlen(FileName) - 1), FolderPath),
+      // the hashes Filewall recorded for the original file, mapped as two FileHash entities
+      SHA256 = OriginalSHA256,
+      SHA1 = OriginalSHA1,
+      Sha256Algorithm = iff(isnotempty(OriginalSHA256), "SHA256", ""),
+      Sha1Algorithm = iff(isnotempty(OriginalSHA1), "SHA1", "")
+  | project TimeGenerated, DeviceId, DeviceName, ActionType, FileName, FileDirectory, FolderPath, SHA256, Sha256Algorithm, SHA1, Sha1Algorithm, SanitizedSHA256, InitiatingProcessFileName, DeviceAccountName, DeviceAccountUPNSuffix, DeviceAccountNTDomain, ThreatVerdict, EventSeverity, BlockReason, FilewallTime, FilewallFileName, FilewallUser, FilewallAccountName, FilewallUPNSuffix, FilewallSource, EventReportUrl
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: DeviceAccountName
+      - identifier: UPNSuffix
+        columnName: DeviceAccountUPNSuffix
+      - identifier: NTDomain
+        columnName: DeviceAccountNTDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: FilewallAccountName
+      - identifier: UPNSuffix
+        columnName: FilewallUPNSuffix
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+      - identifier: Directory
+        columnName: FileDirectory
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Sha256Algorithm
+      - identifier: Value
+        columnName: SHA256
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Sha1Algorithm
+      - identifier: Value
+        columnName: SHA1
+customDetails:
+  Verdict: ThreatVerdict
+  BlockReason: BlockReason
+  FilewallEventTime: FilewallTime
+  FilewallSource: FilewallSource
+  FilewallFileName: FilewallFileName
+  FilewallUser: FilewallUser
+  SanitizedSHA256: SanitizedSHA256
+  DeviceAction: ActionType
+  InitiatingProcess: InitiatingProcessFileName
+  FilewallReport: EventReportUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'File Filewall blocked as {{ThreatVerdict}} seen on {{DeviceName}}'
+  alertDescriptionFormat: 'Filewall for Microsoft 365 blocked this file as {{ThreatVerdict}} ({{BlockReason}}), and Microsoft Defender for Endpoint later recorded the original file on {{DeviceName}}, so it reached the device by another path; the alert link opens the blocked item in the Filewall console.'
+  alertSeverityColumnName: EventSeverity
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: EventReportUrl
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: Selected
+    groupByEntities:
+      - FileHash
+kind: Scheduled
+version: 1.0.0

@@ -1,0 +1,33 @@
+id: 51c781c1-ba93-401e-a1c1-e34d4e407e54
+Function:
+  Title: Parser for Exchange email attachment events
+  Version: '1.0.0'
+  LastUpdated: '2026-10-26'
+Category: Microsoft Sentinel Parser
+FunctionName: FilewallM365EmailAttachmentEvent
+FunctionAlias: FilewallM365EmailAttachmentEvent
+FunctionQuery: |
+  // One row per email attachment Filewall processed, with its message's columns and its own
+  // ThreatVerdict and EventSeverity (see FilewallM365ExchangeEvent for the verdicts).
+  // The original and sanitized hashes are kept apart: OriginalFile* is the file the sender sent,
+  // the one to look for elsewhere; SanitizedFile* is the copy Filewall delivered in its place,
+  // empty when nothing was delivered.
+  FilewallM365ExchangeEvent()
+  | mv-expand Attachment = EmailAttachments
+  | extend
+          AttachmentName = tostring(Attachment.name),
+          AttachmentFileType = tostring(Attachment.type),
+          AttachmentSize = tostring(Attachment.size),
+          AttachmentStatus = tostring(Attachment.status),
+          AttachmentBlockReason = tostring(Attachment.block_reason),
+          AttachmentSummary = tostring(Attachment.summary),
+          ThreatVerdict = tostring(Attachment.verdict),
+          EventSeverity = tostring(Attachment.severity),
+          OriginalFileSha256 = tolower(tostring(Attachment.original_sha256)),
+          OriginalFileSha1 = tolower(tostring(Attachment.original_sha1)),
+          SanitizedFileSha256 = tolower(tostring(Attachment.new_sha256)),
+          SanitizedFileSha1 = tolower(tostring(Attachment.new_sha1))
+  | extend
+          EventType = iff(ThreatVerdict in ("Malicious", "Suspicious"), "ThreatInfo", "Informational"),
+          EventResult = case(AttachmentStatus =~ "blocked", "Blocked", AttachmentStatus =~ "failed", "Failure", AttachmentStatus in~ ("succeed", "sanitized"), "Success", "NA")
+  | project TimeGenerated, IngestionTime, EventStartTime, EventEndTime, EventUid, EventType, EventOriginalType, EventResult, EventSeverity, ThreatVerdict, EventVendor, EventProduct, User, ActorUsername, EmailSubject, EmailSenderFrom, EmailRecipientTo, EmailDirection, EmailInternetMessageId, FilewallMessageId, EventReportUrl, AlertPolicyId, AlertPolicyName, AttachmentName, AttachmentFileType, AttachmentSize, AttachmentStatus, AttachmentBlockReason, AttachmentSummary, OriginalFileSha256, OriginalFileSha1, SanitizedFileSha256, SanitizedFileSha1, application, event_id, timestamp

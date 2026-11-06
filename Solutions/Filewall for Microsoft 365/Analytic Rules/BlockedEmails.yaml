@@ -1,45 +1,94 @@
 id: 9b784b65-2d16-4c9f-9f59-2a5d4c659f42
-name: Filewall - Blocked emails
-description: Identifies emails blocked by Filewall for Microsoft 365 (Exchange).
+name: Filewall - Malicious or suspicious email attachment blocked
+description: |
+  'Identifies attachments in inbound email that Filewall for Microsoft 365 blocked because an antivirus engine found malware (High severity), or because static analysis flagged the file or its content does not match its file type (Medium severity).
+  Attachments blocked only by a policy rule (file type, size or encryption) and attachments sanitized by CDR are not malware verdicts and do not raise this alert; they stay available in the FilewallM365EmailAttachmentEvent parser.
+  The alert maps the recipient, the message and the original file hashes, so Microsoft Defender XDR can correlate it with other evidence for the same file or user, and it links to the message in the Filewall console.'
 severity: High
 status: Available
-kind: Scheduled
-query: | 
-  FilewallM365ExchangeEvent()
-  | where EventVendor == 'ODI-X' and EventProduct == 'Filewall for Microsoft 365'
-  | where EventType == 'ThreatInfo' and EventResult == 'Blocked'
+requiredDataConnectors:
+  - connectorId: FilewallM365
+    dataTypes:
+      - FilewallExchange_CL
 queryFrequency: 5m
-queryPeriod: 5m
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
-relevantTechniques:
-- T1048
 tactics:
-- Exfiltration
+  - InitialAccess
+relevantTechniques:
+  - T1566.001
+query: |
+  // TimeGenerated is the email's received time, which can be well before Filewall finished with it,
+  // so the rule looks back an hour and takes each attachment once, by when it was ingested.
+  FilewallM365EmailAttachmentEvent()
+  | where IngestionTime > ago(5m)
+  | where ThreatVerdict in ("Malicious", "Suspicious")
+  | where EmailDirection != "Outbound"
+  | extend RecipientAccountName = tostring(split(EmailRecipientTo, "@")[0]), RecipientUPNSuffix = tostring(split(EmailRecipientTo, "@")[1])
+  | extend Sha256Algorithm = "SHA256", Sha1Algorithm = "SHA1"
+  | project TimeGenerated, ThreatVerdict, EventSeverity, AttachmentName, AttachmentFileType, AttachmentBlockReason, AttachmentSummary, OriginalFileSha256, OriginalFileSha1, Sha256Algorithm, Sha1Algorithm, EmailSubject, EmailSenderFrom, EmailRecipientTo, RecipientAccountName, RecipientUPNSuffix, EmailDirection, EmailInternetMessageId, FilewallMessageId, AlertPolicyName, EventReportUrl
 eventGroupingSettings:
   aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: RecipientAccountName
+      - identifier: UPNSuffix
+        columnName: RecipientUPNSuffix
+  - entityType: Mailbox
+    fieldMappings:
+      - identifier: MailboxPrimaryAddress
+        columnName: EmailRecipientTo
+  - entityType: MailMessage
+    fieldMappings:
+      - identifier: Recipient
+        columnName: EmailRecipientTo
+      - identifier: Sender
+        columnName: EmailSenderFrom
+      - identifier: InternetMessageId
+        columnName: EmailInternetMessageId
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: AttachmentName
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Sha256Algorithm
+      - identifier: Value
+        columnName: OriginalFileSha256
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: Sha1Algorithm
+      - identifier: Value
+        columnName: OriginalFileSha1
+customDetails:
+  Verdict: ThreatVerdict
+  BlockReason: AttachmentBlockReason
+  Detail: AttachmentSummary
+  PolicyName: AlertPolicyName
+  Subject: EmailSubject
+  OriginalSHA256: OriginalFileSha256
+  FilewallMessageId: FilewallMessageId
+  FilewallReport: EventReportUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Filewall blocked a {{ThreatVerdict}} email attachment - {{AttachmentName}}'
+  alertDescriptionFormat: 'Filewall for Microsoft 365 blocked the attachment {{AttachmentName}} in an email to {{EmailRecipientTo}}, block reason {{AttachmentBlockReason}}. The custom details hold the original file hash and policy, and the alert link opens the message in the Filewall console.'
+  alertSeverityColumnName: EventSeverity
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: EventReportUrl
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
-    matchingMethod: AllEntities
+    enabled: true
     reopenClosedIncident: false
-    enabled: false
-    lookbackDuration: PT1H
-entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: ActorUsername
-- entityType: MailMessage
-  fieldMappings:
-  - identifier: Recipient
-    columnName: EmailRecipientTo
-  - identifier: Subject
-    columnName: EmailSubject
-  - identifier: Sender
-    columnName: EmailSenderFrom
-requiredDataConnectors:
-- dataTypes:
-  - FilewallExchange_CL
-  connectorId: FilewallM365
-version: 1.0.0
+    lookbackDuration: PT5H
+    matchingMethod: Selected
+    groupByEntities:
+      - FileHash
+kind: Scheduled
+version: 1.1.0
