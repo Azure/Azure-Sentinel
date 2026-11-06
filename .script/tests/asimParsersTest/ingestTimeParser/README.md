@@ -65,7 +65,7 @@ workflow above, without requiring query-time union-parser metadata or a
 corresponding `vim*` parser.
 
 `ParserQuery` is submitted to the parser DCR exactly as decoded from YAML.
-Static validation rejects queries longer than 15,360 characters with
+Static validation rejects queries longer than 14,800 characters with
 `KQL044`; comments, indentation, and line breaks count toward that limit.
 The workflow does not compact or otherwise rewrite the parser query.
 
