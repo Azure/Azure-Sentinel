@@ -138,5 +138,70 @@ class SalesforceIpValidationTests(unittest.TestCase):
                 self.assert_ip(padding + value, False)
 
 
+class SalesforceDomainFallbackTests(unittest.TestCase):
+    def test_optional_domain_and_fallbacks(self):
+        cases = (
+            ({"SalesforceDomain": "tenant.example", "LoginUrl": "https://login.example/path"}, "tenant.example"),
+            ({"SalesforceDomain": "tenant.example", "LoginUrl": ""}, "tenant.example"),
+            ({"SalesforceDomain": "", "LoginUrl": "https://login.example/path"}, "login.example"),
+            ({"LoginUrl": "https://login.example/path"}, "login.example"),
+            ({"SalesforceDomain": None, "LoginUrl": "https://login.example/path"}, "login.example"),
+            ({"LoginUrl": "login.example/path"}, "login.example"),
+            ({"SalesforceDomain": "", "LoginUrl": "http://user@login.example:443/path"}, "login.example"),
+            ({"LoginUrl": "https:///path"}, "https:///path"),
+            ({"SalesforceDomain": "", "LoginUrl": ""}, ""),
+            ({"LoginUrl": ""}, ""),
+        )
+        for name in PARSER_NAMES:
+            query = yaml.safe_load(
+                (PARSER_DIRECTORY / f"{name}.yaml").read_text(encoding="utf-8")
+            )["ParserQuery"]
+            self.assertIn(
+                '| extend _SalesforceDomain = tostring(columnifexists("SalesforceDomain", ""))',
+                query,
+            )
+            self.assertLess(
+                query.index("| extend _SalesforceDomain"),
+                query.index("| extend TargetFQDN"),
+            )
+            self.assertEqual(1, len(re.findall(r'\bSalesforceDomain\b', query)))
+            self.assertNotIn("column_ifexists", query)
+            selection = re.search(
+                r"TargetFQDN = case\(\s*"
+                r"isnotempty\((\w+)\),\s*\1,\s*"
+                r"isnotempty\((\w+)\),\s*\2,\s*(\w+)\)",
+                query,
+            )
+            self.assertIsNotNone(selection)
+            self.assertEqual(
+                ("_SalesforceDomain", "LoginUrlFQDN", "LoginUrl"),
+                selection.groups(),
+            )
+            host_pattern = re.search(
+                r'LoginUrlFQDN = extract\(@"([^"]+)", 1, TargetUrl\)',
+                query,
+            ).group(1)
+            for record, expected in cases:
+                with self.subTest(parser=name, record=record):
+                    # Local model of the asserted KQL selection, not live execution.
+                    login_url = record["LoginUrl"]
+                    target_url = (
+                        login_url
+                        if not login_url or login_url.startswith(("http://", "https://"))
+                        else "https://" + login_url
+                    )
+                    match = re.search(host_pattern, target_url)
+                    columns = {
+                        "_SalesforceDomain": record.get("SalesforceDomain") or "",
+                        "LoginUrlFQDN": match.group(1) if match else "",
+                        "LoginUrl": login_url,
+                    }
+                    actual = next(
+                        (columns[column] for column in selection.groups()[:2] if columns[column]),
+                        columns[selection.group(3)],
+                    )
+                    self.assertEqual(expected, actual)
+
+
 if __name__ == "__main__":
     unittest.main()
