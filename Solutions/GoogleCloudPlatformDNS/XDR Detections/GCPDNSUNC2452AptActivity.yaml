@@ -1,0 +1,165 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: &id001
+- connectorId: GCPDNSLogsCCPDefinition
+  dataTypes:
+  - GCPCloudDNS
+  - GCPDNS
+- connectorId: GCPDNSDataConnector
+  dataTypes:
+  - GCPCloudDNS
+  - GCP_DNS_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPCloudDNS
+    - GCPDNS
+    - GCP_DNS_CL
+  requiredDataConnectors: *id001
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 22a613ea-c338-4f91-bbd3-3be97b00ebf9
+    path: Analytic Rules/GCPDNSUNC2452AptActivity.yaml
+    version: 1.0.0
+    querySha256: afd6685899a388da560c1b747f529d0b49a0883a63406f0932fa2733cec5a464
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - 'Supplemental customDetails preserved from unmapped Sentinel entities: DNSDomainName=DNSCustomEntity (from DNS.DomainName;
+      Defender XDR ''dns'' entity mapping requires domainNameColumn + serverIpColumn + hostIpAddressColumn).'
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1095
+    reviewScope:
+      sourceDocumentSha256: 44b16187acebf102a35159af8267689a03dd98b4d696ef0681542eaf8aac2a5e
+      targetQuerySha256: f7d11d3abef391fa4dbfa0f4c7aa9e38ca7e0c1ec90b2e3178776c6e6865918a
+    preservedEntityCustomDetails:
+      DNSDomainName:
+        column: DNSCustomEntity
+        origin: entityMappings
+        entityType: DNS
+        fieldType: DomainName
+properties:
+  id: xdr-22a613ea-c338-4f91-bbd3-3be97b00ebf9
+  displayName: Google DNS - UNC2452 (Nobelium) APT Group activity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let GCPCloudDNS = view () {
+          let DNSQuery_GcpDns_empty = datatable(
+              TimeGenerated:datetime,
+              Query:string,
+              QueryTypeName:string,
+              ResponseName:string,
+              EventResultDetails:string,
+              NetworkProtocol:string,
+              SrcIpAddr:string,
+              EventOriginalUid:string,
+              EventSeverity:string,
+              EventCount:int,
+              EventProduct:string,
+              EventVendor:string,
+              EventSchemaVersion:string,
+              Dvc:string,
+              EventType:string,
+              EventResult:string,
+              EventSubType:string,
+              EventEndTime:datetime,
+              ResponseCodeName:string,
+              Domain:string,
+              IpAddr:string,
+              EventStartTime:datetime,
+              payload_serverLatency_d:real
+          )[];
+          let DNSQuery_GcpDns = union isfuzzy=true GCP_DNS_CL, DNSQuery_GcpDns_empty
+          | extend
+              Query=column_ifexists('payload_queryName_s', ''),
+              QueryTypeName=column_ifexists('payload_queryType_s', ''),
+              ResponseName=column_ifexists('payload_rdata_s', ''),
+              EventResultDetails=column_ifexists('payload_responseCode_s', ''),
+              NetworkProtocol=column_ifexists('payload_protocol_s', ''),
+              SrcIpAddr=column_ifexists('payload_sourceIP_s', ''),
+              EventOriginalUid=column_ifexists('insert_id_s', ''),
+              EventSeverity=column_ifexists('severity_s', ''),
+              EventCount=(1),
+              EventProduct="Cloud DNS",
+              EventVendor="GCP",
+              EventSchemaVersion="0.1.0",
+              Dvc="GCPDNS",
+              EventType=iif(column_ifexists('resource_type_s', '') == "dns_query", "lookup", column_ifexists('resource_type_s', '')),
+              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
+              EventSubType='response',
+              EventEndTime=todatetime(column_ifexists('timestamp_t', ''))
+          | extend
+              ResponseCodeName=EventResultDetails,
+              Domain=Query,
+              IpAddr=SrcIpAddr,
+              EventStartTime=EventEndTime;
+          let DNSQuery_GcpDnsV2 = union isfuzzy=true GCPDNS, DNSQuery_GcpDns_empty
+          | extend
+              Query=column_ifexists('QueryName', ''),
+              QueryTypeName=column_ifexists('QueryType', ''),
+              ResponseName=column_ifexists('Rdata', ''),
+              EventResultDetails=column_ifexists('ResponseCode', ''),
+              NetworkProtocol=column_ifexists('Protocol', ''),
+              SrcIpAddr=column_ifexists('SourceIP', ''),
+              EventOriginalUid=column_ifexists('InsertId', ''),
+              EventSeverity=column_ifexists('Severity', ''),
+              EventCount=(1),
+              EventProduct="Cloud DNS",
+              EventVendor="GCP",
+              EventSchemaVersion="0.1.0",
+              Dvc="GCPDNS",
+              EventType=iif(column_ifexists('ResourceType', '') == "dns_query", "lookup", column_ifexists('ResourceType', '')),
+              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
+              EventSubType='response',
+              EventEndTime=todatetime(column_ifexists('Timestamp', ''))
+          | extend
+              ResponseCodeName=EventResultDetails,
+              Domain=Query,
+              IpAddr=SrcIpAddr,
+              EventStartTime=EventEndTime,
+              payload_serverLatency_d=toreal(column_ifexists('ServerLatency', ''));
+          union isfuzzy=true DNSQuery_GcpDns, DNSQuery_GcpDnsV2
+          | project-reorder Query, QueryTypeName, ResponseName, EventResultDetails, NetworkProtocol, SrcIpAddr, EventOriginalUid, EventSeverity, EventCount, EventProduct, EventVendor, EventSchemaVersion, Dvc, EventType, EventResult, EventSubType, EventEndTime, ResponseCodeName, Domain, IpAddr, EventStartTime
+      };
+      GCPCloudDNS
+      | where Query has_any ('tomasubiera.com', 'theandersonco.com', 'stonecrestnews.com', 'nordicmademedia.com')
+      | extend DNSCustomEntity = Query, IPCustomEntity = SrcIpAddr
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: Google DNS - UNC2452 (Nobelium) APT Group activity
+      description: '''Detects UNC2452 (Nobelium) APT Group activity.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1095
+      customDetails:
+        DNSDomainName: DNSCustomEntity

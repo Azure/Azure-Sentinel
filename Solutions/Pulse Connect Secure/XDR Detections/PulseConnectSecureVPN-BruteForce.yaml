@@ -1,0 +1,115 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - PulseConnectSecure
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 34663177-8abf-4db1-b0a4-5683ab273f44
+    path: Analytic Rules/PulseConnectSecureVPN-BruteForce.yaml
+    version: 1.0.4
+    querySha256: b0e0e938f23008263a39cd8a33e40e00f4a4be6fcbfca17aa861b9cedc95aaae
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `User`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `User` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 54751278d5d7dbf29c4828be2894d0f4280770ddb1794539279d0c9199709526
+      targetQuerySha256: bb3014755637af16d1cad0d18d8509597ab7b98c4c2b8bd9cc33906cbb05ab90
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 54751278d5d7dbf29c4828be2894d0f4280770ddb1794539279d0c9199709526
+      targetQuerySha256: bb3014755637af16d1cad0d18d8509597ab7b98c4c2b8bd9cc33906cbb05ab90
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: User
+      column: User
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-34663177-8abf-4db1-b0a4-5683ab273f44
+  displayName: PulseConnectSecure - Potential Brute Force Attempts
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 20;
+      PulseConnectSecure
+      | where Messages contains "Login failed"
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by User, Source_IP
+      | where count_ > threshold
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: PulseConnectSecure - Potential Brute Force Attempts
+      description: '''This query identifies evidence of potential brute force attack by looking at multiple failed attempts
+        to log into the VPN server'''
+      severity: low
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: Source_IP
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        AccountFullName: User

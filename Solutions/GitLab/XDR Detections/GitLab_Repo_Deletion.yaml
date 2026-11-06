@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3efd09bd-a582-4410-b7ec-5ff21cfad7bd
+    path: Analytic Rules/GitLab_Repo_Deletion.yaml
+    version: 1.0.1
+    querySha256: 9fd0b9330ac2c5e3f3490e869bc23d1148ba9d41f55d88bc6c2b689daa195940
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `AuthorName`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `AuthorName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+    reviewScope:
+      sourceDocumentSha256: c52c1db99ad07aa5cf46378ce7675857a42cb2a4396531f6a1f93350c1c232f7
+      targetQuerySha256: 5cf47bec1e9906fdab4232deb54908e055bb724615199854f75eb9818dd6ef27
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: AuthorName
+      column: AuthorName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-3efd09bd-a582-4410-b7ec-5ff21cfad7bd
+  displayName: GitLab - Abnormal number of repositories deleted
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let LearningPeriod = 7d;
+      let BinTime = 1h;
+      let RunTime = 1h;
+      let StartTime = 1h;
+      let NumberOfStds = 3;
+      let MinThreshold = 10.0;
+      let EndRunTime = StartTime - RunTime;
+      let EndLearningTime = StartTime + LearningPeriod;
+      let GitLabRepositoryDestroyEvents = (GitLabAudit
+      | where RemoveAction == "project" or RemoveAction == "repository");
+      GitLabRepositoryDestroyEvents
+      | where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))
+      | summarize count() by bin(TimeGenerated, BinTime)
+      | summarize AvgInLearning = avg(count_), StdInLearning = stdev(count_)
+      | extend LearningThreshold = max_of(AvgInLearning + StdInLearning * NumberOfStds, MinThreshold)
+      | extend Dummy = 1
+      | join kind=innerunique (GitLabRepositoryDestroyEvents
+      | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))
+      | summarize CountInRunTime = count(), IPAddress = take_any(IPAddress), AuthorName = take_any(AuthorName) by bin(TimeGenerated, BinTime)
+      | extend Dummy = 1) on Dummy
+      | project TimeGenerated, AvgInLearning, StdInLearning, LearningThreshold, CountInRunTime, IPAddress, AuthorName
+      | where CountInRunTime > LearningThreshold
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GitLab - Abnormal number of repositories deleted
+      description: '''This hunting queries identify an unusual increase of repo deletion activities adversaries may want to
+        disrupt availability or compromise integrity by deleting business data.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+      customDetails:
+        AccountFullName: AuthorName
