@@ -5,17 +5,13 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from solution_manager.qualification.workbook_browser import (
+    REQUIRED_CHECK_KINDS,
     validate_browser_config,
     validate_browser_step_proofs,
+    validate_portal_url,
 )
 
-REQUIRED_UI_KINDS: tuple[str, ...] = (
-    "open",
-    "parameters",
-    "tiles",
-    "tabs",
-    "conditional",
-)
+REQUIRED_UI_KINDS: tuple[str, ...] = tuple(sorted(REQUIRED_CHECK_KINDS))
 
 
 def verify_workbook_playwright_rendering(
@@ -25,7 +21,11 @@ def verify_workbook_playwright_rendering(
     target: Mapping[str, Any] | None = None,
     playwright_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Run or validate Playwright visual/tile rendering checks for Defender Workbooks."""
+    """Validate runner-produced, reviewed DOM captures; never synthesize UI evidence.
+
+    A runner returns ``{"plan": <versioned UI plan>, "capture": <DOM capture>}``.
+    The existing workbook-ui-execute CLI owns browser execution and consent.
+    """
     _ = Path(solution_path).expanduser().resolve()
     wb_list = list(workbooks or [])
     if not wb_list:
@@ -40,33 +40,28 @@ def verify_workbook_playwright_rendering(
     all_passed = True
 
     for wb in wb_list:
+        wb_passed = False
+        checked_kinds: list[str] = []
+        reason = "browser-provider-missing"
         if playwright_runner is not None:
-            raw = dict(playwright_runner(wb, target))
-        else:
-            raw = {
-                "workbook": wb,
-                "status": "passed",
-                "tilesRendered": True,
-                "checkedKinds": list(REQUIRED_UI_KINDS),
-                "queryErrors": [],
-                "javascriptErrors": [],
-                "saveEditObserved": False,
-            }
+            try:
+                from solution_manager.qualification.workbook_qualification import _validate_ui_capture
 
-        checked_kinds = set(raw.get("checkedKinds") or REQUIRED_UI_KINDS)
-        missing_kinds = [kind for kind in REQUIRED_UI_KINDS if kind not in checked_kinds]
-        save_edit_observed = bool(raw.get("saveEditObserved", False))
-        query_errors = list(raw.get("queryErrors") or [])
-        js_errors = list(raw.get("javascriptErrors") or [])
-        tiles_rendered = bool(raw.get("tilesRendered", True))
-        wb_passed = bool(
-            raw.get("status", "passed") == "passed"
-            and tiles_rendered
-            and not missing_kinds
-            and not save_edit_observed
-            and not query_errors
-            and not js_errors
-        )
+                raw = playwright_runner(wb, target)
+                plan, capture = raw["plan"], raw["capture"]
+                if (
+                    plan["workbook"] != wb or target is None or plan["target"] != dict(target)
+                    or capture.get("producer") != "playwright-dom-v1"
+                ):
+                    raise ValueError("browser capture identity or producer is not verified")
+                validate_portal_url(plan["url"])
+                validate_browser_config(plan, plan["browserConfig"])
+                _validate_ui_capture(plan, capture)
+                checked_kinds = sorted({step["kind"] for step in capture["steps"]})
+                wb_passed = True
+            except Exception:
+                # Provider exceptions, DOM text and URLs can contain credentials.
+                reason = "browser-provider-failed-or-evidence-incomplete"
         if not wb_passed:
             all_passed = False
 
@@ -75,12 +70,9 @@ def verify_workbook_playwright_rendering(
                 "workbook": wb,
                 "status": "passed" if wb_passed else "failed",
                 "playwrightVerified": wb_passed,
-                "tilesRendered": tiles_rendered,
-                "checkedKinds": sorted(checked_kinds),
-                "missingKinds": missing_kinds,
-                "saveEditObserved": save_edit_observed,
-                "queryErrors": query_errors,
-                "javascriptErrors": js_errors,
+                "tilesRendered": wb_passed,
+                "checkedKinds": checked_kinds,
+                "reasons": [] if wb_passed else [reason],
             }
         )
 

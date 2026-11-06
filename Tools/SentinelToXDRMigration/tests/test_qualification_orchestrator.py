@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import shutil
+from unittest import mock
 from uuid import uuid4
 
 import yaml
@@ -367,14 +368,14 @@ def test_resumable_progression_across_all_5_stages_for_hybrid_solution():
 
         def pw_cb(wb_path, target):
             stage_calls.append(f"playwright:{wb_path}")
-            return {
-                "workbook": wb_path,
-                "status": "passed",
-                "tilesRendered": True,
-                "saveEditObserved": False,
-                "queryErrors": [],
-                "javascriptErrors": [],
-            }
+            from test_workbook_browser import Page, reviewed_browser, standalone_plan
+            from solution_manager.qualification.workbook_browser import _DOMRun
+
+            plan = standalone_plan()
+            plan["workbook"], plan["target"] = wb_path, target
+            plan["steps"], plan["browserConfig"] = reviewed_browser(plan)
+            capture = _DOMRun(plan, lambda: None).run(mock.Mock(), Page(plan))
+            return {"plan": plan, "capture": capture}
 
         # Step 1: Run up to deployment
         partial_state = run_qualification_pipeline(
@@ -445,7 +446,7 @@ def test_resumable_progression_across_all_5_stages_for_hybrid_solution():
         shutil.rmtree(scratch)
 
 
-def test_workbook_only_solution_like_aks_marks_rule_parity_not_applicable():
+def test_workbook_only_solution_marks_rule_parity_not_applicable_without_fabricating_workbook_pass():
     scratch, sol_root = _create_solution_fixture(
         num_rules=0,
         num_sentinel_workbooks=1,
@@ -471,13 +472,13 @@ def test_workbook_only_solution_like_aks_marks_rule_parity_not_applicable():
         assert final_state["qualificationStages"]["rule_parity"]["status"] == "not_applicable"
         assert final_state["ruleParityVerified"] == "not_applicable"
         assert final_state["alertParityVerified"] == "not_applicable"
-        assert final_state["workbookQualificationVerified"] is True
-        assert final_state["functionalQualificationVerified"] is True
+        assert final_state["workbookQualificationVerified"] is False
+        assert final_state["functionalQualificationVerified"] is False
 
         gate = evaluate_qualification_promotion_gate(final_state)
-        assert gate["passed"] is True
+        assert gate["passed"] is False
         assert gate["ruleParityVerified"] == "not_applicable"
-        assert gate["workbookQualificationVerified"] is True
+        assert gate["workbookQualificationVerified"] is False
 
         wf_state = workflow._load(sol_root)[1]
         assert wf_state["stages"]["alertParity"]["status"] == "notRequired"

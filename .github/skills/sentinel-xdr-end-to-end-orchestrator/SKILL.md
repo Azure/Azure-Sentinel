@@ -9,6 +9,7 @@ requiredSkills:
   - sentinel-xdr-alert-parity-validator
   - sentinel-solution-mock-data-generation
   - sentinel-solution-optional-testing
+  - validate-sentinel-workbook-browser
 ---
 
 # Orchestrate Sentinel to Defender XDR migration
@@ -61,6 +62,13 @@ fixture handling, guarded ingestion, and evidence routing. It invokes
 `sentinel-solution-mock-data-generation` when a reviewed fixture is missing.
 Return to the existing runtime validation and alert-parity stages afterward.
 
+For workbook portal QA, use `validate-sentinel-workbook-browser` with the
+existing reviewed query/UI contracts. Prefer `security.microsoft.com` for
+Sentinel, require separate live browser approval and verify the locked
+tenant/workspace and installed workbook. Native Sentinel workbook testing
+does not require conversion or an AR/CD pair. Offline/synthetic results must
+not be presented as authenticated browser qualification.
+
 Qualification must use one shared, rule-specific `mock.json` for the source
 Analytic Rule and converted Custom Detection. Ingest it once through the real
 source-table path, confirm both exact queries return the same uniquely marked
@@ -102,4 +110,3 @@ reminders with no-change suppression (`workflow-status-reminder`):
   `expectedNextStep`, grounded batch `durationExplanation`, and
   `workflowDiagram` while suppressing repetitive notices when
   `suppressedNoChange` is `true`.
-

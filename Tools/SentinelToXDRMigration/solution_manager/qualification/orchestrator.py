@@ -291,7 +291,7 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
     has_zero_workbooks = (
         workbooks_count is not None and int(workbooks_count) == 0
     ) or (
-        isinstance(qual_stages.get("workbook_qualification"), Mapping)
+        workbooks_count is None and isinstance(qual_stages.get("workbook_qualification"), Mapping)
         and qual_stages["workbook_qualification"].get("status") in {"not_applicable", "notRequired"}
     )
 
@@ -387,13 +387,13 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
         if "workbookQualificationVerified" in state
         else gates_input.get("workbookQualificationVerified")
     )
-    if raw_wb_qual == "not_applicable" or (raw_wb_qual is None and has_zero_workbooks):
+    if has_zero_workbooks and raw_wb_qual in (None, "not_applicable"):
         workbook_qualification_verified: bool | str = "not_applicable"
     elif isinstance(raw_wb_qual, bool):
         workbook_qualification_verified = raw_wb_qual
     elif "workbook_qualification" in qual_stages:
         wb_stage = qual_stages["workbook_qualification"]
-        if wb_stage.get("status") in {"not_applicable", "notRequired"} or has_zero_workbooks:
+        if has_zero_workbooks:
             workbook_qualification_verified = "not_applicable"
         else:
             workbook_qualification_verified = bool(
@@ -402,6 +402,17 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
             )
     else:
         workbook_qualification_verified = "not_applicable" if has_zero_workbooks else False
+    wb_contract = state.get("workbookContractResult")
+    if not isinstance(wb_contract, Mapping):
+        wb_contract = (qual_stages.get("workbook_qualification") or {}).get("workbookContractResult")
+    if not has_zero_workbooks and isinstance(wb_contract, Mapping):
+        browser = wb_contract.get("playwrightVerification") or {}
+        if (
+            wb_contract.get("accepted") is not True or wb_contract.get("status") != "passed"
+            or browser.get("status") != "passed" or browser.get("playwrightVerified") is not True
+            or not browser.get("workbooks")
+        ):
+            workbook_qualification_verified = False
 
     # 6. sanitizedEvidenceReady
     if "sanitizedEvidenceReady" in state:
@@ -1242,22 +1253,37 @@ class QualificationOrchestrator:
             return self._persist_state(self.state)
 
         inv = self.plan["inventory"]
-        wb_paths = list(inv.get("defenderWorkbookPaths") or inv.get("sentinelWorkbookPaths") or ["XDR Workbooks/Workbook.json"])
+        wb_paths = list(inv.get("defenderWorkbookPaths") or inv.get("sentinelWorkbookPaths") or [])
         query_results: list[dict[str, Any]] = []
-        queries_ok = True
+        queries_ok = bool(wb_paths)
         for wb_path in wb_paths:
             if self.workbook_query_runner is not None:
-                q_res = dict(self.workbook_query_runner(wb_path, self.plan["target"]))
+                try:
+                    q_res = dict(self.workbook_query_runner(wb_path, self.plan["target"]))
+                except Exception:
+                    q_res = {"workbook": wb_path, "status": "failed", "reason": "query-provider-failed"}
             else:
                 q_res = {
                     "workbook": wb_path,
-                    "status": "passed",
-                    "executedQueryCount": 1,
-                    "failedQueryCount": 0,
+                    "status": "failed",
+                    "reason": "query-provider-missing",
                 }
-            if q_res.get("status") != "passed" or int(q_res.get("failedQueryCount", 0)) > 0:
+            if (
+                q_res.get("status") != "passed" or q_res.get("workbook") != wb_path
+                or type(q_res.get("executedQueryCount")) is not int or q_res["executedQueryCount"] <= 0
+                or type(q_res.get("failedQueryCount")) is not int or q_res["failedQueryCount"] != 0
+            ):
                 queries_ok = False
-            query_results.append(q_res)
+                query_results.append({
+                    "workbook": wb_path, "status": "failed",
+                    "reason": "query-provider-failed-or-evidence-incomplete",
+                })
+            else:
+                query_results.append({
+                    "workbook": wb_path, "status": "passed",
+                    "executedQueryCount": q_res["executedQueryCount"],
+                    "failedQueryCount": q_res["failedQueryCount"],
+                })
 
         if self.enable_playwright:
             pw_res = verify_workbook_playwright_rendering(
@@ -1266,10 +1292,10 @@ class QualificationOrchestrator:
                 target=self.plan["target"],
                 playwright_runner=self.playwright_runner,
             )
-            pw_ok = bool(pw_res.get("playwrightVerified") in {True, "not_applicable"})
+            pw_ok = bool(wb_paths and pw_res.get("status") == "passed" and pw_res.get("playwrightVerified") is True)
         else:
-            pw_res = {"status": "skipped", "playwrightVerified": True, "workbooks": []}
-            pw_ok = True
+            pw_res = {"status": "skipped", "playwrightVerified": False, "workbooks": []}
+            pw_ok = False
 
         contract_result = {
             "accepted": bool(queries_ok and pw_ok),
