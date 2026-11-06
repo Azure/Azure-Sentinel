@@ -79,6 +79,11 @@ physical-table/logical-ASIM type discrepancy, preferring the corrected `_d`
 and `_s` columns and falling back to casts of the legacy columns. This
 normalization affects only the data-tester input, not ingestion or QTP parity.
 
+For `ASimAlertEventLogs`, the data-tester input casts `FileSize` to `long`.
+The [physical table](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimalerteventlogs)
+stores this column as `string`, while logical ASIM requires `long`. This
+normalization likewise leaves ingestion and QTP parity unchanged.
+
 Static validation requires `ParserFilterQuery` to contain a `where` stage when
 `ParserQuery` contains one. This is a presence check only; it does not require
 all parser `where` stages to be copied into the filter query.
