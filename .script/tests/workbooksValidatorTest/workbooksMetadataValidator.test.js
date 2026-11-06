@@ -1,23 +1,8 @@
 import chai, { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
-import { getVersionChangesByWorkbook } from "../../utils/workbookCheckers/isVersionIncrementedOnModification";
 import { IsValidWorkbookMetadata } from "../../workbooksMetadataValidator";
 chai.use(chaiAsPromised);
 describe("workbooksValidator", () => {
-    it("should find version increments for workbook metadata entries after nested arrays", () => {
-        const versionChanges = getVersionChangesByWorkbook([
-            { templateRelativePath: "EarlierWorkbook.json", version: "1.0.0" },
-            { templateRelativePath: "AzureSentinelCost.json", version: "1.5.1" },
-        ], [
-            { templateRelativePath: "EarlierWorkbook.json", version: "1.0.0" },
-            { templateRelativePath: "AzureSentinelCost.json", version: "1.6.4" },
-        ]);
-        expect(versionChanges["AzureSentinelCost.json"]).to.deep.equal({
-            newVersion: "1.6.4",
-            oldVersion: "1.5.1",
-        });
-        expect(versionChanges["EarlierWorkbook.json"]).to.equal(undefined);
-    });
     it("should pass when WorkbooksMetadata.json is valid", async () => {
         await checkValid(".script/tests/workbooksValidatorTest/testFiles/validWorkbooksMetadata.json");
     });

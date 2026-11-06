@@ -12,7 +12,7 @@ const filePathFolderPrefixes = ["Workbooks"];
 const fileKinds = ["Modified"];
 
 const workbooksDirectoryPath = "Workbooks";
-const workbooksMetadataPath = `${workbooksDirectoryPath}/WorkbooksMetadata.json`;
+const gitDiffFileFullContentOption = "-W"; // -W option to get the full file content
 
 // Checks that the version of a workbook template is incremented if modified
 export async function isVersionIncrementedOnModification(items: Array<WorkbookMetadata>) {
@@ -41,9 +41,10 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
           }
       }
 
-      const baseMetadata = JSON.parse(await git.show([`${pr.base.ref}:${workbooksMetadataPath}`])) as WorkbookMetadata[];
-      const headMetadata = JSON.parse(await git.show([`${pr.head.ref}:${workbooksMetadataPath}`])) as WorkbookMetadata[];
-      const versionChanges = getVersionChangesByWorkbook(baseMetadata, headMetadata);
+      const options = [pr.base.ref, pr.head.ref, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
+      const diffSummary = await git.diff(options);
+      const diffLinesArray: string[] = diffSummary.split('\n').map((l: string) => l.trim());
+      const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
 
       items
       .filter((workbookMetadata: WorkbookMetadata) => changedFiles.includes(`${workbooksDirectoryPath}/${workbookMetadata.templateRelativePath}`))
@@ -67,22 +68,53 @@ export async function isVersionIncrementedOnModification(items: Array<WorkbookMe
 }
 
 
-export function getVersionChangesByWorkbook(
-  baseItems: Array<Pick<WorkbookMetadata, "templateRelativePath" | "version">>,
-  headItems: Array<Pick<WorkbookMetadata, "templateRelativePath" | "version">>
-) {
-  const baseVersions = new Map(baseItems.map(({ templateRelativePath, version }) => [templateRelativePath, version]));
-  const versionChanges: Record<string, { newVersion: string; oldVersion: string }> = {};
+function extractVersionChangesByWorkbook(diffLines: string[]) {
+    let currentLine = 0;
+    const workbookVersionChanges: any = {};
+    const replaceQuotesRegex = /\"/gi;
 
-  for (const { templateRelativePath, version: newVersion } of headItems) {
-    const oldVersion = baseVersions.get(templateRelativePath);
-    if (oldVersion !== undefined && oldVersion !== newVersion) {
-      versionChanges[templateRelativePath] = { newVersion, oldVersion };
+    while (currentLine < diffLines.length && diffLines[currentLine] !== '[') {
+        currentLine++; // Skip to beginning of Workbooks array
     }
-  }
 
-  return versionChanges;
+    while (currentLine < diffLines.length && diffLines[currentLine] !== ']') {
+        if (diffLines[currentLine] === '{') {
+            let templateRelativePath: string | null = null;
+            let newVersion: string | null = null;
+            let oldVersion: string | null = null;
+
+            currentLine++; // Beginning of a workbook metadata object
+
+            while (currentLine < diffLines.length && diffLines[currentLine] !== '}') {
+                const line = diffLines[currentLine];
+
+                if (line.trim().startsWith('"templateRelativePath":')) {
+                    templateRelativePath = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+                }
+
+                if ((line.trim().startsWith('+') || line.trim().startsWith('-')) && line.includes('"version":')) {
+                    const version = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
+                    if (line.trim().startsWith('+')) {
+                        newVersion = version;
+                    } else {
+                        oldVersion = version;
+                    }
+                }
+
+                currentLine++;
+            }
+
+            if (templateRelativePath && newVersion && oldVersion) {
+                workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
+            }
+        }
+
+        currentLine++;
+    }
+
+    return workbookVersionChanges;
 }
+
 
 
 
