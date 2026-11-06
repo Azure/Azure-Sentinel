@@ -7,7 +7,7 @@ const fileTypeSuffixes = [".json"];
 const filePathFolderPrefixes = ["Workbooks"];
 const fileKinds = ["Modified"];
 const workbooksDirectoryPath = "Workbooks";
-const gitDiffFileFullContentOption = "-W"; // -W option to get the full file content
+const workbooksMetadataPath = `${workbooksDirectoryPath}/WorkbooksMetadata.json`;
 // Checks that the version of a workbook template is incremented if modified
 export async function isVersionIncrementedOnModification(items) {
     const pr = await GetPRDetails();
@@ -34,10 +34,9 @@ export async function isVersionIncrementedOnModification(items) {
                     return -1 /* ExitCode.ERROR */;
                 }
             }
-            const options = [pr.base.ref, pr.head.ref, gitDiffFileFullContentOption, `${workbooksDirectoryPath}/WorkbooksMetadata.json`];
-            const diffSummary = await git.diff(options);
-            const diffLinesArray = diffSummary.split('\n').map((l) => l.trim());
-            const versionChanges = extractVersionChangesByWorkbook(diffLinesArray);
+            const baseMetadata = JSON.parse(await git.show([`${pr.base.ref}:${workbooksMetadataPath}`]));
+            const headMetadata = JSON.parse(await git.show([`${pr.head.ref}:${workbooksMetadataPath}`]));
+            const versionChanges = getVersionChangesByWorkbook(baseMetadata, headMetadata);
             items
                 .filter((workbookMetadata) => changedFiles.includes(`${workbooksDirectoryPath}/${workbookMetadata.templateRelativePath}`))
                 .forEach((workbookMetadata) => {
@@ -57,41 +56,15 @@ export async function isVersionIncrementedOnModification(items) {
     }
     return 0 /* ExitCode.SUCCESS */;
 }
-function extractVersionChangesByWorkbook(diffLines) {
-    let currentLine = 0;
-    const workbookVersionChanges = {};
-    const replaceQuotesRegex = /\"/gi;
-    while (currentLine < diffLines.length && diffLines[currentLine] !== '[') {
-        currentLine++; // Skip to beginning of Workbooks array
-    }
-    while (currentLine < diffLines.length && diffLines[currentLine] !== ']') {
-        if (diffLines[currentLine] === '{') {
-            let templateRelativePath = null;
-            let newVersion = null;
-            let oldVersion = null;
-            currentLine++; // Beginning of a workbook metadata object
-            while (currentLine < diffLines.length && diffLines[currentLine] !== '}') {
-                const line = diffLines[currentLine];
-                if (line.trim().startsWith('"templateRelativePath":')) {
-                    templateRelativePath = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-                }
-                if ((line.trim().startsWith('+') || line.trim().startsWith('-')) && line.includes('"version":')) {
-                    const version = line.split(':')[1].trim().replace(replaceQuotesRegex, "").replace(',', "");
-                    if (line.trim().startsWith('+')) {
-                        newVersion = version;
-                    }
-                    else {
-                        oldVersion = version;
-                    }
-                }
-                currentLine++;
-            }
-            if (templateRelativePath && newVersion && oldVersion) {
-                workbookVersionChanges[templateRelativePath] = { "newVersion": newVersion, "oldVersion": oldVersion };
-            }
+export function getVersionChangesByWorkbook(baseItems, headItems) {
+    const baseVersions = new Map(baseItems.map(({ templateRelativePath, version }) => [templateRelativePath, version]));
+    const versionChanges = {};
+    for (const { templateRelativePath, version: newVersion } of headItems) {
+        const oldVersion = baseVersions.get(templateRelativePath);
+        if (oldVersion !== undefined && oldVersion !== newVersion) {
+            versionChanges[templateRelativePath] = { newVersion, oldVersion };
         }
-        currentLine++;
     }
-    return workbookVersionChanges;
+    return versionChanges;
 }
 //# sourceMappingURL=isVersionIncrementedOnModification.js.map
