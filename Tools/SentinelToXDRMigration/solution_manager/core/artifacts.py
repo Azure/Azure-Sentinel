@@ -49,6 +49,11 @@ def reset_run_selection(token) -> None:
 
 @contextmanager
 def using_run(solution: str | Path, run_id: str | None):
+    # A missing run_id must not discard an explicit selection made by an outer caller
+    # (e.g. the CLI --run-id); otherwise nested helpers resolve a different run.
+    if not run_id:
+        yield
+        return
     token = select_run(solution, run_id)
     try:
         yield
@@ -457,7 +462,7 @@ def write_json_artifact(solution: str | Path, path: Path, value: Any) -> None:
     destination = report_directory(solution, create=True)
     if not path.is_relative_to(destination):
         raise ValueError("artifact write must belong to the selected migration run")
-    path.write_text(json.dumps(portable_artifact(solution, value), indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(portable_artifact(solution, value), indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def migrate_reports(solution: str | Path, *, apply: bool = False) -> dict[str, Any]:
@@ -506,7 +511,7 @@ def migrate_reports(solution: str | Path, *, apply: bool = False) -> dict[str, A
             if not target.exists():
                 target.write_bytes(content)
             receipt[name] = sorted(_digest(path) for path in legacy[name])
-        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8", newline="\n")
     return {"mode": "applied" if apply else "dry-run", "files": sorted(prepared),
             "runId": destination.name, "destination": destination.relative_to(root).as_posix(),
             "originalsPreserved": True}

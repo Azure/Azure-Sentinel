@@ -3,9 +3,10 @@
 # This script ingests ASIM parser sample data into a Log Analytics workspace for testing.
 #
 # It expects the Azure-Sentinel repo to be checked out locally and works as follows:
-#   1. Detects modified ASIM parser YAML files by comparing the current branch against upstream/master.
+#   1. Detects modified ASIM query-time parser YAML files, excluding IngestTimeParsers,
+#      by comparing the current branch against upstream/master.
 #   2. Reads each parser YAML from the local repo to extract schema, vendor, and product info.
-#   3. Loads the corresponding sample data and schema CSV files from "Sample Data/ASIM/".
+#   3. Retains matching legacy sample CSVs, using source-specific files for target collisions.
 #   4. For custom log tables: creates the table and a Data Collection Rule (DCR), then ingests data.
 #   5. For built-in tables: creates a DCR (handling GUID column mismatches) and ingests data.
 #
@@ -30,6 +31,8 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
+resolve_sample_data_path = parser_file_utils.resolve_sample_data_path
 
 import requests
 import yaml
@@ -62,11 +65,6 @@ def get_modified_files(current_directory):
     except subprocess.CalledProcessError as e:
         print(f"::error::Error occurred while executing the command: {e}")
         return []
-
-def filter_yaml_files(modified_files):
-    # Take only the YAML files
-    return [line for line in modified_files if line.endswith('.yaml')]
-
 
 def convert_schema_csv_to_json(csv_file):
     """Reads a schema CSV file with 'ColumnName' and 'ColumnType' headers and returns a list of
@@ -487,7 +485,8 @@ SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
 current_directory = os.path.dirname(os.path.abspath(__file__))
 modified_files = get_modified_files(current_directory)
 
-parser_yaml_files = filter_yaml_files(modified_files)
+parser_yaml_files = filter_query_time_parser_files(modified_files)
+ingested_fixtures = set()
 
 prnumber = sys.argv[1]
 
@@ -514,9 +513,10 @@ for file in parser_yaml_files:
     equivalent_built_in_parser = asim_parser.get('EquivalentBuiltInParser')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
-    SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_dir = os.path.join(repo_root, 'Sample Data', 'ASIM')
-    sample_data_path = os.path.join(sample_data_dir, SampleDataFile)
+    sample_data_path = resolve_sample_data_path(
+        sample_data_dir, event_vendor, event_product, schema, parser_query
+    )
     print(f"Sample data log file reading from local path: {sample_data_path}")
     try:
         with open(sample_data_path, 'rb') as f:
@@ -525,6 +525,10 @@ for file in parser_yaml_files:
     except Exception as e:
         print(f"::error::An error occurred while trying to read Sample Data file at {sample_data_path}: {e}")
     data_result,table_name,datetime_keys = convert_data_csv_to_json('tempfile.csv')
+    fixture_key = (os.path.normcase(os.path.realpath(sample_data_path)), table_name)
+    if fixture_key in ingested_fixtures:
+        print(f"Skipping sample fixture already ingested into {table_name}: {sample_data_path}")
+        continue
     data_result = rebase_time_generated(data_result)
     print(f"Table Name : {table_name}")
     log_ingestion_supported,table_type=check_for_custom_table(table_name)
@@ -581,7 +585,8 @@ for file in parser_yaml_files:
                 break 
         print(f"Ingestion started for {table_name}") 
         print(f"{immutable_id},{stream_name},{table_name}")      
-        senddtosentinel(immutable_id,data_result,stream_name,flag)
+        if senddtosentinel(immutable_id,data_result,stream_name,flag):
+            ingested_fixtures.add(fixture_key)
     elif log_ingestion_supported == True and table_type == "builtin":
         flag=0 #flag value is used to check if DCR is created for the table or not
         #create dcr for ingestion
@@ -625,7 +630,8 @@ for file in parser_yaml_files:
                 break
         print(dcr_directory)    
         print(f"Ingestion started for {table_name}")       
-        senddtosentinel(immutable_id,data_result,stream_name,flag)
+        if senddtosentinel(immutable_id,data_result,stream_name,flag):
+            ingested_fixtures.add(fixture_key)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
         continue

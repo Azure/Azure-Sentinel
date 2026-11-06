@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5b72f527-e3f6-4a00-9908-8e4fee14da9f
+    path: Analytic Rules/PaloAlto-PortScanning.yaml
+    version: 1.0.8
+    querySha256: 5f52b3c8ce230eadf07055c074930a9ed63248e8a0cdd30791b0ac6c8a44e4e8
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - 'Best-effort entity mapping requires review: source Host.FullName column `DeviceName` is provisionally represented by hosts.nameColumn `DeviceName`; confirm that this column is the intended host identifier. The original value is also retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName from query column `SourceUserID`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Host.FullName mismatch is informational because its original value is preserved as customDetails.HostFullName from query column `DeviceName`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1046
+    reviewScope:
+      status: approved
+      actor: user
+      reviewedAt: '2026-11-03T12:00:00Z'
+      reference: approve_batch_7c_fixes_and_qualify=true
+      rationale: Reviewed and approved CommonSecurityLog / CefAma dependencies, entity mappings, customDetails retention, and single primary MITRE tactic for Graph Custom Detection compatibility.
+      sourceDocumentSha256: 6b7ea80634d2f9753ef35655f1297afc5873ce79b57568dfc2de60ea788a231c
+      targetQuerySha256: d065783731a38999fd9ca8290422e5c77c0f47c413d5f228fc38f64680d3c707
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 6b7ea80634d2f9753ef35655f1297afc5873ce79b57568dfc2de60ea788a231c
+      targetQuerySha256: d065783731a38999fd9ca8290422e5c77c0f47c413d5f228fc38f64680d3c707
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: SourceUserID
+      column: SourceUserID
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: DeviceName
+      column: DeviceName
+      status: available
+      customDetailKey: HostFullName
+properties:
+  id: xdr-5b72f527-e3f6-4a00-9908-8e4fee14da9f
+  displayName: Palo Alto - possible internal to external port scanning
+  status: disabled
+  queryCondition:
+    queryText: "CommonSecurityLog\n| where isnotempty(DestinationPort) and DeviceAction !in (\"reset-both\", \"deny\")\n// filter out common usage ports. Add ports that are legitimate for your environment\n| where DestinationPort !in (\"443\", \"53\", \"389\", \"80\", \"0\", \"880\", \"8888\", \"8080\")\n| where ApplicationProtocol == \"incomplete\"\n// filter out IANA ephemeral or negotiated ports as per https://en.wikipedia.org/wiki/Ephemeral_port\n| where DestinationPort !between (toint(49512) .. toint(65535))\n| where Computer != \"\"\n| where ipv4_is_private(DestinationIP) == false\n| extend Reason = coalesce(\n                              column_ifexists(\"Reason\", \"\"),\n                              extract(\"reason=(.+?)(;|$)\", 1, AdditionalExtensions),\n                              \"\"\n                          )\n// Filter out any graceful reset reasons of AGED OUT which occurs when a TCP session closes with a FIN due to aging out.\n| where Reason !has \"aged-out\"\n// Filter out any TCP FIN which occurs when a TCP FIN is used to gracefully close half or both sides of a connection.\n| where Reason !has \"tcp-fin\"\n// Uncomment one of the following where clauses to trigger on specific TCP reset reasons\n// See Palo Alto article for details - https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK\n// TCP RST-server - Occurs when the server sends a TCP reset to the client\n// | where AdditionalExtensions has \"reason=tcp-rst-from-server\"\n// TCP RST-client - Occurs when the client sends a TCP reset to the server\n// | where AdditionalExtensions has \"reason=tcp-rst-from-client\"\n// Already performed\n//| extend reason = tostring(split(AdditionalExtensions, \";\")[3])\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by DeviceName, SourceUserID, SourceIP, ApplicationProtocol, Reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction, DestinationIP\n| where count_ >= 10\n| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), makeset(DestinationIP), totalcount = sum(count_) by DeviceName, SourceUserID, SourceIP, ApplicationProtocol, Reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Palo Alto - possible internal to external port scanning
+      description: '''Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which results in an "ApplicationProtocol = incomplete" designation. The server resets coupled with an "Incomplete" ApplicationProtocol designation can be an indication of internal to external port scanning or probing attack.
+
+        References: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK and
+
+        https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK'''
+      severity: low
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: DeviceName
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1046
+      customDetails:
+        AccountFullName: SourceUserID
+        HostFullName: DeviceName

@@ -1,0 +1,144 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 95dc4ae3-e0f2-48bd-b996-cdd22b90f9af
+    path: Analytic Rules/ADFSDomainTrustMods.yaml
+    version: 1.1.2
+    querySha256: e0af89abdcfed51df41f1ddb5c789e3ee51c7e909a9ddcb341692d97cada4615
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `InitiatingUserPrincipalName`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1555
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 8d5a9d776143931c8e0dec9813af8a1a2fa5f03dcb0a562376f3667f44fb0e40
+      targetQuerySha256: 076eb9cf4f45592350e443abe20f4c39e4bfee38d1d546a75024999256c68a10
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 8d5a9d776143931c8e0dec9813af8a1a2fa5f03dcb0a562376f3667f44fb0e40
+      targetQuerySha256: 076eb9cf4f45592350e443abe20f4c39e4bfee38d1d546a75024999256c68a10
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-95dc4ae3-e0f2-48bd-b996-cdd22b90f9af
+  displayName: Modified domain federation trust settings
+  status: disabled
+  queryCondition:
+    queryText: "(union isfuzzy=true\n(\nAuditLogs\n| where OperationName =~ \"Set\
+      \ federation settings on domain\"\n//| where Result =~ \"success\"   // commenting\
+      \ out, as it may be interesting to capture failed attempts\n| mv-expand TargetResources\n\
+      | extend modifiedProperties = parse_json(TargetResources).modifiedProperties\n\
+      | mv-expand modifiedProperties\n| extend targetDisplayName = tostring(parse_json(modifiedProperties).displayName)\n\
+      ),\n(\nAuditLogs\n| where OperationName =~ \"Set domain authentication\"\n//|\
+      \ where Result =~ \"success\"   // commenting out, as it may be interesting\
+      \ to capture failed attempts\n| mv-expand TargetResources\n| extend modifiedProperties\
+      \ = parse_json(TargetResources).modifiedProperties\n| mv-expand modifiedProperties\n\
+      | mv-apply Property = modifiedProperties on\n  (\n      where Property.displayName\
+      \ =~ \"LiveType\"\n      | extend targetDisplayName = tostring(Property.displayName),\n\
+      \               NewDomainValue = tostring(Property.newValue)\n  )\n| where NewDomainValue\
+      \ has \"Federated\"\n)\n)\n| mv-apply AdditionalDetail = AdditionalDetails on\n\
+      \  (\n      where AdditionalDetail.key =~ \"User-Agent\"\n      | extend UserAgent\
+      \ = tostring(AdditionalDetail.value)\n  )\n| extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.user.userPrincipalName),\
+      \ tostring(InitiatedBy.app.displayName))\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n\
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n\
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n\
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress\
+      \ = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress,\
+      \ InitiatedBy.app.ipAddress))\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName,\
+      \ \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName,\
+      \ \"@\")[1])\n| project-reorder TimeGenerated, OperationName, InitiatingUserOrApp,\
+      \ AADOperationType, targetDisplayName, Result, InitiatingIpAddress, UserAgent,\
+      \ CorrelationId, TenantId, AADTenantId"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Modified domain federation trust settings
+      description: 'This will alert when a user or application modifies the federation settings on the domain or Update domain authentication from Managed to Federated. For example, this alert will trigger when a new Active Directory Federated Service (ADFS) TrustedRealm object, such as a signing certificate, is added to the domain. Modification to domain federation settings should be rare. Confirm the added or modified target domain/URL is legitimate administrator behavior.'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatingAppName
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        - id: account2
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1555
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName

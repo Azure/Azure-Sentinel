@@ -1,0 +1,133 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9e6f4b2c-0d3e-5a8f-c9b7-2f5d8a1e4c6b
+    path: Analytic Rules/BTP - Cloud Integration access policy tampering.yaml
+    version: 1.0.1
+    querySha256: 39bf275e551b6e8d49d74d2a470f4e415435ec973c04ee5086aeb701189d4d6b
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'ObjectType' column `ObjectType` requires runtime output-schema
+      binding verification
+    - customDetails 'ObjectId' column `ObjectId` requires runtime output-schema binding
+      verification
+    - customDetails 'Action' column `Action` requires runtime output-schema binding
+      verification
+    - customDetails 'PolicyMessage' column `PolicyMessage` requires runtime output-schema
+      binding verification
+    - customDetails 'SourceIP' column `ipAddress` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1548
+    - T1222
+    reviewScope:
+      sourceDocumentSha256: 3e380d7da73634f628ca8f92c3e08493c948c3675c02526f93c70d7452a9e809
+      targetQuerySha256: b3089474c96f5fa2bd06fe923e73e6e6696b42e739eab2d91b043c621e2f429f
+properties:
+  id: xdr-9e6f4b2c-0d3e-5a8f-c9b7-2f5d8a1e4c6b
+  displayName: SAP BTP - Cloud Integration access policy tampering
+  status: disabled
+  queryCondition:
+    queryText: "let accessPolicyTypes = dynamic([\"Access Policy\", \"Artifact Reference\"\
+      ]);\nlet monitoredActions = dynamic([\"Create\", \"Change\", \"Delete\"]);\n\
+      SAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n| extend data_s\
+      \ = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n| extend\
+      \ parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n\
+      \         objectType = tostring(parsedData.objectType),\n         objectId =\
+      \ tostring(parsedData.objectId),\n         policyMessage = tostring(parsedData.attributes.message)\n\
+      | where objectType in (accessPolicyTypes)\n| where action in (monitoredActions)\n\
+      | extend normalizedAction = case(\n    action == \"Create\", \"created\",\n\
+      \    action == \"Change\", \"modified\",\n    action == \"Delete\", \"deleted\"\
+      ,\n    action\n)\n| extend MessageText = case(\n    objectType == \"Access Policy\"\
+      , strcat(\"Access policy '\", objectId, \"' was \", normalizedAction),\n   \
+      \ objectType == \"Artifact Reference\", strcat(\"Artifact reference '\", objectId,\
+      \ \"' was \", normalizedAction),\n    strcat(objectType, \" '\", objectId, \"\
+      ' was \", normalizedAction)\n)\n| project\n    UpdatedOn,\n    UserName,\n \
+      \   MessageText,\n    ObjectType = objectType,\n    ObjectId = objectId,\n \
+      \   Action = action,\n    PolicyMessage = policyMessage,\n    Tenant,\n    ipAddress,\n\
+      \    CloudApp = \"SAP Cloud Integration\"\n| extend AccountName = split(UserName,\
+      \ \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]"
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - Cloud Integration access policy tampering
+      description: 'Identifies changes to access policies in SAP Cloud Integration.
+        Access policies control
+
+        authorization for integration artifacts, defining which users and roles can
+        access specific
+
+        integration flows and related content.
+
+
+        Unauthorized access policy manipulation could indicate:
+
+        - Attacker granting themselves access to sensitive integration artifacts
+
+        - Removal of security controls to enable further malicious activity
+
+        - Defense evasion by modifying artifact references to hide unauthorized access'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ipAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1548
+        - technique: T1222
+      customDetails:
+        ObjectType: ObjectType
+        ObjectId: ObjectId
+        Action: Action
+        PolicyMessage: PolicyMessage
+        SourceIP: ipAddress

@@ -1,0 +1,162 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6f675c17-7a61-440c-abd1-c73ef4d748ec
+    path: Analytic Rules/AWS_CreatedCRUDDyanmoDBPolicytoPrivilegeEscalation.yaml
+    version: 1.0.3
+    querySha256: cc6fbb52bde75b5c87e52edb508cc8eb1d38abfdfc9c64ff61b8caae5a4f0d1e
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'PolicyName' column `PolicyName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'EventName' column `EventName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - Account.CloudAppAccountId output column `RecipientAccountId` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - PrivilegeEscalation
+    - Persistence
+    originalTechniques:
+    - T1484
+    - T1098.003
+    reviewScope:
+      sourceDocumentSha256: 062565e81b5652b0225fc080874e3b7fb4b39957d66e8f32ad23c45f0f1ecea8
+      targetQuerySha256: 7ff06775863910ddd2c53cb58d4be09966ad2ff7404fb1aebe1ec8b1fa8db91e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-6f675c17-7a61-440c-abd1-c73ef4d748ec
+  displayName: AWSCloudTrail - Creation of CRUD DynamoDB policy and then privilege escalation
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
+      let createPolicy =  dynamic(["CreatePolicy", "CreatePolicyVersion"]);
+      let timeframe = 1d;
+      let lookback = 14d;
+      // Creating Master table with all the events to use with materialize for better performance
+      let EventInfo = AWSCloudTrail
+      | where TimeGenerated >= ago(lookback)
+      | where EventName in (EventNameList) or EventName in (createPolicy)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "");
+      //Checking for Policy creation event with Full Admin Privileges since lookback period.
+      let FullAdminPolicyEvents =  materialize(  EventInfo
+      | where TimeGenerated >= ago(lookback)
+      | where EventName in (createPolicy)
+      | extend PolicyName = tostring(parse_json(RequestParameters).policyName)
+      | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement
+      | mvexpand Statement
+      | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)
+      | extend Action = tostring(Action)
+      | where Effect =~ "Allow" and ((Action contains "dynamodb:Create" or Action contains "dynamodb:Put") and (Action contains "dynamodb:Describe" or Action contains "dynamodb:Get" or Action contains "dynamodb:Scan")  and Action contains "dynamodb:Update" and Action contains "dynamodb:Delete") and Resource == "*" and Condition == ""
+      | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn
+      | project-rename StartTime = TimeGenerated  );
+      let PolicyAttach = materialize(  EventInfo
+      | where TimeGenerated >= ago(timeframe)
+      | where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),"/")[1])
+      | summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, SourceIpAddress, PolicyName
+      | extend AttachEvent = pack("StartTime", StartTime, "EndTime", EndTime, "EventName", EventName, "UserIdentityType",   UserIdentityType, "SourceIpAddress", SourceIpAddress, "AccountName", AccountName, "AccountUPNSuffix", AccountUPNSuffix, "RecipientAccountId", RecipientAccountId, "UserIdentityArn", UserIdentityArn)
+      | project EventSource, PolicyName, AttachEvent, AttachEventCount, RecipientAccountId, AccountName, AccountUPNSuffix
+      );
+      // Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.
+      // These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.
+      FullAdminPolicyEvents
+      | join kind=leftouter
+      (
+          PolicyAttach
+      )
+      on PolicyName
+      | project-away PolicyName1
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Creation of CRUD DynamoDB policy and then privilege escalation
+      description: |-
+        Identifies creation of IAM policies that provide broad CRUD permissions for DynamoDB, followed by policy attachment activity. This sequence can indicate an attempt to grant capabilities that support
+        privilege escalation and should be validated against approved administrative changes.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1484
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1484
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+      customDetails:
+        PolicyName: PolicyName
+        EventName: EventName
+        RecipientAccountId: RecipientAccountId
+        UserIdentityArn: UserIdentityArn

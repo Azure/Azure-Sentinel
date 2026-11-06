@@ -1,0 +1,150 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (Exchange)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (Exchange)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7b907bf7-77d4-41d0-a208-5643ff75bf9a
+    path: Analytic Rules/Malicious_Inbox_Rule.yaml
+    version: 2.0.4
+    querySha256: c1346f51befc99d9f9861895015f945c887b56b4ef9e2236335439ec0c384d54
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `OriginatingServerName` is provisionally represented
+      by hosts.nameColumn `OriginatingServerName`; confirm that this column is the intended host identifier. The original
+      value is also retained in customDetails when the query output binding is available; this assumption does not prove entity
+      parity'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserId`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserId` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `OriginatingServerName`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `OriginatingServerName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - DefenseEvasion
+    originalTechniques:
+    - T1098
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 4a21cee1dd16db62cfc382c4105d3322b12f05c2b030504fa0602f36971841cb
+      targetQuerySha256: 68f270dceb1c7eed0c430198b3119031fdecf934f151ca8fbf0217a81b8b1ee3
+    reviewDecisions:
+    - reason: 'Best-effort entity mapping requires review: source Host.FullName column `OriginatingServerName` is provisionally
+        represented by hosts.nameColumn `OriginatingServerName`; confirm that this column is the intended host identifier.
+        The original value is also retained in customDetails when the query output binding is available; this assumption does
+        not prove entity parity'
+      decision: accepted
+      sourceDocumentSha256: 4a21cee1dd16db62cfc382c4105d3322b12f05c2b030504fa0602f36971841cb
+      targetQuerySha256: 68f270dceb1c7eed0c430198b3119031fdecf934f151ca8fbf0217a81b8b1ee3
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: OriginatingServerName
+      column: OriginatingServerName
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    acceptedReviewReasons:
+    - 'Best-effort entity mapping requires review: source Host.FullName column `OriginatingServerName` is provisionally represented
+      by hosts.nameColumn `OriginatingServerName`; confirm that this column is the intended host identifier. The original
+      value is also retained in customDetails when the query output binding is available; this assumption does not prove entity
+      parity'
+properties:
+  id: xdr-7b907bf7-77d4-41d0-a208-5643ff75bf9a
+  displayName: Malicious Inbox Rule
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Keywords = dynamic(["helpdesk", " alert", " suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
+      OfficeActivity
+      | where OfficeWorkload =~ "Exchange"
+      | where Operation =~ "New-InboxRule" and (ResultStatus =~ "True" or ResultStatus =~ "Succeeded")
+      | where Parameters has "Deleted Items" or Parameters has "Junk Email"  or Parameters has "DeleteMessage"
+      | extend Events=todynamic(Parameters)
+      | parse Events  with * "SubjectContainsWords" SubjectContainsWords '}'*
+      | parse Events  with * "BodyContainsWords" BodyContainsWords '}'*
+      | parse Events  with * "SubjectOrBodyContainsWords" SubjectOrBodyContainsWords '}'*
+      | where SubjectContainsWords has_any (Keywords)
+       or BodyContainsWords has_any (Keywords)
+       or SubjectOrBodyContainsWords has_any (Keywords)
+      | extend ClientIPAddress = case( ClientIP has ".", tostring(split(ClientIP,":")[0]), ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))), ClientIP )
+      | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))
+      | extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\')[-1]))
+      | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+      | extend OriginatingServerName = tostring(split(OriginatingServer, " ")[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Malicious Inbox Rule
+      description: |-
+        'Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.
+         This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.
+        Reference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: OriginatingServerName
+        ips:
+        - id: ip1
+          addressColumn: ClientIPAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+        - technique: T1078
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountFullName: UserId
+        HostFullName: OriginatingServerName

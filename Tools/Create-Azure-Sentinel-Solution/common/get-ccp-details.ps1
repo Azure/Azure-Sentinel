@@ -36,7 +36,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                 -ContentPath $file `
                 -RequireFile
             $file = $resolvedDefinition.RelativePath
-            $currentFileDCPath = $resolvedDefinition.FullPath
+            $currentFileDCPath = $resolvedDefinition.FullPath.Replace('\', '/')
             $ccpBaseFolderPath = (Split-Path -Path $currentFileDCPath -Parent) -replace '\\', '/'
             Write-Host "currentFileDCPath $currentFileDCPath, ccpBaseFolderPath $ccpBaseFolderPath"
             $fileContent = Read-ContainedSolutionJson -filePath $currentFileDCPath -solutionRoot $solutionRoot -solutionName $solutionName
@@ -173,7 +173,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                     ) {
                                         if ($counter -eq 0) {
                                             # update details for this record only.
-                                            $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
+                                            $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName.Replace('\', '/')
                                             $ccpDefinitionFile.DCPollerStreamName = $pollerArrayItem.properties.dcrConfig.streamName
                                             $ccpDefinitionFile.PollerKind = $pollerArrayItem.kind;
                                             if ($null -eq $pollerArrayItem.properties.dcrConfig.dataCollectionEndpoint) {
@@ -220,7 +220,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                 if ($fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId -or
                                 $fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.PollerConnectorDefinitionName
                                 ) {
-                                    $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
+                                    $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName.Replace('\', '/')
                                     $ccpDefinitionFile.DCPollerStreamName = $fileContent.properties.dcrConfig.streamName
                                     $ccpDefinitionFile.PollerKind = $fileContent.kind;
                                     if ($null -eq $fileContent.properties.dcrConfig.dataCollectionEndpoint) {
@@ -271,7 +271,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                         if ($ccpPollerFile.isDynamicStreamName -and [string]::IsNullOrEmpty($ccpPollerFile.DCRFilePath)) {
                             $isDCRType = if ($fileContent -is [System.Object[]]) { $fileContent[0].type -eq "Microsoft.Insights/dataCollectionRules" } else { $fileContent.type -eq "Microsoft.Insights/dataCollectionRules" }
                             if ($isDCRType) {
-                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                 continue
                             }
                         }
@@ -294,13 +294,13 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                         Write-Host "Error For given CCP, DCR file 'stream' value is not correct. Please make sure that StreamName in Data Connector poller file and that in DCR Stream name are correct. Refer Tools/Create-Azure-Sentinel-Solution/common/StandardLogStreams.ps1 file for Standard mapping." -BackgroundColor Red
                                         exit 1; 
                                     } else {
-                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                     }
                                 }
                                 else {
                                     # this is a custom table
                                     if ($dcrDataFlowStream.streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
-                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                        $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                         if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
                                             $ccpPollerFile.TableOutputStream = $dcrDataFlowStream.outputStream.Replace('Custom-', '')
                                             $ccpPollerFile.DCROutputStream = $dcrDataFlowStream.outputStream
@@ -316,7 +316,7 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                         $dataFlowOutputStreamName = $dataFlowItem.outputStream
 
                                         if ($dataFlowStreamName -eq $ccpPollerFile.DCPollerStreamName) {
-                                            $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                            $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
 
                                             if ($dataFlowOutputStreamName.contains('Custom-')) {
                                                 $ccpPollerFile.TableOutputStream = $dataFlowStreamName.Replace('Custom-', '')
@@ -331,13 +331,13 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                             . "$PSScriptRoot/standardLogStreams.ps1" # load standard data connector poller and dcr mapper
                                             $dcPollerStreamNameValue = GetKeyValue -key $ccpPollerFile.DCPollerStreamName
                                             if ($dcPollerStreamNameValue -eq $dataFlowStreamName) {
-                                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                                $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                             }
                                         }
                                     }
                                 }
                                 if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
-                                    $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                    $ccpPollerFile.DCRFilePath = $inputFile.FullName.Replace('\', '/')
                                     if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
                                         $ccpPollerFile.TableOutputStream = $fileContent.properties.dataFlows[0].outputStream.Replace('Custom-', '')
                                         $ccpPollerFile.DCROutputStream = $fileContent.properties.dataFlows[0].outputStream
@@ -375,14 +375,14 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                             foreach ($tableArrayItem in $fileContent) {
                                 if($tableArrayItem.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
                                     if ($tableArrayItem.name -eq $ccpTable.TableOutputStream) {
-                                        $ccpTable.TableFilePath = $inputFile.FullName
+                                        $ccpTable.TableFilePath = $inputFile.FullName.Replace('\', '/')
                                     }
                                 }
                             }
                         } else {
                             if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
                                 if ($fileContent.name -eq $ccpTable.TableOutputStream) {
-                                    $ccpTable.TableFilePath = $inputFile.FullName
+                                    $ccpTable.TableFilePath = $inputFile.FullName.Replace('\', '/')
                                 }
                             }
                         }
@@ -443,7 +443,7 @@ function GetCCPTableFilePaths($existingCCPDict, $baseFolderPath, $solutionName, 
             }
 
             if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
-                $currentTableFilePath = $inputFile.FullName
+                $currentTableFilePath = $inputFile.FullName.Replace('\', '/')
                 if ($existingCCPDict.Count -gt 0) {
                     # check if current file path already present in variable $existingCCPDict if not present then add it in new variable list
                     $isTablePresent = $false;

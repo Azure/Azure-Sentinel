@@ -1,0 +1,120 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - Syslog
+    - VMwareESXi
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 395c5560-ddc2-45b2-aafe-2e3f64528d3d
+    path: Analytic Rules/ESXiUnexpectedDiskImage.yaml
+    version: 1.0.2
+    querySha256: 9c11ac630d29c03c07123595b3c654bc7d807488590f5f1cad590d17431ceac7
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity`
+      is provisionally represented by hosts.nameColumn `HostCustomEntity`; confirm
+      that this column is the intended host identifier. The original value is also
+      retained in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column
+      `HostCustomEntity`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `HostCustomEntity` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1496
+    reviewScope:
+      sourceDocumentSha256: 649cbf93e2eb9378a53dc11a8bafb4cc42fc0c5ef0217c485233135a908913a1
+      targetQuerySha256: ff2d6fcbaaece81590bcfc0f98a0710ffb68bed4106c1106194403eb7b65fe74
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: HostCustomEntity
+      column: HostCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+properties:
+  id: xdr-395c5560-ddc2-45b2-aafe-2e3f64528d3d
+  displayName: VMware ESXi - Unexpected disk image
+  status: disabled
+  queryCondition:
+    queryText: 'let img_ =
+
+      VMwareESXi
+
+      | where SyslogMessage has (''Matched discovered VM'')
+
+      | extend DstHostname = extract(@''vim.VirtualMachine\S+,(.*?)\]'', 1, SyslogMessage)
+
+      | extend kImageName = extract(@''ds:///vmfs/volumes/(.*)/(.*?),'', 2, SyslogMessage)
+
+      | summarize img_lst = makeset(kImageName) by DstHostname;
+
+      VMwareESXi
+
+      | where SyslogMessage has (''Matched discovered VM'')
+
+      | extend DstHostname = extract(@''vim.VirtualMachine\S+,(.*?)\]'', 1, SyslogMessage)
+
+      | extend ImageName = extract(@''ds:///vmfs/volumes/(.*)/(.*?),'', 2, SyslogMessage)
+
+      | join (img_) on DstHostname
+
+      | where img_lst !has ImageName
+
+      | extend HostCustomEntity = DstHostname'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: VMware ESXi - Unexpected disk image
+      description: '''Detects unexpected disk image for VM.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1496
+      customDetails:
+        HostFullName: HostCustomEntity

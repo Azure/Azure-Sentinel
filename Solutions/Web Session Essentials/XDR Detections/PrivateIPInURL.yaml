@@ -1,0 +1,177 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: e3a7722a-e099-45a9-9afb-6618e8f05405
+    path: Analytic Rules/PrivateIPInURL.yaml
+    version: 1.0.1
+    querySha256: f04288f0a1fa855a2b87838b504b23314a6658deed7b85ba8fea9fbf7d8d0d30
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventCount' column `EventCount` requires runtime output-schema binding verification
+    - customDetails 'Urls' column `Urls` requires runtime output-schema binding verification
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - CommandAndControl
+    originalTechniques:
+    - T1041
+    - T1071.001
+    - T1001
+    reviewScope:
+      sourceDocumentSha256: d6c5ac7bbba01bcea95c3614cac3f31cbc2076638b4e907a5449e80021698bc1
+      targetQuerySha256: e9c1d704e2fd4c9b16213b345ba40cca6d43e5765c2d5f68a2e02679e0218d84
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: d6c5ac7bbba01bcea95c3614cac3f31cbc2076638b4e907a5449e80021698bc1
+      targetQuerySha256: e9c1d704e2fd4c9b16213b345ba40cca6d43e5765c2d5f68a2e02679e0218d84
+properties:
+  id: xdr-e3a7722a-e099-45a9-9afb-6618e8f05405
+  displayName: Detect presence of private IP addresses in URLs (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback = 1h;
+      // Identified base64 encoded IPv4 addresses
+      let ipv4_encoded_identification_regex = @"\=([a-zA-Z0-9\/\+]*(?:(?:MC|Au|wL|MS|Eu|xL|Mi|Iu|yL|My|Mu|zL|NC|Qu|0L|NS|Uu|1L|Ni|Yu|2L|Ny|cu|3L|OC|gu|4L|OS|ku|5L){1}[a-zA-Z0-9\/\+]{2,4}){3}[a-zA-Z0-9\/\+\=]*)";
+      // Extractes IPv4 addresses as hex values
+      let ipv4_decoded_hex_extract = @"((?:(?:61|62|63|64|65|66|67|68|69|6a|6b|6c|6d|6e|6f|70|71|72|73|74|75|76|77|78|79|7a|41|42|43|44|45|46|47|48|49|4a|4b|4c|4d|4e|4f|50|51|52|53|54|55|56|57|58|59|5a|2f|2b|3d),){6,14}(?:61|62|63|64|65|66|67|68|69|6a|6b|6c|6d|6e|6f|70|71|72|73|74|75|76|77|78|79|7a|41|42|43|44|45|46|47|48|49|4a|4b|4c|4d|4e|4f|50|51|52|53|54|55|56|57|58|59|5a|2f|2b|3d))";
+      let ipV4_Private_FromPlainString = _Im_WebSession(starttime=ago(lookback), eventresult='Success')
+          | where isnotempty(Url)
+          | extend ip_inURL = extract(@"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b", 0, Url)
+          | where ipv4_is_private(ip_inURL)
+          | where not(ipv4_is_private(DstIpAddr)) // only take traffic going to internet
+          | summarize
+              EventCount=count(),
+              EventEndTime = max(TimeGenerated),
+              EventStartTime = min(TimeGenerated),
+              Urls=tostring(make_set(Url, 100))
+              by SrcIpAddr, SrcUsername, SrcHostname, ip_inURL;
+      let ipV4_Private_FromEncodedString =
+          _Im_WebSession(starttime=ago(lookback), eventresult='Success')
+          | where isnotempty(Url)
+          // Identify requests with encoded IPv4 addresses
+          | where Url matches regex ipv4_encoded_identification_regex
+          | where not(ipv4_is_private(DstIpAddr)) // only take traffic going to internet
+          | project TimeGenerated, Url, SrcIpAddr, SrcUsername, SrcHostname
+          // Extract IP candidates in their base64 encoded format, significantly reducing the dataset
+          | extend extracted_encoded_ip_inURL = extract_all(ipv4_encoded_identification_regex, Url)
+          // We could have more than one ip, expand them out
+          | mv-expand extracted_encoded_ip_inURL to typeof(string)
+          | summarize
+              EventStartTime=min(TimeGenerated),
+              EventEndTime=max(TimeGenerated),
+              make_set(Url, 100),
+              EventCount=count()
+              by extracted_encoded_ip_inURL, SrcIpAddr, SrcUsername, SrcHostname
+          // Pad if we need to
+          | extend extracted_encoded_ip_inURL = iff(strlen(extracted_encoded_ip_inURL) % 2 == 0, extracted_encoded_ip_inURL, strcat(extracted_encoded_ip_inURL, "="))
+          // Now decode the candidate to a long array, we cannot go straight to string as it cannot handle non-UTF8, we need to strip that first
+          | extend extracted_encoded_ip_inURL = tostring(base64_decode_toarray(extracted_encoded_ip_inURL))
+          // Extract the IP candidates from the array
+          | extend hex_extracted = extract_all(ipv4_decoded_hex_extract, extracted_encoded_ip_inURL)
+          // Expand, it's still possible that we might have more than 1 IP
+          | mv-expand hex_extracted
+          // Now we should have a clean string. We need to put it back into a dynamic array to convert back to a string.
+          | extend hex_extracted = trim_end(",", tostring(hex_extracted))
+          | extend hex_extracted = strcat("[", hex_extracted, "]")
+          | extend hex_extracted = todynamic(hex_extracted)
+          // Convert the array back into a string
+          | extend decoded_ip_inURL = unicode_codepoints_to_string(hex_extracted)
+          | where ipv4_is_private(decoded_ip_inURL)
+          | project
+              ip_inURL=decoded_ip_inURL,
+              Urls=tostring(set_Url),
+              EventStartTime,
+              EventEndTime,
+              EventCount,
+              SrcIpAddr,
+              SrcUsername,
+              SrcHostname;
+      union ipV4_Private_FromPlainString, ipV4_Private_FromEncodedString
+      | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Detect presence of private IP addresses in URLs (ASIM Web Session)
+      description: '''This rule identifies requests made to atypical URLs, as malware can exploit IP addresses for communication
+        with command-and-control (C2) servers. The detection identifies network requests that contain either plain text or
+        Base64 encoded IP addresses. Alerts are triggered when a private IP address is observed as plain text or base64 encoded
+        in an outbound web request. This method of concealing the IP address was observed in the utilization of the RunningRAT
+        tool by POLONIUM.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: ip_inURL
+        - id: ip2
+          addressColumn: SrcIpAddr
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: SrcHostname
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1041
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+          subTechniques:
+          - T1071.001
+        - technique: T1001
+      customDetails:
+        EventCount: EventCount
+        Urls: Urls
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime

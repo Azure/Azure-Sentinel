@@ -1,0 +1,118 @@
+Parser:
+  Title: Email Event ASIM filtering parser for Microsoft Sentinel native Email Event table
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: Native
+Normalization:
+  Schema: EmailEvent
+  Version: '1.0.0'
+References:
+  - Title: Native Email Event table
+    Link: https://learn.microsoft.com/azure/azure-monitor/reference/tables/asimemaileventlogs
+  - Title: ASIM Email Event Schema
+    Link: https://aka.ms/ASimEmailEventDoc
+Description: |
+  This ASIM parser supports normalizing the native Email Event table (ASimEmailEventLogs) to the ASIM Email Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: vimEmailEventNative
+EquivalentBuiltInParser: _Im_EmailEvent_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailfromaddress_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailrecipient_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emailsubject_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildirection_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: emaildeliverylocation_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime:datetime=datetime(null), endtime:datetime=datetime(null),
+      ipaddr_has_any_prefix:dynamic=dynamic([]), emailfromaddress_has_any:dynamic=dynamic([]),
+      emailrecipient_has_any:dynamic=dynamic([]), emailsubject_has_any:dynamic=dynamic([]),
+      emaildirection_in:dynamic=dynamic([]), emaildeliverylocation_in:dynamic=dynamic([]),
+      eventresult:string='*', disabled:bool=false, pack:bool=false) {
+    ASimEmailEventLogs
+    | where not(disabled)
+    | where isnull(starttime) or coalesce(EventStartTime, TimeGenerated) >= starttime
+    | where isnull(endtime) or coalesce(EventEndTime, TimeGenerated) <= endtime
+    | where array_length(ipaddr_has_any_prefix) == 0
+        or has_any_ipv4_prefix(SrcIpAddr, ipaddr_has_any_prefix)
+        or has_any_ipv4_prefix(DstIpAddr, ipaddr_has_any_prefix)
+    | where array_length(emailfromaddress_has_any) == 0 or EmailFromAddress has_any (emailfromaddress_has_any)
+    | where array_length(emailrecipient_has_any) == 0
+        or EmailToRecipients has_any (emailrecipient_has_any)
+        or EmailCCRecipients has_any (emailrecipient_has_any)
+        or EmailBCCRecipients has_any (emailrecipient_has_any)
+    | where array_length(emailsubject_has_any) == 0 or EmailSubject has_any (emailsubject_has_any)
+    | where array_length(emaildirection_in) == 0 or EmailDirection in~ (emaildirection_in)
+    | where array_length(emaildeliverylocation_in) == 0 or EmailDeliveryLocation in~ (emaildeliverylocation_in)
+    | where eventresult == '*' or EventResult =~ eventresult
+    | extend
+        EventSchema = "EmailEvent",
+        EventStartTime = coalesce(EventStartTime, TimeGenerated),
+        EventEndTime = coalesce(EventEndTime, TimeGenerated),
+        Dvc = coalesce(Dvc, DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Src = coalesce(Src, SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+        Dst = coalesce(Dst, DstIpAddr),
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        User = SrcUserName,
+        IpAddr = SrcIpAddr,
+        DvcEntityKey = column_ifexists("DvcEntityKey", ""),
+        AdditionalFields = iff(pack, AdditionalFields, dynamic({}))
+    | project
+        TimeGenerated, Type, EventUid, EventOriginalUid, EventSchema, EventSchemaVersion,
+        EventStartTime, EventEndTime, EventCount, EventVendor, EventProduct, EventProductVersion,
+        EventType, EventSubType, EventOriginalType, EventResult, EventSeverity,
+        EventOriginalSeverity, EventResultDetails, EventOriginalResultDetails,
+        EventMessage, EventReportUrl, EventOwner, AdditionalEntities, AdditionalFields,
+        Dvc, DvcIpAddr, DvcHostname, DvcDomain, DvcDomainType, DvcFQDN, DvcDescription,
+        DvcId, DvcIdType, DvcMacAddr, DvcZone, DvcOs, DvcOsVersion, DvcAction,
+        DvcOriginalAction, DvcInterface, DvcScopeId, DvcScope, DvcEntityKey,
+        SrcUserName, SrcUsernameType, SrcUserId, SrcUserIdType, SrcUserScopeId, SrcUserScope,
+        SrcUserUpn, Src, SrcDvcId, SrcDvcScopeId, SrcDvcScope, SrcDvcIdType, SrcDeviceType,
+        SrcHostname, SrcDomain, SrcDomainType, SrcFQDN, SrcDescription, SrcIsp,
+        SrcGeoCountry, SrcGeoCity, SrcGeoRegion, SrcGeoLongitude, SrcGeoLatitude, SrcIpAddr,
+        Dst, DstIpAddr, EmailToRecipients, EmailCCRecipients, EmailBCCRecipients, EmailSubject,
+        EmailSizeBytes, EmailUrlCount, EmailUrls, EmailFileCount, EmailFiles,
+        EmailDirection, EmailDeliveryLocation, EmailOriginalDeliveryLocation, EmailLanguage,
+        EmailProtocolName, EmailMailFromAddress, EmailFromAddress, EmailReplyToAddress,
+        EmailMailFromDomain, EmailFromDomain, EmailReplyToDomain,
+        EmailDmarcResult, EmailDmarcOriginalResult, EmailDmarcOverride, EmailDmarcPolicy,
+        EmailSpfResult, EmailSpfOriginalResult, EmailDkimResult, EmailDkimOriginalResult,
+        EmailDkimDomain, EmailDkimSignature, RuleName, RuleNumber, Rule, RuleDescription,
+        ThreatId, ThreatName, ThreatCategory, ThreatOriginalCategory, ThreatRiskLevel,
+        ThreatOriginalRiskLevel, ThreatIpAddr, ThreatField, ThreatConfidence, ThreatOriginalConfidence,
+        ThreatIsActive, ThreatFirstReportedTime, ThreatLastReportedTime, IndicatorType,
+        IndicatorAssociation, AttackTactics, AttackTechniques, AttackRemediationSteps, User, IpAddr
+  };
+  parser(starttime=starttime, endtime=endtime, ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      emailfromaddress_has_any=emailfromaddress_has_any, emailrecipient_has_any=emailrecipient_has_any,
+      emailsubject_has_any=emailsubject_has_any, emaildirection_in=emaildirection_in,
+      emaildeliverylocation_in=emaildeliverylocation_in, eventresult=eventresult,
+      disabled=disabled, pack=pack)

@@ -1,0 +1,715 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Microsoft Entra ID audit logs"
+      },
+      "name": "text - 1"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "bc372bf5-2dcd-4efa-aa85-94b6e6fafe14",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 7776000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "e032b9f7-5449-4180-9c20-75760afa96f6",
+            "version": "KqlParameterItem/1.0",
+            "name": "User",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "AuditLogs\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n//| where initiator!= \"\"\r\n| summarize Count = count() by initiator\r\n| order by Count desc, initiator asc\r\n| project Value = initiator, Label = strcat(initiator, ' - ', Count), Selected = false",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          },
+          {
+            "id": "0a59a0b3-6d93-4fee-bdbe-147383c510c6",
+            "version": "KqlParameterItem/1.0",
+            "name": "Category",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "AuditLogs\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n| where \"{User:lable}\" == \"All\" or initiator in ({User})\r\n| summarize Count = count() by Category\r\n| order by Count desc, Category asc\r\n| project Value = Category, Label = strcat(Category, ' - ', Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          },
+          {
+            "id": "4d2b245b-5e59-4eb6-9f51-ba926581ab47",
+            "version": "KqlParameterItem/1.0",
+            "name": "Result",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "AuditLogs\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n| where \"{User:lable}\" == \"All\" or initiator in ({User})\r\n| summarize Count = count() by Result\r\n| order by Count desc, Result asc\r\n| project Value = Result, Label = strcat(Result, ' - ', Count, ' sign-ins')",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = AuditLogs\r\n| where \"{Category:lable}\" == \"All\" or Category in ({Category})\r\n| where \"{Result:lable}\" == \"All\" or Result in ({Result})\r\n| extend initiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\r\n| where initiatingUserPrincipalName != \"\" \r\n| where \"{User:lable}\" == \"All\" or initiatingUserPrincipalName in ({User});\r\ndata\r\n| summarize Count = count() by Category\r\n| join kind = fullouter (datatable(Category:string)['Medium', 'high', 'low']) on Category\r\n| project Category = iff(Category == '', Category1, Category), Count = iff(Category == '', 0, Count)\r\n| join kind = inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Category)\r\n    on Category\r\n| project-away Category1, TimeGenerated\r\n| extend Category = Category\r\n| union (\r\n    data \r\n    | summarize Count = count() \r\n    | extend jkey = 1\r\n    | join kind=inner (data\r\n        | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n        | extend jkey = 1) on jkey\r\n    | extend Category = 'All', Categorys = '*'    \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "title": "Categories volume",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "Category",
+        "exportParameterName": "CategoryFIlter",
+        "exportDefaultValue": "All",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Category",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 21,
+            "formatOptions": {
+              "palette": "purple",
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = AuditLogs\r\n| where \"{Result:lable}\" == \"All\" or Result in ({Result})\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n| where \"{User:lable}\" == \"All\" or initiator in ({User})\r\n| where \"{Category:lable}\" == \"All\" or Category in ({Category})\r\n| where Category == '{CategoryFIlter}' or '{CategoryFIlter}' == \"All\";\r\nlet appData = data\r\n| summarize TotalCount = count() by OperationName, Category\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by OperationName\r\n    | project-away TimeGenerated) on OperationName\r\n| order by TotalCount desc, OperationName asc\r\n| project OperationName, TotalCount, Trend, Category\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\"), Category, OperationName\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by OperationName, initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n    | project-away TimeGenerated) on OperationName, initiator\r\n| order by TotalCount desc, OperationName asc\r\n| project OperationName, initiator, TotalCount, Category, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on OperationName\r\n| project Id, Name = initiator, ItemType = 'initiator', ['Operations Count'] = TotalCount, Trend, Category, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = OperationName, ItemType = 'Operation', ['Operations Count'] = TotalCount, Category, Trend)\r\n| order by ['Operations Count'] desc, Name asc",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "User activities",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportParameterName": "UserInfo",
+        "exportDefaultValue": "{ \"Name\":\"\", \"ItemType\":\"*\"}",
+        "showExportToExcel": true,
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ItemType",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Operations Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blue",
+                "showIcon": true
+              },
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "min": 0,
+                "palette": "turquoise",
+                "showIcon": true
+              },
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 1000,
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          }
+        }
+      },
+      "customWidth": "70",
+      "showPin": true,
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({UserInfo});\r\nAuditLogs\r\n| where \"{Category:lable}\" == \"All\" or Category in ({Category})\r\n| where \"{Result:lable}\" == \"All\" or Result in ({Result})\r\n| extend initiatingUserPrincipalName = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n//| where initiatingUserPrincipalName != \"\" \r\n| where \"{User:lable}\" == \"All\" or initiatingUserPrincipalName in ({User})\r\n| where details.ItemType == '*' or (details.ItemType == 'initiator' and initiatingUserPrincipalName == details.Name) or (details.ItemType == 'Operation' and OperationName == details.Name)\r\n| summarize Activities = count() by initiatingUserPrincipalName\r\n| sort by Activities desc nulls last ",
+        "size": 0,
+        "title": "Top active users",
+        "timeContext": {
+          "durationMs": 7776000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "piechart"
+      },
+      "customWidth": "30",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let details = dynamic({UserInfo});\r\nlet data = AuditLogs\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n| where details.ItemType == '*' or (details.ItemType == 'initiator' and initiator == details.Name) or (details.ItemType == 'Operation' and OperationName == details.Name)\r\n| where \"{Category:lable}\" == \"All\" or Category in ({Category})\r\n| where \"{Result:lable}\" == \"All\" or Result in ({Result})\r\n| where \"{User:lable}\" == \"All\" or initiator in ({User});\r\nlet appData = data\r\n| summarize TotalCount = count() by Result\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Result\r\n    | project-away TimeGenerated) on Result\r\n| order by TotalCount desc, Result asc\r\n| project Result, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by OperationName, Result\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Result, OperationName\r\n    | project-away TimeGenerated) on Result, OperationName\r\n| order by TotalCount desc, Result asc\r\n| project Result, OperationName, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Result\r\n| project Id, Name = OperationName, ItemType = 'Operation', ['Results Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Result, ItemType = 'Result', ['Results Count'] = TotalCount, Trend)\r\n| order by ['Results Count'] desc, Name asc",
+        "size": 0,
+        "title": "Result status",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportParameterName": "ResultInfo",
+        "exportDefaultValue": "{ \"Name\":\"\", \"ItemType\":\"*\"}",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "ItemType",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Results Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "grayBlue"
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "greenDark"
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5
+            }
+          ],
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          }
+        }
+      },
+      "customWidth": "70",
+      "name": "query - 5"
+    }
+  ],
+  "fromTemplateId": "sentinel-AzureActiveDirectoryAuditLogs",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "xdrMetadata": {
+    "contentId": "e10c840c-9ead-500e-959a-db267f2edfa4",
+    "instanceId": "0159cd3c-cd94-56ce-8a86-1162e896d923",
+    "version": "3.3.20",
+    "schemaVersion": "1.0.0",
+    "displayName": "Microsoft Entra ID Audit logs"
+  },
+  "contentProvenance": {
+    "source": {
+      "path": "Workbooks/AzureActiveDirectoryAuditLogs.json",
+      "sha256": "759180e25d0933de953483aed09f616a5bcd1739402c9685afaef09fea102c16",
+      "contentId": "sentinel-AzureActiveDirectoryAuditLogs",
+      "originalMetadataVersion": null
+    },
+    "conversion": {
+      "tool": "sentinel-xdr-migration",
+      "version": "0.1.0",
+      "reviewRequired": false,
+      "queries": [
+        {
+          "sourcePath": "/items/1/content/parameters/1/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "migrate-microsoft-entra-id-workbooks",
+            "planSha256": "920d1958a788680ad1bc611c14305212badec6d3973798956ef5c7a7de18ede4",
+            "decision": "accept",
+            "querySha256": "54456029dc3e8c9f2412f9f92a0c28fc9a82a0143a713f7bf94f0df342f16e36"
+          },
+          "conversion": {
+            "sourceId": "/items/1/content/parameters/1/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AuditLogs\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n//| where initiator!= \"\"\r\n| summarize Count = count() by initiator\r\n| order by Count desc, initiator asc\r\n| project Value = initiator, Label = strcat(initiator, ' - ', Count), Selected = false",
+            "resolvedTables": [
+              "AuditLogs"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AuditLogs",
+                "ahTable": "AuditLogs",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 27,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/1/content/parameters/1/query",
+          "sourceSha256": "54456029dc3e8c9f2412f9f92a0c28fc9a82a0143a713f7bf94f0df342f16e36",
+          "targetSha256": "54456029dc3e8c9f2412f9f92a0c28fc9a82a0143a713f7bf94f0df342f16e36"
+        },
+        {
+          "sourcePath": "/items/1/content/parameters/2/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "migrate-microsoft-entra-id-workbooks",
+            "planSha256": "920d1958a788680ad1bc611c14305212badec6d3973798956ef5c7a7de18ede4",
+            "decision": "accept",
+            "querySha256": "ac8919385dc7af8827d9ca5d0b369a06ffef6e495b213a3e1e2202499ef3ef06"
+          },
+          "conversion": {
+            "sourceId": "/items/1/content/parameters/2/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AuditLogs\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n| where \"{User:lable}\" == \"All\" or initiator in ({User})\r\n| summarize Count = count() by Category\r\n| order by Count desc, Category asc\r\n| project Value = Category, Label = strcat(Category, ' - ', Count)",
+            "resolvedTables": [
+              "AuditLogs"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AuditLogs",
+                "ahTable": "AuditLogs",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 27,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/1/content/parameters/2/query",
+          "sourceSha256": "ac8919385dc7af8827d9ca5d0b369a06ffef6e495b213a3e1e2202499ef3ef06",
+          "targetSha256": "ac8919385dc7af8827d9ca5d0b369a06ffef6e495b213a3e1e2202499ef3ef06"
+        },
+        {
+          "sourcePath": "/items/1/content/parameters/3/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "migrate-microsoft-entra-id-workbooks",
+            "planSha256": "920d1958a788680ad1bc611c14305212badec6d3973798956ef5c7a7de18ede4",
+            "decision": "accept",
+            "querySha256": "95b74f2891b352aa8e48a73a72b720a4530bc8aeb82701c441eed4523d3ebc7f"
+          },
+          "conversion": {
+            "sourceId": "/items/1/content/parameters/3/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "AuditLogs\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n| where \"{User:lable}\" == \"All\" or initiator in ({User})\r\n| summarize Count = count() by Result\r\n| order by Count desc, Result asc\r\n| project Value = Result, Label = strcat(Result, ' - ', Count, ' sign-ins')",
+            "resolvedTables": [
+              "AuditLogs"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AuditLogs",
+                "ahTable": "AuditLogs",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 27,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/1/content/parameters/3/query",
+          "sourceSha256": "95b74f2891b352aa8e48a73a72b720a4530bc8aeb82701c441eed4523d3ebc7f",
+          "targetSha256": "95b74f2891b352aa8e48a73a72b720a4530bc8aeb82701c441eed4523d3ebc7f"
+        },
+        {
+          "sourcePath": "/items/2/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "migrate-microsoft-entra-id-workbooks",
+            "planSha256": "920d1958a788680ad1bc611c14305212badec6d3973798956ef5c7a7de18ede4",
+            "decision": "accept",
+            "querySha256": "67bf89f253446a70819fafd88b6b890cbbeb56765b80ed874529b0f804192099"
+          },
+          "conversion": {
+            "sourceId": "/items/2/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = AuditLogs\r\n| where \"{Category:lable}\" == \"All\" or Category in ({Category})\r\n| where \"{Result:lable}\" == \"All\" or Result in ({Result})\r\n| extend initiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\r\n| where initiatingUserPrincipalName != \"\" \r\n| where \"{User:lable}\" == \"All\" or initiatingUserPrincipalName in ({User});\r\ndata\r\n| summarize Count = count() by Category\r\n| join kind = fullouter (datatable(Category:string)['Medium', 'high', 'low']) on Category\r\n| project Category = iff(Category == '', Category1, Category), Count = iff(Category == '', 0, Count)\r\n| join kind = inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Category)\r\n    on Category\r\n| project-away Category1, TimeGenerated\r\n| extend Category = Category\r\n| union (\r\n    data \r\n    | summarize Count = count() \r\n    | extend jkey = 1\r\n    | join kind=inner (data\r\n        | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n        | extend jkey = 1) on jkey\r\n    | extend Category = 'All', Categorys = '*'    \r\n)\r\n| order by Count desc\r\n| take 10",
+            "resolvedTables": [
+              "AuditLogs"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AuditLogs",
+                "ahTable": "AuditLogs",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 27,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/2/content/query",
+          "sourceSha256": "67bf89f253446a70819fafd88b6b890cbbeb56765b80ed874529b0f804192099",
+          "targetSha256": "67bf89f253446a70819fafd88b6b890cbbeb56765b80ed874529b0f804192099"
+        },
+        {
+          "sourcePath": "/items/3/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "migrate-microsoft-entra-id-workbooks",
+            "planSha256": "920d1958a788680ad1bc611c14305212badec6d3973798956ef5c7a7de18ede4",
+            "decision": "accept",
+            "querySha256": "947d90f3e2176829745c3c265b29bd93d3a6aba49d3b68d905d812bcf2035947"
+          },
+          "conversion": {
+            "sourceId": "/items/3/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = AuditLogs\r\n| where \"{Result:lable}\" == \"All\" or Result in ({Result})\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n| where \"{User:lable}\" == \"All\" or initiator in ({User})\r\n| where \"{Category:lable}\" == \"All\" or Category in ({Category})\r\n| where Category == '{CategoryFIlter}' or '{CategoryFIlter}' == \"All\";\r\nlet appData = data\r\n| summarize TotalCount = count() by OperationName, Category\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by OperationName\r\n    | project-away TimeGenerated) on OperationName\r\n| order by TotalCount desc, OperationName asc\r\n| project OperationName, TotalCount, Trend, Category\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\"), Category, OperationName\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by OperationName, initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n    | project-away TimeGenerated) on OperationName, initiator\r\n| order by TotalCount desc, OperationName asc\r\n| project OperationName, initiator, TotalCount, Category, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on OperationName\r\n| project Id, Name = initiator, ItemType = 'initiator', ['Operations Count'] = TotalCount, Trend, Category, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = OperationName, ItemType = 'Operation', ['Operations Count'] = TotalCount, Category, Trend)\r\n| order by ['Operations Count'] desc, Name asc",
+            "resolvedTables": [
+              "AuditLogs"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AuditLogs",
+                "ahTable": "AuditLogs",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 27,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/3/content/query",
+          "sourceSha256": "947d90f3e2176829745c3c265b29bd93d3a6aba49d3b68d905d812bcf2035947",
+          "targetSha256": "947d90f3e2176829745c3c265b29bd93d3a6aba49d3b68d905d812bcf2035947"
+        },
+        {
+          "sourcePath": "/items/4/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "migrate-microsoft-entra-id-workbooks",
+            "planSha256": "920d1958a788680ad1bc611c14305212badec6d3973798956ef5c7a7de18ede4",
+            "decision": "accept",
+            "querySha256": "306b86fb6066f9c8109ecd12449816f16018c9eb9620c089daa1e293d3c1f1a3"
+          },
+          "conversion": {
+            "sourceId": "/items/4/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({UserInfo});\r\nAuditLogs\r\n| where \"{Category:lable}\" == \"All\" or Category in ({Category})\r\n| where \"{Result:lable}\" == \"All\" or Result in ({Result})\r\n| extend initiatingUserPrincipalName = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n//| where initiatingUserPrincipalName != \"\" \r\n| where \"{User:lable}\" == \"All\" or initiatingUserPrincipalName in ({User})\r\n| where details.ItemType == '*' or (details.ItemType == 'initiator' and initiatingUserPrincipalName == details.Name) or (details.ItemType == 'Operation' and OperationName == details.Name)\r\n| summarize Activities = count() by initiatingUserPrincipalName\r\n| sort by Activities desc nulls last ",
+            "resolvedTables": [
+              "AuditLogs"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AuditLogs",
+                "ahTable": "AuditLogs",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 27,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/4/content/query",
+          "sourceSha256": "306b86fb6066f9c8109ecd12449816f16018c9eb9620c089daa1e293d3c1f1a3",
+          "targetSha256": "306b86fb6066f9c8109ecd12449816f16018c9eb9620c089daa1e293d3c1f1a3"
+        },
+        {
+          "sourcePath": "/items/5/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "alonkarmona",
+            "reference": "migrate-microsoft-entra-id-workbooks",
+            "planSha256": "920d1958a788680ad1bc611c14305212badec6d3973798956ef5c7a7de18ede4",
+            "decision": "accept",
+            "querySha256": "209574e9347cf03567e64869e057b6e706bc543e0b5237bc128e93ccd01cb20b"
+          },
+          "conversion": {
+            "sourceId": "/items/5/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let details = dynamic({UserInfo});\r\nlet data = AuditLogs\r\n| extend initiator = iif (tostring(InitiatedBy.user.userPrincipalName) != \"\", tostring(InitiatedBy.user.userPrincipalName), \"unknown\")\r\n| where details.ItemType == '*' or (details.ItemType == 'initiator' and initiator == details.Name) or (details.ItemType == 'Operation' and OperationName == details.Name)\r\n| where \"{Category:lable}\" == \"All\" or Category in ({Category})\r\n| where \"{Result:lable}\" == \"All\" or Result in ({Result})\r\n| where \"{User:lable}\" == \"All\" or initiator in ({User});\r\nlet appData = data\r\n| summarize TotalCount = count() by Result\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Result\r\n    | project-away TimeGenerated) on Result\r\n| order by TotalCount desc, Result asc\r\n| project Result, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by OperationName, Result\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Result, OperationName\r\n    | project-away TimeGenerated) on Result, OperationName\r\n| order by TotalCount desc, Result asc\r\n| project Result, OperationName, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Result\r\n| project Id, Name = OperationName, ItemType = 'Operation', ['Results Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Result, ItemType = 'Result', ['Results Count'] = TotalCount, Trend)\r\n| order by ['Results Count'] desc, Name asc",
+            "resolvedTables": [
+              "AuditLogs"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "AuditLogs",
+                "ahTable": "AuditLogs",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 27,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/5/content/query",
+          "sourceSha256": "209574e9347cf03567e64869e057b6e706bc543e0b5237bc128e93ccd01cb20b",
+          "targetSha256": "209574e9347cf03567e64869e057b6e706bc543e0b5237bc128e93ccd01cb20b"
+        }
+      ]
+    },
+    "requiredWorkloads": [
+      {
+        "workload": "sentinel",
+        "dataTypes": [
+          "AuditLogs"
+        ]
+      }
+    ],
+    "requiredDataConnectors": [
+      {
+        "connectorId": "AzureActiveDirectory",
+        "dataTypes": [
+          "AuditLogs"
+        ]
+      }
+    ],
+    "dependencyReviewRequired": false
+  }
+}

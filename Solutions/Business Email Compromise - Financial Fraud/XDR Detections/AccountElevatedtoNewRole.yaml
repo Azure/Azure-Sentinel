@@ -1,0 +1,199 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c1c66f0b-5531-4a3e-a619-9d2f770ef730
+    path: Analytic Rules/AccountElevatedtoNewRole.yaml
+    version: 1.1.2
+    querySha256: fc7e8ec6bcf85b4eb6db71bde385c8500888ad91885810ef97e02fa661745603
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `InitiatingUserPrincipalName`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query
+      column `TargetUserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `TargetUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: cf715127781c20c2d6df542deb70b2d226da8b659ddcadceb654eebc02702f31
+      targetQuerySha256: c88d60a150da1293056abcb2cce4de203e3f948546875153bcca3655153089a2
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-c1c66f0b-5531-4a3e-a619-9d2f770ef730
+  displayName: Account Elevated to New Role
+  status: disabled
+  queryCondition:
+    queryText: 'let auditList =
+
+      AuditLogs
+
+      | where TimeGenerated >= ago(14d)
+
+      | where OperationName =~ "Add member to role completed (PIM activation)"
+
+      | where Result =~ "success"
+
+      | extend TargetUserPrincipalName = tostring(TargetResources[2].userPrincipalName)
+
+      | extend displayName = tostring(TargetResources[0].displayName)
+
+      | extend displayName2 = tostring(TargetResources[3].displayName)
+
+      | extend ElevatedRole = iif(displayName =~ "Member", displayName2, displayName)
+
+      ;
+
+      let lookbackList = auditList
+
+      | where TimeGenerated between(ago(14d)..ago(1d))
+
+      ;
+
+      let recentList = auditList
+
+      | where TimeGenerated > ago(1d)
+
+      ;
+
+      let newlyElevated = recentList
+
+      | join kind = leftanti lookbackList on ElevatedRole, TargetUserPrincipalName
+
+      ;
+
+      newlyElevated | project Id, AdditionalDetails
+
+      | mv-expand bagexpansion=array AdditionalDetails
+
+      | evaluate bag_unpack(AdditionalDetails)
+
+      | extend key = column_ifexists("key", ''''), value = column_ifexists("value",
+      '''')
+
+      | evaluate pivot(key, make_set(value))
+
+      | extend ipaddr = todynamic(column_ifexists("ipaddr", ""))
+
+      | mv-expand ipaddr
+
+      | project Id, InitiatingIPAddress = tostring(ipaddr)
+
+      | join kind=rightouter newlyElevated on Id
+
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+
+      | extend InitiatingIPAddress = iff(isnotempty(tostring(InitiatedBy.user.ipAddress)),
+      tostring(InitiatedBy.user.ipAddress), InitiatingIPAddress)
+
+      | extend ElevatedBy = iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName,
+      InitiatingAppName)
+
+      | extend ElevatedUser = TargetUserPrincipalName
+
+      | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName,
+      "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName,
+      "@")[1])
+
+      | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]),
+      TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+
+      | project-reorder ElevatedUser, ElevatedRole, ResultReason, ElevatedBy, InitiatingUserPrincipalName,
+      InitiatingAadUserId, InitiatingIPAddress, TargetUserPrincipalName'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Account Elevated to New Role
+      description: "'Detects an account that is elevated to a new role where that\
+        \ account has not had that role in the last 14 days.\n  Role elevations are\
+        \ a key mechanism for gaining permissions, monitoring which users have which\
+        \ roles, and for anomalies in those roles is useful for finding suspicious\
+        \ activity.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account2
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account3
+          nameColumn: TargetAccountName
+          upnSuffixColumn: TargetAccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIPAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName
+        AccountFullName_2: TargetUserPrincipalName

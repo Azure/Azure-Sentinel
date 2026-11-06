@@ -1,0 +1,163 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureFirewall
+  dataTypes:
+  - AzureDiagnostics
+  - AZFWApplicationRule
+  - AZFWNetworkRule
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes: []
+  requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes:
+    - AZFWApplicationRule
+    - AZFWNetworkRule
+    - AzureDiagnostics
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 720335f4-ee8c-4270-9424-d0859222168c
+    path: Analytic Rules/Azure Firewall - Port Sweep.yaml
+    version: 1.2.3
+    querySha256: bd895ee6b87a35922c629b2725f6c345073c36c10eaeffcf29dafac19f8bec17
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'DestinationPort' column `DestinationPort` requires runtime output-schema
+      binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - Discovery
+    - Reconnaissance
+    originalTechniques:
+    - T1046
+    - T1595.001
+    reviewScope:
+      sourceDocumentSha256: b7228d22346b570976191d65d2219039c8e745616354b5c3fcc3c1b420b626b5
+      targetQuerySha256: 572169cb89f1230f2af9c1d2f8bcf4468dd9bd04752734fd69d44a702d00927c
+properties:
+  id: xdr-720335f4-ee8c-4270-9424-d0859222168c
+  displayName: Port Sweep
+  status: disabled
+  queryCondition:
+    queryText: 'let MinimumDifferentHostsThreshold = 200;
+
+      let ExcludedPorts = dynamic([80 , 443]);
+
+      let BinTime = 30s;
+
+      union isfuzzy=true(
+
+      AZFWApplicationRule
+
+      | where DestinationPort !in (ExcludedPorts)
+
+      | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated,
+      BinTime), DestinationPort
+
+      | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
+
+      | mv-expand Fqdn = AlertTimedCountHostsInBinTime),
+
+      (AZFWNetworkRule
+
+      | extend Fqdn = DestinationIp
+
+      | where DestinationPort !in (ExcludedPorts)
+
+      | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated,
+      BinTime), DestinationPort
+
+      | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
+
+      | mv-expand Fqdn = AlertTimedCountHostsInBinTime),
+
+      (AzureDiagnostics
+
+      | where OperationName == "AzureFirewallApplicationRuleLog" or OperationName
+      == "AzureFirewallNetworkRuleLog"
+
+      | parse msg_s with * "from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int
+      ". " * "Action: " Action "." *
+
+      | where DestinationPort !in (ExcludedPorts)
+
+      | where isnotempty(Fqdn) and isnotempty(SourceIp) and isnotempty(DestinationPort)
+
+      | summarize AlertTimedCountHostsInBinTime = make_set(Fqdn) by SourceIp, bin(TimeGenerated,
+      BinTime), DestinationPort
+
+      | where array_length(AlertTimedCountHostsInBinTime) > MinimumDifferentHostsThreshold
+
+      | mv-expand Fqdn = AlertTimedCountHostsInBinTime)
+
+      | project bin(TimeGenerated, BinTime), SourceIp, DestinationPort, AlertTimedCountHostsInBinTime,
+      Fqdn'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Port Sweep
+      description: '''Identifies a source IP scanning same open ports on the Azure
+        Firewall IPs. This can indicate malicious scanning of port by an attacker,
+        trying to reveal IPs with specific ports open in the organization. The ports
+        can be compromised by attackers for initial access, most often by exploiting
+        vulnerability.
+
+
+        Configurable Parameters:
+
+
+        - Port sweep time - the time range to look for multiple hosts scanned. Default
+        is set to 30 seconds.
+
+        - Minimum different hosts threshold - alert only if more than this number
+        of hosts scanned. Default is set to 200.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+        urls:
+        - id: url1
+          addressColumn: Fqdn
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1046
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1595
+          subTechniques:
+          - T1595.001
+      customDetails:
+        DestinationPort: DestinationPort

@@ -1,0 +1,384 @@
+name: NPF Pull Request Labeler
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - master
+    paths:
+      - "Solutions/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label-npf-pr:
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    name: Label NPF Migration, Validation, Qualification, and Solution Metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect PR files, apply NPF labels, and write npf-meta block
+        uses: actions/github-script@b7fb2001b410c9390cbe9e2c7d5cab7eefb7b29c
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
+
+            const activePaths = files
+              .filter(f => f.status !== 'removed')
+              .map(f => f.filename);
+
+            const solutionNames = new Set();
+            for (const p of activePaths) {
+              const m = p.match(/^Solutions\/([^/]+)\//);
+              if (m && m[1] !== 'Images') {
+                solutionNames.add(m[1]);
+              }
+            }
+
+            const existing = new Set(
+              (context.payload.pull_request?.labels || []).map(l => l.name)
+            );
+            const headSha = context.payload.pull_request?.head?.sha;
+
+            async function fetchFileText(repoPath) {
+              if (!headSha) return null;
+              try {
+                const resp = await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path: repoPath,
+                  ref: headSha
+                });
+                if (resp.data && resp.data.content) {
+                  return Buffer.from(resp.data.content, 'base64').toString('utf8');
+                }
+              } catch (_) {
+                // File not present at headSha
+              }
+              return null;
+            }
+
+            async function pathExistsAtHead(repoPath) {
+              if (!headSha) return false;
+              try {
+                const resp = await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path: repoPath,
+                  ref: headSha
+                });
+                if (resp.data) {
+                  return true;
+                }
+              } catch (_) {
+                // File not present at headSha
+              }
+              return false;
+            }
+
+            const ALLOWED_VERDICTS = new Set([
+              'Qualified',
+              'Conditionally Qualified',
+              'Not Qualified',
+              'Validated',
+              'Partially Validated',
+              'Failed',
+              'Validation Failed',
+              'Qualification Failed'
+            ]);
+
+            const VERDICT_PRIORITY = {
+              'Not Qualified': 6,
+              'Qualification Failed': 6,
+              'Validation Failed': 6,
+              'Failed': 6,
+              'Conditionally Qualified': 5,
+              'Partially Validated': 4,
+              'Qualified': 3,
+              'Validated': 2
+            };
+
+            function pickHigherPriorityVerdict(current, candidate) {
+              if (!candidate) return current;
+              if (!current) return candidate;
+              return (VERDICT_PRIORITY[candidate] || 0) > (VERDICT_PRIORITY[current] || 0) ? candidate : current;
+            }
+
+            const sortedSolutions = [...solutionNames].sort();
+
+            let hasXdrContent = activePaths.some(p =>
+              /^Solutions\/[^/]+\/(XDR Detections|XDR Workbooks)\//.test(p)
+            ) || existing.has('XDR');
+
+            if (!hasXdrContent) {
+              const packageTouchedSols = sortedSolutions.filter(sol =>
+                activePaths.some(
+                  p => p === `Solutions/${sol}/Package/mainTemplate.json` || p.startsWith(`Solutions/${sol}/Package/`)
+                )
+              );
+              if (packageTouchedSols.length > 0) {
+                const xdrChecks = await Promise.all(
+                  packageTouchedSols.map(async sol => {
+                    const [hasXdrDet, hasXdrWb] = await Promise.all([
+                      pathExistsAtHead(`Solutions/${sol}/XDR Detections`),
+                      pathExistsAtHead(`Solutions/${sol}/XDR Workbooks`)
+                    ]);
+                    return hasXdrDet || hasXdrWb;
+                  })
+                );
+                if (xdrChecks.some(Boolean)) {
+                  hasXdrContent = true;
+                }
+              }
+            }
+
+            const hasValidationEvidence = activePaths.some(p =>
+              /^Solutions\/[^/]+\/Evidence\/(pr-qualification\/(pr-qualification-result\.json|qualification-report\.html|qualification-summary\.md)|workflow-state\.json|decision-manifest\.json|[^/]+\/evidence\.json)$/.test(p)
+            );
+            let hasQualificationEvidence = activePaths.some(p =>
+              /^Solutions\/[^/]+\/Evidence\/(qualification-evidence\.json|receipts\/(alert-parity-live|workbook-queries-live|arm-deployment-readback|graph-detection-deployment)\.json)$/.test(p)
+            );
+
+            const verdicts = {};
+            const structuredPassesValues = [];
+            const publisherTiers = new Set();
+            const solutionDetails = [];
+
+            const perSolutionData = await Promise.all(
+              sortedSolutions.map(async sol => {
+                const qualResultCandidates = activePaths.filter(
+                  p =>
+                    p === `Solutions/${sol}/Evidence/pr-qualification/pr-qualification-result.json` ||
+                    p === `Solutions/${sol}/Evidence/pr-qualification-result.json`
+                );
+                const summaryCandidates = activePaths.filter(
+                  p =>
+                    p === `Solutions/${sol}/Evidence/pr-qualification/qualification-summary.md` ||
+                    p === `Solutions/${sol}/Evidence/qualification-summary.md`
+                );
+                const metaPath = `Solutions/${sol}/SolutionMetadata.json`;
+
+                const [qualTexts, metaText] = await Promise.all([
+                  Promise.all(qualResultCandidates.map(cand => fetchFileText(cand))),
+                  fetchFileText(metaPath)
+                ]);
+
+                let solVerdict = null;
+                let solHasQual = false;
+                let solPasses = null;
+
+                for (const rawJson of qualTexts) {
+                  if (!rawJson) continue;
+                  try {
+                    const parsed = JSON.parse(rawJson.replace(/^\uFEFF/, ''));
+                    const modeVal = String(parsed?.mode || parsed?.workflowProfile || '').trim().toLowerCase();
+                    const qualStatus = String(parsed?.qualificationStatus || '').trim();
+                    const verdictVal = String(parsed?.verdict || parsed?.overallVerdict || '').trim();
+                    const rawPasses = Number(parsed?.passesPerSolution ?? parsed?.runNumber);
+                    if (Number.isFinite(rawPasses) && rawPasses >= 1 && solPasses === null) {
+                      solPasses = rawPasses;
+                    }
+                    if (
+                      modeVal === 'qualification' ||
+                      modeVal === 'full' ||
+                      qualStatus === 'Qualified' ||
+                      qualStatus === 'Conditionally Qualified' ||
+                      verdictVal === 'Qualified' ||
+                      verdictVal === 'Conditionally Qualified'
+                    ) {
+                      solHasQual = true;
+                    }
+                    if (verdictVal && ALLOWED_VERDICTS.has(verdictVal)) {
+                      solVerdict = pickHigherPriorityVerdict(solVerdict, verdictVal);
+                    }
+                  } catch (_) {
+                    // Ignore parse errors
+                  }
+                }
+
+                if (summaryCandidates.length > 0) {
+                  const mdTexts = await Promise.all(summaryCandidates.map(cand => fetchFileText(cand)));
+                  for (const mdText of mdTexts) {
+                    if (!mdText) continue;
+                    let mdVerdict = null;
+                    if (
+                      /\b(?:Not\s+Qualified|Non-Qualified|Not\s+Conditionally\s+Qualified|Qualification\s+Failed|Validation\s+Failed|Migration\s+Failed)\b/i.test(
+                        mdText
+                      )
+                    ) {
+                      mdVerdict = 'Not Qualified';
+                    } else if (/\bConditionally Qualified\b/i.test(mdText)) {
+                      solHasQual = true;
+                      mdVerdict = 'Conditionally Qualified';
+                    } else if (/\bQualified\b/i.test(mdText)) {
+                      solHasQual = true;
+                      mdVerdict = 'Qualified';
+                    } else if (/\bPartially Validated\b/i.test(mdText)) {
+                      mdVerdict = 'Partially Validated';
+                    } else if (/\bValidated\b/i.test(mdText)) {
+                      mdVerdict = 'Validated';
+                    }
+                    solVerdict = pickHigherPriorityVerdict(solVerdict, mdVerdict);
+                  }
+                }
+
+                let tierLabel = 'Unknown';
+                if (metaText) {
+                  try {
+                    const meta = JSON.parse(metaText.replace(/^\uFEFF/, ''));
+                    const tier = String(meta?.support?.tier || '').trim().toLowerCase();
+                    const pub = String(meta?.publisherId || '').trim().toLowerCase();
+                    if (tier === 'community' || pub === 'microsoftsentinelcommunity') {
+                      tierLabel = 'Community Solution';
+                    } else if (tier === 'partner') {
+                      tierLabel = 'ISV Solution';
+                    } else if (tier === 'microsoft' || pub === 'azuresentinel' || pub === 'microsoftcorporation') {
+                      tierLabel = '1P Solution';
+                    }
+                  } catch (e) {
+                    core.warning(`Failed to parse ${metaPath}: ${e.message}`);
+                  }
+                }
+
+                return { sol, solVerdict, solHasQual, solPasses, tierLabel };
+              })
+            );
+
+            for (const item of perSolutionData) {
+              if (item.solHasQual) {
+                hasQualificationEvidence = true;
+              }
+              if (item.solVerdict) {
+                verdicts[item.sol] = item.solVerdict;
+              }
+              if (item.solPasses !== null) {
+                structuredPassesValues.push(item.solPasses);
+              }
+              if (item.tierLabel !== 'Unknown') {
+                publisherTiers.add(item.tierLabel);
+              }
+              solutionDetails.push({ name: item.sol, tier: item.tierLabel });
+            }
+
+            const desired = new Set();
+            const npfModes = [];
+            if (solutionNames.size > 0) {
+              desired.add('Solution');
+            }
+            if (hasXdrContent) {
+              desired.add('XDR');
+              desired.add('Migration');
+              npfModes.push('Migration');
+            }
+            if (hasValidationEvidence) {
+              desired.add('Validation');
+              npfModes.push('Validation');
+            }
+            if (hasQualificationEvidence) {
+              desired.add('Qualification');
+              npfModes.push('Qualification');
+            }
+            for (const tierLabel of publisherTiers) {
+              desired.add(tierLabel);
+            }
+
+            if (desired.size === 0) {
+              core.info('No Solution or NPF labels detected.');
+              return;
+            }
+
+            const labelsToAdd = [...desired].filter(l => !existing.has(l));
+
+            if (labelsToAdd.length > 0) {
+              core.info(`Adding labels to PR #${context.issue.number}: ${labelsToAdd.join(', ')}`);
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labelsToAdd
+              });
+            } else {
+              core.info(`All applicable labels already present: ${[...desired].join(', ')}`);
+            }
+
+            if (npfModes.length === 0) {
+              core.info('PR has no NPF modes (Migration/Validation/Qualification); skipping npf-meta block.');
+              return;
+            }
+
+            const highestStage = npfModes.includes('Qualification')
+              ? 'Qualification'
+              : (npfModes.includes('Validation') ? 'Validation' : 'Migration');
+
+            const commitPasses = Math.max(1, Number(context.payload.pull_request?.commits || 1));
+            const passesPerSolution =
+              structuredPassesValues.length > 0
+                ? Number(
+                    (
+                      structuredPassesValues.reduce((acc, v) => acc + v, 0) /
+                      structuredPassesValues.length
+                    ).toFixed(2)
+                  )
+                : null;
+
+            // Build machine-readable npf-meta block for PR body and step summary
+            const currentBody = context.payload.pull_request?.body || '';
+            const metaRegex = /<!--\s*npf-meta:\s*(\{.*?\})\s*-->/s;
+            let priorSyncObserved = false;
+            const existingMetaMatch = currentBody.match(metaRegex);
+            if (existingMetaMatch) {
+              try {
+                const parsedMeta = JSON.parse(existingMetaMatch[1]);
+                if (parsedMeta && parsedMeta.synchronizePushObserved === true) {
+                  priorSyncObserved = true;
+                }
+              } catch (_err) {
+                // Ignore malformed prior metadata block
+              }
+            }
+            const synchronizePushObserved = priorSyncObserved || (context.payload.action === 'synchronize');
+            const npfMeta = {
+              solutionCount: solutionDetails.length,
+              solutions: solutionDetails.map(s => s.name),
+              publisherTiers: [...publisherTiers],
+              npfModes,
+              highestStage,
+              commitPasses,
+              passesPerSolution,
+              verdicts,
+              synchronizePushObserved
+            };
+            const safeMetaJson = JSON.stringify(npfMeta).replace(/-->/g, '--\\u003e');
+            const metaComment = `<!-- npf-meta: ${safeMetaJson} -->`;
+
+            let updatedBody = currentBody;
+            if (metaRegex.test(currentBody)) {
+              updatedBody = currentBody.replace(metaRegex, () => metaComment);
+            } else {
+              updatedBody = currentBody.trimEnd() + `\n\n${metaComment}\n`;
+            }
+
+            if (updatedBody !== currentBody) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                body: updatedBody
+              });
+              core.info(`Updated PR #${context.issue.number} body with npf-meta block.`);
+            }
+
+            await core.summary
+              .addHeading('NPF PR Metadata Summary', 3)
+              .addRaw(`<p><strong>Solutions Count:</strong> ${npfMeta.solutionCount}</p>`, true)
+              .addCodeBlock(JSON.stringify(npfMeta, null, 2), 'json')
+              .write();

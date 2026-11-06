@@ -58,6 +58,7 @@ if ($PSCmdlet.ParameterSetName -eq "Local") {
         }
     }
     $localImplementation = Join-Path $PSScriptRoot "..\common\createSolutionLocal.ps1"
+    $global:LASTEXITCODE = 0
     & $localImplementation `
         -SolutionDataFolderPath $SolutionDataFolderPath `
         -VersionMode $VersionMode `
@@ -70,6 +71,9 @@ if ($PSCmdlet.ParameterSetName -eq "Local") {
         -IncludeXdrDetections $true `
         -EnforceV31Versions $true `
         -SkipAttributionLookup:$SkipAttributionLookup
+    if (-not $? -or ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0)) {
+        exit $(if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 1 })
+    }
     return
 }
 
@@ -130,7 +134,7 @@ try {
         $contentResourceDetails = returnContentResources $calculatedPackageVersion
         if ($null -eq $contentResourceDetails) {
             Write-Error "Not able to identify content resource details based on Version. Please verify if Version in data input file is correct!"
-            return
+            exit 1
         }
 
         $ccpDict = @()
@@ -277,7 +281,7 @@ try {
                             'data connectors' {
                                 $isCCPConnectorFile = $false
                                 foreach ($item in $ccpDict) {
-                                    if ($item.DCDefinitionFullPath -eq $finalPath) { $isCCPConnectorFile = $true; break }
+                                    if ($item.DCDefinitionFullPath.Replace('\', '/') -eq $finalPath.Replace('\', '/')) { $isCCPConnectorFile = $true; break }
                                 }
                                 if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
                                     GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
@@ -291,7 +295,7 @@ try {
                             'dataconnectors' {
                                 $isCCPConnectorFile = $false
                                 foreach ($item in $ccpDict) {
-                                    if ($item.DCDefinitionFullPath -eq $finalPath) { $isCCPConnectorFile = $true; break }
+                                    if ($item.DCDefinitionFullPath.Replace('\', '/') -eq $finalPath.Replace('\', '/')) { $isCCPConnectorFile = $true; break }
                                 }
                                 if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
                                     GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter

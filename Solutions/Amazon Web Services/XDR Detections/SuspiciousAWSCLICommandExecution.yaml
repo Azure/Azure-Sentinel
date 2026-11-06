@@ -1,0 +1,139 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8c2dc344-9352-4ca1-8863-b1b7a5e09e59
+    path: Analytic Rules/SuspiciousAWSCLICommandExecution.yaml
+    version: 1.0.2
+    querySha256: e00e4505ca25a8e2b2afd14587bf88af7e7d855cbcd7bc99226ba0fc75ee28e4
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'SuspiciousCommand' column `commands` requires runtime output-schema binding verification
+    - customDetails 'AWSUser' column `UserIdentityUserName` requires runtime output-schema binding verification
+    - customDetails 'AWSUserIp' column `SourceIpAddress` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Reconnaissance
+    originalTechniques:
+    - T1595
+    - T1592.004
+    - T1589.002
+    - T1589.003
+    - T1590
+    - T1591
+    - T1596
+    reviewScope:
+      sourceDocumentSha256: 39ea96ad9ba656902c1ca0777b2309856c382a82bd97ae77a7358f742a32ec0a
+      targetQuerySha256: 0fc5750e1ccb5d90616bfec01324c7e14b8d5472c6a6cfecc5c431cef97c7b09
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-8c2dc344-9352-4ca1-8863-b1b7a5e09e59
+  displayName: AWSCloudTrail - Suspicious AWS CLI Command Execution
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let SuspiciousCommands= pack_array('iam.list-users', 'iam.list-groups', 'ec2.describe-vpcs', 'ec2.describe-subnets', 'route53.list-hosted-zones', 'kms.list-keys', 'kms.list-aliases', 'ecs.list-clusters', 'ecs.list-services', 'iam.list-roles', 'iam.get-user''iam.list-access-keys', 'ec2.describe-security-groups', 'ec2.describe-network-acls', 'ec2.describe-network-interfaces', 'ec2.describe-route-tables', 'ec2.describe-internet-gateways', 'ec2.describe-vpc-peering-connections', 'ec2.describe-network-interfaces', 'ec2.describe-network-interfaces', 'ec2.describe-transit-gateway-vpc-attachment', 'ec2.describe-vpc');
+      // Retrieve AWS CloudTrail events
+      AWSCloudTrail
+      // Filter events with UserAgent starting with "aws-cli"
+      | where UserAgent startswith "aws-cli"
+      // Extract the command from the UserAgent using string splitting
+      | extend command = tostring(split(UserAgent, "off command/", 1)[0])
+      // Filter events based on predefined suspicious command list
+      | where command has_any (SuspiciousCommands)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      // Summarize relevant information for further analysis
+      | summarize
+          CommadCount = dcount(command),
+          EventCount = dcount(EventName),
+          commands = make_list(command),
+          Events = make_list(EventName)
+          by
+          bin(TimeGenerated, 1min),
+          RecipientAccountId, AccountName, AccountUPNSuffix,
+          UserIdentityUserName,
+          SourceIpAddress,
+          SessionMfaAuthenticated
+      // Filter out results with a sufficient count of unique suspicious commands in 1 min time window
+      | where CommadCount >= 8
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Suspicious AWS CLI Command Execution
+      description: '''This detection focuses on identifying potentially suspicious activities involving the execution of AWS
+        Command Line Interface (CLI) commands, particularly focusing on reconnaissance operations.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1595
+        - technique: T1592
+          subTechniques:
+          - T1592.004
+        - technique: T1589
+          subTechniques:
+          - T1589.002
+          - T1589.003
+        - technique: T1590
+        - technique: T1591
+        - technique: T1596
+      customDetails:
+        SuspiciousCommand: commands
+        AWSUser: UserIdentityUserName
+        AWSUserIp: SourceIpAddress
+        AccountCloudAppAccountId: RecipientAccountId

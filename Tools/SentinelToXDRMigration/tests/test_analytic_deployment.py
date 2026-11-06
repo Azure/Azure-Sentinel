@@ -51,6 +51,19 @@ class AnalyticDeploymentTests(unittest.TestCase):
             payload["properties"]["alertRuleTemplateName"], document()["id"]
         )
 
+    def test_sub_techniques_are_split_from_parent_techniques(self) -> None:
+        value = document()
+        value["relevantTechniques"] = ["T1204.002", "T1204.001", "T1190", "T1204", "T1204.002"]
+        properties = analytic_rule_payload(value)["properties"]
+
+        self.assertEqual(["T1204", "T1190"], properties["techniques"])
+        self.assertEqual(["T1204.002", "T1204.001"], properties["subTechniques"])
+
+        value["relevantTechniques"] = ["T1190"]
+        properties = analytic_rule_payload(value)["properties"]
+        self.assertEqual(["T1190"], properties["techniques"])
+        self.assertNotIn("subTechniques", properties)
+
     @mock.patch(
         "sentinel_xdr_migration.analytic_deployment._arm_token",
         return_value="token",

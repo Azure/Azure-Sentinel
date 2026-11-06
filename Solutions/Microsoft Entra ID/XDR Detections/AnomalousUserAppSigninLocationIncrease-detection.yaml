@@ -1,0 +1,165 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+    - AADNonInteractiveUserSignInLogs
+    - Anomalies
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7cb8f77d-c52f-4e46-b82f-3cf2e106224a
+    path: Analytic Rules/AnomalousUserAppSigninLocationIncrease-detection.yaml
+    version: 2.0.5
+    querySha256: 4fb530c36f10e09ab9767c68b2295763a1cd6c00b67ad542b463e451d2cb288b
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'Application' column `AppDisplayName` requires runtime output-schema
+      binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `UserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 8bb7edb25d10ce552752ba8547a9fe05505ac440ed22d28c36f9261923445ff2
+      targetQuerySha256: 49654e9e33af0f9b5df8b6e8e2a64eaee5e705d02106492368a0b3217bde10bf
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 8bb7edb25d10ce552752ba8547a9fe05505ac440ed22d28c36f9261923445ff2
+      targetQuerySha256: 49654e9e33af0f9b5df8b6e8e2a64eaee5e705d02106492368a0b3217bde10bf
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-7cb8f77d-c52f-4e46-b82f-3cf2e106224a
+  displayName: Anomalous sign-in location by user account and authenticating application
+  status: disabled
+  queryCondition:
+    queryText: '// Adjust this figure to adjust how sensitive this detection is
+
+      let sensitivity = 2.5;
+
+      // Adjust this figure to set the value that defines the requested estimation
+      accuracy. The default value is 1. Possible values are 0, 1, 2, 3, 4.
+
+      let dcountAccuracy = 1;
+
+      let AuthEvents = materialize(
+
+      union isfuzzy=True SigninLogs, AADNonInteractiveUserSignInLogs
+
+      | where TimeGenerated between (ago(7d) .. now())
+
+      | where ResultType == 0
+
+      | extend LocationDetails = LocationDetails_dynamic
+
+      | extend Location = strcat(LocationDetails.countryOrRegion, "-", LocationDetails.state,"-",
+      LocationDetails.city)
+
+      | where Location != "--");
+
+      AuthEvents
+
+      | summarize dcount(Location, dcountAccuracy) by AppDisplayName, AppId, UserPrincipalName,
+      UserId, bin(startofday(TimeGenerated), 1d)
+
+      | where dcount_Location > 2
+
+      | make-series CountOfLocations = sum(dcount_Location) on TimeGenerated  step
+      1d by AppId, UserId
+
+      | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfLocations,
+      sensitivity, -1, ''linefit'')
+
+      | mv-expand CountOfLocations to typeof(double), TimeGenerated to typeof(datetime),
+      Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)
+
+      | where Anomalies > 0 and Baseline > 0
+
+      | join kind=inner( AuthEvents | extend TimeStamp = startofday(TimeGenerated))
+      on UserId, AppId
+
+      | extend SignInDetails = bag_pack("TimeGenerated", TimeGenerated1, "Location",
+      Location, "Source", IPAddress, "Device", DeviceDetail_dynamic)
+
+      | summarize SignInDetailsSet=make_set(SignInDetails, 1000) by UserId, UserPrincipalName,
+      CountOfLocations, TimeGenerated, AppId, AppDisplayName
+
+      | extend Name = split(UserPrincipalName, "@")[0], UPNSuffix = split(UserPrincipalName,
+      "@")[1]'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Anomalous sign-in location by user account and authenticating application
+      description: '''This query over Microsoft Entra ID sign-in considers all user
+        sign-ins for each Microsoft Entra ID application and picks out the most anomalous
+        change in location profile for a user within an individual application.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: UserId
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        Application: AppDisplayName
+        AccountFullName: UserPrincipalName

@@ -1,0 +1,166 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: bb616d82-108f-47d3-9dec-9652ea0d3bf6
+    path: Analytic Rules/AccountCreatedandDeletedinShortTimeframe.yaml
+    version: 1.1.2
+    querySha256: 3c3e5ef2901af9e21857fedf6577214c27949ffc0d7e8df48b2c59699ef09ff1
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `TargetUserPrincipalName` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Account.FullName output column `CreatedByUserPrincipalName` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Account.FullName output column `DeletedByUserPrincipalName` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 2e970ed1c8de02e517bf142930ba38bcaaed050a917e48fb24e08755f483d9b6
+      targetQuerySha256: 2f6abda71fa8280a4e2a3614b9eefb10cdb4a13e5644bf41a8d51baffa862399
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: CreatedByUserPrincipalName
+      column: CreatedByUserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: Account
+      entityIndex: 4
+      identifier: FullName
+      sourceColumn: DeletedByUserPrincipalName
+      column: DeletedByUserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-bb616d82-108f-47d3-9dec-9652ea0d3bf6
+  displayName: Account Created and Deleted in Short Timeframe
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let queryfrequency = 1h;
+      let queryperiod = 7d; // Increased queryperiod to 7 days to mitigate timing-based bypasses
+      AuditLogs
+      | where TimeGenerated > ago(queryfrequency)
+      | where OperationName =~ "Delete user"
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type == "User"
+            // Normalize TargetUserPrincipalName by removing optional 32-char hex prefixes and underscores
+            // Making extraction case-insensitive, and converting the result to lowercase for consistency
+            | extend TargetUserPrincipalName = tolower(extract(@"(?i)([a-f0-9]{32})?_?(.*)", 2, tostring(TargetResource.userPrincipalName)))
+            // Standardize UserId to ensure consistent, immutable identification
+            | extend UserId = tostring(TargetResource.id)
+        )
+      | extend DeletedByApp = tostring(InitiatedBy.app.displayName),
+      DeletedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),
+      DeletedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),
+      DeletedByAadUserId = tostring(InitiatedBy.user.id),
+      DeletedByIPAddress = tostring(InitiatedBy.user.ipAddress)
+      | project Deletion_TimeGenerated = TimeGenerated, TargetUserPrincipalName, UserId, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress,
+      Deletion_AdditionalDetails = AdditionalDetails, Deletion_InitiatedBy = InitiatedBy, Deletion_TargetResources = TargetResources
+      | join kind=inner (
+          AuditLogs
+          | where TimeGenerated > ago(queryperiod)
+          | where OperationName =~ "Add user"
+          | mv-apply TargetResource = TargetResources on
+            (
+                where TargetResource.type == "User"
+                // Normalize TargetUserPrincipalName by removing optional 32-char hex prefixes and underscores
+                // Making extraction case-insensitive, and converting the result to lowercase for consistency
+                | extend TargetUserPrincipalName = tolower(extract(@"(?i)([a-f0-9]{32})?_?(.*)", 2, tostring(TargetResource.userPrincipalName)))
+                // Standardize UserId to ensure consistent, immutable identification
+                | extend UserId = tostring(TargetResource.id)
+            )
+          | project-rename Creation_TimeGenerated = TimeGenerated
+      ) on UserId
+      | extend TimeDelta = Deletion_TimeGenerated - Creation_TimeGenerated
+      | where  TimeDelta between (time(0s) .. queryperiod)
+      | extend CreatedByApp = tostring(InitiatedBy.app.displayName),
+      CreatedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),
+      CreatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),
+      CreatedByAadUserId = tostring(InitiatedBy.user.id),
+      CreatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
+      | project Creation_TimeGenerated, Deletion_TimeGenerated, TimeDelta, UserId, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress,
+      CreatedByApp, CreatedByAppServicePrincipalId, CreatedByUserPrincipalName, CreatedByAadUserId, CreatedByIPAddress, Creation_AdditionalDetails = AdditionalDetails, Creation_InitiatedBy = InitiatedBy, Creation_TargetResources = TargetResources, Deletion_AdditionalDetails, Deletion_InitiatedBy, Deletion_TargetResources
+      | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+      | extend CreatedByName = tostring(split(CreatedByUserPrincipalName,'@',0)[0]), CreatedByUPNSuffix = tostring(split(CreatedByUserPrincipalName,'@',1)[0])
+      | extend DeletedByName = tostring(split(DeletedByUserPrincipalName,'@',0)[0]), DeletedByUPNSuffix = tostring(split(DeletedByUserPrincipalName,'@',1)[0])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Account Created and Deleted in Short Timeframe
+      description: |-
+        'Search for user principal name (UPN) events. Look for accounts created and then deleted within 7 days. Attackers may create an account for their use, and then remove the account when no longer needed.
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-account'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account2
+          nameColumn: CreatedByName
+          upnSuffixColumn: CreatedByUPNSuffix
+        - id: account3
+          aadUserIdColumn: CreatedByAadUserId
+        - id: account4
+          nameColumn: DeletedByName
+          upnSuffixColumn: DeletedByUPNSuffix
+        - id: account5
+          aadUserIdColumn: DeletedByAadUserId
+        ips:
+        - id: ip1
+          addressColumn: CreatedByIPAddress
+        - id: ip2
+          addressColumn: DeletedByIPAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004

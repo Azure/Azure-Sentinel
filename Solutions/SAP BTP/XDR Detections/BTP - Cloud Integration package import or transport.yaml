@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f
+    path: Analytic Rules/BTP - Cloud Integration package import or transport.yaml
+    version: 1.0.1
+    querySha256: 13feb508831cb89adcf504c4c90b99ee721a7d49fa6145dd97b1c96b02be03e0
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'ObjectType' column `ObjectType` requires runtime output-schema
+      binding verification
+    - customDetails 'ObjectId' column `ObjectId` requires runtime output-schema binding
+      verification
+    - customDetails 'Action' column `Action` requires runtime output-schema binding
+      verification
+    - customDetails 'OperationType' column `OperationType` requires runtime output-schema
+      binding verification
+    - customDetails 'OperationStatus' column `OperationStatus` requires runtime output-schema
+      binding verification
+    - customDetails 'SourceIP' column `ipAddress` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    originalTechniques:
+    - T1195
+    - T1546
+    reviewScope:
+      sourceDocumentSha256: 15685b5c591fc6d33602e34b2afa7bed9113897f742cabb818f409535d8ade02
+      targetQuerySha256: 8fd703839eab1457ce832500fe1215c7fb6e8693e7d021ec58f83099fb084cfa
+properties:
+  id: xdr-c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f
+  displayName: SAP BTP - Cloud Integration package import or transport
+  status: disabled
+  queryCondition:
+    queryText: "let packageActions = dynamic([\"Package_Import_Started\", \"Package_Import_Completed\"\
+      , \"Package_Transport_Started\", \"Package_Transport_Completed\", \"Artifact_Transport_Started\"\
+      , \"Artifact_Transport_Completed\"]);\nSAPBTPAuditLog_CL\n| where Category ==\
+      \ \"audit.security-events\"\n| extend data_s = tostring(Message.data),\n   \
+      \      ipAddress = tostring(Message.ip)\n| extend parsedData = parse_json(data_s)\n\
+      | extend action = tostring(parsedData.action),\n         objectType = tostring(parsedData.objectType),\n\
+      \         objectId = tostring(parsedData.objectId)\n| where action in (packageActions)\n\
+      | extend operationType = case(\n    action contains \"Import\", \"Import\",\n\
+      \    action contains \"Transport\", \"Transport\",\n    \"Unknown\"\n),\noperationStatus\
+      \ = case(\n    action endswith \"Started\", \"Started\",\n    action endswith\
+      \ \"Completed\", \"Completed\",\n    \"Unknown\"\n)\n| extend MessageText =\
+      \ strcat(objectType, \" '\", objectId, \"' \", tolower(operationType), \" \"\
+      , tolower(operationStatus))\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n\
+      \    ObjectType = objectType,\n    ObjectId = objectId,\n    Action = action,\n\
+      \    OperationType = operationType,\n    OperationStatus = operationStatus,\n\
+      \    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Integration\"\n| extend\
+      \ AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\"\
+      )[1]"
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - Cloud Integration package import or transport
+      description: 'Identifies import and transport operations for integration packages
+        and artifacts in
+
+        SAP Cloud Integration. Packages contain integration flows, mappings, scripts,
+        and other
+
+        artifacts that can be imported from external sources or transported between
+        tenants.
+
+
+        Unauthorized package operations could indicate:
+
+        - Supply chain attack through malicious package import
+
+        - Lateral movement between environments via artifact transport
+
+        - Introduction of backdoors or rogue integration logic'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ipAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1195
+      customDetails:
+        ObjectType: ObjectType
+        ObjectId: ObjectId
+        Action: Action
+        OperationType: OperationType
+        OperationStatus: OperationStatus
+        SourceIP: ipAddress

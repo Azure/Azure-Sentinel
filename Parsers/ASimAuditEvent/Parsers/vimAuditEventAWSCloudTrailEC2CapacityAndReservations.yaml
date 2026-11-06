@@ -1,0 +1,317 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for AWS CloudTrail EC2 CapacityAndReservations activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+- Title: Amazon EC2 API actions
+  Link: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Operations.html
+Description: |
+  Filters and normalizes AWSCloudTrail events from ec2.amazonaws.com for Capacity Reservations and
+  fleets, Capacity Manager, Capacity Blocks, Dedicated Hosts, Reserved Instances, and
+  Scheduled Instances. Includes cancellation and date-change quotes and monitored Capacity
+  Manager tag keys. This parser is referenced by vimAuditEventAWSCloudTrail.
+ParserName: vimAuditEventAWSCloudTrailEC2CapacityAndReservations
+ParentParser: vimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AWSCloudTrailEC2CapacityAndReservations
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    actorusername_has_any:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool=false,
+    pack:bool=false
+  ) {
+  let Events = datatable(EventName: string, EventType: string, Object: string)
+  [
+    "AcceptCapacityReservationBillingOwnership", "Execute", "Capacity Reservation",
+    "AcceptReservedInstancesExchangeQuote", "Execute", "Convertible Reserved Instance",
+    "AllocateHosts", "Create", "Dedicated Host",
+    "AssociateCapacityReservationBillingOwner", "Set", "Capacity Reservation",
+    "CancelCapacityReservation", "Delete", "Capacity Reservation",
+    "CancelCapacityReservationFleets", "Delete", "Capacity Reservation",
+    "CancelReservedInstancesListing", "Delete", "Reserved Instance Listing",
+    "ConfirmProductInstance", "Execute", "EC2 Instance",
+    "CreateCapacityManagerDataExport", "Create", "EC2 Capacity Manager Data Report",
+    "CreateCapacityReservation", "Create", "Capacity Reservation",
+    "CreateCapacityReservationBySplitting", "Create", "Capacity Reservation",
+    "CreateCapacityReservationCancellationQuote", "Create", "Capacity Reservation Cancellation Quote",
+    "CreateCapacityReservationDateChangeQuote", "Create", "Capacity Reservation Date Change Quote",
+    "CreateCapacityReservationFleet", "Create", "Capacity Reservation Fleet",
+    "CreateInterruptibleCapacityReservationAllocation", "Create", "Capacity Reservation",
+    "CreateReservedInstancesListing", "Create", "Reserved Instance Listing",
+    "DeleteCapacityManagerDataExport", "Delete", "Capacity Manager Configuration",
+    "DeleteQueuedReservedInstances", "Delete", "Reserved Instance",
+    "DescribeCapacityBlockExtensionHistory", "Read", "Capacity Block Extension History",
+    "DescribeCapacityBlockExtensionOfferings", "Read", "Capacity Block Extension Offering",
+    "DescribeCapacityBlockOfferings", "Read", "Capacity Block",
+    "DescribeCapacityBlockStatus", "Read", "Capacity Block",
+    "DescribeCapacityBlocks", "Read", "Capacity Block",
+    "DescribeCapacityManagerDataExports", "Read", "Capacity Manager Data Exports",
+    "DescribeCapacityReservationBillingRequests", "Read", "Capacity Reservation",
+    "DescribeCapacityReservationCancellationQuotes", "Read", "Capacity Reservation Cancellation Quote",
+    "DescribeCapacityReservationDateChangeQuotes", "Read", "Capacity Reservation Date Change Quote",
+    "DescribeCapacityReservationFleets", "Read", "Capacity Reservation Fleet",
+    "DescribeCapacityReservationTopology", "Read", "Capacity Reservation",
+    "DescribeCapacityReservations", "Read", "Capacity Reservation",
+    "DescribeHostReservationOfferings", "Read", "Dedicated Host Reservation",
+    "DescribeHostReservations", "Read", "Dedicated Host Reservation",
+    "DescribeHosts", "Read", "Dedicated Host",
+    "DescribeMacHosts", "Read", "Dedicated Host",
+    "DescribeReservedInstances", "Read", "Reserved Instance",
+    "DescribeReservedInstancesListings", "Read", "Reserved Instance Listing",
+    "DescribeReservedInstancesModifications", "Read", "Reserved Instance Modification",
+    "DescribeReservedInstancesOfferings", "Read", "Reserved Instance Offering",
+    "DescribeScheduledInstanceAvailability", "Read", "EC2 Instance",
+    "DescribeScheduledInstances", "Read", "EC2 Instance",
+    "DisableCapacityManager", "Disable", "Capacity Manager",
+    "DisassociateCapacityReservationBillingOwner", "Delete", "Capacity Reservation",
+    "EnableCapacityManager", "Enable", "Capacity Manager",
+    "GetCapacityManagerAttributes", "Read", "Capacity Manager",
+    "GetCapacityManagerMetricData", "Read", "Capacity Manager",
+    "GetCapacityManagerMetricDimensions", "Read", "Capacity Manager",
+    "GetCapacityManagerMonitoredTagKeys", "Read", "Capacity Manager Monitored Tag Keys",
+    "GetCapacityReservationUsage", "Read", "Capacity Reservation",
+    "GetGroupsForCapacityReservation", "Read", "Capacity Reservation",
+    "GetHostReservationPurchasePreview", "Read", "Dedicated Host",
+    "GetReservedInstancesExchangeQuote", "Read", "Reserved Instance",
+    "ModifyCapacityReservation", "Set", "Capacity Reservation",
+    "ModifyCapacityReservationFleet", "Set", "Capacity Reservation Fleet",
+    "ModifyHosts", "Set", "Dedicated Host",
+    "ModifyReservedInstances", "Set", "Reserved Instance",
+    "MoveCapacityReservationInstances", "Execute", "Capacity Reservation",
+    "PurchaseCapacityBlock", "Create", "Capacity Block",
+    "PurchaseCapacityBlockExtension", "Create", "Capacity Block",
+    "PurchaseHostReservation", "Create", "Dedicated Host",
+    "PurchaseReservedInstancesOffering", "Create", "Reserved Instance",
+    "PurchaseScheduledInstances", "Create", "Scheduled Instance",
+    "RejectCapacityReservationBillingOwnership", "Execute", "Capacity Reservation",
+    "ReleaseHosts", "Delete", "Dedicated Host",
+    "RunScheduledInstances", "Create", "EC2 Instance",
+    "UpdateCapacityManagerMonitoredTagKeys", "Set", "Capacity Manager Monitored Tag Keys",
+    "UpdateCapacityManagerOrganizationsAccess", "Set", "Capacity Manager",
+    "UpdateInterruptibleCapacityReservationAllocation", "Set", "Capacity Reservation"
+  ]
+  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+  | where array_length(object_has_any) == 0 or Object has_any (object_has_any);
+  AWSCloudTrail
+  | where not(disabled)
+  | where EventSource == "ec2.amazonaws.com"
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+  | where array_length(operation_has_any) == 0 or EventName has_any (operation_has_any)
+  | where array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any)
+  | where array_length(srcipaddr_has_any_prefix) == 0
+      or (ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0")
+          and has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+  | where EventName in (Events | project EventName)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | where eventresult == "*" or EventResult == eventresult
+  | lookup kind=inner Events on EventName
+  | extend Req = todynamic(RequestParameters), Resp = todynamic(ResponseElements)
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AllocateHosts", Resp.hostIdSet,
+      EventName == "AssociateCapacityReservationBillingOwner", Req.CapacityReservationId,
+      EventName == "CancelCapacityReservationFleets", Resp.successfulFleetCancellationSet,
+      EventName in ("CancelReservedInstancesListing", "CreateReservedInstancesListing"),
+        Resp.reservedInstancesListingsSet,
+      EventName == "ConfirmProductInstance", Resp.ownerId,
+      EventName == "CreateCapacityManagerDataExport", Resp.capacityManagerDataExportId,
+      EventName == "CreateCapacityReservation", Resp.capacityReservation,
+      EventName in ("CreateCapacityReservationBySplitting", "MoveCapacityReservationInstances"),
+        Resp.destinationCapacityReservation,
+      EventName == "CreateCapacityReservationCancellationQuote",
+        Resp.capacityReservationCancellationQuote,
+      EventName == "CreateCapacityReservationDateChangeQuote",
+        Resp.capacityReservationModificationQuote,
+      EventName == "CreateCapacityReservationFleet", Resp.state,
+      EventName == "CreateInterruptibleCapacityReservationAllocation", Resp.interruptionType,
+      EventName == "EnableCapacityManager", Resp.output,
+      EventName == "ModifyReservedInstances", Req.ReservedInstancesConfigurationSetItemType.N,
+      EventName == "PurchaseCapacityBlock", Resp.capacityBlockSet,
+      EventName == "PurchaseCapacityBlockExtension", Resp.capacityBlockExtensionSet,
+      EventName == "PurchaseReservedInstancesOffering", Resp.reservedInstancesId,
+      EventName == "PurchaseScheduledInstances", Resp.scheduledInstanceSet,
+      EventName == "RunScheduledInstances", Resp.instanceIdSet,
+      EventName == "UpdateCapacityManagerMonitoredTagKeys", Resp.capacityManagerTagKeySet,
+      EventName == "UpdateInterruptibleCapacityReservationAllocation", Req.TargetInstanceCount,
+      ""
+    ), "")
+  | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+  | extend ObjectId = case(
+      EventName in ("AcceptCapacityReservationBillingOwnership", "AssociateCapacityReservationBillingOwner",
+        "CancelCapacityReservation", "DescribeCapacityBlockExtensionHistory",
+        "DescribeCapacityBlockExtensionOfferings", "DescribeCapacityReservationBillingRequests",
+        "DescribeCapacityReservationTopology", "DescribeCapacityReservations",
+        "DisassociateCapacityReservationBillingOwner", "GetGroupsForCapacityReservation",
+        "ModifyCapacityReservation", "RejectCapacityReservationBillingOwnership"),
+        Req.CapacityReservationId,
+      EventName == "AcceptReservedInstancesExchangeQuote", Resp.exchangeId,
+      EventName == "AllocateHosts", Resp.hostIdSet,
+      EventName in ("CancelCapacityReservationFleets", "DescribeCapacityReservationFleets",
+        "ModifyCapacityReservationFleet"), Req.CapacityReservationFleetId,
+      EventName == "CancelReservedInstancesListing", Req.ReservedInstancesListingId,
+      EventName == "ConfirmProductInstance", Req.InstanceId,
+      EventName in ("CreateCapacityManagerDataExport", "DeleteCapacityManagerDataExport"),
+        Resp.capacityManagerDataExportId,
+      EventName == "CreateCapacityReservation", Resp.capacityReservation.capacityReservationId,
+      EventName == "CreateCapacityReservationBySplitting",
+        Resp.destinationCapacityReservation.destinationCapacitySplittingId,
+      EventName == "CreateCapacityReservationCancellationQuote",
+        Resp.capacityReservationCancellationQuote.capacityReservationCancellationQuoteId,
+      EventName == "CreateCapacityReservationDateChangeQuote",
+        Resp.capacityReservationModificationQuote.capacityReservationModificationQuoteId,
+      EventName == "CreateCapacityReservationFleet", Resp.capacityReservationFleetId,
+      EventName in ("CreateInterruptibleCapacityReservationAllocation",
+        "UpdateInterruptibleCapacityReservationAllocation"), Resp.sourceCapacityReservationId,
+      EventName in ("CreateReservedInstancesListing", "DeleteQueuedReservedInstances",
+        "DescribeReservedInstances", "DescribeReservedInstancesListings", "ModifyReservedInstances"),
+        Req.ReservedInstancesId,
+      EventName in ("DescribeCapacityBlockStatus", "DescribeCapacityBlocks"), Req.CapacityBlockId,
+      EventName == "DescribeCapacityManagerDataExports", Req.CapacityManagerDataExportId,
+      EventName in ("DescribeHostReservationOfferings", "GetHostReservationPurchasePreview"),
+        Req.OfferingId,
+      EventName == "DescribeHostReservations", Req.HostReservationIdSet,
+      EventName in ("DescribeHosts", "DescribeMacHosts", "ModifyHosts", "ReleaseHosts"),
+        Req.HostId,
+      EventName == "DescribeReservedInstancesModifications", Req.ReservedInstancesModificationId,
+      EventName in ("DescribeReservedInstancesOfferings", "PurchaseReservedInstancesOffering"),
+        Req.ReservedInstancesOfferingId,
+      EventName in ("DescribeScheduledInstances", "RunScheduledInstances"),
+        Req.ScheduledInstanceId,
+      EventName == "GetCapacityReservationUsage", Resp.capacityReservationId,
+      EventName == "GetReservedInstancesExchangeQuote", Req.ReservedInstanceId,
+      EventName == "MoveCapacityReservationInstances", Req.SourceCapacityReservationId,
+      EventName in ("PurchaseCapacityBlock", "PurchaseCapacityBlockExtension"),
+        Req.CapacityBlockOfferingId,
+      EventName == "PurchaseHostReservation", Req.HostIdSet,
+      EventName == "PurchaseScheduledInstances", Req.PurchaseRequest,
+      ""
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service"
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      ActorUserEntityKey = "",
+      AdditionalEntities = dynamic([]),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", Req,
+      "ResponseElements", Resp
+    ), dynamic({}))
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  | project
+      TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+      EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+      EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+      ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+      SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+      Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+      ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+      AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+      TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(
+    starttime,
+    endtime,
+    srcipaddr_has_any_prefix,
+    actorusername_has_any,
+    operation_has_any,
+    eventtype_in,
+    eventresult,
+    object_has_any,
+    newvalue_has_any,
+    disabled,
+    pack
+  )

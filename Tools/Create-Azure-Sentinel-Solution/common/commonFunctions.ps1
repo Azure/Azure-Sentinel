@@ -94,7 +94,7 @@ function Resolve-SolutionContentPath {
         throw "Referenced solution content is not a local file: $ContentPath"
     }
     [PSCustomObject]@{
-        FullPath = $fullPath
+        FullPath = $fullPath.Replace('\', '/')
         RelativePath = $relative.Replace('\', '/')
     }
 }
@@ -935,7 +935,7 @@ function GetWorkbookDataMetadata($file, $isPipelineRun, $contentResourceDetails,
         }
         catch {
             Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
-            break;
+            throw
         }
 
         if ($dependencies.source -and $dependencies.source.kind -and ($dependencies.source.kind -eq "Community" -or $dependencies.source.kind -eq "Standalone")) {
@@ -954,7 +954,7 @@ function GetWorkbookDataMetadata($file, $isPipelineRun, $contentResourceDetails,
     }
     catch {
         Write-Host "Failed to serialize $file" -ForegroundColor Red
-        break;
+        throw
     }
     $workbookDescriptionText = $(if ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.Array]) { $contentToImport.WorkbookDescription[$global:workbookCounter - 1] } elseif ($contentToImport.WorkbookDescription -and $contentToImport.WorkbookDescription -is [System.String]) { $contentToImport.WorkbookDescription } else { "" })
     #creating parameters in mainTemplate
@@ -1040,7 +1040,7 @@ function GetWorkbookDataMetadata($file, $isPipelineRun, $contentResourceDetails,
         }
         catch {
             Write-Host "TemplateSpec Workbook Metadata Dependencies errors occurred: $($_.Exception.Message)" -ForegroundColor Red
-            break;
+            throw
         }
 
         $workbookNameParameter = [PSCustomObject] @{ type = "string"; defaultValue = $dependencies.title; minLength = 1; metadata = [PSCustomObject] @{ description = "Name for the workbook" }; }
@@ -2018,7 +2018,7 @@ function GetDataConnectorMetadata($file, $contentResourceDetails, $dataFileMetad
     }
     catch {
         Write-Host "Failed to deserialize $file" -ForegroundColor Red
-        break;
+        throw
     }
 
     $hasStaticDataConnectorIdsProperty = [bool]($contentToImport.PSObject.Properties.Name.tolower() -match 'staticdataconnectorids') ? $true : $false
@@ -2469,7 +2469,7 @@ function GetHuntingDataMetadata($file, $rawData, $contentResourceDetails) {
     }
     catch {
         Write-Host "Failed to deserialize $file" -ForegroundColor Red
-        break;
+        throw
     }
 
     $fileName = Split-Path $file -leafbase;
@@ -2802,7 +2802,7 @@ function GenerateAlertRule($file, $contentResourceDetails) {
     }
     catch {
         Write-Host "Failed to deserialize $file, Error Details: $_" -ForegroundColor Red
-        break;
+        throw
     }
 
     if ($yaml.metadata -and $yaml.metadata.source -and $yaml.metadata.source.kind -and ($yaml.metadata.source.kind -eq "Community" -or $yaml.metadata.source.kind -eq "Standalone")) {
@@ -2948,6 +2948,22 @@ function GenerateAlertRule($file, $contentResourceDetails) {
             }
             elseif ($yamlField -eq "sentinelEntitiesMappings" -and $yaml.$yamlField.length -lt 2) {
                 $alertRule.sentinelEntitiesMappings = @($alertRule.sentinelEntitiesMappings);
+            }
+            elseif ($yamlField -eq "customDetails" -and $null -ne $alertRule.customDetails) {
+                if ($alertRule.customDetails -is [System.Collections.IDictionary]) {
+                    foreach ($detailKey in @($alertRule.customDetails.Keys)) {
+                        if ($detailKey -like '*id' -and $alertRule.customDetails[$detailKey] -is [string] -and -not $alertRule.customDetails[$detailKey].StartsWith('[')) {
+                            $alertRule.customDetails[$detailKey] = ConvertTo-CustomDetectionArmLiteral -Value $alertRule.customDetails[$detailKey]
+                        }
+                    }
+                }
+                else {
+                    foreach ($detail in $alertRule.customDetails.PSObject.Properties) {
+                        if ($detail.Name -like '*id' -and $detail.Value -is [string] -and -not $detail.Value.StartsWith('[')) {
+                            $detail.Value = ConvertTo-CustomDetectionArmLiteral -Value $detail.Value
+                        }
+                    }
+                }
             }
         }
     }
@@ -3162,6 +3178,12 @@ function GenerateWatchList($json, $isPipelineRun, $watchListFileName) {
 
     # Replace watchlist resource id
     $watchlistData.name = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('watchlist$global:watchlistCounter-id'))]"
+    if ($watchlistData.PSObject.Properties['kind'] -and [string]::IsNullOrWhiteSpace([string]$watchlistData.kind)) {
+        $watchlistData.PSObject.Properties.Remove('kind')
+    }
+    if ($watchlistData.properties -and $watchlistData.properties.PSObject.Properties['labels'] -and @($watchlistData.properties.labels).Count -eq 0) {
+        $watchlistData.properties.PSObject.Properties.Remove('labels')
+    }
 
     # Handle MainTemplate Resource
     $global:baseMainTemplate.resources += $watchlistData #Assume 1 watchlist per template
@@ -3226,11 +3248,21 @@ function RunArmTtkOnPackage {
     if ($isPipelineRun -eq $false) {
         #downloading and running arm-ttk on generated solution
         $armTtkFolder = "$PSScriptRoot/../arm-ttk"
+        $moduleManifest = Join-Path $PSScriptRoot "../tmp/arm-ttk/arm-ttk.psd1"
         if (!$(Get-Command Test-AzTemplate -ErrorAction SilentlyContinue)) {
-            Write-Output "Missing arm-ttk validations. Downloading module..."
-            & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
+            if (Test-Path -Path $moduleManifest -PathType Leaf) {
+                Import-Module $moduleManifest
+            }
+            else {
+                Write-Output "Missing arm-ttk validations. Downloading module..."
+                & (Join-Path $armTtkFolder "download-arm-ttk.ps1")
+            }
         }
+        $global:LASTEXITCODE = 0
         & (Join-Path $armTtkFolder "run-arm-ttk-in-automation.ps1") -SolutionName $solutionName
+        if ($LASTEXITCODE -ne 0) {
+            throw "ARM-TTK validation failed for solution '$solutionName' (exit code $LASTEXITCODE)."
+        }
     }
 }
 
@@ -3247,7 +3279,8 @@ function CheckJsonIsValid($solutionFolderBasePath) {
                 Write-Host "File $filePath is a valid Json file!"
             }
             else {
-                Write-Host "File $filePath is Not a valid Json file!"
+                Write-Host "File $filePath is Not a valid Json file!" -ForegroundColor Red
+                throw "File $filePath is Not a valid Json file!"
             }
         }
     }
@@ -3332,7 +3365,13 @@ function GeneratePackage(
     $createUiDefinitionOutputPath = "$solutionFolder/createUiDefinition.json"
 
     try {
-        $baseMainTemplate | ConvertTo-Json -Depth $packageSerializationDepth | Out-File $mainTemplateOutputPath -Encoding utf8
+        $mainTemplateJson = $baseMainTemplate | ConvertTo-Json -Depth $packageSerializationDepth
+        if ($IncludeXdrDetections -and $xdrDetectionCount -gt 0) {
+            $mainTemplateJson = ConvertTo-CustomDetectionTemplateJson -Json $mainTemplateJson
+        }
+
+        $mainTemplateJson -replace '("defaultValue"\s*:\s*)\[\s*("(?:[^"\\]|\\.)*")\s*\]', '$1[$2]' |
+            Out-File $mainTemplateOutputPath -Encoding utf8
 
         # create testParameters json file which will be used for test case automation
         $testParametersOutputPath = "$solutionFolder/testParameters.json"
@@ -3340,7 +3379,7 @@ function GeneratePackage(
     }
     catch {
         Write-Host "Failed to write output file $mainTemplateOutputPath" -ForegroundColor Red
-        break;
+        throw
     }
 
     try {
@@ -3360,7 +3399,7 @@ function GeneratePackage(
     }
     catch {
         Write-Host "Failed to write output file $createUiDefinitionOutputPath" -ForegroundColor Red
-        break;
+        throw
     }
         
     if ($calculatedBuildPipelinePackageVersion -eq '') {
@@ -3481,7 +3520,7 @@ function global:returnContentResources ($item) {
     }
     catch {
         Write-Host "Expected Version information is coming as null. Please correct the version number accordingly: $($_.Exception.Message)" -ForegroundColor Red
-        break;
+        throw
     }
 }
 
@@ -3790,7 +3829,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
         }
         catch {
             Write-Host "Failed to deserialize while converting the Saved Search Function from Yaml $file" -ForegroundColor Red
-            break;
+            throw
         }
     }
     elseif ($file -match "(\.json)$") {
@@ -3818,6 +3857,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
         }
         catch {
             Write-Host "Failed to deserialize JSON parser file $file" -ForegroundColor Red
+            throw
         }
     }
     

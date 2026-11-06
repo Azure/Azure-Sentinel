@@ -1,0 +1,81 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityRecommendation
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8178a514-1270-4e31-a1d9-aaafeb40122f
+    path: Analytic Rules/M2131LogRetentionLessThan1Year.yaml
+    version: 1.0.0
+    querySha256: 853ab709e4901bdb71c66b65336ed8539de911863e2b6d92e4d842c75e04b7f1
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1082
+    reviewScope:
+      sourceDocumentSha256: 199b6ffd96d547b2d585e5e0a96b9103e4218e90261914fe800055ac60b658ce
+      targetQuerySha256: e68627ac0874ac6704533f61b720523b785acb2f15bf9ed7e5114399ae4750b3
+properties:
+  id: xdr-8178a514-1270-4e31-a1d9-aaafeb40122f
+  displayName: M2131_LogRetentionLessThan1Year
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityRecommendation
+      | summarize arg_max(TimeGenerated, *) by RecommendationDisplayName, AssessedResourceId
+      | where RecommendationDisplayName == "Activity log should be retained for at least one year"
+      | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by RecommendationDisplayName, AssessedResourceId
+      | extend PassedControls = (Passed/todouble(Total))*100
+      | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+      | project RecommendationDisplayName, AssessedResourceId, Total, PassedControls, Passed, Failed, RemediationLink, LastObserved=now()
+      | where Failed > 0
+      | sort by Failed desc
+      | extend URLCustomEntity = RemediationLink, ResourceId = AssessedResourceId
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: M2131_LogRetentionLessThan1Year
+      description: '''This alert is designed to monitor log retention within the Maturity Model for Event Log Management (M-21-31)
+        standard. The alert triggers when a log analytics workspace in active storage is configured for less than 1 year.'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: URLCustomEntity
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: AssessedResourceId
+        hosts:
+        - id: host1
+          nameColumn: ResourceId
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1082

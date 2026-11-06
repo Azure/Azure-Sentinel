@@ -1,0 +1,68 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 77b7c820-5f60-4779-8bdb-f06e21add5f1
+    path: Analytic Rules/RareClientObservedWithHighReverseDNSLookupCountStaticThresholdBased.yaml
+    version: 1.0.2
+    querySha256: 7c63dcf93fc3785c40738b393267603f74994d18b6d371c20fb152f5538d0d1f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 10d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=10d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'DNSQueries' column `DNSQueries` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'DNSQuerythreshold' column `DNSQuerythreshold` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'DNSQueryCount' column `DNSQueryCount` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Reconnaissance
+    originalTechniques:
+    - T1590
+    reviewScope:
+      sourceDocumentSha256: e1c0d1845ccebb1a556c3a1aa7391dab3d94784bc16d2a247cb6ebb3ba794890
+      targetQuerySha256: 6aaa4205c82e1d6a7c2b1f75603db6d2175c8bca20fd1772205c5527a8c5b2fd
+properties:
+  id: xdr-77b7c820-5f60-4779-8bdb-f06e21add5f1
+  displayName: Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: "let threshold = 10;\nlet stime = 10d;\nlet etime = 1d;\nlet SearchDomain = dynamic([\"in-addr.arpa\"]);\n_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)\n| summarize\n  StartTimeUtc = min(TimeGenerated),\n  EndTimeUtc = max(TimeGenerated),\n  DNSQueryCount=dcount(DnsQuery)\n  by SrcIpAddr\n| where DNSQueryCount > threshold\n| project StartTimeUtc, EndTimeUtc, SrcIpAddr, DNSQueryCount\n| join kind=leftanti (_Im_Dns(starttime=ago(stime), endtime=ago(etime), domain_has_any=SearchDomain)\n  | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated, 1d)\n  | where DNSQueryCount > threshold\n  | project SrcIpAddr, DNSQueryCount\n  )\n  on SrcIpAddr\n| join kind=inner (_Im_Dns(starttime=ago(etime), domain_has_any=SearchDomain)\n  | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n| extend DNSQuerythreshold = threshold\n| project-away SrcIpAddr1"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Rare client observed with high reverse DNS lookup count - Static threshold based (ASIM DNS Solution)
+      description: '''This rule identifies clients with high reverse DNS counts, which could be carrying out reconnaissance or discovery activity. This helps in detecting the possible initial phases of an attack, like discovery and reconnaissance. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1590
+      customDetails:
+        DNSQueries: DNSQueries
+        DNSQuerythreshold: DNSQuerythreshold
+        DNSQueryCount: DNSQueryCount

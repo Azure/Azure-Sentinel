@@ -41,6 +41,12 @@ def _setup_toolkit_imports(toolkit_root: Path) -> None:
     migration_root = toolkit_root / "Tools" / "SentinelToXDRMigration"
     if str(migration_root) not in sys.path:
         sys.path.insert(0, str(migration_root))
+    for pkg_name in ("solution_manager", "solution_manager.authoring"):
+        pkg = sys.modules.get(pkg_name)
+        if pkg is not None and hasattr(pkg, "__path__"):
+            sub_dir = migration_root.joinpath(*pkg_name.split("."))
+            if sub_dir.is_dir() and str(sub_dir) not in pkg.__path__:
+                pkg.__path__.insert(0, str(sub_dir))
 
 
 def _rel_path(path: Path, content_root: Path) -> str:
@@ -122,10 +128,14 @@ def _load_solution_data(solution_root: Path) -> tuple[Path | None, dict[str, Any
         return data_file, None, str(exc)
 
 
+DEPLOY_PARSER_CONDITION = "[parameters('DeployParser')]"
+
+
 def _find_saved_search_dependency(
     resources: list[dict[str, Any]],
     variables: dict[str, Any],
     function_alias: str,
+    parameters: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None, str | None]:
     """Locate the savedSearches resource for function_alias and compute its expected dependsOn expression."""
     saved = [
@@ -146,11 +156,28 @@ def _find_saved_search_dependency(
             f"(found {len(saved)})",
         )
     resource = saved[0]
-    if "condition" in resource or "copy" in resource:
+    # The packager gates parsers by DeployParser (defaultValue true); no other condition or copy is valid.
+    condition = resource.get("condition")
+    deploy_parser = parameters.get("DeployParser") if isinstance(parameters, dict) else None
+    if "copy" in resource or (
+        "condition" in resource
+        and (
+            condition != DEPLOY_PARSER_CONDITION
+            or (
+                parameters is not None
+                and not (
+                    isinstance(deploy_parser, dict)
+                    and deploy_parser.get("type") == "bool"
+                    and deploy_parser.get("defaultValue") is True
+                )
+            )
+        )
+    ):
         return (
             resource,
             None,
-            f"Required workspace function '{function_alias}' savedSearches resource must be unconditional",
+            f"Required workspace function '{function_alias}' savedSearches resource must be unconditional "
+            f"or gated only by {DEPLOY_PARSER_CONDITION} (bool parameter, defaultValue true)",
         )
     name = resource.get("name")
     if not isinstance(name, str) or not name:
@@ -318,6 +345,10 @@ def validate_solution_xdr_detections(
         xdr_detection_files,
     )
     from sentinel_xdr_migration.packaging import _read_json, _value, _xdr_references
+    from solution_manager.authoring.validator import (
+        _solution_parser_aliases,
+        validate_xdr_detection_kql,
+    )
 
     xdr_dir = solution_root / "XDR Detections"
     authored_files = xdr_detection_files(xdr_dir) if xdr_dir.is_dir() else []
@@ -376,6 +407,7 @@ def validate_solution_xdr_detections(
     results: list[dict[str, Any]] = []
     seen_ids: dict[str, list[Path]] = {}
     parsed_docs: dict[Path, dict[str, Any]] = {}
+    parser_aliases = _solution_parser_aliases(solution_root)
 
     for path in authored_files:
         file_errors: list[str] = []
@@ -394,10 +426,17 @@ def validate_solution_xdr_detections(
             file_errors.append(f"Invalid YAML syntax: {exc}")
             document = {}
 
+        static_kql_valid = False
         if document:
             parsed_docs[path] = document
             file_errors.extend(validate_document(document))
             file_warnings.extend(custom_detail_binding_warnings(document))
+            static_kql_res = validate_xdr_detection_kql(
+                document, known_functions=parser_aliases
+            )
+            static_kql_valid = bool(static_kql_res.get("valid"))
+            for kql_err in static_kql_res.get("errors") or []:
+                file_errors.append(f"Static KQL validation: {kql_err}")
 
             provenance = document.get("contentProvenance")
             if isinstance(provenance, dict):
@@ -473,6 +512,7 @@ def validate_solution_xdr_detections(
                 "validator": "XDR Detection",
                 "filePath": _rel_path(path, content_root),
                 "passed": len(file_errors) == 0,
+                "staticKqlValidated": static_kql_valid and len(file_errors) == 0,
                 "error": "; ".join(dict.fromkeys(file_errors)) if file_errors else None,
                 "warnings": file_warnings,
             }
@@ -548,6 +588,11 @@ def validate_solution_xdr_detections(
 
     return {
         "applicable": True,
+        "staticKqlValidated": bool(authored_files)
+        and all(
+            bool(r.get("staticKqlValidated", True)) and bool(r.get("passed"))
+            for r in results
+        ),
         "liveKqlSkipped": True,
         "liveKqlSkipReason": (
             "Live Advanced Hunting KQL validation for XDR Detections requires an "
@@ -667,8 +712,13 @@ def validate_solution_xdr_workbooks(
         selected_workbook_files,
         validate_workbooks,
     )
+    from solution_manager.authoring.validator import (
+        _solution_parser_aliases,
+        validate_xdr_workbook_kql,
+    )
 
     wb_dir = solution_root / "XDR Workbooks"
+    parser_aliases = _solution_parser_aliases(solution_root)
     authored_files = (
         sorted(p for p in wb_dir.rglob("*.json") if p.is_file())
         if wb_dir.is_dir()
@@ -777,10 +827,19 @@ def validate_solution_xdr_workbooks(
                 target_path = solution_root / rel_item_path
                 # Run explicit schema check against Tools/SentinelToXDRMigration/schema/xdr-workbook.schema.json
                 doc = parsed_workbooks.get(target_path)
+                static_kql_valid = False
                 if doc is not None:
                     for err in schema_validator.iter_errors(doc):
                         loc = "/".join(map(str, err.absolute_path)) or "<root>"
                         msg = f"{loc}: {err.message}"
+                        if msg not in item_errors:
+                            item_errors.append(msg)
+                    static_kql_res = validate_xdr_workbook_kql(
+                        doc, known_functions=parser_aliases
+                    )
+                    static_kql_valid = bool(static_kql_res.get("valid"))
+                    for kql_err in static_kql_res.get("errors") or []:
+                        msg = f"Static KQL validation: {kql_err}"
                         if msg not in item_errors:
                             item_errors.append(msg)
                 results.append(
@@ -788,6 +847,7 @@ def validate_solution_xdr_workbooks(
                         "validator": "XDR Workbook",
                         "filePath": _rel_path(target_path, content_root),
                         "passed": len(item_errors) == 0,
+                        "staticKqlValidated": static_kql_valid and len(item_errors) == 0,
                         "error": "; ".join(dict.fromkeys(item_errors)) if item_errors else None,
                     }
                 )
@@ -819,6 +879,10 @@ def validate_solution_xdr_workbooks(
                 for e in schema_validator.iter_errors(doc)
             ]
             file_errors.extend(dependency_validation_errors(doc))
+            static_kql_res = validate_xdr_workbook_kql(doc)
+            static_kql_valid = bool(static_kql_res.get("valid"))
+            for kql_err in static_kql_res.get("errors") or []:
+                file_errors.append(f"Static KQL validation: {kql_err}")
             provenance = doc.get("contentProvenance")
             if isinstance(provenance, dict):
                 fn_records = provenance.get("requiredWorkspaceFunctions", [])
@@ -832,6 +896,7 @@ def validate_solution_xdr_workbooks(
                     "validator": "XDR Workbook",
                     "filePath": _rel_path(path, content_root),
                     "passed": len(file_errors) == 0,
+                    "staticKqlValidated": static_kql_valid and len(file_errors) == 0,
                     "error": "; ".join(dict.fromkeys(file_errors)) if file_errors else None,
                 }
             )
@@ -898,6 +963,11 @@ def validate_solution_xdr_workbooks(
 
     return {
         "applicable": True,
+        "staticKqlValidated": bool(authored_files)
+        and all(
+            bool(r.get("staticKqlValidated", True)) and bool(r.get("passed"))
+            for r in results
+        ),
         "liveKqlSkipped": True,
         "liveKqlSkipReason": (
             "Live Advanced Hunting / Defender Workbook query & portal rendering validation "
@@ -1162,7 +1232,7 @@ def _validate_packaged_defender_workbooks(
                                 )
                                 continue
                             _, dep_expr, dep_err = _find_saved_search_dependency(
-                                resources, variables, fn_rec["functionAlias"]
+                                resources, variables, fn_rec["functionAlias"], parameters
                             )
                             if dep_err:
                                 errors.append(dep_err)
@@ -1215,7 +1285,7 @@ def _validate_packaged_defender_workbooks(
                         if not isinstance(alias, str) or not isinstance(src_path, str):
                             continue
                         saved_res, _, dep_err = _find_saved_search_dependency(
-                            resources, variables, alias
+                            resources, variables, alias, parameters
                         )
                         if dep_err and dep_err not in errors:
                             errors.append(dep_err)
@@ -1231,7 +1301,7 @@ def _validate_packaged_defender_workbooks(
                                     != function_parameters(definition)
                                 ):
                                     errors.append(
-                                        "Required workspace function must be unconditional and match current source"
+                                        "Required workspace function must be unconditional or DeployParser-gated and match current source"
                                     )
                             except (ValueError, KeyError) as exc:
                                 errors.append(str(exc))

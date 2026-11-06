@@ -209,7 +209,7 @@ _BUILTINS = {
     "toscalar", "tostring", "toint", "tolong", "todouble", "todatetime", "todecimal", "todynamic", "toreal", "totable",
     "totimespan", "tobool", "now", "ago", "startofday", "endofday", "startofweek", "endofweek",
     "startofmonth", "endofmonth", "startofyear", "endofyear", "tolower", "toupper", "coalesce", "iff", "iif", "case",
-    "_GetWatchlist", "workspace", "app", "resource", "cluster", "database", "table", "view", "materialize",
+    "_GetWatchlist", "_GetWatchlistAlias", "workspace", "app", "resource", "cluster", "database", "table", "view", "materialize",
     "abs", "acos", "asin", "atan", "atan2", "beta_cdf", "beta_inv", "beta_pdf", "bin", "bin_at", " ceiling", "ceiling",
     "cos", "cot", " count", "count", "count_distinct", "count_distinctif", "countif", "countof",
     " dcount", "dcount", "dcount_hll", "dcountif", "degrees", "exp", "exp10", "exp2", "floor", "gamma",
@@ -358,7 +358,10 @@ def _quoted_calls_and_table_sources(query: str) -> tuple[set[str], set[str]]:
     calls: set[str] = set()
     bare: set[str] = set()
     # Mask single-line // comments only first, then inspect quoted constructs at top level.
-    no_comments = re.sub(r"//[^\r\n]*", lambda m: " " * len(m.group(0)), query)
+    # String literals are matched first so "https://..." is not treated as a comment.
+    no_comments = _QUOTED_LITERAL_RE.sub(
+        lambda m: " " * len(m.group(0)) if m.group(0).startswith("//") else m.group(0), query
+    )
     protectedspans: list[tuple[int, int]] = []
     for m in _BRACKETED_QUOTED_NAME_RE.finditer(no_comments):
         protectedspans.append(m.span())

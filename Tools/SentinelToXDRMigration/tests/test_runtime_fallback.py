@@ -318,6 +318,37 @@ class AdvancedHuntingProviderBoundsTests(unittest.TestCase):
         self.assertEqual(rows[:10], result["sampleRows"])
         self.assertTrue(result["sampleRowsTruncated"])
 
+    def test_graph_odata_type_row_annotations_are_ignored_and_stripped(self):
+        schema = [{"name": "Name", "type": "String"}, {"name": "count_", "type": "Int64"}]
+        rows = [{"Name": "a", "count_": 3, "count_@odata.type": "#Int64"}]
+        urlopen = mock.Mock(
+            return_value=_successful_response({"schema": schema, "results": rows})
+        )
+        with mock.patch.object(runtime_module.urllib.request, "urlopen", urlopen):
+            result = run_advanced_hunting_query(
+                "T | summarize count()", _token="cached-test-token", capture_full_results=True
+            )
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([{"Name": "a", "count_": 3}], result["results"])
+        self.assertEqual([{"Name": "a", "count_": 3}], result["sampleRows"])
+
+        bad = [{"Name": "a", "count_": 3, "Other@odata.type": "#Int64", "Unknown": 1}]
+        urlopen = mock.Mock(return_value=_successful_response({"schema": schema, "results": bad}))
+        with mock.patch.object(runtime_module.urllib.request, "urlopen", urlopen):
+            result = run_advanced_hunting_query("T", _token="cached-test-token")
+        self.assertFalse(result["ok"])
+
+    def test_workbook_result_normalization_ignores_odata_annotations(self):
+        from solution_manager.qualification.workbook_qualification import _normalize_result
+
+        normalized = _normalize_result(
+            [{"name": "count_", "type": "Int64"}],
+            [{"count_": 3, "count_@odata.type": "#Int64"}],
+        )
+        self.assertEqual([[3]], normalized["rows"])
+        with self.assertRaises(ValueError):
+            _normalize_result([{"name": "count_", "type": "Int64"}], [{"count_": 3, "extra": 1}])
+
     def test_missing_or_invalid_provider_schema_is_not_success(self):
         invalid_bodies = (
             {"results": []},

@@ -1,0 +1,116 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1b1061be-2595-4492-af6d-1c8a5fc9576d
+    path: Analytic Rules/Dataverse - Removal of blocked file extensions.yaml
+    version: 3.2.0
+    querySha256: 623201c7077df2757393d5e4bb413696d46ceac99ee36c455e6e45c45114e8b3
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1629
+    reviewScope:
+      sourceDocumentSha256: 7642da3b0622f368e5d3df27a421ee77c328f1aa6c1f2195e5792259b1a9677f
+      targetQuerySha256: d211a376bd29904d65eee5af0de5b349725231af85bd579a32f688bf03c8d920
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-1b1061be-2595-4492-af6d-1c8a5fc9576d
+  displayName: Dataverse - Removal of blocked file extensions
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      let default_attachments = split('ade;adp;app;asa;ashx;asmx;asp;bas;bat;cdx;cer;chm;class;cmd;com;config;cpl;crt;csh;dll;exe;fxp;hlp;hta;htr;htw;ida;idc;idq;inf;ins;isp;its;jar;js;jse;ksh;lnk;mad;maf;mag;mam;maq;mar;mas;mat;mau;mav;maw;mda;mdb;mde;mdt;mdw;mdz;msc;msh;msh1;msh1xml;msh2;msh2xml;mshxml;msi;msp;mst;ops;pcd;pif;prf;prg;printer;pst;reg;rem;scf;scr;sct;shb;shs;shtm;shtml;soap;stm;tmp;url;vb;vbe;vbs;vsmacros;vss;vst;vsw;ws;wsc;wsf;wsh', ";");
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "Update" and EntityName =~ 'organization'
+      | mv-expand Fields
+      | where Fields.Name == "blockedattachments"
+      | extend
+          UpdatedAttachments = split(tostring(Fields.Value), ";"),
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | extend RemovedAttachments = set_difference(default_attachments, UpdatedAttachments)
+      | project
+          TimeGenerated,
+          UserId,
+          ClientIp,
+          InstanceUrl,
+          RemovedAttachments,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Removal of blocked file extensions
+      description: Identifies modifications to an environment's blocked file extensions and extracts the removed extension.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1629
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

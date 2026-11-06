@@ -1,0 +1,185 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f948a32f-226c-4116-bddd-d95e91d97eb9
+    path: Analytic Rules/MaliciousOAuthApp_O365AttackToolkit.yaml
+    version: 1.1.2
+    querySha256: 352dff0ad74c385ec9cb934e36a16a963e9a6c71752d810cbbfea9105ce54eb7
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `GrantInitiatedByUserPrincipalName`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `GrantInitiatedByUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - DefenseEvasion
+    originalTechniques:
+    - T1528
+    - T1550
+    reviewScope:
+      sourceDocumentSha256: 29e5f70414eb8a7e385a4b74067659ae44ae4a28a5aa1e3bf26ceb9296697e1b
+      targetQuerySha256: 93ca36a9d0b7e1f462b2edcbead3e387acaaa97addc61020050319130b29e3c0
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: GrantInitiatedByUserPrincipalName
+      column: GrantInitiatedByUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: 29e5f70414eb8a7e385a4b74067659ae44ae4a28a5aa1e3bf26ceb9296697e1b
+      targetQuerySha256: 93ca36a9d0b7e1f462b2edcbead3e387acaaa97addc61020050319130b29e3c0
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+properties:
+  id: xdr-f948a32f-226c-4116-bddd-d95e91d97eb9
+  displayName: Suspicious application consent similar to O365 Attack Toolkit
+  status: disabled
+  queryCondition:
+    queryText: "let detectionTime = 1d;\nlet joinLookback = 14d;\nlet threshold =\
+      \ 5;\nlet o365_attack_regex = \"contacts.read|user.read|mail.read|notes.read.all|mailboxsettings.readwrite|Files.ReadWrite.All|mail.send|files.read|files.read.all\"\
+      ;\nlet o365_attack = dynamic([\"contacts.read\", \"user.read\", \"mail.read\"\
+      , \"notes.read.all\", \"mailboxsettings.readwrite\", \"Files.ReadWrite.All\"\
+      , \"mail.send\", \"files.read\", \"files.read.all\"]);\nAuditLogs\n| where TimeGenerated\
+      \ > ago(detectionTime)\n| where LoggedByService =~ \"Core Directory\"\n| where\
+      \ Category =~ \"ApplicationManagement\"\n| where OperationName =~ \"Consent\
+      \ to application\"\n| mv-apply TargetResource = TargetResources on\n  (\n  \
+      \    where TargetResource.type =~ \"ServicePrincipal\"\n      | extend AppDisplayName\
+      \ = tostring(TargetResource.displayName),\n               AppClientId = tostring(TargetResource.id),\n\
+      \               props = TargetResource.modifiedProperties\n  )\n| where AppClientId\
+      \ !in ((externaldata(knownAppClientId:string, knownAppDisplayName:string)[@\"\
+      https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.OAuth.KnownApplications.csv\"\
+      ] with (format=\"csv\"))) // NOTE: a MATCH from this list will cause the alert\
+      \ to NOT fire - please modify for your environment!\n| mv-apply ConsentFull\
+      \ = props on\n  (\n      where ConsentFull.displayName =~ \"ConsentAction.Permissions\"\
+      \n  )\n| parse ConsentFull with * \"ConsentType: \" GrantConsentType \", Scope:\
+      \ \" GrantScope1 \", CreatedDateTime\" * \"]\" *\n| where GrantConsentType !=\
+      \ \"AllPrincipals\" // NOTE: we are ignoring if OAuth application was granted\
+      \ to all users via an admin - but admin due diligence should be audited occasionally\n\
+      | where ConsentFull has_any (o365_attack)\n| extend GrantScopeCount = countof(tolower(GrantScope1),\
+      \ o365_attack_regex, 'regex')\n| where GrantScopeCount > threshold\n| extend\
+      \ GrantInitiatedByAppName = tostring(InitiatedBy.app.displayName)\n| extend\
+      \ GrantInitiatedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n\
+      | extend GrantInitiatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n\
+      | extend GrantInitiatedByAadUserId = tostring(InitiatedBy.user.id)\n| extend\
+      \ GrantIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress),\
+      \ tostring(InitiatedBy.app.ipAddress))\n| extend GrantInitiatedBy = iff(isnotempty(GrantInitiatedByUserPrincipalName),\
+      \ GrantInitiatedByUserPrincipalName, GrantInitiatedByAppName)\n| mv-apply AdditionalDetail\
+      \ = AdditionalDetails on\n  (\n      where AdditionalDetail.key =~ \"User-Agent\"\
+      \n      | extend GrantUserAgent = AdditionalDetail.value\n  )\n| project TimeGenerated,\
+      \ GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, GrantInitiatedByUserPrincipalName,\
+      \ GrantInitiatedByAadUserId, GrantInitiatedByAppName, GrantInitiatedByAppServicePrincipalId,\
+      \ GrantIpAddress, GrantUserAgent, AppClientId, OperationName, ConsentFull, CorrelationId\n\
+      | join kind = leftouter (AuditLogs\n  | where TimeGenerated > ago(joinLookback)\n\
+      \  | where LoggedByService =~ \"Core Directory\"\n  | where Category =~ \"ApplicationManagement\"\
+      \n  | where OperationName =~ \"Add service principal\"\n  | mv-apply TargetResource\
+      \ = TargetResources on\n      (\n          where TargetResource.type =~ \"ServicePrincipal\"\
+      \n          | extend props = TargetResource.modifiedProperties,\n          \
+      \        AppClientId = tostring(TargetResource.id)\n      )\n  | mv-apply Property\
+      \ = props on\n      (\n          where Property.displayName =~ \"AppAddress\"\
+      \ and Property.newValue has \"AddressType\"\n          | extend AppReplyURLs\
+      \ = trim('\"',tostring(Property.newValue))\n      )\n  | distinct AppClientId,\
+      \ tostring(AppReplyURLs)\n) on AppClientId\n| join kind = innerunique (AuditLogs\n\
+      \      | where TimeGenerated > ago(joinLookback)\n      | where LoggedByService\
+      \ =~ \"Core Directory\"\n      | where Category =~ \"ApplicationManagement\"\
+      \n      | where OperationName =~ \"Add OAuth2PermissionGrant\" or OperationName\
+      \ =~ \"Add delegated permission grant\"\n          | mv-apply TargetResource\
+      \ = TargetResources on\n          (\n              where TargetResource.type\
+      \ =~ \"ServicePrincipal\" and array_length(TargetResource.modifiedProperties)\
+      \ > 0 and isnotnull(TargetResource.displayName)\n              | extend GrantAuthentication\
+      \ = tostring(TargetResource.displayName)\n          )\n      | extend GrantOperation\
+      \ = OperationName\n      | project GrantAuthentication, GrantOperation, CorrelationId\n\
+      \  ) on CorrelationId\n| project TimeGenerated, GrantConsentType, GrantScope1,\
+      \ GrantInitiatedBy, AppDisplayName, AppReplyURLs, GrantInitiatedByUserPrincipalName,\
+      \ GrantInitiatedByAadUserId, GrantInitiatedByAppName, GrantInitiatedByAppServicePrincipalId,\
+      \ GrantIpAddress, GrantUserAgent, AppClientId, GrantAuthentication, OperationName,\
+      \ GrantOperation, CorrelationId, ConsentFull\n| extend Name = tostring(split(GrantInitiatedByUserPrincipalName,'@',0)[0]),\
+      \ UPNSuffix = tostring(split(GrantInitiatedByUserPrincipalName,'@',1)[0])"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Suspicious application consent similar to O365 Attack Toolkit
+      description: '''This will alert when a user consents to provide a previously-unknown
+        Azure application with the same OAuth permissions used by the MDSec O365 Attack
+        Toolkit (https://github.com/mdsecactivebreach/o365-attack-toolkit).
+
+        The default permissions/scope for the MDSec O365 Attack toolkit change sometimes
+        but often include contacts.read, user.read, mail.read, notes.read.all, mailboxsettings.readwrite,
+        files.readwrite.all, mail.send, files.read, and files.read.all.
+
+        Consent to applications with these permissions should be rare, especially
+        as the knownApplications list is expanded, especially as the know'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: GrantInitiatedByAadUserId
+        - id: account3
+          aadUserIdColumn: GrantInitiatedByAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: GrantIpAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: AppDisplayName
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1528
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1550
+      customDetails:
+        AccountFullName: GrantInitiatedByUserPrincipalName

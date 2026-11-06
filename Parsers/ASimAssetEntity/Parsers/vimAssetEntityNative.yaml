@@ -1,0 +1,97 @@
+Parser:
+  Title: Asset Entity ASIM filtering parser for Microsoft Sentinel native Asset Entity table
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: Native
+Normalization:
+  Schema: AssetEntity
+  Version: '1.0.0'
+References:
+  - Title: Native Asset Entity table
+    Link: https://learn.microsoft.com/azure/azure-monitor/reference/tables/asimassetentitylogs
+  - Title: ASIM Asset Entity Schema
+    Link: https://aka.ms/ASimAssetEntityDoc
+Description: |
+  This ASIM parser supports normalizing the native Asset Entity table (ASimAssetEntityLogs) to the ASIM Asset Entity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: vimAssetEntityNative
+EquivalentBuiltInParser: _Im_AssetEntity_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: entityid_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: entityname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: assettype_in
+    Type: string
+    Default: '*'
+  - Name: path_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: assetowner_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: entitysource_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime:datetime=datetime(null), endtime:datetime=datetime(null),
+      entityid_has_any:dynamic=dynamic([]), entityname_has_any:dynamic=dynamic([]),
+      assettype_in:string='*', path_has_any:dynamic=dynamic([]),
+      assetowner_has_any:dynamic=dynamic([]), entitysource_has_any:dynamic=dynamic([]),
+      disabled:bool=false, pack:bool=false) {
+    ASimAssetEntityLogs
+    | where not(disabled)
+    | where isnull(starttime) or coalesce(EntityIngestionTime, TimeGenerated) >= starttime
+    | where isnull(endtime) or coalesce(EntityIngestionTime, TimeGenerated) <= endtime
+    | where array_length(entityid_has_any) == 0 or EntityId has_any (entityid_has_any)
+    | where array_length(entityname_has_any) == 0 or EntityName has_any (entityname_has_any)
+    | where assettype_in == '*' or AssetType =~ assettype_in
+    | where array_length(path_has_any) == 0
+        or FilePath has_any (path_has_any) or SitePath has_any (path_has_any)
+    | where array_length(assetowner_has_any) == 0 or AssetOwnerId has_any (assetowner_has_any)
+    | where array_length(entitysource_has_any) == 0 or EntitySource has_any (entitysource_has_any)
+    | extend
+        EntitySchema = "AssetEntity",
+        EntityUpdatedTime = coalesce(EntityUpdatedTime, TimeGenerated),
+        EntityIngestionTime = coalesce(EntityIngestionTime, TimeGenerated),
+        AssetPath = coalesce(FilePath, SitePath),
+        User = AssetOwnerId,
+        AdditionalFields = iff(pack, AdditionalFields, dynamic({}))
+    | project
+        TimeGenerated, Type, EntitySchema, EntitySchemaVersion, EntityUpdatedTime,
+        EntityIngestionTime, EntityKey, EntityId, EntityIdType, EntityOriginalId,
+        EntityName, EntityNameType, AssetType, AssetOriginalType,
+        EntityVendor, EntitySource, EntityOriginalSource, EntityProduct, EntitySubProduct,
+        EntityCreatedTime, EntityLastAccessedTime, EntityLastModifiedTime,
+        EntityIsDeleted, EntityFeedType, EntitySnapshotId,
+        AssetOwnerId, AssetOwnerIdType, AssetOwnerType, AssetOwnerScope, AssetOwnerScopeId,
+        AdditionalAssetOwners, AssetOriginalPermissions, AssetOriginalRiskDetails,
+        AssetRiskName, AssetRiskLevel, AssetOriginalRiskLevel,
+        AssetRiskFirstReportedTime, AssetRiskLastReportedTime,
+        AssetSensitivityLabel, AssetOriginalSensitivityLevel, AssetIsProtectedByDlp,
+        AssetRelatedIndicators, AssetOriginalDataClassificationType,
+        AssetClassificationLastScanDateTime, AADTenantId,
+        IdentityDirectoryName, IdentityDirectoryId, InternalUsersCount, ExternalUsersCount,
+        FilePath, FileSize, FileMD5, FileSHA1, FileSHA256, FileSHA512, FileExtension,
+        FileIsSignatureValid, FileSignatureDetails, SitePath, SitePrimaryUri,
+        AssetPath, User, AdditionalFields
+  };
+  parser(starttime=starttime, endtime=endtime, entityid_has_any=entityid_has_any,
+      entityname_has_any=entityname_has_any, assettype_in=assettype_in,
+      path_has_any=path_has_any, assetowner_has_any=assetowner_has_any,
+      entitysource_has_any=entitysource_has_any, disabled=disabled, pack=pack)

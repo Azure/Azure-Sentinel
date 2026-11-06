@@ -1,0 +1,67 @@
+Parser:
+  Title: Alert Event ASIM parser for Microsoft Sentinel native Alert Event table
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: Native
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1.0'
+References:
+  - Title: Native Alert Event table
+    Link: https://learn.microsoft.com/azure/azure-monitor/reference/tables/asimalerteventlogs
+  - Title: ASIM Alert Event Schema
+    Link: https://aka.ms/ASimAlertEventDoc
+Description: |
+  This ASIM parser supports normalizing the native Alert Event table (ASimAlertEventLogs) to the ASIM Alert Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: ASimAlertEventNative
+EquivalentBuiltInParser: _ASim_AlertEvent_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false, pack:bool=false) {
+    ASimAlertEventLogs
+    | where not(disabled)
+    | extend
+        EventSchema = "AlertEvent",
+        EventStartTime = coalesce(EventStartTime, TimeGenerated),
+        EventEndTime = coalesce(EventEndTime, TimeGenerated),
+        Dvc = coalesce(DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        FileSize = tolong(FileSize),
+        AdditionalFields = iff(pack, AdditionalFields, dynamic({}))
+    | extend
+        AlertId = EventUid,
+        AlertDescription = EventMessage,
+        Hostname = DvcHostname,
+        IpAddr = DvcIpAddr,
+        User = Username,
+        Rule = coalesce(RuleName, tostring(RuleNumber))
+    | project
+        TimeGenerated, Type, EventUid, EventOriginalUid, EventSchema, EventSchemaVersion,
+        EventStartTime, EventEndTime, EventCount, EventVendor, EventProduct,
+        EventProductVersion, EventType, EventSubType, EventResult, EventResultDetails,
+        EventOriginalType, EventOriginalSubType, EventOriginalResultDetails,
+        EventSeverity, EventOriginalSeverity, EventMessage, EventOwner, EventReportUrl,
+        Dvc, DvcIpAddr, DvcHostname, DvcDomain, DvcDomainType, DvcFQDN,
+        DvcDescription, DvcId, DvcIdType, DvcMacAddr, DvcZone, DvcOs, DvcOsVersion,
+        DvcAction, DvcOriginalAction, DvcInterface, DvcScopeId, DvcScope, DvcEntityKey,
+        AlertId, AlertName, AlertDescription, AlertVerdict, AlertStatus, AlertOriginalStatus,
+        DetectionMethod, Rule, RuleNumber, RuleName, RuleDescription,
+        ThreatId, ThreatName, ThreatFirstReportedTime, ThreatLastReportedTime,
+        ThreatCategory, ThreatOriginalCategory, ThreatIsActive, ThreatRiskLevel,
+        ThreatOriginalRiskLevel, ThreatConfidence, ThreatOriginalConfidence,
+        IndicatorType, IndicatorAssociation, AttackTactics, AttackTechniques,
+        AttackRemediationSteps, UserId, UserIdType, Username, User, UsernameType,
+        UserType, OriginalUserType, UserSessionId, UserScopeId, UserScope,
+        UserEntityKey, UserAdditionalIds, ProcessId, ProcessCommandLine,
+        ProcessName, ProcessFileCompany, ProcessEntityKey, FileName, FilePath,
+        FileSHA1, FileSHA256, FileMD5, FileSize, FileEntityKey, Url,
+        RegistryKey, RegistryValue, RegistryValueData, RegistryValueType,
+        EmailMessageId, EmailSubject, Hostname, IpAddr, AdditionalEntities, AdditionalFields
+  };
+  parser(disabled=disabled, pack=pack)

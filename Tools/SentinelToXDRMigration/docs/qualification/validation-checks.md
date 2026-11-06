@@ -443,7 +443,7 @@ title: Workbook Function Dependency Integrity
 originalCriterion: Bind required workspace functions to packaged definitions, aliases and current hashes; resolve actual parser installation dependencies.
 applicability: Packaged Sentinel/XDR workbooks invoking parser or workspace functions.
 category: validation
-howPerformed: Check definition paths, aliases, hashes and underlying tables; distinguish built-in ASIM and Watchlist functions; verify unconditional required parser installation and actual saved-search dependsOn references.
+howPerformed: Check definition paths, aliases, hashes and underlying tables; distinguish built-in ASIM and Watchlist functions; verify required parser installation (unconditional or gated only by the DeployParser parameter with defaultValue true) and actual saved-search dependsOn references.
 expectedEvidence: [query/function references, definition hashes, builtin classification, package resource pointers, expected and observed dependency edges]
 passCriteria: Function provenance and installation dependencies match the applicable workbook contract. FAIL or SKIPPED may become WAIVED_WITH_AUTHOR_EVIDENCE with author justification and evidence ref, yielding Partially Validated; runtime availability remains separate.
 sourceChecklist: toolkit-contract

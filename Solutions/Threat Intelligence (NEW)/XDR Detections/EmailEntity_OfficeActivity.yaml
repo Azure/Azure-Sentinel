@@ -1,0 +1,139 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - OfficeActivity
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 795d43a3-6edc-4c99-971f-00d05841e5ac
+    path: Analytic Rules/EmailEntity_OfficeActivity.yaml
+    version: 1.2.12
+    querySha256: b959b36ec76be8140943e3ceab11cbb17695908eb4465dc6f8e66ee7cfab93c3
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.2.12
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserId` cannot be proven after a destructive
+      projection; no supplemental customDetails binding was added and KQL was not
+      rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: d0586f1fbf392ba9196af14110ea8c74d5971a70bc462c66ddac57da3ae78e15
+      targetQuerySha256: 5d756539d2a56275385d38f2236d2bfce5d9e611cbdb2e50c9135f43ac0a184b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-795d43a3-6edc-4c99-971f-00d05841e5ac
+  displayName: TI Map Email entity to OfficeActivity
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\\
+      .[a-zA-Z0-9-.]+$';\nlet OfficeEvents = materialize(\n  OfficeActivity\n  | where\
+      \ isnotempty(UserId)\n  | where TimeGenerated >= ago(dt_lookBack)\n  | where\
+      \ UserId matches regex emailregex\n  | project-rename  OfficeActivity_TimeGenerated\
+      \ = TimeGenerated);\nlet OfficeActivityUPNs = OfficeEvents | distinct UserId\
+      \ = tolower(UserId) | summarize make_list(UserId);\nThreatIntelIndicators\n\
+      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"email-addr\"\n| extend EmailSenderAddress\
+      \ = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress,\
+      \ indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress,\
+      \ \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n\
+      | where TimeGenerated >= ago(ioc_lookBack)\n| where tolower(EmailSenderAddress)\
+      \ in (OfficeActivityUPNs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated,\
+      \ *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n\
+      | extend Description = tostring(parse_json(Data).description)\n| where Description\
+      \ !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\
+      \n| project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain,\
+      \ Type\n// using innerunique to keep perf fast and result set low, we only need\
+      \ one match to indicate potential malicious activity that needs to be investigated\n\
+      | join kind=innerunique (OfficeEvents) on $left.EmailSenderAddress == $right.UserId\n\
+      | where OfficeActivity_TimeGenerated < ValidUntil\n| summarize OfficeActivity_TimeGenerated\
+      \ = arg_max(OfficeActivity_TimeGenerated, *) by Id, UserId\n| extend Description\
+      \ = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"\
+      ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project OfficeActivity_TimeGenerated,\
+      \ Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress,\
+      \ EmailSourceDomain, UserId, ClientIP, Operation, UserType, RecordType, OfficeWorkload,\
+      \ Parameters, Url\n| extend Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix\
+      \ = tostring(split(UserId, '@', 1)[0])\n| extend timestamp = OfficeActivity_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Email entity to OfficeActivity
+      description: '''Identifies a match in OfficeActivity table from any Email IOC
+        from TI'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566

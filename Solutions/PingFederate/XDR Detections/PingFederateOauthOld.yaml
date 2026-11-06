@@ -1,0 +1,117 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - PingFederateEvent
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: PingFederate
+    dataTypes:
+    - PingFederateEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 85f70197-4865-4635-a4b2-a9c57e8fea1b
+    path: Analytic Rules/PingFederateOauthOld.yaml
+    version: 1.0.3
+    querySha256: 813302b80b3c6e43bdc9ec0914a6019088564a8c8cc9c518821d54949e136ce9
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required
+      Host, Mailbox, or IP asset is available
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved
+      as customDetails.AccountName from query column `AccountCustomEntity`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    reviewScope:
+      sourceDocumentSha256: f479c93caae87caecb31155f274b47a6b0458550762bd99f5aec1b373c41967e
+      targetQuerySha256: 38d402593f75f4da12d587f9d469f22a8a542b1b365c377a28d7ee5723103488
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-85f70197-4865-4635-a4b2-a9c57e8fea1b
+  displayName: Ping Federate - OAuth old version
+  status: disabled
+  queryCondition:
+    queryText: "// PingFederateEvent parser inlined: Defender XDR cannot resolve Sentinel\
+      \ workspace functions.\nlet xdr_inline_PingFederateEvent = view () {\nCommonSecurityLog\
+      \ \n| where DeviceProduct has 'PingFederate'\n| extend EventVendor = DeviceVendor\n\
+      | extend EventProduct = DeviceProduct\n| extend EventProductVersion = DeviceVersion\n\
+      | extend EventSeverity = LogSeverity\n| extend SrcIpAddr = SourceIP\n| extend\
+      \ SrcHostname = SourceHostName\n| extend SrcUserName = SourceUserName\n| extend\
+      \ EventMessage = Message\n| extend EventSubType = DeviceEventClassID\n| extend\
+      \ EventType = Activity\n| extend DstUserName = DestinationUserID\n| extend DstGeoCountry\
+      \ = extract(@'country=;?(\\w+),.*', 1, AdditionalExtensions)\n| extend EventResultDetails\
+      \ = extract(@'description=(.*?),.*', 1, AdditionalExtensions)\n| extend DvcHostname\
+      \ = DeviceAddress\n| project TimeGenerated\n        , EventVendor\n        ,\
+      \ EventProduct\n        , EventProductVersion\n        , EventMessage\n    \
+      \    , EventType\n        , EventSubType\n        , DstUserName\n        , DstGeoCountry\n\
+      \        , DvcHostname\n        , EventSeverity\n        , SrcIpAddr\n     \
+      \   , SrcHostname\n        , SrcUserName\n        , EventResultDetails\n   \
+      \     , DeviceCustomString1Label\n        , DeviceCustomString1\n        , DeviceCustomString2Label\n\
+      \        , DeviceCustomString2\n        , DeviceCustomString3Label\n       \
+      \ , DeviceCustomString3\n        , DeviceCustomString4Label\n        , DeviceCustomString4\n\
+      \        , DeviceCustomString5Label\n        , DeviceCustomString5\n       \
+      \ , DeviceCustomString6Label\n        , DeviceCustomString6\n        , AdditionalExtensions\n\
+      };\nxdr_inline_PingFederateEvent\n| where isnotempty(DeviceCustomString3)\n\
+      | extend proto = extract(@'(OAuth)', 1, DeviceCustomString3)\n| extend ver =\
+      \ extract(@'(\\d+)', 1, DeviceCustomString3)\n| where proto =~ 'OAuth'\n| where\
+      \ ver !~ '20'\n| extend AccountCustomEntity = DstUserName\n| extend IpCustomEntity\
+      \ = SrcIpAddr"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Ping Federate - OAuth old version
+      description: '''Detects requests using not the latest version of OAuth protocol.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IpCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      customDetails:
+        AccountName: AccountCustomEntity

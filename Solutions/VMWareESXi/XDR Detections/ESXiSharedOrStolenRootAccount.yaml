@@ -1,0 +1,112 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - Syslog
+    - VMwareESXi
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9c496d6c-42a3-4896-9b6c-00254386928f
+    path: Analytic Rules/ESXiSharedOrStolenRootAccount.yaml
+    version: 1.0.3
+    querySha256: de92ffda95f946dc1c12708a33e44b66e9f0ac370fd21de88edf941c6c0d5c30
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: b1d500a281c687d12ab35cf06e51e26dbad608272f0b397f6c2922504874fef7
+      targetQuerySha256: 53c08f18960196d9f9bad2b5f4e6d3827a55a1205d22ee92038f0a23a01c3ae3
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: b1d500a281c687d12ab35cf06e51e26dbad608272f0b397f6c2922504874fef7
+      targetQuerySha256: 53c08f18960196d9f9bad2b5f4e6d3827a55a1205d22ee92038f0a23a01c3ae3
+properties:
+  id: xdr-9c496d6c-42a3-4896-9b6c-00254386928f
+  displayName: VMware ESXi - Shared or stolen root account
+  status: disabled
+  queryCondition:
+    queryText: 'VMwareESXi
+
+      | where SyslogMessage has_all (''UserLoginSessionEvent'', ''root'', ''logged
+      in'')
+
+      | extend SrcIpAddr = extract(@''root@(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'',
+      1, SyslogMessage)
+
+      | summarize count() by SrcIpAddr, bin(TimeGenerated, 15m)
+
+      | where count_ > 1
+
+      | extend IPCustomEntity = SrcIpAddr'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: VMware ESXi - Shared or stolen root account
+      description: '''Detects when shared or stolen root account.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078

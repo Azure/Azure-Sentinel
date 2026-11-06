@@ -477,9 +477,13 @@ function Get-DefenderWorkbookImplicitFunctions {
                     }
                     $queryText = $settings.query
                 }
-                # Ignore single-line // comments first (/* */ is NOT a KQL comment).
-                $noComments = [regex]::Replace($queryText, '//[^\r\n]*', ' ')
                 $strPat = '@"(?:""|[^"])*"|@''(?:''''|[^''])*''|"(?:\\.|[^"\\])*"|''(?:\\.|[^''\\])*'''
+                # Ignore single-line // comments (/* */ is NOT a KQL comment), but leave string
+                # literals intact so a URL such as "https://..." is not mistaken for a comment.
+                $noComments = [regex]::Replace($queryText, "(?s)$strPat|//[^\r\n]*", {
+                    param($m)
+                    if ($m.Value.StartsWith('//')) { ' ' } else { $m.Value }
+                })
                 $bracketPat = "(?s)\[\s*($strPat)\s*\]"
                 $tableCallPat = "(?i)(?<![.\w])(?:table|totable)\s*\(\s*($strPat)\s*(?:,[^;\r\n)]*)?\)"
                 $tableAnyCallPat = "(?i)(?<![.\w])(?:table|totable)\s*\("
@@ -547,7 +551,7 @@ function Get-DefenderWorkbookImplicitFunctions {
                     'toscalar', 'tostring', 'toint', 'tolong', 'todouble', 'todatetime', 'todecimal', 'todynamic', 'toreal', 'totable',
                     'totimespan', 'tobool', 'now', 'ago', 'startofday', 'endofday', 'startofweek', 'endofweek',
                     'startofmonth', 'endofmonth', 'startofyear', 'endofyear', 'tolower', 'toupper', 'coalesce', 'iff', 'iif', 'case',
-                    '_GetWatchlist', 'workspace', 'app', 'resource', 'cluster', 'database', 'table', 'view', 'materialize',
+                    '_GetWatchlist', '_GetWatchlistAlias', 'workspace', 'app', 'resource', 'cluster', 'database', 'table', 'view', 'materialize',
                     'abs', 'acos', 'asin', 'atan', 'atan2', 'beta_cdf', 'beta_inv', 'beta_pdf', 'bin', 'bin_at', 'ceiling',
                     'cos', 'cot', 'count', 'count_distinct', 'count_distinctif', 'countif', 'countof',
                     'dcount', 'dcount_hll', 'dcountif', 'degrees', 'exp', 'exp10', 'exp2', 'floor', 'gamma',
@@ -928,6 +932,9 @@ function Get-DefenderWorkbookParserDependencies {
                 -ExcludedQueryPaths $excludedQueryPaths -Path '/items') +
             @(Get-DefenderWorkbookImplicitFunctions -Value $Document.items `
                 -AllowedBareTables $allowedBareTables -KnownFunctionAliases $knownFunctionAliases)) {
+        # Built-in Sentinel ASIM unifying parsers (_ASim_*, _Im_*) ship with the workspace; mirrors
+        # is_standard_builtin_asim_parser in solution_manager/migration/_workbook_core/workbook.py.
+        if ($alias -imatch '\A_(?:asim|im)_(?!test\z)[a-z0-9_]+\z') { continue }
         if (-not $referenced.Contains($alias)) {
             throw "Defender Workbook has an unreviewed implicit workspace function '$alias'."
         }
