@@ -1120,10 +1120,6 @@ class CurrentRepositoryIngestionParserTests(unittest.TestCase):
             "Parsers/ASimNetworkSession/IngestTimeParsers/"
             "ASimNetworkSessionAWSVPC.yaml",
         }
-        oversized_query_parsers = {
-            "Parsers/ASimAuthentication/IngestTimeParsers/"
-            "ASimAuthenticationSalesforceServiceCloud.yaml",
-        }
         manifest = VALIDATION.build_validation_manifest(
             repo_root, list(pairs.keys())
         )
@@ -1155,19 +1151,6 @@ class CurrentRepositoryIngestionParserTests(unittest.TestCase):
                         finding["code"]
                         for finding in result["findings"]
                     },
-                )
-            elif ingest_path in oversized_query_parsers:
-                self.assertFalse(result["valid"])
-                self.assertIn(
-                    "KQL044",
-                    {
-                        finding["code"]
-                        for finding in result["findings"]
-                    },
-                )
-                self.assertEqual(
-                    "resolved",
-                    targets_by_path[ingest_path]["fixtureStatus"],
                 )
             else:
                 self.assertTrue(
