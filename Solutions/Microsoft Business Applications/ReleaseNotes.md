@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                  |
 |-------------|--------------------------------|---------------------------------------------------------------------|
+| 3.2.5       | 06-11-2026                     | Restored the Microsoft Dataverse, Microsoft Power Automate, and Microsoft Power Platform Admin Activity **Data Connectors** as source definitions, Purview Audit connection configurations, and data collection rules, and included them in the solution packaging manifest. |
 | 3.2.4       | 25-10-2026                     | Migrated **Analytic Rules** to Defender XDR Custom Detection format and added **XDR Workbooks**. |
 | 3.2.3       | 23-02-2026                     | Updated **Dataverse - Activity after failed logons** hunting query to use valid Enterprise technique |
 | 3.2.2       | 22-04-2025                     |<ul><li>Updated solution description.</li></ul> |
