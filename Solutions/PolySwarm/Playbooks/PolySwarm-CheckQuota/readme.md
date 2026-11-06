@@ -1,19 +1,32 @@
 # PolySwarm-CheckQuota
 
 Reads PolySwarm account features and remaining API and sandbox uses
-(`GET /v3/public/accounts`) and comments on the incident when API or sandbox quota is
-below a configured warning threshold, a pattern also seen in other vendors' published
-quota-check playbooks. Matters because sandbox detonations are metered: this playbook
-warns before a quota is exhausted rather than after a submission fails.
+(`GET /v3/public/accounts`) and always comments on the incident with how much API and
+sandbox quota is used, the limit, how much remains and the percent remaining. A clearly
+marked warning is added when either is below a configured threshold. Matters because
+sandbox detonations are metered: you see the usage and are warned before a quota is
+exhausted rather than after a submission fails.
 
 File: `Playbooks/PolySwarm-CheckQuota/azuredeploy.json`, Microsoft Sentinel
 incident-triggered.
 
 ## Summary
 
-Reads the PolySwarm API key from Key Vault, calls `GET /v3/public/accounts`, and
-compares remaining API and sandbox usage against two independent percentage
-thresholds. If either is crossed, posts a warning comment on the triggering incident.
+Reads the PolySwarm API key from Key Vault, calls `GET /v3/public/accounts`, and posts a
+comment on the triggering incident every run. For daily API calls it reports used, limit,
+remaining and percent remaining (from `daily_api_limit` and `daily_api_remaining`). For
+sandbox detonations it reports the same for each metered sandbox feature (from
+`base_uses` and `remaining_uses`). It also shows the account's current usage window
+(`window_start` to `window_end`). If either quota is at or below its percentage threshold,
+the comment adds a bold WARNING line.
+
+The account response has no "used" field, so used is calculated as limit minus remaining.
+The response also has no separate reset time; the usage window dates are shown as returned.
+
+Unmetered plans: if the limit is missing, zero, or remaining is -1, the API line says
+"unmetered on this plan (no limit reported)" and no used figure, percentage or warning is
+produced. Sandbox is handled separately: if no sandbox feature has a positive `base_uses`
+it reports sandbox as unmetered, and never divides by a missing or zero limit.
 
 Revision 2: HTTP 204 with an empty body from the account call is reported as no account record
 and is never parsed.
@@ -52,15 +65,27 @@ and is never parsed.
 
 ## What the comment looks like
 
-On a healthy account the comment reads:
+On an unmetered account (the lab account, which reports a daily limit of 0 and no metered
+sandbox feature) the comment reads:
 
 ```
 PolySwarm quota check
-API and sandbox quota are within normal range.
+API calls: unmetered on this plan (no limit reported).
+Sandbox detonations: unmetered on this plan (no limit reported).
+Usage window: 2026-10-18T10:54:51+00:00 to 2026-11-17T10:54:51+00:00 (UTC).
 ```
 
-The low-quota warning has not yet been seen on a live account, because the account
-used for testing has no quota limit.
+On a metered account each line carries the figures, for example:
+
+```
+API calls: 360 used of 1000, 640 remaining (64% remaining).
+Sandbox detonations: sandbox_request: 5 used of 50, 45 remaining (90% remaining).
+```
+
+When below threshold, a line such as `WARNING: daily API quota is low (150 of 1000 calls
+remaining).` is appended. The metered and low-quota wording is covered by unit tests
+against recorded response shapes; it has not yet been seen on a live metered account,
+because the account used for testing has no quota limit.
 
 ## Troubleshooting
 

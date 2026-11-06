@@ -41,31 +41,32 @@ egress rules.
 3. Note the vault's name and the secret's name; every playbook below asks for these as
    `KeyVaultName` and `KeyVaultSecretName` deployment parameters.
 
-## 2. Deploy the sandbox results infrastructure (if deploying any sandbox playbook)
+## 2. Sandbox results infrastructure (created by the sandbox playbooks)
 
-Deploy `Data Connectors/PolySwarmSandboxResults/azuredeploy.json` once, before any
-sandbox-detonating playbook. It takes two parameters:
+There is nothing to deploy separately. Every sandbox-detonating playbook template
+(URL, Outlook attachment, Storage blob, Defender file) creates the shared
+infrastructure itself when you deploy it, with fixed names:
 
-- `log_analytics_workspace_name` (required): the Log Analytics workspace backing your
-  Sentinel instance.
-- `log_analytics_workspace_location` (optional, defaults to the resource group's
-  location).
+- A Data Collection Endpoint, `polyswarm-dce`.
+- The `PolySwarmSandbox_CL` table (17 columns) on your workspace.
+- A Data Collection Rule, `polyswarm-dcr-sandbox-results`, with input stream
+  `Custom-PolySwarmSandboxResults`.
 
-It creates a Data Collection Endpoint (`polyswarm-dce`), the `PolySwarmSandbox_CL`
-table (17 columns) on your workspace, and a Data Collection Rule
-(`polyswarm-dcr-sandbox-results`) with input stream `Custom-PolySwarmSandboxResults`.
-Record its four outputs; every sandbox-detonating playbook needs them as deployment
-parameters:
+Because the names are fixed and Azure resource deployment is idempotent, deploying
+several sandbox playbooks, or redeploying one, is safe. Each template takes a
+required `WorkspaceName` parameter: the Log Analytics workspace backing your Microsoft
+Sentinel instance, which must be in the same resource group you deploy the playbook to.
+The playbook finds the endpoint address, rule id and stream on its own, and grants its
+own managed identity Monitoring Metrics Publisher on the rule when
+`create_role_assignment` is true (the default).
 
-| Output | Feeds playbook parameter |
-| --- | --- |
-| `dceLogsIngestionEndpoint` | `DceLogsIngestionEndpoint` |
-| `dcrImmutableId` | `DcrImmutableId` |
-| `dcrResourceId` | `DcrResourceId`, used as the scope for each playbook's own Monitoring Metrics Publisher role assignment |
-| `streamName` | `StreamName`, value `Custom-PolySwarmSandboxResults` |
+If you would rather create the three resources once, ahead of time, you can still
+deploy `Data Connectors/PolySwarmSandboxResults/azuredeploy.json` (parameters
+`log_analytics_workspace_name`, and optionally `log_analytics_workspace_location`).
+It creates the same resources with the same names, so the playbooks then reuse them.
 
-Skip this step if you are deploying enrichment playbooks, the check quota playbook, or
-the data connectors only; none of those write to `PolySwarmSandbox_CL`.
+Enrichment playbooks, the check quota playbook and the data connectors do not write to
+`PolySwarmSandbox_CL` and need none of this.
 
 ## 3. Deploy the solution content
 
@@ -76,12 +77,6 @@ Sentinel workspace > Content Hub in the Azure portal. For a pre-release install,
 deploy the packaged ARM templates in `Package/` instead, from either portal's "Deploy
 a custom template" page. Choose which optional pieces to deploy:
 
-- The custom connector (`custom-connector/polyswarm-connector-swagger.json`), if your
-  team wants to build its own playbooks and automation rules against the PolySwarm
-  API directly. Covers lookup operations plus the sandbox submission/status
-  operations; it does not include a file-upload operation (the presigned-URL upload
-  step is a different host than the rest of the API, which a single Swagger document
-  cannot express).
 - The enrichment playbooks: `PolySwarm-Enrich-FileHash`, `PolySwarm-Enrich-Url`,
   `PolySwarm-Enrich-Ip`, `PolySwarm-Enrich-Domain`, each with an
   `incident-trigger/azuredeploy.json` (incident-triggered) and `entity-trigger/azuredeploy.json`
@@ -134,7 +129,7 @@ playbooks, and the check quota playbook.
 ### Every sandbox-detonating playbook, additionally
 
 1. The **Monitoring Metrics Publisher** role on the Data Collection Rule
-   (`DcrResourceId`, from step 2 above) is assigned automatically at deployment when
+   (`polyswarm-dcr-sandbox-results`, see step 2 above) is assigned automatically at deployment when
    `create_role_assignment` is `true` (the default) and the deploying principal can
    grant RBAC roles on that DCR. If deployed with `create_role_assignment=false`,
    grant it manually the same way as the Key Vault role, scoped to the DCR resource
@@ -235,9 +230,8 @@ portal; playbooks themselves never create incidents.
 
 Three analytics rules and four hunting queries ship with the solution (see
 `README.md`, "Analytics rules and hunting queries"). Rule 3 (sandbox detonation
-malicious) declares its dependency on the hunting connector's id
-(`PolySwarmHuntingCCFDefinition`) with `dataType: PolySwarmSandbox_CL`, since that
-table is written by the playbooks rather than a dedicated CCF connector. Hunting
+malicious) reads `PolySwarmSandbox_CL`, which the sandbox playbooks write. It declares
+no data connector because no connector writes that table. Hunting
 queries are under Microsoft Sentinel > **Hunting** in the same portal.
 
 ## 7. Attach playbooks to automation rules
@@ -303,7 +297,7 @@ both accept only a relative `since` window in minutes, not absolute start/end
 timestamps; and private-community isolation by account entitlement.
 
 Verified in a live Microsoft Sentinel workspace, 15 to 20 October 2026: both data
-connectors connected from the content hub with the key read from Key Vault, with data
+connectors connected from the content hub with the key entered in each connector's page, with data
 arriving in ThreatIntelIndicators; every one of the 15 playbook templates deploying; the four enrichment
 playbooks, the URL and storage blob sandbox playbooks and the check quota playbook
 running on a real incident and commenting on it, with sandbox rows landing in

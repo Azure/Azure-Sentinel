@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "title": "PolySwarm - Check Quota",
-    "description": "Reads PolySwarm account features and remaining API and sandbox uses from GET /v3/public/accounts and comments on the incident when API or sandbox quota is below the configured warning threshold. Modelled on ReversingLabs-CheckQuota.",
+    "description": "Reads PolySwarm account features and remaining API and sandbox uses from GET /v3/public/accounts and always comments on the incident with used, limit, remaining and percent remaining for API calls and sandbox detonations, adding a marked warning when either is below the configured threshold. Modelled on ReversingLabs-CheckQuota.",
     "prerequisites": [
       "A PolySwarm API key stored as a secret in an Azure Key Vault. Get a key at https://polyswarm.network/account/api-keys"
     ],
@@ -311,47 +311,101 @@
                         ]
                       }
                     },
-                    "If_any_quota_low": {
+                    "Select_sandbox_usage_lines": {
+                      "type": "Select",
+                      "description": "One line per metered sandbox feature (base_uses > 0): used, limit, remaining and percent remaining. Used is base_uses minus remaining_uses, never below zero.",
+                      "inputs": {
+                        "from": "@body('Filter_metered_sandbox_features')",
+                        "select": "@concat(replace(replace(replace(replace(string(coalesce(item()?['name'], item()?['tag'])), '&', '&amp;'), '<', '&lt;'), '>', '&gt;'), '\"', '&quot;'), ': ', string(max(createArray(0, sub(item()?['base_uses'], coalesce(item()?['remaining_uses'], 0))))), ' used of ', string(item()?['base_uses']), ', ', string(coalesce(item()?['remaining_uses'], 0)), ' remaining (', string(div(mul(coalesce(item()?['remaining_uses'], 0), 100), item()?['base_uses'])), '% remaining)')"
+                      },
+                      "runAfter": {
+                        "Filter_metered_sandbox_features": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Compose_api_usage_line": {
+                      "type": "Compose",
+                      "description": "Daily API calls: used, limit, remaining and percent remaining. An account with daily_api_limit of 0 (or remaining of -1) has no daily limit and is reported as unlimited.",
+                      "inputs": "@if(and(greater(coalesce(outputs('Select_account_record')?['daily_api_limit'], 0), 0), greaterOrEquals(coalesce(outputs('Select_account_record')?['daily_api_remaining'], -1), 0)), concat('API calls: ', string(sub(coalesce(outputs('Select_account_record')?['daily_api_limit'], 0), coalesce(outputs('Select_account_record')?['daily_api_remaining'], -1))), ' used of ', string(coalesce(outputs('Select_account_record')?['daily_api_limit'], 0)), ', ', string(coalesce(outputs('Select_account_record')?['daily_api_remaining'], -1)), ' remaining (', string(div(mul(coalesce(outputs('Select_account_record')?['daily_api_remaining'], -1), 100), coalesce(outputs('Select_account_record')?['daily_api_limit'], 0))), '% remaining).'), 'API calls: unmetered on this plan (no limit reported).')",
+                      "runAfter": {
+                        "Select_sandbox_usage_lines": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Compose_sandbox_usage_line": {
+                      "type": "Compose",
+                      "inputs": "@if(greater(length(body('Select_sandbox_usage_lines')), 0), concat('Sandbox detonations: ', join(body('Select_sandbox_usage_lines'), '; '), '.'), 'Sandbox detonations: unmetered on this plan (no limit reported).')",
+                      "runAfter": {
+                        "Compose_api_usage_line": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Compose_quota_window_line": {
+                      "type": "Compose",
+                      "description": "window_start and window_end are the account's current usage window as returned by GET /v3/public/accounts.",
+                      "inputs": "@if(empty(coalesce(outputs('Select_account_record')?['window_end'], '')), '', concat('<br>\nUsage window: ', coalesce(outputs('Select_account_record')?['window_start'], ''), ' to ', outputs('Select_account_record')?['window_end'], ' (UTC).'))",
+                      "runAfter": {
+                        "Compose_sandbox_usage_line": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Compose_quota_warning_text": {
+                      "type": "Compose",
+                      "description": "Low-quota warning, empty unless API or a metered sandbox feature is at or below its threshold.",
+                      "inputs": "@concat(if(and(and(greater(coalesce(outputs('Select_account_record')?['daily_api_limit'], 0), 0), greaterOrEquals(coalesce(outputs('Select_account_record')?['daily_api_remaining'], -1), 0)), lessOrEquals(mul(coalesce(outputs('Select_account_record')?['daily_api_remaining'], -1), 100), mul(coalesce(outputs('Select_account_record')?['daily_api_limit'], 0), parameters('ApiQuotaWarningThresholdPercent')))), concat('<br>\n<strong>WARNING: daily API quota is low (', string(coalesce(outputs('Select_account_record')?['daily_api_remaining'], -1)), ' of ', string(coalesce(outputs('Select_account_record')?['daily_api_limit'], 0)), ' calls remaining).</strong>'), ''), if(greater(length(body('Select_low_sandbox_quota_lines')), 0), concat('<br>\n<strong>WARNING: sandbox quota is low: ', join(body('Select_low_sandbox_quota_lines'), '; '), '.</strong>'), ''))",
+                      "runAfter": {
+                        "Compose_quota_window_line": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Add_quota_comment_to_incident": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p><strong>PolySwarm quota check</strong><br>\n@{outputs('Compose_api_usage_line')}<br>\n@{outputs('Compose_sandbox_usage_line')}@{outputs('Compose_quota_window_line')}@{outputs('Compose_quota_warning_text')}</p>"
+                        }
+                      },
+                      "runAfter": {
+                        "Compose_quota_warning_text": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Add_quota_comment_to_incident_unless_conflict": {
                       "type": "If",
+                      "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
+                      "runAfter": {
+                        "Add_quota_comment_to_incident": [
+                          "Failed"
+                        ]
+                      },
                       "expression": {
-                        "or": [
+                        "and": [
                           {
-                            "and": [
-                              {
-                                "greater": [
-                                  "@outputs('Select_account_record')?['daily_api_limit']",
-                                  0
-                                ]
-                              },
-                              {
-                                "greaterOrEquals": [
-                                  "@outputs('Select_account_record')?['daily_api_remaining']",
-                                  0
-                                ]
-                              },
-                              {
-                                "lessOrEquals": [
-                                  "@mul(outputs('Select_account_record')?['daily_api_remaining'], 100)",
-                                  "@mul(outputs('Select_account_record')?['daily_api_limit'], parameters('ApiQuotaWarningThresholdPercent'))"
-                                ]
-                              }
-                            ]
-                          },
-                          {
-                            "greater": [
-                              "@length(body('Select_low_sandbox_quota_lines'))",
-                              0
-                            ]
+                            "not": {
+                              "equals": [
+                                "@outputs('Add_quota_comment_to_incident')?['statusCode']",
+                                409
+                              ]
+                            }
                           }
                         ]
                       },
-                      "runAfter": {
-                        "Select_low_sandbox_quota_lines": [
-                          "Succeeded"
-                        ]
-                      },
                       "actions": {
-                        "Add_quota_warning_comment_to_incident": {
+                        "Add_quota_comment_to_incident_retry": {
                           "type": "ApiConnection",
                           "inputs": {
                             "host": {
@@ -363,118 +417,27 @@
                             "path": "/Incidents/Comment",
                             "body": {
                               "incidentArmId": "@triggerBody()?['object']?['id']",
-                              "message": "<p><strong>PolySwarm quota check</strong><br>\n@{if(and(greater(outputs('Select_account_record')?['daily_api_limit'], 0), greaterOrEquals(outputs('Select_account_record')?['daily_api_remaining'], 0), lessOrEquals(mul(outputs('Select_account_record')?['daily_api_remaining'], 100), mul(outputs('Select_account_record')?['daily_api_limit'], parameters('ApiQuotaWarningThresholdPercent')))), concat('Daily API quota low: ', string(outputs('Select_account_record')?['daily_api_remaining']), ' of ', string(outputs('Select_account_record')?['daily_api_limit']), ' calls remaining.<br>\n'), '')}@{if(greater(length(body('Select_low_sandbox_quota_lines')), 0), concat('Sandbox quota low: ', join(body('Select_low_sandbox_quota_lines'), '; '), '.'), '')}</p>"
+                              "message": "<p><strong>PolySwarm quota check</strong><br>\n@{outputs('Compose_api_usage_line')}<br>\n@{outputs('Compose_sandbox_usage_line')}@{outputs('Compose_quota_window_line')}@{outputs('Compose_quota_warning_text')}</p>"
                             }
                           },
                           "runAfter": {}
-                        },
-                        "Add_quota_warning_comment_to_incident_unless_conflict": {
-                          "type": "If",
-                          "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
-                          "runAfter": {
-                            "Add_quota_warning_comment_to_incident": [
-                              "Failed"
-                            ]
-                          },
-                          "expression": {
-                            "and": [
-                              {
-                                "not": {
-                                  "equals": [
-                                    "@outputs('Add_quota_warning_comment_to_incident')?['statusCode']",
-                                    409
-                                  ]
-                                }
-                              }
-                            ]
-                          },
-                          "actions": {
-                            "Add_quota_warning_comment_to_incident_retry": {
-                              "type": "ApiConnection",
-                              "inputs": {
-                                "host": {
-                                  "connection": {
-                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                  }
-                                },
-                                "method": "post",
-                                "path": "/Incidents/Comment",
-                                "body": {
-                                  "incidentArmId": "@triggerBody()?['object']?['id']",
-                                  "message": "<p><strong>PolySwarm quota check</strong><br>\n@{if(and(greater(outputs('Select_account_record')?['daily_api_limit'], 0), greaterOrEquals(outputs('Select_account_record')?['daily_api_remaining'], 0), lessOrEquals(mul(outputs('Select_account_record')?['daily_api_remaining'], 100), mul(outputs('Select_account_record')?['daily_api_limit'], parameters('ApiQuotaWarningThresholdPercent')))), concat('Daily API quota low: ', string(outputs('Select_account_record')?['daily_api_remaining']), ' of ', string(outputs('Select_account_record')?['daily_api_limit']), ' calls remaining.<br>\n'), '')}@{if(greater(length(body('Select_low_sandbox_quota_lines')), 0), concat('Sandbox quota low: ', join(body('Select_low_sandbox_quota_lines'), '; '), '.'), '')}</p>"
-                                }
-                              },
-                              "runAfter": {}
-                            }
-                          },
-                          "else": {
-                            "actions": {}
-                          }
                         }
                       },
                       "else": {
-                        "actions": {
-                          "Add_quota_healthy_comment_to_incident": {
-                            "type": "ApiConnection",
-                            "inputs": {
-                              "host": {
-                                "connection": {
-                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                }
-                              },
-                              "method": "post",
-                              "path": "/Incidents/Comment",
-                              "body": {
-                                "incidentArmId": "@triggerBody()?['object']?['id']",
-                                "message": "<p><strong>PolySwarm quota check</strong><br>\nAPI and sandbox quota are within normal range.</p>"
-                              }
-                            },
-                            "runAfter": {}
-                          },
-                          "Add_quota_healthy_comment_to_incident_unless_conflict": {
-                            "type": "If",
-                            "description": "Microsoft Sentinel can answer 409 when several playbooks comment on one incident at once, even though the comment was saved. A 409 is left alone; any other failure posts the comment once more.",
-                            "runAfter": {
-                              "Add_quota_healthy_comment_to_incident": [
-                                "Failed"
-                              ]
-                            },
-                            "expression": {
-                              "and": [
-                                {
-                                  "not": {
-                                    "equals": [
-                                      "@outputs('Add_quota_healthy_comment_to_incident')?['statusCode']",
-                                      409
-                                    ]
-                                  }
-                                }
-                              ]
-                            },
-                            "actions": {
-                              "Add_quota_healthy_comment_to_incident_retry": {
-                                "type": "ApiConnection",
-                                "inputs": {
-                                  "host": {
-                                    "connection": {
-                                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                  },
-                                  "method": "post",
-                                  "path": "/Incidents/Comment",
-                                  "body": {
-                                    "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p><strong>PolySwarm quota check</strong><br>\nAPI and sandbox quota are within normal range.</p>"
-                                  }
-                                },
-                                "runAfter": {}
-                              }
-                            },
-                            "else": {
-                              "actions": {}
-                            }
-                          }
-                        }
+                        "actions": {}
+                      }
+                    },
+                    "Filter_metered_sandbox_features": {
+                      "type": "Query",
+                      "description": "Matched sandbox features that have a metered allocation (base_uses > 0).",
+                      "inputs": {
+                        "from": "@body('Filter_sandbox_features')",
+                        "where": "@greater(coalesce(item()?['base_uses'], 0), 0)"
+                      },
+                      "runAfter": {
+                        "Select_low_sandbox_quota_lines": [
+                          "Succeeded"
+                        ]
                       }
                     }
                   },

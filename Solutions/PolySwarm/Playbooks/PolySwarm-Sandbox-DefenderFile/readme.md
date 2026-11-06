@@ -150,8 +150,11 @@ hangs silently until its own timeout rather than failing with a clear error. See
   workspace.
 - A PolySwarm API key with sandbox access to a private community, stored as a secret
   in an Azure Key Vault this subscription can reach.
-- The shared sandbox results infrastructure
-  (`Data Connectors/PolySwarmSandboxResults/azuredeploy.json`) deployed first.
+- A Log Analytics workspace with Microsoft Sentinel in the resource group you deploy to
+  (`WorkspaceName`). The template itself creates the `PolySwarmSandbox_CL` table, the
+  `polyswarm-dce` Data Collection Endpoint and the `polyswarm-dcr-sandbox-results` Data
+  Collection Rule, with fixed names, so deploying several sandbox playbooks is safe and
+  no separate infrastructure deployment is needed.
 
 ## Parameters
 
@@ -171,10 +174,7 @@ hangs silently until its own timeout rather than failing with a clear error. See
 | `MaxFileSizeBytes` | Default `104857600` (100 MB), measured on the gzip-compressed bytes. Over this limit, the file is left on the device for retrieval from the Microsoft Defender portal instead of being downloaded and submitted; no download link is posted to the incident. |
 | `MaliciousScoreThreshold` | Default `7`. |
 | `SuspiciousScoreThreshold` | Default `4`. |
-| `DceLogsIngestionEndpoint` | No default; required. |
-| `DcrImmutableId` | No default; required. |
-| `StreamName` | Default `Custom-PolySwarmSandboxResults`. |
-| `DcrResourceId` | No default; required. |
+| `WorkspaceName` | Name of the Log Analytics workspace (same resource group). No default; required. |
 | `create_role_assignment` | Boolean, default `true`. |
 | `RequireAnalystApproval` | Boolean, default `true`. Sends an Office 365 Outlook approval email to `ApproverEmail` before Defender live response `GetFile` runs; only an explicit Approve within `ApprovalTimeoutHours` lets retrieval proceed. |
 | `ApproverEmail` | No default; required when `RequireAnalystApproval` is `true`. Where the approval email is sent. |
@@ -200,7 +200,7 @@ hangs silently until its own timeout rather than failing with a clear error. See
    approval email is sent from whichever mailbox authorizes this connection.
 4. Assign the **Microsoft Sentinel Responder** role on the resource group (or
    workspace) to this playbook's managed identity so it can comment on incidents.
-5. **Monitoring Metrics Publisher** on the Data Collection Rule (`DcrResourceId`) is
+5. **Monitoring Metrics Publisher** on the Data Collection Rule (`polyswarm-dcr-sandbox-results`) is
    assigned automatically when `create_role_assignment` is `true` (default);
    otherwise grant it manually the same way as the Key Vault role, scoped to the DCR
    instead. `grant-defender-permissions.sh` does not do this; it only handles the

@@ -1,8 +1,8 @@
 # Upgrading from the earlier enrichment-only playbooks
 
 This is for anyone who already deployed the earlier, enrichment-only version of this
-integration (three playbooks, plus the custom connector, with no per-playbook folder
-layout and no Key Vault requirement). That earlier work is preserved for reference at
+integration (three playbooks, plus a custom connector that this solution does not include, with
+no per-playbook folder layout and no Key Vault requirement). That earlier work is preserved for reference at
 `reference/existing-enrichment-README.md`; it is not packaged or shipped from this
 repository. This solution supersedes it and adds sandbox detonation, data connectors,
 analytics rules, hunting queries, and entity-triggered variants.

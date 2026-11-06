@@ -14,7 +14,7 @@
       "2. Run grant-defender-permissions.sh (in this folder) against the resource group, passing this playbook's name, to grant Machine.LiveResponse, Machine.ReadWrite.All and AdvancedQuery.Read.All on the WindowsDefenderATP API to the managed identity. NOTE: this is Machine.ReadWrite.All, not Machine.Read.All -- see README, 'A permission correction'.",
       "3. Authorize the Microsoft Sentinel and Key Vault API connections if they show as unauthorized.",
       "4. Assign the 'Microsoft Sentinel Responder' role on the resource group (or workspace) to this playbook's managed identity so it can comment on incidents.",
-      "5. This template auto-assigns 'Monitoring Metrics Publisher' on DcrResourceId to the managed identity when create_role_assignment is true (default). If deployed with create_role_assignment=false, grant it manually the same way as the Key Vault role in step 1, scoped to the DCR resource instead -- grant-defender-permissions.sh does not do this (it is an Azure RBAC role assignment, not a WindowsDefenderATP application permission).",
+      "5. This template auto-assigns 'Monitoring Metrics Publisher' on the polyswarm-dcr-sandbox-results Data Collection Rule to the managed identity when create_role_assignment is true (default). If deployed with create_role_assignment=false, grant it manually the same way as the Key Vault role in step 1, scoped to the DCR resource instead -- grant-defender-permissions.sh does not do this (it is an Azure RBAC role assignment, not a WindowsDefenderATP application permission).",
       "6. Attach to an automation rule scoped to FileHash entities."
     ],
     "entities": [
@@ -40,6 +40,12 @@
       "defaultValue": "PolySwarm-Sandbox-DefenderFile-EntityTriggered",
       "metadata": {
         "description": "Name of the Logic App playbook resource."
+      }
+    },
+    "WorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace that Microsoft Sentinel is enabled on, in this same resource group. This template creates (or leaves unchanged, if it already exists) the PolySwarmSandbox_CL table in it, plus the Data Collection Endpoint and Data Collection Rule the playbook writes detonation results through. The same fixed names are used by every PolySwarm sandbox playbook, so deploying several of them is safe."
       }
     },
     "SolutionVersion": {
@@ -138,36 +144,11 @@
         "description": "Sandbox report score at or above which (and below MaliciousScoreThreshold) Verdict is 'suspicious'. Below this, Verdict is 'benign'. A null score reports 'unknown'; a sandbox task status of KNOWN_GOOD reports 'known good' regardless of score."
       }
     },
-    "DceLogsIngestionEndpoint": {
-      "type": "string",
-      "metadata": {
-        "description": "Logs ingestion URL of the Data Collection Endpoint (DCE) that fronts the PolySwarmSandbox_CL Data Collection Rule, e.g. https://<dce-name>-<suffix>.<region>-1.ingest.monitor.azure.com. No default: workspace-specific, matches the shared DCE/DCR template's dceLogsIngestionEndpoint output."
-      }
-    },
-    "DcrImmutableId": {
-      "type": "string",
-      "metadata": {
-        "description": "Immutable ID (dcr-...) of the Data Collection Rule that accepts PolySwarmSandbox_CL rows, used in the Logs Ingestion API URL path. No default: workspace-specific, matches the shared DCE/DCR template's dcrImmutableId output. This is NOT the same value as DcrResourceId below -- see that parameter."
-      }
-    },
-    "StreamName": {
-      "type": "string",
-      "defaultValue": "Custom-PolySwarmSandboxResults",
-      "metadata": {
-        "description": "Custom stream name on the Data Collection Rule that maps incoming rows to the PolySwarmSandbox_CL table. Matches the shared DCE/DCR template's streamName output."
-      }
-    },
-    "DcrResourceId": {
-      "type": "string",
-      "metadata": {
-        "description": "Full ARM resource ID of the same Data Collection Rule identified by dcrImmutableId above (/subscriptions/.../resourceGroups/.../providers/Microsoft.Insights/dataCollectionRules/<name>). A DCR's immutableId and its ARM resource ID are two different identifiers; the Logs Ingestion API URL needs the former, and the role assignment below (scope) needs the latter. No default: workspace-specific."
-      }
-    },
     "create_role_assignment": {
       "type": "bool",
       "defaultValue": true,
       "metadata": {
-        "description": "If true, this template automatically assigns the Monitoring Metrics Publisher role on DcrResourceId to this playbook's managed identity. Same pattern as Recorded Future's sandbox playbooks. Set false and grant it manually (see grant-defender-permissions.sh --help) if this identity does not have rights to create role assignments at deployment time."
+        "description": "If true, this template automatically assigns the Monitoring Metrics Publisher role on the polyswarm-dcr-sandbox-results DCR to this playbook's managed identity. Same pattern as Recorded Future's sandbox playbooks. Set false and grant it manually (see grant-defender-permissions.sh --help) if this identity does not have rights to create role assignments at deployment time."
       }
     },
     "RequireAnalystApproval": {
@@ -213,9 +194,230 @@
     "AzureSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
     "KeyVaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]",
     "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
-    "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+    "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]",
+    "DceName": "polyswarm-dce",
+    "DcrName": "polyswarm-dcr-sandbox-results",
+    "TableName": "PolySwarmSandbox_CL",
+    "StreamName": "Custom-PolySwarmSandboxResults",
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
+    "dceResourceId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('DceName'))]",
+    "dcrResourceId": "[resourceId('Microsoft.Insights/dataCollectionRules', variables('DcrName'))]",
+    "tableResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('WorkspaceName'), variables('TableName'))]"
   },
   "resources": [
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('DceName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(parameters('WorkspaceName'), '/', variables('TableName'))]",
+      "properties": {
+        "schema": {
+          "name": "[variables('TableName')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime",
+              "description": "Ingestion time of this row."
+            },
+            {
+              "name": "TaskId",
+              "type": "string",
+              "description": "PolySwarm sandbox task id."
+            },
+            {
+              "name": "ArtifactType",
+              "type": "string",
+              "description": "FILE or URL."
+            },
+            {
+              "name": "Sha256",
+              "type": "string",
+              "description": "SHA-256 of the submitted artifact, when known."
+            },
+            {
+              "name": "Url",
+              "type": "string",
+              "description": "Submitted URL for ArtifactType URL tasks."
+            },
+            {
+              "name": "FileName",
+              "type": "string",
+              "description": "Original filename for ArtifactType FILE tasks (attachment name, blob name, or the name Defender's GetFile returned)."
+            },
+            {
+              "name": "Source",
+              "type": "string",
+              "description": "Which playbook submitted the task: Url, OutlookAttachment, StorageBlob, or DefenderFile."
+            },
+            {
+              "name": "Provider",
+              "type": "string",
+              "description": "Sandbox provider that ran the task: cape or triage."
+            },
+            {
+              "name": "Community",
+              "type": "string",
+              "description": "PolySwarm community the task ran in."
+            },
+            {
+              "name": "Verdict",
+              "type": "string",
+              "description": "Malicious/suspicious/benign verdict, as determined by the playbook after polling the task to completion."
+            },
+            {
+              "name": "Score",
+              "type": "real",
+              "description": "Provider-specific score the playbook read from the completed task."
+            },
+            {
+              "name": "Family",
+              "type": "string",
+              "description": "Malware family, when the sandbox report names one."
+            },
+            {
+              "name": "Techniques",
+              "type": "dynamic",
+              "description": "MITRE ATT&CK technique ids the sandbox report observed."
+            },
+            {
+              "name": "ReportUrl",
+              "type": "string",
+              "description": "PolySwarm scan result permalink for this task's artifact."
+            },
+            {
+              "name": "CreatedAt",
+              "type": "datetime",
+              "description": "Task creation time."
+            },
+            {
+              "name": "CompletedAt",
+              "type": "datetime",
+              "description": "Time the playbook observed the task reach a completed status."
+            },
+            {
+              "name": "IncidentArmId",
+              "type": "string",
+              "description": "ARM resource id of the Microsoft Sentinel incident this detonation was run from, for playbooks triggered from an incident. Empty for a standalone submission."
+            }
+          ]
+        },
+        "retentionInDays": 90,
+        "plan": "Analytics"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2024-03-11",
+      "name": "[variables('DcrName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[variables('dceResourceId')]",
+        "[variables('tableResourceId')]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[variables('dceResourceId')]",
+        "streamDeclarations": {
+          "[variables('StreamName')]": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "TaskId",
+                "type": "string"
+              },
+              {
+                "name": "ArtifactType",
+                "type": "string"
+              },
+              {
+                "name": "Sha256",
+                "type": "string"
+              },
+              {
+                "name": "Url",
+                "type": "string"
+              },
+              {
+                "name": "FileName",
+                "type": "string"
+              },
+              {
+                "name": "Source",
+                "type": "string"
+              },
+              {
+                "name": "Provider",
+                "type": "string"
+              },
+              {
+                "name": "Community",
+                "type": "string"
+              },
+              {
+                "name": "Verdict",
+                "type": "string"
+              },
+              {
+                "name": "Score",
+                "type": "real"
+              },
+              {
+                "name": "Family",
+                "type": "string"
+              },
+              {
+                "name": "Techniques",
+                "type": "dynamic"
+              },
+              {
+                "name": "ReportUrl",
+                "type": "string"
+              },
+              {
+                "name": "CreatedAt",
+                "type": "datetime"
+              },
+              {
+                "name": "CompletedAt",
+                "type": "datetime"
+              },
+              {
+                "name": "IncidentArmId",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "workspace"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[variables('StreamName')]"
+            ],
+            "destinations": [
+              "workspace"
+            ],
+            "transformKql": "source | project TimeGenerated = todatetime(TimeGenerated), TaskId = tostring(TaskId), ArtifactType = tostring(ArtifactType), Sha256 = tostring(Sha256), Url = tostring(Url), FileName = tostring(FileName), Source = tostring(Source), Provider = tostring(Provider), Community = tostring(Community), Verdict = tostring(Verdict), Score = toreal(Score), Family = tostring(Family), Techniques = parse_json(tostring(Techniques)), ReportUrl = tostring(ReportUrl), CreatedAt = todatetime(CreatedAt), CompletedAt = todatetime(CompletedAt), IncidentArmId = tostring(IncidentArmId)",
+            "outputStream": "[concat('Custom-', variables('TableName'))]"
+          }
+        ]
+      }
+    },
     {
       "type": "Microsoft.Web/connections",
       "apiVersion": "2016-06-01",
@@ -279,7 +481,9 @@
       "dependsOn": [
         "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
         "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
-        "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+        "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+        "[variables('dceResourceId')]",
+        "[variables('dcrResourceId')]"
       ],
       "properties": {
         "state": "Enabled",
@@ -2864,13 +3068,13 @@
             "value": "[parameters('SuspiciousScoreThreshold')]"
           },
           "DceLogsIngestionEndpoint": {
-            "value": "[parameters('DceLogsIngestionEndpoint')]"
+            "value": "[reference(variables('dceResourceId'), '2024-03-11').logsIngestion.endpoint]"
           },
           "DcrImmutableId": {
-            "value": "[parameters('DcrImmutableId')]"
+            "value": "[reference(variables('dcrResourceId'), '2024-03-11').immutableId]"
           },
           "StreamName": {
-            "value": "[parameters('StreamName')]"
+            "value": "[variables('StreamName')]"
           },
           "RequireAnalystApproval": {
             "value": "[parameters('RequireAnalystApproval')]"
@@ -2893,8 +3097,8 @@
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "name": "[guid(parameters('DcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
-      "scope": "[parameters('DcrResourceId')]",
+      "name": "[guid(variables('dcrResourceId'), parameters('PlaybookName'), variables('MonitoringMetricsPublisherRoleId'))]",
+      "scope": "[variables('dcrResourceId')]",
       "condition": "[parameters('create_role_assignment')]",
       "dependsOn": [
         "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"

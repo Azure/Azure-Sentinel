@@ -26,8 +26,13 @@ at support@polyswarm.io.
 - **Threat intelligence.** Two data connectors bring PolySwarm indicators into
   Microsoft Sentinel's native `ThreatIntelIndicators` table: one from your own
   PolySwarm hunting results, one from the PolySwarm curated feed. Because the
-  indicators are native, Microsoft's own built-in indicator matching rules run against
-  them automatically, alongside the analytics rules this solution ships.
+  indicators are native, Microsoft's threat intelligence matching rules can use them
+  alongside the analytics rules this solution ships. Use the "TI Map" rules from
+  Microsoft's Threat Intelligence solution that read `ThreatIntelIndicators`; older
+  rules that read the legacy `ThreatIntelligenceIndicator` table do not see PolySwarm
+  indicators. With the curated feed connected (about 500,000 indicators a day), shorten
+  those rules' lookback to a day or two, since a 14-day lookback over that volume can
+  run out of query memory and return nothing.
 - **Sandbox detonation.** An analyst can submit a URL, an email attachment, a file in
   Azure Storage, or a file retrieved directly from an endpoint through Microsoft
   Defender for Endpoint, to the PolySwarm sandbox, and get a score-derived verdict,
@@ -35,6 +40,9 @@ at support@polyswarm.io.
   incident. Each detonating playbook writes its own result to a dedicated table, so an
   analytics rule can turn a malicious detonation into an incident.
 - **Hunting.** Hunting queries join PolySwarm indicators against your own log tables.
+  Both connectors deliver file-hash indicators, so alerts are on known-malicious files.
+  The URL, IP address and domain hunting queries are ready for network indicators but
+  return nothing from the shipped connectors.
 - **Status.** A small PolySwarm status workbook shows what has arrived from each
   connector and each rule. It reads only tables in your workspace, never calls
   PolySwarm and needs no credential. A tile that says nothing has arrived yet is normal
@@ -91,14 +99,18 @@ or unconnected, and each item has one action that turns it on.
    yet moved to the Defender portal can still run entity playbooks from an entity on the
    incident page in the Azure portal, and any workspace can start one through the
    Microsoft Sentinel API (Entities, Run Playbook).
-5. **Sandbox results table.** `PolySwarmSandbox_CL` exists only after you deploy
-   `Data Connectors/PolySwarmSandboxResults/azuredeploy.json`. Deploy it once, before
-   any sandbox playbook. The sandbox detonation rule has nothing to read until a
-   playbook has written a row.
+5. **Sandbox results table.** `PolySwarmSandbox_CL` is created for you the first time
+   you create a sandbox playbook from its template (URL, Outlook attachment, Storage
+   blob or Defender file). Each of those templates also creates the `polyswarm-dce`
+   Data Collection Endpoint and the `polyswarm-dcr-sandbox-results` Data Collection
+   Rule, with fixed names, so creating several sandbox playbooks is safe. Enter your
+   workspace name when you create the playbook, in the same resource group as the
+   workspace. The sandbox detonation rule has nothing to read until a playbook has
+   written a row. `Data Connectors/PolySwarmSandboxResults/azuredeploy.json` still
+   works as an optional standalone deployment of the same three resources.
 6. **Hunting queries (four).** These are saved queries and run only when an analyst
-   runs them from Hunting.
-7. **Custom connector.** It is available to your own playbooks once deployed and does
-   nothing by itself.
+   runs them from Hunting. Only the file hash query has PolySwarm data to match today;
+   the URL, IP address and domain queries are ready for network indicators.
 
 The PolySwarm status workbook is the place to see which of these has started producing
 data. Open it from Workbooks, then Templates.
@@ -136,7 +148,7 @@ gives the Defender portal path first for anything Sentinel-specific: Content Hub
 connectors, analytics rules, automation rules, and incidents. A few steps genuinely
 live in the Azure portal regardless of which portal you use for Sentinel itself,
 because they are Azure resource operations rather than a Sentinel screen: deploying a
-Logic App or a Logic Apps custom connector, managing an Azure Key Vault, and assigning
+Logic App, managing an Azure Key Vault, and assigning
 Azure RBAC roles (Access control (IAM)). Those steps say "Azure portal" explicitly
 wherever they come up.
 
@@ -145,10 +157,10 @@ wherever they come up.
 - A Microsoft Sentinel workspace, in a resource group you can deploy Logic Apps,
   connectors and role assignments into.
 - A PolySwarm API key. Generate one from your PolySwarm account. Keys are never
-  committed to this repository; every deployed playbook and connector reads its key
-  from Azure Key Vault (or, for the curated feed connector, Azure Key Vault-sourced
-  Basic auth credentials) through its managed identity, not from a plain deployment
-  parameter. See "Key Vault setup" below.
+  committed to this repository; every deployed playbook reads its key from Azure Key
+  Vault through its managed identity, not from a plain deployment parameter. The two
+  data connectors take their credentials in their own connector pages instead. See
+  "Key Vault setup" below.
 - Your PolySwarm account must carry the entitlement for each capability you deploy:
   - **Sandbox detonation**, for the sandbox playbooks, the Defender for Endpoint file
     detonation playbook, and the shared sandbox results infrastructure.
@@ -171,14 +183,16 @@ wherever they come up.
 1. Confirm the prerequisites above, including which entitlements your PolySwarm
    account carries.
 2. Set up Azure Key Vault and store your PolySwarm API key there (see below).
-3. If you are deploying any sandbox-detonating playbook (URL, Outlook attachment,
-   Storage blob, or Defender file), deploy the shared sandbox results infrastructure
-   first: `Data Connectors/PolySwarmSandboxResults/azuredeploy.json`. Every sandbox
-   playbook depends on its outputs.
+3. Sandbox-detonating playbooks (URL, Outlook attachment, Storage blob, Defender file)
+   create the shared sandbox results infrastructure themselves, so there is no separate
+   step. You only enter your workspace name, which must be in the same resource group
+   as the playbook. Optionally, deploy
+   `Data Connectors/PolySwarmSandboxResults/azuredeploy.json` ahead of time to create
+   the same resources.
 4. Deploy the data connectors, enrichment playbooks, sandbox playbooks, check quota
    playbook, analytics rules and hunting queries you need; each deploys
    independently once its own prerequisites (above) are met.
-5. Grant every deployed playbook's and connector's managed identity the roles and API
+5. Grant every deployed playbook's managed identity the roles and API
    permissions it needs. See `docs/permissions.md` for the complete list and
    `docs/deployment.md` for the role assignment steps.
 6. Configure each data connector (your API key, the community for the hunting
@@ -228,9 +242,9 @@ The curated feed data connector reads its credentials differently: the PolySwarm
 TAXII server authenticates with HTTP Basic auth (your PolySwarm account number as the
 username, your Team API key as the password), not the `Authorization: <key>` header
 scheme every other PolySwarm call in this solution uses. You enter both values
-directly in the connector's own configuration pane; they are not read from Key Vault
-at connector-configuration time, matching how every other CCF connector in this
-solution takes its API key.
+directly in the connector's own configuration pane; they are not read from Key Vault.
+The hunting connector works the same way: you enter its API key in the connector's
+configuration pane.
 
 ## Sandbox results: how the data actually gets there
 
@@ -241,28 +255,32 @@ that make the table useful. The table is instead filled directly by whichever
 playbook ran the detonation, right after it polls the task to completion, since that
 playbook already holds the full result.
 
-`Data Connectors/PolySwarmSandboxResults/azuredeploy.json` deploys the shared, one-time
-infrastructure: a Data Collection Endpoint, the `PolySwarmSandbox_CL` table (17
-columns: `TimeGenerated, TaskId, ArtifactType, Sha256, Url, FileName, Source, Provider,
-Community, Verdict, Score, Family, Techniques, ReportUrl, CreatedAt, CompletedAt,
-IncidentArmId`), and a Data Collection Rule. Deploy this once, before any sandbox
-playbook. Its outputs (`dceLogsIngestionEndpoint`, `dcrImmutableId`, `dcrResourceId`,
-`streamName`) feed the matching deployment parameters on every sandbox-detonating
-playbook (URL, Outlook attachment, Storage blob, Defender file).
+Every sandbox-detonating playbook template (URL, Outlook attachment, Storage blob,
+Defender file) creates the shared infrastructure itself, idempotently, with fixed
+names: a Data Collection Endpoint (`polyswarm-dce`), the `PolySwarmSandbox_CL` table
+(17 columns: `TimeGenerated, TaskId, ArtifactType, Sha256, Url, FileName, Source,
+Provider, Community, Verdict, Score, Family, Techniques, ReportUrl, CreatedAt,
+CompletedAt, IncidentArmId`), and a Data Collection Rule
+(`polyswarm-dcr-sandbox-results`, stream `Custom-PolySwarmSandboxResults`). Each
+template takes a required `WorkspaceName` parameter (the workspace must be in the same
+resource group) and works out the endpoint address, rule id and stream on its own.
+`Data Connectors/PolySwarmSandboxResults/azuredeploy.json` remains as an optional
+standalone way to create the same three resources ahead of time.
 
 Each of those playbooks then:
 
 - Posts one row via the Logs Ingestion API
-  (`{dceLogsIngestionEndpoint}/dataCollectionRules/{dcrImmutableId}/streams/{streamName}?api-version=2023-01-01`,
+  (`{endpoint}/dataCollectionRules/{immutableId}/streams/Custom-PolySwarmSandboxResults?api-version=2023-01-01`,
   managed identity auth, audience `https://monitor.azure.com`) for every detonation
   attempt, including timeouts, so the table reflects every submission, not only the
   successful ones.
 - Needs the **Monitoring Metrics Publisher** role on the Data Collection Rule
-  (`dcrResourceId`) to write to it. Each playbook template can create this role
-  assignment for itself automatically at deployment (the `create_role_assignment`
-  parameter, default `true`), a pattern also used by other published Content Hub
-  solutions with a similar sandbox-and-Logs-Ingestion design; set it to `false` and
-  grant the role manually if the deploying principal cannot grant RBAC roles.
+  (`polyswarm-dcr-sandbox-results`) to write to it. Each playbook template can create
+  this role assignment for itself automatically at deployment (the
+  `create_role_assignment` parameter, default `true`), a pattern also used by other
+  published Content Hub solutions with a similar sandbox-and-Logs-Ingestion design; set
+  it to `false` and grant the role manually if the deploying principal cannot grant
+  RBAC roles.
 
 `Source` records which playbook wrote a given row: `Url`, `OutlookAttachment`,
 `StorageBlob` or `DefenderFile`.
@@ -334,17 +352,18 @@ Three analytics rules ship with the solution, all Scheduled rules:
   tactic dynamically.
 - **PolySwarm sandbox detonation malicious**, severity High. Raises an incident from
   any `PolySwarmSandbox_CL` row with a malicious verdict, covering file and URL
-  detonations from every sandbox-detonating playbook. Its `requiredDataConnectors`
-  entry points at the hunting connector's id (`PolySwarmHuntingCCFDefinition`) with
-  `dataType: PolySwarmSandbox_CL`, since that table is no longer written by a
-  dedicated CCF connector; this is how the rule declares a PolySwarm dependency
-  without a connector definition of its own to point at. This is how a PolySwarm
-  sandbox verdict becomes an incident in the unified Defender portal, since the
+  detonations from every sandbox-detonating playbook. The sandbox playbooks write that
+  table, and the rule declares no data connector because no connector writes it.
+  This is how a PolySwarm sandbox verdict becomes an incident in the unified Defender
+  portal, since the
   playbooks that submit detonations only post an incident comment and never create an
   incident directly.
 
 Four hunting queries join PolySwarm indicators against your own log tables for hash,
-IP address, URL and domain, for an analyst to run interactively.
+IP address, URL and domain, for an analyst to run interactively. Both connectors
+deliver file-hash indicators, so the file hash query is the one with PolySwarm data to
+match; the URL, IP address and domain queries are ready for network indicators and
+return nothing from the shipped connectors.
 
 ## User agent
 
@@ -362,7 +381,7 @@ solution's own name and version and the calling component's name.
 | --- | --- |
 | A playbook fails with a 403 posting a comment or reading incident entities | Its managed identity is missing the **Microsoft Sentinel Responder** role. See `docs/permissions.md`. |
 | A playbook fails reading the PolySwarm API key | Its managed identity cannot read the secret: on a vault using Azure role-based access control it needs **Key Vault Secrets User**; on a vault using access policies it needs an access policy with the **Get** secret permission. Or the secret name does not match what the playbook expects. |
-| A sandbox playbook fails writing to `PolySwarmSandbox_CL` | Its managed identity is missing **Monitoring Metrics Publisher** on the Data Collection Rule, or the shared `PolySwarmSandboxResults` infrastructure has not been deployed yet. |
+| A sandbox playbook fails writing to `PolySwarmSandbox_CL` | Its managed identity is missing **Monitoring Metrics Publisher** on the Data Collection Rule, or the `WorkspaceName` entered at deployment does not match the workspace in the playbook's resource group. |
 | A data connector shows disconnected | The stored PolySwarm API key or, for the curated feed connector, account number/API key pair is invalid, or the account does not carry the entitlement that connector needs. |
 | No PolySwarm result, HTTP 401 | The PolySwarm API key is invalid or missing. |
 | No PolySwarm result, HTTP 204 with an empty body | PolySwarm has no record of the artifact. This is a normal outcome, not an error. |

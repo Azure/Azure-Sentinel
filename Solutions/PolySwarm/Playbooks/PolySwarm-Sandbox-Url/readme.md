@@ -70,10 +70,11 @@ All polling loops are bounded twice: a count limit and a timeout (TimeoutMinutes
   an Azure Key Vault.
 - A private PolySwarm community to detonate in (ask PolySwarm Customer Success if you
   do not have one yet).
-- The shared sandbox results infrastructure
-  (`Data Connectors/PolySwarmSandboxResults/azuredeploy.json`) deployed first; this
-  playbook is one of the writers to that table, since PolySwarm's own sandbox task
-  list API does not carry verdicts.
+- A Log Analytics workspace with Microsoft Sentinel in the resource group you deploy to
+  (`WorkspaceName`). The template itself creates the `PolySwarmSandbox_CL` table, the
+  `polyswarm-dce` Data Collection Endpoint and the `polyswarm-dcr-sandbox-results` Data
+  Collection Rule, with fixed names, so deploying several sandbox playbooks is safe and
+  no separate infrastructure deployment is needed.
 
 ## Parameters
 
@@ -91,11 +92,8 @@ All polling loops are bounded twice: a count limit and a timeout (TimeoutMinutes
 | `PolySwarmApiBaseUrl` | Defaults to `https://api.polyswarm.network/v3`. |
 | `MaliciousScoreThreshold` | Default `7` (of a 0-10 score). |
 | `SuspiciousScoreThreshold` | Default `4`. |
-| `DceLogsIngestionEndpoint` | From the sandbox results infrastructure's `dceLogsIngestionEndpoint` output. No default; required. |
-| `DcrImmutableId` | From the same infrastructure's `dcrImmutableId` output. No default; required. |
-| `StreamName` | Defaults to `Custom-PolySwarmSandboxResults`. |
-| `DcrResourceId` | From the same infrastructure's `dcrResourceId` output. Used as the scope for this playbook's own Monitoring Metrics Publisher role assignment. No default; required. |
-| `create_role_assignment` | Boolean, default `true`. Whether the template auto-assigns Monitoring Metrics Publisher on `DcrResourceId` to its own managed identity. |
+| `WorkspaceName` | Name of the Log Analytics workspace Microsoft Sentinel runs on, in the same resource group. The template creates the `PolySwarmSandbox_CL` table, DCE and DCR in it (fixed names, idempotent). No default; required. |
+| `create_role_assignment` | Boolean, default `true`. Whether the template auto-assigns Monitoring Metrics Publisher on the sandbox DCR to its own managed identity. |
 
 ## Post-deployment steps
 
@@ -103,7 +101,7 @@ All polling loops are bounded twice: a count limit and a timeout (TimeoutMinutes
    workspace) to this playbook's managed identity.
 2. Assign the **Key Vault Secrets User** role on the Key Vault (`KeyVaultName`) to the
    same managed identity.
-3. **Monitoring Metrics Publisher** on the Data Collection Rule (`DcrResourceId`) is
+3. **Monitoring Metrics Publisher** on the Data Collection Rule (`polyswarm-dcr-sandbox-results`) is
    assigned automatically at deployment when `create_role_assignment` is `true`
    (default) and the deploying principal can grant RBAC roles there; otherwise set it
    to `false` and assign the role manually.

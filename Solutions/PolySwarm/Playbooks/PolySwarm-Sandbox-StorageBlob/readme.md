@@ -47,8 +47,11 @@ All polling loops are bounded twice: a count limit and a timeout (TimeoutMinutes
 - A private PolySwarm community to detonate in.
 - An Azure Storage account and container that already holds the files referenced by
   incident File entities.
-- The shared sandbox results infrastructure
-  (`Data Connectors/PolySwarmSandboxResults/azuredeploy.json`) deployed first.
+- A Log Analytics workspace with Microsoft Sentinel in the resource group you deploy to
+  (`WorkspaceName`). The template itself creates the `PolySwarmSandbox_CL` table, the
+  `polyswarm-dce` Data Collection Endpoint and the `polyswarm-dcr-sandbox-results` Data
+  Collection Rule, with fixed names, so deploying several sandbox playbooks is safe and
+  no separate infrastructure deployment is needed.
 
 ## Parameters
 
@@ -64,8 +67,7 @@ All other parameters (`PlaybookName` default
 `PolySwarm-Sandbox-StorageBlob-IncidentTriggered`, `Community`,
 `AllowPublicCommunity`, `Provider`, `VmSlug`, `NetworkEnabled`, `TimeoutMinutes`,
 `KeyVaultName`, `KeyVaultSecretName`, `PolySwarmApiBaseUrl`,
-`MaliciousScoreThreshold`, `SuspiciousScoreThreshold`, `DceLogsIngestionEndpoint`,
-`DcrImmutableId`, `StreamName`, `DcrResourceId`, `create_role_assignment`) are
+`MaliciousScoreThreshold`, `SuspiciousScoreThreshold`, `WorkspaceName`, `create_role_assignment`) are
 identical in name, type and default to `PolySwarm-Sandbox-Url`.
 
 ## Post-deployment steps
@@ -76,7 +78,7 @@ identical in name, type and default to `PolySwarm-Sandbox-Url`.
    the same managed identity.
 3. Assign the **Storage Blob Data Reader** role on the storage account
    (`StorageAccountName`) to the same managed identity.
-4. **Monitoring Metrics Publisher** on the Data Collection Rule (`DcrResourceId`) is
+4. **Monitoring Metrics Publisher** on the Data Collection Rule (`polyswarm-dcr-sandbox-results`) is
    assigned automatically when `create_role_assignment` is `true` (default);
    otherwise assign it manually.
 5. Authorize the Microsoft Sentinel, Azure Key Vault and Azure Blob Storage API

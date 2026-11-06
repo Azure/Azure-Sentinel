@@ -51,8 +51,11 @@ All polling loops are bounded twice: a count limit and a timeout (TimeoutMinutes
 - A private PolySwarm community to detonate in.
 - An Office 365 mailbox connection with permission to read the mail message
   referenced by the incident's Mail entity.
-- The shared sandbox results infrastructure
-  (`Data Connectors/PolySwarmSandboxResults/azuredeploy.json`) deployed first.
+- A Log Analytics workspace with Microsoft Sentinel in the resource group you deploy to
+  (`WorkspaceName`). The template itself creates the `PolySwarmSandbox_CL` table, the
+  `polyswarm-dce` Data Collection Endpoint and the `polyswarm-dcr-sandbox-results` Data
+  Collection Rule, with fixed names, so deploying several sandbox playbooks is safe and
+  no separate infrastructure deployment is needed.
 
 ## Parameters
 
@@ -62,9 +65,7 @@ Same shape as `PolySwarm-Sandbox-Url`: `PlaybookName` (default
 (default `windows11-21h2-x64`), `NetworkEnabled` (default `true`), `TimeoutMinutes`
 (default `15`), `KeyVaultName`, `KeyVaultSecretName` (default `PolySwarmApiKey`),
 `PolySwarmApiBaseUrl`, `MaliciousScoreThreshold` (default `7`),
-`SuspiciousScoreThreshold` (default `4`), `DceLogsIngestionEndpoint`,
-`DcrImmutableId`, `StreamName` (default `Custom-PolySwarmSandboxResults`),
-`DcrResourceId`, `create_role_assignment` (default `true`). See
+`SuspiciousScoreThreshold` (default `4`), `WorkspaceName`, `create_role_assignment` (default `true`). See
 `Playbooks/PolySwarm-Sandbox-Url/readme.md` for the full parameter table; this
 playbook's parameters are identical in name, type and default.
 
@@ -74,7 +75,7 @@ playbook's parameters are identical in name, type and default.
    workspace) to this playbook's managed identity.
 2. Assign the **Key Vault Secrets User** role on the Key Vault (`KeyVaultName`) to
    the same managed identity.
-3. **Monitoring Metrics Publisher** on the Data Collection Rule (`DcrResourceId`) is
+3. **Monitoring Metrics Publisher** on the Data Collection Rule (`polyswarm-dcr-sandbox-results`) is
    assigned automatically when `create_role_assignment` is `true` (default);
    otherwise assign it manually.
 4. Authorize the Microsoft Sentinel, Azure Key Vault and Office 365 API connections

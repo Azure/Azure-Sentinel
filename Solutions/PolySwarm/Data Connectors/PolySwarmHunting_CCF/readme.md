@@ -3,8 +3,9 @@
 A Codeless Connector Framework (CCF) `RestApiPoller` connector that polls your
 PolySwarm live hunt results (`/v3/hunt/live/list`) and writes each result as a native
 indicator into Microsoft Sentinel's `ThreatIntelIndicators` table. Because the
-indicators are native, Microsoft's own built-in indicator matching rules run against
-them automatically, alongside this solution's analytics rules. Connector id
+indicators are native, Microsoft's threat intelligence matching rules that read
+`ThreatIntelIndicators` can use them, alongside this solution's analytics rules.
+Connector id
 `PolySwarmHuntingCCFDefinition`. Requires the live hunting entitlement on your
 PolySwarm account.
 
