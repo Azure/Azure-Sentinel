@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                   |
 |-------------|--------------------------------|------------------------------------------------------|
+| 3.1.5       | 29-10-2026                     | Update **Analytic Rules**, **Hunting Queries** and **Workbook** metadata to reference the CCF data connector (ProofpointCCPDefinition) and its tables.|
 | 3.1.4       | 17-04-2026                     | Update **ProofpointPOD_PollingConfig.json** to pass sinceTime parameter with firstWindowBackfillInMin configuration.|
 | 3.1.3       | 19-03-2026                     | Update **ProofpointPOD_PollingConfig.json** to pass user-agent header with solution package version.|
 | 3.1.2       | 08-12-2025                     | Update **ProofpointPOD_PollingConfig.json** to remove start and end time query params, it impacts time frames at server side and causes duplicate data ingestion.|  
