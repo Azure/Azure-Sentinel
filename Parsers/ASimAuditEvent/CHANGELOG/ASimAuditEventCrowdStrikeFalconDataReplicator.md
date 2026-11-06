@@ -1,5 +1,10 @@
 # Changelog for ASimAuditEventCrowdStrikeFalconDataReplicator.yaml
 
+## Version 0.1.1
+
+- (2026-11-06) Reduce ingestion transform size by removing redundant mappings - [PR #15576](https://github.com/Azure/Azure-Sentinel/pull/15576)
+- The removed EventType and ObjectType branches returned the existing `Other` fallback.
+
 ## Version 0.1.0
 
 - (2026-10-23) Initial creation of the CrowdStrike Falcon Data Replicator AuditEvent parser - [PR #15414](https://github.com/Azure/Azure-Sentinel/pull/15414)
