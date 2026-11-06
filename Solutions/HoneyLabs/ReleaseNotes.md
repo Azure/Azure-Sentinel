@@ -1,3 +1,4 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                    |
 |-------------|--------------------------------|---------------------------------------|
+| 3.0.1       | 04-11-2026                     | Published by HoneyLabs as a partner-supported solution (publisher `honeylabsnet`). No content changes. |
 | 3.0.0       | 14-08-2026                     | Initial Solution Release. Includes the **HoneyLabs Threat Intelligence** workbook \| v 1.0.0, four **Analytic Rules** matching HoneyLabs indicators against sign-in, CEF and normalised network logs \| v 1.0.0, four **Hunting Queries** \| v 1.0.0, and the **HoneyLabs-EnrichIncident-IP** playbook \| v 1.0. Indicators are ingested with Microsoft Sentinel's built-in **Threat Intelligence - TAXII** data connector, so the solution does not ship a data connector of its own. Setup values are in the solution README and in the workbook. |

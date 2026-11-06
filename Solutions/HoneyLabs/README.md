@@ -63,8 +63,8 @@ requests, captured payloads and client fingerprints.
 
 ## Support
 
-Community supported by HoneyLabs. Open an issue at
-[honeylabs.net](https://honeylabs.net) or mail info@honeylabs.net.
+Supported by HoneyLabs. Open an issue at
+[honeylabs.net](https://honeylabs.net) or mail support@honeylabs.net.
 
 - [Integration guide](https://honeylabs.net/integrations/sentinel)
 - [Methodology](https://honeylabs.net/methodology)
