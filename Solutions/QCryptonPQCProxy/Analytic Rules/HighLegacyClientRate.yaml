@@ -1,0 +1,38 @@
+id: 6f7a8b9c-0d1e-4f2a-3b4c-6d7e8f9a0b1c
+name: High percentage of clients connecting without PQC support
+description: |
+  More than 50% of TLS handshakes on a PQC Proxy instance in the last 24 hours used classical
+  (non-PQC) key exchange because clients did not offer any post-quantum groups. This is an
+  adoption tracking signal - these clients are not protected against harvest-now-decrypt-later
+  attacks. Consider requiring client TLS library upgrades or communicating PQC requirements
+  to connecting services.
+severity: Informational
+requiredDataConnectors:
+  - connectorId: QCryptonPQCProxyCCPDefinition
+    dataTypes:
+      - PQCProxy_CL
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  PQCProxy_CL
+  | where TimeGenerated > ago(1d)
+  | where EventType == "handshake"
+  | summarize Total = count(), Classical = countif(QuantumPosture == "classical") by ProxyHost, ProxyInstanceId
+  | extend ClassicalPct = round(100.0 * Classical / Total, 1)
+  | where ClassicalPct > 50
+  | project ProxyHost, ProxyInstanceId, Total, Classical, ClassicalPct
+  | order by ClassicalPct desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: ProxyHost
+status: Available
+version: 1.0.0
+kind: Scheduled
