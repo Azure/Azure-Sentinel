@@ -1,0 +1,70 @@
+id: 8265ae28-63f1-43a8-ac57-6d5f7a1dca5f
+Function:
+  Title: Parser for Mimecast Human Risk Attacks
+  Version: '1.1.0'
+  LastUpdated: '2026-10-21'
+Category: Microsoft Sentinel Parser
+FunctionName: MimecastHumanRiskAttacks
+FunctionAlias: MimecastHumanRiskAttacks
+FunctionQuery: |
+    let dummy_table = datatable(TimeGenerated: datetime) [];
+    let FactorLabel = (f: string) { case(f == 'veryLow', 'Very Low', f == 'low', 'Low', f == 'medium', 'Medium', f == 'high', 'High', f == 'veryHigh', 'Very High', 'Not Scored') };
+    let MimecastHumanRiskAttacks_view = view() {
+    union isfuzzy=true
+        dummy_table,
+        MimecastHumanRisk_Attacks_CL
+    | extend
+        AttackScore = toint(column_ifexists('AttackScore', int(null))),
+        AttackFactor = tostring(column_ifexists('AttackFactor', '')),
+        AttackTypes = todynamic(column_ifexists('AttackTypes', dynamic(null)))
+    | extend AttackTypesRaw = iff(gettype(AttackTypes) != 'array' or array_length(AttackTypes) == 0, dynamic([{}]), AttackTypes)
+    | mv-expand AttackTypeItem = AttackTypesRaw
+    | extend
+        AttackFactorLabel = FactorLabel(AttackFactor),
+        AttackType = tostring(AttackTypeItem.type),
+        AttackTypeTotal = toint(AttackTypeItem.attackTotal),
+        AttackTypeScore = toint(AttackTypeItem.attackScore),
+        AttackTypeFactor = tostring(AttackTypeItem.attackFactor),
+        AttackTypeTrend = toint(AttackTypeItem.trend),
+        AttackTypeEvents = AttackTypeItem.events,
+        EventDelivered = toint(AttackTypeItem.events.delivered),
+        EventBlocked = toint(AttackTypeItem.events.blocked),
+        EventRemediated = toint(AttackTypeItem.events.remediated),
+        EventDownloadAttempted = toint(AttackTypeItem.events.downloadAttempted),
+        EventDownloaded = toint(AttackTypeItem.events.downloaded),
+        EventExecuted = toint(AttackTypeItem.events.executed),
+        EventUnknown = toint(AttackTypeItem.events.unknown),
+        EventAnomalous = toint(AttackTypeItem.events.anomalous),
+        EventSuspicious = toint(AttackTypeItem.events.suspicious),
+        EventMalicious = toint(AttackTypeItem.events.malicious),
+        EventReported = toint(AttackTypeItem.events.reported)
+    | extend
+        AttackTypeName = case(AttackType == 'actualPhishing', 'Actual Phishing', AttackType == 'malware', 'Malware', AttackType == 'identity', 'Identity', AttackType),
+        AttackTypeFactorLabel = FactorLabel(AttackTypeFactor)
+    | project
+        TimeGenerated,
+        AttackScore,
+        AttackFactor,
+        AttackFactorLabel,
+        AttackType,
+        AttackTypeName,
+        AttackTypeTotal,
+        AttackTypeScore,
+        AttackTypeFactor,
+        AttackTypeFactorLabel,
+        AttackTypeTrend,
+        AttackTypeEvents,
+        EventDelivered,
+        EventBlocked,
+        EventRemediated,
+        EventDownloadAttempted,
+        EventDownloaded,
+        EventExecuted,
+        EventUnknown,
+        EventAnomalous,
+        EventSuspicious,
+        EventMalicious,
+        EventReported,
+        AttackTypes
+    };
+    MimecastHumanRiskAttacks_view
