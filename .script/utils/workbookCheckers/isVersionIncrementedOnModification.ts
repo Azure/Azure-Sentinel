@@ -27,6 +27,9 @@ export async function isVersionIncrementedOnModification() {
     const template = path.substring("Workbooks/".length);
     const oldEntries = base.get(template);
     const newEntries = head.get(template);
+    if (!oldEntries && !newEntries) {
+      continue;
+    }
     if (!oldEntries || !newEntries || oldEntries.size !== newEntries.size ||
         [...oldEntries.keys()].some(key => !newEntries.has(key))) {
       throw new WorkbookValidationError(`Missing or ambiguous metadata for modified workbook ${template} in ${metadataPath}. Both PR snapshots must contain the same workbook keys for this template.`);

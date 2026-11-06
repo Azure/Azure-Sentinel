@@ -71,6 +71,8 @@ Run from the repository root:
 
 ```powershell
 npm run tsc
+$env:REPO_OWNER = "Azure"
+$env:REPO_NAME = "Azure-Sentinel"
 node --import tsx node_modules/mocha/bin/mocha.js --timeout 15000 ".script/tests/workbooksValidatorTest/*.test.ts"
 ```
 
@@ -90,8 +92,10 @@ PR's exact base and head commit SHAs, fetching a missing commit from its reposit
 It matches entries by `templateRelativePath` and `workbookKey`. Shared templates are
 supported only when every existing key remains and its own version increases; a new,
 removed, or replaced key for a modified template is rejected rather than matched
-ambiguously. Missing metadata, duplicate keys in either snapshot, invalid JSON, and
-Git failures are validation errors. Additions, deletions, and renames remain outside
+ambiguously. Auxiliary JSON files absent from both metadata snapshots are ignored;
+a mapping missing from only one snapshot remains a validation error. Duplicate keys
+in either snapshot, invalid JSON, and Git failures are validation errors.
+Additions, deletions, and renames remain outside
 the existing modified-file discovery contract. Metadata-only changes do not require
 a template bump, and local validation without PR context retains its existing skip.
 

@@ -175,6 +175,23 @@ describe("workbook version increment public validator", () => {
         expect(validate(scenario).result).to.equal(0);
         fails({ ...scenario, head: JSON.stringify([entry("AzureSentinelCost", "1.6.4"), entry("ADXvsLA", "1.0.0")]) }, "ADXvsLA");
     });
+    it("ignores unmapped auxiliary JSON alongside a correctly bumped gallery template", () => {
+        const changed = [
+            "Workbooks/use cases mapper workbook/deployment.json",
+            "Workbooks/AzureSentinelCost.json",
+            metadataPath,
+        ];
+        const result = validate({ changed, publicMetadata: true });
+        expect(result.result, result.error).to.equal(0);
+        fails({
+            changed,
+            head: JSON.stringify([entry("AzureSentinelCost", "1.5.1"), entry("ADXvsLA", "1.0.0")]),
+        }, "must be greater");
+    });
+    it("ignores an auxiliary-only change absent from both metadata snapshots", () => {
+        const result = validate({ changed: ["Workbooks/use cases mapper workbook/deployment.json"] });
+        expect(result.result, result.error).to.equal(0);
+    });
     for (const snapshot of ["base", "head"]) {
         it(`rejects missing mappings in the ${snapshot} snapshot`, () => {
             fails({ [snapshot]: "[]" }, "Missing or ambiguous metadata");
