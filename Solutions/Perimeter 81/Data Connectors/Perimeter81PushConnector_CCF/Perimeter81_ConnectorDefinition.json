@@ -1,0 +1,241 @@
+{
+  "name": "Perimeter81PushConnector",
+  "apiVersion": "2025-07-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "Perimeter81PushConnector",
+      "title": "Perimeter 81 Activity Logs (Push Connector via Codeless Connector Framework)",
+      "publisher": "Microsoft Corporation",
+      "descriptionMarkdown": "Connects Perimeter 81 (Check Point SASE) activity logs to Microsoft Sentinel via the Azure Monitor DCE/DCR Logs Ingestion API. Replaces the legacy HTTP Data Collector API connector with Entra ID service principal authentication scoped to the Data Collection Rule.",
+      "graphQueries": [
+        {
+          "metricName": "Total activity log events received",
+          "legend": "Perimeter 81 Activity Logs",
+          "baseQuery": "Perimeter81ActivityLogsV2"
+        },
+        {
+          "metricName": "Authentication activity",
+          "legend": "Authentication Events",
+          "baseQuery": "Perimeter81ActivityLogsV2 | where EventCategory in (\"Authentication\", \"Login\")"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Get 10 latest activity log events",
+          "query": "Perimeter81ActivityLogsV2 | take 10"
+        },
+        {
+          "description": "Login and sign-out activity",
+          "query": "Perimeter81ActivityLogsV2\n| where EventCategory in (\"Authentication\", \"Login\")"
+        },
+        {
+          "description": "Group and membership changes",
+          "query": "Perimeter81ActivityLogsV2\n| where EventCategory == \"Group\""
+        },
+        {
+          "description": "Repeated authentication event IDs (last 24 hours)",
+          "query": "Perimeter81ActivityLogsV2\n| where TimeGenerated > ago(24h)\n| where EventCategory in (\"Authentication\", \"Login\")\n| where isnotempty(EventId)\n| summarize count() by EventId\n| where count_ > 1"
+        },
+        {
+          "description": "Deletions and removals (last 24 hours)",
+          "query": "Perimeter81ActivityLogsV2\n| where TimeGenerated > ago(24h)\n| where EventName has_any (\"delete\", \"remove\", \"destroy\", \"deleted\", \"removed\", \"destroyed\")"
+        },
+        {
+          "description": "Batched and unparsed payloads",
+          "query": "Perimeter81ActivityLogsV2\n| where ParseStatus != \"Parsed\"\n| project TimeGenerated, ParseStatus, RawData"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "Perimeter81ActivityLogsV2",
+          "lastDataReceivedQuery": "Perimeter81ActivityLogsV2\n| where TimeGenerated > ago(12h) | summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        },
+        {
+          "type": "IsConnectedQuery",
+          "value": [
+            "Perimeter81ActivityLogsV2 | where TimeGenerated > ago(7d) | take 1"
+          ]
+        }
+      ],
+      "availability": {
+        "isPreview": true,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Microsoft.Insights/dataCollectionEndpoints",
+            "description": "Data Collection Endpoint is required for the modern push connector to receive data from the external security system."
+          },
+          {
+            "name": "Microsoft.Insights/dataCollectionRules",
+            "description": "Data Collection Rule is required to define the schema and transformations for incoming data."
+          },
+          {
+            "name": "Microsoft.Authorization/roleAssignments",
+            "description": "Role assignment is required to grant the Entra application permissions to send data to the Data Collection Rule."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create ARM Resources and Provide the Required Permissions",
+          "description": "This connector receives data from external security systems that push logs to Microsoft Sentinel. The external system must be configured to send raw event data to the Microsoft Sentinel Ingestion API. Clicking on **Deploy** will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n[Learn more about the connector setup process](https://review.learn.microsoft.com/azure/sentinel/create-push-codeless-connector)",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "## Azure Resource Deployment\n\nThe deployment process will create the following resources:\n- Log Analytics custom table(s)\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR)\n- Entra ID Application Registration\n- Role assignments for data ingestion"
+              }
+            },
+            {
+              "type": "DeployPushConnectorButton",
+              "parameters": {
+                "label": "Deploy Perimeter 81 Activity Logs connector resources",
+                "applicationDisplayName": "Perimeter 81 Activity Logs (Push Connector via Codeless Connector Framework)"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Configuration Values\n\nAfter deployment, copy the following values to configure your external security system:"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": ["TenantId"],
+                "label": "Tenant ID (Directory ID)",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": ["ApplicationId"],
+                "label": "Entra App Registration Application ID",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": ["ApplicationSecret"],
+                "label": "Entra App Registration Secret",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": ["DataCollectionEndpoint"],
+                "label": "Data Collection Endpoint Url",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": ["DataCollectionRuleId"],
+                "label": "Data Collection Rule Immutable ID",
+                "value": "{0}"
+              }
+            },
+            {
+              "type": "CopyableLabel",
+              "parameters": {
+                "fillWith": [],
+                "label": "Stream Name (Perimeter81ActivityLogsV2)",
+                "value": "Custom-Perimeter81ActivityLogsV2_CL"
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Keep these values secure. You will need them to configure your external security system.",
+                "visible": true,
+                "inline": true
+              }
+            }
+          ]
+        },
+        {
+          "title": "2. Configure your external system to push logs",
+          "description": "Use the following parameters to configure your external security system to send logs to the workspace.\n\n### Configuration Steps\n\n1. Access your external security system's configuration interface.\n2. Navigate to the data forwarding, integration, or SIEM settings.\n3. Select **Azure Monitor** or **Microsoft Sentinel** as the destination.\n4. Select **Data Collection Endpoint** as the authentication method.\n5. Configure the required fields using the values from the previous step:\n   - **Tenant ID**: Copy from above\n   - **Application (Client) ID**: Copy from above\n   - **Client Secret**: Copy from above\n   - **Data Collection Endpoint**: Copy from above\n   - **Data Collection Rule Immutable ID**: Copy from above\n   - **Stream Name**: Copy the appropriate stream name from above\n6. Save the configuration and enable/start the forwarder.\n\n### Validation\n\n> **Note**: Data will appear in the **Perimeter81ActivityLogsV2** table in your Log Analytics workspace within a few minutes.\n\nTo verify data is being received, run the following query in your Log Analytics workspace:\n\n```kusto\nPerimeter81ActivityLogsV2\n| where TimeGenerated > ago(1h)\n| take 10\n```\n\n### Troubleshooting\n\nIf data is not appearing:\n- Verify the configuration values are correct\n- Check that the forwarder/integration is enabled and running\n- Review logs in your external security system for any errors\n- Ensure network connectivity from your system to Azure\n- Verify the Entra application has the correct permissions",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "After deploying the Azure resources, configure **Check Point Portal Event Forwarding** to push activity logs to the new DCE/DCR endpoint using Entra ID app credentials."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Configure Check Point Portal Event Forwarding\n\nIn the Check Point Infinity Portal, go to **Account Settings > Event Forwarding** and create (or edit) a destination:\n\n1. **Forwarding method**: Push to SIEM\n2. **SIEM server**: Microsoft Sentinel\n3. Enter the values shown above:\n\n| Setting | Value |\n|---|---|\n| **Azure Tenant ID** | Your Microsoft Entra Directory (tenant) ID |\n| **Application (Client) ID** | Entra ID app registration client ID |\n| **Client Secret** | Client secret generated for the app registration |\n| **Client Secret Expiration Date** | From the app registration's Certificates & secrets page |\n| **Data Collection Endpoint** | Data Collection Endpoint URL from Step 1 |\n| **DCR Immutable ID** | Data Collection Rule Immutable ID from Step 1 |\n| **Stream Name** | Stream Name from Step 1 |\n\n4. Run **Test Connectivity**, then create a **forwarding rule** with **Format: CEF**.\n5. Under **Services**, select **both `SASE` and `Infinity Portal`** — administrative and membership actions (logins, sign-outs, group changes) are classified under `Infinity Portal`, not `SASE`, even though they originate from the SASE module. Selecting only `SASE` will show **No traffic detected** indefinitely.\n6. Send each CEF event as a separate JSON object with `TimeGenerated` and `RawData`. Do not concatenate multiple CEF events in one `RawData` value; DCR transformations cannot split one input record into multiple output records.\n\nFor full instructions, see [Check Point Portal: Push to SIEM](https://sc1.checkpoint.com/documents/Infinity_Portal/WebAdminGuides/EN/Infinity-Portal-Admin-Guide/Content/Topics-Infinity-Portal/Event-Forwarding-Push.htm)."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Important: Connection Status\n\nThis is a **push-based connector** - it receives data from Check Point Event Forwarding and does not maintain an active polling connection. The connector shows as **Connected** when data has been received within the last 7 days.\n\nSingle-event CEF payloads are parsed into structured columns at ingestion. The original `RawData` is retained. Records containing multiple CEF events are marked `ParseStatus = Batched` and preserved without populating event columns, because DCR KQL cannot split one record into multiple rows. Non-CEF messages (including connectivity tests) and malformed CEF are retained with `NonCef` and `MalformedCef` statuses. Structured event queries exclude these unparsed records; use the batched and unparsed payloads query to inspect them. Legacy CLv1 compatibility remains the responsibility of the marketplace solution's parser."
+              }
+            }
+          ]
+        },
+        {
+          "title": "Uninstall connector",
+          "description": "Use this PowerShell script to delete the connector instance.",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "### Delete the Connector Instance"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "Run the following PowerShell commands to remove the data connector instance:\n\n```powershell\n$sub = \"<subscription-id>\"\n$rg  = \"<resource-group-name>\"\n$ws  = \"<workspace-name>\"\n$connectorName = \"Perimeter81PushConnector\"\n\nWrite-Host \"Deleting $connectorName...\" -NoNewline\naz rest --method DELETE --uri \"https://management.azure.com/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.OperationalInsights/workspaces/$ws/providers/Microsoft.SecurityInsights/dataConnectors/$connectorName`?api-version=2024-09-01\"\nWrite-Host \" Done\" -ForegroundColor Green\n```"
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "> NOTE: Replace `<subscription-id>`, `<resource-group-name>`, and `<workspace-name>` with your actual Azure values before running the script."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "This removes the push connector instance. Historical data in your Log Analytics workspace will be retained."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
