@@ -45,28 +45,30 @@ from azure.storage.blob import BlobServiceClient, BlobClient
 # ---------------------------------------------------------------------------
 # Configuration from Application Settings
 # ---------------------------------------------------------------------------
-TENANT_ID               = os.environ.get("TENANT_ID")
-CLIENT_ID               = os.environ.get("CLIENT_ID")
-CLIENT_SECRET           = os.environ.get("CLIENT_SECRET")
-DCE_ENDPOINT            = os.environ.get("DCE_ENDPOINT")
-DCR_ID                  = os.environ.get("DCR_ID")
-ASSETS_STREAM_NAME      = os.environ.get("ASSETS_STREAM_NAME", "Custom-XbowAssets_CL")
-FINDINGS_STREAM_NAME    = os.environ.get("FINDINGS_STREAM_NAME", "Custom-XbowFindings_CL")
-ASSESSMENTS_STREAM_NAME = os.environ.get("ASSESSMENTS_STREAM_NAME", "Custom-XbowAssessments_CL")
-XBOW_API_TOKEN          = os.environ.get("XBOW_API_TOKEN")
-XBOW_ORG_ID             = os.environ.get("XBOW_ORG_ID")
-STORAGE_CONN_STR        = os.environ.get("AzureWebJobsStorage")
+TENANT_ID = os.environ.get("TENANT_ID")
+CLIENT_ID = os.environ.get("CLIENT_ID")
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+DCE_ENDPOINT = os.environ.get("DCE_ENDPOINT")
+DCR_ID = os.environ.get("DCR_ID")
+ASSETS_STREAM_NAME = os.environ.get("ASSETS_STREAM_NAME", "Custom-XbowAssets_CL")
+FINDINGS_STREAM_NAME = os.environ.get("FINDINGS_STREAM_NAME", "Custom-XbowFindings_CL")
+ASSESSMENTS_STREAM_NAME = os.environ.get(
+    "ASSESSMENTS_STREAM_NAME", "Custom-XbowAssessments_CL"
+)
+XBOW_API_TOKEN = os.environ.get("XBOW_API_TOKEN")
+XBOW_ORG_ID = os.environ.get("XBOW_ORG_ID")
+STORAGE_CONN_STR = os.environ.get("AzureWebJobsStorage")
 
-__version__ = "1.2"
+__version__ = "1.3"
 
-XBOW_API_BASE    = "https://console.xbow.com/api/v1"
-XBOW_API_VERSION = "2026-07-01"
-PAGE_SIZE        = 100
-INGEST_BATCH_SIZE = 500          # max records per upload() call
-STATE_CONTAINER  = "xbow-connector-state"
-STATE_BLOB       = "sync_state.json"
+XBOW_API_BASE = "https://console.xbow.com/api/v1"
+XBOW_API_VERSION = "2026-11-01"
+PAGE_SIZE = 100
+INGEST_BATCH_SIZE = 500  # max records per upload() call
+STATE_CONTAINER = "xbow-connector-state"
+STATE_BLOB = "sync_state.json"
 
-logs_prefix   = "XbowConnector"
+logs_prefix = "XbowConnector"
 function_name = "main"
 
 
@@ -109,7 +111,9 @@ class SyncState:
                 assessments=raw.get("assessments", {}),
             )
         except Exception as exc:
-            logging.info(f"{logs_prefix}: No existing sync state found (first run or error: {exc}). Starting fresh.")
+            logging.info(
+                f"{logs_prefix}: No existing sync state found (first run or error: {exc}). Starting fresh."
+            )
             return SyncState()
 
     def save_state(self) -> None:
@@ -119,7 +123,9 @@ class SyncState:
             blob.upload_blob(json.dumps(asdict(self), indent=2), overwrite=True)
             logging.info(f"{logs_prefix}: Sync state saved to blob storage.")
         except Exception as exc:
-            logging.error(f"{logs_prefix}: Failed to save sync state: {exc}. State will not persist across runs.")
+            logging.error(
+                f"{logs_prefix}: Failed to save sync state: {exc}. State will not persist across runs."
+            )
 
 
 def _parse_ts(ts: str | None) -> datetime | None:
@@ -164,6 +170,7 @@ def _max_ts(a: str | None, b: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 # XBOW API helpers
 # ---------------------------------------------------------------------------
+
 
 def _xbow_headers() -> dict:
     return {
@@ -248,6 +255,7 @@ def _safe_asset_payload(asset: dict) -> dict:
 # Event builders with incremental diff
 # ---------------------------------------------------------------------------
 
+
 def collect_finding_events(
     org_id: str,
     assets: list[dict],
@@ -261,14 +269,14 @@ def collect_finding_events(
     new_last_seen: dict[str, str] = dict(last_seen)
 
     for asset in assets:
-        asset_id   = asset["id"]
+        asset_id = asset["id"]
         asset_name = asset["name"]
         asset_last = last_seen.get(asset_id)
         asset_max_ts = asset_last
 
         for finding in _paginate(f"{XBOW_API_BASE}/assets/{asset_id}/findings"):
             finding_id = finding["id"]
-            record_ts  = finding.get("updatedAt") or finding.get("createdAt")
+            record_ts = finding.get("updatedAt") or finding.get("createdAt")
 
             if not _is_newer(record_ts, asset_last):
                 continue  # already ingested on a previous run
@@ -284,22 +292,24 @@ def collect_finding_events(
                 )
                 detail = finding
 
-            events.append({
-                "TimeGenerated":  detail.get("updatedAt") or detail.get("createdAt"),
-                "FindingId":      detail.get("id", ""),
-                "FindingName":    detail.get("name", ""),
-                "Severity":       detail.get("severity", ""),
-                "State":          detail.get("state", ""),
-                "Summary":        (detail.get("summary") or "")[:32000],
-                "Evidence":       (detail.get("evidence") or "")[:32000],
-                "Impact":         (detail.get("impact") or "")[:8000],
-                "Mitigations":    (detail.get("mitigations") or "")[:8000],
-                "Recipe":         (detail.get("recipe") or "")[:32000],
-                "AssetId":        asset_id,
-                "AssetName":      asset_name,
-                "OrganizationId": org_id,
-                "CreatedAt":      detail.get("createdAt", ""),
-            })
+            events.append(
+                {
+                    "TimeGenerated": detail.get("updatedAt") or detail.get("createdAt"),
+                    "FindingId": detail.get("id", ""),
+                    "FindingName": detail.get("name", ""),
+                    "Severity": detail.get("severity", ""),
+                    "State": detail.get("state", ""),
+                    "Summary": (detail.get("summary") or "")[:32000],
+                    "Evidence": (detail.get("evidence") or "")[:32000],
+                    "Impact": (detail.get("impact") or "")[:8000],
+                    "Mitigations": (detail.get("mitigations") or "")[:8000],
+                    "Recipe": (detail.get("recipe") or "")[:32000],
+                    "AssetId": asset_id,
+                    "AssetName": asset_name,
+                    "OrganizationId": org_id,
+                    "CreatedAt": detail.get("createdAt", ""),
+                }
+            )
 
             asset_max_ts = _max_ts(asset_max_ts, record_ts)
 
@@ -347,26 +357,32 @@ def collect_asset_events(
         checks = safe_detail.get("checks") or {}
         asset_reachable = checks.get("assetReachable") or {}
 
-        events.append({
-            "TimeGenerated":          safe_detail.get("updatedAt") or safe_detail.get("createdAt") or record_ts,
-            "AssetId":                safe_detail.get("id", asset_id),
-            "AssetName":              safe_detail.get("name", ""),
-            "Lifecycle":              safe_detail.get("lifecycle", ""),
-            "OrganizationId":         safe_detail.get("organizationId", org_id),
-            "StartUrl":               (safe_detail.get("startUrl") or "")[:2048],
-            "Sku":                    safe_detail.get("sku", ""),
-            "MaxRequestsPerSecond":   safe_detail.get("maxRequestsPerSecond") or 0,
-            "CreatedAt":              safe_detail.get("createdAt", ""),
-            "UpdatedAt":              safe_detail.get("updatedAt", ""),
-            "AssetReachableState":    asset_reachable.get("state", ""),
-            "AssetReachableMessage":  (asset_reachable.get("message") or "")[:4000],
-            "Checks":                 json.dumps(checks),
-            "ApprovedTimeWindows":    json.dumps(safe_detail.get("approvedTimeWindows")),
-            "DnsBoundaryRules":       json.dumps(safe_detail.get("dnsBoundaryRules")),
-            "HttpBoundaryRules":      json.dumps(safe_detail.get("httpBoundaryRules")),
-            "Headers":                json.dumps(safe_detail.get("headers")),
-            "RawAsset":               json.dumps(safe_detail)[:32000],
-        })
+        events.append(
+            {
+                "TimeGenerated": safe_detail.get("updatedAt")
+                or safe_detail.get("createdAt")
+                or record_ts,
+                "AssetId": safe_detail.get("id", asset_id),
+                "AssetName": safe_detail.get("name", ""),
+                "Lifecycle": safe_detail.get("lifecycle", ""),
+                "OrganizationId": safe_detail.get("organizationId", org_id),
+                "StartUrl": (safe_detail.get("startUrl") or "")[:2048],
+                "Sku": safe_detail.get("sku", ""),
+                "MaxRequestsPerSecond": safe_detail.get("maxRequestsPerSecond") or 0,
+                "CreatedAt": safe_detail.get("createdAt", ""),
+                "UpdatedAt": safe_detail.get("updatedAt", ""),
+                "AssetReachableState": asset_reachable.get("state", ""),
+                "AssetReachableMessage": (asset_reachable.get("message") or "")[:4000],
+                "Checks": json.dumps(checks),
+                "ApprovedTimeWindows": json.dumps(
+                    safe_detail.get("approvedTimeWindows")
+                ),
+                "DnsBoundaryRules": json.dumps(safe_detail.get("dnsBoundaryRules")),
+                "HttpBoundaryRules": json.dumps(safe_detail.get("httpBoundaryRules")),
+                "Headers": json.dumps(safe_detail.get("headers")),
+                "RawAsset": json.dumps(safe_detail)[:32000],
+            }
+        )
 
         if record_ts:
             new_last_seen[asset_id] = record_ts
@@ -390,7 +406,7 @@ def collect_assessment_events(
     new_last_seen: dict[str, str] = dict(last_seen)
 
     for asset in assets:
-        asset_id   = asset["id"]
+        asset_id = asset["id"]
         asset_name = asset["name"]
         asset_last = last_seen.get(asset_id)
         asset_max_ts = asset_last
@@ -413,19 +429,21 @@ def collect_assessment_events(
                 )
                 detail = assessment
 
-            events.append({
-                "TimeGenerated":   detail.get("updatedAt") or detail.get("createdAt"),
-                "AssessmentId":    detail.get("id", ""),
-                "AssessmentName":  detail.get("name", ""),
-                "State":           detail.get("state", ""),
-                "Progress":        detail.get("progress", 0),
-                "AttackCredits":   detail.get("attackCredits", 0),
-                "RecentEvents":    json.dumps(detail.get("recentEvents") or []),
-                "AssetId":         asset_id,
-                "AssetName":       asset_name,
-                "OrganizationId":  detail.get("organizationId", org_id),
-                "CreatedAt":       detail.get("createdAt", ""),
-            })
+            events.append(
+                {
+                    "TimeGenerated": detail.get("updatedAt") or detail.get("createdAt"),
+                    "AssessmentId": detail.get("id", ""),
+                    "AssessmentName": detail.get("name", ""),
+                    "State": detail.get("state", ""),
+                    "Progress": detail.get("progress", 0),
+                    "AttackCredits": detail.get("attackCredits", 0),
+                    "RecentEvents": json.dumps(detail.get("recentEvents") or []),
+                    "AssetId": asset_id,
+                    "AssetName": asset_name,
+                    "OrganizationId": detail.get("organizationId", org_id),
+                    "CreatedAt": detail.get("createdAt", ""),
+                }
+            )
 
             asset_max_ts = _max_ts(asset_max_ts, record_ts)
 
@@ -438,6 +456,7 @@ def collect_assessment_events(
 # ---------------------------------------------------------------------------
 # Ingestion helper (batched upload)
 # ---------------------------------------------------------------------------
+
 
 def _ingest_batched(
     client: LogsIngestionClient,
@@ -459,7 +478,9 @@ def _ingest_batched(
         batch = events[i : i + INGEST_BATCH_SIZE]
         client.upload(rule_id=DCR_ID, stream_name=stream, logs=batch)
         total += len(batch)
-        logging.info(f"{logs_prefix}: Uploaded batch of {len(batch)} events to '{stream}' ({total}/{len(events)} total).")
+        logging.info(
+            f"{logs_prefix}: Uploaded batch of {len(batch)} events to '{stream}' ({total}/{len(events)} total)."
+        )
 
     logging.info(f"{logs_prefix}: Finished ingesting {total} event(s) → '{stream}'.")
 
@@ -467,6 +488,7 @@ def _ingest_batched(
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main(mytimer: func.TimerRequest) -> None:
     """Entry point for the timer-triggered Azure Function."""
@@ -476,21 +498,27 @@ def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.warning(f"{logs_prefix} {function_name}: Timer is running late!")
 
-    logging.info(f"{logs_prefix} {function_name}: Connector starting at {utc_timestamp}")
+    logging.info(
+        f"{logs_prefix} {function_name}: Connector starting at {utc_timestamp}"
+    )
 
     # ------------------------------------------------------------------
     # 1. Validate required application settings
     # ------------------------------------------------------------------
-    missing = [k for k, v in {
-        "XBOW_API_TOKEN":    XBOW_API_TOKEN,
-        "XBOW_ORG_ID":       XBOW_ORG_ID,
-        "TENANT_ID":         TENANT_ID,
-        "CLIENT_ID":         CLIENT_ID,
-        "CLIENT_SECRET":     CLIENT_SECRET,
-        "DCE_ENDPOINT":      DCE_ENDPOINT,
-        "DCR_ID":            DCR_ID,
-        "AzureWebJobsStorage": STORAGE_CONN_STR,
-    }.items() if not v]
+    missing = [
+        k
+        for k, v in {
+            "XBOW_API_TOKEN": XBOW_API_TOKEN,
+            "XBOW_ORG_ID": XBOW_ORG_ID,
+            "TENANT_ID": TENANT_ID,
+            "CLIENT_ID": CLIENT_ID,
+            "CLIENT_SECRET": CLIENT_SECRET,
+            "DCE_ENDPOINT": DCE_ENDPOINT,
+            "DCR_ID": DCR_ID,
+            "AzureWebJobsStorage": STORAGE_CONN_STR,
+        }.items()
+        if not v
+    ]
     if missing:
         raise EnvironmentError(
             f"{logs_prefix}: Missing required app settings: {', '.join(missing)}"
@@ -522,7 +550,9 @@ def main(mytimer: func.TimerRequest) -> None:
     asset_events, new_assets_last_seen = collect_asset_events(
         XBOW_ORG_ID, assets, state.assets
     )
-    logging.info(f"{logs_prefix}: {len(asset_events)} new/changed asset snapshot(s) to ingest.")
+    logging.info(
+        f"{logs_prefix}: {len(asset_events)} new/changed asset snapshot(s) to ingest."
+    )
 
     # ------------------------------------------------------------------
     # 5. Collect new/changed findings (with full enrichment)
@@ -531,7 +561,9 @@ def main(mytimer: func.TimerRequest) -> None:
     finding_events, new_findings_last_seen = collect_finding_events(
         XBOW_ORG_ID, assets, state.findings
     )
-    logging.info(f"{logs_prefix}: {len(finding_events)} new/changed finding(s) to ingest.")
+    logging.info(
+        f"{logs_prefix}: {len(finding_events)} new/changed finding(s) to ingest."
+    )
 
     # ------------------------------------------------------------------
     # 6. Collect new/changed assessments
@@ -540,7 +572,9 @@ def main(mytimer: func.TimerRequest) -> None:
     assessment_events, new_assessments_last_seen = collect_assessment_events(
         XBOW_ORG_ID, assets, state.assessments
     )
-    logging.info(f"{logs_prefix}: {len(assessment_events)} new/changed assessment(s) to ingest.")
+    logging.info(
+        f"{logs_prefix}: {len(assessment_events)} new/changed assessment(s) to ingest."
+    )
 
     # ------------------------------------------------------------------
     # 7. Create Sentinel ingestion client
@@ -580,7 +614,9 @@ def main(mytimer: func.TimerRequest) -> None:
         )
         raise
     except Exception as exc:
-        logging.error(f"{logs_prefix} {function_name}: Unexpected ingestion error: {exc}")
+        logging.error(
+            f"{logs_prefix} {function_name}: Unexpected ingestion error: {exc}"
+        )
         raise
 
     # ------------------------------------------------------------------
