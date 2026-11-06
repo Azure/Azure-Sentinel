@@ -356,12 +356,15 @@ class AsimIngestionHarness(AzureMonitorClient):
                     )
                     attempted_dcr_ids.append(raw_resource_id)
                     with self._stage("raw-dcr"):
+                        raw_transform = self.build_raw_replay_transform(
+                            source_table, schema
+                        )
                         raw_handle = self.create_dcr(
                             name=names["rawDcr"],
                             stream_name=names["rawStream"],
                             destination_name=names["destination"],
                             schema=schema,
-                            transform_kql="source",
+                            transform_kql=raw_transform,
                             output_stream=input_stream,
                         )
                 except HarnessError as exc:
