@@ -365,13 +365,18 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Materialize pull request content as untrusted data
         env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request base SHA."
+            exit 1
+          fi
           if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "::error::Invalid pull request number."
             exit 1
@@ -381,22 +386,56 @@ jobs:
             exit 1
           fi
           pr_data_dir="$RUNNER_TEMP/asim-pr-data"
-          git fetch --no-tags origin \
-            "refs/pull/$PR_NUMBER/head:refs/remotes/origin/asim-pr-head"
-          fetched_sha="$(
-            git rev-parse --verify \
-              "refs/remotes/origin/asim-pr-head^{commit}"
-          )"
-          if [ "$fetched_sha" != "$PR_HEAD_SHA" ]; then
-            echo "::error::Pull request head changed after this workflow was triggered."
+          trusted_base_ref="refs/remotes/origin/asim-trusted-base"
+          pr_head_ref="refs/remotes/origin/asim-pr-head"
+          merge_base=""
+
+          # Fetch only the pinned base and PR histories, deepening until Git
+          # can establish their relationship.
+          for depth in 1 32 128 512 2048 8192; do
+            echo "Fetching ASIM comparison refs at depth $depth."
+            git fetch --force --no-tags --filter=blob:none \
+              --depth="$depth" origin \
+              "+$BASE_SHA:$trusted_base_ref" \
+              "+refs/pull/$PR_NUMBER/head:$pr_head_ref"
+
+            fetched_base_sha="$(
+              git rev-parse --verify "$trusted_base_ref^{commit}"
+            )"
+            fetched_head_sha="$(
+              git rev-parse --verify "$pr_head_ref^{commit}"
+            )"
+            if [ "$fetched_base_sha" != "$BASE_SHA" ]; then
+              echo "::error::Trusted base revision does not match the workflow event."
+              exit 1
+            fi
+            if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+              echo "::error::Pull request head changed after this workflow was triggered."
+              exit 1
+            fi
+
+            if merge_base="$(
+              git merge-base "$trusted_base_ref" "$pr_head_ref"
+            )"; then
+              echo "Found merge base $merge_base at depth $depth."
+              break
+            fi
+          done
+
+          if [ -z "$merge_base" ]; then
+            echo "::error::Unable to establish a merge base within 8192 commits."
             exit 1
           fi
+
           git worktree add --detach \
-            "$pr_data_dir" "$PR_HEAD_SHA"
+            "$pr_data_dir" "$pr_head_ref"
           git -C "$pr_data_dir" config user.name "github-actions[bot]"
           git -C "$pr_data_dir" config user.email "<>"
           set +e
-          git -C "$pr_data_dir" merge --no-edit --no-commit origin/master
+          git -C "$pr_data_dir" merge \
+            --no-edit \
+            --no-commit \
+            "$trusted_base_ref"
           merge_exit=$?
           set -e
           conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
@@ -409,6 +448,7 @@ jobs:
             exit "$merge_exit"
           fi
           echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_BASE_REF=$trusted_base_ref" >> "$GITHUB_ENV"
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -424,7 +464,7 @@ jobs:
         run: |
           trusted_root="$RUNNER_TEMP/asim-trusted-repo"
           mkdir -p "$trusted_root"
-          git archive origin/master \
+          git archive "$ASIM_TRUSTED_BASE_REF" \
             .script/tests/asimParsersTest/ingestTimeParser \
             | tar -x -C "$trusted_root"
           trusted_dir="$trusted_root/.script/tests/asimParsersTest/ingestTimeParser"
@@ -440,7 +480,7 @@ jobs:
           python "$ASIM_TRUSTED_DIR/asim_ingest_time_validation.py" \
             discover \
             --repo-root "$ASIM_PR_DATA_DIR" \
-            --base-ref origin/master \
+            --base-ref "$ASIM_TRUSTED_BASE_REF" \
             --output asim-workflow/discovery.json
           discovery_exit=$?
           if [ "$discovery_exit" -eq 0 ]; then
@@ -513,13 +553,18 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Materialize pull request content as untrusted data
         env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request base SHA."
+            exit 1
+          fi
           if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "::error::Invalid pull request number."
             exit 1
@@ -529,22 +574,56 @@ jobs:
             exit 1
           fi
           pr_data_dir="$RUNNER_TEMP/asim-pr-data"
-          git fetch --no-tags origin \
-            "refs/pull/$PR_NUMBER/head:refs/remotes/origin/asim-pr-head"
-          fetched_sha="$(
-            git rev-parse --verify \
-              "refs/remotes/origin/asim-pr-head^{commit}"
-          )"
-          if [ "$fetched_sha" != "$PR_HEAD_SHA" ]; then
-            echo "::error::Pull request head changed after this workflow was triggered."
+          trusted_base_ref="refs/remotes/origin/asim-trusted-base"
+          pr_head_ref="refs/remotes/origin/asim-pr-head"
+          merge_base=""
+
+          # Fetch only the pinned base and PR histories, deepening until Git
+          # can establish their relationship.
+          for depth in 1 32 128 512 2048 8192; do
+            echo "Fetching ASIM comparison refs at depth $depth."
+            git fetch --force --no-tags --filter=blob:none \
+              --depth="$depth" origin \
+              "+$BASE_SHA:$trusted_base_ref" \
+              "+refs/pull/$PR_NUMBER/head:$pr_head_ref"
+
+            fetched_base_sha="$(
+              git rev-parse --verify "$trusted_base_ref^{commit}"
+            )"
+            fetched_head_sha="$(
+              git rev-parse --verify "$pr_head_ref^{commit}"
+            )"
+            if [ "$fetched_base_sha" != "$BASE_SHA" ]; then
+              echo "::error::Trusted base revision does not match the workflow event."
+              exit 1
+            fi
+            if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+              echo "::error::Pull request head changed after this workflow was triggered."
+              exit 1
+            fi
+
+            if merge_base="$(
+              git merge-base "$trusted_base_ref" "$pr_head_ref"
+            )"; then
+              echo "Found merge base $merge_base at depth $depth."
+              break
+            fi
+          done
+
+          if [ -z "$merge_base" ]; then
+            echo "::error::Unable to establish a merge base within 8192 commits."
             exit 1
           fi
+
           git worktree add --detach \
-            "$pr_data_dir" "$PR_HEAD_SHA"
+            "$pr_data_dir" "$pr_head_ref"
           git -C "$pr_data_dir" config user.name "github-actions[bot]"
           git -C "$pr_data_dir" config user.email "<>"
           set +e
-          git -C "$pr_data_dir" merge --no-edit --no-commit origin/master
+          git -C "$pr_data_dir" merge \
+            --no-edit \
+            --no-commit \
+            "$trusted_base_ref"
           merge_exit=$?
           set -e
           conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
@@ -557,6 +636,7 @@ jobs:
             exit "$merge_exit"
           fi
           echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_BASE_REF=$trusted_base_ref" >> "$GITHUB_ENV"
 
       - name: Download ingestion discovery artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -578,7 +658,7 @@ jobs:
         run: |
           trusted_root="$RUNNER_TEMP/asim-trusted-repo"
           mkdir -p "$trusted_root"
-          git archive origin/master \
+          git archive "$ASIM_TRUSTED_BASE_REF" \
             .script/tests/asimParsersTest/ingestTimeParser \
             | tar -x -C "$trusted_root"
           trusted_dir="$trusted_root/.script/tests/asimParsersTest/ingestTimeParser"
@@ -719,7 +799,7 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Initialize ingestion validation artifacts
         run: |
@@ -758,7 +838,7 @@ jobs:
         run: |
           trusted_root="$RUNNER_TEMP/asim-trusted-root"
           mkdir -p "$trusted_root"
-          git archive origin/master \
+          git archive HEAD \
             .script/tests/asimParsersTest/ingestTimeParser \
             ASIM/dev/ASimTester/Testers/ASimDataTester.yaml \
             | tar -x -C "$trusted_root"

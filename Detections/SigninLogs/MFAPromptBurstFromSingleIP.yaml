@@ -1,0 +1,54 @@
+id: 284c73e0-3e14-4698-9202-36fcd458034e
+name: Repeated failed MFA challenges for one user from one IP (AADSTS50074 / AADSTS500121)
+description: |
+  Identifies users with several AADSTS50074 (strong authentication required, the user did not pass the MFA challenge) or AADSTS500121 (authentication failed during the MFA challenge) sign-in results from the same IP address within one hour.
+  One such row is often normal, for example a user who ignores a prompt once. A burst from an IP or country the user does not use can indicate MFA fatigue (an attacker with the password generating prompts), and a later successful sign-in from the same IP suggests the user approved a prompt they did not start.
+  The threshold of 3 is a starting point, not a Microsoft number. Tune it against your own baseline.
+  Each run looks at the last hour only, matching the hourly schedule, so one burst raises one alert and not one per run.
+  Reference: https://learn.microsoft.com/en-us/entra/identity/monitoring-health/concept-interactive-sign-ins
+severity: Medium
+status: InPreview
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1621
+query: |
+  SigninLogs
+  | where TimeGenerated > ago(1h)
+  | where ResultType in ("50074", "500121")
+  | summarize Prompts = count(),
+              ResultTypes = make_set(ResultType),
+              FirstSeen = min(CreatedDateTime),
+              LastSeen = max(CreatedDateTime),
+              Apps = make_set(AppDisplayName, 5)
+            by UserPrincipalName, IPAddress
+  | where Prompts >= 3
+  | sort by Prompts desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Bram Brinkmeier
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

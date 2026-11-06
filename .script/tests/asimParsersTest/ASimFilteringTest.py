@@ -17,6 +17,7 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
 
 __unittest = True #prevents stacktrace during most assertions
 
@@ -291,8 +292,7 @@ def main():
         print(f"::error::An error occurred while executing the command: {e}")
         sys.stdout.flush()  # Explicitly flush stdout
     
-    # Get only YAML files
-    modified_yaml_files = [line for line in modified_files.stdout.splitlines() if line.endswith('.yaml')]
+    modified_yaml_files = filter_query_time_parser_files(modified_files.stdout.splitlines())
     print(f"{YELLOW}Following files has been detected as modified:{RESET}")
     sys.stdout.flush()  # Explicitly flush stdout
     for file in modified_yaml_files:
@@ -722,7 +722,8 @@ class FilteringTest(unittest.TestCase):
                 + f"query() | where has_any_ipv4_prefix(tostring({column_name_in_table}), dynamic([{filter_parameters}]))"
                 + f" | summarize count() by {column_name_in_table}\n"
             )
-            self.assertCountEqual(query_response.tables[0].rows, expected_response.tables[0].rows,
+            self.assertCountEqual([list(row) for row in query_response.tables[0].rows],
+                                  [list(row) for row in expected_response.tables[0].rows],
                                   f"Parameter: {parameter_name} - Results differ from KQL IPv4-prefix matching.")
         return (query_response, filter_parameters)
     

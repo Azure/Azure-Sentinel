@@ -1,0 +1,133 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 716cf6d4-97ad-407b-923e-6790083acb58
+    path: Analytic Rules/Dataverse - Mass deletion of records.yaml
+    version: 3.2.0
+    querySha256: 1fda77f72d49f7f68bdb2c3ccade3a5ee55e6c7bccb5c604cc8c5c27c94d11c4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+    reviewScope:
+      sourceDocumentSha256: 04b9ed11a9b60f1bc87a2116754fd29f77bba3c2c6d5c9a671b26cbebd0f25cb
+      targetQuerySha256: 3b790dc2745f0e6f74e77ec2b5fe82efaffa20bc32afe53ae1996cee02041c66
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-716cf6d4-97ad-407b-923e-6790083acb58
+  displayName: Dataverse - Mass deletion of records
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let mass_delete_threshold = 10000;
+      let query_frequency = 1d;
+      let delete_activities = DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where Message == "Delete";
+      union
+          (
+          delete_activities
+          | summarize FirstEvent = min(TimeGenerated), TotalEvents = count() by UserId, InstanceUrl
+          | where TotalEvents > mass_delete_threshold
+          | join kind=inner (
+              delete_activities
+              | summarize DeleteCount = count() by UserId, InstanceUrl, ClientIp, EntityName)
+              on UserId, InstanceUrl
+          | extend Entities = bag_pack("Entity", EntityName, "Count", DeleteCount)
+          | summarize Details = make_set(Entities, 100), FirstEvent = min(FirstEvent) by UserId, InstanceUrl, ClientIp, TotalEvents
+          ),
+          (
+          DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where Message == "BulkDelete"
+          | summarize FirstEvent = min(TimeGenerated), TotalEvents = count() by UserId, InstanceUrl, ClientIp
+          | extend Details = todynamic("Bulk delete scheduled")
+          )
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          FirstEvent,
+          UserId,
+          ClientIp,
+          TotalEvents,
+          Details,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Mass deletion of records
+      description: Identifies large scale record delete operations based on a predefined threshold and also detects scheduled
+        bulk deletion jobs.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

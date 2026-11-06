@@ -1,0 +1,122 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AWSS3
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 633a91df-d031-4b6e-a413-607a61540559
+    path: Analytic Rules/AWS_LogTampering.yaml
+    version: 1.0.6
+    querySha256: 04a0bc2e99cfeacbf0c03baf3de0329970f49d72f7ef16b763fcd8917b97b63c
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'EventTypeName' column `EventTypeName` requires runtime output-schema binding verification
+    - customDetails 'EventSource' column `EventSource` requires runtime output-schema binding verification
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - customDetails 'UserAgent' column `UserAgent` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.008
+    reviewScope:
+      sourceDocumentSha256: a60f4154d261147a3962c0f7f5f35a25e5b7864301bcbd391d4122c5810ba692
+      targetQuerySha256: 20a47cbb05a7f9f419fba55490f12aaf9be32c4bfe6f3be6429597a1cc4a5a0b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-633a91df-d031-4b6e-a413-607a61540559
+  displayName: AWSCloudTrail - Successful Tampering with AWS CloudTrail Logs
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let EventNameList = dynamic(["UpdateTrail","DeleteTrail","StopLogging","DeleteFlowLogs","DeleteEventBus","DeleteLogGroup"]);
+      AWSCloudTrail
+      | where (EventName in~ (EventNameList) or (EventName == "UpdateTrail" and (parse_json(RequestParameters).enableLogFileValidation) == false) or (EventName == "UpdateTrail" and (parse_json(RequestParameters).isMultiRegionTrail) == false)) and isempty(ErrorMessage) and isempty(ErrorCode)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+       AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,
+      UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Successful Tampering with AWS CloudTrail Logs
+      description: |-
+        Identifies successful attempts to disable, delete, or weaken AWS logging telemetry, including CloudTrail,
+        CloudWatch/EventBridge, and VPC flow logs. This behavior can indicate defense evasion and deliberate reduction
+        of incident visibility by an attacker.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.008
+      customDetails:
+        EventName: EventName
+        EventTypeName: EventTypeName
+        EventSource: EventSource
+        AWSRegion: AWSRegion
+        UserAgent: UserAgent
+        AccountCloudAppAccountId: RecipientAccountId

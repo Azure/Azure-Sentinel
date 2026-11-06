@@ -486,7 +486,8 @@ class FilteringTest(unittest.TestCase):
                 + f"query() | where has_any_ipv4_prefix(tostring({column_name_in_table}), dynamic([{filter_parameters}]))"
                 + f" | summarize count() by {column_name_in_table}\n"
             )
-            self.assertCountEqual(query_response.tables[0].rows, expected_response.tables[0].rows,
+            self.assertCountEqual([list(row) for row in query_response.tables[0].rows],
+                                  [list(row) for row in expected_response.tables[0].rows],
                                   f"Parameter: {parameter_name} - Results differ from KQL IPv4-prefix matching.")
         return (query_response, filter_parameters)
     

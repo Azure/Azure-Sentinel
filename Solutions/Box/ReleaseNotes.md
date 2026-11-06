@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.1.7       | 19-10-2026                     | Updated rule to compare the new user's email domain with the corporate domain from SrcUserUpn, normalizing both to lowercase. |
 | 3.1.6       | 11-08-2026                     | Added top-level action_by ingestion and exposed recorded_at through the parser. |
 | 3.1.5       | 09-07-2026                     | Updated **Parser** and **CCF Data Connector** DCR. |
 | 3.1.4       | 13-04-2026                     | Deprecate Box Events (using Azure Function) |

@@ -390,75 +390,6 @@
                         "name": "text - 2"
                     },
                     {
-                        "type": 9,
-                        "content": {
-                            "version": "KqlParameterItem/1.0",
-                            "parameters": [
-                                {
-                                    "id": "04187a88-ee78-4ddf-bab3-5ce201d0c3c1",
-                                    "version": "KqlParameterItem/1.0",
-                                    "name": "TimeRange",
-                                    "label": "Time Range",
-                                    "type": 4,
-                                    "typeSettings": {
-                                        "selectableValues": [
-                                            {
-                                                "durationMs": 900000
-                                            },
-                                            {
-                                                "durationMs": 1800000
-                                            },
-                                            {
-                                                "durationMs": 3600000
-                                            },
-                                            {
-                                                "durationMs": 14400000
-                                            },
-                                            {
-                                                "durationMs": 43200000
-                                            },
-                                            {
-                                                "durationMs": 86400000
-                                            },
-                                            {
-                                                "durationMs": 172800000
-                                            },
-                                            {
-                                                "durationMs": 259200000
-                                            },
-                                            {
-                                                "durationMs": 604800000
-                                            },
-                                            {
-                                                "durationMs": 1209600000
-                                            },
-                                            {
-                                                "durationMs": 2592000000
-                                            },
-                                            {
-                                                "durationMs": 5184000000
-                                            },
-                                            {
-                                                "durationMs": 7776000000
-                                            }
-                                        ],
-                                        "allowCustom": true
-                                    },
-                                    "timeContext": {
-                                        "durationMs": 86400000
-                                    },
-                                    "value": {
-                                        "durationMs": 2592000000
-                                    }
-                                }
-                            ],
-                            "style": "pills",
-                            "queryType": 0,
-                            "resourceType": "microsoft.operationalinsights/workspaces"
-                        },
-                        "name": "parameters - 3"
-                    },
-                    {
                         "type": 3,
                         "content": {
                             "version": "KqlItem/1.0",
@@ -597,7 +528,7 @@
                         "type": 3,
                         "content": {
                             "version": "KqlItem/1.0",
-                            "query": "let user_account_changes = materialize(SAPBTPAuditLog_CL\r\n    | where UpdatedOn between ({TimeRange:start} .. {TimeRange:end})\r\n    | where isnotempty(Message.object)\r\n    | where Message has \"scim user\"\r\n    | extend Attributes = parse_json(Message.attributes)\r\n    | mv-expand Attributes\r\n    | where isnotempty(Attributes.new)\r\n    | extend New = replace_regex(tostring(Attributes.new), \"\\\\r\", \"\")\r\n    | extend Old = replace_regex(tostring(Attributes.old), \"\\\\r\", \"\")\r\n    | extend Action = tostring(parse_json(tostring(parse_json(tostring(Message.object)).id)).crudType)\r\n    | project UpdatedOn, UserName, Action, Tenant, New, Old);\r\nlet unpack_object = (Changes: (UpdatedOn: datetime, UserName: string, Tenant:string, Action: string, Column: string, Value: string)) {\r\n    Changes\r\n    | extend Column = parse_json(Column)\r\n    | evaluate bag_unpack(Column): (\r\n        UpdatedOn: datetime\r\n        , UserName: string\r\n        , Tenant: string\r\n        , Action: string\r\n        , Value: string\r\n        , userName: string\r\n        , active: string\r\n        , emails: string\r\n        , externalId: string\r\n        , id: string\r\n        , meta: string\r\n        , name: string\r\n        , origin: string\r\n        , passwordLastModified: datetime\r\n        , verified: string\r\n        , zoneid: string)\r\n};\r\nlet old_user = user_account_changes\r\n    | project-away New\r\n    | project-rename Column = Old\r\n    | extend Value = \"Old\"\r\n    | where not (Action == \"CREATE\" and Value == \"Old\");\r\nlet new_user = user_account_changes\r\n    | project-away Old\r\n    | project-rename Column = New\r\n    | extend Value = \"New\";\r\nunion (unpack_object(old_user)), (unpack_object(new_user))\r\n| where UserName !startswith \"sb-\"\r\n| order by UpdatedOn desc, Value asc ",
+                            "query": "let user_account_changes = materialize(SAPBTPAuditLog_CL\r\n    | where UpdatedOn between ({TimeRange:start} .. {TimeRange:end})\r\n    | where isnotempty(Message.object)\r\n    | where Message has \"scim user\"\r\n    | extend Attributes = parse_json(Message.attributes)\r\n    | mv-expand Attributes\r\n    | where isnotempty(Attributes.new)\r\n    | extend New = replace_regex(tostring(Attributes.new), \"\\\\r\", \"\")\r\n    | extend Old = replace_regex(tostring(Attributes.old), \"\\\\r\", \"\")\r\n    | extend Action = tostring(parse_json(tostring(parse_json(tostring(Message.object)).id)).crudType)\r\n    | project UpdatedOn, UserName, Action, Tenant, New, Old);\r\nlet old_user = user_account_changes\r\n    | project-away New\r\n    | project-rename Column = Old\r\n    | extend Value = \"Old\"\r\n    | where not (Action == \"CREATE\" and Value == \"Old\");\r\nlet new_user = user_account_changes\r\n    | project-away Old\r\n    | project-rename Column = New\r\n    | extend Value = \"New\";\r\nunion old_user, new_user\r\n| extend Column = parse_json(Column)\r\n| evaluate bag_unpack(Column): (\r\n    UpdatedOn: datetime\r\n    , UserName: string\r\n    , Tenant: string\r\n    , Action: string\r\n    , Value: string\r\n    , userName: string\r\n    , active: string\r\n    , emails: string\r\n    , externalId: string\r\n    , id: string\r\n    , meta: string\r\n    , name: string\r\n    , origin: string\r\n    , passwordLastModified: datetime\r\n    , verified: string\r\n    , zoneid: string)\r\n| where UserName !startswith \"sb-\"\r\n| order by UpdatedOn desc, Value asc ",
                             "size": 0,
                             "title": "User account management activity",
                             "timeContextFromParameter": "TimeRange",
@@ -664,7 +595,7 @@
                         "type": 3,
                         "content": {
                             "version": "KqlItem/1.0",
-                            "query": "SAPBTPAuditLog_CL\r\n| where UpdatedOn between ({TimeRange:start} .. {TimeRange:end})\r\n| where Message has_any (\"xs_rolecollection2user\", \"xsrolecollection2role\", \"xsrolecollections\")\r\n| where UserName != \"client/hcp_onboarding\"\r\n| extend ChangeId = parse_json(tostring(parse_json(Message.object).id))\r\n| evaluate bag_unpack(ChangeId)\r\n| project-away TimeGenerated, Message, MessageUuid, OrgId, SpaceId, AlsServiceId, Category, Type, TenantId, _ResourceId\r\n| project-reorder UpdatedOn, UserName",
+                            "query": "SAPBTPAuditLog_CL\r\n| where UpdatedOn between ({TimeRange:start} .. {TimeRange:end})\r\n| where Message has_any (\"xs_rolecollection2user\", \"xsrolecollection2role\", \"xsrolecollections\")\r\n| where UserName != \"client/hcp_onboarding\"\r\n| extend ChangeId = parse_json(tostring(parse_json(Message.object).id))\r\n| evaluate bag_unpack(ChangeId)\r\n| project-away TimeGenerated, Message, MessageUuid, OrgId, SpaceId, AlsServiceId, Category\r\n| project-reorder UpdatedOn, UserName",
                             "size": 0,
                             "title": "Security role collection management events",
                             "timeContextFromParameter": "TimeRange",
@@ -733,59 +664,6 @@
                             "json": "# BTP Audit Coverage\r\n\r\nThis view identifies custom BTP applications that have user logins but no business audit trail. These applications may be missing audit log service bindings or `@AuditLog` annotations, creating security blind spots where user actions are invisible to monitoring."
                         },
                         "name": "text - audit-coverage"
-                    },
-                    {
-                        "type": 9,
-                        "content": {
-                            "version": "KqlParameterItem/1.0",
-                            "parameters": [
-                                {
-                                    "id": "b7e2a1c4-3d5f-48e9-a0b6-c1d2e3f4a5b7",
-                                    "version": "KqlParameterItem/1.0",
-                                    "name": "TimeRange",
-                                    "label": "Time Range",
-                                    "type": 4,
-                                    "typeSettings": {
-                                        "selectableValues": [
-                                            {
-                                                "durationMs": 3600000
-                                            },
-                                            {
-                                                "durationMs": 14400000
-                                            },
-                                            {
-                                                "durationMs": 43200000
-                                            },
-                                            {
-                                                "durationMs": 86400000
-                                            },
-                                            {
-                                                "durationMs": 259200000
-                                            },
-                                            {
-                                                "durationMs": 604800000
-                                            },
-                                            {
-                                                "durationMs": 1209600000
-                                            },
-                                            {
-                                                "durationMs": 2592000000
-                                            }
-                                        ]
-                                    },
-                                    "timeContext": {
-                                        "durationMs": 86400000
-                                    },
-                                    "value": {
-                                        "durationMs": 604800000
-                                    }
-                                }
-                            ],
-                            "style": "pills",
-                            "queryType": 0,
-                            "resourceType": "microsoft.operationalinsights/workspaces"
-                        },
-                        "name": "parameters - audit-coverage"
                     },
                     {
                         "type": 3,
@@ -949,47 +827,6 @@
                         "content": {
                             "version": "KqlParameterItem/1.0",
                             "parameters": [
-                                {
-                                    "id": "a1b2c3d4-5e6f-47a8-b9c0-d1e2f3a4b5c6",
-                                    "version": "KqlParameterItem/1.0",
-                                    "name": "TimeRange",
-                                    "label": "Time Range",
-                                    "type": 4,
-                                    "typeSettings": {
-                                        "selectableValues": [
-                                            {
-                                                "durationMs": 3600000
-                                            },
-                                            {
-                                                "durationMs": 14400000
-                                            },
-                                            {
-                                                "durationMs": 43200000
-                                            },
-                                            {
-                                                "durationMs": 86400000
-                                            },
-                                            {
-                                                "durationMs": 259200000
-                                            },
-                                            {
-                                                "durationMs": 604800000
-                                            },
-                                            {
-                                                "durationMs": 1209600000
-                                            },
-                                            {
-                                                "durationMs": 2592000000
-                                            }
-                                        ]
-                                    },
-                                    "timeContext": {
-                                        "durationMs": 86400000
-                                    },
-                                    "value": {
-                                        "durationMs": 604800000
-                                    }
-                                },
                                 {
                                     "id": "b2c3d4e5-6f7a-48b9-c0d1-e2f3a4b5c6d7",
                                     "version": "KqlParameterItem/1.0",

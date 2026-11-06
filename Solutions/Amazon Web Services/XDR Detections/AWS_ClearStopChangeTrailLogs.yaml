@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AWSS3
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 610d3850-c26f-4f20-8d86-f10fdf2425f5
+    path: Analytic Rules/AWS_ClearStopChangeTrailLogs.yaml
+    version: 1.0.6
+    querySha256: f861d9c2c8dcc29aa4d989aed98cc6a32fe2d61e576daacc4fd86b2fb47cfa8d
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'EventTypeName' column `EventTypeName` requires runtime output-schema binding verification
+    - customDetails 'EventSource' column `EventSource` requires runtime output-schema binding verification
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - customDetails 'UserAgent' column `UserAgent` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.008
+    reviewScope:
+      sourceDocumentSha256: cf243e0feddeb6e7d2b1ea17ccaad1404f86201477615e9bcd7fe921656a5200
+      targetQuerySha256: 9f50f4543a9efbd897dc1ffe359c94f49e18c44596e87c7414fbb652e7270cab
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-610d3850-c26f-4f20-8d86-f10fdf2425f5
+  displayName: AWSCloudTrail - Failed Attempts to Change AWS CloudTrail Logs
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let EventNameList = dynamic(["UpdateTrail","DeleteTrail","StopLogging","DeleteFlowLogs","DeleteEventBus","DeleteLogGroup"]);
+      AWSCloudTrail
+      | where (EventName in~ (EventNameList) or (EventName == "UpdateTrail" and (parse_json(RequestParameters).enableLogFileValidation) == false) or (EventName == "UpdateTrail" and (parse_json(RequestParameters).isMultiRegionTrail) == false)) and (isnotempty(ErrorMessage) or isnotempty(ErrorCode))
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,
+      UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Failed Attempts to Change AWS CloudTrail Logs
+      description: "Identifies FAILED or denied attempts to manipulate AWS CloudTrail, CloudWatch/EventBridge, or VPC Flow\
+        \ Logs.\nSuccessful manipulation is covered by the higher-severity 'AWSCloudTrail - Successful Tampering with AWS\
+        \ CloudTrail Logs' rule.\nThese failed attempts can indicate reconnaissance or an actor probing for insufficient permissions\
+        \ as part of defense evasion.\nFor more information, visit: \n\nAWS CloudTrail API: https://docs.aws.amazon.com/awscloudtrail/latest/APIReference/API_Operations.html\
+        \ \n\nAWS CloudWatch/EventBridge API: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Opera"
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.008
+      customDetails:
+        EventName: EventName
+        EventTypeName: EventTypeName
+        EventSource: EventSource
+        AWSRegion: AWSRegion
+        UserAgent: UserAgent
+        AccountCloudAppAccountId: RecipientAccountId

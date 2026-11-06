@@ -1,0 +1,114 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f8ea7d50-e33b-4b9d-9c3e-a59fcbcee281
+    path: Analytic Rules/AWS_NetworkACLOpenToAllPorts.yaml
+    version: 1.0.3
+    querySha256: 6e574c669ab9b540bd29bad65a1f3aad68f46f547f568d84f7eb414d8dc934b9
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.007
+    reviewScope:
+      sourceDocumentSha256: f75ad69106beb2ae4b01b4409178c28263c83add2a85e1895c0a1ad60a6c72bc
+      targetQuerySha256: b95547a8b18741512748c863463b0c762a00fd6519982623dcdd0de86606d5da
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-f8ea7d50-e33b-4b9d-9c3e-a59fcbcee281
+  displayName: AWSCloudTrail - Network ACL with all the open ports to a specified CIDR
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where EventName in ('CreateNetworkAclEntry', 'ReplaceNetworkAclEntry') and isempty(ErrorMessage) and isempty(ErrorCode)
+      | extend ruleAction = tostring(parse_json(RequestParameters)['ruleAction']),
+               egress=parse_json(RequestParameters)['egress'],
+               total_ports=(toint(parse_json(parse_json(RequestParameters)['portRange'])['to']) - toint(parse_json(parse_json(RequestParameters)['portRange'])['from'])),
+               aclProtocol=parse_json(RequestParameters)['aclProtocol']
+      | where isnotempty(total_ports)
+      | where ruleAction == 'allow' and egress == false and (aclProtocol == '-1' or (total_ports > 1024))
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Network ACL with all the open ports to a specified CIDR
+      description: |-
+        Detects Network ACL entries that allow very broad inbound access ranges, including all protocols or large port
+        ranges. Such changes can significantly increase exposure and may indicate weakening of cloud network controls.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.007
+      customDetails:
+        EventName: EventName
+        RuleAction: ruleAction
+        AclProtocol: aclProtocol
+        AWSRegion: AWSRegion
+        AccountCloudAppAccountId: RecipientAccountId

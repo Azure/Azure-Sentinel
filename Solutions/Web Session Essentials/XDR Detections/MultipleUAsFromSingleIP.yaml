@@ -1,0 +1,126 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 813ccf3b-0321-4622-b0bc-63518fd14454
+    path: Analytic Rules/MultipleUAsFromSingleIP.yaml
+    version: 1.0.1
+    querySha256: 0d443368b822e92b692b986296d8bd8cec283dc6cd250850383937734698453e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'UserAgentCount' column `UserAgentCount` requires runtime output-schema binding verification
+    - customDetails 'UserAgentArray' column `UserAgentList` requires runtime output-schema binding verification
+    - customDetails 'UserAgentThreshold' column `Threshold` requires runtime output-schema binding verification
+    - customDetails 'URLs' column `URL_List` requires runtime output-schema binding verification
+    - customDetails 'DestinationIPList' column `DestinationIPList` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - CredentialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    - T1528
+    reviewScope:
+      sourceDocumentSha256: 062612dc037ec60247a7fec459dc59402f817f62088fc0c6f528b57166a24b04
+      targetQuerySha256: 67261e7c89bdf751e3aa7b9b4525c019e2e0523719ebe4b12a69f9ff4b6c3d1a
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 062612dc037ec60247a7fec459dc59402f817f62088fc0c6f528b57166a24b04
+      targetQuerySha256: 67261e7c89bdf751e3aa7b9b4525c019e2e0523719ebe4b12a69f9ff4b6c3d1a
+properties:
+  id: xdr-813ccf3b-0321-4622-b0bc-63518fd14454
+  displayName: Identify instances where a single source is observed using multiple user agents (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 5; // Please update threshold limit as per your environment
+      _Im_WebSession(starttime=ago(1h), eventresult="Success")
+      | where isnotempty(HttpUserAgent)
+      | summarize
+          EventCount=count(),
+          UserAgentList=make_set(HttpUserAgent, 100),
+          URL_List = make_set(Url, 100),
+          DestinationIPList = make_set(DstIpAddr, 100)
+          by SrcIpAddr, SrcUsername, SrcHostname, bin(TimeGenerated, 5min)
+      | extend UserAgentCount = array_length(UserAgentList)
+      | where UserAgentCount > threshold
+      | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),""), Threshold=threshold
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Identify instances where a single source is observed using multiple user agents (ASIM Web Session)
+      description: '''This detection mechanism identifies requests originating from a single source within a brief time period
+        that exhibit multiple user agents. Such behavior could indicate unusual web browsing activities performed by unconventional
+        processes'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        hosts:
+        - id: host1
+          nameColumn: SrcHostname
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1528
+      customDetails:
+        UserAgentCount: UserAgentCount
+        UserAgentArray: UserAgentList
+        UserAgentThreshold: Threshold
+        URLs: URL_List
+        DestinationIPList: DestinationIPList

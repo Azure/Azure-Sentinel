@@ -1,0 +1,145 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: Workday
+  dataTypes:
+  - Workday
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ASimAuditEventLogs
+    - Event
+    - ThreatIntelIndicators
+    - Workday
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: Workday
+    dataTypes:
+    - Workday
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 92e8e945-6e99-4e4b-bef8-468b4c19fc3a
+    path: Analytic Rules/IPEntity_Workday_Updated.yaml
+    version: 1.0.4
+    querySha256: 6042c27d68e8201269f25818321febc015515e23133741058cd3ced821561c64
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.4
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `ActorUsername`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `ActorUsername` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 14664afc1bfaad6c3b0abcbab9103eff5a8e90ef3c45b7e7c5b299e027488888
+      targetQuerySha256: afdaf79df33a2434d848a1e29fae6957915822d50f63d6df74ea3ed1c4e06e87
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorUsername
+      column: ActorUsername
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-92e8e945-6e99-4e4b-bef8-468b4c19fc3a
+  displayName: TI Map IP entity to Workday(ASimAuditEventLogs)
+  status: disabled
+  queryCondition:
+    queryText: "let dtLookBack = 1h; // Define the lookback period for audit events\n\
+      let ioc_lookBack = 14d; // Define the lookback period for threat intelligence\
+      \ indicators\nThreatIntelIndicators\n| where TimeGenerated >= ago(ioc_lookBack)\
+      \ // Filter threat intelligence indicators within the lookback period\n//extract\
+      \ key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\
+      \"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType\
+      \ in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP\
+      \ = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      \     | where isnotempty(NetworkSourceIP)\n| summarize LatestIndicatorTime =\
+      \ arg_max(TimeGenerated, *) by Id, ObservableValue // Get the latest indicator\
+      \ time for each IndicatorId\n  | extend TI_ipEntity = coalesce(NetworkSourceIP,\
+      \ NetworkSourceIP, NetworkSourceIP, NetworkSourceIP) // Combine IP fields into\
+      \ a single entity\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\
+      \ // Filter for active indicators that have not expired\n  | project-reorder\
+      \ *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n \
+      \ | join kind=inner (\n      ASimAuditEventLogs\n      | where EventVendor ==\
+      \ \"Workday\" // Filter for Workday events\n      | where TimeGenerated >= ago(dtLookBack)\
+      \ // Filter events within the lookback period\n      | where isnotempty(DvcIpAddr)\
+      \ // Filter for events with a device IP address\n      | extend WD_TimeGenerated\
+      \ = EventStartTime // Rename the event start time column\n      | project WD_TimeGenerated,\
+      \ ActorUsername, DvcIpAddr, Operation, Object // Select relevant columns\n \
+      \     )\n      on $left.TI_ipEntity == $right.DvcIpAddr // Join on the IP entity\n\
+      \      | extend Description = tostring(parse_json(Data).description)\n     \
+      \ | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      \  | project\n      LatestIndicatorTime,\n      Description,\n      ActivityGroupNames,\n\
+      \      Id,\n      ValidUntil,\n      Confidence,\n      WD_TimeGenerated,\n\
+      \      ActorUsername,\n      DvcIpAddr,\n      Operation,\n      Object // Select\
+      \ relevant columns after the join\n  | extend\n      timestamp = WD_TimeGenerated,\n\
+      \      Name = tostring(split(ActorUsername, '@', 0)),\n      UPNSuffix = tostring(split(ActorUsername,\
+      \ '@', 1)) // Add additional fields for timestamp, name, and UPN suffix"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP entity to Workday(ASimAuditEventLogs)
+      description: Detects a match in Workday activity from any IP Indicator of Compromise
+        (IOC) provided by Threat Intelligence (TI).
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: DvcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountFullName: ActorUsername
