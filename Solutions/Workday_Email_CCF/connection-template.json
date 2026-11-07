@@ -1,0 +1,125 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.1.0",
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Existing Microsoft Sentinel Log Analytics workspace name."
+      }
+    },
+    "connectorDefinitionName": {
+      "type": "string",
+      "defaultValue": "WorkdayEmailCCPDefinition",
+      "allowedValues": [
+        "WorkdayEmailCCPDefinition"
+      ]
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "minLength": 1
+    },
+    "tokenEndpoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authorizationEndpoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "apiEndpoint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "scope": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "clientId": {
+      "type": "securestring",
+      "minLength": 1
+    },
+    "clientSecret": {
+      "type": "securestring",
+      "minLength": 1
+    },
+    "authorizationCode": {
+      "type": "securestring",
+      "minLength": 1,
+      "metadata": {
+        "description": "Fresh authorization code supplied by the Sentinel OAuth form. Never use a placeholder or replay a redeemed code."
+      }
+    },
+    "dcrConfig": {
+      "type": "object",
+      "metadata": {
+        "description": "Sentinel-supplied dataCollectionEndpoint (logs ingestion URL) and dataCollectionRuleImmutableId."
+      }
+    }
+  },
+  "resources": [
+    {
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/WorkdayEmail-', uniqueString(parameters('apiEndpoint')))]",
+      "apiVersion": "2022-12-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "RestApiPoller",
+      "properties": {
+        "connectorDefinitionName": "WorkdayEmailCCPDefinition",
+        "dataType": "ASimAuditEventLogs",
+        "dcrConfig": {
+          "dataCollectionEndpoint": "[parameters('dcrConfig').dataCollectionEndpoint]",
+          "dataCollectionRuleImmutableId": "[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+          "streamName": "Custom-WorkdayEmailActivity"
+        },
+        "auth": {
+          "type": "OAuth2",
+          "ClientId": "[parameters('clientId')]",
+          "ClientSecret": "[parameters('clientSecret')]",
+          "AuthorizationCode": "[parameters('authorizationCode')]",
+          "GrantType": "authorization_code",
+          "TokenEndpoint": "[parameters('tokenEndpoint')]",
+          "AuthorizationEndpoint": "[parameters('authorizationEndpoint')]",
+          "RedirectUri": "https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights",
+          "Scope": "[parameters('scope')]",
+          "TokenEndpointHeaders": {
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          "AuthorizationEndpointQueryParameters": {
+            "redirect": "n"
+          }
+        },
+        "request": {
+          "apiEndpoint": "[parameters('apiEndpoint')]",
+          "httpMethod": "GET",
+          "rateLimitQPS": 10,
+          "queryWindowInMin": 5,
+          "retryCount": 3,
+          "timeoutInSeconds": 60,
+          "headers": {
+            "Accept": "application/json"
+          },
+          "startTimeAttributeName": "After_Date_Time",
+          "endTimeAttributeName": "Before_Date_Time",
+          "queryParameters": {
+            "After_Date_Time": "{_QueryWindowStartTime}",
+            "Before_Date_Time": "{_QueryWindowEndTime}",
+            "format": "json"
+          }
+        },
+        "response": {
+          "eventsJsonPaths": [
+            "$.Report_Entry"
+          ],
+          "format": "json"
+        },
+        "addOnAttributes": {
+          "apiEndpoint": "[parameters('apiEndpoint')]"
+        }
+      }
+    }
+  ]
+}

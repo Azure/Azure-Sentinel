@@ -1,0 +1,563 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.1.0",
+  "metadata": {
+    "title": "Workday Email Activity CCF installer",
+    "description": "Installs a custom RaaS connector without credentials or an active poller. Complete OAuth in Microsoft Sentinel after deployment."
+  },
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Existing Microsoft Sentinel workspace in this resource group."
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region of the Log Analytics workspace. Override if different from the resource group region."
+      }
+    },
+    "existingDataCollectionEndpointResourceId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional existing DCE resource ID in the workspace region. Leave empty to create a dedicated public DCE. Do not supply an ingestion URL here."
+      }
+    },
+    "dataCollectionRuleName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional dedicated DCR name, created by Sentinel when connecting. Do not use a DCR still managed by Terraform or another connector."
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+    "connectorVersion": "1.0.1",
+    "solutionVersion": "3.0.1",
+    "solutionName": "Workday Email Activity",
+    "solutionAuthor": "CSA Team",
+    "solutionId": "azuresentinel.azure-sentinel-solution-azuresentinel.azure-sentinel-workday-email",
+    "connectorDefinitionName": "WorkdayEmailCCPDefinition",
+    "connectionsContentId": "WorkdayEmailTemplateConnections",
+    "definitionTemplateName": "[concat(parameters('workspace'), '-dc-', uniqueString(variables('connectorDefinitionName')), variables('connectorVersion'))]",
+    "connectionsTemplateName": "[concat(parameters('workspace'), '-dc-', uniqueString('WorkdayEmailTemplateConnections'), variables('connectorVersion'))]",
+    "dceName": "[concat('dce-workday-email-', uniqueString(variables('workspaceResourceId')))]",
+    "dceResourceId": "[if(empty(parameters('existingDataCollectionEndpointResourceId')), resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), parameters('existingDataCollectionEndpointResourceId'))]",
+    "dcrName": "[if(empty(parameters('dataCollectionRuleName')), concat('dcr-workday-email-', uniqueString(variables('workspaceResourceId'))), parameters('dataCollectionRuleName'))]",
+    "connectorMetadata": {
+      "parentId": "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('connectorDefinitionName'))]",
+      "contentId": "[variables('connectorDefinitionName')]",
+      "kind": "DataConnector",
+      "version": "[variables('connectorVersion')]",
+      "source": {
+        "sourceId": "[variables('solutionId')]",
+        "name": "[variables('solutionName')]",
+        "kind": "Solution"
+      },
+      "author": {
+        "name": "[variables('solutionAuthor')]"
+      },
+      "support": {
+        "name": "[variables('solutionAuthor')]",
+        "tier": "Community"
+      },
+      "dependencies": {
+        "criteria": [
+          {
+            "version": "[variables('connectorVersion')]",
+            "contentId": "[variables('connectionsContentId')]",
+            "kind": "ResourcesDataConnector"
+          }
+        ]
+      }
+    },
+    "dcrProperties": {
+      "dataCollectionEndpointId": "[variables('dceResourceId')]",
+      "streamDeclarations": {
+        "Custom-WorkdayEmailActivity": {
+          "columns": [
+            {
+              "name": "DateTimeStamp",
+              "type": "string"
+            },
+            {
+              "name": "EmailIDAfter",
+              "type": "string"
+            },
+            {
+              "name": "EmailIDBefore",
+              "type": "string"
+            },
+            {
+              "name": "Employee_ID",
+              "type": "string"
+            },
+            {
+              "name": "Login_ID",
+              "type": "string"
+            },
+            {
+              "name": "TargetID",
+              "type": "string"
+            },
+            {
+              "name": "Worker",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "destinations": {
+        "logAnalytics": [
+          {
+            "workspaceResourceId": "[variables('workspaceResourceId')]",
+            "name": "workspace"
+          }
+        ]
+      },
+      "dataFlows": [
+        {
+          "streams": [
+            "Custom-WorkdayEmailActivity"
+          ],
+          "destinations": [
+            "workspace"
+          ],
+          "transformKql": "source\n| project TimeGenerated = todatetime(DateTimeStamp), EventStartTime = todatetime(DateTimeStamp), EventEndTime = todatetime(DateTimeStamp), EventCount = toint(1), EventProduct = \"Workday\", EventVendor = \"Workday\", EventSchemaVersion = \"0.1\", EventResult = \"Success\", EventType = \"Set\", Operation = \"Email Activity\", ObjectType = \"Other\", Object = Worker, OldValue = EmailIDBefore, NewValue = EmailIDAfter, ActorUserId = Employee_ID, ActorUsername = Login_ID, EventOriginalUid = TargetID",
+          "outputStream": "Microsoft-ASimAuditEventLogs"
+        }
+      ]
+    },
+    "connectorUiConfig": {
+      "id": "WorkdayEmailCCPDefinition",
+      "title": "Workday Email Activity (via Codeless Connector Framework)",
+      "publisher": "CSA Team",
+      "descriptionMarkdown": "Collect completed Email ID Change events from a Workday Report-as-a-Service (RaaS) custom report into ASimAuditEventLogs. This custom connector is not the Microsoft Workday User Activity connector and does not support WQL endpoints. The report must return all matching rows in one Report_Entry array and honor After_Date_Time and Before_Date_Time prompts.",
+      "graphQueriesTableName": "ASimAuditEventLogs",
+      "graphQueries": [
+        {
+          "metricName": "Total events received",
+          "legend": "Workday Email Activity",
+          "baseQuery": "{{graphQueriesTableName}}\n| where EventProduct == \"Workday\" and Operation == \"Email Activity\""
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Recent Workday email address changes",
+          "query": "{{graphQueriesTableName}}\n| where EventProduct == \"Workday\" and Operation == \"Email Activity\"\n| project TimeGenerated, ActorUserId, ActorUsername, Object, OldValue, NewValue, EventOriginalUid\n| take 100"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| where EventProduct == \"Workday\" and Operation == \"Email Activity\"\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": true
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Workspace read, write, and delete permissions.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Azure data collection resources",
+            "description": "Permission to create data collection rules in the resource group. The ARM installer creates a data collection endpoint unless an existing endpoint resource ID is supplied."
+          },
+          {
+            "name": "Workday RaaS and OAuth access",
+            "description": "An OAuth authorization-code API client with a Bearer access token, report access for the authorizing user, and the Workday functional-area permissions required by the custom report."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Prepare the Workday custom report and API client",
+          "description": "1. Enable OAuth 2.0 clients in Workday tenant security settings.\n2. Enable the Email ID Change report as a web service. Confirm it returns Report_Entry with DateTimeStamp, EmailIDAfter, EmailIDBefore, Employee_ID, Login_ID, TargetID, and Worker. DateTimeStamp must be an ISO 8601 timestamp with a time zone. Configure After_Date_Time and Before_Date_Time prompts to return the complete five-minute interval without pagination or truncation.\n3. Register an API client with Authorization Code Grant and Bearer access tokens. Grant the functional-area permissions required by this report and authorize with a user permitted to run it.\n4. Register exactly this redirect URI: https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights\n5. Retrieve token and authorization URLs from View API Clients in the same Workday tenant. Do not copy example hosts or use a WQL URL.\n6. Enter credentials only in the OAuth form below. Click Connect once and complete Workday consent. Each attempt must obtain a fresh authorization code; do not deploy placeholder or previously redeemed codes."
+        },
+        {
+          "title": "Connect the Workday Email ID Change report",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Token endpoint",
+                "placeholder": "https://<services-host>/ccx/oauth2/<tenant>/token",
+                "type": "text",
+                "name": "tokenEndpoint",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "Authorization endpoint (without query parameters)",
+                "placeholder": "https://<authorization-host>/<tenant>/authorize",
+                "type": "text",
+                "name": "authorizationEndpoint",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "RaaS report endpoint (without query parameters)",
+                "placeholder": "https://<services-host>/ccx/service/customreport2/<tenant>/<report-owner>/<report-name>",
+                "type": "text",
+                "name": "apiEndpoint",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "OAuth scope (only if required by your Workday API client)",
+                "placeholder": "Use the exact OAuth scope confirmed by your Workday administrator, or leave empty",
+                "type": "text",
+                "name": "scope"
+              }
+            },
+            {
+              "type": "OAuthForm",
+              "parameters": {
+                "clientIdLabel": "Client ID",
+                "clientSecretLabel": "Client Secret",
+                "connectButtonLabel": "Connect",
+                "disconnectButtonLabel": "Disconnect"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "resources": [
+    {
+      "condition": "[empty(parameters('existingDataCollectionEndpointResourceId'))]",
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('dceName')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('definitionTemplateName'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/contentPackages', variables('solutionId'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('connectorDefinitionName')]",
+        "displayName": "[variables('solutionName')]",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.1.0",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/DataConnector-', variables('connectorDefinitionName'))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": "[variables('connectorMetadata')]"
+            },
+            {
+              "name": "[variables('dcrName')]",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "properties": "[variables('dcrProperties')]"
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('solutionVersion')]",
+        "packageName": "[variables('solutionName')]",
+        "contentProductId": "[concat(substring(variables('solutionId'), 0, 50), '-dc-', uniqueString(concat(variables('solutionId'), '-DataConnector-', variables('connectorDefinitionName'), '-', variables('connectorVersion'))))]",
+        "packageId": "[variables('solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('solutionVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('connectorDefinitionName'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": "[variables('connectorUiConfig')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/DataConnector-', variables('connectorDefinitionName'))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "dependsOn": [
+        "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('connectorDefinitionName'))]",
+        "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/contentTemplates', variables('definitionTemplateName'))]",
+        "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/contentTemplates', variables('connectionsTemplateName'))]"
+      ],
+      "properties": "[variables('connectorMetadata')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('connectionsTemplateName'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(variables('workspaceResourceId'), 'Microsoft.SecurityInsights/contentPackages', variables('solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('connectionsContentId')]",
+        "displayName": "[concat(variables('solutionName'), ' connection')]",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.1.0",
+          "parameters": {
+            "workspace": {
+              "type": "string",
+              "defaultValue": "[parameters('workspace')]",
+              "minLength": 1
+            },
+            "connectorDefinitionName": {
+              "type": "string",
+              "defaultValue": "[variables('connectorDefinitionName')]"
+            },
+            "workspace-location": {
+              "type": "string",
+              "defaultValue": "[parameters('workspace-location')]",
+              "minLength": 1
+            },
+            "tokenEndpoint": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authorizationEndpoint": {
+              "type": "string",
+              "minLength": 1
+            },
+            "apiEndpoint": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "clientId": {
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "type": "securestring",
+              "minLength": 1
+            },
+            "authorizationCode": {
+              "type": "securestring",
+              "minLength": 1
+            },
+            "dcrConfig": {
+              "type": "object"
+            }
+          },
+          "resources": [
+            {
+              "name": "[[concat(parameters('workspace'), '/Microsoft.SecurityInsights/WorkdayEmail-', uniqueString(parameters('apiEndpoint')))]",
+              "apiVersion": "2022-12-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "WorkdayEmailCCPDefinition",
+                "dataType": "ASimAuditEventLogs",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-WorkdayEmailActivity"
+                },
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "AuthorizationCode": "[[parameters('authorizationCode')]",
+                  "GrantType": "authorization_code",
+                  "TokenEndpoint": "[[parameters('tokenEndpoint')]",
+                  "AuthorizationEndpoint": "[[parameters('authorizationEndpoint')]",
+                  "RedirectUri": "https://portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights",
+                  "Scope": "[[parameters('scope')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "AuthorizationEndpointQueryParameters": {
+                    "redirect": "n"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[parameters('apiEndpoint')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 5,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json"
+                  },
+                  "startTimeAttributeName": "After_Date_Time",
+                  "endTimeAttributeName": "Before_Date_Time",
+                  "queryParameters": {
+                    "After_Date_Time": "{_QueryWindowStartTime}",
+                    "Before_Date_Time": "{_QueryWindowEndTime}",
+                    "format": "json"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.Report_Entry"
+                  ],
+                  "format": "json"
+                },
+                "addOnAttributes": {
+                  "apiEndpoint": "[[parameters('apiEndpoint')]"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('workspace'), '/Microsoft.SecurityInsights/DataConnector-WorkdayEmail-', uniqueString(parameters('apiEndpoint')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "dependsOn": [
+                "[[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', concat('WorkdayEmail-', uniqueString(parameters('apiEndpoint'))))]"
+              ],
+              "properties": {
+                "parentId": "[[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', concat('WorkdayEmail-', uniqueString(parameters('apiEndpoint'))))]",
+                "contentId": "[variables('connectionsContentId')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('connectorVersion')]",
+                "source": {
+                  "sourceId": "[variables('solutionId')]",
+                  "name": "[variables('solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('solutionAuthor')]",
+                  "tier": "Community"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('solutionVersion')]",
+        "packageName": "[variables('solutionName')]",
+        "contentProductId": "[concat(substring(variables('solutionId'), 0, 50), '-rdc-', uniqueString(concat(variables('solutionId'), '-ResourcesDataConnector-', variables('connectionsContentId'), '-', variables('connectorVersion'))))]",
+        "packageId": "[variables('solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('solutionVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', variables('solutionId'))]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "[variables('solutionVersion')]",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "[variables('solutionName')]",
+          "sourceId": "[variables('solutionId')]"
+        },
+        "author": {
+          "name": "[variables('solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('solutionAuthor')]",
+          "tier": "Community"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('connectorDefinitionName')]",
+              "version": "[variables('connectorVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-05-13",
+        "providers": [
+          "[variables('solutionAuthor')]"
+        ],
+        "contentKind": "Solution",
+        "packageId": "[variables('solutionId')]",
+        "contentProductId": "[concat(substring(variables('solutionId'), 0, 50), '-sl-', uniqueString(concat(variables('solutionId'), '-Solution-', variables('solutionId'), '-', variables('solutionVersion'))))]",
+        "displayName": "[variables('solutionName')]",
+        "publisherDisplayName": "[variables('solutionAuthor')]",
+        "descriptionHtml": "Custom Workday RaaS Email ID Change connector. Complete OAuth in Microsoft Sentinel after installation."
+      }
+    }
+  ],
+  "outputs": {
+    "connectorDefinitionName": {
+      "type": "string",
+      "value": "[variables('connectorDefinitionName')]"
+    },
+    "dataCollectionEndpointResourceId": {
+      "type": "string",
+      "value": "[variables('dceResourceId')]"
+    },
+    "dataCollectionRuleName": {
+      "type": "string",
+      "value": "[variables('dcrName')]"
+    },
+    "nextStep": {
+      "type": "string",
+      "value": "Open Microsoft Sentinel > Data connectors > Workday Email Activity (via Codeless Connector Framework), enter Workday endpoints and OAuth credentials, and click Connect once. Sentinel creates the DCR and poller after authorization."
+    }
+  }
+}
