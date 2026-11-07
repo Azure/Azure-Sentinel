@@ -1,0 +1,183 @@
+id: e9c8ebfd-e5bb-4a9e-9858-12907398cf5d
+name: Samsung Knox - Potential Multistage Attack Detected
+version: 1.0.0
+kind: Scheduled
+description: |
+  'Indicates potential threats based on detecting multi-stage attacks, initially focused on suspicious URL and app sideloading events'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SamsungDCDefinition
+    dataTypes:
+      - Samsung_Knox_User_CL
+      - Samsung_Knox_Application_CL
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+  // Stage 1 - suspicious URL accessed (Samsung_Knox_User_CL). ConfidenceScore is carried
+  // through as UrlConfidence for triage but is not filtered on.
+  let suspiciousUrls =
+      Samsung_Knox_User_CL
+      | where Name == "SUSPICIOUS_URL_ACCESSED"
+      | where isnotempty(PrimaryImei)
+      | extend PrimaryImei = replace_regex(tostring(PrimaryImei), @"[^0-9]", "")
+      | project PrimaryImei, Url, UrlConfidence = ConfidenceScore, UrlTime = TimeGenerated;
+  // Stage 2 - package installed from source on the same device (Samsung_Knox_Application_CL).
+  // InstallerPkgName identifies the install source (sideload signal).
+  let sideloads =
+      Samsung_Knox_Application_CL
+      | where Name == "TAG_PACKAGE_INSTALLED_FROM_SOURCE"
+      | where isnotempty(PrimaryImei) and isnotempty(PkgName)
+      | extend PrimaryImei = replace_regex(tostring(PrimaryImei), @"[^0-9]", "")
+      | extend DeviceWifimac = tostring(column_ifexists("DeviceWifimac", ""))
+      | project PrimaryImei, InstalledPkg = PkgName, InstallerPkgName,
+                DeviceModel, DeviceSerialNumber, DeviceImei1, DeviceImei2, DeviceWifimac,
+                InstallTime = TimeGenerated;
+  // Stage 3 - the installed app acquires covert surveillance capability (Samsung_Knox_Application_CL)
+  let surveillanceGrants =
+      Samsung_Knox_Application_CL
+      | where Name in ("KEY_INPUT_CAPTURE_CAPABILITY", "SCREEN_CAPTURE_CAPABILITY")
+      | where isnotempty(PrimaryImei)
+      | extend PrimaryImei = replace_regex(tostring(PrimaryImei), @"[^0-9]", "")
+      | project PrimaryImei, CapabilityPkg = PkgName, Capability = Name, CapabilityTime = TimeGenerated;
+  // Optional Intune enrichment. Device/Account entity is mapped ONLY for Intune-managed devices.
+  // 'union isfuzzy=true' + the empty datatable seed tolerate IntuneDevices being absent
+  // (customer has no Intune) so detection still fires and event info is still shown.
+  // Primary lookup keyed by normalized WiFi MAC (every device has a MAC; tablets have no IMEI).
+  // Colons/case stripped so Knox "hd:ue:yh" matches Intune "hdueyh". column_ifexists keeps this
+  // safe if WifiMacAddress is absent in a tenant's IntuneDevices schema (MAC match just no-ops).
+  let intuneByMac =
+      union isfuzzy=true
+          (datatable(MacKey: string, IntuneDeviceName: string, IntuneUPN: string, IntuneCompliance: string, IntuneManagedBy: string, IntuneOSVersion: string)[]),
+          (
+              IntuneDevices
+              | extend MacKey = replace_regex(tolower(tostring(column_ifexists("WifiMacAddress", ""))), @"[^0-9a-f]", "")
+              | where isnotempty(MacKey)
+              | summarize arg_max(TimeGenerated, DeviceName, UPN, CompliantState, ManagedBy, OSVersion) by MacKey
+              | project MacKey,
+                        IntuneDeviceName = DeviceName,
+                        IntuneUPN = UPN,
+                        IntuneCompliance = CompliantState,
+                        IntuneManagedBy = ManagedBy,
+                        IntuneOSVersion = tostring(OSVersion)
+          );
+  // IMEI fallback lookup - backfills devices whose WiFi MAC did not resolve (e.g. Knox/Intune MAC differ).
+  let intuneByImei =
+      union isfuzzy=true
+          (datatable(ImeiKey: string, IntuneDeviceName: string, IntuneUPN: string, IntuneCompliance: string, IntuneManagedBy: string, IntuneOSVersion: string)[]),
+          (
+              IntuneDevices
+              | where isnotempty(IMEI)
+              | extend ImeiKey = replace_regex(tostring(IMEI), @"[^0-9]", "")
+              | where isnotempty(ImeiKey)
+              | summarize arg_max(TimeGenerated, DeviceName, UPN, CompliantState, ManagedBy, OSVersion) by ImeiKey
+              | project ImeiKey,
+                        IntuneDeviceName = DeviceName,
+                        IntuneUPN = UPN,
+                        IntuneCompliance = CompliantState,
+                        IntuneManagedBy = ManagedBy,
+                        IntuneOSVersion = tostring(OSVersion)
+          );
+  suspiciousUrls
+  | join kind=inner (sideloads) on PrimaryImei
+  | where InstallTime > UrlTime
+  | join kind=inner (surveillanceGrants) on PrimaryImei
+  | where CapabilityTime >= InstallTime
+  // Tie the acquired capability back to the app that was installed after the URL click.
+  | where CapabilityPkg == InstalledPkg
+  | summarize
+      Capabilities        = make_set(Capability),
+      UrlTime             = min(UrlTime),
+      InstallTime         = min(InstallTime),
+      FirstCapabilityTime = min(CapabilityTime),
+      UrlConfidence       = max(UrlConfidence),
+      DeviceModel         = take_any(DeviceModel),
+      DeviceSerialNumber  = take_any(DeviceSerialNumber),
+      DeviceImei1         = take_any(DeviceImei1),
+      DeviceImei2         = take_any(DeviceImei2),
+      DeviceWifimac       = take_any(DeviceWifimac)
+      by PrimaryImei, Url, PkgName = InstalledPkg, InstallerPkgName
+  // Device resolution keys: WiFi MAC (primary) and IMEI (fallback), both normalized.
+  | extend MacKey = replace_regex(tolower(tostring(DeviceWifimac)), @"[^0-9a-f]", "")
+  | extend ImeiKey = replace_regex(tostring(PrimaryImei), @"[^0-9]", "")
+  | join kind=leftouter (intuneByMac) on MacKey
+  | join kind=leftouter (intuneByImei) on ImeiKey
+  // MAC-primary / IMEI-fallback: MAC match wins; IMEI backfills rows MAC did not resolve.
+  | extend DeviceMatchedBy = case(isnotempty(IntuneDeviceName), "WifiMac", isnotempty(IntuneDeviceName1), "IMEI", "None")
+  | extend IntuneDeviceName = coalesce(IntuneDeviceName, IntuneDeviceName1)
+  | extend IntuneUPN        = coalesce(IntuneUPN, IntuneUPN1)
+  | extend IntuneCompliance = coalesce(IntuneCompliance, IntuneCompliance1)
+  | extend IntuneManagedBy  = coalesce(IntuneManagedBy, IntuneManagedBy1)
+  | extend IntuneOSVersion  = coalesce(IntuneOSVersion, IntuneOSVersion1)
+  | extend CapabilitiesAcquired = strcat_array(Capabilities, ", ")
+  | extend ChainDurationMinutes = datetime_diff('minute', FirstCapabilityTime, UrlTime)
+  | extend DeviceResolvedInIntune = iff(isnotempty(IntuneDeviceName), "Yes", "No")
+  | extend IntuneManaged = iff(IntuneManagedBy == "Intune", "Yes", "No")
+  | extend IntuneCompliance = coalesce(IntuneCompliance, "Unknown")
+  // OS fields gated on Intune resolution so no nameless Host is created without Intune.
+  | extend OSPlatform = iff(isnotempty(IntuneDeviceName), "Android", "")
+  | extend OSVersion = iff(isnotempty(IntuneDeviceName), coalesce(IntuneOSVersion, ""), "")
+  | project
+      TimeGenerated = FirstCapabilityTime,
+      PrimaryImei, IntuneDeviceName, IntuneUPN, IntuneManaged, DeviceResolvedInIntune, IntuneCompliance, DeviceMatchedBy,
+      OSPlatform, OSVersion,
+      DeviceModel, DeviceSerialNumber, DeviceImei1, DeviceImei2,
+      Url, UrlConfidence, PkgName, InstallerPkgName, CapabilitiesAcquired,
+      UrlTime, InstallTime, FirstCapabilityTime, ChainDurationMinutes
+suppressionEnabled: false
+suppressionDuration: PT5H
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: Malware
+    fieldMappings:
+      - identifier: Name
+        columnName: PkgName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: IntuneDeviceName
+      - identifier: OSFamily
+        columnName: OSPlatform
+      - identifier: OSVersion
+        columnName: OSVersion
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: IntuneUPN
+customDetails:
+  PrimaryImei: PrimaryImei
+  MaliciousPkg: PkgName
+  InstallerPkg: InstallerPkgName
+  ChainDurationMin: ChainDurationMinutes
+  DeviceModel: DeviceModel
+  SerialNumber: DeviceSerialNumber
+  # Intune correlation: IntuneResolved says whether the device was found in IntuneDevices
+  # at all, DeviceMatchedBy says which key resolved it (WifiMac / IMEI / None). Both are
+  # needed to diagnose devices that fail to match, so keep them alongside compliance.
+  IntuneResolved: DeviceResolvedInIntune
+  DeviceMatchedBy: DeviceMatchedBy
+  IntuneCompliance: IntuneCompliance
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Samsung Knox - Multistage attack on device {{PrimaryImei}} ({{PkgName}})'
+  alertDescriptionFormat: 'Device {{PrimaryImei}} accessed a suspicious URL, then installed {{PkgName}}, which acquired {{CapabilitiesAcquired}}.'
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByCustomDetails:
+      - PrimaryImei
+      - MaliciousPkg
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
