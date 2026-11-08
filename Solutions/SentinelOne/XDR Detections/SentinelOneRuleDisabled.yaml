@@ -55,7 +55,7 @@ contentProvenance:
     id: 84e210dd-8982-4398-b6f3-264fd72d036c
     path: Analytic Rules/SentinelOneRuleDisabled.yaml
     version: 1.0.0
-    querySha256: da5cac8218c7996a4e1cf2b4af18fba975e5bd1917007b55bbf69c276908dd85
+    querySha256: aefc0a4c32b78dc78453dfe446dc8647d156353c7aceb990f2ff99ff62a01123
     schedule:
       queryFrequency: 1h
       queryPeriod: 1h
@@ -88,8 +88,8 @@ contentProvenance:
     originalTechniques:
     - T1070
     reviewScope:
-      sourceDocumentSha256: aab0b85c54922814aa54729466ef8832853205da26cb4b5a8f8c7491a7d80dc6
-      targetQuerySha256: 469dd57e2546f0559fefb9aa518a60bd6b29ea7550cf003c987bad1b0a1e604e
+      sourceDocumentSha256: d6c7323ef39a92a9f6b202474c210fdd1fb7eadef0de2ea2e5e2fd603133cff1
+      targetQuerySha256: a96f02fbbac8d7bb7c16070245fd9192013efb5d2fdf8524ed473d9e04dafd1f
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -110,8 +110,8 @@ contentProvenance:
       aggregationDifference: No summarize/make-series aggregation detected in query;
         native 4-hour XDR lookback relies on Defender XDR alert deduplication across
         hourly runs.
-      sourceDocumentSha256: aab0b85c54922814aa54729466ef8832853205da26cb4b5a8f8c7491a7d80dc6
-      targetQuerySha256: 469dd57e2546f0559fefb9aa518a60bd6b29ea7550cf003c987bad1b0a1e604e
+      sourceDocumentSha256: d6c7323ef39a92a9f6b202474c210fdd1fb7eadef0de2ea2e5e2fd603133cff1
+      targetQuerySha256: a96f02fbbac8d7bb7c16070245fd9192013efb5d2fdf8524ed473d9e04dafd1f
     supplementalEntityDetails:
     - entityType: Account
       entityIndex: 1
@@ -125,13 +125,51 @@ properties:
   displayName: Sentinel One - Rule disabled
   status: disabled
   queryCondition:
-    queryText: 'SentinelOne
-
-      | where ActivityType == 3603
-
-      | project EventCreationTime, DataRuleName, DataRuleQueryDetails, DataUserName
-
-      | extend AccountCustomEntity = DataUserName'
+    queryText: "let _xdr_inline_SentinelOne = view () {\n    let SentinelOneV2_Empty\
+      \ = datatable(\n        TimeGenerated:datetime,\n        ActivityType:real,\n\
+      \        CreatedAt:datetime,\n        Data:string,\n        Id:string,\n   \
+      \     PrimaryDescription:string,\n        SecondaryDescription:string,\n   \
+      \     UserId:string,\n        Description:string,\n        Uuid:string,\n  \
+      \      AlertInfo:string,\n        SrcUserName:string,\n        DataUserName:string,\n\
+      \        DataRole:string,\n        DataComputerName:string,\n        DataRuleName:string,\n\
+      \        DataRuleQueryDetails:string\n    )[];\n    let SentinelOneV1_Empty\
+      \ = datatable(\n        TimeGenerated:datetime,\n        activityType_d:real,\n\
+      \        createdAt_t:datetime,\n        data_role_s:string,\n        data_username_s:string,\n\
+      \        data_userName_s:string,\n        data_computerName_s:string,\n    \
+      \    data_ruleName_s:string,\n        data_ruleQueryDetails_s:string,\n    \
+      \    primaryDescription_s:string,\n        secondaryDescription_s:string\n \
+      \   )[];\n    let SentinelOneV1Empty_Union = union isfuzzy=true SentinelOne_CL,\
+      \ SentinelOneV1_Empty\n        | extend\n            ActivityType=toreal(column_ifexists('activityType_d',\
+      \ '')),\n            CreatedAt=todatetime(column_ifexists('createdAt_t', '')),\n\
+      \            EventCreationTime=todatetime(column_ifexists('createdAt_t', '')),\n\
+      \            DataRole=tostring(column_ifexists('data_role_s', '')),\n      \
+      \      SrcUserName=tostring(column_ifexists('data_username_s', '')),\n     \
+      \       DataUserName=tostring(column_ifexists('data_userName_s', '')),\n   \
+      \         DataComputerName=tostring(column_ifexists('data_computerName_s', '')),\n\
+      \            DataRuleName=tostring(column_ifexists('data_ruleName_s', '')),\n\
+      \            DataRuleQueryDetails=tostring(column_ifexists('data_ruleQueryDetails_s',\
+      \ '')),\n            PrimaryDescription=tostring(column_ifexists('primaryDescription_s',\
+      \ '')),\n            EventOriginalMessage=tostring(column_ifexists('primaryDescription_s',\
+      \ '')),\n            SecondaryDescription=tostring(column_ifexists('secondaryDescription_s',\
+      \ '')),\n            EventSubStatus=tostring(column_ifexists('secondaryDescription_s',\
+      \ ''));\n    union isfuzzy=true SentinelOneV2_Empty, SentinelOneActivities_CL,\
+      \ SentinelOneAgents_CL, SentinelOneAlerts_CL, SentinelOneGroups_CL, SentinelOneThreats_CL,\
+      \ SentinelOneV1Empty_Union\n    | extend\n        EventVendor=\"SentinelOne\"\
+      ,\n        EventProduct=\"SentinelOne\",\n        EventCreationTime=CreatedAt,\n\
+      \        EventOriginalMessage=PrimaryDescription,\n        EventSubStatus=SecondaryDescription,\n\
+      \        SrcUserName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).userName),\
+      \ SrcUserName),\n        DataUserName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).userName),\
+      \ DataUserName),\n        DataRole=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).role),\
+      \ DataRole),\n        DataComputerName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).computerName),\
+      \ DataComputerName),\n        DataRuleName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).rulename),\
+      \ DataRuleName),\n        DataRuleQueryDetails=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).ruleQueryDetails),\
+      \ DataRuleQueryDetails)\n    | project\n        TimeGenerated,\n        EventVendor,\n\
+      \        EventProduct,\n        ActivityType,\n        EventCreationTime,\n\
+      \        EventOriginalMessage,\n        EventSubStatus,\n        SrcUserName,\n\
+      \        DataUserName,\n        DataRole,\n        DataComputerName,\n     \
+      \   DataRuleName,\n        DataRuleQueryDetails\n};\n_xdr_inline_SentinelOne\n\
+      | where ActivityType == 3603\n| project TimeGenerated, EventCreationTime, DataRuleName,\
+      \ DataRuleQueryDetails, DataUserName\n| extend AccountCustomEntity = DataUserName"
   schedule:
     frequency: PT1H
   detectionAction:

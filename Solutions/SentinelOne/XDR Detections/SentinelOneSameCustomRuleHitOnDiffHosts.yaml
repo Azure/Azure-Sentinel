@@ -86,7 +86,7 @@ contentProvenance:
     - T1210
     reviewScope:
       sourceDocumentSha256: 5291eb2628e46d42db9c33abf3c4c66baa022117e2072c7824ebb69be52e0c3f
-      targetQuerySha256: 9a3dc95173f538382dd592e6b0fc8ab7dbbf4d38ac07c037aad98e7c21f74b87
+      targetQuerySha256: 24a78ccfd36546252df810a99561a14fe35900bc2502febe94d58a3d720f7189
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -108,25 +108,60 @@ contentProvenance:
         over the native 4-hour XDR lookback window without an injected 1h event-time
         filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
       sourceDocumentSha256: 5291eb2628e46d42db9c33abf3c4c66baa022117e2072c7824ebb69be52e0c3f
-      targetQuerySha256: 9a3dc95173f538382dd592e6b0fc8ab7dbbf4d38ac07c037aad98e7c21f74b87
+      targetQuerySha256: 24a78ccfd36546252df810a99561a14fe35900bc2502febe94d58a3d720f7189
 properties:
   id: xdr-5586d378-1bce-4d9b-9ac8-e7271c9d5a9a
   displayName: Sentinel One - Same custom rule triggered on different hosts
   status: disabled
   queryCondition:
-    queryText: 'SentinelOne
-
-      | where ActivityType == 3608
-
-      | extend RuleName = extract(@''Custom Rule:\s(.*?)\sin Group'', 1, EventOriginalMessage)
-
-      | extend DstHostname = extract(@''detected on\s(\S+)\.'', 1, EventOriginalMessage)
-
-      | summarize hosts = makeset(DstHostname) by RuleName, bin(TimeGenerated, 15m)
-
-      | where array_length(hosts) > 1
-
-      | extend HostCustomEntity = tostring(hosts[0])'
+    queryText: "let _xdr_inline_SentinelOne = view () {\n    let SentinelOneV2_Empty\
+      \ = datatable(\n        TimeGenerated:datetime,\n        ActivityType:real,\n\
+      \        CreatedAt:datetime,\n        Data:string,\n        Id:string,\n   \
+      \     PrimaryDescription:string,\n        SecondaryDescription:string,\n   \
+      \     UserId:string,\n        Description:string,\n        Uuid:string,\n  \
+      \      AlertInfo:string,\n        SrcUserName:string,\n        DataUserName:string,\n\
+      \        DataRole:string,\n        DataComputerName:string,\n        DataRuleName:string,\n\
+      \        DataRuleQueryDetails:string\n    )[];\n    let SentinelOneV1_Empty\
+      \ = datatable(\n        TimeGenerated:datetime,\n        activityType_d:real,\n\
+      \        createdAt_t:datetime,\n        data_role_s:string,\n        data_username_s:string,\n\
+      \        data_userName_s:string,\n        data_computerName_s:string,\n    \
+      \    data_ruleName_s:string,\n        data_ruleQueryDetails_s:string,\n    \
+      \    primaryDescription_s:string,\n        secondaryDescription_s:string\n \
+      \   )[];\n    let SentinelOneV1Empty_Union = union isfuzzy=true SentinelOne_CL,\
+      \ SentinelOneV1_Empty\n        | extend\n            ActivityType=toreal(column_ifexists('activityType_d',\
+      \ '')),\n            CreatedAt=todatetime(column_ifexists('createdAt_t', '')),\n\
+      \            EventCreationTime=todatetime(column_ifexists('createdAt_t', '')),\n\
+      \            DataRole=tostring(column_ifexists('data_role_s', '')),\n      \
+      \      SrcUserName=tostring(column_ifexists('data_username_s', '')),\n     \
+      \       DataUserName=tostring(column_ifexists('data_userName_s', '')),\n   \
+      \         DataComputerName=tostring(column_ifexists('data_computerName_s', '')),\n\
+      \            DataRuleName=tostring(column_ifexists('data_ruleName_s', '')),\n\
+      \            DataRuleQueryDetails=tostring(column_ifexists('data_ruleQueryDetails_s',\
+      \ '')),\n            PrimaryDescription=tostring(column_ifexists('primaryDescription_s',\
+      \ '')),\n            EventOriginalMessage=tostring(column_ifexists('primaryDescription_s',\
+      \ '')),\n            SecondaryDescription=tostring(column_ifexists('secondaryDescription_s',\
+      \ '')),\n            EventSubStatus=tostring(column_ifexists('secondaryDescription_s',\
+      \ ''));\n    union isfuzzy=true SentinelOneV2_Empty, SentinelOneActivities_CL,\
+      \ SentinelOneAgents_CL, SentinelOneAlerts_CL, SentinelOneGroups_CL, SentinelOneThreats_CL,\
+      \ SentinelOneV1Empty_Union\n    | extend\n        EventVendor=\"SentinelOne\"\
+      ,\n        EventProduct=\"SentinelOne\",\n        EventCreationTime=CreatedAt,\n\
+      \        EventOriginalMessage=PrimaryDescription,\n        EventSubStatus=SecondaryDescription,\n\
+      \        SrcUserName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).userName),\
+      \ SrcUserName),\n        DataUserName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).userName),\
+      \ DataUserName),\n        DataRole=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).role),\
+      \ DataRole),\n        DataComputerName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).computerName),\
+      \ DataComputerName),\n        DataRuleName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).rulename),\
+      \ DataRuleName),\n        DataRuleQueryDetails=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).ruleQueryDetails),\
+      \ DataRuleQueryDetails)\n    | project\n        TimeGenerated,\n        EventVendor,\n\
+      \        EventProduct,\n        ActivityType,\n        EventCreationTime,\n\
+      \        EventOriginalMessage,\n        EventSubStatus,\n        SrcUserName,\n\
+      \        DataUserName,\n        DataRole,\n        DataComputerName,\n     \
+      \   DataRuleName,\n        DataRuleQueryDetails\n};\n_xdr_inline_SentinelOne\n\
+      | where ActivityType == 3608\n| extend RuleName = extract(@'Custom Rule:\\s(.*?)\\\
+      sin Group', 1, EventOriginalMessage)\n| extend DstHostname = extract(@'detected\
+      \ on\\s(\\S+)\\.', 1, EventOriginalMessage)\n| summarize hosts = makeset(DstHostname)\
+      \ by RuleName, bin(TimeGenerated, 15m)\n| where array_length(hosts) > 1\n| extend\
+      \ HostCustomEntity = hosts"
   schedule:
     frequency: PT1H
   detectionAction:

@@ -88,7 +88,7 @@ contentProvenance:
     - T1555
     reviewScope:
       sourceDocumentSha256: 12ac7e54a076c9bdb9c0106a4b78f92a68a8abb1313a5a110a3ac8b1320d7e18
-      targetQuerySha256: 829931199c6ac0ec201449c1e368c33b4ee5ecd0a8fac4e731a33742bbe69c71
+      targetQuerySha256: 5911b5079bed106efdea314f9e35b361ae5564161b5cca2cca9a1c6ea8d9060e
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -110,7 +110,7 @@ contentProvenance:
         native 4-hour XDR lookback relies on Defender XDR alert deduplication across
         hourly runs.
       sourceDocumentSha256: 12ac7e54a076c9bdb9c0106a4b78f92a68a8abb1313a5a110a3ac8b1320d7e18
-      targetQuerySha256: 829931199c6ac0ec201449c1e368c33b4ee5ecd0a8fac4e731a33742bbe69c71
+      targetQuerySha256: 5911b5079bed106efdea314f9e35b361ae5564161b5cca2cca9a1c6ea8d9060e
     supplementalEntityDetails:
     - entityType: Account
       entityIndex: 1
@@ -124,11 +124,51 @@ properties:
   displayName: Sentinel One - User viewed agent's passphrase
   status: disabled
   queryCondition:
-    queryText: 'SentinelOne
-
-      | where ActivityType == 64
-
-      | extend AccountCustomEntity = SrcUserName, HostCustomEntity = DataComputerName'
+    queryText: "let _xdr_inline_SentinelOne = view () {\n    let SentinelOneV2_Empty\
+      \ = datatable(\n        TimeGenerated:datetime,\n        ActivityType:real,\n\
+      \        CreatedAt:datetime,\n        Data:string,\n        Id:string,\n   \
+      \     PrimaryDescription:string,\n        SecondaryDescription:string,\n   \
+      \     UserId:string,\n        Description:string,\n        Uuid:string,\n  \
+      \      AlertInfo:string,\n        SrcUserName:string,\n        DataUserName:string,\n\
+      \        DataRole:string,\n        DataComputerName:string,\n        DataRuleName:string,\n\
+      \        DataRuleQueryDetails:string\n    )[];\n    let SentinelOneV1_Empty\
+      \ = datatable(\n        TimeGenerated:datetime,\n        activityType_d:real,\n\
+      \        createdAt_t:datetime,\n        data_role_s:string,\n        data_username_s:string,\n\
+      \        data_userName_s:string,\n        data_computerName_s:string,\n    \
+      \    data_ruleName_s:string,\n        data_ruleQueryDetails_s:string,\n    \
+      \    primaryDescription_s:string,\n        secondaryDescription_s:string\n \
+      \   )[];\n    let SentinelOneV1Empty_Union = union isfuzzy=true SentinelOne_CL,\
+      \ SentinelOneV1_Empty\n        | extend\n            ActivityType=toreal(column_ifexists('activityType_d',\
+      \ '')),\n            CreatedAt=todatetime(column_ifexists('createdAt_t', '')),\n\
+      \            EventCreationTime=todatetime(column_ifexists('createdAt_t', '')),\n\
+      \            DataRole=tostring(column_ifexists('data_role_s', '')),\n      \
+      \      SrcUserName=tostring(column_ifexists('data_username_s', '')),\n     \
+      \       DataUserName=tostring(column_ifexists('data_userName_s', '')),\n   \
+      \         DataComputerName=tostring(column_ifexists('data_computerName_s', '')),\n\
+      \            DataRuleName=tostring(column_ifexists('data_ruleName_s', '')),\n\
+      \            DataRuleQueryDetails=tostring(column_ifexists('data_ruleQueryDetails_s',\
+      \ '')),\n            PrimaryDescription=tostring(column_ifexists('primaryDescription_s',\
+      \ '')),\n            EventOriginalMessage=tostring(column_ifexists('primaryDescription_s',\
+      \ '')),\n            SecondaryDescription=tostring(column_ifexists('secondaryDescription_s',\
+      \ '')),\n            EventSubStatus=tostring(column_ifexists('secondaryDescription_s',\
+      \ ''));\n    union isfuzzy=true SentinelOneV2_Empty, SentinelOneActivities_CL,\
+      \ SentinelOneAgents_CL, SentinelOneAlerts_CL, SentinelOneGroups_CL, SentinelOneThreats_CL,\
+      \ SentinelOneV1Empty_Union\n    | extend\n        EventVendor=\"SentinelOne\"\
+      ,\n        EventProduct=\"SentinelOne\",\n        EventCreationTime=CreatedAt,\n\
+      \        EventOriginalMessage=PrimaryDescription,\n        EventSubStatus=SecondaryDescription,\n\
+      \        SrcUserName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).userName),\
+      \ SrcUserName),\n        DataUserName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).userName),\
+      \ DataUserName),\n        DataRole=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).role),\
+      \ DataRole),\n        DataComputerName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).computerName),\
+      \ DataComputerName),\n        DataRuleName=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).rulename),\
+      \ DataRuleName),\n        DataRuleQueryDetails=iff(isnotempty(Data), tostring(parse_json(todynamic(Data)).ruleQueryDetails),\
+      \ DataRuleQueryDetails)\n    | project\n        TimeGenerated,\n        EventVendor,\n\
+      \        EventProduct,\n        ActivityType,\n        EventCreationTime,\n\
+      \        EventOriginalMessage,\n        EventSubStatus,\n        SrcUserName,\n\
+      \        DataUserName,\n        DataRole,\n        DataComputerName,\n     \
+      \   DataRuleName,\n        DataRuleQueryDetails\n};\n_xdr_inline_SentinelOne\n\
+      | where ActivityType == 64\n| extend AccountCustomEntity = SrcUserName, HostCustomEntity\
+      \ = DataComputerName"
   schedule:
     frequency: PT1H
   detectionAction:
