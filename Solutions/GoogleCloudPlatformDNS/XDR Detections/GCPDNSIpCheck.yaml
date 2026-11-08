@@ -3,14 +3,12 @@ version: 3.2.2
 kind: CustomDetection
 resourceType: Microsoft.Security/detectionRules
 apiVersion: 2026-06-01-preview
-requiredDataConnectors: &id001
+requiredDataConnectors:
 - connectorId: GCPDNSLogsCCPDefinition
   dataTypes:
-  - GCPCloudDNS
   - GCPDNS
 - connectorId: GCPDNSDataConnector
   dataTypes:
-  - GCPCloudDNS
   - GCP_DNS_CL
 contentProvenance:
   requiredWorkloads:
@@ -19,7 +17,13 @@ contentProvenance:
     - GCPCloudDNS
     - GCPDNS
     - GCP_DNS_CL
-  requiredDataConnectors: *id001
+  requiredDataConnectors:
+  - connectorId: GCPDNSLogsCCPDefinition
+    dataTypes:
+    - GCPDNS
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+    - GCP_DNS_CL
   dependencyReviewRequired: false
   source:
     platform: Microsoft Sentinel
@@ -42,17 +46,27 @@ contentProvenance:
     warnings:
     - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
       mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
     informational:
-    - 'Supplemental customDetails preserved from unmapped Sentinel entities: DNSDomainName=DNSCustomEntity (from DNS.DomainName;
-      Defender XDR ''dns'' entity mapping requires domainNameColumn + serverIpColumn + hostIpAddressColumn).'
+    - DNS.DomainName mismatch is informational because its original value is preserved as customDetails.DNSDomainName from
+      query column `DNSCustomEntity`; supplemental details do not restore entity identity, correlation, or alert parity
     errors: []
     originalTactics:
     - CommandAndControl
     originalTechniques:
     - T1095
+    supplementalEntityDetails:
+    - entityType: DNS
+      entityIndex: 1
+      identifier: DomainName
+      sourceColumn: DNSCustomEntity
+      column: DNSCustomEntity
+      status: available
+      customDetailKey: DNSDomainName
     reviewScope:
       sourceDocumentSha256: ef2933eaa012ac3bd8e1d90bd6b05bf0f72c53c8305f861ae349aaf0b4712ecc
-      targetQuerySha256: 7a53689101b0ed8f6d9f9ff75af326e2d3addc5b457e02a73d4e19139f25cb4b
+      targetQuerySha256: 16f6b6f442dd4d37c3ac29ba715e0fa43591e2e986c57f542272fce65577aabf
     eventTimeWindow:
       status: default-native-lookback
       appliedDefault: hourly-1h-to-native-4h-lookback
@@ -72,97 +86,13 @@ contentProvenance:
       aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
         Defender XDR alert deduplication across hourly runs.
       sourceDocumentSha256: ef2933eaa012ac3bd8e1d90bd6b05bf0f72c53c8305f861ae349aaf0b4712ecc
-      targetQuerySha256: 7a53689101b0ed8f6d9f9ff75af326e2d3addc5b457e02a73d4e19139f25cb4b
-    preservedEntityCustomDetails:
-      DNSDomainName:
-        column: DNSCustomEntity
-        origin: entityMappings
-        entityType: DNS
-        fieldType: DomainName
+      targetQuerySha256: 16f6b6f442dd4d37c3ac29ba715e0fa43591e2e986c57f542272fce65577aabf
 properties:
   id: xdr-35221a58-cacb-4174-9bb4-ee777784fbce
   displayName: Google DNS - IP check activity
   status: disabled
   queryCondition:
     queryText: |-
-      let GCPCloudDNS = view () {
-          let DNSQuery_GcpDns_empty = datatable(
-              TimeGenerated:datetime,
-              Query:string,
-              QueryTypeName:string,
-              ResponseName:string,
-              EventResultDetails:string,
-              NetworkProtocol:string,
-              SrcIpAddr:string,
-              EventOriginalUid:string,
-              EventSeverity:string,
-              EventCount:int,
-              EventProduct:string,
-              EventVendor:string,
-              EventSchemaVersion:string,
-              Dvc:string,
-              EventType:string,
-              EventResult:string,
-              EventSubType:string,
-              EventEndTime:datetime,
-              ResponseCodeName:string,
-              Domain:string,
-              IpAddr:string,
-              EventStartTime:datetime,
-              payload_serverLatency_d:real
-          )[];
-          let DNSQuery_GcpDns = union isfuzzy=true GCP_DNS_CL, DNSQuery_GcpDns_empty
-          | extend
-              Query=column_ifexists('payload_queryName_s', ''),
-              QueryTypeName=column_ifexists('payload_queryType_s', ''),
-              ResponseName=column_ifexists('payload_rdata_s', ''),
-              EventResultDetails=column_ifexists('payload_responseCode_s', ''),
-              NetworkProtocol=column_ifexists('payload_protocol_s', ''),
-              SrcIpAddr=column_ifexists('payload_sourceIP_s', ''),
-              EventOriginalUid=column_ifexists('insert_id_s', ''),
-              EventSeverity=column_ifexists('severity_s', ''),
-              EventCount=(1),
-              EventProduct="Cloud DNS",
-              EventVendor="GCP",
-              EventSchemaVersion="0.1.0",
-              Dvc="GCPDNS",
-              EventType=iif(column_ifexists('resource_type_s', '') == "dns_query", "lookup", column_ifexists('resource_type_s', '')),
-              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
-              EventSubType='response',
-              EventEndTime=todatetime(column_ifexists('timestamp_t', ''))
-          | extend
-              ResponseCodeName=EventResultDetails,
-              Domain=Query,
-              IpAddr=SrcIpAddr,
-              EventStartTime=EventEndTime;
-          let DNSQuery_GcpDnsV2 = union isfuzzy=true GCPDNS, DNSQuery_GcpDns_empty
-          | extend
-              Query=column_ifexists('QueryName', ''),
-              QueryTypeName=column_ifexists('QueryType', ''),
-              ResponseName=column_ifexists('Rdata', ''),
-              EventResultDetails=column_ifexists('ResponseCode', ''),
-              NetworkProtocol=column_ifexists('Protocol', ''),
-              SrcIpAddr=column_ifexists('SourceIP', ''),
-              EventOriginalUid=column_ifexists('InsertId', ''),
-              EventSeverity=column_ifexists('Severity', ''),
-              EventCount=(1),
-              EventProduct="Cloud DNS",
-              EventVendor="GCP",
-              EventSchemaVersion="0.1.0",
-              Dvc="GCPDNS",
-              EventType=iif(column_ifexists('ResourceType', '') == "dns_query", "lookup", column_ifexists('ResourceType', '')),
-              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
-              EventSubType='response',
-              EventEndTime=todatetime(column_ifexists('Timestamp', ''))
-          | extend
-              ResponseCodeName=EventResultDetails,
-              Domain=Query,
-              IpAddr=SrcIpAddr,
-              EventStartTime=EventEndTime,
-              payload_serverLatency_d=toreal(column_ifexists('ServerLatency', ''));
-          union isfuzzy=true DNSQuery_GcpDns, DNSQuery_GcpDnsV2
-          | project-reorder Query, QueryTypeName, ResponseName, EventResultDetails, NetworkProtocol, SrcIpAddr, EventOriginalUid, EventSeverity, EventCount, EventProduct, EventVendor, EventSchemaVersion, Dvc, EventType, EventResult, EventSubType, EventEndTime, ResponseCodeName, Domain, IpAddr, EventStartTime
-      };
       let ip_check = dynamic(['whatismyipaddress.com', 'ip2location.com', 'ipaddress.my', 'whatismyip.com', 'ipinfo.info', 'checkmyip.com', 'myip.com', 'checkmyip.org', 'canireachthe.net', 'ipv4.icanhazip.com', 'ip.anysrc.net', 'edns.ip-api.com', 'wtfismyip.com', 'checkip.dyndns.org', 'api.2ip.ua', 'icanhazip.com', 'api.ipify.org', 'ip-api.com', 'checkip.amazonaws.com', 'ipecho.net', 'ipinfo.io', 'ipv4bot.whatismyipaddress.com', 'freegeoip.app', 'checkip.azurewebsites.net']);
       GCPCloudDNS
       | where Query in~ (ip_check)
@@ -174,6 +104,8 @@ properties:
       title: Google DNS - IP check activity
       description: '''Detects requests to ip lookup resources.'''
       severity: medium
+      customDetails:
+        DNSDomainName: DNSCustomEntity
       entityMappings:
         ips:
         - id: ip1
@@ -182,5 +114,3 @@ properties:
       - tactic: CommandAndControl
         techniques:
         - technique: T1095
-      customDetails:
-        DNSDomainName: DNSCustomEntity

@@ -3,14 +3,12 @@ version: 3.2.2
 kind: CustomDetection
 resourceType: Microsoft.Security/detectionRules
 apiVersion: 2026-06-01-preview
-requiredDataConnectors: &id001
+requiredDataConnectors:
 - connectorId: GCPDNSLogsCCPDefinition
   dataTypes:
-  - GCPCloudDNS
   - GCPDNS
 - connectorId: GCPDNSDataConnector
   dataTypes:
-  - GCPCloudDNS
   - GCP_DNS_CL
 contentProvenance:
   requiredWorkloads:
@@ -19,7 +17,13 @@ contentProvenance:
     - GCPCloudDNS
     - GCPDNS
     - GCP_DNS_CL
-  requiredDataConnectors: *id001
+  requiredDataConnectors:
+  - connectorId: GCPDNSLogsCCPDefinition
+    dataTypes:
+    - GCPDNS
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+    - GCP_DNS_CL
   dependencyReviewRequired: false
   source:
     platform: Microsoft Sentinel
@@ -42,107 +46,33 @@ contentProvenance:
     warnings:
     - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
       mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
     informational:
-    - 'Supplemental customDetails preserved from unmapped Sentinel entities: DNSDomainName=DNSCustomEntity (from DNS.DomainName;
-      Defender XDR ''dns'' entity mapping requires domainNameColumn + serverIpColumn + hostIpAddressColumn).'
+    - DNS.DomainName mismatch is informational because its original value is preserved as customDetails.DNSDomainName from
+      query column `DNSCustomEntity`; supplemental details do not restore entity identity, correlation, or alert parity
     errors: []
     originalTactics:
     - InitialAccess
     originalTechniques:
     - T1195
+    supplementalEntityDetails:
+    - entityType: DNS
+      entityIndex: 1
+      identifier: DomainName
+      sourceColumn: DNSCustomEntity
+      column: DNSCustomEntity
+      status: available
+      customDetailKey: DNSDomainName
     reviewScope:
       sourceDocumentSha256: 97ea961a4a11da6daaa83fbf7675691937218d4d3a027d35a6bec9255718f7ad
-      targetQuerySha256: 8cefd7d1cf1bd01f222e48eac2d68e29ebcba366a306c640bf1a8c523bd66a4a
-    preservedEntityCustomDetails:
-      DNSDomainName:
-        column: DNSCustomEntity
-        origin: entityMappings
-        entityType: DNS
-        fieldType: DomainName
+      targetQuerySha256: 24e18d152ec53f79fc377bb9bb5011e440f03a5cc010efa08756e15ae19e02ca
 properties:
   id: xdr-75491db8-eaf7-40bb-a46a-279872cc82f5
   displayName: Google DNS - Malicous Python packages
   status: disabled
   queryCondition:
     queryText: |-
-      let GCPCloudDNS = view () {
-          let DNSQuery_GcpDns_empty = datatable(
-              TimeGenerated:datetime,
-              Query:string,
-              QueryTypeName:string,
-              ResponseName:string,
-              EventResultDetails:string,
-              NetworkProtocol:string,
-              SrcIpAddr:string,
-              EventOriginalUid:string,
-              EventSeverity:string,
-              EventCount:int,
-              EventProduct:string,
-              EventVendor:string,
-              EventSchemaVersion:string,
-              Dvc:string,
-              EventType:string,
-              EventResult:string,
-              EventSubType:string,
-              EventEndTime:datetime,
-              ResponseCodeName:string,
-              Domain:string,
-              IpAddr:string,
-              EventStartTime:datetime,
-              payload_serverLatency_d:real
-          )[];
-          let DNSQuery_GcpDns = union isfuzzy=true GCP_DNS_CL, DNSQuery_GcpDns_empty
-          | extend
-              Query=column_ifexists('payload_queryName_s', ''),
-              QueryTypeName=column_ifexists('payload_queryType_s', ''),
-              ResponseName=column_ifexists('payload_rdata_s', ''),
-              EventResultDetails=column_ifexists('payload_responseCode_s', ''),
-              NetworkProtocol=column_ifexists('payload_protocol_s', ''),
-              SrcIpAddr=column_ifexists('payload_sourceIP_s', ''),
-              EventOriginalUid=column_ifexists('insert_id_s', ''),
-              EventSeverity=column_ifexists('severity_s', ''),
-              EventCount=(1),
-              EventProduct="Cloud DNS",
-              EventVendor="GCP",
-              EventSchemaVersion="0.1.0",
-              Dvc="GCPDNS",
-              EventType=iif(column_ifexists('resource_type_s', '') == "dns_query", "lookup", column_ifexists('resource_type_s', '')),
-              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
-              EventSubType='response',
-              EventEndTime=todatetime(column_ifexists('timestamp_t', ''))
-          | extend
-              ResponseCodeName=EventResultDetails,
-              Domain=Query,
-              IpAddr=SrcIpAddr,
-              EventStartTime=EventEndTime;
-          let DNSQuery_GcpDnsV2 = union isfuzzy=true GCPDNS, DNSQuery_GcpDns_empty
-          | extend
-              Query=column_ifexists('QueryName', ''),
-              QueryTypeName=column_ifexists('QueryType', ''),
-              ResponseName=column_ifexists('Rdata', ''),
-              EventResultDetails=column_ifexists('ResponseCode', ''),
-              NetworkProtocol=column_ifexists('Protocol', ''),
-              SrcIpAddr=column_ifexists('SourceIP', ''),
-              EventOriginalUid=column_ifexists('InsertId', ''),
-              EventSeverity=column_ifexists('Severity', ''),
-              EventCount=(1),
-              EventProduct="Cloud DNS",
-              EventVendor="GCP",
-              EventSchemaVersion="0.1.0",
-              Dvc="GCPDNS",
-              EventType=iif(column_ifexists('ResourceType', '') == "dns_query", "lookup", column_ifexists('ResourceType', '')),
-              EventResult=iff(EventResultDetails =~ 'NOERROR', 'Success', 'Failure'),
-              EventSubType='response',
-              EventEndTime=todatetime(column_ifexists('Timestamp', ''))
-          | extend
-              ResponseCodeName=EventResultDetails,
-              Domain=Query,
-              IpAddr=SrcIpAddr,
-              EventStartTime=EventEndTime,
-              payload_serverLatency_d=toreal(column_ifexists('ServerLatency', ''));
-          union isfuzzy=true DNSQuery_GcpDns, DNSQuery_GcpDnsV2
-          | project-reorder Query, QueryTypeName, ResponseName, EventResultDetails, NetworkProtocol, SrcIpAddr, EventOriginalUid, EventSeverity, EventCount, EventProduct, EventVendor, EventSchemaVersion, Dvc, EventType, EventResult, EventSubType, EventEndTime, ResponseCodeName, Domain, IpAddr, EventStartTime
-      };
       GCPCloudDNS
       | where Query has_any ('psec.forward.io.global.prod.fastly.net', 'b0a0374cd1cb4305002e.d.requestbin.net', 'tornadodomain.000webhostapp.com', 'yxznlysc47wvrb9r9z211e1jbah15q')
       | extend DNSCustomEntity = Query, IPCustomEntity = SrcIpAddr
@@ -153,6 +83,8 @@ properties:
       title: Google DNS - Malicous Python packages
       description: '''Detects requests to resources with malicious Python packages.'''
       severity: high
+      customDetails:
+        DNSDomainName: DNSCustomEntity
       entityMappings:
         ips:
         - id: ip1
@@ -161,5 +93,3 @@ properties:
       - tactic: InitialAccess
         techniques:
         - technique: T1195
-      customDetails:
-        DNSDomainName: DNSCustomEntity
