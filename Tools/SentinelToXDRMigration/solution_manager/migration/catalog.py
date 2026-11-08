@@ -202,17 +202,12 @@ def configured_column_renames(query: str, config: dict[str, Any]) -> tuple[dict[
 
 
 def query_has_mixed_time_semantics(query: str) -> bool:
-    tables = referenced_catalog_tables(query)
-    return bool(tables & NATIVE_XDR_TABLES) and bool(
-        tables & PASSTHROUGH_TABLES.keys()
-    )
+    return False
 
 
 def query_column_renames(query: str) -> dict[str, str]:
     renames: dict[str, str] = {}
     tables = referenced_catalog_tables(query)
-    if tables & NATIVE_XDR_TABLES and not tables & PASSTHROUGH_TABLES.keys():
-        renames["TimeGenerated"] = "Timestamp"
     for table in tables & PASSTHROUGH_TABLES.keys():
         renames.update(PASSTHROUGH_TABLES[table]["columnRenames"])
     return renames
@@ -257,7 +252,6 @@ def _tokens(query: str) -> list[str]:
 
 
 SECURITY_ALERT_DIRECT_COLUMN_MAP: dict[str, str] = {
-    "TimeGenerated": "Timestamp",
     "SystemAlertId": "AlertId",
     "AlertName": "Title",
     "DisplayName": "Title",
@@ -293,7 +287,6 @@ SECURITY_ALERT_COMPAT_ALIAS_EXPRESSIONS: dict[str, str] = {
     **ALERT_EVIDENCE_CROSS_SURFACE_EXPRESSIONS,
 }
 SECURITY_INCIDENT_DIRECT_COLUMN_MAP: dict[str, str] = {
-    "TimeGenerated": "Timestamp",
     "IncidentName": "Title",
     "IncidentNumber": "AlertId",
     "ProviderName": "DetectionSource",
@@ -683,9 +676,8 @@ def convert_security_alert_incident_query(
             rewritten_stage = _token_replace(stage_stripped, stage_map)
             rewritten_downstream.append(rewritten_stage)
         elif kw == "project":
-            # Replace TimeGenerated -> Timestamp in project, while keeping both compatibility
-            # aliases and mapped AlertInfo/AlertEvidence columns available.
-            rewritten_stage = _token_replace(stage_stripped, {"TimeGenerated": "Timestamp"})
+            # Keep both compatibility aliases and mapped AlertInfo/AlertEvidence columns available.
+            rewritten_stage = stage_stripped
             proj_body = rewritten_stage[len(m_kw.group(0)):].strip() if m_kw else ""
             proj_items = _split_top_level_comma_items(proj_body)
             existing_proj_names: set[str] = set()
@@ -710,7 +702,7 @@ def convert_security_alert_incident_query(
                 rewritten_stage = f"{rewritten_stage}, {', '.join(appended_proj)}"
             rewritten_downstream.append(rewritten_stage)
         else:
-            stage_map = {"TimeGenerated": "Timestamp"}
+            stage_map: dict[str, str] = {}
             if not needed_compat:
                 stage_map.update(direct_map)
             rewritten_stage = _token_replace(stage_stripped, stage_map)

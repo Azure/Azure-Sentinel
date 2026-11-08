@@ -293,6 +293,7 @@ def build_mapping_evidence(
     target_hash = hashlib.sha256(target_query.encode("utf-8")).hexdigest()
     runtime_references = _runtime_references(runtime_evidence, source_hash, target_hash)
     target_words = _query_words(target_query)
+    target_words_folded = {word.casefold() for word in target_words}
     table_references = query_table_references(source_query)
     issues: list[dict[str, str]] = []
     if not table_references:
@@ -392,6 +393,17 @@ def build_mapping_evidence(
                 for source, target in known_column_renames.items():
                     if source.casefold() not in {key.casefold() for key in column_candidates}:
                         column_candidates[source] = target
+                if "timegenerated" in query_words and "timegenerated" not in {
+                    key.casefold() for key in column_candidates
+                }:
+                    column_candidates["TimeGenerated"] = (
+                        "Timestamp"
+                        if (
+                            "timestamp" in target_words_folded
+                            and "timegenerated" not in target_words_folded
+                        )
+                        else "TimeGenerated"
+                    )
 
         aliases_for_scope = [str(ref["alias"]).casefold() for ref in table_references if ref.get("alias")]
         alias_ambiguous = bool(alias and aliases_for_scope.count(str(alias).casefold()) > 1)
@@ -459,9 +471,19 @@ def build_mapping_evidence(
                 })
             source_type = source_columns.get(source_column)
             kind = _mapping_kind(source_column, target_column, transform)
-            is_catalog = source_column in known_column_renames and (
-                table in NATIVE_XDR_TABLES or table in PASSTHROUGH_TABLES
-            )
+            is_catalog = (
+                transform is None
+                and (
+                    (
+                        source_column in known_column_renames
+                        and target_column == known_column_renames[source_column]
+                    )
+                    or (
+                        source_column == "TimeGenerated"
+                        and target_column in {"TimeGenerated", "Timestamp"}
+                    )
+                )
+            ) and (table in NATIVE_XDR_TABLES or table in PASSTHROUGH_TABLES)
             references_for_mapping = list(evidence_references)
             if is_catalog:
                 references_for_mapping.append(catalog_ref)
