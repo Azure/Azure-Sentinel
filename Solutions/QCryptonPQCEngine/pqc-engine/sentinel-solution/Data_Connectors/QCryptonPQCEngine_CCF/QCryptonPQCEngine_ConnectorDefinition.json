@@ -1,0 +1,130 @@
+{
+  "name": "QCryptonPQCEngineCCPDefinition",
+  "apiVersion": "2025-03-01",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "QCryptonPQCEngineCCPDefinition",
+      "title": "QCrypton PQC Engine",
+      "publisher": "QCrypton, Inc.",
+      "descriptionMarkdown": "The QCrypton PQC Engine data connector ingests runtime cryptographic telemetry from PQC Engine instances deployed on F5 BIG-IP into Microsoft Sentinel through the QCrypton API. PQC Engine is an OpenSSL 3.x provider that adds ML-KEM-768/1024 and ML-DSA-65/87 post-quantum algorithms. This connector streams handshake negotiations, KEM operations, policy enforcement events, and vulnerable algorithm detections into the PQCEngine_CL table.",
+      "graphQueries": [
+        {
+          "metricName": "Total PQC Engine events received",
+          "legend": "PQCEngine_CL",
+          "baseQuery": "PQCEngine_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "PQC adoption rate across handshakes in the last 24h",
+          "query": "PQCEngine_CL\n| where TimeGenerated > ago(24h)\n| where EventType == 'handshake'\n| summarize Total = count(), PQC = countif(PQCNegotiated == 1)\n| extend PQCPct = round(100.0 * PQC / Total, 1)\n| project Total, PQC, PQCPct"
+        },
+        {
+          "description": "Policy block events in the last 24h",
+          "query": "PQCEngine_CL\n| where TimeGenerated > ago(24h)\n| where EventType == 'policy_block'\n| project TimeGenerated, Hostname, InstanceId, Algorithm, NegotiatedGroup, CipherSuite, ClientClass, Detail\n| order by TimeGenerated desc"
+        },
+        {
+          "description": "Vulnerable algorithm detections",
+          "query": "PQCEngine_CL\n| where TimeGenerated > ago(24h)\n| where EventType == 'vuln_detected'\n| summarize Count = count() by Algorithm, Detail\n| order by Count desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "PQCEngine_CL",
+          "lastDataReceivedQuery": "PQCEngine_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": false,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "QCrypton API Key",
+            "description": "A QCrypton PQC Engine API key is required. Obtain one from the [QCrypton Portal](https://portal.qcrypton.com)."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Connect QCrypton PQC Engine to Microsoft Sentinel",
+          "instructions": [
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "This connector polls the QCrypton PQC Engine API to retrieve runtime cryptographic telemetry and ingest it into the **PQCEngine_CL** table in your Log Analytics workspace."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 1. API Key\nObtain your QCrypton API key from the [QCrypton Portal](https://portal.qcrypton.com). Navigate to **Settings > API Keys** and generate a key with read access to engine telemetry."
+              }
+            },
+            {
+              "type": "Markdown",
+              "parameters": {
+                "content": "#### 2. API Server URL\nEnter the base URL of your QCrypton API server. The default is `https://api.qcrypton.com`. If you use a dedicated or regional instance, enter the URL provided by QCrypton."
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "QCrypton API Key",
+                "placeholder": "Enter your QCrypton API key",
+                "type": "password",
+                "name": "apiKey",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "QCrypton API Server URL",
+                "placeholder": "https://api.qcrypton.com",
+                "type": "text",
+                "name": "apiServerUrl",
+                "description": "Enter the QCrypton API base URL. Do not include a trailing slash or path.",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "name": "toggle"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
