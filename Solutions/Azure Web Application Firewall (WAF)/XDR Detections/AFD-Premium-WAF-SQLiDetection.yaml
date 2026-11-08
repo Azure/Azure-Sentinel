@@ -22,8 +22,8 @@ contentProvenance:
     kind: AnalyticsRule
     id: 16da3a2a-af29-48a0-8606-d467c180fe18
     path: Analytic Rules/AFD-Premium-WAF-SQLiDetection.yaml
-    version: 1.0.2
-    querySha256: 9df0b465b92a446aab041b50d8efd35064324a3c0071a9ac4403fe070d71970d
+    version: 1.0.3
+    querySha256: 659b1c6455f8693c052a78217606cac64569581ca90f20103b48b4764bf180ea
     schedule:
       queryFrequency: 6h
       queryPeriod: 6h
@@ -54,8 +54,8 @@ contentProvenance:
     - T1190
     - T0890
     reviewScope:
-      sourceDocumentSha256: 620c85abbf29f5c747044268a78e73bade3adba1d88b34e17c75bec5e130e582
-      targetQuerySha256: cc508694342f681ac91d4180d49a89fb96bbb1403728b8c645611e4631da239d
+      sourceDocumentSha256: 15198c5cc8ad7435825c3167770e02dfaf963cb24335fb95b1047218a7e5b8e2
+      targetQuerySha256: 110d7cb481c12da35f3948dee7ff2fc95d65cdf3958e89e960847d586666ea2b
 properties:
   id: xdr-16da3a2a-af29-48a0-8606-d467c180fe18
   displayName: Front Door Premium WAF - SQLi Detection
@@ -65,16 +65,18 @@ properties:
       let Threshold = 1;
       AzureDiagnostics
       | where Category =~ "FrontDoorWebApplicationFirewallLog"
-      | extend action_s = column_ifexists("action_s", ""), details_msg_s = column_ifexists("details_msg_s", ""), details_data_s = column_ifexists("details_data_s", ""), details_matches_s = column_ifexists("details_matches_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
+      | extend action_s = column_ifexists("action_s", ""), policy_s = column_ifexists("policy_s", ""), details_msg_s = column_ifexists("details_msg_s", ""), details_data_s = column_ifexists("details_data_s", ""), details_matches_s = column_ifexists("details_matches_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
       | where action_s =~ "AnomalyScoring"
       | where details_msg_s has "SQL Injection"
       | parse details_data_s with MessageText "Matched Data:" MatchedData "AND " * "table_name FROM " TableName " " *
-      | project trackingReference_s, host_s, requestUri_s, TimeGenerated, clientIP_s, details_matches_s, details_msg_s, details_data_s, TableName, MatchedData
+      | project policy_s, trackingReference_s, host_s, requestUri_s, TimeGenerated, clientIP_s, details_matches_s, details_msg_s, details_data_s, TableName, MatchedData
       | join kind = inner(
       AzureDiagnostics
       | where Category =~ "FrontDoorWebApplicationFirewallLog"
-      | extend action_s = column_ifexists("action_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
-      | where action_s =~ "Block") on trackingReference_s
+      | extend action_s = column_ifexists("action_s", ""), policy_s = column_ifexists("policy_s", ""), policyMode_s = column_ifexists("policyMode_s", ""), ruleName_s = column_ifexists("ruleName_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
+      | where action_s =~ "Block"
+      | where policyMode_s =~ "Prevention"
+      | where ruleName_s contains "949110") on policy_s, trackingReference_s
       | summarize URI_s = make_set(requestUri_s,100), Table = make_set(TableName,100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TrackingReference = make_set(trackingReference_s,100), Matched_Data = make_set(MatchedData,100), Detail_Data = make_set(details_data_s,100), Detail_Message = make_set(details_msg_s,100), Total_TrackingReference = dcount(trackingReference_s) by clientIP_s, host_s, action_s
       | where Total_TrackingReference >= Threshold
   schedule:
@@ -83,7 +85,7 @@ properties:
     alertTemplate:
       title: Front Door Premium WAF - SQLi Detection
       description: |-
-        'Identifies a match for a SQL Injection attack in the Front Door Premium WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+        'Identifies a SQL Injection match on a request blocked by the managed anomaly-score threshold rule in Prevention mode. The match contributes to the aggregate anomaly score but does not establish that SQL Injection alone caused the block. The threshold value in the query can be changed as per your infrastructure's requirements.
         References: https://owasp.org/Top10/A03_2021-Injection/'
       severity: high
       entityMappings:
