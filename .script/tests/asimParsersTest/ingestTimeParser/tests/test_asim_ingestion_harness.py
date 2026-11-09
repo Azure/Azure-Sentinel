@@ -172,6 +172,17 @@ def query_payload(columns, rows):
     return {"tables": [{"columns": columns, "rows": rows}]}
 
 
+def table_payload(columns, standard_columns=None):
+    return {
+        "properties": {
+            "schema": {
+                "columns": columns,
+                "standardColumns": standard_columns or [],
+            }
+        }
+    }
+
+
 class IngestionHarnessUnitTests(unittest.TestCase):
     def config(self):
         return HARNESS.CanaryConfig(
@@ -1048,7 +1059,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         self.assertTrue(result["telemetry"]["requestAttempts"])
 
-    def test_raw_replay_transform_uses_destination_types(self):
+    def test_raw_replay_transform_uses_management_destination_types(self):
         destination_schema = [
             {"name": "TimeGenerated", "type": "datetime"},
             {"name": "AwsEventId", "type": "guid"},
@@ -1060,7 +1071,9 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             {"name": "PlatformOnly", "type": "string"},
         ]
         harness, session, _ = self.harness([
-            FakeResponse(200, query_payload(destination_schema, [])),
+            FakeResponse(200, table_payload(
+                destination_schema[:1], destination_schema[1:]
+            )),
         ])
         schema = [
             {"name": column["name"], "type": "string"}
@@ -1081,10 +1094,14 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             transform,
         )
         self.assertEqual(original_schema, schema)
+        self.assertEqual("GET", session.calls[0]["method"])
         self.assertEqual(
-            "AWSCloudTrail | take 0",
-            session.calls[0]["json"]["query"],
+            "https://management.azure.com"
+            f"{harness.config.workspace_resource_id}/tables/AWSCloudTrail"
+            "?api-version=2022-10-01",
+            session.calls[0]["url"],
         )
+        self.assertEqual([HARNESS.MANAGEMENT_SCOPE], harness.token_provider.scopes)
 
     def test_raw_replay_transform_preserves_matching_types(self):
         schema = [
@@ -1092,7 +1109,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             {"name": "Value", "type": "string"},
         ]
         harness, _, _ = self.harness([
-            FakeResponse(200, query_payload(schema, [])),
+            FakeResponse(200, table_payload(schema)),
         ])
         self.assertEqual(
             "source",
@@ -1101,9 +1118,9 @@ class IngestionHarnessUnitTests(unittest.TestCase):
 
     def test_raw_replay_transform_quotes_column_names(self):
         harness, _, _ = self.harness([
-            FakeResponse(200, query_payload([
+            FakeResponse(200, table_payload([
                 {"name": "Event Id", "type": "guid"},
-            ], [])),
+            ])),
         ])
         self.assertEqual(
             "source\n| extend ['Event Id'] = toguid(['Event Id'])",
@@ -1126,9 +1143,9 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         for column_type, function in conversions.items():
             with self.subTest(column_type=column_type):
                 harness, _, _ = self.harness([
-                    FakeResponse(200, query_payload([
+                    FakeResponse(200, table_payload([
                         {"name": "Value", "type": column_type},
-                    ], [])),
+                    ])),
                 ])
                 input_type = "long" if column_type == "string" else "string"
                 self.assertEqual(
@@ -1138,7 +1155,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                     ),
                 )
 
-    def test_raw_replay_schema_query_failure_warns_and_blocks_parity(self):
+    def test_raw_replay_schema_read_failure_warns_and_blocks_parity(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
         schema = [{"name": "TimeGenerated", "type": "datetime"}]
         query_result = query_payload(schema, [[timestamp]])
@@ -1212,8 +1229,34 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         ):
             with self.subTest(columns=columns):
                 harness, _, _ = self.harness([
-                    FakeResponse(200, query_payload(columns, [])),
+                    FakeResponse(200, table_payload(columns)),
                 ])
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.build_raw_replay_transform(
+                        "Contoso", [{"name": "Value", "type": "string"}]
+                    )
+                self.assertEqual("raw-schema", caught.exception.stage)
+
+    def test_raw_replay_transform_rejects_invalid_management_schema(self):
+        for payload in (
+            [],
+            {},
+            {"properties": None},
+            {"properties": {"schema": None}},
+            table_payload(None),
+            table_payload({"name": "Value", "type": "guid"}),
+            {
+                "properties": {
+                    "schema": {"columns": [], "standardColumns": "invalid"}
+                }
+            },
+            table_payload(
+                [{"name": "Value", "type": "string"}],
+                [{"name": "Value", "type": "guid"}],
+            ),
+        ):
+            with self.subTest(payload=payload):
+                harness, _, _ = self.harness([FakeResponse(200, payload)])
                 with self.assertRaises(HARNESS.HarnessError) as caught:
                     harness.build_raw_replay_transform(
                         "Contoso", [{"name": "Value", "type": "string"}]
@@ -1242,12 +1285,12 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(204),  # parser upload
                 FakeResponse(200, query_result),  # target visibility
                 FakeResponse(200, query_result),  # target stable
-                FakeResponse(200, query_payload([
+                FakeResponse(200, table_payload([
                     {"name": "TimeGenerated", "type": "datetime"},
                     {"name": "AwsEventId", "type": "guid"},
                     {"name": "AwsRequestId", "type": "guid"},
                     {"name": "SharedEventId", "type": "guid"},
-                ], [])),
+                ])),
                 FakeResponse(201),  # QTP raw DCR PUT
                 FakeResponse(
                     200,
@@ -1399,8 +1442,8 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(204),  # parser upload
                 FakeResponse(200, query_result),  # target visibility
                 FakeResponse(200, query_result),  # target stable
-                FakeResponse(200, query_payload(
-                    [{"name": "TimeGenerated", "type": "datetime"}], []
+                FakeResponse(200, table_payload(
+                    [{"name": "TimeGenerated", "type": "datetime"}]
                 )),
                 FakeResponse(
                     400,
@@ -1505,10 +1548,10 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(204),  # parser upload
                 FakeResponse(200, target_result),
                 FakeResponse(200, target_result),
-                FakeResponse(200, query_payload([
+                FakeResponse(200, table_payload([
                     {"name": "TimeGenerated", "type": "datetime"},
                     {"name": "Value", "type": "string"},
-                ], [])),
+                ])),
                 FakeResponse(201),  # raw DCR PUT
                 FakeResponse(
                     200,
