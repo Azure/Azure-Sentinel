@@ -470,6 +470,9 @@ def build_asim_tester_query(
                 'column_ifexists("ThreatOriginalRiskLevel_s", ""), '
                 'tostring(column_ifexists("ThreatOriginalRiskLevel", int(null))))'
             )
+        elif target_table == "ASimAlertEventLogs":
+            # The physical table stores FileSize as string; logical ASIM uses long.
+            target_expression += "\n| extend FileSize = tolong(FileSize)"
         signature = "T:(*), selected_schema:string=''"
         invocation = (
             "_AsimValidationTargetRows\n"

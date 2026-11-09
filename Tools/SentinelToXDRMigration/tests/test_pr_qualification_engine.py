@@ -1596,6 +1596,131 @@ def test_round4_e2e_q02_bipartite_matching_and_kql_regressions(tmp_path: Path) -
     dup_file.unlink()
 
 
+def _ms_locale_url(subdomain: str, locale: str, path: str) -> str:
+    """Construct a locale-bearing Microsoft URL at runtime so test source never embeds CI-rejected literals."""
+    return f"https://{subdomain}.microsoft.com/{locale}/{path.lstrip('/')}"
+
+
+def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_path: Path) -> None:
+    """Verify VAL-URL-01, validate_solution, and QUAL-URL-01 catch CI DocumentsLinkValidation locale URLs and normalize resolvedUrl."""
+    from solution_manager.migration.converter import convert_solution, validate_solution
+    from solution_manager.qualification.pr_check_runner import (
+        build_url_verification_evidence,
+        normalize_solution_url_verification_files,
+        normalize_url_verification_payload,
+        strip_microsoft_url_locale,
+    )
+
+    azure_en_us_legal = _ms_locale_url("azure", "en-us", "support/legal/preview-supplemental-terms/")
+    docs_en_us_hunting = _ms_locale_url("docs", "en-us", "azure/sentinel/hunting")
+    docs_en_us_overview = _ms_locale_url("docs", "en-us", "azure/sentinel/overview")
+    azure_fr_fr_legal = _ms_locale_url("azure", "fr-fr", "support/legal/")
+
+    assert (
+        strip_microsoft_url_locale(azure_en_us_legal)
+        == "https://azure.microsoft.com/support/legal/preview-supplemental-terms/"
+    )
+    assert (
+        strip_microsoft_url_locale(docs_en_us_hunting)
+        == "https://docs.microsoft.com/azure/sentinel/hunting"
+    )
+
+    sol = tmp_path / "LocaleUrlSol"
+    _build_base_package(
+        sol,
+        version="3.2.2",
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/Rule1.yaml"],
+            "XDR Detections": ["XDR Detections/Rule1.yaml"],
+        },
+    )
+    ar_path = sol / "Analytic Rules" / "Rule1.yaml"
+    _build_valid_analytic_rule(ar_path)
+    ar_doc = yaml.safe_load(ar_path.read_text(encoding="utf-8"))
+    ar_doc["requiredDataConnectors"] = [{"connectorId": "AzureNetworkDDoSProtection", "dataTypes": ["AzureDiagnostics"]}]
+    ar_doc["version"] = "1.0.0"
+    _write_yaml(ar_path, ar_doc)
+    convert_solution(sol)
+
+    # Write Evidence/receipts/url-and-asset-verification.json with a locale-bearing resolvedUrl (exact PR #15543 scenario)
+    receipt_path = sol / "Evidence" / "receipts" / "url-and-asset-verification.json"
+    _write_json(
+        receipt_path,
+        {
+            "checkedCount": 1,
+            "brokenCount": 0,
+            "passed": True,
+            "urls": [
+                {
+                    "url": "https://azure.microsoft.com/support/legal/preview-supplemental-terms/",
+                    "resolvedUrl": azure_en_us_legal,
+                    "status": 200,
+                }
+            ],
+        },
+    )
+
+    # 1. VAL-URL-01 and validate_solution must fail and surface recommended locale-stripped URL fix
+    qual_run = run_pr_qualification_checks(sol, run_qualification=False)
+    val_url = qual_run["checksById"]["VAL-URL-01"]
+    assert val_url["status"] == "FAIL"
+    assert azure_en_us_legal in val_url["whatWeObserved"]
+    assert "https://azure.microsoft.com/support/legal/preview-supplemental-terms/" in val_url["whyPassedOrFailed"]
+
+    val_sol = validate_solution(sol)
+    assert val_sol["documentsLinkValidation"]["valid"] is False
+    assert val_sol["documentsLinkValidation"]["issueCount"] == 1
+    assert val_sol["invalid"] == 1
+    issue = val_sol["documentsLinkValidation"]["issues"][0]
+    assert issue["file"] == "Evidence/receipts/url-and-asset-verification.json"
+    assert issue["url"] == azure_en_us_legal
+    assert issue["recommendedUrl"] == "https://azure.microsoft.com/support/legal/preview-supplemental-terms/"
+
+    # 2. Normalizing on-disk URL verification evidence files strips locale and makes VAL-URL-01 + validate_solution pass
+    updated_files = normalize_solution_url_verification_files(sol)
+    assert updated_files == ["Evidence/receipts/url-and-asset-verification.json"]
+    normalized_receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert (
+        normalized_receipt["urls"][0]["resolvedUrl"]
+        == "https://azure.microsoft.com/support/legal/preview-supplemental-terms/"
+    )
+
+    qual_run_after = run_pr_qualification_checks(sol, run_qualification=False)
+    assert qual_run_after["checksById"]["VAL-URL-01"]["status"] == "PASS"
+
+    val_sol_after = validate_solution(sol)
+    assert val_sol_after["documentsLinkValidation"]["valid"] is True
+    assert val_sol_after["invalid"] == 0
+
+    # 3. build_url_verification_evidence and normalize_url_verification_payload normalize resolvedUrl automatically
+    built_ev = build_url_verification_evidence(
+        [
+            {
+                "url": "https://aka.ms/sentinel",
+                "resolvedUrl": docs_en_us_overview,
+                "status": 200,
+            }
+        ]
+    )
+    assert built_ev["passed"] is True
+    assert built_ev["urls"][0]["resolvedUrl"] == "https://docs.microsoft.com/azure/sentinel/overview"
+
+    nested_ev = normalize_url_verification_payload(
+        {
+            "urlVerification": {
+                "urls": [
+                    {
+                        "url": "https://azure.microsoft.com/support/legal/",
+                        "resolvedUrl": azure_fr_fr_legal,
+                    }
+                ]
+            }
+        }
+    )
+    assert nested_ev["urlVerification"]["urls"][0]["resolvedUrl"] == "https://azure.microsoft.com/support/legal/"
+
+
 
 class TestPrQualificationEngineUnittest(unittest.TestCase):
     def test_kql_runtime_verified_rules_and_metrics(self) -> None:
@@ -1604,4 +1729,8 @@ class TestPrQualificationEngineUnittest(unittest.TestCase):
 
     def test_round3_kql_and_retry_fixes(self) -> None:
         test_round3_kql_subquery_and_retry_after_fixes()
+
+    def test_documents_link_validation_locale_scanning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_documents_link_validation_locale_scanning_and_url_normalization(Path(tmp))
 

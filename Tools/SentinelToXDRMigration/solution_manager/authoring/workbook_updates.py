@@ -95,7 +95,11 @@ def _queries(document, provenance, baseline):
     sentinel = {table for record in provenance["requiredWorkloads"]
                 if record["workload"] == "sentinel" for table in record["dataTypes"]}
     connectors = {table for record in provenance["requiredDataConnectors"] for table in record["dataTypes"]}
-    known = set(TABLE_WORKLOADS) | set(mapping_catalog.load_mapping_catalog()["tables"])
+    known = (
+        set(TABLE_WORKLOADS)
+        | set(mapping_catalog.load_mapping_catalog()["tables"])
+        | (sentinel & connectors)
+    )
     historical = {surface["path"]: surface for surface in workbook.query_surfaces(baseline)}
     queries, used = [], set()
     for surface in workbook.query_surfaces(document):
@@ -113,7 +117,7 @@ def _queries(document, provenance, baseline):
                                        allowed_functions=aliases, allow_sentinel=True))
             except ValueError:
                 inherited = set()
-        lineage = _query(surface, allowed_tables=declared | inherited if not native else (),
+        lineage = _query(surface, allowed_tables=declared | inherited if not native else (sentinel & connectors),
                          allowed_functions=aliases, allow_sentinel=not native,
                          include_lineage=True)
         tables = lineage["tables"]

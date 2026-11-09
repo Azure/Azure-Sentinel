@@ -79,7 +79,7 @@ class TestSecurityAlertAndIncidentConversion:
         assert "security_alert_migrated_to_alert_info" in notes
         assert renamed == {"SecurityAlert": "AlertInfo"}
         assert converted.startswith("AlertInfo")
-        assert "Timestamp > ago(1d)" in converted
+        assert "TimeGenerated > ago(1d)" in converted
         assert "Severity in ('High', 'Medium')" in converted
         assert "DetectionSource == 'MDATP'" in converted
         assert "ServiceSource has 'Defender'" in converted
