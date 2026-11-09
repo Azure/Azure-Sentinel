@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEventCrowdStrikeFalcon.yaml
 
+## Version 0.1.3
+
+- (2026-11-06) Align query-time and ingestion-time parser output for data parity - [PR #15588](https://github.com/Azure/Azure-Sentinel/pull/15588)
+
 ## Version 0.1.2
 
 - (2026-11-06) Align query-time and ingestion-time parser output for data parity - [PR #15569](https://github.com/Azure/Azure-Sentinel/pull/15569)
