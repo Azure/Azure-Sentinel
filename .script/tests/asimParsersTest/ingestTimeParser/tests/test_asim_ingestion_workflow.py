@@ -1210,6 +1210,10 @@ class WorkflowTopologyTests(unittest.TestCase):
             self.repo_root
             / ".github/workflows/runAsimIngestionTimeValidation.yaml"
         )
+        self.unit_test_path = (
+            self.repo_root
+            / ".github/workflows/runAsimIngestionTimeValidationTests.yaml"
+        )
 
     def test_security_gate_matches_legacy_except_initial_events(self):
         legacy = self.legacy_path.read_text(encoding="utf-8")
@@ -1299,6 +1303,55 @@ class WorkflowTopologyTests(unittest.TestCase):
             ],
             jobs["report"]["needs"],
         )
+
+    def test_workflows_build_pinned_kusto_analyzer(self):
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+        unit_tests = self.unit_test_path.read_text(encoding="utf-8")
+        job_markers = (
+            ("  discover:\n", "\n  templateValidate:"),
+            ("  templateValidate:\n", "\n  ingestionValidation:"),
+            ("  ingestionValidation:\n", "\n  report:"),
+        )
+        analyzer_jobs = [
+            isolated[
+                isolated.index(start):isolated.index(
+                    end,
+                    isolated.index(start),
+                )
+            ]
+            for start, end in job_markers
+        ]
+        setup_action = (
+            "actions/setup-dotnet@"
+            "67a3573c9a986a3f9c594539f4ab511d57bb3ce9"
+        )
+
+        for workflow in (unit_tests, *analyzer_jobs):
+            self.assertIn(setup_action, workflow)
+            self.assertIn('dotnet-version: "8.0.x"', workflow)
+            self.assertIn(
+                "kusto_analyzer/kusto_analyzer.csproj",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet restore "$analyzer_project" '
+                "--locked-mode --nologo",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet build "$analyzer_project"',
+                workflow,
+            )
+            self.assertIn(
+                "ASIM_KUSTO_ANALYZER_DLL=",
+                workflow,
+            )
+        for workflow in analyzer_jobs:
+            self.assertIn(
+                "Trusted base predates the Kusto analyzer; "
+                "using its legacy validator.",
+                workflow,
+            )
 
     def test_workflow_never_masks_validation_failures(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
