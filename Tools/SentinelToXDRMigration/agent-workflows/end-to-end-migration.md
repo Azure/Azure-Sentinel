@@ -69,6 +69,8 @@ disabled-by-default, and exact-scope authorization gates remain in force.
 
 `Discovery -> Conversion -> Validation -> Packaging -> Report`
 
+Whenever an existing Analytic Rule (`Analytic Rules/*.yaml`) or Custom Detection (`XDR Detections/*.yaml`) is modified, its semantic patch version (`X.Y.Z` -> `X.Y.(Z+1)`) must be bumped, while unmodified rules and detections retain their existing version.
+
 Legacy offline Authoring does not require a tenant, workspace, deployment, mock
 ingestion, or alert-parity test. New capability-version-1 CLI runs use the
 candidate ARM lifecycle below; their default lab route requires an approved

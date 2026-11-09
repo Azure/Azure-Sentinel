@@ -76,17 +76,15 @@ normal errors and gates. Do not package or deploy content with unresolved
 review flags; query execution and preserved custom details do not prove entity
 correlation or alert parity.
 
-The converter must not modify `Analytic Rules` or `Package/mainTemplate.json`.
+The converter must not modify `Package/mainTemplate.json`, and must not modify `Analytic Rules` except to bump the top-level patch `version` when an already-tracked Analytic Rule has been modified and `--overwrite` is used.
 Generated detections must remain disabled.
 `XDR Detections` must contain detection YAML only.
 
-New detections receive an independent top-level `version: 3.1.0`; source
-Sentinel versions remain unchanged in `contentProvenance.source.version`.
+New detections receive an independent top-level `version` (defaulting to the solution's release version in `[3.1.0, 4.0.0)` or `3.1.0`); source
+Sentinel versions are preserved in `contentProvenance.source.version`.
 The XDR release must be a `major.minor.patch` string in `[3.1.0, 4.0.0)`.
-Regeneration preserves a valid existing XDR version for the same source rule,
-including with `--overwrite`. Invalid versions or mismatched source identities
+When reconverting with `--overwrite`, unmodified detections preserve their existing `version`, while modified Analytic Rules and modified Custom Detections automatically bump their patch version (`X.Y.Z` -> `X.Y.(Z+1)`). Invalid versions or mismatched source identities
 are conflicts and must not be silently reset. Older YAML without its own version
 fails validation/packaging; after reviewing manual edits and obtaining overwrite
 approval, reconvert with `--overwrite` to initialize `3.1.0`, or explicitly author
-the independent XDR version. Do not change schema/API versions or source AR
-versions to satisfy the XDR release bounds.
+the independent XDR version. Do not change schema/API versions to satisfy the XDR release bounds.

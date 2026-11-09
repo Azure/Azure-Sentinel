@@ -13,6 +13,13 @@ import uuid
 
 import yaml
 
+from solution_manager.migration.converter import (
+    _bump_patch_version,
+    _git_head_tracked_files,
+    _load_git_head_yaml,
+    _version_tuple,
+    _without_version,
+)
 from solution_manager.qualification.pr_applicability import (
     determine_pr_applicability,
 )
@@ -1701,6 +1708,7 @@ def _evaluate_validation_checks(
             issues: list[str] = []
             refs = []
             checked_count = 0
+            repo_root, tracked_head_files = _git_head_tracked_files(solution_root)
 
             for rel in ar_files:
                 checked_count += 1
@@ -1724,6 +1732,18 @@ def _evaluate_validation_checks(
                 for tech in doc.get("relevantTechniques") or []:
                     if not _MITRE_TECHNIQUE_RE.match(str(tech).strip()):
                         issues.append(f"{rel}: invalid MITRE technique '{tech}'")
+                if tracked_head_files:
+                    head_doc = _load_git_head_yaml(solution_root / rel, repo_root, tracked_head_files)
+                    if isinstance(head_doc, Mapping) and head_doc.get("version") is not None:
+                        if _without_version(doc) != _without_version(head_doc):
+                            cur_ver = str(doc.get("version") or "").strip()
+                            head_ver = str(head_doc.get("version") or "").strip()
+                            if _version_tuple(cur_ver) <= _version_tuple(head_ver):
+                                expected_ver = _bump_patch_version(head_ver)
+                                issues.append(
+                                    f"{rel}: modified Analytic Rule must bump patch version from "
+                                    f"'{head_ver}' to '{expected_ver}' (found '{cur_ver}')"
+                                )
 
             for rel in xdr_files:
                 checked_count += 1
@@ -1744,6 +1764,18 @@ def _evaluate_validation_checks(
                 for tech in xdr_fields["techniques"]:
                     if not _MITRE_TECHNIQUE_RE.match(tech):
                         issues.append(f"{rel}: invalid MITRE technique '{tech}'")
+                if tracked_head_files:
+                    head_doc = _load_git_head_yaml(solution_root / rel, repo_root, tracked_head_files)
+                    if isinstance(head_doc, Mapping) and head_doc.get("version") is not None:
+                        if _without_version(doc) != _without_version(head_doc):
+                            cur_ver = str(doc.get("version") or "").strip()
+                            head_ver = str(head_doc.get("version") or "").strip()
+                            if _version_tuple(cur_ver) <= _version_tuple(head_ver):
+                                expected_ver = _bump_patch_version(head_ver)
+                                issues.append(
+                                    f"{rel}: modified XDR Detection must bump patch version from "
+                                    f"'{head_ver}' to '{expected_ver}' (found '{cur_ver}')"
+                                )
 
             if issues:
                 results.append(

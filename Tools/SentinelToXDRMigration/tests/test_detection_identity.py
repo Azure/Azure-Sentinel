@@ -64,7 +64,7 @@ class DetectionIdentityTests(unittest.TestCase):
         self.assertEqual(CANONICAL_ID, document["properties"]["id"])
         self.assertEqual(SOURCE_ID, document["contentProvenance"]["source"]["id"])
         self.assertEqual(CANONICAL_ID, graph_detection_payload(document)["id"])
-        self.assertEqual("3.1.0", document["version"])
+        self.assertEqual("3.1.1", document["version"])
         self.assertEqual("disabled", document["properties"]["status"])
 
     def test_source_guid_format_and_case_are_preserved_not_normalized(self):
@@ -95,7 +95,7 @@ class DetectionIdentityTests(unittest.TestCase):
             graph.assert_not_called()
         self.assertEqual(0, result["conflicts"])
         document = self.read_output()
-        self.assertEqual("3.1.1", document["version"])
+        self.assertEqual("3.1.2", document["version"])
         self.assertEqual(CANONICAL_ID, document["properties"]["id"])
         self.assertEqual("disabled", document["properties"]["status"])
         conversion = document["contentProvenance"]["conversion"]
