@@ -2,7 +2,7 @@
 
 ARM template for ASIM AlertEvent schema parser for Google Cloud Security Command Center.
 
-This ASIM parser supports normalizing Google Cloud Security Command Center findings, stored in the GoogleCloudSCC table, to the ASIM Alert Event normalized schema.
+This ASIM parser supports normalizing Google Cloud Security Command Center findings, stored in the GoogleCloudSCC table, to the ASIM Alert Event normalized schema. All finding classes are normalized except `SCC_ERROR`. `EventSubType` is derived from the finding class.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
