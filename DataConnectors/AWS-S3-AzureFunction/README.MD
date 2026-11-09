@@ -1,4 +1,7 @@
-# Azure Sentinel Data connector to ingest AWS S3 Files
+# [Deprecated] Azure Sentinel Data connector to ingest AWS S3 Files
+
+> **NOTE:** This data connector has been deprecated.
+
 **Author: Sreedhar Ande**  
 
 Azure Sentinel Data connector to ingest AWS S3 Files using Azure Function App. This Data connector currently support the following file types from AWS S3  

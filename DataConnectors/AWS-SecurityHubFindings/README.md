@@ -1,4 +1,6 @@
-# Ingest AWS Security Hub Events to Azure Sentinel
+# [Deprecated] Ingest AWS Security Hub Events to Azure Sentinel
+
+> **NOTE:** This data connector has been deprecated.
 
 Authors: Sreedhar Ande, Håkon Drange, Truls Dahlsveen
 

@@ -1,3 +1,7 @@
+## Unreleased source maintenance
+
+Marked the legacy Azure Function data connector as deprecated. This definition is not included in the current solution package; the CCF connector and package version are unchanged.
+
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
 | 3.0.2       | 06-04-2026                     | codeless **Data Connector** bases on Rest + api polling Moved to GA + small fix to avoid arm-ttk validation issue		|  
