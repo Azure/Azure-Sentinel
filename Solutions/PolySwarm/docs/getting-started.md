@@ -46,12 +46,12 @@ The playbooks read your key from the Key Vault, so it never sits in plain text a
 5. For **Secret value**, paste your PolySwarm API key.
 6. Choose **Create**.
 
-![The empty Create a secret form in the Azure portal](images/getting-started/01-key-vault-create-secret.png)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/01-key-vault-create-secret-dark.png"><img alt="The empty Create a secret form in the Azure portal" src="images/getting-started/01-key-vault-create-secret.png"></picture>
 
 You should now see `PolySwarmApiKey` in the list, with the status **Enabled**. The key
 itself is never shown.
 
-![The Key Vault secrets list showing PolySwarmApiKey as Enabled](images/getting-started/02-key-vault-secret-listed.png)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/02-key-vault-secret-listed-dark.png"><img alt="The Key Vault secrets list showing PolySwarmApiKey as Enabled" src="images/getting-started/02-key-vault-secret-listed.png"></picture>
 
 ## Step 2. Install PolySwarm from the Content hub
 
@@ -73,11 +73,11 @@ in, and that is normal.
 1. In Microsoft Sentinel, open **Configuration**, then **Data connectors**.
 2. Type **PolySwarm** in the search box. You will see two connectors.
 
-   ![The data connectors list filtered to the two PolySwarm connectors](images/getting-started/04-data-connectors-polyswarm.png)
+   <picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/04-data-connectors-polyswarm-dark.png"><img alt="The data connectors list filtered to the two PolySwarm connectors" src="images/getting-started/04-data-connectors-polyswarm.png"></picture>
 
 3. Select **PolySwarm Hunting**, then **Open connector page**.
 
-   ![The PolySwarm Hunting side pane](images/getting-started/05-hunting-side-pane.png)
+   <picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/05-hunting-side-pane-dark.png"><img alt="The PolySwarm Hunting side pane" src="images/getting-started/05-hunting-side-pane.png"></picture>
 
 4. Paste your PolySwarm API key into **PolySwarm API Key**.
 5. Leave **Community** as `public`, unless your hunts run in a private community. Then
@@ -87,12 +87,12 @@ in, and that is normal.
 7. Select **Connect**. It can take up to a minute, and the page does not show progress
    while it works.
 
-   ![The PolySwarm Hunting connector page after connecting](images/getting-started/06-hunting-page-connected.png)
+   <picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/06-hunting-page-connected-dark.png"><img alt="The PolySwarm Hunting connector page after connecting" src="images/getting-started/06-hunting-page-connected.png"></picture>
 
 When it works, the button changes to **Disconnect** and the status turns **Connected**.
 The key box looks empty again afterwards. That is normal: Azure never shows a saved key.
 
-![The bottom of the connector page, explaining what to expect after you connect](images/getting-started/07-hunting-what-to-expect.png)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/07-hunting-what-to-expect-dark.png"><img alt="The bottom of the connector page, explaining what to expect after you connect" src="images/getting-started/07-hunting-what-to-expect.png"></picture>
 
 ## Step 4. Connect the PolySwarm Curated Feed (if your plan includes it)
 
@@ -103,7 +103,7 @@ takes in, so check Microsoft Sentinel pricing before you connect it.
 1. In **Data connectors**, select **PolySwarm Curated Feed**, then **Open connector
    page**.
 
-   ![The PolySwarm Curated Feed side pane, including the data volume note](images/getting-started/08-feed-side-pane.png)
+   <picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/08-feed-side-pane-dark.png"><img alt="The PolySwarm Curated Feed side pane, including the data volume note" src="images/getting-started/08-feed-side-pane.png"></picture>
 
 2. Type your PolySwarm account number into **PolySwarm Account Number**.
 3. Paste your API key into **PolySwarm API Key**.
@@ -111,14 +111,14 @@ takes in, so check Microsoft Sentinel pricing before you connect it.
 5. Leave **Polling window** at 60 minutes.
 6. Select **Connect**.
 
-![The PolySwarm Curated Feed connector page after connecting](images/getting-started/09-feed-page-connected.png)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/09-feed-page-connected-dark.png"><img alt="The PolySwarm Curated Feed connector page after connecting" src="images/getting-started/09-feed-page-connected.png"></picture>
 
 After you connect, the boxes look empty and the Feed box shows its hint text instead
 of your choice. That is normal.
 
 When both connectors are connected, both show a green bar in the list:
 
-![Both PolySwarm connectors connected](images/getting-started/10-both-connectors-connected.png)
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/getting-started/10-both-connectors-connected-dark.png"><img alt="Both PolySwarm connectors connected" src="images/getting-started/10-both-connectors-connected.png"></picture>
 
 ## Step 5. Check the status page
 
@@ -134,7 +134,9 @@ your own workspace. It never calls PolySwarm.
 You will see one chart for each connector, when each last delivered something, and
 tiles for sandbox results and alerts.
 
-![The PolySwarm status workbook with data from both connectors](images/getting-started/12-workbook.png)
+![The PolySwarm status workbook with data from both connectors, first part](images/getting-started/12-workbook-a.png)
+
+![The PolySwarm status workbook, second part](images/getting-started/12-workbook-b.png)
 
 Give it an hour after connecting. A tile that says nothing has arrived yet is normal on
 a new install; each one fills as its source starts producing data.
@@ -162,6 +164,11 @@ What each rule does:
   a file PolySwarm is very sure about.
 - **PolySwarm sandbox detonation malicious** raises an alert when a PolySwarm sandbox
   playbook finds a file or link is malicious.
+
+When a rule fires, the alert becomes an incident. If your workspace is onboarded to the
+Microsoft Defender portal, PolySwarm incidents appear there too.
+
+![A PolySwarm incident in the Microsoft Defender portal](images/getting-started/21-defender-incident.png)
 
 ## Step 7. Add PolySwarm's verdict to incidents
 
@@ -209,6 +216,51 @@ its lines.)
 
 The comment gives the verdict, how many scanning engines called the file malicious,
 the malware family when known, and a link to the full PolySwarm report.
+
+## Detonate a link in the PolySwarm sandbox
+
+The sandbox playbook runs each link on an incident in a PolySwarm sandbox and reports
+what happened. Create it the same way as the enrichment playbook.
+
+1. In the **Content hub**, open **PolySwarm**, then **Manage**.
+2. Find **PolySwarm-Sandbox-Url-IncidentTriggered**, select it, and choose
+   **Configuration**, then **Playbook templates**, then **Create playbook**.
+3. On the **Parameters** page, fill in three values:
+
+   - **WorkspaceName**: the name of your Log Analytics workspace, which must be in the
+     same resource group as the playbook.
+   - **Community**: the short name of your private PolySwarm community. The playbook
+     will not submit to the public community unless you also set
+     **AllowPublicCommunity** to true.
+   - **KeyVaultName**: the name of your Key Vault (the vault from step 1).
+
+   ![The Parameters page of the sandbox playbook](images/getting-started/19-sandbox-playbook-parameters.png)
+
+4. Go through the remaining pages and choose **Create**. The first deployment also
+   creates the table the sandbox results are stored in, and the collection resources
+   that feed it. You do not need to set those up yourself.
+
+Then grant the roles and attach it to an incident, as in the steps above for the
+enrichment playbook. Detonation is metered and takes minutes, so consider running it by
+hand on an incident rather than on every one.
+
+When it finishes, the incident gets a comment with the verdict and the sandbox score out
+of 10, the sandbox provider and virtual machine, the malware family and MITRE ATT&CK
+techniques when the sandbox finds them, the community, the task id, and a link to the
+PolySwarm report. Each result is also written to the sandbox results table, which feeds
+the sandbox detonation rule and the status workbook.
+
+## Check your quota
+
+The **PolySwarm-CheckQuota** playbook adds a comment to an incident showing how much of
+your PolySwarm quota you have used. Create it from its template the same way, then run
+it by hand on an incident.
+
+![A PolySwarm quota check comment on an incident](images/getting-started/20-quota-comment.png)
+
+This lab plan has no limits, so it shows unmetered. On a metered plan the comment shows
+used, limit and remaining for API calls and sandbox detonations, and a warning when
+either runs low.
 
 ## Other playbooks
 
