@@ -21,6 +21,9 @@ query: |
   let lookback = 7d;
   // Sign-ins inside this window after the disable are excluded while the change applies
   let gracePeriod = 15m;
+  // Correlate on the stable object ID (TargetResources.id / sign-in UserId) so renamed users,
+  // guest UPN differences, and reused UPNs don't cause missed or misattributed results.
+  // UPNs are kept for display only.
   let AccountStateChanges = materialize(
       AuditLogs
       | where TimeGenerated >= ago(lookback)
@@ -28,40 +31,40 @@ query: |
       | where Result =~ "success"
       | mv-expand TargetResource = TargetResources
       | where tostring(TargetResource.type) =~ "User"
+      | extend TargetUserId = tostring(TargetResource.id)
+      | where isnotempty(TargetUserId)
       | extend TargetUpn = tolower(tostring(TargetResource.userPrincipalName))
-      | where isnotempty(TargetUpn)
       | extend ChangedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)),
                                tostring(InitiatedBy.user.userPrincipalName),
                                tostring(InitiatedBy.app.displayName))
-      | project TimeGenerated, OperationName, TargetUpn, ChangedBy);
+      | project TimeGenerated, OperationName, TargetUserId, TargetUpn, ChangedBy);
   let Disables =
       AccountStateChanges
       | where OperationName =~ "Disable account"
-      | project DisabledTime = TimeGenerated, TargetUpn, DisabledBy = ChangedBy;
-  let DisabledUpns = Disables | distinct TargetUpn;
+      | project DisabledTime = TimeGenerated, TargetUserId, DisabledUpn = TargetUpn, DisabledBy = ChangedBy;
+  let DisabledUserIds = Disables | distinct TargetUserId;
   let Enables =
       AccountStateChanges
       | where OperationName =~ "Enable account"
-      | project EnabledTime = TimeGenerated, EnabledUpn = TargetUpn;
+      | project EnabledTime = TimeGenerated, EnabledUserId = TargetUserId;
   // For each disable, find the first re-enable that follows it, if any
   let DisabledWindows =
       Disables
-      | join kind=leftouter Enables on $left.TargetUpn == $right.EnabledUpn
+      | join kind=leftouter Enables on $left.TargetUserId == $right.EnabledUserId
       | extend EnabledAfter = iff(EnabledTime > DisabledTime, EnabledTime, datetime(null))
-      | summarize ReEnabledTime = min(EnabledAfter) by TargetUpn, DisabledTime, DisabledBy;
+      | summarize ReEnabledTime = min(EnabledAfter) by TargetUserId, DisabledUpn, DisabledTime, DisabledBy;
   union
       (SigninLogs
       | where TimeGenerated >= ago(lookback)
       | where ResultType == "0"
-      | where UserPrincipalName in~ (DisabledUpns)
+      | where UserId in (DisabledUserIds)
       | extend SignInType = "Interactive"),
       (AADNonInteractiveUserSignInLogs
       | where TimeGenerated >= ago(lookback)
       | where ResultType == "0"
-      | where UserPrincipalName in~ (DisabledUpns)
+      | where UserId in (DisabledUserIds)
       | extend SignInType = "NonInteractive")
-  | extend UserUpn = tolower(UserPrincipalName)
-  | join kind=inner DisabledWindows on $left.UserUpn == $right.TargetUpn
+  | join kind=inner DisabledWindows on $left.UserId == $right.TargetUserId
   | where TimeGenerated > DisabledTime + gracePeriod
   | where isnull(ReEnabledTime) or TimeGenerated < ReEnabledTime
   | summarize
@@ -69,10 +72,13 @@ query: |
       LastSignInAfterDisable = max(TimeGenerated),
       SignInCount = count(),
       SignInTypes = make_set(SignInType, 2),
+      SignInUpns = make_set(tolower(UserPrincipalName), 5),
       Apps = make_set(AppDisplayName, 20),
       IPAddresses = make_set(IPAddress, 20),
       SampleIPAddress = take_any(IPAddress)
-      by UserUpn, DisabledTime, DisabledBy, ReEnabledTime
+      by UserId, DisabledUpn, DisabledTime, DisabledBy, ReEnabledTime
+  // Display UPN: the UPN at disable time, or the sign-in UPN if the audit event had none
+  | extend UserUpn = iff(isnotempty(DisabledUpn), DisabledUpn, tostring(SignInUpns[0]))
   | extend AccountName = tostring(split(UserUpn, "@")[0])
   | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
   | sort by FirstSignInAfterDisable desc
@@ -85,6 +91,8 @@ entityMappings:
         columnName: AccountName
       - identifier: UPNSuffix
         columnName: AccountUPNSuffix
+      - identifier: AadUserId
+        columnName: UserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -94,7 +102,7 @@ customDetails:
   DisabledBy: DisabledBy
   SignInCount: SignInCount
   FirstSignIn: FirstSignInAfterDisable
-version: 1.0.0
+version: 1.0.1
 metadata:
     source:
         kind: Community
