@@ -2,7 +2,14 @@
 
 ## Summary
 
-Runs every 24 hours, downloads the full Silent Push IOFA IPv4 export (`iofa-exports/all_iofas_ips.txt`), bulk-enriches the IPs in batches of 100 and uploads them to Microsoft Sentinel Threat Intelligence as STIX indicators (Upload Indicators API).
+Runs every 24 hours, downloads a Silent Push export of IPs that you choose, bulk-enriches the IPs in batches of 100 and uploads them to Microsoft Sentinel Threat Intelligence as STIX indicators (Upload Indicators API).
+
+```mermaid
+flowchart LR
+    A["Every 24 hours"] --> B["Export (needs user input)<br/>download the chosen<br/>Silent Push export"]
+    B --> C["Enrich<br/>bulk-enrich in<br/>batches of 100"]
+    C --> D["Upload TI<br/>send STIX indicators<br/>to Sentinel"]
+```
 
 ### Prerequisites
 
@@ -36,6 +43,12 @@ The playbook deploys with an empty API key for the Silent Push connection.
 
 The Microsoft Sentinel connection (`azuresentinel-<PlaybookName>`) uses the playbook's managed identity. The deployment grants it the **Microsoft Sentinel Contributor** role on the workspace, so the deploying user needs Owner or User Access Administrator rights on that workspace.
 
-#### c. Enable the playbook
+#### c. Choose the export to process
 
-The playbook is deployed **Disabled**. Enable it once the connections are authorized.
+1. Open the playbook in the **Logic app designer** and select the **Export IP** action.
+2. Fill in **export_category** and **file_name** with the Silent Push export you want to process.
+3. Click **Save**.
+
+#### d. Enable the playbook
+
+The playbook is deployed **Disabled**. Enable it once the connections are authorized and the export is set.
