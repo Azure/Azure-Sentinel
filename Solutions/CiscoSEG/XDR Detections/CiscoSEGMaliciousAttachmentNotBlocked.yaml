@@ -1,0 +1,90 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSEGEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 236e872c-31d1-4b45-ac2a-fda3af465c97
+    path: Analytic Rules/CiscoSEGMaliciousAttachmentNotBlocked.yaml
+    version: 1.0.3
+    querySha256: 020a7cbc979b1a85204b3a98f1dde69967ee69f16bfcc0300e083ba4730ec222
+    schedule:
+      queryFrequency: 10m
+      queryPeriod: 10m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10m, lookback=10m; target frequency=PT10M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name output column `AccountCustomEntity` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 107a0a8643381c8acb94fa5c4db49875cb27b877cf1f613844dccf1c9c857f65
+      targetQuerySha256: 28c2e6c95b88624d27ca5a75fe978345298947979918c72264b812d81f745d93
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-236e872c-31d1-4b45-ac2a-fda3af465c97
+  displayName: Cisco SEG - Malicious attachment not blocked
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CiscoSEGEvent
+      | where NetworkDirection =~ 'Incoming'
+      | where SimplifiedDeviceAction =~ 'DELIVERED'
+      | where tostring(AdditionalFields) has 'ESAAMPVerdict'
+      | extend amp_verdict = extract(@'ESAAMPVerdict":"(NOT_EVALUATED|CLEAN|FA_PENDING|UNKNOWN|SKIPPED|UNSCANNABLE|LOW_RISK|MALICIOUS)"', 1, tostring(AdditionalFields))
+      | where amp_verdict =~ 'MALICIOUS'
+      | extend AccountCustomEntity = DstUserName, IPCustomEntity = coalesce(SourceIP, DvcIpAddr)
+      | project-away AdditionalFields
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: Cisco SEG - Malicious attachment not blocked
+      description: '''Detects mails with malicious attachments which were not blocked.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566

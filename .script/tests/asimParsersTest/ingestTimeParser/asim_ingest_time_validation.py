@@ -34,10 +34,7 @@ from asim_ingestion.parser.discovery import (
     resolve_query_time_pair,
 )
 from asim_ingestion.parser.kql import (
-    mask_kql,
     resolve_source_specific_fixture,
-    split_kql_statements,
-    split_pipeline,
 )
 from asim_ingestion.parser.static_validation import validate_ingest_time_parser
 
@@ -53,13 +50,10 @@ __all__ = [
     "get_changed_files",
     "load_yaml_file",
     "main",
-    "mask_kql",
     "normalize_changed_path",
     "parser_common",
     "resolve_query_time_pair",
     "resolve_source_specific_fixture",
-    "split_kql_statements",
-    "split_pipeline",
     "validate_ingest_time_parser",
 ]
 

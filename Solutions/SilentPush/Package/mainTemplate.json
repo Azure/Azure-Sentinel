@@ -47,11 +47,11 @@
     "email": "support@silentpush.com",
     "_email": "[variables('email')]",
     "_solutionName": "SilentPush",
-    "_solutionVersion": "3.1.1",
+    "_solutionVersion": "3.1.2",
     "solutionId": "silentpushinc1618175309468.azure-sentinel-solution-silentpush",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.1.1",
+    "dataConnectorCCPVersion": "3.1.2",
     "_dataConnectorContentIdConnectorDefinition1": "SilentPushFeedsConnectorDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "SilentPushFeedsConnectorDefinitionConnections",
@@ -131,7 +131,7 @@
                   "id": "SilentPushFeedsConnectorDefinition",
                   "title": "SilentPush Feeds",
                   "publisher": "Silent Push",
-                  "descriptionMarkdown": "Native codeless data connector for monitoring Silent Push threat actor feeds. Supports feed exports in CSV format with a header row (e.g. `*_enriched.csv`). Not compatible with headerless plaintext indicator lists (e.g. `*_ips.txt`, `*_domains.txt`) -- use the SilentPush Export Enrichment playbooks for those instead.",
+                  "descriptionMarkdown": "Native codeless data connector for monitoring Silent Push threat actor feeds. Supports feed exports in CSV format with a header row (e.g. `*_enriched.csv`). Not compatible with headerless plaintext indicator lists (e.g. `*_ips.txt`, `*_domains.txt`) -- use the SilentPush Export Enrichment playbooks for those instead. The feed is polled once every 24 hours and each poll ingests the full export, so the same indicator can appear once per day. To get the latest row per indicator, use `SLP_Feeds_CL | summarize arg_max(TimeGenerated, *) by indicator`.",
                   "graphQueriesTableName": "SLP_Feeds_CL",
                   "graphQueries": [
                     {
@@ -940,7 +940,7 @@
           "id": "SilentPushFeedsConnectorDefinition",
           "title": "SilentPush Feeds",
           "publisher": "Silent Push",
-          "descriptionMarkdown": "Native codeless data connector for monitoring Silent Push threat actor feeds. Supports feed exports in CSV format with a header row (e.g. `*_enriched.csv`). Not compatible with headerless plaintext indicator lists (e.g. `*_ips.txt`, `*_domains.txt`) -- use the SilentPush Export Enrichment playbooks for those instead.",
+          "descriptionMarkdown": "Native codeless data connector for monitoring Silent Push threat actor feeds. Supports feed exports in CSV format with a header row (e.g. `*_enriched.csv`). Not compatible with headerless plaintext indicator lists (e.g. `*_ips.txt`, `*_domains.txt`) -- use the SilentPush Export Enrichment playbooks for those instead. The feed is polled once every 24 hours and each poll ingests the full export, so the same indicator can appear once per day. To get the latest row per indicator, use `SLP_Feeds_CL | summarize arg_max(TimeGenerated, *) by indicator`.",
           "graphQueriesTableName": "SLP_Feeds_CL",
           "graphQueries": [
             {
@@ -1194,7 +1194,8 @@
                     "User-Agent": "Microsoft/Sentinel (Data Connector)"
                   },
                   "timeoutInSeconds": 120,
-                  "retryCount": 2
+                  "retryCount": 2,
+                  "queryWindowInMin": 1440
                 },
                 "response": {
                   "eventsJsonPaths": [
@@ -1226,7 +1227,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPushCustomConnector Playbook with template version 3.1.1",
+        "description": "SilentPushCustomConnector Playbook with template version 3.1.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -6336,7 +6337,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPush-IPExportEnrichment-Sample Playbook with template version 3.1.1",
+        "description": "SilentPush-IPExportEnrichment-Sample Playbook with template version 3.1.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -6416,7 +6417,7 @@
                     }
                   },
                   "actions": {
-                    "Export_IOFA": {
+                    "Export_IP": {
                       "type": "ApiConnection",
                       "inputs": {
                         "host": {
@@ -6425,18 +6426,18 @@
                           }
                         },
                         "method": "get",
-                        "path": "/api/v1/export/@{encodeURIComponent('iofa-exports')}/@{encodeURIComponent('all_iofas_ips.txt')}/"
+                        "path": "/api/v1/export/@{encodeURIComponent('')}/@{encodeURIComponent('')}/"
                       }
                     },
                     "Extract_Location": {
                       "type": "Compose",
                       "runAfter": {
-                        "Export_IOFA": [
+                        "Export_IP": [
                           "Succeeded",
                           "Failed"
                         ]
                       },
-                      "inputs": "@outputs('Export_IOFA')?['headers']?['Location']"
+                      "inputs": "@outputs('Export_IP')?['headers']?['Location']"
                     },
                     "Check_Location_Valid": {
                       "type": "If",
@@ -6515,7 +6516,7 @@
                                   "runStatus": "Failed",
                                   "error": {
                                     "code": "UntrustedRedirect",
-                                    "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
+                                    "message": "Silent Push IP export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                                   }
                                 }
                               }
@@ -6531,7 +6532,7 @@
                               "runStatus": "Failed",
                               "error": {
                                 "code": "ExportFailed",
-                                "message": "@concat('Silent Push IOFA IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IOFA')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_IOFA')?['body'], 'n/a'))))))"
+                                "message": "@concat('Silent Push IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IP')?['statusCode'], 'unknown')), '. Response body (truncated): ', substring(string(coalesce(outputs('Export_IP')?['body'], 'n/a')), 0, min(500, length(string(coalesce(outputs('Export_IP')?['body'], 'n/a'))))))"
                               }
                             }
                           }
@@ -6591,7 +6592,7 @@
           ],
           "metadata": {
             "title": "SilentPush-IPExportEnrichment-Sample",
-            "description": "Silent Push IPs export with enrichment",
+            "description": "Silent Push IPs export with enrichment. Flow: Every 24 hours -> Export (needs user input) -> Enrich (first 100 only, results not saved)",
             "prerequisites": [
               "1. Deploy the Silent Push custom connector BEFORE creating this playbook. Installing the solution does not create it. Deploy it with the Deploy to Azure button on https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SilentPush/Connector/SilentPushCustomConnector (or deploy its azuredeploy.json as a custom template).",
               "2. Deploy the connector into the same resource group where you create this playbook and keep its name as SilentPush-API (or use the same name in the CustomConnectorName parameter)."
@@ -6602,9 +6603,11 @@
               "1. Go to your Logic App -> API connections -> select the <PlaybookName> connection resource",
               "2. Go to General -> Edit API connection",
               "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
-              "4. Click Save"
+              "4. Click Save",
+              "**Choose the export to process**",
+              "The playbook has no default export. Before enabling it, open the playbook in the Logic app designer, select the Export IP action, fill in export_category and file_name with the Silent Push export you want to process, and click Save."
             ],
-            "lastUpdateTime": "2026-11-05T10:24:35.869Z",
+            "lastUpdateTime": "2026-11-10T10:41:36.581Z",
             "releaseNotes": {
               "version": "1.2",
               "title": "[variables('blanks')]",
@@ -6636,7 +6639,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPush-IPExportEnrichment-Full Playbook with template version 3.1.1",
+        "description": "SilentPush-IPExportEnrichment-Full Playbook with template version 3.1.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -6752,7 +6755,7 @@
                     }
                   },
                   "actions": {
-                    "Export_IOFA": {
+                    "Export_IP": {
                       "type": "ApiConnection",
                       "inputs": {
                         "host": {
@@ -6761,18 +6764,18 @@
                           }
                         },
                         "method": "get",
-                        "path": "/api/v1/export/@{encodeURIComponent('iofa-exports')}/@{encodeURIComponent('all_iofas_ips.txt')}/"
+                        "path": "/api/v1/export/@{encodeURIComponent('')}/@{encodeURIComponent('')}/"
                       }
                     },
                     "Extract_Location": {
                       "type": "Compose",
                       "runAfter": {
-                        "Export_IOFA": [
+                        "Export_IP": [
                           "Succeeded",
                           "Failed"
                         ]
                       },
-                      "inputs": "@outputs('Export_IOFA')?['headers']?['Location']"
+                      "inputs": "@outputs('Export_IP')?['headers']?['Location']"
                     },
                     "Check_Location_Valid": {
                       "type": "If",
@@ -6895,7 +6898,7 @@
                                           "id": "@{concat('indicator--', guid())}",
                                           "value": "@{item()?['ip']}",
                                           "name": "@{concat('Malicious IP: ', item()?['ip'])}",
-                                          "description": "Enriched via Silent Push IOFA export",
+                                          "description": "Enriched via Silent Push export",
                                           "pattern": "@{concat('[ipv4-addr:value = ''', item()?['ip'], ''']')}",
                                           "pattern_type": "stix",
                                           "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))",
@@ -6909,7 +6912,7 @@
                                             "x-silentpush-ext": {
                                               "extension_type": "property-extension",
                                               "vendor": "Silent Push",
-                                              "datasource": "SilentPush IOFA Export",
+                                              "datasource": "SilentPush",
                                               "asname": "@item()?['asname']",
                                               "asn": "@item()?['asn']",
                                               "asn_allocation_age": "@item()?['asn_allocation_age']",
@@ -6970,7 +6973,7 @@
                                         },
                                         "method": "post",
                                         "body": {
-                                          "sourcesystem": "Silent Push - IOFA Export",
+                                          "sourcesystem": "Silent Push - Export",
                                           "indicators": "@body('Build_TI_Indicators')"
                                         },
                                         "path": "[[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName')), '2025-07-01').customerId, '/UploadIndicators/')]",
@@ -6994,7 +6997,7 @@
                                       "runStatus": "Failed",
                                       "error": {
                                         "code": "ExportTooLarge",
-                                        "message": "@concat('Silent Push IOFA IP export exceeded the maximum supported size (', string(parameters('maxExportSizeChars')), ' characters, approximate - measured via string length, not exact byte count). The export was not processed to avoid excessive run duration/cost.')"
+                                        "message": "@concat('Silent Push IP export exceeded the maximum supported size (', string(parameters('maxExportSizeChars')), ' characters, approximate - measured via string length, not exact byte count). The export was not processed to avoid excessive run duration/cost.')"
                                       }
                                     }
                                   }
@@ -7010,7 +7013,7 @@
                                   "runStatus": "Failed",
                                   "error": {
                                     "code": "UntrustedRedirect",
-                                    "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
+                                    "message": "Silent Push IP export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                                   }
                                 }
                               }
@@ -7026,7 +7029,7 @@
                               "runStatus": "Failed",
                               "error": {
                                 "code": "ExportFailed",
-                                "message": "@concat('Silent Push IOFA IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IOFA')?['statusCode'], 'unknown')))"
+                                "message": "@concat('Silent Push IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IP')?['statusCode'], 'unknown')))"
                               }
                             }
                           }
@@ -7110,7 +7113,7 @@
           ],
           "metadata": {
             "title": "SilentPush-IPExportEnrichment-Full",
-            "description": "Silent Push IPs export with enrichment and TI upload",
+            "description": "Silent Push IPs export with enrichment and TI upload. Flow: Every 24 hours -> Export (needs user input) -> Enrich -> Upload TI",
             "prerequisites": [
               "1. Deploy the Silent Push custom connector BEFORE creating this playbook. Installing the solution does not create it. Deploy it with the Deploy to Azure button on https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SilentPush/Connector/SilentPushCustomConnector (or deploy its azuredeploy.json as a custom template).",
               "2. Deploy the connector into the same resource group where you create this playbook and keep its name as SilentPush-API (or use the same name in the CustomConnectorName parameter)."
@@ -7121,9 +7124,11 @@
               "1. Go to your Logic App -> API connections -> select the <PlaybookName> connection resource",
               "2. Go to General -> Edit API connection",
               "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
-              "4. Click Save"
+              "4. Click Save",
+              "**Choose the export to process**",
+              "The playbook has no default export. Before enabling it, open the playbook in the Logic app designer, select the Export IP action, fill in export_category and file_name with the Silent Push export you want to process, and click Save."
             ],
-            "lastUpdateTime": "2026-11-05T10:24:38.050Z",
+            "lastUpdateTime": "2026-11-10T10:41:37.856Z",
             "releaseNotes": {
               "version": "1.4",
               "title": "[variables('blanks')]",
@@ -7155,7 +7160,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPush-DomainExportEnrichment-Sample Playbook with template version 3.1.1",
+        "description": "SilentPush-DomainExportEnrichment-Sample Playbook with template version 3.1.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion4')]",
@@ -7244,7 +7249,7 @@
                           }
                         },
                         "method": "get",
-                        "path": "/api/v1/export/@{encodeURIComponent('iofa-exports')}/@{encodeURIComponent('all_iofas_domains.txt')}/"
+                        "path": "/api/v1/export/@{encodeURIComponent('')}/@{encodeURIComponent('')}/"
                       }
                     },
                     "Extract_Location": {
@@ -7334,7 +7339,7 @@
                                   "runStatus": "Failed",
                                   "error": {
                                     "code": "UntrustedRedirect",
-                                    "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
+                                    "message": "Silent Push domain export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                                   }
                                 }
                               }
@@ -7350,7 +7355,7 @@
                               "runStatus": "Failed",
                               "error": {
                                 "code": "ExportFailed",
-                                "message": "@concat('Silent Push IOFA domain export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_Domains')?['statusCode'], 'unknown')))"
+                                "message": "@concat('Silent Push domain export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_Domains')?['statusCode'], 'unknown')))"
                               }
                             }
                           }
@@ -7410,7 +7415,7 @@
           ],
           "metadata": {
             "title": "SilentPush-DomainExportEnrichment-Sample",
-            "description": "Silent Push domains export with enrichment",
+            "description": "Silent Push domains export with enrichment. Flow: Every 24 hours -> Export (needs user input) -> Enrich (first 100 only, results not saved)",
             "prerequisites": [
               "1. Deploy the Silent Push custom connector BEFORE creating this playbook. Installing the solution does not create it. Deploy it with the Deploy to Azure button on https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SilentPush/Connector/SilentPushCustomConnector (or deploy its azuredeploy.json as a custom template).",
               "2. Deploy the connector into the same resource group where you create this playbook and keep its name as SilentPush-API (or use the same name in the CustomConnectorName parameter)."
@@ -7421,9 +7426,11 @@
               "1. Go to your Logic App -> API connections -> select the <PlaybookName> connection resource",
               "2. Go to General -> Edit API connection",
               "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
-              "4. Click Save"
+              "4. Click Save",
+              "**Choose the export to process**",
+              "The playbook has no default export. Before enabling it, open the playbook in the Logic app designer, select the Export Domains action, fill in export_category and file_name with the Silent Push export you want to process, and click Save."
             ],
-            "lastUpdateTime": "2026-11-05T10:24:38.480Z",
+            "lastUpdateTime": "2026-11-10T10:41:38.149Z",
             "releaseNotes": {
               "version": "1.2",
               "title": "[variables('blanks')]",
@@ -7455,7 +7462,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "SilentPush-DomainExportEnrichment-Full Playbook with template version 3.1.1",
+        "description": "SilentPush-DomainExportEnrichment-Full Playbook with template version 3.1.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion5')]",
@@ -7580,7 +7587,7 @@
                           }
                         },
                         "method": "get",
-                        "path": "/api/v1/export/@{encodeURIComponent('iofa-exports')}/@{encodeURIComponent('all_iofas_domains.txt')}/"
+                        "path": "/api/v1/export/@{encodeURIComponent('')}/@{encodeURIComponent('')}/"
                       }
                     },
                     "Extract_Location": {
@@ -7714,7 +7721,7 @@
                                           "id": "@{concat('indicator--', guid())}",
                                           "value": "@{item()?['domaininfo']?['query']}",
                                           "name": "@{concat('Malicious Domain: ', item()?['domaininfo']?['query'])}",
-                                          "description": "Enriched via Silent Push IOFA export",
+                                          "description": "Enriched via Silent Push export",
                                           "pattern": "@{concat('[domain-name:value = ''', item()?['domaininfo']?['query'], ''']')}",
                                           "pattern_type": "stix",
                                           "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))",
@@ -7728,7 +7735,7 @@
                                             "x-silentpush-ext": {
                                               "extension_type": "property-extension",
                                               "vendor": "Silent Push",
-                                              "datasource": "SilentPush IOFA Export",
+                                              "datasource": "SilentPush",
                                               "registrar": "@item()?['domaininfo']?['registrar']",
                                               "whois_age": "@item()?['domaininfo']?['whois_age']",
                                               "whois_created_date": "@item()?['domaininfo']?['whois_created_date']",
@@ -7772,7 +7779,7 @@
                                         },
                                         "method": "post",
                                         "body": {
-                                          "sourcesystem": "Silent Push - IOFA Export",
+                                          "sourcesystem": "Silent Push - Export",
                                           "indicators": "@body('Build_TI_Indicators')"
                                         },
                                         "path": "[[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName')), '2025-07-01').customerId, '/UploadIndicators/')]",
@@ -7796,7 +7803,7 @@
                                       "runStatus": "Failed",
                                       "error": {
                                         "code": "ExportTooLarge",
-                                        "message": "@concat('Silent Push IOFA domain export exceeded the maximum supported size (', string(parameters('maxExportSizeChars')), ' characters, approximate - measured via string length, not exact byte count). Actual export size: ', string(outputs('Get_Export_Total_Size')), ' characters. The export was not processed to avoid excessive run duration/cost. Consider running this playbook more frequently to keep exports smaller, or contact Silent Push support if this volume is expected.')"
+                                        "message": "@concat('Silent Push domain export exceeded the maximum supported size (', string(parameters('maxExportSizeChars')), ' characters, approximate - measured via string length, not exact byte count). Actual export size: ', string(outputs('Get_Export_Total_Size')), ' characters. The export was not processed to avoid excessive run duration/cost. Consider running this playbook more frequently to keep exports smaller, or contact Silent Push support if this volume is expected.')"
                                       }
                                     }
                                   }
@@ -7812,7 +7819,7 @@
                                   "runStatus": "Failed",
                                   "error": {
                                     "code": "UntrustedRedirect",
-                                    "message": "Silent Push IOFA domain export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
+                                    "message": "Silent Push domain export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                                   }
                                 }
                               }
@@ -7828,7 +7835,7 @@
                               "runStatus": "Failed",
                               "error": {
                                 "code": "ExportFailed",
-                                "message": "@{concat('Silent Push IOFA domain export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). Status code: ', string(outputs('Export_Domains')?['statusCode']), '. Response body (truncated): ', if(greater(length(string(body('Export_Domains'))), 1024), substring(string(body('Export_Domains')), 0, 1024), string(body('Export_Domains'))))}"
+                                "message": "@{concat('Silent Push domain export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). Status code: ', string(outputs('Export_Domains')?['statusCode']), '. Response body (truncated): ', if(greater(length(string(body('Export_Domains'))), 1024), substring(string(body('Export_Domains')), 0, 1024), string(body('Export_Domains'))))}"
                               }
                             }
                           }
@@ -7912,7 +7919,7 @@
           ],
           "metadata": {
             "title": "SilentPush-DomainExportEnrichment-Full",
-            "description": "Silent Push domains export with enrichment and TI upload",
+            "description": "Silent Push domains export with enrichment and TI upload. Flow: Every 24 hours -> Export (needs user input) -> Enrich -> Upload TI",
             "prerequisites": [
               "1. Deploy the Silent Push custom connector BEFORE creating this playbook. Installing the solution does not create it. Deploy it with the Deploy to Azure button on https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SilentPush/Connector/SilentPushCustomConnector (or deploy its azuredeploy.json as a custom template).",
               "2. Deploy the connector into the same resource group where you create this playbook and keep its name as SilentPush-API (or use the same name in the CustomConnectorName parameter)."
@@ -7923,9 +7930,11 @@
               "1. Go to your Logic App -> API connections -> select the <PlaybookName> connection resource",
               "2. Go to General -> Edit API connection",
               "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
-              "4. Click Save"
+              "4. Click Save",
+              "**Choose the export to process**",
+              "The playbook has no default export. Before enabling it, open the playbook in the Logic app designer, select the Export Domains action, fill in export_category and file_name with the Silent Push export you want to process, and click Save."
             ],
-            "lastUpdateTime": "2026-11-05T10:24:40.379Z",
+            "lastUpdateTime": "2026-11-10T10:41:39.229Z",
             "releaseNotes": {
               "version": "1.4",
               "title": "[variables('blanks')]",
@@ -7953,7 +7962,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.1.1",
+        "version": "3.1.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "SilentPush",
