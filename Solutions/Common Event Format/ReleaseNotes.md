@@ -1,6 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
-| 3.2.2       | 09-11-2026                     | Added Defender **XDR Workbook** (*CEFOverviewWorkbook*) and repackaged **Solution** with V3.1. |
 | 3.0.6       | 20-08-2025                     | The main template solution has been updated by changing arrays to fields for datatypes, graphqueries and samplequeries. |
 | 3.0.5       | 08-07-2025                     | Modifying the availability status.|
 | 3.0.4       | 24-06-2025                     | Updated Connector kind of Legacy CEF **Data Connector** so that the queries will be reflected.|
