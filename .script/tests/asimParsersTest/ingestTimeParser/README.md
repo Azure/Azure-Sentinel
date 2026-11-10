@@ -80,6 +80,11 @@ facts instead of custom KQL tokenization. CI restores the NuGet dependency in
 locked mode for discovery, template validation, and ingestion validation and
 passes the built trusted DLL through `ASIM_KUSTO_ANALYZER_DLL`.
 
+`ParserFilterQuery` and `ParserQuery` must each contain exactly one expression
+statement whose pipeline root is the lowercase name `source`. Leading `let`
+statements, multiple statements, parenthesized roots, external-table roots,
+and differently cased source names are rejected before operator-policy checks.
+
 `ParserQuery` is submitted to the parser DCR exactly as decoded from YAML.
 Static validation rejects queries longer than 14,800 characters with
 `KQL044`; comments, indentation, and line breaks count toward that limit.

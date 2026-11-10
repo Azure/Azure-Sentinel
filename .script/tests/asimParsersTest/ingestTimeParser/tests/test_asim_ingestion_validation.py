@@ -487,7 +487,7 @@ class FilterValidationTests(unittest.TestCase):
         self.assertEqual("pass-through", result["mode"])
         self.assertEqual(0, result["rejectedRowCount"])
 
-    def test_source_passthrough_allows_scalar_let_prerequisite(self):
+    def test_source_passthrough_rejects_scalar_let_prerequisite(self):
         client = FakeQueryClient(
             [
                 (
@@ -512,18 +512,20 @@ class FilterValidationTests(unittest.TestCase):
             ]
         )
 
-        result = self.validator().evaluate_filter(
-            client,
-            self.snapshot(),
-            {
-                "SourceRawTable": "Contoso_CL",
-                "ParserFilterQuery": (
-                    "let accepted = true;\nsource"
-                ),
-            },
-        )
-
-        self.assertEqual("pass-through", result["mode"])
+        with self.assertRaisesRegex(
+            VALIDATION.ValidationError,
+            "at least one rejected row",
+        ):
+            self.validator().evaluate_filter(
+                client,
+                self.snapshot(),
+                {
+                    "SourceRawTable": "Contoso_CL",
+                    "ParserFilterQuery": (
+                        "let accepted = true;\nsource"
+                    ),
+                },
+            )
 
 
 class ParityTests(unittest.TestCase):

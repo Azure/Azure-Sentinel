@@ -896,7 +896,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "FILTER001", {finding["code"] for finding in result["findings"]}
         )
 
-    def test_filter_let_must_appear_in_parser_query(self):
+    def test_filter_let_is_rejected_by_source_pipeline_shape(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -912,7 +912,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
         self.assertIn(
-            "FILTER003", {finding["code"] for finding in result["findings"]}
+            "KQL039", {finding["code"] for finding in result["findings"]}
         )
 
     def test_filter_stage_comparison_ignores_formatting(self):
@@ -1007,8 +1007,26 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "| project-away Temp*"
         )
 
-        self.assertEqual(2, analysis["version"])
+        self.assertEqual(3, analysis["version"])
         self.assertEqual([], analysis["diagnostics"])
+        self.assertEqual(
+            {
+                "isValid": True,
+                "statementCount": 1,
+                "statementType": "ExpressionStatement",
+                "rootType": "NameReference",
+                "rootText": "source",
+                "sourceLocation": {
+                    "start": 0,
+                    "length": 6,
+                    "line": 1,
+                    "column": 1,
+                    "text": "source",
+                    "normalizedText": "source",
+                },
+            },
+            analysis["sourcePipeline"],
+        )
         self.assertEqual("source", analysis["pipeline"]["rootText"])
         self.assertEqual(
             [
@@ -1040,6 +1058,25 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                 for reference in analysis["sourceReferences"]
             ],
         )
+
+    def test_kusto_analyzer_validates_exact_source_pipeline_shape(self):
+        cases = {
+            "source": (True, None),
+            "source | where (": (False, "diagnostics"),
+            "let selected = true; source": (
+                False,
+                "statementCount",
+            ),
+            "let selected = source": (False, "statementType"),
+            "Source | project EventType": (False, "root"),
+            "(source | project EventType)": (False, "root"),
+        }
+
+        for query, expected in cases.items():
+            with self.subTest(query=query):
+                source_pipeline = analyze_kql(query)["sourcePipeline"]
+                self.assertEqual(expected[0], source_pipeline["isValid"])
+                self.assertEqual(expected[1], source_pipeline.get("failure"))
 
     def test_ast_policy_mapping_covers_existing_kql_rules(self):
         query = """\
@@ -1304,7 +1341,7 @@ source
         ]
         self.assertEqual(2, len(findings), result["findings"])
 
-    def test_allows_supported_scalar_let_statement(self):
+    def test_rejects_scalar_let_before_source_pipeline(self):
         query = (
             "let selectedType = 'Login';\n"
             "source\n"
@@ -1329,7 +1366,15 @@ source
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
-        self.assertTrue(result["valid"], result["findings"])
+        self.assertFalse(result["valid"])
+        self.assertEqual(
+            2,
+            sum(
+                finding["code"] == "KQL039"
+                for finding in result["findings"]
+            ),
+            result["findings"],
+        )
 
     def test_detects_multiline_unsupported_function(self):
         ingest_path = self.write_yaml(
@@ -1367,7 +1412,6 @@ source
 
         codes = {finding["code"] for finding in result["findings"]}
         self.assertIn("KQL039", codes)
-        self.assertIn("KQL042", codes)
 
     def test_rejects_external_table_in_let_binding(self):
         ingest_path = self.write_yaml(
@@ -1384,7 +1428,36 @@ source
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
         self.assertIn(
-            "KQL043", {finding["code"] for finding in result["findings"]}
+            "KQL039", {finding["code"] for finding in result["findings"]}
+        )
+
+    def test_rejects_non_lowercase_source_root(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    'Source | where EventType == "Login"'
+                ),
+                parser_query=(
+                    'Source | where EventType == "Login"\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertEqual(
+            2,
+            sum(
+                finding["code"] == "KQL039"
+                for finding in result["findings"]
+            ),
+            result["findings"],
         )
 
     def test_ignores_unsupported_words_in_strings_and_comments(self):

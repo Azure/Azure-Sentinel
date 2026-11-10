@@ -173,10 +173,8 @@ def _is_source_passthrough(filter_query: str) -> bool:
     analysis = analyze_kql(filter_query)
     pipeline = analysis.get("pipeline")
     return (
-        not analysis["diagnostics"]
+        analysis["sourcePipeline"]["isValid"]
         and isinstance(pipeline, dict)
-        and pipeline.get("rootType") == "NameReference"
-        and str(pipeline.get("rootText", "")).casefold() == "source"
         and not pipeline["operators"]
     )
 
