@@ -17,6 +17,8 @@ HARNESS = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = HARNESS
 SPEC.loader.exec_module(HARNESS)
 
+from asim_ingestion.azure.common import build_fixture_snapshot
+
 
 class FakeResponse:
     def __init__(self, status_code=200, payload=None, headers=None):
@@ -208,6 +210,30 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             random_source=__import__("random").Random(0),
         )
         return harness, session, clock
+
+    def test_snapshot_rejects_case_insensitive_schema_duplicates(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+
+        with self.assertRaisesRegex(
+            HARNESS.HarnessError,
+            "case-insensitive duplicate columns",
+        ):
+            build_fixture_snapshot(
+                target_id="parser-a",
+                table_name="Contoso_CL",
+                timestamps=[timestamp],
+                schema=[
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {"name": "DvcOs", "type": "string"},
+                    {"name": "DvcOS", "type": "string"},
+                ],
+                fixture_rows=[
+                    {
+                        "TimeGenerated": timestamp,
+                        "DvcOs": "Windows",
+                    }
+                ],
+            )
 
     def test_builds_exact_timestamp_query(self):
         query = HARNESS.build_exact_timestamp_query(

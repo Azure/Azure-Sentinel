@@ -62,6 +62,12 @@ discover target
   → clean up DCRs and publish the report
 ```
 
+Fixture preparation matches row column names to repository schema names
+case-insensitively and rewrites them to the schema's canonical casing before
+type conversion. Two fixture columns that collapse to the same name are
+rejected. Snapshot construction repeats the case-insensitive uniqueness check
+so it cannot submit an invalid DCR stream declaration.
+
 The legacy `VerifyASimParserTemplate.py` validator is limited to query-time
 parser files under `Parsers/`; its changed-file filter excludes
 `IngestTimeParsers/`. Ingestion-time parsers are validated by the dedicated
@@ -80,10 +86,22 @@ facts instead of custom KQL tokenization. CI restores the NuGet dependency in
 locked mode for discovery, template validation, and ingestion validation and
 passes the built trusted DLL through `ASIM_KUSTO_ANALYZER_DLL`.
 
+`ParserFilterQuery` and `ParserQuery` must each contain exactly one expression
+statement whose pipeline root is the lowercase name `source`. Leading `let`
+statements, multiple statements, parenthesized roots, external-table roots,
+and differently cased source names are rejected before operator-policy checks.
+
 `ParserQuery` is submitted to the parser DCR exactly as decoded from YAML.
 Static validation rejects queries longer than 14,800 characters with
 `KQL044`; comments, indentation, and line breaks count toward that limit.
 The workflow does not compact or otherwise rewrite the parser query.
+Static policy checks enforce ASIM contract invariants such as one source,
+independent rows, no aggregation, no fan-out, no joins or external tabular
+sources, and explicit wildcard-free output schemas. They do not predict
+whether Azure DCR currently supports a scalar function or otherwise
+row-preserving parser operator; live parser-DCR creation is authoritative for
+those capability checks. `ParserFilterQuery` retains its narrower operator
+contract because it is used as the row-selection predicate.
 
 Parser validation does not depend on raw-table replay. QTP source replay is
 optional. If its table or DCR cannot be established, the report records a
@@ -161,15 +179,18 @@ shared types are consistent, it filters both row sets into
 row comparison across that shared schema.
 
 For the dynamic `AdditionalFields` property bag only, parity compares the
-case-sensitive set of top-level key names per row, not their values. Nested
-keys and values are not compared. This accommodates ingestion serialization
-changes such as date-shaped strings becoming datetimes. Row counts, duplicate
-multiplicity, schema types, and values in every other column remain strict.
-An empty property bag is still distinct from null or a non-object value;
-non-object `AdditionalFields` values retain the existing value comparison.
-Canonical mismatch examples replace property-bag values with null to represent
-key presence. The stored QTP/ITP rows and filtered rows retain their original
-values.
+case-sensitive set of top-level key names per row, not their values. It ignores
+the exact platform-managed keys `TenantId`, `TimeGenerated`, `Type`, and
+`_ResourceId` when they occur inside `AdditionalFields`; differently cased
+keys remain strict. Nested keys and values are not compared. This accommodates
+ingestion serialization changes such as date-shaped strings becoming
+datetimes and platform metadata unavailable to DCR transformations. Row
+counts, duplicate multiplicity, schema types, and values in every other column
+remain strict. An empty property bag is still distinct from null or a
+non-object value; non-object `AdditionalFields` values retain the existing
+value comparison. Canonical mismatch examples replace retained property-bag
+values with null to represent key presence. The stored QTP/ITP rows and
+filtered rows retain their original values.
 
 ## Tests
 

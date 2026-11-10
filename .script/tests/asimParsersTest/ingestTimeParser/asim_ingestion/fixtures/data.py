@@ -11,7 +11,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from .timestamps import (
     TimestampNamespace,
@@ -290,6 +290,50 @@ def _adapt_schema_to_rows(
     return adapted
 
 
+def _schema_names_by_casefold(
+    schema: Sequence[Mapping[str, Any]],
+) -> dict[str, str]:
+    names: dict[str, str] = {}
+    for column in schema:
+        name = str(column["name"])
+        folded = name.casefold()
+        if folded in names:
+            raise ValueError(
+                "Fixture schema contains case-insensitive duplicate "
+                f"columns: {names[folded]!r}, {name!r}."
+            )
+        names[folded] = name
+    return names
+
+
+def canonicalize_row_column_names(
+    schema: Sequence[Mapping[str, Any]],
+    rows: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    schema_names = _schema_names_by_casefold(schema)
+    extra_names: dict[str, str] = {}
+    canonical_rows: list[dict[str, Any]] = []
+    for row_number, row in enumerate(rows, start=1):
+        canonical_row: dict[str, Any] = {}
+        source_names: dict[str, str] = {}
+        for raw_name, value in row.items():
+            name = str(raw_name)
+            folded = name.casefold()
+            canonical_name = schema_names.get(folded)
+            if canonical_name is None:
+                canonical_name = extra_names.setdefault(folded, name)
+            if canonical_name in canonical_row:
+                raise ValueError(
+                    f"Fixture row {row_number} contains case-insensitive "
+                    "duplicate columns: "
+                    f"{source_names[canonical_name]!r}, {name!r}."
+                )
+            canonical_row[canonical_name] = value
+            source_names[canonical_name] = name
+        canonical_rows.append(canonical_row)
+    return canonical_rows
+
+
 def _convert_boolean(value: str, column_name: str) -> bool:
     normalized = value.casefold()
     if normalized == "true":
@@ -413,6 +457,12 @@ def prepare_fixture(
         datetime_columns,
         schema_path,
     )
+    rows = canonicalize_row_column_names(schema, rows)
+    schema_names = _schema_names_by_casefold(schema)
+    datetime_columns = {
+        schema_names.get(name.casefold(), name)
+        for name in datetime_columns
+    }
     schema = _adapt_schema_to_rows(schema, rows)
     if target_slot < 0 or target_slot >= target_count:
         raise ValueError(
