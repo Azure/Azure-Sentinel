@@ -24,7 +24,6 @@ from .common import (
 )
 from .kusto_analyzer import KustoAnalyzerError, analyze_kql
 from .kql import (
-    ALLOWED_DCR_OPERATORS,
     ALLOWED_FILTER_OPERATORS,
     ASIM_HELPER_RULE,
     KQL_CONSTRUCT_RULES,
@@ -179,7 +178,7 @@ def _operator_name(operator: dict[str, Any]) -> str | None:
 def _validate_pipeline_operators(
     analysis: dict[str, Any],
     field: str,
-    allowed_operators: set[str],
+    allowed_operators: set[str] | None,
     findings: list[Finding],
 ) -> None:
     pipeline = _validate_statement_shape(analysis, field, findings)
@@ -215,7 +214,10 @@ def _validate_pipeline_operators(
                     line=line if isinstance(line, int) else None,
                 )
             )
-        elif operator not in allowed_operators:
+        elif (
+            allowed_operators is not None
+            and operator not in allowed_operators
+        ):
             findings.append(
                 Finding(
                     "KQL041",
@@ -229,7 +231,7 @@ def _validate_pipeline_operators(
 def _validate_kql(
     query: str,
     field: str,
-    allowed_operators: set[str],
+    allowed_operators: set[str] | None,
     findings: list[Finding],
 ) -> dict[str, Any] | None:
     try:
@@ -651,7 +653,7 @@ def validate_ingest_time_parser(
             parser_analysis = _validate_kql(
                 parser_query,
                 "ParserQuery",
-                ALLOWED_DCR_OPERATORS,
+                None,
                 findings,
             )
         if (

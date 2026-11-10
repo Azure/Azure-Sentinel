@@ -6,17 +6,10 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-ALLOWED_DCR_OPERATORS = {
-    "extend",
-    "parse",
-    "project",
-    "project-away",
-    "project-rename",
-    "where",
-}
 ALLOWED_FILTER_OPERATORS = {
     "extend",
     "parse",
+    "parse-kv",
     "project-rename",
     "where",
 }
@@ -56,21 +49,6 @@ KQL_OPERATOR_RULES = {
         "distinct",
         "Per-row transformations cannot deduplicate records.",
     ),
-    "ProjectReorderOperator": KqlRule(
-        "KQL009",
-        "project-reorder",
-        "Column order is not part of the DCR contract.",
-    ),
-    "ParseKvOperator": KqlRule(
-        "KQL014",
-        "parse-kv",
-        "Rewrite with supported parsing expressions.",
-    ),
-    "ParseWhereOperator": KqlRule(
-        "KQL015",
-        "parse-where",
-        "Rewrite with parse or extract plus where.",
-    ),
     "MvApplyOperator": KqlRule(
         "KQL027",
         "mv operator",
@@ -89,100 +67,9 @@ KQL_OPERATOR_RULES = {
     "JoinOperator": KqlRule(
         "KQL031", "join", "A DCR transformation has one input stream."
     ),
-    "ProjectKeepOperator": KqlRule(
-        "KQL036",
-        "project-keep",
-        "Emit an explicit supported projection.",
-    ),
 }
 
 KQL_FUNCTION_RULES = {
-    **_named_rules(
-        KqlRule(
-            "KQL013",
-            "coalesce",
-            "Rewrite with iif and null or empty checks.",
-        ),
-        "coalesce",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL017",
-            "column_ifexists",
-            "Use columnifexists or a confirmed source column.",
-        ),
-        "column_ifexists",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL018",
-            "Unix time conversion",
-            "Rewrite with datetime arithmetic.",
-        ),
-        "unixtime_milliseconds_todatetime",
-        "unixtime_seconds_todatetime",
-        "unixtime_microseconds_todatetime",
-        "unixtime_nanoseconds_todatetime",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL020",
-            "bag_pack",
-            "Use pack or an explicit supported projection.",
-        ),
-        "bag_pack",
-        "bag_pack_columns",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL021",
-            "replace_string",
-            "Use the DCR-supported replace form.",
-        ),
-        "replace_string",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL022",
-            "array_index_of",
-            "Rewrite as supported scalar logic.",
-        ),
-        "array_index_of",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL023",
-            "array_slice",
-            "Rewrite with indexof and substring.",
-        ),
-        "array_slice",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL024",
-            "trim",
-            "Rewrite with anchored replace.",
-        ),
-        "trim",
-        "trim_start",
-        "trim_end",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL025",
-            "parse_url",
-            "Extract only the required URL components.",
-        ),
-        "parse_url",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL026",
-            "parse_user_agent",
-            "Extract only the required user-agent fields.",
-        ),
-        "parse_user_agent",
-    ),
     **_named_rules(
         KqlRule(
             "KQL029",
@@ -196,82 +83,9 @@ KQL_FUNCTION_RULES = {
         "take_anyif",
         "take_any",
     ),
-    **_named_rules(
-        KqlRule(
-            "KQL030",
-            "bag_merge",
-            "No sound DCR equivalent is available.",
-        ),
-        "bag_merge",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL032",
-            "tohex",
-            "No general DCR equivalent is available.",
-        ),
-        "tohex",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL033",
-            "IP utility",
-            "This IP utility is not supported by DCR transformations.",
-        ),
-        "ipv6_is_match",
-        "ipv4_netmask_suffix",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL034",
-            "url_decode",
-            "No exact DCR equivalent is available.",
-        ),
-        "url_decode",
-    ),
 }
 
 KQL_CONSTRUCT_RULES = {
-    "MaterializeExpression": KqlRule(
-        "KQL008",
-        "materialize",
-        "Remove the query-time caching hint.",
-    ),
-    "DynamicExpression": KqlRule(
-        "KQL010",
-        "dynamic literal",
-        "Use parse_json for dynamic literals.",
-    ),
-    "HasAnyExpression": KqlRule(
-        "KQL011",
-        "has_any",
-        "Expand to supported scalar comparisons.",
-    ),
-    "HasAllExpression": KqlRule(
-        "KQL012",
-        "has_all",
-        "Expand to supported scalar comparisons.",
-    ),
-    "InCsExpression": KqlRule(
-        "KQL016",
-        "case-insensitive operator",
-        "Normalize operands and use the supported operator.",
-    ),
-    "NotInCsExpression": KqlRule(
-        "KQL016",
-        "case-insensitive operator",
-        "Normalize operands and use the supported operator.",
-    ),
-    "BetweenExpression": KqlRule(
-        "KQL019",
-        "between",
-        "Rewrite as explicit comparisons.",
-    ),
-    "NotBetweenExpression": KqlRule(
-        "KQL019",
-        "between",
-        "Rewrite as explicit comparisons.",
-    ),
     "ToScalarExpression": KqlRule(
         "KQL035",
         "toscalar",

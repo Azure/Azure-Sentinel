@@ -95,6 +95,13 @@ and differently cased source names are rejected before operator-policy checks.
 Static validation rejects queries longer than 14,800 characters with
 `KQL044`; comments, indentation, and line breaks count toward that limit.
 The workflow does not compact or otherwise rewrite the parser query.
+Static policy checks enforce ASIM contract invariants such as one source,
+independent rows, no aggregation, no fan-out, no joins or external tabular
+sources, and explicit wildcard-free output schemas. They do not predict
+whether Azure DCR currently supports a scalar function or otherwise
+row-preserving parser operator; live parser-DCR creation is authoritative for
+those capability checks. `ParserFilterQuery` retains its narrower operator
+contract because it is used as the row-selection predicate.
 
 Parser validation does not depend on raw-table replay. QTP source replay is
 optional. If its table or DCR cannot be established, the report records a
