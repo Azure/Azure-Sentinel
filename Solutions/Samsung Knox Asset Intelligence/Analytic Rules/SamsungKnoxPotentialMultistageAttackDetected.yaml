@@ -1,6 +1,6 @@
 id: e9c8ebfd-e5bb-4a9e-9858-12907398cf5d
 name: Samsung Knox - Potential Multistage Attack Detected
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled
 description: |
   'Indicates potential threats based on detecting multi-stage attacks, initially focused on suspicious URL and app sideloading events'
@@ -12,7 +12,7 @@ requiredDataConnectors:
       - Samsung_Knox_User_CL
       - Samsung_Knox_Application_CL
 queryFrequency: 1d
-queryPeriod: 1d
+queryPeriod: 25h
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -20,32 +20,38 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
+  // Every stage correlates on DeviceKey: normalized Wi-Fi MAC first (every device has one),
+  // then IMEI, then serial number, so Wi-Fi-only devices without an IMEI are still detected.
   // Stage 1 - suspicious URL accessed (Samsung_Knox_User_CL). ConfidenceScore is carried
   // through as UrlConfidence for triage but is not filtered on.
   let suspiciousUrls =
       Samsung_Knox_User_CL
       | where Name == "SUSPICIOUS_URL_ACCESSED"
-      | where isnotempty(PrimaryImei)
       | extend PrimaryImei = replace_regex(tostring(PrimaryImei), @"[^0-9]", "")
-      | project PrimaryImei, Url, UrlConfidence = ConfidenceScore, UrlTime = TimeGenerated;
+      | extend DeviceKey = coalesce(replace_regex(tolower(tostring(DeviceWifimac)), @"[^0-9a-f]", ""), PrimaryImei, tostring(DeviceSerialNumber))
+      | where isnotempty(DeviceKey)
+      | project DeviceKey, PrimaryImei, Url, UrlConfidence = ConfidenceScore, UrlTime = TimeGenerated;
   // Stage 2 - package installed from source on the same device (Samsung_Knox_Application_CL).
   // InstallerPkgName identifies the install source (sideload signal).
   let sideloads =
       Samsung_Knox_Application_CL
       | where Name == "TAG_PACKAGE_INSTALLED_FROM_SOURCE"
-      | where isnotempty(PrimaryImei) and isnotempty(PkgName)
+      | where isnotempty(PkgName)
       | extend PrimaryImei = replace_regex(tostring(PrimaryImei), @"[^0-9]", "")
+      | extend DeviceKey = coalesce(replace_regex(tolower(tostring(DeviceWifimac)), @"[^0-9a-f]", ""), PrimaryImei, tostring(DeviceSerialNumber))
+      | where isnotempty(DeviceKey)
       | extend DeviceWifimac = tostring(column_ifexists("DeviceWifimac", ""))
-      | project PrimaryImei, InstalledPkg = PkgName, InstallerPkgName,
+      | project DeviceKey, InstalledPkg = PkgName, InstallerPkgName,
                 DeviceModel, DeviceSerialNumber, DeviceImei1, DeviceImei2, DeviceWifimac,
                 InstallTime = TimeGenerated;
   // Stage 3 - the installed app acquires covert surveillance capability (Samsung_Knox_Application_CL)
   let surveillanceGrants =
       Samsung_Knox_Application_CL
       | where Name in ("KEY_INPUT_CAPTURE_CAPABILITY", "SCREEN_CAPTURE_CAPABILITY")
-      | where isnotempty(PrimaryImei)
       | extend PrimaryImei = replace_regex(tostring(PrimaryImei), @"[^0-9]", "")
-      | project PrimaryImei, CapabilityPkg = PkgName, Capability = Name, CapabilityTime = TimeGenerated;
+      | extend DeviceKey = coalesce(replace_regex(tolower(tostring(DeviceWifimac)), @"[^0-9a-f]", ""), PrimaryImei, tostring(DeviceSerialNumber))
+      | where isnotempty(DeviceKey)
+      | project DeviceKey, CapabilityPkg = PkgName, Capability = Name, CapabilityTime = TimeGenerated;
   // Optional Intune enrichment. Device/Account entity is mapped ONLY for Intune-managed devices.
   // 'union isfuzzy=true' + the empty datatable seed tolerate IntuneDevices being absent
   // (customer has no Intune) so detection still fires and event info is still shown.
@@ -85,14 +91,17 @@ query: |
                         IntuneOSVersion = tostring(OSVersion)
           );
   suspiciousUrls
-  | join kind=inner (sideloads) on PrimaryImei
+  | join kind=inner (sideloads) on DeviceKey
   | where InstallTime > UrlTime
-  | join kind=inner (surveillanceGrants) on PrimaryImei
+  | join kind=inner (surveillanceGrants) on DeviceKey
   | where CapabilityTime >= InstallTime
   // Tie the acquired capability back to the app that was installed after the URL click.
   | where CapabilityPkg == InstalledPkg
+  // Only alert on chains completed in the latest 24h; the extra hour is lookback overlap only.
+  | where CapabilityTime > ago(1d)
   | summarize
       Capabilities        = make_set(Capability),
+      PrimaryImei         = take_any(PrimaryImei),
       UrlTime             = min(UrlTime),
       InstallTime         = min(InstallTime),
       FirstCapabilityTime = min(CapabilityTime),
@@ -102,7 +111,7 @@ query: |
       DeviceImei1         = take_any(DeviceImei1),
       DeviceImei2         = take_any(DeviceImei2),
       DeviceWifimac       = take_any(DeviceWifimac)
-      by PrimaryImei, Url, PkgName = InstalledPkg, InstallerPkgName
+      by DeviceKey, Url, PkgName = InstalledPkg, InstallerPkgName
   // Device resolution keys: WiFi MAC (primary) and IMEI (fallback), both normalized.
   | extend MacKey = replace_regex(tolower(tostring(DeviceWifimac)), @"[^0-9a-f]", "")
   | extend ImeiKey = replace_regex(tostring(PrimaryImei), @"[^0-9]", "")
@@ -125,7 +134,7 @@ query: |
   | extend OSVersion = iff(isnotempty(IntuneDeviceName), coalesce(IntuneOSVersion, ""), "")
   | project
       TimeGenerated = FirstCapabilityTime,
-      PrimaryImei, IntuneDeviceName, IntuneUPN, IntuneManaged, DeviceResolvedInIntune, IntuneCompliance, DeviceMatchedBy,
+      DeviceKey, PrimaryImei, IntuneDeviceName, IntuneUPN, IntuneManaged, DeviceResolvedInIntune, IntuneCompliance, DeviceMatchedBy,
       OSPlatform, OSVersion,
       DeviceModel, DeviceSerialNumber, DeviceImei1, DeviceImei2,
       Url, UrlConfidence, PkgName, InstallerPkgName, CapabilitiesAcquired,
@@ -154,6 +163,7 @@ entityMappings:
       - identifier: FullName
         columnName: IntuneUPN
 customDetails:
+  DeviceKey: DeviceKey
   PrimaryImei: PrimaryImei
   MaliciousPkg: PkgName
   InstallerPkg: InstallerPkgName
@@ -167,8 +177,8 @@ customDetails:
   DeviceMatchedBy: DeviceMatchedBy
   IntuneCompliance: IntuneCompliance
 alertDetailsOverride:
-  alertDisplayNameFormat: 'Samsung Knox - Multistage attack on device {{PrimaryImei}} ({{PkgName}})'
-  alertDescriptionFormat: 'Device {{PrimaryImei}} accessed a suspicious URL, then installed {{PkgName}}, which acquired {{CapabilitiesAcquired}}.'
+  alertDisplayNameFormat: 'Samsung Knox - Multistage attack on device {{DeviceKey}} ({{PkgName}})'
+  alertDescriptionFormat: 'Device {{DeviceKey}} accessed a suspicious URL, then installed {{PkgName}}, which acquired {{CapabilitiesAcquired}}.'
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -177,7 +187,7 @@ incidentConfiguration:
     lookbackDuration: P1D
     matchingMethod: Selected
     groupByCustomDetails:
-      - PrimaryImei
+      - DeviceKey
       - MaliciousPkg
 eventGroupingSettings:
   aggregationKind: AlertPerResult
