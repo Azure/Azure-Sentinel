@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.2       | 29-10-2026                     | Migrated 11 Analytic Rules to XDR Detections and 1 Workbook to XDR Workbooks. |
 | 3.0.5       | 02-10-2026                     | Fixed API versions for saved searches resource in mainTemplate |
 | 3.0.4       | 27-10-2025                     | Add missing "detailed" flag to CCF **Data Connector** polling config |
 | 3.0.3       | 10-10-2025                     | CCF **Data Connector** Moving to GA.		|

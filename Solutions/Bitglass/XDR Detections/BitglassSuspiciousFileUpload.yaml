@@ -1,0 +1,129 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Bitglass
+  dataTypes:
+  - Bitglass
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - BitglassLogs_CL
+  requiredDataConnectors:
+  - connectorId: Bitglass
+    dataTypes:
+    - BitglassLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4b272e82-19f1-40d1-bfdf-74fbb6353e8b
+    path: Analytic Rules/BitglassSuspiciousFileUpload.yaml
+    version: 1.0.1
+    querySha256: 095c61d3b50e92997ff4b7a1f43559d33fb14e8b28b37ccf2259be6ec0d0cad7
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped
+      to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise
+      project an Entra user ID, SID, or account name plus domain'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved
+      as customDetails.AccountName from query column `AccountCustomEntity`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+    reviewScope:
+      sourceDocumentSha256: 94218dd938f039c3f5d4cd2629debadf6adee42859fe461f5f2719d303d3ea55
+      targetQuerySha256: 9d9ac427df9780fd9b4b0b35c595526b6cc02c36dfb18df369979eb0a9dcf6f4
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 94218dd938f039c3f5d4cd2629debadf6adee42859fe461f5f2719d303d3ea55
+      targetQuerySha256: 9d9ac427df9780fd9b4b0b35c595526b6cc02c36dfb18df369979eb0a9dcf6f4
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountName
+    reviewDecisions:
+    - decision: approved
+      reason: Entity mapping AccountCustomEntity to Account.upnColumn reviewed and
+        approved for Defender XDR custom detection.
+      reviewedAt: '2026-04-20T21:15:00Z'
+properties:
+  id: xdr-4b272e82-19f1-40d1-bfdf-74fbb6353e8b
+  displayName: Bitglass - Suspicious file uploads
+  status: disabled
+  queryCondition:
+    queryText: 'Bitglass
+
+      | where EventType =~ ''swgwebdlp''
+
+      | where HttpRequestMethod =~ ''POST''
+
+      | where isnotempty(DlpPattern)
+
+      | summarize count() by User, bin(TimeGenerated, 15m)
+
+      | where count_ > 1
+
+      | extend AccountCustomEntity = User'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Bitglass - Suspicious file uploads
+      description: '''Detects suspicious file upload activity.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      customDetails:
+        AccountName: AccountCustomEntity

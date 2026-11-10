@@ -1,0 +1,2918 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "<div style=\"font-size: 200%;\">Palo Alto Networks overview</div>"
+      },
+      "name": "text - 0"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "parameters": [
+          {
+            "id": "a5c18655-3e2d-4d12-8ba4-82e57b296581",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 2592000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "32f5a8aa-9c54-4fd1-a2b9-8461b2c57f55",
+            "version": "KqlParameterItem/1.0",
+            "name": "Source_IP",
+            "label": "Source IP",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "CommonSecurityLog\r\n| summarize Count = count()/1000 by SourceIP\r\n| where SourceIP != \"\"\r\n| order by Count desc, SourceIP asc\r\n| project Value = SourceIP, Label = strcat(SourceIP, \" - \", Count, \"k\"), Selected = false\r\n",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 1800000
+            },
+            "queryType": "advancedHunting"
+          },
+          {
+            "id": "b937ca33-bc62-4183-bc0f-9ad8306dc36a",
+            "version": "KqlParameterItem/1.0",
+            "name": "Destination_IP",
+            "label": "Destination IP",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "CommonSecurityLog\r\n| summarize Count = count()/1000 by DestinationIP\r\n| where DestinationIP != \"\"\r\n| order by Count desc, DestinationIP asc\r\n| project Value = DestinationIP, Label = strcat(DestinationIP, \" - \", Count, \"k\"), Selected = false",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "limitSelectTo": 10,
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters - 5"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "parameters": [
+          {
+            "id": "7f28bae3-a11f-408a-832f-77a0f3e633d7",
+            "version": "KqlParameterItem/1.0",
+            "name": "EventClass",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| distinct DeviceEventClassID",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters - 35"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP})\r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where \"{EventClass:lable}\" == \"All\" or \"{EventClass:lable}\" == \"All\" or DeviceEventClassID in ({EventClass});\r\ndata\r\n| summarize Count = count() by Activity\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Activity)\r\n on Activity\r\n| project-away Activity1, TimeGenerated\r\n| extend Activitys = Activity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend Activity = 'All', Activitys = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportFieldName": "Activity",
+        "exportParameterName": "activities",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Activities, by volume",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Activity",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "blueDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "lightBlue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activitys",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "jkey",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "jkey1",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        },
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Activity",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "all activities"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP})\r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where \"{EventClass:lable}\" == \"All\" or DeviceEventClassID in ({EventClass})\r\n| where '{activities}' == \"All\" or Activity == '{activities}'\r\n| summarize LogVolume=count() by DeviceEventClassID, bin_at(TimeGenerated, {TimeRange:grain}, {TimeRange:start})",
+        "size": 0,
+        "aggregation": 3,
+        "exportToExcelOptions": "visible",
+        "title": "Event trend, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "DeviceEventClassID",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "LogVolume",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "Event trend by time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//trend by sevearity\r\nCommonSecurityLog\r\n| where DeviceProduct has 'PAN-OS'\r\n| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where \"{EventClass:lable}\" == \"All\" or DeviceEventClassID in ({EventClass})\r\n| where '{activities}' == \"All\" or Activity == '{activities}'\r\n| summarize count() by bin_at(TimeGenerated, {TimeRange:grain},{TimeRange:start}), LogSeverity\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Events severity, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "LogSeverity",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        },
+        "graphSettings": {
+          "type": 0,
+          "topContent": {
+            "columnMatch": "LogSeverity",
+            "formatter": 1
+          },
+          "centerContent": {
+            "columnMatch": "count_",
+            "formatter": 1,
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "Events severity over time"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\r\n### Traffic events summary"
+      },
+      "name": "text - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ \"Traffic\";\r\ndata\r\n| summarize Count = count() by DeviceEventClassID\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceEventClassID)\r\n on DeviceEventClassID\r\n| project-away DeviceEventClassID1, TimeGenerated\r\n| extend DeviceEventClassIDs = DeviceEventClassID\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceEventClassID = 'All', DeviceEventClassIDs = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportFieldName": "DeviceEventClassID",
+        "exportParameterName": "EventClass",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Device events Id summary - click to filter the graph below",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "DeviceEventClassID",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "50",
+      "name": "Traffic event summary"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ \"Traffic\";\r\ndata\r\n| summarize Count = count() by DeviceAction\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceAction)\r\n on DeviceAction\r\n| project-away DeviceAction1, TimeGenerated\r\n| extend DeviceAction = DeviceAction\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceAction = 'All', DeviceActions = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportFieldName": "DeviceAction",
+        "exportParameterName": "DeviceAction",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Device action summary - click to filter the graph below",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "DeviceAction",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 3,
+              "formatOptions": {
+                "palette": "blueDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "blueDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "jkey",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "jkey1",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeviceActions",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        },
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "DeviceAction",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "33",
+      "name": "Traffic activity summary"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'TRAFFIC'\r\n| where '{EventClass}' == \"All\" or DeviceEventClassID=='{EventClass}'\r\n| summarize EventCount= count() by DeviceAction, bin_at(TimeGenerated, {TimeRange:grain}, {TimeRange:start})",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Device action, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "Traffic activity by time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where '{DeviceAction}' == \"All\" or DeviceAction=='{DeviceAction}'\r\n| where Activity =~ \"Traffic\"\r\n| summarize EventCount= count() by DeviceEventClassID, bin_at(TimeGenerated, {TimeRange:grain}, {TimeRange:start})",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Device events Id, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "Traffic class ID by time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks' \r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'TRAFFIC' \r\n| where DeviceEventClassID =~ 'end' \r\n| extend Reason = coalesce(\r\n                            column_ifexists(\"Reason\", \"\"),\r\n                            extract(';reason=(.*?);',1,AdditionalExtensions),\r\n                            \"\"\r\n                        )\r\n| summarize ReasonCount= count() by  Reason, TimeGenerated  \r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Reasons for session ending, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "timechart"
+      },
+      "customWidth": "50",
+      "name": "Reasons for session ending"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Data sent outbound vs inbound\r\nCommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'TRAFFIC'\r\n| extend Direction=iff(DeviceCustomString4=~'Trust','Outbound' ,'Inbound' )\r\n| summarize DataSentOutBoundMB=sumif(SentBytes, Direction=~'Outbound')/1048576,   DataRecievedInboundMB=sumif(ReceivedBytes, Direction=~'Inbound')/1048576 by TimeGenerated\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Sent and received data, by volume",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "timechart"
+      },
+      "customWidth": "50",
+      "name": "Sent and received data by volume"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\r\n## Web filter"
+      },
+      "name": "text - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| where DeviceAction contains 'block'\r\n| summarize ProtocolCount=count()  by ApplicationProtocol\r\n| top 5 by ProtocolCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 blocked URLs, by application protocol",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ApplicationProtocol",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ProtocolCount",
+              "formatter": 4,
+              "formatOptions": {
+                "min": 0,
+                "palette": "purple",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "25",
+      "name": "Top 5 blocked URLs by application protocol"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| where DeviceAction in ('block-url', 'block-continue')\r\n| summarize CategoryCount=count() by DeviceCustomString2\r\n| project-rename CategoryName= DeviceCustomString2\r\n| top 5 by CategoryCount\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 URL blocked, by category",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "CategoryName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "CategoryCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "25",
+      "name": "op 5 URL blocked by category"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| where DeviceAction in ('block-url', 'block-continue')\r\n| summarize URLCount=count() by RequestURL\r\n| top 5 by URLCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 blocked URLs",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting"
+      },
+      "customWidth": "25",
+      "name": "Top 5 blocked URLs"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| summarize ProtocolCount=count() by ApplicationProtocol\r\n| top 5 by ProtocolCount desc",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 URLs, by application protocols",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ApplicationProtocol",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ProtocolCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "25",
+      "name": "Top 5 URLs by application protocols"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| where DeviceAction in ('alert', 'continue')\r\n| summarize URLCount=count() by RequestURL\r\n| top 5 by URLCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 allowed URLs",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "RequestURL",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "URLCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "25",
+      "name": "Top 5 allowed URLs"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| summarize ActionCount=count() by DeviceAction\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "URL threat event summary",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "DeviceAction",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ActionCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "25",
+      "name": "URL threat event summary"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| where DeviceAction contains 'block'\r\n| extend PAReferer= extract(';PanOSReferer=(.*?);',1,AdditionalExtensions)\r\n| where PAReferer !=''\r\n| summarize RefererCount= count() by PAReferer\r\n| top 5 by RefererCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 referrers for blocked URLs",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting"
+      },
+      "customWidth": "25",
+      "name": "Top 5 referrers for blocked URLs"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| where DeviceAction in ('alert', 'continue')\r\n| summarize CategoryCount=count() by DeviceCustomString2\r\n| project-rename CategoryName= DeviceCustomString2\r\n| top 5 by CategoryCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 allowed URLs, by category",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "CategoryName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "CategoryCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "25",
+      "name": "Top 5 allowed URLs, by category"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| where DeviceAction !contains 'block'\r\n| summarize ProtocolCount=count()  by ApplicationProtocol\r\n| top 5 by ProtocolCount desc",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 allowed URLs, by application protocol",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ApplicationProtocol",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ProtocolCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "33",
+      "name": "Top 5 allowed URLs by application protocol"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| summarize ActionCount=count() by DeviceAction, TimeGenerated\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Web filter ativity, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "DeviceAction",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ActionCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "33",
+      "name": "Web filter ativity by time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where DeviceEventClassID =~ 'url'\r\n| where DeviceAction in ('alert', 'continue')\r\n| summarize IPCount=count() by SourceIP\r\n| top 5 by IPCount  desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 allowed web traffic source IP addresses",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SourceIP",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "IPCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "33",
+      "name": "Top 5 allowed web traffic source IP addresses"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\r\n## Wildfire"
+      },
+      "name": "text - 24"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'wildfire'\r\n| summarize ActionCount=count() by DeviceAction, TimeGenerated\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Wildfire events, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "timechart"
+      },
+      "customWidth": "50",
+      "name": "Wildfire events, by time"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~'wildfire'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP});\r\ndata\r\n| summarize Count = count() by DeviceAction\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceAction)\r\n on DeviceAction\r\n| project-away DeviceAction1, TimeGenerated\r\n| extend DeviceActions = DeviceAction\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceAction = 'All', DeviceActions = '*' \r\n)\r\n| project DeviceAction, Count, Trend\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportFieldName": "DeviceAction",
+        "exportParameterName": "DeviceAction",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 Wildfire activities",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "DeviceAction",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 3,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "grayBlue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeviceActions",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "jkey",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "jkey1",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "DeviceAction",
+              "sortOrder": 1
+            }
+          ],
+          "labelSettings": []
+        },
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "DeviceAction",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "25",
+      "name": "Top 5 Wildfire activities"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~'wildfire'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP});\r\ndata\r\n| summarize Count = count() by DeviceCustomString2\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceCustomString2)\r\n on DeviceCustomString2\r\n| project-away DeviceCustomString21, TimeGenerated\r\n| extend DeviceCustomString2s = DeviceCustomString2\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceCustomString2 = 'All', DeviceCustomString2s = '*' \r\n)\r\n| project DeviceCustomString2, Count, Trend\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportFieldName": "DeviceCustomString2",
+        "exportParameterName": "DeviceString",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 Wildfire verdicts",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "DeviceAction",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 3,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "grayBlue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeviceActions",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "jkey",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "jkey1",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "DeviceAction",
+              "sortOrder": 1
+            }
+          ],
+          "labelSettings": []
+        },
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "DeviceCustomString2",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "25",
+      "name": "Top 5 Wildfire verdicts"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'wildfire'\r\n| where '{DeviceAction}' == \"All\" or DeviceAction=='{DeviceAction}'\r\n| where '{DeviceString}' == \"All\" or DeviceCustomString2=='{DeviceString}'\r\n| project TimeGenerated, ReceiptTime, LogSeverity, DeviceAction, ['URL Category'] =DeviceCustomString2, DestinationPort, DestinationIP, Message, SourcePort, SourceIP, DestinationUserID, RequestURL",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Wildfire events",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "name": "Wildfire events"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\r\n## General statistics"
+      },
+      "name": "text - 30"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where DeviceEventClassID  =~ 'file'\r\n| where DeviceAction contains 'deny'\r\n| summarize ProtocolCount=count()  by ApplicationProtocol\r\n| top 5 by ProtocolCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 denied files, by application protocol",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ApplicationProtocol",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ProtocolCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "33",
+      "name": "Top 5 denied files by application protocol"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where DeviceEventClassID  =~ 'file'\r\n| where DeviceAction !contains 'deny'\r\n| summarize ProtocolCount=count()  by ApplicationProtocol\r\n| top 5 by ProtocolCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 allowed files, by application protocol",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ApplicationProtocol",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ProtocolCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "33",
+      "name": "Top 5 allowed files by application protocol"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//Palo Alto File Category By Action Summary\r\nCommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks' \r\n| where Activity =~ 'THREAT'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where DeviceEventClassID =~ 'file' \r\n| extend PACategory= coalesce(\r\n                            column_ifexists(\"DeviceEventCategory\", \"\"),\r\n                            extract(';cat=(.*?)($|;)',1,AdditionalExtensions),\r\n                            \"\"\r\n                        )\r\n| summarize CategoryCount=count() by PACategory\r\n| sort by CategoryCount",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Summary of Palo Alto file categories, by activity",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "PACategory",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "CategoryCount",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "coldHot",
+                "showIcon": true
+              },
+              "numberFormat": {
+                "unit": 17,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            }
+          ],
+          "labelSettings": []
+        }
+      },
+      "customWidth": "33",
+      "name": "Summary of Palo Alto file categories by activity"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~'file'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP});\r\ndata\r\n| summarize Count = count() by DeviceAction\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceAction)\r\n on DeviceAction\r\n| project-away DeviceAction1, TimeGenerated\r\n| extend DeviceActions = DeviceAction\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceAction = 'All', DeviceActions = '*' \r\n)\r\n| project DeviceAction, Count, Trend\r\n| order by Count desc\r\n| take 10\r\n",
+        "size": 4,
+        "exportFieldName": "DeviceAction",
+        "exportParameterName": "SelectedDA",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Summary of file type activities",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "DeviceAction",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "25",
+      "name": "Summary of file type activities"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'file'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where '{SelectedDA}' == \"All\" or DeviceAction == '{SelectedDA}'\r\n| summarize ActionCount=count() by DeviceAction, bin(TimeGenerated, {TimeRange:grain})\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Compare allowed and denied files, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "timechart"
+      },
+      "name": "Compare allowed and denied files by time"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-PaloAltoOverview",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "xdrMetadata": {
+    "contentId": "c3eaca0b-63ec-598f-9c2d-e999a82095ed",
+    "instanceId": "2173fe52-2a00-5293-99d6-1d8957a28743",
+    "version": "3.2.2",
+    "schemaVersion": "1.0.0",
+    "displayName": "Palo Alto overview"
+  },
+  "contentProvenance": {
+    "source": {
+      "path": "Workbooks/PaloAltoOverview.json",
+      "sha256": "48130ac3bff766321002e7ebea11d1f79ed1242fdea281824e5ba98712914ea2",
+      "contentId": "sentinel-PaloAltoOverview",
+      "originalMetadataVersion": null
+    },
+    "conversion": {
+      "tool": "sentinel-xdr-migration",
+      "version": "0.1.0",
+      "reviewRequired": false,
+      "queries": [
+        {
+          "sourcePath": "/items/1/content/parameters/1/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "1b3fadb56cab557e3ff9feb57ccf62757a195566dd6e3b05cf46f2819449af43"
+          },
+          "conversion": {
+            "sourceId": "/items/1/content/parameters/1/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| summarize Count = count()/1000 by SourceIP\r\n| where SourceIP != \"\"\r\n| order by Count desc, SourceIP asc\r\n| project Value = SourceIP, Label = strcat(SourceIP, \" - \", Count, \"k\"), Selected = false\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/1/content/parameters/1/query",
+          "sourceSha256": "1b3fadb56cab557e3ff9feb57ccf62757a195566dd6e3b05cf46f2819449af43",
+          "targetSha256": "1b3fadb56cab557e3ff9feb57ccf62757a195566dd6e3b05cf46f2819449af43"
+        },
+        {
+          "sourcePath": "/items/1/content/parameters/2/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "dec60baf7078e45d8d34636f454018bf0f3ba6b225558449d98d068151237984"
+          },
+          "conversion": {
+            "sourceId": "/items/1/content/parameters/2/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| summarize Count = count()/1000 by DestinationIP\r\n| where DestinationIP != \"\"\r\n| order by Count desc, DestinationIP asc\r\n| project Value = DestinationIP, Label = strcat(DestinationIP, \" - \", Count, \"k\"), Selected = false",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/1/content/parameters/2/query",
+          "sourceSha256": "dec60baf7078e45d8d34636f454018bf0f3ba6b225558449d98d068151237984",
+          "targetSha256": "dec60baf7078e45d8d34636f454018bf0f3ba6b225558449d98d068151237984"
+        },
+        {
+          "sourcePath": "/items/2/content/parameters/0/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "53a27e1ce8452b7abe9bce0bbb40f038481216b92cea0a30b848eafaa670584c"
+          },
+          "conversion": {
+            "sourceId": "/items/2/content/parameters/0/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| distinct DeviceEventClassID",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/2/content/parameters/0/query",
+          "sourceSha256": "53a27e1ce8452b7abe9bce0bbb40f038481216b92cea0a30b848eafaa670584c",
+          "targetSha256": "53a27e1ce8452b7abe9bce0bbb40f038481216b92cea0a30b848eafaa670584c"
+        },
+        {
+          "sourcePath": "/items/3/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "ea74564cbdca8f47542a5ad3db4e33939043c82723ab30914905a9e8c0c24dff"
+          },
+          "conversion": {
+            "sourceId": "/items/3/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP})\r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where \"{EventClass:lable}\" == \"All\" or \"{EventClass:lable}\" == \"All\" or DeviceEventClassID in ({EventClass});\r\ndata\r\n| summarize Count = count() by Activity\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Activity)\r\n on Activity\r\n| project-away Activity1, TimeGenerated\r\n| extend Activitys = Activity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend Activity = 'All', Activitys = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/3/content/query",
+          "sourceSha256": "ea74564cbdca8f47542a5ad3db4e33939043c82723ab30914905a9e8c0c24dff",
+          "targetSha256": "ea74564cbdca8f47542a5ad3db4e33939043c82723ab30914905a9e8c0c24dff"
+        },
+        {
+          "sourcePath": "/items/4/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "ef560b1da50af034ac43ec5002acf9ddd4046646d932d453aa5bcc9c60f40163"
+          },
+          "conversion": {
+            "sourceId": "/items/4/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP})\r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where \"{EventClass:lable}\" == \"All\" or DeviceEventClassID in ({EventClass})\r\n| where '{activities}' == \"All\" or Activity == '{activities}'\r\n| summarize LogVolume=count() by DeviceEventClassID, bin_at(TimeGenerated, {TimeRange:grain}, {TimeRange:start})",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/4/content/query",
+          "sourceSha256": "ef560b1da50af034ac43ec5002acf9ddd4046646d932d453aa5bcc9c60f40163",
+          "targetSha256": "ef560b1da50af034ac43ec5002acf9ddd4046646d932d453aa5bcc9c60f40163"
+        },
+        {
+          "sourcePath": "/items/5/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "62ed47b87dd9613577f68ecd14cfddd864b2ff7a4736b2d540ed4fec6c7bd72d"
+          },
+          "conversion": {
+            "sourceId": "/items/5/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "//trend by sevearity\r\nCommonSecurityLog\r\n| where DeviceProduct has 'PAN-OS'\r\n| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where \"{EventClass:lable}\" == \"All\" or DeviceEventClassID in ({EventClass})\r\n| where '{activities}' == \"All\" or Activity == '{activities}'\r\n| summarize count() by bin_at(TimeGenerated, {TimeRange:grain},{TimeRange:start}), LogSeverity\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/5/content/query",
+          "sourceSha256": "62ed47b87dd9613577f68ecd14cfddd864b2ff7a4736b2d540ed4fec6c7bd72d",
+          "targetSha256": "62ed47b87dd9613577f68ecd14cfddd864b2ff7a4736b2d540ed4fec6c7bd72d"
+        },
+        {
+          "sourcePath": "/items/7/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "5298ee142d12a6459e13b4400ccfa9c515f7122cc1932927743146f2eff5f979"
+          },
+          "conversion": {
+            "sourceId": "/items/7/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ \"Traffic\";\r\ndata\r\n| summarize Count = count() by DeviceEventClassID\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceEventClassID)\r\n on DeviceEventClassID\r\n| project-away DeviceEventClassID1, TimeGenerated\r\n| extend DeviceEventClassIDs = DeviceEventClassID\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceEventClassID = 'All', DeviceEventClassIDs = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/7/content/query",
+          "sourceSha256": "5298ee142d12a6459e13b4400ccfa9c515f7122cc1932927743146f2eff5f979",
+          "targetSha256": "5298ee142d12a6459e13b4400ccfa9c515f7122cc1932927743146f2eff5f979"
+        },
+        {
+          "sourcePath": "/items/8/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "7cf533d2eeef3f842953f25baf9ac2f22c05b74a2ccd641be0e5005921ca394b"
+          },
+          "conversion": {
+            "sourceId": "/items/8/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ \"Traffic\";\r\ndata\r\n| summarize Count = count() by DeviceAction\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceAction)\r\n on DeviceAction\r\n| project-away DeviceAction1, TimeGenerated\r\n| extend DeviceAction = DeviceAction\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceAction = 'All', DeviceActions = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/8/content/query",
+          "sourceSha256": "7cf533d2eeef3f842953f25baf9ac2f22c05b74a2ccd641be0e5005921ca394b",
+          "targetSha256": "7cf533d2eeef3f842953f25baf9ac2f22c05b74a2ccd641be0e5005921ca394b"
+        },
+        {
+          "sourcePath": "/items/9/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "54caa14c09912f356d4a7269fd12219520da2f85437dd4ef9e3b1dd0c08e3a10"
+          },
+          "conversion": {
+            "sourceId": "/items/9/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'TRAFFIC'\r\n| where '{EventClass}' == \"All\" or DeviceEventClassID=='{EventClass}'\r\n| summarize EventCount= count() by DeviceAction, bin_at(TimeGenerated, {TimeRange:grain}, {TimeRange:start})",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/9/content/query",
+          "sourceSha256": "54caa14c09912f356d4a7269fd12219520da2f85437dd4ef9e3b1dd0c08e3a10",
+          "targetSha256": "54caa14c09912f356d4a7269fd12219520da2f85437dd4ef9e3b1dd0c08e3a10"
+        },
+        {
+          "sourcePath": "/items/10/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "a08b0432a6f669045dc6b3b3b95ad1ecb83280a17a28434a3e94af49bf50881c"
+          },
+          "conversion": {
+            "sourceId": "/items/10/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where '{DeviceAction}' == \"All\" or DeviceAction=='{DeviceAction}'\r\n| where Activity =~ \"Traffic\"\r\n| summarize EventCount= count() by DeviceEventClassID, bin_at(TimeGenerated, {TimeRange:grain}, {TimeRange:start})",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/10/content/query",
+          "sourceSha256": "a08b0432a6f669045dc6b3b3b95ad1ecb83280a17a28434a3e94af49bf50881c",
+          "targetSha256": "a08b0432a6f669045dc6b3b3b95ad1ecb83280a17a28434a3e94af49bf50881c"
+        },
+        {
+          "sourcePath": "/items/11/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "48714327638389ae48e9bd040eeb58bc742a5562eab78c840854347bfb37d1d9"
+          },
+          "conversion": {
+            "sourceId": "/items/11/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks' \r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'TRAFFIC' \r\n| where DeviceEventClassID =~ 'end' \r\n| extend Reason = coalesce(\r\n                            column_ifexists(\"Reason\", \"\"),\r\n                            extract(';reason=(.*?);',1,AdditionalExtensions),\r\n                            \"\"\r\n                        )\r\n| summarize ReasonCount= count() by  Reason, TimeGenerated  \r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/11/content/query",
+          "sourceSha256": "48714327638389ae48e9bd040eeb58bc742a5562eab78c840854347bfb37d1d9",
+          "targetSha256": "48714327638389ae48e9bd040eeb58bc742a5562eab78c840854347bfb37d1d9"
+        },
+        {
+          "sourcePath": "/items/12/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "a92e55dd9445e330e1cb23e72497aad573a9f90dd9fb5454a57a1180ebcc13aa"
+          },
+          "conversion": {
+            "sourceId": "/items/12/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "// Data sent outbound vs inbound\r\nCommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'TRAFFIC'\r\n| extend Direction=iff(DeviceCustomString4=~'Trust','Outbound' ,'Inbound' )\r\n| summarize DataSentOutBoundMB=sumif(SentBytes, Direction=~'Outbound')/1048576,   DataRecievedInboundMB=sumif(ReceivedBytes, Direction=~'Inbound')/1048576 by TimeGenerated\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/12/content/query",
+          "sourceSha256": "a92e55dd9445e330e1cb23e72497aad573a9f90dd9fb5454a57a1180ebcc13aa",
+          "targetSha256": "a92e55dd9445e330e1cb23e72497aad573a9f90dd9fb5454a57a1180ebcc13aa"
+        },
+        {
+          "sourcePath": "/items/14/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "19d15d7dafdc1e9eecdaf7304bacee5c5939c39e5eae30e489c5f7a6d4f23ce3"
+          },
+          "conversion": {
+            "sourceId": "/items/14/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| where DeviceAction contains 'block'\r\n| summarize ProtocolCount=count()  by ApplicationProtocol\r\n| top 5 by ProtocolCount desc\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/14/content/query",
+          "sourceSha256": "19d15d7dafdc1e9eecdaf7304bacee5c5939c39e5eae30e489c5f7a6d4f23ce3",
+          "targetSha256": "19d15d7dafdc1e9eecdaf7304bacee5c5939c39e5eae30e489c5f7a6d4f23ce3"
+        },
+        {
+          "sourcePath": "/items/15/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "3f2594c6c0ca25d62ba06556a7cee206c817aa6b48dd8840d3f758c0a575ccf7"
+          },
+          "conversion": {
+            "sourceId": "/items/15/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| where DeviceAction in ('block-url', 'block-continue')\r\n| summarize CategoryCount=count() by DeviceCustomString2\r\n| project-rename CategoryName= DeviceCustomString2\r\n| top 5 by CategoryCount\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/15/content/query",
+          "sourceSha256": "3f2594c6c0ca25d62ba06556a7cee206c817aa6b48dd8840d3f758c0a575ccf7",
+          "targetSha256": "3f2594c6c0ca25d62ba06556a7cee206c817aa6b48dd8840d3f758c0a575ccf7"
+        },
+        {
+          "sourcePath": "/items/16/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "0969939b0054be3d8b99b14547ade7bb1af0d8248e731369e0c61893826618f9"
+          },
+          "conversion": {
+            "sourceId": "/items/16/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| where DeviceAction in ('block-url', 'block-continue')\r\n| summarize URLCount=count() by RequestURL\r\n| top 5 by URLCount desc\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/16/content/query",
+          "sourceSha256": "0969939b0054be3d8b99b14547ade7bb1af0d8248e731369e0c61893826618f9",
+          "targetSha256": "0969939b0054be3d8b99b14547ade7bb1af0d8248e731369e0c61893826618f9"
+        },
+        {
+          "sourcePath": "/items/17/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "fd8c3af478a69586f36f4313da29abcc4674a7e0717193339dba3b554e685762"
+          },
+          "conversion": {
+            "sourceId": "/items/17/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| summarize ProtocolCount=count() by ApplicationProtocol\r\n| top 5 by ProtocolCount desc",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/17/content/query",
+          "sourceSha256": "fd8c3af478a69586f36f4313da29abcc4674a7e0717193339dba3b554e685762",
+          "targetSha256": "fd8c3af478a69586f36f4313da29abcc4674a7e0717193339dba3b554e685762"
+        },
+        {
+          "sourcePath": "/items/18/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "347700bacb05a39f6eaa30144b54c5d23cf93f89992a8a70024387fedb3dcada"
+          },
+          "conversion": {
+            "sourceId": "/items/18/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| where DeviceAction in ('alert', 'continue')\r\n| summarize URLCount=count() by RequestURL\r\n| top 5 by URLCount desc\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/18/content/query",
+          "sourceSha256": "347700bacb05a39f6eaa30144b54c5d23cf93f89992a8a70024387fedb3dcada",
+          "targetSha256": "347700bacb05a39f6eaa30144b54c5d23cf93f89992a8a70024387fedb3dcada"
+        },
+        {
+          "sourcePath": "/items/19/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "917c83377736ddfe572faec02662cd649ab6cc3d17cd89e5b4c2f3d275c52b79"
+          },
+          "conversion": {
+            "sourceId": "/items/19/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| summarize ActionCount=count() by DeviceAction\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/19/content/query",
+          "sourceSha256": "917c83377736ddfe572faec02662cd649ab6cc3d17cd89e5b4c2f3d275c52b79",
+          "targetSha256": "917c83377736ddfe572faec02662cd649ab6cc3d17cd89e5b4c2f3d275c52b79"
+        },
+        {
+          "sourcePath": "/items/20/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "43f2ab6ec387be81bc5e320d27eb3658524caca0d3d4a8d04aed975033ece7b4"
+          },
+          "conversion": {
+            "sourceId": "/items/20/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| where DeviceAction contains 'block'\r\n| extend PAReferer= extract(';PanOSReferer=(.*?);',1,AdditionalExtensions)\r\n| where PAReferer !=''\r\n| summarize RefererCount= count() by PAReferer\r\n| top 5 by RefererCount desc\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/20/content/query",
+          "sourceSha256": "43f2ab6ec387be81bc5e320d27eb3658524caca0d3d4a8d04aed975033ece7b4",
+          "targetSha256": "43f2ab6ec387be81bc5e320d27eb3658524caca0d3d4a8d04aed975033ece7b4"
+        },
+        {
+          "sourcePath": "/items/21/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "643d3f664d92ecf22422b326f920e95e0a1843cf184a45ec78c0f9873c286356"
+          },
+          "conversion": {
+            "sourceId": "/items/21/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| where DeviceAction in ('alert', 'continue')\r\n| summarize CategoryCount=count() by DeviceCustomString2\r\n| project-rename CategoryName= DeviceCustomString2\r\n| top 5 by CategoryCount desc\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/21/content/query",
+          "sourceSha256": "643d3f664d92ecf22422b326f920e95e0a1843cf184a45ec78c0f9873c286356",
+          "targetSha256": "643d3f664d92ecf22422b326f920e95e0a1843cf184a45ec78c0f9873c286356"
+        },
+        {
+          "sourcePath": "/items/22/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "0c5cba1b047558f733a6ec7b0e71de803bb6693913d60e9dfb43ed918352e3a7"
+          },
+          "conversion": {
+            "sourceId": "/items/22/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID  =~ 'url'\r\n| where DeviceAction !contains 'block'\r\n| summarize ProtocolCount=count()  by ApplicationProtocol\r\n| top 5 by ProtocolCount desc",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/22/content/query",
+          "sourceSha256": "0c5cba1b047558f733a6ec7b0e71de803bb6693913d60e9dfb43ed918352e3a7",
+          "targetSha256": "0c5cba1b047558f733a6ec7b0e71de803bb6693913d60e9dfb43ed918352e3a7"
+        },
+        {
+          "sourcePath": "/items/23/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "37b83203b622ec2aed2781d0550228508450fae7c237ca2168f85f5f39e753b2"
+          },
+          "conversion": {
+            "sourceId": "/items/23/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'url'\r\n| summarize ActionCount=count() by DeviceAction, TimeGenerated\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/23/content/query",
+          "sourceSha256": "37b83203b622ec2aed2781d0550228508450fae7c237ca2168f85f5f39e753b2",
+          "targetSha256": "37b83203b622ec2aed2781d0550228508450fae7c237ca2168f85f5f39e753b2"
+        },
+        {
+          "sourcePath": "/items/24/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "4cc28bce2c7232d0207e2d781447febf48a898bbc2f501ac06245e44e3987084"
+          },
+          "conversion": {
+            "sourceId": "/items/24/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where DeviceEventClassID =~ 'url'\r\n| where DeviceAction in ('alert', 'continue')\r\n| summarize IPCount=count() by SourceIP\r\n| top 5 by IPCount  desc\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/24/content/query",
+          "sourceSha256": "4cc28bce2c7232d0207e2d781447febf48a898bbc2f501ac06245e44e3987084",
+          "targetSha256": "4cc28bce2c7232d0207e2d781447febf48a898bbc2f501ac06245e44e3987084"
+        },
+        {
+          "sourcePath": "/items/26/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "2961eb33244f622f4d4d687626462cf4f7935cd95ad7ffaaa067e66f4578cece"
+          },
+          "conversion": {
+            "sourceId": "/items/26/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'wildfire'\r\n| summarize ActionCount=count() by DeviceAction, TimeGenerated\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/26/content/query",
+          "sourceSha256": "2961eb33244f622f4d4d687626462cf4f7935cd95ad7ffaaa067e66f4578cece",
+          "targetSha256": "2961eb33244f622f4d4d687626462cf4f7935cd95ad7ffaaa067e66f4578cece"
+        },
+        {
+          "sourcePath": "/items/27/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "1c399137860bd392534e530b39ccca3cedd309e40118668186443427c8306409"
+          },
+          "conversion": {
+            "sourceId": "/items/27/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~'wildfire'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP});\r\ndata\r\n| summarize Count = count() by DeviceAction\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceAction)\r\n on DeviceAction\r\n| project-away DeviceAction1, TimeGenerated\r\n| extend DeviceActions = DeviceAction\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceAction = 'All', DeviceActions = '*' \r\n)\r\n| project DeviceAction, Count, Trend\r\n| order by Count desc\r\n| take 10",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/27/content/query",
+          "sourceSha256": "1c399137860bd392534e530b39ccca3cedd309e40118668186443427c8306409",
+          "targetSha256": "1c399137860bd392534e530b39ccca3cedd309e40118668186443427c8306409"
+        },
+        {
+          "sourcePath": "/items/28/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "04968414d86bd7bb6413b8e00d2b979d10ba7c54d4589fe18ae75d6f9e5a66ea"
+          },
+          "conversion": {
+            "sourceId": "/items/28/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~'wildfire'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP});\r\ndata\r\n| summarize Count = count() by DeviceCustomString2\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceCustomString2)\r\n on DeviceCustomString2\r\n| project-away DeviceCustomString21, TimeGenerated\r\n| extend DeviceCustomString2s = DeviceCustomString2\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceCustomString2 = 'All', DeviceCustomString2s = '*' \r\n)\r\n| project DeviceCustomString2, Count, Trend\r\n| order by Count desc\r\n| take 10",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/28/content/query",
+          "sourceSha256": "04968414d86bd7bb6413b8e00d2b979d10ba7c54d4589fe18ae75d6f9e5a66ea",
+          "targetSha256": "04968414d86bd7bb6413b8e00d2b979d10ba7c54d4589fe18ae75d6f9e5a66ea"
+        },
+        {
+          "sourcePath": "/items/29/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "29c17d302cc8ec29507b5362fa28580064c045770c1630d2b45b620ae9b464a6"
+          },
+          "conversion": {
+            "sourceId": "/items/29/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'wildfire'\r\n| where '{DeviceAction}' == \"All\" or DeviceAction=='{DeviceAction}'\r\n| where '{DeviceString}' == \"All\" or DeviceCustomString2=='{DeviceString}'\r\n| project TimeGenerated, ReceiptTime, LogSeverity, DeviceAction, ['URL Category'] =DeviceCustomString2, DestinationPort, DestinationIP, Message, SourcePort, SourceIP, DestinationUserID, RequestURL",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/29/content/query",
+          "sourceSha256": "29c17d302cc8ec29507b5362fa28580064c045770c1630d2b45b620ae9b464a6",
+          "targetSha256": "29c17d302cc8ec29507b5362fa28580064c045770c1630d2b45b620ae9b464a6"
+        },
+        {
+          "sourcePath": "/items/31/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "043651ba8d51014b0aef6b3db20c3b2a1aa82019979fcd3f11c2f58d7f992719"
+          },
+          "conversion": {
+            "sourceId": "/items/31/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where DeviceEventClassID  =~ 'file'\r\n| where DeviceAction contains 'deny'\r\n| summarize ProtocolCount=count()  by ApplicationProtocol\r\n| top 5 by ProtocolCount desc\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/31/content/query",
+          "sourceSha256": "043651ba8d51014b0aef6b3db20c3b2a1aa82019979fcd3f11c2f58d7f992719",
+          "targetSha256": "043651ba8d51014b0aef6b3db20c3b2a1aa82019979fcd3f11c2f58d7f992719"
+        },
+        {
+          "sourcePath": "/items/32/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "5e64f746a0878b1c88a62b513d653ad69a6e12558fbd2b99dc98a6152e69085d"
+          },
+          "conversion": {
+            "sourceId": "/items/32/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where DeviceEventClassID  =~ 'file'\r\n| where DeviceAction !contains 'deny'\r\n| summarize ProtocolCount=count()  by ApplicationProtocol\r\n| top 5 by ProtocolCount desc\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/32/content/query",
+          "sourceSha256": "5e64f746a0878b1c88a62b513d653ad69a6e12558fbd2b99dc98a6152e69085d",
+          "targetSha256": "5e64f746a0878b1c88a62b513d653ad69a6e12558fbd2b99dc98a6152e69085d"
+        },
+        {
+          "sourcePath": "/items/33/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "23f1c3f73d6c6f3a627f743f1f43d60f58a8a10402c27346b58d84d928c8932e"
+          },
+          "conversion": {
+            "sourceId": "/items/33/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "//Palo Alto File Category By Action Summary\r\nCommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks' \r\n| where Activity =~ 'THREAT'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where DeviceEventClassID =~ 'file' \r\n| extend PACategory= coalesce(\r\n                            column_ifexists(\"DeviceEventCategory\", \"\"),\r\n                            extract(';cat=(.*?)($|;)',1,AdditionalExtensions),\r\n                            \"\"\r\n                        )\r\n| summarize CategoryCount=count() by PACategory\r\n| sort by CategoryCount",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/33/content/query",
+          "sourceSha256": "23f1c3f73d6c6f3a627f743f1f43d60f58a8a10402c27346b58d84d928c8932e",
+          "targetSha256": "23f1c3f73d6c6f3a627f743f1f43d60f58a8a10402c27346b58d84d928c8932e"
+        },
+        {
+          "sourcePath": "/items/34/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "039cad6e296f5ef16de2af1035017f8c152d787499ccf6151d7d3bc70d2817d0"
+          },
+          "conversion": {
+            "sourceId": "/items/34/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~'file'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP});\r\ndata\r\n| summarize Count = count() by DeviceAction\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by DeviceAction)\r\n on DeviceAction\r\n| project-away DeviceAction1, TimeGenerated\r\n| extend DeviceActions = DeviceAction\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend DeviceAction = 'All', DeviceActions = '*' \r\n)\r\n| project DeviceAction, Count, Trend\r\n| order by Count desc\r\n| take 10\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/34/content/query",
+          "sourceSha256": "039cad6e296f5ef16de2af1035017f8c152d787499ccf6151d7d3bc70d2817d0",
+          "targetSha256": "039cad6e296f5ef16de2af1035017f8c152d787499ccf6151d7d3bc70d2817d0"
+        },
+        {
+          "sourcePath": "/items/35/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user",
+            "reference": "approve_batch_7c_fixes_and_qualify=true",
+            "planSha256": "0e6b569e217ea59b03991002cff34e3a83935a197f6a5d928de04558ad36d3fa",
+            "decision": "accept",
+            "querySha256": "cdc4a07ad39f77ae400512498d0b8a6ba9f47dbdcf87b1b38c80d8fde62933dc"
+          },
+          "conversion": {
+            "sourceId": "/items/35/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "CommonSecurityLog\r\n| where (DeviceProduct has 'PAN-OS'\r\n or DeviceProduct  has 'LF'\r\n )| where DeviceVendor =~ 'Palo Alto Networks'\r\n| where Activity =~ 'THREAT'\r\n| where DeviceEventClassID =~ 'file'\r\n| where \"{Destination_IP:lable}\"==\"All\" or DestinationIP in ({Destination_IP}) \r\n| where \"{Source_IP:lable}\" == \"All\" or SourceIP in ({Source_IP})\r\n| where '{SelectedDA}' == \"All\" or DeviceAction == '{SelectedDA}'\r\n| summarize ActionCount=count() by DeviceAction, bin(TimeGenerated, {TimeRange:grain})\r\n",
+            "resolvedTables": [
+              "CommonSecurityLog"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "CommonSecurityLog",
+                "ahTable": "CommonSecurityLog",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 156,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/35/content/query",
+          "sourceSha256": "cdc4a07ad39f77ae400512498d0b8a6ba9f47dbdcf87b1b38c80d8fde62933dc",
+          "targetSha256": "cdc4a07ad39f77ae400512498d0b8a6ba9f47dbdcf87b1b38c80d8fde62933dc"
+        }
+      ]
+    },
+    "requiredWorkloads": [
+      {
+        "workload": "sentinel",
+        "dataTypes": [
+          "CommonSecurityLog"
+        ]
+      }
+    ],
+    "requiredDataConnectors": [
+      {
+        "connectorId": "CefAma",
+        "dataTypes": [
+          "CommonSecurityLog"
+        ]
+      }
+    ],
+    "dependencyReviewRequired": false
+  }
+}

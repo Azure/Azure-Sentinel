@@ -1,0 +1,115 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: afb4191b-a142-4065-a0da-f721ee3d006c
+    path: Analytic Rules/AWS_PrivilegeEscalationFullAccessManagedPolicy.yaml
+    version: 1.0.2
+    querySha256: 694f8b677374ebac22c1ee7d0e4b98c374b2dd16b8b6367dd11bdf66202b6b4b
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.CloudAppAccountId mismatch is informational because its original value is preserved as customDetails.AccountCloudAppAccountId
+      from query column `RecipientAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    - Persistence
+    originalTechniques:
+    - T1098.003
+    reviewScope:
+      sourceDocumentSha256: 3d00d9a1337a029b6b27dbe3b7bdb43913eb8edbc4e9cee26d5a34c98cf5c494
+      targetQuerySha256: e5adb89dadd1624488505991fe45607c1f2cb767eb7a775ab515bdc8441cf03e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: available
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-afb4191b-a142-4065-a0da-f721ee3d006c
+  displayName: AWSCloudTrail - Privilege escalation with FullAccess managed policy
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where  EventName in ("AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+      | where tostring(parse_json(RequestParameters).policyArn) has "FullAccess" and tostring(parse_json(RequestParameters).policyArn) !has "Admin"
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Privilege escalation with FullAccess managed policy
+      description: |-
+        Detects successful attachment of AWS managed policies containing FullAccess permissions to users, roles, or
+        groups, excluding admin-named policies. This action can rapidly expand privilege scope and should be reviewed
+        as potential cloud privilege escalation.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+      customDetails:
+        EventName: EventName
+        EventSource: EventSource
+        AWSRegion: AWSRegion
+        UserIdentityArn: UserIdentityArn
+        AccountCloudAppAccountId: RecipientAccountId

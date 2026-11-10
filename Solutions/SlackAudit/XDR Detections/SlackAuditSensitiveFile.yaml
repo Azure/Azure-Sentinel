@@ -1,0 +1,169 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SlackAuditAPI
+  dataTypes:
+  - SlackAudit_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - SlackAuditV2_CL
+    - SlackAudit_CL
+  requiredDataConnectors:
+  - connectorId: SlackAuditAPI
+    dataTypes:
+    - SlackAudit_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 279316e8-8965-47d2-9788-b94dc352c853
+    path: Analytic Rules/SlackAuditSensitiveFile.yaml
+    version: 1.0.1
+    querySha256: a0ee8638d40a62bd7f645519fbec358ee55a50aa2070e64f5c09bb67d450c72d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1048
+    - T1567.002
+    reviewScope:
+      sourceDocumentSha256: dbfe198a307953d5875ae709c8a329d21b6e12c69d0de7e2b35dae5b316f9db8
+      targetQuerySha256: 97b63be96c1bec1d799a888c8c8359fa510878513ee02335eeebe0d06b35fad5
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: dbfe198a307953d5875ae709c8a329d21b6e12c69d0de7e2b35dae5b316f9db8
+      targetQuerySha256: 97b63be96c1bec1d799a888c8c8359fa510878513ee02335eeebe0d06b35fad5
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: ActorEntity
+properties:
+  id: xdr-279316e8-8965-47d2-9788-b94dc352c853
+  displayName: SlackAudit - Public link created for file which can contain sensitive information.
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let _SlackAudit = union isfuzzy=true
+          (SlackAuditV2_CL),
+          (SlackAudit_CL),
+          (datatable(TimeGenerated:datetime, Id:string, DateCreate:string, Action:string, Actor:dynamic, Entity:dynamic, Context:dynamic, Details:dynamic, ActionDescription:string)[])
+      | extend TimeGenerated = iff(isnotempty(column_ifexists('DateCreate', '')) and isnotnull(todatetime(column_ifexists('DateCreate', ''))), todatetime(column_ifexists('DateCreate', '')), TimeGenerated)
+      | extend actor = todynamic(Actor), entity = todynamic(Entity), context = todynamic(Context), details = todynamic(Details)
+      | extend
+          EventVendor = 'Slack',
+          EventProduct = 'Audit',
+          EventSchemaVersion = '0.1.0',
+          EventId = column_ifexists('Id', ''),
+          EventEndTime = column_ifexists('DateCreate', ''),
+          Action = column_ifexists('Action', ''),
+          DvcAction = column_ifexists('Action', ''),
+          DvcActionDesc = column_ifexists('ActionDescription', ''),
+          ActorType = tostring(actor.type),
+          SrcUserIdentity = tostring(actor.user.id),
+          SrcUserName = tostring(actor.user.name),
+          SrcUserEmail = tostring(actor.user.email),
+          SrcUserTeam = tostring(actor.user.team),
+          EntityType = tostring(entity.type),
+          EntityFileId = tostring(entity.file.id),
+          EntityFileName = tostring(entity.file.name),
+          EntityFileFiletype = tostring(entity.file.filetype),
+          EntityFileTitle = tostring(entity['file']['title']),
+          EntityUserId = tostring(entity.user.id),
+          EntityUserName = tostring(entity.user.name),
+          EntityUserEmail = tostring(entity.user.email),
+          EntityUserTeam = tostring(entity.user.team),
+          UserAgentOriginal = tostring(context.ua),
+          SrcIpAddr = tostring(context.ip_address),
+          SessionId = tostring(context.session_id),
+          DetailsType = tostring(details.type),
+          DetailsNewValue = tostring(details.new_value),
+          DetailsPreviousValue = tostring(details.previous_value);
+      let AllowedFiles = dynamic([]);
+      let AllowedUsers = dynamic([]);
+      _SlackAudit
+      | where Action =~ 'file_public_link_created'
+      | extend FileNameLower = tolower(EntityFileName), UserLower = tolower(SrcUserName)
+      | where EntityFileName in~ ('id_rsa')
+          or FileNameLower has_any ('password', 'secret', 'token', 'credential', 'private key', 'api key')
+          or FileNameLower has_any ('.ssh', '.npmrc', '.muttrc', '.gitconfig', '.netrc', 'package.json', 'Gemfile', 'bower.json', 'config.gypi', 'travis.yml', 'config.json')
+      | where array_length(AllowedFiles) == 0 or EntityFileName !in~ (AllowedFiles)
+      | where array_length(AllowedUsers) == 0 or UserLower !in~ (AllowedUsers)
+      | extend AccountCustomEntity = SrcUserName
+      | extend IPCustomEntity = SrcIpAddr
+      | project TimeGenerated, EntityFileName, Action, SrcUserName, SrcUserEmail, SrcIpAddr, AccountCustomEntity, IPCustomEntity
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: SlackAudit - Public link created for file which can contain sensitive information.
+      description: |-
+        'Detects public links created for files that may contain sensitive data such as passwords, authentication tokens,
+        secret keys, or private configuration files. Tune exclusions using the SlackAuditSensitiveFile_Allowlist_File and SlackAuditSensitiveFile_Allowlist_Account
+        watchlists when known benign files or accounts generate expected public-link activity.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: SrcUserEmail
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1048
+        - technique: T1567
+          subTechniques:
+          - T1567.002
+      customDetails:
+        FileName: EntityFileName
+        Action: Action
+        SourceUser: SrcUserName
+        SourceIP: SrcIpAddr
+        ActorEntity: AccountCustomEntity
+        IpEntity: IPCustomEntity

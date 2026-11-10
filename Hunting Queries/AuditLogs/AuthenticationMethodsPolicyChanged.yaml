@@ -1,0 +1,119 @@
+id: 92acf0e0-77e2-4149-905f-779cca97a591
+name: Tenant authentication methods policy changed
+description: |
+  Identifies changes to the tenant authentication methods policy, such as enabling or disabling a method (Temporary Access Pass, SMS, FIDO2) or changing Microsoft Authenticator settings, with the old and new value of each setting that changed.
+description-detailed: |
+  The authentication methods policy decides which sign-in and MFA methods every user in the tenant is allowed
+  to register and use. Weakening it is a quiet way to prepare account takeover and persistence: enabling a
+  method that can be registered without strong proof (Temporary Access Pass, SMS, voice, email), disabling a
+  phishing-resistant method such as FIDO2, or loosening the Microsoft Authenticator settings. None of this
+  touches a single user, so user-level detections such as MFA registration or Temporary Access Pass creation
+  never see it.
+  The audit log records every save as an "Authentication Methods Policy Update" event written by the
+  "Authentication Methods" service, with the old and new value of each changed setting in the modified
+  properties. The setting is named "<Method>.<Setting>", for example "SoftwareOath.State" or
+  "MicrosoftAuthenticator.FeatureSettings", and the entry that holds those values is not the first
+  TargetResources entry (in events observed in a lab tenant it has neither a display name nor a type), so every
+  entry is expanded instead of reading a fixed index. A single save can change several settings and returns one
+  row per changed setting. A save also writes two "Update policy" events for the Fido and Default policies from
+  the "Azure Credential Configuration Endpoint Service" application; they carry no values and are deliberately
+  not matched.
+  This query applies no allow-list: any successful change is returned, so a planned change must be ruled out
+  against the change calendar. Treat a change made outside a change window, by an actor who does not normally
+  administer authentication methods, or followed within the hour by a change in the two companion hunting
+  queries of this pack (tenant authorization policy and device registration policy), as high priority. Combine
+  it with the Temporary Access Pass and MFA modification hunting queries to follow what is done once a method
+  has been enabled.
+  Observed in one lab tenant only: the setting names beyond "SoftwareOath.State" and
+  "MicrosoftAuthenticator.FeatureSettings" are shown as they appear in the log and are not mapped to a fixed
+  list, so a method that is not covered by the lab still appears as long as it is logged with this operation.
+  References:
+  - https://learn.microsoft.com/entra/identity/authentication/concept-authentication-methods-manage
+  - https://learn.microsoft.com/entra/identity/monitoring-health/reference-audit-activities
+  - https://attack.mitre.org/techniques/T1556/006/
+  - https://attack.mitre.org/techniques/T1098/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - DefenseEvasion
+  - CredentialAccess
+relevantTechniques:
+  - T1556.006
+  - T1098
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "Authentication Methods Policy Update"
+  | where Result =~ "success"
+  // One save can change several settings, and the TargetResources entry that carries the values is not
+  // always the first one, so every entry and every modified property is expanded.
+  | mv-apply TargetResource = TargetResources on (
+        mv-expand Property = TargetResource.modifiedProperties
+        | extend PropertyName = tostring(Property.displayName)
+        | extend OldValue = trim('"', tostring(Property.oldValue))
+        | extend NewValue = trim('"', tostring(Property.newValue))
+    )
+  | where OldValue != NewValue
+  // Settings are named "<Method>.<Setting>"
+  | extend Method  = tostring(split(PropertyName, ".")[0])
+  | extend Setting = strcat_array(array_slice(split(PropertyName, "."), 1, -1), ".")
+  | extend StateChange = case(
+        Setting =~ "State" and NewValue =~ "Enabled", "Method enabled",
+        Setting =~ "State" and NewValue =~ "Disabled", "Method disabled",
+        "Other setting changed")
+  | extend ActorUpn = tostring(InitiatedBy.user.userPrincipalName)
+  | extend ActorApp = tostring(InitiatedBy.app.displayName)
+  | extend Actor    = iff(isnotempty(ActorUpn), ActorUpn, ActorApp)
+  | extend ActorIp  = iff(
+        isnotempty(tostring(InitiatedBy.user.ipAddress)),
+        tostring(InitiatedBy.user.ipAddress),
+        tostring(InitiatedBy.app.ipAddress))
+  | extend AccountName      = tostring(split(ActorUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(ActorUpn, "@")[1])
+  | project
+      TimeGenerated,
+      OperationName,
+      Method,
+      Setting,
+      StateChange,
+      OldValue,
+      NewValue,
+      Actor,
+      ActorUpn,
+      AccountName,
+      AccountUPNSuffix,
+      ActorIp,
+      CorrelationId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ActorUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ActorIp
+customDetails:
+  Method: Method
+  Setting: Setting
+  StateChange: StateChange
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

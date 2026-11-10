@@ -1,5 +1,9 @@
 # Changelog for imFileEvent.yaml
 
+## Version 0.2.4
+
+- (2026-10-30) Add Salesforce Real-Time Event Monitoring FileEvent parser. - [PR #15514](https://github.com/Azure/Azure-Sentinel/pull/15514)
+
 ## Version 0.2.3
 
 - (2026-10-26) Add the CrowdStrike Falcon Data Replicator filtering parser with standard FileEvent parameters, disable-watchlist support, and optional field packing. - [PR #15436](https://github.com/Azure/Azure-Sentinel/pull/15436)

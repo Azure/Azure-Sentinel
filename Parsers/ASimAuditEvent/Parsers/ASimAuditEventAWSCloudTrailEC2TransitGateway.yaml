@@ -1,0 +1,181 @@
+Parser:
+  Title: Audit Event ASIM parser for AWS CloudTrail EC2 TransitGateway activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+- Title: Amazon EC2 API actions
+  Link: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Operations.html
+Description: |
+  Normalizes AWSCloudTrail events from ec2.amazonaws.com for Transit Gateways, VPC and
+  peering attachments, Connect, and Connect peers. Includes Client VPN attachments and
+  attachment NAT configuration. This parser is referenced by ASimAuditEventAWSCloudTrail.
+ParserName: ASimAuditEventAWSCloudTrailEC2TransitGateway
+ParentParser: ASimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _ASim_AuditEvent_AWSCloudTrailEC2TransitGateway
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+    let Events = datatable(EventName: string, EventType: string, Object: string)
+    [
+      "AcceptTransitGatewayClientVpnAttachment", "Set", "Transit Gateway Client VPN Attachment",
+      "AcceptTransitGatewayPeeringAttachment", "Execute", "Transit Gateway Attachment",
+      "AcceptTransitGatewayVpcAttachment", "Execute", "Transit Gateway Attachment",
+      "CreateTransitGateway", "Create", "Transit Gateway",
+      "CreateTransitGatewayConnect", "Create", "Transit Gateway Connect",
+      "CreateTransitGatewayConnectPeer", "Create", "Transit Gateway Connect Peer",
+      "CreateTransitGatewayPeeringAttachment", "Create", "Transit Gateway Peering Attachment",
+      "CreateTransitGatewayVpcAttachment", "Create", "Transit Gateway",
+      "DeleteTransitGateway", "Delete", "Transit Gateway",
+      "DeleteTransitGatewayClientVpnAttachment", "Delete", "Transit Gateway Client VPN Attachment",
+      "DeleteTransitGatewayConnect", "Delete", "Transit Gateway Connect",
+      "DeleteTransitGatewayConnectPeer", "Delete", "Transit Gateway Connect Peer",
+      "DeleteTransitGatewayPeeringAttachment", "Delete", "Transit Gateway Peering Attachment",
+      "DeleteTransitGatewayVpcAttachment", "Delete", "Transit Gateway VPC Attachment",
+      "DescribeTransitGatewayAttachments", "Read", "Transit Gateway Attachment",
+      "DescribeTransitGatewayConnectPeers", "Read", "Transit Gateway Connect Peer",
+      "DescribeTransitGatewayConnects", "Read", "Transit Gateway Connect",
+      "DescribeTransitGatewayMeteringPolicies", "Read", "Transit Gateway Metering Policy",
+      "DescribeTransitGatewayPeeringAttachments", "Read", "Transit Gateway Peering Attachment",
+      "DescribeTransitGatewayVpcAttachments", "Read", "Transit Gateway VPC Attachment",
+      "DescribeTransitGateways", "Read", "Transit Gateway",
+      "GetTransitGatewayAttachmentNatConfiguration", "Read", "Transit Gateway Attachment NAT Configuration",
+      "ModifyTransitGateway", "Set", "Transit Gateway",
+      "ModifyTransitGatewayAttachmentNatConfiguration", "Set", "Transit Gateway Attachment NAT Configuration",
+      "ModifyTransitGatewayVpcAttachment", "Set", "Transit Gateway VPC Attachment",
+      "RejectTransitGatewayClientVpnAttachment", "Set", "Transit Gateway Client VPN Attachment",
+      "RejectTransitGatewayPeeringAttachment", "Execute", "Transit Gateway Attachment",
+      "RejectTransitGatewayVpcAttachment", "Execute", "Transit Gateway VPC Attachment"
+    ];
+    AWSCloudTrail
+    | where not(disabled)
+    | where EventSource == "ec2.amazonaws.com"
+    | where EventName in (Events | project EventName)
+    | lookup kind=inner Events on EventName
+    | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+    | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+    | extend NewValue = iff(EventResult == "Success", case(
+        EventName in ("AcceptTransitGatewayClientVpnAttachment", "RejectTransitGatewayClientVpnAttachment"),
+          ResponseElements.transitGatewayClientVpnAttachment,
+        EventName in ("AcceptTransitGatewayPeeringAttachment", "CreateTransitGatewayPeeringAttachment",
+          "RejectTransitGatewayPeeringAttachment"), ResponseElements.transitGatewayPeeringAttachment,
+        EventName in ("AcceptTransitGatewayVpcAttachment", "CreateTransitGatewayVpcAttachment",
+          "ModifyTransitGatewayVpcAttachment", "RejectTransitGatewayVpcAttachment"),
+          ResponseElements.transitGatewayVpcAttachment,
+        EventName in ("CreateTransitGateway", "ModifyTransitGateway"), ResponseElements.transitGateway,
+        EventName == "CreateTransitGatewayConnect", ResponseElements.transitGatewayConnect,
+        EventName == "CreateTransitGatewayConnectPeer", ResponseElements.transitGatewayConnectPeer,
+        EventName == "ModifyTransitGatewayAttachmentNatConfiguration", bag_pack("natGatewayRuleSet",
+          ResponseElements.natGatewayRuleSet, "natGatewaySupport", ResponseElements.natGatewaySupport,
+          "natSystemRouteSupport", ResponseElements.natSystemRouteSupport),
+        ""
+      ), "")
+    | extend ObjectId = case(
+        EventName in ("AcceptTransitGatewayClientVpnAttachment", "DeleteTransitGatewayClientVpnAttachment",
+          "GetTransitGatewayAttachmentNatConfiguration", "ModifyTransitGatewayAttachmentNatConfiguration",
+          "RejectTransitGatewayClientVpnAttachment"), coalesce(RequestParameters.transitGatewayAttachmentId,
+          RequestParameters.TransitGatewayAttachmentId),
+        EventName in ("AcceptTransitGatewayPeeringAttachment", "AcceptTransitGatewayVpcAttachment",
+          "DeleteTransitGatewayConnect", "DeleteTransitGatewayPeeringAttachment",
+          "DeleteTransitGatewayVpcAttachment", "ModifyTransitGatewayVpcAttachment",
+          "RejectTransitGatewayPeeringAttachment", "RejectTransitGatewayVpcAttachment"),
+          RequestParameters.TransitGatewayAttachmentId,
+        EventName == "CreateTransitGateway", ResponseElements.transitGateway.transitGatewayId,
+        EventName == "CreateTransitGatewayConnect",
+          ResponseElements.transitGatewayConnect.transitGatewayGonnectId,
+        EventName == "CreateTransitGatewayConnectPeer",
+          ResponseElements.transitGatewayConnectPeer.transitGatewayConnectPeerId,
+        EventName == "CreateTransitGatewayPeeringAttachment",
+          ResponseElements.transitGatewayPeeringAttachment.transitGatewayPeeringAttachmentId,
+        EventName in ("CreateTransitGatewayVpcAttachment", "DeleteTransitGateway", "ModifyTransitGateway"),
+          RequestParameters.TransitGatewayId,
+        EventName == "DeleteTransitGatewayConnectPeer", RequestParameters.TransitGatewayConnectPeerId,
+        EventName in ("DescribeTransitGatewayAttachments", "DescribeTransitGatewayPeeringAttachments",
+          "DescribeTransitGatewayVpcAttachments"), RequestParameters.TransitGatewayAttachmentIds,
+        EventName == "DescribeTransitGatewayConnectPeers", RequestParameters.TransitGatewayConnectPeerIds,
+        EventName == "DescribeTransitGatewayConnects", RequestParameters.TransitGatewayMeteringPolicyIds,
+        EventName == "DescribeTransitGatewayMeteringPolicies", RequestParameters.TransitGatewayMulticastDomainIds,
+        EventName == "DescribeTransitGateways", RequestParameters.TransitGatewayIds,
+        ""
+      )
+    | extend
+        Type = "AWSCloudTrail",
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventSeverity = "Informational",
+        EventSchema = "AuditEvent",
+        EventSchemaVersion = "1.0.0",
+        EventVendor = "AWS",
+        EventProduct = "CloudTrail",
+        Dvc = "CloudTrail",
+        EventMessage = ErrorMessage,
+        ObjectType = "Cloud Resource",
+        TargetAppName = "Amazon Elastic Compute Cloud",
+        TargetAppType = "Service"
+    | project-rename
+        EventOriginalSubType = EventTypeName,
+        EventOriginalType = EventName,
+        EventUid = AwsEventId,
+        EventOriginalResultDetails = ErrorMessage,
+        EventProductVersion = EventVersion,
+        ActorUserId = UserIdentityAccountId,
+        ActorUsername = UserIdentityUserName,
+        ActorOriginalUserType = UserIdentityType,
+        HttpUserAgent = UserAgent
+    | extend
+        ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+        ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+        SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+        ActingApplicationEntityKey = "",
+        ActorUserAdditionalIds = dynamic([]),
+        ActorUserEntityKey = "",
+        AdditionalEntities = dynamic([]),
+        DvcEntityKey = "",
+        SrcSystemEntityKey = "",
+        TargetApplicationEntityKey = "",
+        TargetSystemEntityKey = ""
+    | extend AdditionalFields = iff(pack, bag_pack(
+        "ActorAccessKeyId", UserIdentityAccessKeyId,
+        "AWSRegion", AWSRegion,
+        "APIVersion", APIVersion,
+        "ManagementEvent", ManagementEvent,
+        "ReadOnly", ReadOnly,
+        "RequestParameters", RequestParameters,
+        "ResponseElements", ResponseElements
+      ), dynamic({}))
+    | extend
+        Operation = EventOriginalType,
+        User = ActorUsername,
+        IpAddr = SrcIpAddr,
+        Application = TargetAppName,
+        Value = NewValue
+    | project
+        TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+        EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+        EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+        EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+        ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+        SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+        Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+        ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+        AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+        TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(disabled=disabled, pack=pack)

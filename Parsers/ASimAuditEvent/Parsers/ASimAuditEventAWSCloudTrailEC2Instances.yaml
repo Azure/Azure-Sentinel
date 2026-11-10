@@ -1,0 +1,251 @@
+Parser:
+  Title: Audit Event ASIM parser for AWS CloudTrail EC2 instance activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query-ec2.html
+- Title: Amazon EC2 API actions
+  Link: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Operations.html
+Description: |
+  Normalizes AWSCloudTrail events from ec2.amazonaws.com for EC2 instance lifecycle,
+  attributes, monitoring, metadata options, IAM instance-profile associations, SQL high
+  availability, and scheduled-event notifications and windows. Launch templates, console
+  access, instance-type discovery, images, storage, fleets, and reservation lifecycle
+  actions are handled separately. Includes application status checks, instance application
+  health, and check suppression. This parser is referenced by ASimAuditEventAWSCloudTrail.
+ParserName: ASimAuditEventAWSCloudTrailEC2Instances
+ParentParser: ASimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _ASim_AuditEvent_AWSCloudTrailEC2Instances
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+    let Events = datatable(EventName: string, EventType: string, Object: string)
+    [
+      "AssociateApplicationStatusCheck", "Set", "Application Status Check Association",
+      "AssociateIamInstanceProfile", "Set", "EC2 Instance",
+      "AssociateInstanceEventWindow", "Set", "Instance Event Window",
+      "CreateApplicationStatusCheck", "Create", "Application Status Check",
+      "CreateInstanceEventWindow", "Create", "Instance Event Window",
+      "DeleteApplicationStatusCheck", "Delete", "Application Status Check",
+      "DeleteInstanceEventWindow", "Delete", "Instance Event Window",
+      "DescribeApplicationStatus", "Read", "EC2 Instance Application Status",
+      "DescribeApplicationStatusCheckAssociations", "Read", "Application Status Check Association",
+      "DescribeApplicationStatusChecks", "Read", "Application Status Check",
+      "DescribeIamInstanceProfileAssociations", "Read", "IAM Instance Profile Association",
+      "DescribeInstanceAttribute", "Read", "EC2 Instance",
+      "DescribeInstanceCreditSpecifications", "Read", "EC2 Instance",
+      "DescribeInstanceEventNotificationAttributes", "Read", "Instance Event Notification Attribute",
+      "DescribeInstanceEventWindows", "Read", "Instance Event Window",
+      "DescribeInstanceImageMetadata", "Read", "EC2 Instance",
+      "DescribeInstanceSqlHaHistoryStates", "Read", "EC2 Instance",
+      "DescribeInstanceSqlHaStates", "Read", "EC2 Instance",
+      "DescribeInstanceStatus", "Read", "EC2 Instance",
+      "DescribeInstances", "Read", "EC2 Instance",
+      "DisableApplicationStatusCheckSuppression", "Disable", "Application Status Check Suppression",
+      "DisableInstanceSqlHaStandbyDetections", "Disable", "EC2 Instance",
+      "DisassociateApplicationStatusCheck", "Delete", "Application Status Check Association",
+      "DisassociateIamInstanceProfile", "Delete", "IAM Instance Profile Association",
+      "DisassociateInstanceEventWindow", "Set", "Instance Event Window",
+      "EnableApplicationStatusCheckSuppression", "Enable", "Application Status Check Suppression",
+      "EnableInstanceSqlHaStandbyDetections", "Enable", "EC2 Instance",
+      "GetDefaultCreditSpecification", "Read", "EC2 Instance",
+      "GetInstanceMetadataDefaults", "Read", "Instance Metadata Defaults",
+      "GetInstanceUefiData", "Read", "EC2 Instance",
+      "ModifyApplicationStatusCheck", "Set", "Application Status Check",
+      "ModifyDefaultCreditSpecification", "Set", "EC2 Instance",
+      "ModifyInstanceAttribute", "Set", "EC2 Instance",
+      "ModifyInstanceCapacityReservationAttributes", "Set", "EC2 Instance",
+      "ModifyInstanceCpuOptions", "Set", "EC2 Instance",
+      "ModifyInstanceCreditSpecification", "Set", "EC2 Instance",
+      "ModifyInstanceEventStartTime", "Set", "EC2 Instance",
+      "ModifyInstanceEventWindow", "Set", "Instance Event Window",
+      "ModifyInstanceMaintenanceOptions", "Set", "IMDS",
+      "ModifyInstanceMetadataDefaults", "Set", "EC2 Instance",
+      "ModifyInstanceMetadataOptions", "Set", "EC2 Instance",
+      "ModifyInstanceNetworkPerformanceOptions", "Set", "EC2 Instance",
+      "ModifyInstancePlacement", "Set", "EC2 Instance",
+      "ModifyPrivateDnsNameOptions", "Set", "EC2 Instance",
+      "ModifyPublicIpDnsNameOptions", "Set", "Network Interface",
+      "MonitorInstances", "Execute", "EC2 Instance",
+      "RebootInstances", "Execute", "EC2 Instance",
+      "RegisterInstanceEventNotificationAttributes", "Create", "Instance Event Notification Attribute",
+      "ReplaceIamInstanceProfileAssociation", "Set", "IAM Instance Profile Association",
+      "ReportInstanceStatus", "Other", "EC2 Instance",
+      "ResetInstanceAttribute", "Execute", "EC2 Instance",
+      "RunInstances", "Start", "EC2 Instance",
+      "SendDiagnosticInterrupt", "Execute", "EC2 Instance",
+      "StartInstances", "Start", "EC2 Instance",
+      "StopInstances", "Stop", "EC2 Instance",
+      "TerminateInstances", "Stop", "EC2 Instance",
+      "UnmonitorInstances", "Execute", "EC2 Instance"
+    ];
+    AWSCloudTrail
+    | where not(disabled)
+    | where EventSource == "ec2.amazonaws.com"
+    | where EventName in (Events | project EventName)
+    | lookup kind=inner Events on EventName
+    | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+    | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+    | extend NewValue = iff(EventResult == "Success", case(
+        EventName == "AssociateApplicationStatusCheck", ResponseElements.successfulResultSet,
+        EventName == "AssociateIamInstanceProfile", ResponseElements.iamInstanceProfileAssociation,
+        EventName == "AssociateInstanceEventWindow", ResponseElements.instanceEventWindow,
+        EventName == "CreateApplicationStatusCheck", ResponseElements.applicationStatusCheck,
+        EventName == "CreateInstanceEventWindow", ResponseElements.instanceEventWindow,
+        EventName == "DisableApplicationStatusCheckSuppression", ResponseElements.successfulResultSet,
+        EventName == "EnableApplicationStatusCheckSuppression", ResponseElements.successfulResultSet,
+        EventName == "ModifyApplicationStatusCheck", ResponseElements.applicationStatusCheck,
+        EventName == "ModifyDefaultCreditSpecification", ResponseElements.instanceFamilyCreditSpecification,
+        EventName == "ModifyInstanceAttribute", RequestParameters.Attribute,
+        EventName == "ModifyInstanceCapacityReservationAttributes",
+          RequestParameters.CapacityReservationSpecification,
+        EventName == "ModifyInstanceCpuOptions", ResponseElements,
+        EventName == "ModifyInstanceEventStartTime", ResponseElements.event,
+        EventName == "ModifyPublicIpDnsNameOptions", RequestParameters.HostnameType,
+        EventName == "MonitorInstances", ResponseElements.instancesSet,
+        EventName == "RegisterInstanceEventNotificationAttributes", ResponseElements.instanceTagAttribute,
+        EventName == "ReplaceIamInstanceProfileAssociation", ResponseElements.iamInstanceProfileAssociation,
+        EventName == "RunInstances", ResponseElements.groupSet,
+        EventName == "StartInstances", ResponseElements.instancesSet,
+        EventName == "StopInstances", ResponseElements.instancesSet,
+        EventName == "UnmonitorInstances", ResponseElements.instancesSet,
+        ""
+      ), "")
+    | extend ObjectId = case(
+        EventName == "AssociateApplicationStatusCheck", coalesce(RequestParameters.applicationStatusCheckId,
+          RequestParameters.ApplicationStatusCheckId),
+        EventName == "AssociateIamInstanceProfile", RequestParameters.InstanceId,
+        EventName == "AssociateInstanceEventWindow", RequestParameters.InstanceEventWindowId,
+        EventName == "CreateApplicationStatusCheck",
+          ResponseElements.applicationStatusCheck.applicationStatusCheckId,
+        EventName == "CreateInstanceEventWindow", ResponseElements.instanceEventWindow.instanceEventWindowId,
+        EventName == "DeleteApplicationStatusCheck", coalesce(RequestParameters.applicationStatusCheckId,
+          RequestParameters.ApplicationStatusCheckId),
+        EventName == "DeleteInstanceEventWindow", RequestParameters.InstanceEventWindowId,
+        EventName == "DescribeIamInstanceProfileAssociations", RequestParameters.AssociationId,
+        EventName == "DescribeInstanceAttribute", RequestParameters.InstanceId,
+        EventName == "DescribeInstanceCreditSpecifications", RequestParameters.InstanceId,
+        EventName == "DescribeInstanceEventWindows", RequestParameters.InstanceEventWindowId.N,
+        EventName == "DescribeInstanceImageMetadata", RequestParameters.InstanceId.N,
+        EventName == "DescribeInstanceSqlHaHistoryStates", RequestParameters.InstanceId.N,
+        EventName == "DescribeInstanceSqlHaStates", RequestParameters.InstanceId.N,
+        EventName == "DescribeInstanceStatus", RequestParameters.InstanceId.N,
+        EventName == "DescribeInstances", RequestParameters.InstanceId.N,
+        EventName == "DisableInstanceSqlHaStandbyDetections", RequestParameters.InstanceId,
+        EventName == "DisassociateApplicationStatusCheck", coalesce(RequestParameters.applicationStatusCheckId,
+          RequestParameters.ApplicationStatusCheckId),
+        EventName == "DisassociateIamInstanceProfile", RequestParameters.AssociationId,
+        EventName == "DisassociateInstanceEventWindow", RequestParameters.InstanceEventWindowId,
+        EventName == "EnableInstanceSqlHaStandbyDetections", RequestParameters.InstanceId,
+        EventName == "GetInstanceUefiData", ResponseElements.instanceId,
+        EventName == "ModifyApplicationStatusCheck", coalesce(RequestParameters.applicationStatusCheckId,
+          RequestParameters.ApplicationStatusCheckId),
+        EventName == "ModifyDefaultCreditSpecification",
+          ResponseElements.instanceFamilyCreditSpecification.instanceFamilyCreditSpecificationId,
+        EventName == "ModifyInstanceAttribute", RequestParameters.InstanceId,
+        EventName == "ModifyInstanceCapacityReservationAttributes", RequestParameters.InstanceId,
+        EventName == "ModifyInstanceCpuOptions", ResponseElements.instanceId,
+        EventName == "ModifyInstanceCreditSpecification", RequestParameters.InstanceCreditSpecification,
+        EventName == "ModifyInstanceEventStartTime", RequestParameters.InstanceEventId,
+        EventName == "ModifyInstanceEventWindow", RequestParameters.InstanceEventWindowId,
+        EventName == "ModifyInstanceMaintenanceOptions", ResponseElements.instanceId,
+        EventName == "ModifyInstanceMetadataOptions", ResponseElements.instanceId,
+        EventName == "ModifyInstanceNetworkPerformanceOptions", ResponseElements.instanceId,
+        EventName == "ModifyInstancePlacement", ResponseElements.instanceId,
+        EventName == "ModifyPrivateDnsNameOptions", RequestParameters.InstanceId,
+        EventName == "ModifyPublicIpDnsNameOptions", RequestParameters.NetworkInterfaceId,
+        EventName == "MonitorInstances", RequestParameters.InstanceId,
+        EventName == "RebootInstances", RequestParameters.InstanceId,
+        EventName == "ReplaceIamInstanceProfileAssociation",
+          ResponseElements.iamInstanceProfileAssociation.associationId,
+        EventName == "ReportInstanceStatus", RequestParameters.InstanceId,
+        EventName == "ResetInstanceAttribute", RequestParameters.InstanceId,
+        EventName == "RunInstances", ResponseElements.requesterId,
+        EventName == "SendDiagnosticInterrupt", RequestParameters.InstanceId,
+        EventName == "StartInstances", RequestParameters.InstanceId,
+        EventName == "StopInstances", RequestParameters.InstanceId,
+        EventName == "TerminateInstances", RequestParameters.InstanceId,
+        EventName == "UnmonitorInstances", RequestParameters.InstanceId,
+        ""
+      )
+    | extend
+        Type = "AWSCloudTrail",
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventSeverity = "Informational",
+        EventSchema = "AuditEvent",
+        EventSchemaVersion = "1.0.0",
+        EventVendor = "AWS",
+        EventProduct = "CloudTrail",
+        Dvc = "CloudTrail",
+        EventMessage = ErrorMessage,
+        ObjectType = "Cloud Resource",
+        TargetAppName = "Amazon Elastic Compute Cloud",
+        TargetAppType = "Service"
+    | project-rename
+        EventOriginalSubType = EventTypeName,
+        EventOriginalType = EventName,
+        EventUid = AwsEventId,
+        EventOriginalResultDetails = ErrorMessage,
+        EventProductVersion = EventVersion,
+        ActorUserId = UserIdentityAccountId,
+        ActorUsername = UserIdentityUserName,
+        ActorOriginalUserType = UserIdentityType,
+        HttpUserAgent = UserAgent
+    | extend
+        ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+        ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+        SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+        ActingApplicationEntityKey = "",
+        ActorUserAdditionalIds = dynamic([]),
+        ActorUserEntityKey = "",
+        AdditionalEntities = dynamic([]),
+        DvcEntityKey = "",
+        SrcSystemEntityKey = "",
+        TargetApplicationEntityKey = "",
+        TargetSystemEntityKey = ""
+    | extend AdditionalFields = iff(pack, bag_pack(
+        "ActorAccessKeyId", UserIdentityAccessKeyId,
+        "AWSRegion", AWSRegion,
+        "APIVersion", APIVersion,
+        "ManagementEvent", ManagementEvent,
+        "ReadOnly", ReadOnly,
+        "RequestParameters", RequestParameters,
+        "ResponseElements", ResponseElements
+      ), dynamic({}))
+    | extend
+        Operation = EventOriginalType,
+        User = ActorUsername,
+        IpAddr = SrcIpAddr,
+        Application = TargetAppName,
+        Value = NewValue
+    | project
+        TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+        EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+        EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+        EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+        ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+        SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+        Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+        ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+        AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+        TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(disabled=disabled, pack=pack)

@@ -84,6 +84,27 @@ class TargetConfigTests(unittest.TestCase):
             "authoring", json.loads(output.getvalue())["context"]["workflowProfile"]
         )
 
+    def test_cli_workflow_init_defaults_to_qualification_profile(self) -> None:
+        self._write_config()
+        output = io.StringIO()
+        with self._mock_exact_workspace():
+            with redirect_stdout(output):
+                result = main(
+                    [
+                        "workflow-init",
+                        "--solution",
+                        str(self.solution),
+                        "--confirm-configured-target",
+                        "--version-bump",
+                        "none",
+                    ]
+                )
+        self.assertEqual(0, result)
+        payload = json.loads(output.getvalue())
+        self.assertEqual("qualification", payload["context"]["workflowProfile"])
+        self.assertRegex(payload["operatorHash"], r"^[0-9a-f]{16}$")
+        self.assertEqual(payload["operatorHash"], payload["context"]["operatorHash"])
+
     def test_doctor_displays_configured_target_without_resolving_customer_id(self) -> None:
         self._write_config()
         status = doctor_solution_target(self.solution)
@@ -352,6 +373,61 @@ class TargetConfigTests(unittest.TestCase):
             )
         self.assertEqual(locked, target)
         run_az.assert_not_called()
+
+    def test_cli_pr_qualify_accepts_pr_number_and_run_number(self) -> None:
+        captured: dict[str, object] = {}
+
+        def fake_evaluate(
+            sol_root,
+            *,
+            mode="auto",
+            is_migration=None,
+            waivers_file=None,
+            acknowledged_exclusions_file=None,
+            evidence_dir=None,
+            target_version=None,
+            pr_number=None,
+            run_number=None,
+        ):
+            captured["pr_number"] = pr_number
+            captured["run_number"] = run_number
+            return {
+                "solutionName": "Sample",
+                "solutionVersion": "3.0.0",
+                "mode": mode,
+                "isMigration": True,
+                "validationStatus": "Pass",
+                "qualificationStatus": "Pass",
+                "migrationStatus": "Pass",
+                "overallVerdict": "Pass",
+                "summary": {},
+            }
+
+        output = io.StringIO()
+        with mock.patch(
+            "solution_manager.cli.evaluate_solution_pr_qualification",
+            side_effect=fake_evaluate,
+        ), mock.patch(
+            "solution_manager.cli.write_pr_qualification_reports",
+            return_value={
+                "html": self.solution / "report.html",
+                "markdown": self.solution / "summary.md",
+            },
+        ), redirect_stdout(output):
+            rc = main(
+                [
+                    "pr-qualify",
+                    "--solution",
+                    str(self.solution),
+                    "--pr-number",
+                    "42",
+                    "--run-number",
+                    "7",
+                ]
+            )
+        self.assertEqual(0, rc)
+        self.assertEqual(42, captured["pr_number"])
+        self.assertEqual(7, captured["run_number"])
 
 
 if __name__ == "__main__":

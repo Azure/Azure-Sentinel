@@ -1,0 +1,290 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for AWS CloudTrail EC2 ImagesAndImportExport activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+- Title: Amazon EC2 API actions
+  Link: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Operations.html
+Description: |
+  Filters and normalizes AWSCloudTrail events from ec2.amazonaws.com for AMIs, FPGA images, image
+  permissions and reports, VM import/export, bundle tasks, and image recovery. Includes
+  image watermarks, image findings, and AMI instance-type specifications. This parser is
+  referenced by vimAuditEventAWSCloudTrail.
+ParserName: vimAuditEventAWSCloudTrailEC2ImagesAndImportExport
+ParentParser: vimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AWSCloudTrailEC2ImagesAndImportExport
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    actorusername_has_any:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool=false,
+    pack:bool=false
+  ) {
+  let Events = datatable(EventName: string, EventType: string, Object: string)
+  [
+    "AttachImageWatermark", "Set", "AMI Watermark",
+    "BundleInstance", "Execute", "EC2 Instance",
+    "CancelBundleTask", "Delete", "Bundle Task",
+    "CancelConversionTask", "Delete", "Conversion Task",
+    "CancelExportTask", "Delete", "Export Task",
+    "CancelImageLaunchPermission", "Delete", "AMI",
+    "CancelImportTask", "Delete", "Import Task",
+    "CopyFpgaImage", "Execute", "FPGA Image",
+    "CopyImage", "Execute", "AMI",
+    "CreateFpgaImage", "Create", "FPGA Image",
+    "CreateImage", "Create", "AMI",
+    "CreateImageUsageReport", "Create", "Image Usage Report",
+    "CreateInstanceExportTask", "Create", "Instance Export Task",
+    "CreateRestoreImageTask", "Create", "AMI",
+    "CreateStoreImageTask", "Create", "AMI",
+    "DeleteFpgaImage", "Delete", "FPGA Image",
+    "DeleteImageUsageReport", "Delete", "AMI Usage Report",
+    "DeregisterImage", "Delete", "AMI",
+    "DescribeBundleTasks", "Read", "Bundle Task",
+    "DescribeConversionTasks", "Read", "Conversion Task",
+    "DescribeExportImageTasks", "Read", "Export Image Task",
+    "DescribeExportTasks", "Read", "Export Task",
+    "DescribeFastLaunchImages", "Read", "AMI",
+    "DescribeFpgaImageAttribute", "Read", "FPGA Image",
+    "DescribeFpgaImages", "Read", "FPGA Image",
+    "DescribeImageAttribute", "Read", "AMI",
+    "DescribeImageReferences", "Read", "AMI",
+    "DescribeImageUsageReportEntries", "Read", "AMI Usage Report",
+    "DescribeImageUsageReports", "Read", "AMI Usage Report",
+    "DescribeImages", "Read", "AMI",
+    "DescribeImportImageTasks", "Read", "Import Image Task",
+    "DescribeImportSnapshotTasks", "Read", "Import Snapshot Task",
+    "DescribeStoreImageTasks", "Read", "Store Image Task",
+    "DetachImageWatermark", "Delete", "AMI Watermark",
+    "DisableAllowedImagesSettings", "Disable", "AMI",
+    "DisableFastLaunch", "Disable", "AMI",
+    "DisableImage", "Disable", "AMI",
+    "DisableImageBlockPublicAccess", "Disable", "AMI",
+    "DisableImageDeprecation", "Disable", "AMI",
+    "DisableImageDeregistrationProtection", "Disable", "AMI",
+    "EnableAllowedImagesSettings", "Enable", "AMI",
+    "EnableFastLaunch", "Enable", "AMI",
+    "EnableImage", "Enable", "EC2 Instance",
+    "EnableImageBlockPublicAccess", "Enable", "AMI",
+    "EnableImageDeprecation", "Enable", "AMI",
+    "EnableImageDeregistrationProtection", "Enable", "AMI",
+    "ExportImage", "Execute", "AMI",
+    "GetAllowedImagesSettings", "Read", "AMI",
+    "GetImageAncestry", "Read", "AMI",
+    "GetImageBlockPublicAccessState", "Read", "AMI",
+    "GetImageFindings", "Read", "AMI",
+    "ImportImage", "Create", "AMI",
+    "ImportInstance", "Create", "EC2 Instance",
+    "ImportSnapshot", "Create", "EBS Snapshot",
+    "ImportVolume", "Create", "EBS Volume",
+    "ListImagesInRecycleBin", "Read", "AMI",
+    "ModifyFpgaImageAttribute", "Set", "FPGA Image",
+    "ModifyImageAttribute", "Set", "AMI",
+    "RegisterImage", "Create", "AMI",
+    "ReplaceImageCriteriaInAllowedImagesSettings", "Set", "AMI",
+    "ReplaceImageInstanceTypeSpecification", "Set", "AMI",
+    "ResetFpgaImageAttribute", "Execute", "FPGA Image",
+    "ResetImageAttribute", "Execute", "AMI",
+    "RestoreImageFromRecycleBin", "Set", "Snapshot"
+  ]
+  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+  | where array_length(object_has_any) == 0 or Object has_any (object_has_any);
+  AWSCloudTrail
+  | where not(disabled)
+  | where EventSource == "ec2.amazonaws.com"
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+  | where array_length(operation_has_any) == 0 or EventName has_any (operation_has_any)
+  | where array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any)
+  | where array_length(srcipaddr_has_any_prefix) == 0
+      or (ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0")
+          and has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+  | where EventName in (Events | project EventName)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | where eventresult == "*" or EventResult == eventresult
+  | lookup kind=inner Events on EventName
+  | extend Req = todynamic(RequestParameters), Resp = todynamic(ResponseElements)
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AttachImageWatermark", Resp.watermarkKey,
+      EventName in ("BundleInstance", "CancelBundleTask"), Resp.bundleInstanceTask,
+      EventName == "CopyFpgaImage", Resp.fpgaImageId,
+      EventName in ("CopyImage", "CreateImage", "CreateRestoreImageTask"), Resp.imageId,
+      EventName == "CreateFpgaImage", Resp.fpgaImageGlobalId,
+      EventName == "CreateImageUsageReport", Resp.reportId,
+      EventName == "CreateInstanceExportTask", Resp.exportTask,
+      EventName == "EnableAllowedImagesSettings", Req.AllowedImagesSettingsState,
+      EventName == "ExportImage", Resp.s3ExportLocation,
+      EventName == "ImportImage", Resp,
+      EventName in ("ImportInstance", "ImportVolume"), Resp.conversionTask,
+      EventName == "ImportSnapshot", Resp.snapshotTaskDetail,
+      EventName == "ModifyFpgaImageAttribute", Resp.fpgaImageAttribute,
+      EventName == "ReplaceImageInstanceTypeSpecification",
+        coalesce(Req.instanceTypeSpecification, Req.InstanceTypeSpecification),
+      ""
+    ), "")
+  | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+  | extend ObjectId = case(
+      EventName in ("AttachImageWatermark", "DetachImageWatermark", "GetImageFindings",
+        "ReplaceImageInstanceTypeSpecification"), coalesce(Req.imageId,
+        Req.ImageId),
+      EventName == "BundleInstance", Req.InstanceId,
+      EventName == "CancelBundleTask", Req.BundleId,
+      EventName in ("CancelConversionTask", "DescribeConversionTasks"), Req.ConversionTaskId,
+      EventName in ("CancelExportTask", "DescribeExportTasks"), Req.ExportTaskId,
+      EventName in ("CancelImageLaunchPermission", "DeregisterImage", "DescribeFastLaunchImages",
+        "DescribeImageAttribute", "DescribeStoreImageTasks", "DisableFastLaunch", "DisableImage",
+        "DisableImageDeprecation", "DisableImageDeregistrationProtection", "EnableFastLaunch", "EnableImage",
+        "EnableImageDeprecation", "EnableImageDeregistrationProtection", "ExportImage", "GetImageAncestry",
+        "ListImagesInRecycleBin", "ModifyImageAttribute", "ResetImageAttribute", "RestoreImageFromRecycleBin"),
+        Req.ImageId,
+      EventName == "CancelImportTask", Resp.importTaskId,
+      EventName == "CopyFpgaImage", Resp.fpgaImageId,
+      EventName in ("CopyImage", "CreateImage", "CreateRestoreImageTask", "ImportImage", "RegisterImage"),
+        Resp.imageId,
+      EventName == "CreateFpgaImage", Resp.fpgaImageGlobalId,
+      EventName == "CreateImageUsageReport", Resp.reportId,
+      EventName == "CreateInstanceExportTask", Resp.exportTask.exportTaskId,
+      EventName == "CreateStoreImageTask", Resp.objectKey,
+      EventName in ("DeleteFpgaImage", "DescribeFpgaImageAttribute", "DescribeFpgaImages",
+        "ResetFpgaImageAttribute"), Req.FpgaImageId,
+      EventName == "DeleteImageUsageReport", Req.ReportId,
+      EventName == "DescribeBundleTasks", Resp.bundleInstanceTasksSet,
+      EventName == "DescribeExportImageTasks", Req.ExportImageTaskId,
+      EventName in ("DescribeImageReferences", "DescribeImageUsageReportEntries", "DescribeImageUsageReports",
+        "DescribeImages"), Req.ImageId.N,
+      EventName in ("DescribeImportImageTasks", "DescribeImportSnapshotTasks"),
+        Req.ImportTaskId.N,
+      EventName in ("ImportInstance", "ImportVolume"), Resp.conversionTask.conversionTaskId,
+      EventName == "ImportSnapshot", Resp.snapshotTaskDetail.snapshotTaskDetailId,
+      EventName == "ModifyFpgaImageAttribute", Resp.fpgaImageAttribute.fpgaImageId,
+      ""
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service"
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      ActorUserEntityKey = "",
+      AdditionalEntities = dynamic([]),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", Req,
+      "ResponseElements", Resp
+    ), dynamic({}))
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  | project
+      TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+      EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+      EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+      ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+      SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+      Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+      ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+      AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+      TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(
+    starttime,
+    endtime,
+    srcipaddr_has_any_prefix,
+    actorusername_has_any,
+    operation_has_any,
+    eventtype_in,
+    eventresult,
+    object_has_any,
+    newvalue_has_any,
+    disabled,
+    pack
+  )

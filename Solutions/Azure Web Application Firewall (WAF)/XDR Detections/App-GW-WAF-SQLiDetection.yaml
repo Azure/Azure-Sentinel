@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WAF
+  dataTypes:
+  - AzureDiagnostics
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureDiagnostics
+  requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+    - AzureDiagnostics
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: bdb2cd63-99f2-472e-b1b9-acba473b6744
+    path: Analytic Rules/App-GW-WAF-SQLiDetection.yaml
+    version: 1.0.2
+    querySha256: 6aaa74fd43724793645f7f8553cc8c618e34a01070b2c73b458c0e0916c96af1
+    schedule:
+      queryFrequency: 6h
+      queryPeriod: 6h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=6h, lookback=6h; target frequency=PT6H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Execution
+    - InitialAccess
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1211
+    - T1059
+    - T1190
+    - T0890
+    reviewScope:
+      sourceDocumentSha256: 39e415ed50a1577158e965ca61e419c7d3811d042e2705d4d859f9e42b144cae
+      targetQuerySha256: 85366ef73f953c7765f5ca2d27fa6fad000945fa099bda93fac0a5cf293b2d92
+properties:
+  id: xdr-bdb2cd63-99f2-472e-b1b9-acba473b6744
+  displayName: App Gateway WAF - SQLi Detection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Threshold = 3;
+      AGWFirewallLogs
+      | where Action == "Matched"
+      | where Message has "SQL Injection"
+      | project TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message
+      | join kind = inner(
+      AGWFirewallLogs
+      | where Action == "Blocked"
+      | extend transactionId_g = tostring(TransactionId)) on TransactionId
+      | extend Uri = strcat(Hostname,RequestUri)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(transactionId_g,100), Message = make_set(Message,100), Total_TransactionId = dcount(transactionId_g) by ClientIp, Uri, Action
+      | where Total_TransactionId >= Threshold
+  schedule:
+    frequency: PT6H
+  detectionAction:
+    alertTemplate:
+      title: App Gateway WAF - SQLi Detection
+      description: |-
+        'Identifies a match for a SQL Injection attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+        References: https://owasp.org/Top10/A03_2021-Injection/'
+      severity: high
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: Uri
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1211
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T0890

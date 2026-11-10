@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import sys
 from pathlib import Path
@@ -841,9 +842,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     workflow_init.add_argument(
         "--workflow-profile",
-        default="authoring",
+        default="qualification",
         choices=WORKFLOW_PROFILES,
-        help="Select authoring (default) or qualification before initialization.",
+        help="Select qualification (default) or authoring before initialization.",
     )
     workflow_init.add_argument(
         "--yolo",
@@ -1197,6 +1198,18 @@ def main(argv: list[str] | None = None) -> int:
         "--target-version",
         help="Optional target version override for testing/previewing at >= 3.2.2.",
     )
+    pr_qualify_parser.add_argument(
+        "--pr-number",
+        type=int,
+        default=None,
+        help="Optional pull request number for qualification telemetry.",
+    )
+    pr_qualify_parser.add_argument(
+        "--run-number",
+        type=int,
+        default=None,
+        help="Optional run number for qualification telemetry.",
+    )
     from solution_manager.qualification.workbook_qualification_cli import (
         register_workbook_qualification_commands, dispatch_workbook_qualification,
     )
@@ -1346,14 +1359,26 @@ def main(argv: list[str] | None = None) -> int:
                 if args.output_dir
                 else sol_root / "Evidence" / "pr-qualification"
             )
+            eval_kwargs: dict[str, object] = {
+                "mode": args.mode,
+                "is_migration": args.is_migration,
+                "waivers_file": args.waivers_file,
+                "acknowledged_exclusions_file": args.acknowledged_exclusions_file,
+                "evidence_dir": args.evidence_dir,
+                "target_version": args.target_version,
+            }
+            eval_sig = inspect.signature(evaluate_solution_pr_qualification)
+            accepts_var_kw = any(
+                param.kind == inspect.Parameter.VAR_KEYWORD
+                for param in eval_sig.parameters.values()
+            )
+            if "pr_number" in eval_sig.parameters or accepts_var_kw:
+                eval_kwargs["pr_number"] = args.pr_number
+            if "run_number" in eval_sig.parameters or accepts_var_kw:
+                eval_kwargs["run_number"] = args.run_number
             report_data = evaluate_solution_pr_qualification(
                 sol_root,
-                mode=args.mode,
-                is_migration=args.is_migration,
-                waivers_file=args.waivers_file,
-                acknowledged_exclusions_file=args.acknowledged_exclusions_file,
-                evidence_dir=args.evidence_dir,
-                target_version=args.target_version,
+                **eval_kwargs,
             )
             out_dir.mkdir(parents=True, exist_ok=True)
             result_json_path = out_dir / "pr-qualification-result.json"

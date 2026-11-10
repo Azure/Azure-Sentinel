@@ -1,0 +1,158 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureActivity
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: AzureActivity
+    dataTypes:
+    - AzureActivity
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7a0c9989-1618-4126-9290-fb77b976d181
+    path: Analytic Rules/IPEntity_AzureActivity.yaml
+    version: 1.4.7
+    querySha256: ee39e077aedac6fd91f72509938bf113aad956a6e107574f5af169c065ed975d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.4.7
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `Caller`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Caller` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 3295ba0cda1bd197e96d26d9a5e61c80ea316d0f836d3c7053965c093227528a
+      targetQuerySha256: 6657abcf70d9dc72245838786859d43242ce5c4b28683da087a4bb7285e25a7f
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Caller
+      column: Caller
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-7a0c9989-1618-4126-9290-fb77b976d181
+  displayName: TI Map IP Entity to AzureActivity
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h; // Look back 1 hour for AzureActivity logs\n\
+      let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n\
+      // Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators\
+      \ = ThreatIntelIndicators\n //extract key part of kv pair\n     | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\"\
+      )\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n  // Filter out indicators\
+      \ without relevant IP address fields\n  | where TimeGenerated >= ago(ioc_lookBack)\n\
+      \  // Select the IP entity based on availability of different IP fields\n  |\
+      \ extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n\
+      \  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP),\
+      \ NetworkSourceIP, TI_ipEntity)\n  | extend Url = iff(ObservableKey == \"url:value\"\
+      , ObservableValue, \"\")\n  // Exclude local addresses using the ipv4_is_private\
+      \ operator and filtering out specific address prefixes\n  | where ipv4_is_private(TI_ipEntity)\
+      \ == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith\
+      \ \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and\
+      \ (ValidUntil > now() or isempty(ValidUntil));\n// Perform a join between IP\
+      \ indicators and AzureActivity logs to identify potential malicious activity\n\
+      IP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP,\
+      \ Type, TI_ipEntity\n// using innerunique to keep perf fast and result set low,\
+      \ we only need one match to indicate potential malicious activity that needs\
+      \ to be investigated\n| join kind=innerunique (\n    AzureActivity | where TimeGenerated\
+      \ >= ago(dt_lookBack)\n    // renaming time column so it is clear the log this\
+      \ came from\n    | extend AzureActivity_TimeGenerated = TimeGenerated\n)\non\
+      \ $left.TI_ipEntity == $right.CallerIpAddress\n| where AzureActivity_TimeGenerated\
+      \ < ValidUntil\n| summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated,\
+      \ *) by Id, CallerIpAddress\n| extend Description = tostring(parse_json(Data).description)\n\
+      | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project AzureActivity_TimeGenerated, Description, ActivityGroupNames, Id,\
+      \ ValidUntil, Confidence, TI_ipEntity, CallerIpAddress,\nCaller, OperationNameValue,\
+      \ ActivityStatusValue, CategoryValue, ResourceId, NetworkSourceIP, Type, Url\n\
+      | extend timestamp = AzureActivity_TimeGenerated\n| extend Name = iif(Caller\
+      \ has '@', tostring(split(Caller,'@',0)[0]), \"\")\n| extend UPNSuffix = iif(Caller\
+      \ has '@', tostring(split(Caller,'@',1)[0]), \"\")\n| extend AadUserId = iif(Caller\
+      \ !has '@', tostring(Caller), \"\")"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP Entity to AzureActivity
+      description: This query maps any IP indicators of compromise (IOCs) from threat
+        intelligence (TI), by searching for matches in AzureActivity.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: AadUserId
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        urls:
+        - id: url1
+          addressColumn: Url
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: ResourceId
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountFullName: Caller

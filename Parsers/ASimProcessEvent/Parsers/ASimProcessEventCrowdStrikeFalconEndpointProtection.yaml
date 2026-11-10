@@ -1,7 +1,7 @@
 Parser:
   Title: Process Event ASIM parser for CrowdStrike Falcon Endpoint Protection
-  Version: '0.1.0'
-  LastUpdated: Oct 22, 2026
+  Version: '0.1.1'
+  LastUpdated: Oct 29, 2026
 Product:
   Name: CrowdStrike Falcon Endpoint Protection
 Normalization:
@@ -19,7 +19,6 @@ References:
 Description: |
   Normalizes CrowdStrike_Process_Events_CL process creation, synthetic process observations,
   process termination, and termination requests to ASIM ProcessEvent 1.0.0.
-  Retains raw source fields in AdditionalFields for every normalized event.
   This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 ParserName: ASimProcessEventCrowdStrikeFalconEndpointProtection
 EquivalentBuiltInParser: _ASim_ProcessEvent_CrowdStrikeFalconEndpointProtection
@@ -32,8 +31,6 @@ ParserQuery: |
       CrowdStrike_Process_Events_CL
       | where not(disabled)
       | where event_simpleName in ('WmiCreateProcess', 'UnsignedModuleLoad', 'TerminateProcess', 'SyntheticProcessRollup2', 'ProcessSelfDeleted', 'ProcessRollup2', 'ProcessInjection', 'ProcessBlocked', 'ModuleLoadV3DetectInfo', 'FileWrittenAndExecutedInContainer', 'ExecutableDeleted', 'EndOfProcess')
-      | extend
-          _SourceFields = bag_merge(AdditionalFields, bag_remove_keys(pack_all(true), dynamic(["AdditionalFields", "TimeGenerated", "Type"])))
       | extend
           _IsCreate = event_simpleName in ("ProcessRollup2", "SyntheticProcessRollup2"),
           _IsTerminationRequest = event_simpleName == "TerminateProcess",
@@ -48,7 +45,8 @@ ParserQuery: |
           EventOriginalUid = CrowdStrikeId,
           DvcId = aid,
           DvcScopeId = cid,
-          DvcIpAddr = aip
+          DvcIpAddr = aip,
+          _FalconTargetProcessId = TargetProcessId
       | extend
           EventType = iff(_IsCreate, "ProcessCreated", "ProcessTerminated"),
           EventStartTime = _EventTime,
@@ -98,7 +96,6 @@ ParserQuery: |
           TargetUserIdType = iff(not(_IsTerminationRequest) and isnotempty(UserSid), "SID", ""),
           TargetUserSessionId = iff(_IsTerminationRequest, "", AuthenticationId),
           ParentProcessName = "",
-          AdditionalFields = _SourceFields,
           DvcEntityKey = "",
           ActingProcessEntityKey = "",
           ActorUserEntityKey = "",
@@ -118,6 +115,72 @@ ParserQuery: |
           User = TargetUsername,
           Process = TargetProcessName,
           CommandLine = TargetProcessCommandLine
+      | extend AdditionalFields = pack(
+          "SourceAdditionalFields", AdditionalFields,
+          "ContextTimeStamp", ContextTimeStamp, "ConfigBuild", ConfigBuild,
+          "ConfigStateHash", ConfigStateHash, "ContextProcessId", ContextProcessId,
+          "ContextThreadId", ContextThreadId, "BoundingLimitCount", BoundingLimitCount,
+          "BoundingLimitDuration", BoundingLimitDuration, "Entitlements", Entitlements,
+          "EffectiveTransmissionClass", EffectiveTransmissionClass,
+          "OciContainerId", OciContainerId, "TreeId", TreeId,
+          "InjecteeImageFileName", InjecteeImageFileName, "InjectorImageFileName", InjectorImageFileName,
+          "ParentProcessId", ParentProcessId, "TargetProcessId", _FalconTargetProcessId,
+          "ConHostProcessId", ConHostProcessId, "WritingProcessId", WritingProcessId,
+          "SourceProcessId", SourceProcessId, "TargetFileName", TargetFileName,
+          "WritingProcessImageFileName", WritingProcessImageFileName,
+          "WritingProcessCommandLine", WritingProcessCommandLine,
+          "ProcessEndTime", ProcessEndTime, "ModuleName", ModuleName, "TokenType", TokenType,
+          "RpcClientProcessId", RpcClientProcessId, "TemplateInstanceId", TemplateInstanceId,
+          "PatternId", PatternId, "Tags", Tags, "ProcessGroupId", ProcessGroupId,
+          "SyntheticPR2Flags", SyntheticPR2Flags, "ImageSubsystem", ImageSubsystem,
+          "SourceThreadId", SourceThreadId, "AuthenticodeHashData", AuthenticodeHashData,
+          "SessionId", SessionId, "ParentAuthenticationId", ParentAuthenticationId,
+          "SignInfoFlags", SignInfoFlags, "CallStackModuleNamesVersion", CallStackModuleNamesVersion,
+          "CsaProcessDataCollectionInstanceId", CsaProcessDataCollectionInstanceId,
+          "CallStackModuleNames", CallStackModuleNames, "CreateProcessType", CreateProcessType,
+          "ZoneIdentifier", ZoneIdentifier, "HostUrl", HostUrl, "TargetThreadId", TargetThreadId,
+          "SignatureErrorState", SignatureErrorState, "ModuleCharacteristics", ModuleCharacteristics,
+          "PublicKeys", PublicKeys, "ExtendedKeyUsages", ExtendedKeyUsages,
+          "SignatureState", SignatureState, "MappedFromUserMode", MappedFromUserMode,
+          "FileSigningTime", FileSigningTime, "Certificate", Certificate,
+          "FileIdentifier", FileIdentifier, "ExecutableBytes", ExecutableBytes,
+          "LoadingProcessOriginalFilename", LoadingProcessOriginalFilename,
+          "ModuleTagsAsString", ModuleTagsAsString, "ImageDirectoryClassification", ImageDirectoryClassification,
+          "ParentProcessPatternIdList", ParentProcessPatternIdList,
+          "ModuleLoadMechanism", ModuleLoadMechanism, "PatternIdList", PatternIdList,
+          "ScreenshotsTakenCount", ScreenshotsTakenCount, "NetworkListenCount", NetworkListenCount,
+          "SuspiciousRawDiskReadCount", SuspiciousRawDiskReadCount, "NetworkBindCount", NetworkBindCount,
+          "NetworkRecvAcceptCount", NetworkRecvAcceptCount, "ContextData", ContextData,
+          "NewExecutableWrittenCount", NewExecutableWrittenCount, "ExeAndServiceCount", ExeAndServiceCount,
+          "NetworkCloseCount", NetworkCloseCount, "SuspectStackCount", SuspectStackCount,
+          "CLICreationCount", CLICreationCount, "UnsignedModuleLoadCount", UnsignedModuleLoadCount,
+          "UserTime", UserTime, "AllocateVirtualMemoryCount", AllocateVirtualMemoryCount,
+          "ServiceEventCount", ServiceEventCount, "SnapshotFileOpenCount", SnapshotFileOpenCount,
+          "RemovableDiskFileWrittenCount", RemovableDiskFileWrittenCount, "InjectedDllCount", InjectedDllCount,
+          "ModuleLoadCount", ModuleLoadCount, "UserMemoryProtectExecutableCount", UserMemoryProtectExecutableCount,
+          "NetworkCapableAsepWriteCount", NetworkCapableAsepWriteCount, "DnsRequestCount", DnsRequestCount,
+          "ArchiveFileWrittenCount", ArchiveFileWrittenCount, "SetThreadContextCount", SetThreadContextCount,
+          "SuspiciousCredentialModuleLoadCount", SuspiciousCredentialModuleLoadCount,
+          "FileDeletedCount", FileDeletedCount,
+          "UserMemoryAllocateExecutableCount", UserMemoryAllocateExecutableCount,
+          "DirectoryCreatedCount", DirectoryCreatedCount, "NetworkConnectCountUdp", NetworkConnectCountUdp,
+          "QueueApcCount", QueueApcCount, "SuspiciousFontLoadCount", SuspiciousFontLoadCount,
+          "ConHostId", ConHostId, "NetworkConnectCount", NetworkConnectCount,
+          "BinaryExecutableWrittenCount", BinaryExecutableWrittenCount, "CycleTime", CycleTime,
+          "PrivilegedProcessHandleCount", PrivilegedProcessHandleCount, "MaxThreadCount", MaxThreadCount,
+          "GenericFileWrittenCount", GenericFileWrittenCount, "ScriptEngineInvocationCount", ScriptEngineInvocationCount,
+          "RunDllInvocationCount", RunDllInvocationCount, "CreateProcessCount", CreateProcessCount,
+          "KernelTime", KernelTime, "DirectoryEnumeratedCount", DirectoryEnumeratedCount,
+          "AsepWrittenCount", AsepWrittenCount, "SuspiciousDnsRequestCount", SuspiciousDnsRequestCount,
+          "DocumentFileWrittenCount", DocumentFileWrittenCount, "ProtectVirtualMemoryCount", ProtectVirtualMemoryCount,
+          "UserMemoryProtectExecutableRemoteCount", UserMemoryProtectExecutableRemoteCount,
+          "UserMemoryAllocateExecutableRemoteCount", UserMemoryAllocateExecutableRemoteCount,
+          "ExecutableDeletedCount", ExecutableDeletedCount, "RegKeySecurityDecreasedCount", RegKeySecurityDecreasedCount,
+          "InjectedThreadCount", InjectedThreadCount, "NetworkModuleLoadCount", NetworkModuleLoadCount,
+          "ThreadStartAddress", ThreadStartAddress, "ThreadExecutionControlType", ThreadExecutionControlType,
+          "PayloadClassification", PayloadClassification, "PayloadClassificationFlags", PayloadClassificationFlags,
+          "MemoryDescriptionFlags", MemoryDescriptionFlags, "WellKnownTargetFunction", WellKnownTargetFunction,
+          "RemoteAddressIP4", RemoteAddressIP4)
       | project
           TimeGenerated, Type, EventStartTime, EventEndTime, EventCount, EventType, EventResult,
           EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventSeverity,

@@ -1,0 +1,157 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SlackAuditAPI
+  dataTypes:
+  - SlackAudit_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SlackAuditV2_CL
+    - SlackAudit_CL
+  requiredDataConnectors:
+  - connectorId: SlackAuditAPI
+    dataTypes:
+    - SlackAudit_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 132b98a5-07e9-401a-9b6f-453e52a53979
+    path: Analytic Rules/SlackAuditSuspiciousFileDownloaded.yaml
+    version: 1.0.1
+    querySha256: a844e050c4dadc882d4575281901a21e479d9685b16a51f2e7bba5b542d671ad
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName
+      from query column `AccountCustomEntity`; supplemental details do not restore entity identity, correlation, or alert
+      parity
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1189
+    reviewScope:
+      sourceDocumentSha256: bb74783dd545b95f2dc2097e8dd1038d377b13923f2f5d225f33e6ca80b29b9e
+      targetQuerySha256: 6c62cf24a55f74107d63a9241069a7dfb22a8232393777a086359700d3252336
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: bb74783dd545b95f2dc2097e8dd1038d377b13923f2f5d225f33e6ca80b29b9e
+      targetQuerySha256: 6c62cf24a55f74107d63a9241069a7dfb22a8232393777a086359700d3252336
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-132b98a5-07e9-401a-9b6f-453e52a53979
+  displayName: SlackAudit - Suspicious file downloaded.
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let _SlackAudit = union isfuzzy=true
+          (SlackAuditV2_CL),
+          (SlackAudit_CL),
+          (datatable(TimeGenerated:datetime, Id:string, DateCreate:string, Action:string, Actor:dynamic, Entity:dynamic, Context:dynamic, Details:dynamic, ActionDescription:string)[])
+      | extend TimeGenerated = iff(isnotempty(column_ifexists('DateCreate', '')) and isnotnull(todatetime(column_ifexists('DateCreate', ''))), todatetime(column_ifexists('DateCreate', '')), TimeGenerated)
+      | extend actor = todynamic(Actor), entity = todynamic(Entity), context = todynamic(Context), details = todynamic(Details)
+      | extend
+          EventVendor = 'Slack',
+          EventProduct = 'Audit',
+          EventSchemaVersion = '0.1.0',
+          EventId = column_ifexists('Id', ''),
+          EventEndTime = column_ifexists('DateCreate', ''),
+          Action = column_ifexists('Action', ''),
+          DvcAction = column_ifexists('Action', ''),
+          DvcActionDesc = column_ifexists('ActionDescription', ''),
+          ActorType = tostring(actor.type),
+          SrcUserIdentity = tostring(actor.user.id),
+          SrcUserName = tostring(actor.user.name),
+          SrcUserEmail = tostring(actor.user.email),
+          SrcUserTeam = tostring(actor.user.team),
+          EntityType = tostring(entity.type),
+          EntityFileId = tostring(entity.file.id),
+          EntityFileName = tostring(entity.file.name),
+          EntityFileFiletype = tostring(entity.file.filetype),
+          EntityFileTitle = tostring(entity['file']['title']),
+          EntityUserId = tostring(entity.user.id),
+          EntityUserName = tostring(entity.user.name),
+          EntityUserEmail = tostring(entity.user.email),
+          EntityUserTeam = tostring(entity.user.team),
+          UserAgentOriginal = tostring(context.ua),
+          SrcIpAddr = tostring(context.ip_address),
+          SessionId = tostring(context.session_id),
+          DetailsType = tostring(details.type),
+          DetailsNewValue = tostring(details.new_value),
+          DetailsPreviousValue = tostring(details.previous_value);
+      _SlackAudit
+      | where DvcAction =~ 'file_downloaded'
+      | extend FileName = tostring(EntityFileName)
+      | extend fe = split(FileName, '.')
+      | extend FileExtension = iff(array_length(fe) > 1, tostring(fe[-1]), '')
+      | where FileName contains '.'
+      | where FileExtension matches regex @"^[A-Za-z]{1,4}$"
+      | project EntityFileName = FileName, SrcUserName, SrcUserEmail, SrcIpAddr
+      | extend AccountCustomEntity = SrcUserName
+      | extend FileCustomEntity = EntityFileName
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: SlackAudit - Suspicious file downloaded.
+      description: '''Detects potentialy suspicious downloads.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: SrcUserEmail
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1189
+      customDetails:
+        FileName: EntityFileName
+        UserName: SrcUserName
+        AccountFullName: AccountCustomEntity

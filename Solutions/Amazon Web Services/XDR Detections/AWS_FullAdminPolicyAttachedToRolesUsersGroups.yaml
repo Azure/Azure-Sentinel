@@ -1,0 +1,155 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AWSS3
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 826bb2f8-7894-4785-9a6b-a8a855d8366f
+    path: Analytic Rules/AWS_FullAdminPolicyAttachedToRolesUsersGroups.yaml
+    version: 1.0.5
+    querySha256: 7b7f7265d06f933b5d8dd46f3bbfd6c68153cbf89915291eebf4ebddd9c6696f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'PolicyName' column `PolicyName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'EventName' column `EventName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - Account.CloudAppAccountId output column `RecipientAccountId` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1484
+    reviewScope:
+      sourceDocumentSha256: 6101c07abb4ef9823ece608bc7040d66c78232553f15e31973213e25f8d7d0b2
+      targetQuerySha256: 128c119c3e9d09f494f418dc57a849546411d953a45fb288632ee7db2722a644
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-826bb2f8-7894-4785-9a6b-a8a855d8366f
+  displayName: AWSCloudTrail - Full Admin policy created and then attached to Roles, Users or Groups
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
+      let createPolicy = dynamic(["CreatePolicy", "CreatePolicyVersion"]);
+      let timeframe = 1d;
+      let lookback = 14d;
+      // Creating Master table with all the events to use with materialize for better performance
+      let EventInfo = AWSCloudTrail
+      | where TimeGenerated >= ago(lookback)
+      | where EventName in (EventNameList) or EventName in (createPolicy)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "");
+      //Checking for Policy creation event with Full Admin Privileges since lookback period.
+      let FullAdminPolicyEvents =  materialize(  EventInfo
+      | where TimeGenerated >= ago(lookback)
+      | where EventName in (createPolicy)
+      | extend PolicyName = tostring(parse_json(RequestParameters).policyName)
+      | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement
+      | mvexpand Statement
+      | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource)
+      | mvexpand Action
+      | extend Action = tostring(Action)
+      | where Effect =~ "Allow" and Action == "*" and Resource == "*"
+      | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName, RecipientAccountId, AccountName, AccountUPNSuffix
+      | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+      | project-rename StartTime = TimeGenerated  );
+      let PolicyAttach = materialize(  EventInfo
+      | where TimeGenerated >= ago(timeframe)
+      | where EventName in (EventNameList)
+      | extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),"/")[1])
+      | summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, PolicyName
+      | extend AttachEvent = pack("StartTime", StartTime, "EndTime", EndTime, "EventName", EventName, "UserIdentityType",   UserIdentityType, "AccountName", AccountName, "AccountUPNSuffix", AccountUPNSuffix, "RecipientAccountId", RecipientAccountId, "UserIdentityArn", UserIdentityArn, "SourceIpAddress", SourceIpAddress)
+      | project EventSource, PolicyName, AttachEvent, RecipientAccountId, AccountName, AccountUPNSuffix, AttachEventCount
+      );
+      // Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.
+      // These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.
+      FullAdminPolicyEvents
+      | join kind=leftouter
+      (
+          PolicyAttach
+      )
+      on PolicyName
+      | project-away PolicyName1
+      | extend timestamp = StartTime
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Full Admin policy created and then attached to Roles, Users or Groups
+      description: "Identifies creation of IAM policies that grant full administrative access and subsequent attachment to\
+        \ a role, user, or group. This sequence can be used to elevate a low-privilege identity to administrative access and\
+        \ should be investigated immediately.\nAWS IAM Policy Grammar: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_grammar.html\
+        \ \nand AWS IAM API at https://docs.aws.amazon.com/IAM/latest/APIReference/API_Operations.html"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1484
+      customDetails:
+        PolicyName: PolicyName
+        EventName: EventName
+        RecipientAccountId: RecipientAccountId
+        UserIdentityArn: UserIdentityArn

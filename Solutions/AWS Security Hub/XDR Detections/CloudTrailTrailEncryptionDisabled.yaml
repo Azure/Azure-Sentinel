@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWSSecurityHub
+  dataTypes:
+  - AWSSecurityHubFindings
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSSecurityHubFindings
+  requiredDataConnectors:
+  - connectorId: AWSSecurityHub
+    dataTypes:
+    - AWSSecurityHubFindings
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9c2f6c3b-7fd8-4c5a-9d9d-3c4f9e6a7b21
+    path: Analytic Rules/CloudTrailTrailEncryptionDisabled.yaml
+    version: 1.0.0
+    querySha256: 885a1dc02a95f0180718decc55e89e4002ba599c24edca06575236b464084c3d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Impact
+    - DefenseEvasion
+    originalTechniques:
+    - T1565.001
+    - T1562.008
+    reviewScope:
+      sourceDocumentSha256: 7beee7c133f3c5d002e61ebe4580210b1b9998d5365e9884df5c8a750c57f0b9
+      targetQuerySha256: de92f2bbcd60dbcfd8e659244119caf2bd3ce8e14358c82b313f1c2518ea399f
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 7beee7c133f3c5d002e61ebe4580210b1b9998d5365e9884df5c8a750c57f0b9
+      targetQuerySha256: de92f2bbcd60dbcfd8e659244119caf2bd3ce8e14358c82b313f1c2518ea399f
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-9c2f6c3b-7fd8-4c5a-9d9d-3c4f9e6a7b21
+  displayName: AWS Security Hub - Detect CloudTrail trails lacking KMS encryption
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSSecurityHubFindings
+      | where RecordState == "ACTIVE" and ComplianceStatus == "FAILED"
+      | where tostring(AwsSecurityFindingGeneratorId) == "security-control/CloudTrail.2"
+        or tostring(ComplianceSecurityControlId) == "CloudTrail.2"
+      | mv-expand Resource = Resources
+      | where tostring(Resource.Type) == "AwsCloudTrailTrail"
+      | extend TrailId = tostring(Resource.Id)
+      | summarize TimeGenerated = max(TimeGenerated)
+          by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,
+             AwsSecurityFindingId, ComplianceSecurityControlId, TrailId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWS Security Hub - Detect CloudTrail trails lacking KMS encryption
+      description: "This query detects AWS CloudTrail trails that are not configured to use server-side encryption with a\
+        \ customer managed KMS key using AWS Security Hub control CloudTrail.2 findings. \nUnencrypted CloudTrail logs increase\
+        \ the risk of unauthorized access to sensitive audit data at rest."
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AwsAccountId
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: TrailId
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1565
+          subTechniques:
+          - T1565.001
+      customDetails:
+        ComplianceControlId: ComplianceSecurityControlId
+        Region: AwsRegion
+        FindingId: AwsSecurityFindingId
+        AccountName: AwsAccountId

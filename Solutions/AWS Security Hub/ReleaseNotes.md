@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.2       | 03-11-2026                     | Added Defender XDR **Custom Detections** for AWS Security Hub **Analytic Rules** and packaged V3.1 solution. |
 | 3.0.4       | 11-06-2026                     | Updated content ID and version for the AWS Security Hub solution.  |
 | 3.0.3       | 27-05-2026                     | Adding new **Workbook** for AWS Security Hub Compliance |
 | 3.0.2       | 27-08-2025                     | AWS Security Hub added **Analytical Rule** and **Hunting Queries** |

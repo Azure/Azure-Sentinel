@@ -1,0 +1,129 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CustomLogsAma
+  dataTypes:
+  - OracleWebLogicServer_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OracleWebLogicServer_CL
+    - OracleWebLogicServerEvent
+  requiredDataConnectors:
+  - connectorId: CustomLogsAma
+    dataTypes:
+    - OracleWebLogicServer_CL
+  - connectorId: OracleWebLogicServer
+    dataTypes:
+    - OracleWebLogicServerEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6ae36a5e-573f-11ec-bf63-0242ac130002
+    path: Analytic Rules/OracleWebLogicCommandInURI.yaml
+    version: 1.0.3
+    querySha256: f196bb79a87da4086e24aac14571bcdf48b08ec4578a3493a52645ea919f6388
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: b4e04d31a5af65cdd3d3bdb8a0890cbba6a7e406f7700eefed974c20c62a034a
+      targetQuerySha256: f0e3891644dbf24217a4fdf3488607afea0f89fbe9befa6f980039c6b283fd4a
+properties:
+  id: xdr-6ae36a5e-573f-11ec-bf63-0242ac130002
+  displayName: Oracle - Command in URI
+  status: disabled
+  queryCondition:
+    queryText: "// OracleWebLogicServerEvent parser inlined: Defender XDR cannot resolve\
+      \ Sentinel workspace functions.\nlet xdr_inline_OracleWebLogicServerEvent =\
+      \ view () {\nlet owl_serverlog =() {\nOracleWebLogicServer_CL\n| where RawData\
+      \ startswith \"####\"\n| extend EventVendor = \"Oracle\"\n| extend EventProduct\
+      \ = 'Oracle WebLogic Server'\n| extend EventType = 'ServerLog'\n| extend EventData\
+      \ = extract_all(@\"<(.*?)>\", RawData)\n| extend EventStartTime = todatetime(replace(@',\\\
+      d+', @'', replace(@'(\\s\\d{1,2}),', @'\\1', extract(@'\\A(.*(PM|AM))', 1, tostring(EventData[0])))))\n\
+      | extend DvcTimeZone = extract(@'\\A.*(PM|AM)(.*)', 2, tostring(EventData[0]))\n\
+      | extend EventSeverity = tostring(EventData[1])\n| extend Subsystem = tostring(EventData[2])\n\
+      | extend DvcHostname = tostring(EventData[3])\n| extend SrcDvcHostname = tostring(EventData[4])\n\
+      | extend ThreadId = tostring(EventData[5])\n| extend SrcUserName = replace(@'<',\
+      \ '', tostring(EventData[6]))\n| extend TransactionId = tostring(EventData[7])\n\
+      | extend DiagnosticContextId = tostring(EventData[8])\n| extend RawTimeValue\
+      \ = tostring(EventData[9])\n| extend EventOriginalUid = tostring(EventData[10])\n\
+      | extend EventMessage = tostring(EventData[11])\n};\nlet owl_accesslog=() {\n\
+      OracleWebLogicServer_CL\n| where RawData matches regex @'\\A\\d{1,3}\\.\\d{1,3}\\\
+      .\\d{1,3}\\.\\d{1,3}.*\\[.*\\]\\s\\\"(GET|POST)'\n| extend EventVendor = \"\
+      Oracle\"\n| extend EventProduct = 'Oracle WebLogic Server'\n| extend EventType\
+      \ = 'AccessLog'\n| extend EventData = split(RawData, '\"')\n| extend SubEventData0\
+      \ = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')\n\
+      | extend SubEventData1 = split(EventData[1], ' ')\n| extend SubEventData2 =\
+      \ split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')\n|\
+      \ extend SrcIpAddr = tostring(SubEventData0[0])\n| extend ClientIdentity = tostring(SubEventData0[1])\n\
+      | extend SrcUserName = tostring(SubEventData0[2])\n| extend EventStartTime =\
+      \ todatetime(replace(@'\\/', @'-', replace(@'(\\d{2}\\/\\w{3}\\/\\d{4}):(\\\
+      d{2}\\:\\d{2}\\:\\d{2})', @'\\1 \\2', extract(@'\\[(.*?)(\\-|\\+)\\d+\\]', 1,\
+      \ RawData))))\n| extend HttpRequestMethod = tostring(SubEventData1[0])\n| extend\
+      \ UrlOriginal = tostring(SubEventData1[1])\n| extend HttpVersion = tostring(SubEventData1[2])\n\
+      | extend HttpStatusCode = toint(SubEventData2[0])\n| extend HttpResponseBodyBytes\
+      \ = toint(SubEventData2[1])\n| extend HttpReferrerOriginal = tostring(EventData[3])\n\
+      | extend HttpUserAgentOriginal = tostring(EventData[5])\n};\nunion isfuzzy=true\
+      \ owl_serverlog, owl_accesslog\n| project TimeGenerated\n        , EventVendor\n\
+      \        , EventProduct\n        , EventType\n        , EventStartTime\n   \
+      \     , DvcTimeZone\n        , EventSeverity\n        , Subsystem\n        ,\
+      \ DvcHostname\n        , SrcDvcHostname\n        , ThreadId\n        , SrcUserName\n\
+      \        , TransactionId\n        , DiagnosticContextId\n        , RawTimeValue\n\
+      \        , EventOriginalUid\n        , EventMessage\n        , SrcIpAddr\n \
+      \       , ClientIdentity\n        , HttpRequestMethod\n        , UrlOriginal\n\
+      \        , HttpVersion\n        , HttpStatusCode\n        , HttpResponseBodyBytes\n\
+      \        , HttpReferrerOriginal\n        , HttpUserAgentOriginal\n};\nxdr_inline_OracleWebLogicServerEvent\n\
+      | where UrlOriginal has_any ('cat%20/etc/passwd', '/etc/passwd', 'ping -i',\
+      \ '/usr/bin/id(', '%2f%75%73%72%2f%62%69%6e%2f%69%64', 'phpinfo()' , '%70%68%70%69%6e%66%6f%28%29',\
+      \ ';id', '%3b%69%64', '/bin/bash -c', '%2f%62%69%6e%2f%62%61%73%68%20%2d%63%27',\
+      \ '/bin/bash', '%2f%62%69%6e%2f%62%61%73%68', 'sleep(', '%73%6c%65%65%70%28',\
+      \ 'curl', '%63%75%72%6c', '&dir', '%26%64%69%72', '& dir', '%26%20%64%69%72',\
+      \ '<script>', '%3c%73%63%72%69%70%74%3e', 'eval(', '%65%76%61%6c%28', 'exec(',\
+      \ '%65%78%65%63%28' , 'whoami', '%77%68%6f%61%6d%69', 'wget', 'python', 'gcc'\
+      \ , 'uname', 'systeminfo', '%77%67%65%74', '%70%79%74%68%6f%6e', '%75%6e%61%6d%65',\
+      \ '%73%79%73%74%65%6d%69%6e%66%6f')\n| extend UrlCustomEntity = UrlOriginal,\
+      \ IPCustomEntity = SrcIpAddr"
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: Oracle - Command in URI
+      description: '''Detects command in URI'''
+      severity: high
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: UrlCustomEntity
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133

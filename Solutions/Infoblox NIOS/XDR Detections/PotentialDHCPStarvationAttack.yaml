@@ -1,0 +1,108 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 57e56fc9-417a-4f41-a579-5475aea7b8ce
+    path: Analytic Rules/PotentialDHCPStarvationAttack.yaml
+    version: 1.0.6
+    querySha256: 4e078456b9653be0a5cd6b6ff2e32c78efe3ea0c4a9790f6ad789436a59e0da1
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1200
+    reviewScope:
+      sourceDocumentSha256: f8f22347c4d7d539e407f2f5bc23f2215d366e3d02a95e2dbeab8caff757dc48
+      targetQuerySha256: 6924f10bbe2c99a12ed887a7ff6b3865b0f4578f7802b39b3f6aaa08e469c2da
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: f8f22347c4d7d539e407f2f5bc23f2215d366e3d02a95e2dbeab8caff757dc48
+      targetQuerySha256: 6924f10bbe2c99a12ed887a7ff6b3865b0f4578f7802b39b3f6aaa08e469c2da
+properties:
+  id: xdr-57e56fc9-417a-4f41-a579-5475aea7b8ce
+  displayName: Potential DHCP Starvation Attack
+  status: disabled
+  queryCondition:
+    queryText: "// Infoblox_dhcprequest parser inlined: Defender XDR cannot resolve Sentinel workspace functions.\nlet xdr_inline_Infoblox_dhcprequest\
+      \ = view () {\n    let Source_IP = _GetWatchlist('Sources_by_SourceType') | where SearchKey == 'InfobloxNIOS' | extend\
+      \ IP = column_ifexists('IP', column_ifexists('Source', '')) | project IP;\n    let RawData = Syslog\n        | where\
+      \ Computer in (Source_IP) or HostIP in (Source_IP) or CollectorHostName in (Source_IP)\n        | where SyslogMessage\
+      \ has \"DHCPREQUEST\"\n        | extend Parser = extract_all(@\"^(\\d{2}\\-[a-zA-Z]{3}\\-\\d{4}\\s[0-9\\.\\:]+)?\\s?([a-zA-Z-_]+)(\\\
+      s|\\:)?(.*)\", dynamic([1,2,3,4]), SyslogMessage)[0]\n        | extend responseTime = todatetime(Parser[0]),\n     \
+      \            Log_Type = tostring(Parser[1]),\n                 RawData_subString = tostring(Parser[3])\n        | project-away\
+      \ Parser;\n    RawData\n        | extend dhcprequest = extract_all(@\"for\\s((\\S+)(\\s\\(\\S+\\))?)\\sfrom\\s((\\S+)(\\\
+      s\\(\\S+\\))?)\\svia\\s(\\S+)(\\sTransID\\s([a-z0-9]+)\\s)?(uid\\s([a-z0-9:]+)|uid$|uid)?(\\s\\(([a-zA-Z]+)\\)$)?\"\
+      , dynamic([1,2,3,4,5,6,7,8,9,10,11,12]), RawData_subString)[0]\n        | extend SrcIpAddr = tostring(dhcprequest[1]),\n\
+      \                 SrcMacAddr = tostring(dhcprequest[4]),\n                 SrcHostname = extract(@\"\\((\\S+)\\)\",1,tostring(dhcprequest[5])),\n\
+      \                 Relay = tostring(dhcprequest[6]),\n                 DhcpSessionId = tostring(dhcprequest[8]),\n  \
+      \               SrcUserIdType = tostring(dhcprequest[10]),\n                 State = tostring(dhcprequest[11])\n   \
+      \     | project-away SyslogMessage, dhcprequest, RawData_subString\n};\nlet threshold = 1000;\nxdr_inline_Infoblox_dhcprequest\n\
+      | where ProcessName =~ \"dhcpd\" and Log_Type =~ \"DHCPREQUEST\"\n| summarize count() by SrcIpAddr, bin(TimeGenerated,5m)\n\
+      | where count_ > threshold\n| join kind=inner (xdr_inline_Infoblox_dhcprequest\n    | where ProcessName =~ \"dhcpd\"\
+      \ and Log_Type =~ \"DHCPREQUEST\"\n    ) on SrcIpAddr"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Potential DHCP Starvation Attack
+      description: '''This creates an incident in the event that an excessive amount of DHCPREQUEST have been recieved by
+        a DHCP Server and could potentially be an indication of a DHCP Starvation Attack.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1200

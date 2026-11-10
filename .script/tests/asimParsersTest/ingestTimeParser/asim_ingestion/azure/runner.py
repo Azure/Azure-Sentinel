@@ -5,12 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from ..parser.kql import compact_kql
 from .client import AzureMonitorClient
 from .common import (
     HARNESS_RESULT_VERSION,
     HarnessError,
     ValidationRunner,
+    _query_timestamp_counts,
     _validate_timestamp,
     _write_json_no_clobber,
     build_fixture_snapshot,
@@ -20,9 +20,17 @@ from .common import (
 )
 
 
-def _error_payload(exc: HarnessError) -> dict[str, Any]:
+def _error_payload(
+    exc: HarnessError,
+    *,
+    include_observed_query_table: bool = False,
+) -> dict[str, Any]:
     details = exc.details
-    if isinstance(details, Mapping) and "observedQueryTable" in details:
+    if (
+        not include_observed_query_table
+        and isinstance(details, Mapping)
+        and "observedQueryTable" in details
+    ):
         details = dict(details)
         details.pop("observedQueryTable", None)
     return {
@@ -112,9 +120,7 @@ class AsimIngestionHarness(AzureMonitorClient):
         input_stream = str(
             parser_document.get("InputStream") or ""
         ).strip()
-        parser_query = compact_kql(
-            str(parser_document["ParserQuery"])
-        )
+        parser_query = str(parser_document["ParserQuery"])
         if str(parser_document["SourceRawTable"]) != source_table:
             raise ValueError(
                 "Prepared fixture SourceRawTable does not match parser."
@@ -173,6 +179,7 @@ class AsimIngestionHarness(AzureMonitorClient):
             "parserDcr": None,
             "rawUpload": [],
             "parserUpload": [],
+            "targetVisibility": {"status": "not-run"},
             "snapshotPath": str(snapshot_output),
             "filterValidation": None,
             "outputValidation": None,
@@ -273,13 +280,36 @@ class AsimIngestionHarness(AzureMonitorClient):
                     reconcile_table=target_table,
                     expected_counts_by_timestamp=normalized_target_counts,
                 )
-            with self._stage("target-visibility"):
-                self.wait_for_exact_rows(
-                    target_table,
-                    list(normalized_target_counts),
-                    normalized_target_counts,
-                    stage="target-visibility",
-                )
+            try:
+                with self._stage("target-visibility"):
+                    observed_query_table = self.wait_for_exact_rows(
+                        target_table,
+                        list(normalized_target_counts),
+                        normalized_target_counts,
+                        stage="target-visibility",
+                    )
+            except HarnessError as exc:
+                result["targetVisibility"] = {
+                    "status": "failed",
+                    "error": _error_payload(
+                        exc,
+                        include_observed_query_table=True,
+                    ),
+                }
+                raise
+            observed_counts = _query_timestamp_counts(
+                observed_query_table,
+                "target-visibility",
+            )
+            result["targetVisibility"] = {
+                "status": "passed",
+                "expectedCounts": normalized_target_counts,
+                "observedCounts": {
+                    timestamp: observed_counts.get(timestamp, 0)
+                    for timestamp in normalized_target_counts
+                },
+                "missingTimestamps": [],
+            }
 
             if validation_runner is not None:
                 with self._stage("output-validation"):
@@ -323,12 +353,15 @@ class AsimIngestionHarness(AzureMonitorClient):
                     )
                     attempted_dcr_ids.append(raw_resource_id)
                     with self._stage("raw-dcr"):
+                        raw_transform = self.build_raw_replay_transform(
+                            source_table, schema
+                        )
                         raw_handle = self.create_dcr(
                             name=names["rawDcr"],
                             stream_name=names["rawStream"],
                             destination_name=names["destination"],
                             schema=schema,
-                            transform_kql="source",
+                            transform_kql=raw_transform,
                             output_stream=input_stream,
                         )
                 except HarnessError as exc:

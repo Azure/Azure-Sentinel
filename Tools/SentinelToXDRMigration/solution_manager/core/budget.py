@@ -159,11 +159,12 @@ def _atomic_json(path: Path, document: dict[str, Any]) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary, path)
         temporary = None
-        directory_fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        if os.name != "nt":
+            directory_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
