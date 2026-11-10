@@ -653,6 +653,38 @@ class ParityTests(unittest.TestCase):
             [{"new": 2}], actual["AdditionalFields"]["Nested"]
         )
 
+    def test_parity_ignores_platform_additional_fields_keys(self):
+        schema = [
+            *self.schema(),
+            {"name": "AdditionalFields", "type": "dynamic"},
+        ]
+        expected = {
+            "TimeGenerated": TIMESTAMP_1,
+            "EventUid": "event-1",
+            "AdditionalFields": {
+                "APIVersion": "2016-11-15",
+                "TenantId": "tenant",
+                "TimeGenerated": TIMESTAMP_1,
+                "Type": "Custom-Table",
+                "_ResourceId": "/subscriptions/example",
+            },
+        }
+        actual = {
+            **expected,
+            "AdditionalFields": {
+                "APIVersion": "different-value",
+            },
+        }
+
+        result = VALIDATION.compare_parser_outputs(
+            expected_schema=schema,
+            expected_rows=[expected],
+            actual_schema=schema,
+            actual_rows=[actual],
+        )
+
+        self.assertEqual("passed", result["status"])
+
     def test_parity_rejects_additional_fields_key_or_shape_differences(self):
         schema = [
             *self.schema(),
@@ -662,6 +694,10 @@ class ParityTests(unittest.TestCase):
             ({"APIVersion": "2016-11-15"}, {}),
             ({"APIVersion": "2016-11-15"}, {"APIVersion": None, "Extra": 1}),
             ({"APIVersion": "2016-11-15"}, {"apiversion": "2016-11-15"}),
+            (
+                {"APIVersion": "2016-11-15", "tenantid": "tenant"},
+                {"APIVersion": "2016-11-15"},
+            ),
             ({"APIVersion": "2016-11-15"}, ["APIVersion"]),
             ({}, None),
             ({}, []),

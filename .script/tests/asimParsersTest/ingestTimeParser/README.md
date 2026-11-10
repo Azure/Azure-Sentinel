@@ -62,6 +62,12 @@ discover target
   → clean up DCRs and publish the report
 ```
 
+Fixture preparation matches row column names to repository schema names
+case-insensitively and rewrites them to the schema's canonical casing before
+type conversion. Two fixture columns that collapse to the same name are
+rejected. Snapshot construction repeats the case-insensitive uniqueness check
+so it cannot submit an invalid DCR stream declaration.
+
 The legacy `VerifyASimParserTemplate.py` validator is limited to query-time
 parser files under `Parsers/`; its changed-file filter excludes
 `IngestTimeParsers/`. Ingestion-time parsers are validated by the dedicated
@@ -166,15 +172,18 @@ shared types are consistent, it filters both row sets into
 row comparison across that shared schema.
 
 For the dynamic `AdditionalFields` property bag only, parity compares the
-case-sensitive set of top-level key names per row, not their values. Nested
-keys and values are not compared. This accommodates ingestion serialization
-changes such as date-shaped strings becoming datetimes. Row counts, duplicate
-multiplicity, schema types, and values in every other column remain strict.
-An empty property bag is still distinct from null or a non-object value;
-non-object `AdditionalFields` values retain the existing value comparison.
-Canonical mismatch examples replace property-bag values with null to represent
-key presence. The stored QTP/ITP rows and filtered rows retain their original
-values.
+case-sensitive set of top-level key names per row, not their values. It ignores
+the exact platform-managed keys `TenantId`, `TimeGenerated`, `Type`, and
+`_ResourceId` when they occur inside `AdditionalFields`; differently cased
+keys remain strict. Nested keys and values are not compared. This accommodates
+ingestion serialization changes such as date-shaped strings becoming
+datetimes and platform metadata unavailable to DCR transformations. Row
+counts, duplicate multiplicity, schema types, and values in every other column
+remain strict. An empty property bag is still distinct from null or a
+non-object value; non-object `AdditionalFields` values retain the existing
+value comparison. Canonical mismatch examples replace retained property-bag
+values with null to represent key presence. The stored QTP/ITP rows and
+filtered rows retain their original values.
 
 ## Tests
 
