@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CyberArk_AuditEvents_CL
+  requiredDataConnectors:
+  - connectorId: CyberArkAuditCcpDefinition
+    dataTypes:
+    - CyberArk_AuditEvents_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 30938118-8812-4b5f-afa4-a8d4ba2b5d86
+    path: Analytics Rules/CyberArkAuditSensitiveChanges.yaml
+    version: 1.0.0
+    querySha256: e02d1f595ced412b10419338707f980b4c57f6ff685972044d91e437a9ed1cc1
+    schedule:
+      queryFrequency: 10M
+      queryPeriod: 1D
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10M, lookback=1D; target frequency=PT10M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `username`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `username` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques: []
+    reviewScope:
+      sourceDocumentSha256: e2cd77a78f7b128395cf4ba9d47fd5e3f17606ca61afa4d4cac4ef1f9d8a8c8b
+      targetQuerySha256: 4674e7f66c6972a5046e4440585e1ef2c77fa10314720beb4e486aca90c11fc5
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: username
+      column: username
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-30938118-8812-4b5f-afa4-a8d4ba2b5d86
+  displayName: Idira - Sensitive Safe/Permission/Entitlement Changes (with customData)
+  status: disabled
+  queryCondition:
+    queryText: "let indicators = dynamic([\"SafeMember\",\"Permission\",\"Access\"\
+      ,\"ACL\",\"Owner\",\"Role\",\"Entitlement\",\"Policy\"]);\nlet changeVerbs =\
+      \ dynamic([\"grant\",\"revoke\",\"assign\",\"elevate\",\"enable\",\"disable\"\
+      ,\"remove\",\"delete\",\"update\"]);\nlet actions = dynamic([\"policy-add\"\
+      , \"policy-change\"]);\nCyberArk_AuditEvents_CL\n| extend cd = parse_json(tostring(customData))\n\
+      | extend cd_changeType = tolower(tostring(cd.changeType)),\n         cd_role\
+      \       = tostring(cd.role),\n         cd_perm       = tostring(cd.permission),\n\
+      \         cd_policy     = tostring(cd.policy),\n         cd_entitle    = tostring(cd.entitlement),\n\
+      \         cd_description= tostring(cd.description),\n         cd_action    \
+      \ = tostring(cd.action)\n| where\n    action has_any(actions) and\n    (auditType\
+      \ has_any (indicators)\n    or message has_any (indicators)\n    or cd_description\
+      \ has_any (indicators)\n    or cd_action has_any (indicators)\n    or cd_role\
+      \ !~ \"\" or cd_perm !~ \"\" or cd_policy !~ \"\" or cd_entitle !~ \"\"\n  \
+      \  or cd_changeType in (changeVerbs))\n| project TimeGenerated, CyberArkTenantId,\
+      \ serviceName, username, userId, safe,\n          action, actionType, auditType,\n\
+      \          cd_action, cd_description, cd_changeType, cd_role, cd_perm, cd_policy,\
+      \ cd_entitle,\n          target, message"
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: Idira - Sensitive Safe/Permission/Entitlement Changes (with customData)
+      description: 'Alerts on control-plane modifications: safes, permissions, roles,
+        entitlements, policy changes. Leverages customData fields such as changeType/role/permission/policy/entitlement
+        to reduce misses.'
+      severity: low
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: target
+      tactics:
+      - tactic: PrivilegeEscalation
+      customDetails:
+        AccountFullName: username
+requiredDataConnectors:
+- connectorId: CyberArkAuditCcpDefinition
+  dataTypes:
+  - CyberArk_AuditEvents_CL

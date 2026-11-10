@@ -1,0 +1,107 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CyberArk_AuditEvents_CL
+  requiredDataConnectors:
+  - connectorId: CyberArkAuditCcpDefinition
+    dataTypes:
+    - CyberArk_AuditEvents_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3733e1ac-991b-4504-99e8-24ff4fbaf6e4
+    path: Analytics Rules/CyberArkAuditHighRiskActions.yaml
+    version: 1.0.0
+    querySha256: 099ce1de7f7b3eb839f22357f6bcd9e605eb808eb5dfe1cb6f1bb03867f98d4f
+    schedule:
+      queryFrequency: 10M
+      queryPeriod: 1D
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10M, lookback=1D; target frequency=PT10M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `username`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `username` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques: []
+    reviewScope:
+      sourceDocumentSha256: e29efacced717b73470b1123138551cca85bfcb8819449a97faa5222a3e2a078
+      targetQuerySha256: 14f1e533235142bbbbb376c4a499477673c31aebd97e3c73b1ae307c0ed4f77b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: username
+      column: username
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-3733e1ac-991b-4504-99e8-24ff4fbaf6e4
+  displayName: Idira - High-Risk Actions Outside Business Hours
+  status: disabled
+  queryCondition:
+    queryText: "let risky = dynamic([\"Delete\",\"Remove\",\"Rotate\",\"Elevate\"\
+      ,\"Disable\",\"Grant\",\"Policy\",\"Safe\",\"Vault\",\"Key\"]);\nCyberArk_AuditEvents_CL\n\
+      | where isnotempty(action) or isnotempty(actionType) or isnotempty(auditType)\
+      \ or isnotempty(message)\n| where hourofday(TimeGenerated) < 7 or hourofday(TimeGenerated)\
+      \ > 20\n| where action has_any (risky) or actionType has_any (risky) or auditType\
+      \ has_any (risky) or message has_any (risky)\n| extend cd = parse_json(customData)\n\
+      | extend cd_username = tostring(cd.username),\n         cd_auth_method = tostring(cd.authentication_method),\n\
+      \         cd_client_ip = tostring(cd.client_ip_address),\n         cd_source_ip\
+      \ = tostring(cd.source_ip_address),\n         cd_device_os = tostring(cd.device_os),\n\
+      \         cd_browser = tostring(cd.browser_name),\n         cd_geo_city = tostring(cd.geoip_city_name),\n\
+      \         cd_geo_country = tostring(cd.geoip_country_name),\n         cd_target\
+      \ = coalesce(tostring(cd.target), tostring(cd.target_resource), tostring(cd.new_target))\n\
+      | project TimeGenerated, CyberArkTenantId, username, cd_username, identityType,\
+      \ action, actionType, auditType,\n          target, targetAccount, safe, source,\
+      \ cd_source_ip, cd_client_ip, cd_auth_method, cd_device_os,\n          cd_browser,\
+      \ cd_geo_city, cd_geo_country, cd_target, component, serviceName, message"
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: Idira - High-Risk Actions Outside Business Hours
+      description: Detects privileged or destructive actions (delete/disable/rotate/elevate/etc.)
+        occurring outside standard business hours. Useful for insider misuse or compromised
+        admin detection.
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: target
+        ips:
+        - id: ip1
+          addressColumn: source
+      tactics:
+      - tactic: DefenseEvasion
+      customDetails:
+        AccountFullName: username
+requiredDataConnectors:
+- connectorId: CyberArkAuditCcpDefinition
+  dataTypes:
+  - CyberArk_AuditEvents_CL

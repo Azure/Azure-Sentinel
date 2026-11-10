@@ -1,0 +1,134 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CyberArk_AuditEvents_CL
+  requiredDataConnectors:
+  - connectorId: CyberArkAuditCcpDefinition
+    dataTypes:
+    - CyberArk_AuditEvents_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: bdf3cf98-d64f-4c55-97e4-43483d6d3237
+    path: Analytics Rules/CyberArkAuditMultiFailedAndSuccess.yaml
+    version: 1.0.0
+    querySha256: d05c14b3e2903e6982d4054f4c1c50a079c695b393479d4477ccce638e237c5e
+    schedule:
+      queryFrequency: 5M
+      queryPeriod: 15M
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5M, lookback=15M; target frequency=PT5M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - 'Entity confirmation required: `targetAccount` was provisionally mapped to Account.upnColumn.
+      Confirm that the source always emits a complete UPN; otherwise project an Entra
+      user ID, SID, or account name plus domain'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `username`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `username` requires runtime
+      output-schema binding verification
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `targetAccount`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `targetAccount` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques: []
+    reviewScope:
+      sourceDocumentSha256: 8a7807637b7539bb07643c8aa950d1abb8ec0dd2a60f1a85992bdcb87b3daee3
+      targetQuerySha256: 4f2fb3f7bb95caa017482191d011364172b72dd2c51e6a6e34fd2bf2547e3f0f
+    reviewDecisions:
+    - reason: 'Entity confirmation required: `targetAccount` was provisionally mapped to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+      decision: accepted
+      sourceDocumentSha256: 8a7807637b7539bb07643c8aa950d1abb8ec0dd2a60f1a85992bdcb87b3daee3
+      targetQuerySha256: 4f2fb3f7bb95caa017482191d011364172b72dd2c51e6a6e34fd2bf2547e3f0f
+    acceptedReviewReasons:
+    - 'Entity confirmation required: `targetAccount` was provisionally mapped to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise project an Entra user ID, SID, or account name plus domain'
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: username
+      column: username
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: targetAccount
+      column: targetAccount
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-bdf3cf98-d64f-4c55-97e4-43483d6d3237
+  displayName: Idira - Multiple Failed Actions Followed by Success (15m)
+  status: disabled
+  queryCondition:
+    queryText: "let window = 15m;\nlet fails =\n    CyberArk_AuditEvents_CL\n    |\
+      \ where TimeGenerated > ago(window)\n    | where actionType has_any (\"Fail\"\
+      ,\"Failed\",\"Denied\",\"Error\")\n        or message has_any (\"fail\",\"failed\"\
+      ,\"denied\",\"unauthorized\")\n    | summarize Fails=count(), firstFail=min(TimeGenerated),\
+      \ lastFail=max(TimeGenerated) by username, targetAccount;\nlet success =\n \
+      \   CyberArk_AuditEvents_CL\n    | where TimeGenerated > ago(window)\n    |\
+      \ where actionType has_any (\"Success\",\"Succeeded\",\"Allow\",\"Allowed\"\
+      )\n        or message has_any (\"success\",\"allowed\")\n    | summarize Successes=count(),\
+      \ firstSuccess=min(TimeGenerated) by username, targetAccount;\nfails\n| where\
+      \ Fails >= 3\n| join kind=inner success on username, targetAccount\n| join kind=inner\
+      \ (\n    CyberArk_AuditEvents_CL\n    | extend cd = parse_json(customData)\n\
+      \    | extend cd_client_ip = tostring(cd.client_ip_address),\n             cd_source_ip\
+      \ = tostring(cd.source_ip_address),\n             cd_device_os = tostring(cd.device_os),\n\
+      \             cd_browser = tostring(cd.browser_name),\n             cd_geo_city\
+      \ = tostring(cd.geoip_city_name),\n             cd_geo_country = tostring(cd.geoip_country_name),\n\
+      \             cd_target = coalesce(tostring(cd.target), tostring(cd.target_resource),\
+      \ tostring(cd.new_target))\n    | project username, targetAccount, any_cd_client_ip\
+      \ = cd_client_ip, any_cd_source_ip = cd_source_ip,\n              any_cd_device_os\
+      \ = cd_device_os, any_cd_browser = cd_browser,\n              any_cd_geo_city\
+      \ = cd_geo_city, any_cd_geo_country = cd_geo_country, any_cd_target = cd_target\n\
+      \  ) on username, targetAccount\n| project username, targetAccount, Fails, Successes,\
+      \ firstFail, lastFail, firstSuccess,\n          any_cd_source_ip, any_cd_client_ip,\
+      \ any_cd_device_os, any_cd_browser,\n          any_cd_geo_city, any_cd_geo_country,\
+      \ any_cd_target"
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Idira - Multiple Failed Actions Followed by Success (15m)
+      description: Detects 3+ failed actions against an account followed by a success
+        in a short window, indicating brute-force or credential guessing.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: targetAccount
+      tactics:
+      - tactic: CredentialAccess
+      customDetails:
+        AccountFullName: username
+        AccountName: targetAccount
+requiredDataConnectors:
+- connectorId: CyberArkAuditCcpDefinition
+  dataTypes:
+  - CyberArk_AuditEvents_CL

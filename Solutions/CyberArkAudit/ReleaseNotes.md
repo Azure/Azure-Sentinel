@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.2.2       | 09-11-2026                     | Added 3 Defender **XDR Detections** migrated from **Analytic Rules** and updated solution to V3.1 package format. |
 | 3.2.1       | 02-09-2026                     | Security Patch: Remove logResponseContent attribute from Polling Config                    |
 | 3.2.0       | 06-07-2026                     | Rebrand to Idira and remove deprecated Azure Functions Data Connector                      |
 | 3.1.1       | 16-04-2026                     | Update Azure Function based connector to Python 3.12                                       |
