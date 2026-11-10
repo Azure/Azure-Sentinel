@@ -1,0 +1,140 @@
+schemaVersion: 1.0.0
+version: 3.1.7
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: DarktraceActiveAISecurityPlatform
+  dataTypes:
+  - DarktraceModelAlerts_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DarktraceModelAlerts_CL
+  requiredDataConnectors:
+  - connectorId: DarktraceActiveAISecurityPlatform
+    dataTypes:
+    - DarktraceModelAlerts_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9392a06f-63a4-4a5d-8ca3-647064b13c28
+    path: Analytic Rules/DarktraceModelAlert.yaml
+    version: 1.1.1
+    querySha256: 880fccb788380728ea716c2fbc764232c93c984e61bba32689c9e3b26f4d7d17
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=unknown, lookback=unknown; target frequency=PT5M, native lookback=unknown/unconfigured;
+      source NRT timing is not preserved by the emitted scheduled frequency. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - customDetails 'DeviceHostname' column `deviceHostname` requires runtime output-schema binding verification
+    - customDetails 'DeviceCredentials' column `deviceCredentials` requires runtime output-schema binding verification
+    - customDetails 'Compliance' column `compliance` requires runtime output-schema binding verification
+    - customDetails 'Score' column `score` requires runtime output-schema binding verification
+    - customDetails 'CustomLabel' column `customLabel` requires runtime output-schema binding verification
+    - customDetails 'Category' column `category` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `accountName`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `accountName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Execution
+    - LateralMovement
+    - CommandAndControl
+    originalTechniques:
+    - T1190
+    - T1059
+    - T1021
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 017fa68e5077997c0ea2739fb02df4ebe2e79b29231ddf64808917c3f412c820
+      targetQuerySha256: f5724583ed8eb1d9788865570371bed881e77a3d562a6179e8e6eb4857be42f3
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: accountName
+      column: accountName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-9392a06f-63a4-4a5d-8ca3-647064b13c28
+  displayName: Darktrace Model Alert
+  status: disabled
+  queryCondition:
+    queryText: |-
+      DarktraceModelAlerts_CL
+      | where TimeGenerated >= ago(5m)
+      | extend SentinelSeverity = case(
+      compliance == true, "Informational",
+      category == "Informational", "Low",
+      category == "Suspicious", "Medium",
+      category == "Critical", "High",
+      "Informational")
+      | extend ProviderName = "Darktrace"
+      | mv-apply item = mitreTechniques on (
+          extend techniqueId = tostring(item.techniqueId)
+          | summarize techniqueIdArray = make_list(techniqueId, 5)
+      )
+      | extend accountName = accountName, sourceIp = sourceIp, destIp = destIp, destHost = destHost, sourceHost = sourceHost, deviceHostname = deviceHostname, deviceCredentials = deviceCredentials, compliance = compliance, score = score, customLabel = customLabel, category = category
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Darktrace Model Alert
+      description: |-
+        This query searches for Darktrace model alerts and creates a Microsoft Sentinel alert
+        from each matching event. Edit this analytic rule if you would like it to create
+        Microsoft Sentinel incidents.
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: sourceIp
+        - id: ip2
+          addressColumn: destIp
+        hosts:
+        - id: host1
+          nameColumn: destHost
+        - id: host2
+          nameColumn: sourceHost
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1021
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        DeviceHostname: deviceHostname
+        DeviceCredentials: deviceCredentials
+        Compliance: compliance
+        Score: score
+        CustomLabel: customLabel
+        Category: category
+        AccountFullName: accountName
