@@ -1,0 +1,137 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityEvent
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 17371300-904a-4af5-9550-cf57ee727bb7
+    path: Analytic Rules/TM013_OUBlockInheritanceWasEnabledOnAnOU.yaml
+    version: 1.0.0
+    querySha256: ebf558c54d4394ff824c55ee05560741f51e2f9fdb8b0b8d7bedf0eccdb9b0dc
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.ObjectName from
+      query column `ObjectName`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.Account from query
+      column `Account`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1484.001
+    reviewScope:
+      sourceDocumentSha256: 5184bdd7671b404ee0b963acc854fca3855c806e809b6c5486751c51640f7c41
+      targetQuerySha256: 4a82a33eb99d4125d4547b8d8c241a8c9d5b1c3353fb92b0491dc430ca9180e4
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ObjectName
+      column: ObjectName
+      status: available
+      customDetailKey: ObjectName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: Account
+      column: Account
+      status: available
+      customDetailKey: Account
+properties:
+  id: xdr-17371300-904a-4af5-9550-cf57ee727bb7
+  displayName: PROD (TM013.1) - OU - Block Inheritance was Enabled on an OU
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      | where EventID == 5136
+          and Activity has "modified"
+          and EventData has '"ObjectClass">organizationalUnit'
+          and EventData has '<Data Name="AttributeLDAPDisplayName">gPOptions</Data>'
+      | extend ObjectName = extract("<Data Name=\"ObjectDN\">((?i)OU=[^,]+(,(?i)OU=[^,]+)*),(?i)DC=", 1, EventData)
+      | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+      | extend AttributeValue = extract("<Data Name=\"AttributeValue\">([0-9]+)</Data>", 1, EventData)
+      | extend ActivityType = case(
+          AttributeValue == "1", "Block Inheritance Enabled",
+          AttributeValue == "0", "Block Inheritance Disabled",
+          "Block Inheritance Modified")
+      | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+      | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+      | project TimeGenerated
+          , ObjectName
+          , ObjectClass
+          , ActivityType
+          , AttributeLDAP
+          , Account
+          , Domain
+          , Computer
+          , Channel
+          , EventID
+          , EventData
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: PROD (TM013.1) - OU - Block Inheritance was Enabled on an OU
+      description: Blocking Inheritance on an OU will deny Tier Model GPOs from applying.
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1484
+          subTechniques:
+          - T1484.001
+      customDetails:
+        ObjectName: ObjectName
+        ObjectClass: ObjectClass
+        ActivityType: ActivityType
+        AttributeLDAP: AttributeLDAP
+        Account: Account
+        Domain: Domain
+        Computer: Computer
+        Channel: Channel
+        EventID: EventID
+        EventData: EventData

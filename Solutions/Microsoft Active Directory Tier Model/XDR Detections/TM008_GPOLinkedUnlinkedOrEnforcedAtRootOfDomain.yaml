@@ -1,0 +1,148 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityEvent
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: fe468726-b1dc-4e76-adad-3480de4a2c56
+    path: Analytic Rules/TM008_GPOLinkedUnlinkedOrEnforcedAtRootOfDomain.yaml
+    version: 1.0.0
+    querySha256: 1141522d617d9318471ef08af18b84c1ea05878fde2b76095c686ce8e27f2777
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.ObjectName from
+      query column `ObjectName`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.Account from query
+      column `Account`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1484.001
+    reviewScope:
+      sourceDocumentSha256: 6add78a42befebe32c88482255b21e2cbf0e1abab6367cf1e37e26b7f25b27eb
+      targetQuerySha256: 458504c3c78fe79ce5cdbf73016e5d518931e25d1b45e6f1af6abcb992f7c6e5
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ObjectName
+      column: ObjectName
+      status: available
+      customDetailKey: ObjectName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: Account
+      column: Account
+      status: available
+      customDetailKey: Account
+properties:
+  id: xdr-fe468726-b1dc-4e76-adad-3480de4a2c56
+  displayName: PROD (TM008.1) - GPO - Linked, Unlinked, or Enforced at Root of Domain
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      | where EventID == 5136
+          and EventData matches regex @"(?i)DC="
+          and Activity has "modified"
+          and EventData has '"ObjectClass">domainDNS'
+          and EventData has '<Data Name="AttributeLDAPDisplayName">gPLink</Data>'
+          and (EventData has ';0]'
+              or EventData has ';1]'
+              or EventData has ';2]')
+          and EventData has '"OperationType">%%14674'
+      | extend ObjectName = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+      | where ObjectName startswith "DC=" or ObjectName startswith "dc="
+      | extend ObjectTier = "Tier 0"
+      | extend AttributeLDAP = extract("<Data Name=\"AttributeLDAPDisplayName\">([^<]+)</Data>", 1, EventData)
+      | extend AttributeValue = extract("\\[([^\\]]+)\\]", 1, EventData)
+      | extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)
+      | extend AttributeValueDescription = case(
+          LastThreeChars == ";0", "Linked",
+          LastThreeChars == ";1", "Unlinked",
+          LastThreeChars == ";2", "Enforced",
+          "Unknown")
+      | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+      | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+      | project TimeGenerated
+         , ObjectName
+         , ObjectTier
+         , ObjectClass
+         , ActivityType = AttributeValueDescription
+         , AttributeLDAP
+         , Account
+         , Domain
+         , Computer
+         , Channel
+         , EventID
+         , EventData
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: PROD (TM008.1) - GPO - Linked, Unlinked, or Enforced at Root of Domain
+      description: Linked, Unlinked, or Enforced GPOs at the Root of the Domain which could overwrite Tier Model GPOs.
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1484
+          subTechniques:
+          - T1484.001
+      customDetails:
+        ObjectName: ObjectName
+        ObjectTier: ObjectTier
+        ObjectClass: ObjectClass
+        ActivityType: ActivityType
+        AttributeLDAP: AttributeLDAP
+        Account: Account
+        Domain: Domain
+        Computer: Computer
+        Channel: Channel
+        EventID: EventID
+        EventData: EventData

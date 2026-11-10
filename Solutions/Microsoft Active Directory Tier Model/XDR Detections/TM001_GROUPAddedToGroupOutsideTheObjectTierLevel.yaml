@@ -1,0 +1,165 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityEvent
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b300c7f8-dc5e-4fc6-879b-63f0013358ce
+    path: Analytic Rules/TM001_GROUPAddedToGroupOutsideTheObjectTierLevel.yaml
+    version: 1.0.0
+    querySha256: ac6e2700832f7c686c1ed0d910a263997cac80b6a7af24403cc432fe7298928e
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.ObjectName from
+      query column `ObjectName`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.Account from query
+      column `Account`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078.002
+    reviewScope:
+      sourceDocumentSha256: aa2a45c0f7f99ee09f16b88a1ad87c57257b167a81fdc5e8082d268c12b8e8d5
+      targetQuerySha256: 6fe7ad296e12332fa166e3a0525641488da7d9eced9fc983f0258887f8222a70
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ObjectName
+      column: ObjectName
+      status: available
+      customDetailKey: ObjectName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: Account
+      column: Account
+      status: available
+      customDetailKey: Account
+properties:
+  id: xdr-b300c7f8-dc5e-4fc6-879b-63f0013358ce
+  displayName: PROD (TM001.1) - GROUP - Added to Group Outside the Object Tier Level
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      | where EventID == 5136
+          and Activity has "modified"
+          and (EventData matches regex @"(?i)OU=Tier 0 Accounts"
+               or EventData matches regex @"(?i)OU=Tier 1 Accounts"
+               or EventData matches regex @"(?i)OU=Tier 2 Accounts"
+               or EventData matches regex @"(?i)OU=Tier 0 Service Accounts"
+               or EventData matches regex @"(?i)OU=Tier 1 Service Accounts"
+               or EventData matches regex @"(?i)OU=Tier 2 Service Accounts"
+               or EventData matches regex @"(?i)OU=Tier 0 Groups"
+               or EventData matches regex @"(?i)OU=Tier 1 Groups"
+               or EventData matches regex @"(?i)OU=Tier 2 Groups"
+               or EventData matches regex @"(?i)OU=Tier 0 PAW"
+               or EventData matches regex @"(?i)OU=Tier 1 PAW"
+               or EventData matches regex @"(?i)OU=Tier 2 PAW")
+          and EventData has '"AttributeLDAPDisplayName">member'
+          and EventData has 'OperationType">%%14674'
+      | extend GroupName_e = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+      | extend GroupName = extract("(?i)CN=([^,]+)", 1, GroupName_e)
+      | where GroupName != "Protected Users"
+      | where GroupName != "Allowed RODC Password Replication Group"
+      | extend GroupTier_e = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+      | extend GroupTier = extract("(?i)OU=(Tier [^ ]+)", 1, GroupTier_e)
+      | extend GroupTier = iff(isempty(GroupTier), "Outside Tier Model", GroupTier)
+      | extend ObjectName_e = extract("<Data Name=\"AttributeValue\">([^<]+)</Data>", 1, EventData)
+      | extend ObjectName = extract("(?i)CN=([^,]+)", 1, ObjectName_e)
+      | extend ObjectTier_e = extract("<Data Name=\"AttributeValue\">([^<]+)</Data>", 1, EventData)
+      | extend ObjectTier = extract("(?i)OU=(Tier [^ ]+)", 1, ObjectTier_e)
+      | extend ObjectTier = iff(isempty(ObjectTier), "Outside Tier Model", ObjectTier)
+      | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+      | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+      | extend OperationType = iff(EventData has 'OperationType">%%14674', "Added", tostring(OperationType))
+      | where GroupTier != ObjectTier
+      | project TimeGenerated
+              , ObjectName
+              , ObjectTier
+              , ObjectType = AccountType
+              , GroupName
+              , GroupTier
+              , ActivityType
+              , OperationType
+              , Account
+              , Domain
+              , Computer
+              , Channel
+              , EventID
+              , EventData
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: PROD (TM001.1) - GROUP - Added to Group Outside the Object Tier Level
+      description: Added an object to a member of a Tier Model group that is outside of the same Tier. Example a Tier 0 user
+        added to a Tier 1 group.
+      severity: high
+      entityMappings:
+        securityGroups:
+        - id: securityGroup1
+          distinguishedNameColumn: GroupName
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.002
+      customDetails:
+        ObjectName: ObjectName
+        ObjectTier: ObjectTier
+        ObjectType: ObjectType
+        GroupName: GroupName
+        GroupTier: GroupTier
+        ActivityType: ActivityType
+        OperationType: OperationType
+        Account: Account
+        Domain: Domain
+        Channel: Channel
+        EventID: EventID
+        EventData: EventData
