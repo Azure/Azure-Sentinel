@@ -144,6 +144,17 @@ shared types are consistent, it filters both row sets into
 `qtp_rows_filtered` and `itp_rows_filtered` and runs the typed duplicate-aware
 row comparison across that shared schema.
 
+For the dynamic `AdditionalFields` property bag only, parity compares the
+case-sensitive set of top-level key names per row, not their values. Nested
+keys and values are not compared. This accommodates ingestion serialization
+changes such as date-shaped strings becoming datetimes. Row counts, duplicate
+multiplicity, schema types, and values in every other column remain strict.
+An empty property bag is still distinct from null or a non-object value;
+non-object `AdditionalFields` values retain the existing value comparison.
+Canonical mismatch examples replace property-bag values with null to represent
+key presence. The stored QTP/ITP rows and filtered rows retain their original
+values.
+
 ## Tests
 
 Run the complete regression suite from the repository root:
