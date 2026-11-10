@@ -1,0 +1,136 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SlackAuditAPI
+  dataTypes:
+  - SlackAudit_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SlackAuditV2_CL
+    - SlackAudit_CL
+  requiredDataConnectors:
+  - connectorId: SlackAuditAPI
+    dataTypes:
+    - SlackAudit_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9d85feb3-7f54-4181-b143-68abb1a86823
+    path: Analytic Rules/SlackAuditUserEmailChanged.yaml
+    version: 1.0.1
+    querySha256: fe0a2c305904108cfdff30eed1b9b539f5de09a191c4d8ad3d6662ec44dae87d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: f498b650cde31fbb5ae72ef3c8f1709f4184611cb0311172c72bba21119383e1
+      targetQuerySha256: 5567063d557494a5423509d4b5ba508cdb5016a1a8b07e03d8f9c7103f098738
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-9d85feb3-7f54-4181-b143-68abb1a86823
+  displayName: SlackAudit - User email linked to account changed.
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let _SlackAudit = union isfuzzy=true
+          (SlackAuditV2_CL),
+          (SlackAudit_CL),
+          (datatable(TimeGenerated:datetime, Id:string, DateCreate:string, Action:string, Actor:dynamic, Entity:dynamic, Context:dynamic, Details:dynamic, ActionDescription:string)[])
+      | extend TimeGenerated = iff(isnotempty(column_ifexists('DateCreate', '')) and isnotnull(todatetime(column_ifexists('DateCreate', ''))), todatetime(column_ifexists('DateCreate', '')), TimeGenerated)
+      | extend actor = todynamic(Actor), entity = todynamic(Entity), context = todynamic(Context), details = todynamic(Details)
+      | extend
+          EventVendor = 'Slack',
+          EventProduct = 'Audit',
+          EventSchemaVersion = '0.1.0',
+          EventId = column_ifexists('Id', ''),
+          EventEndTime = column_ifexists('DateCreate', ''),
+          Action = column_ifexists('Action', ''),
+          DvcAction = column_ifexists('Action', ''),
+          DvcActionDesc = column_ifexists('ActionDescription', ''),
+          ActorType = tostring(actor.type),
+          SrcUserIdentity = tostring(actor.user.id),
+          SrcUserName = tostring(actor.user.name),
+          SrcUserEmail = tostring(actor.user.email),
+          SrcUserTeam = tostring(actor.user.team),
+          EntityType = tostring(entity.type),
+          EntityFileId = tostring(entity.file.id),
+          EntityFileName = tostring(entity.file.name),
+          EntityFileFiletype = tostring(entity.file.filetype),
+          EntityFileTitle = tostring(entity['file']['title']),
+          EntityUserId = tostring(entity.user.id),
+          EntityUserName = tostring(entity.user.name),
+          EntityUserEmail = tostring(entity.user.email),
+          EntityUserTeam = tostring(entity.user.team),
+          UserAgentOriginal = tostring(context.ua),
+          SrcIpAddr = tostring(context.ip_address),
+          SessionId = tostring(context.session_id),
+          DetailsType = tostring(details.type),
+          DetailsNewValue = tostring(details.new_value),
+          DetailsPreviousValue = tostring(details.previous_value);
+      _SlackAudit
+      | where TimeGenerated between (ago(14d) .. ago(1d))
+      | summarize max(TimeGenerated) by SrcUserName, SrcUserEmail
+      | join (_SlackAudit
+            | where Action =~ 'user_login'
+            | project SrcIpAddr, SrcUserName, NewUserEmail = SrcUserEmail) on SrcUserName
+      | where NewUserEmail != SrcUserEmail
+      | extend AccountCustomEntity = SrcUserName
+      | extend IPCustomEntity = SrcIpAddr
+      | project SrcUserName, SrcUserEmail, NewUserEmail, SrcIpAddr, AccountCustomEntity, IPCustomEntity
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: SlackAudit - User email linked to account changed.
+      description: '''Detects when user email linked to account changes.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: NewUserEmail
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        SourceUserName: SrcUserName
+        OriginalUserEmail: SrcUserEmail
+        NewUserEmail: NewUserEmail
+        SourceIpAddress: SrcIpAddr
+        AccountFullName: AccountCustomEntity

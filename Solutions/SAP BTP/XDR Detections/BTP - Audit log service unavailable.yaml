@@ -1,0 +1,112 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8a3b5c7d-9e1f-4a2b-8c6d-3e5f7a9b1c2d
+    path: Analytic Rules/BTP - Audit log service unavailable.yaml
+    version: 1.0.1
+    querySha256: 7cc45d85555d6b8e0849afcf07100a5b4fdb43882170c0dd8e599c1d0548c516
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'SubaccountName' column `SubaccountName` requires runtime output-schema
+      binding verification
+    - customDetails 'Tenant' column `Tenant` requires runtime output-schema binding
+      verification
+    - customDetails 'LastLogTime' column `LastLogTime` requires runtime output-schema
+      binding verification
+    - customDetails 'TimeSinceLastLog' column `TimeSinceLastLog` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.008
+    reviewScope:
+      sourceDocumentSha256: 7965f427b9416112a806cabb2346ddfaa6395a73ea2103267ba076ec3f8cc78d
+      targetQuerySha256: 3fde320f47d985a2be80073af3f4b0238bd34d441ea5712bfa2f84a18498561a
+properties:
+  id: xdr-8a3b5c7d-9e1f-4a2b-8c6d-3e5f7a9b1c2d
+  displayName: SAP BTP - Audit log service unavailable
+  status: disabled
+  queryCondition:
+    queryText: "// Configure the detection threshold (in minutes) - adjust based on\
+      \ your environment\nlet detection_threshold_in_minutes = 60;\n// Lookback period\
+      \ to identify known subaccounts\nlet lookback = 7d;\n// Get all known subaccounts\
+      \ and their last log time\nlet last_activity = SAPBTPAuditLog_CL\n    | where\
+      \ TimeGenerated > ago(lookback)\n    | summarize LastLogTime = max(TimeGenerated)\
+      \ by SubaccountName, Tenant;\n// Identify subaccounts with no recent activity\
+      \ exceeding the threshold\nlast_activity\n| where datetime_diff('minute', now(),\
+      \ LastLogTime) > detection_threshold_in_minutes\n| extend TimeSinceLastLog =\
+      \ datetime_diff('minute', now(), LastLogTime)\n| project\n    SubaccountName,\n\
+      \    Tenant,\n    LastLogTime,\n    TimeSinceLastLog,\n    CloudApp = \"SAP\
+      \ BTP\"\n| extend AccountName = SubaccountName, UPNSuffix = Tenant"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - Audit log service unavailable
+      description: 'Identifies SAP BTP subaccounts that have not reported audit logs
+        for an unusual period.
+
+        This could indicate that the audit log service has been disabled or tampered
+        with,
+
+        potentially by an attacker attempting to hide malicious activity. It may also
+        indicate
+
+        service key expiry or SAP BTP service availability problems.'
+      severity: high
+      entityMappings:
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.008
+      customDetails:
+        SubaccountName: SubaccountName
+        Tenant: Tenant
+        LastLogTime: LastLogTime
+        TimeSinceLastLog: TimeSinceLastLog

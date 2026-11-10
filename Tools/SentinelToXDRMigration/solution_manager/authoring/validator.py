@@ -966,6 +966,46 @@ def _validate_pipeline_source(
     errors.append(f"Unknown table or tabular identifier '{ident}' in {stmt_label}")
 
 
+def _provenance_known_tables(doc: dict[str, Any]) -> set[str]:
+    props = doc.get("properties") if isinstance(doc.get("properties"), dict) else {}
+    provenance = doc.get("contentProvenance") if isinstance(doc.get("contentProvenance"), dict) else {}
+    if not provenance and isinstance(props.get("contentProvenance"), dict):
+        provenance = props["contentProvenance"]
+    tables: set[str] = set()
+    for container in (doc, props, provenance):
+        if not isinstance(container, dict):
+            continue
+        for key in ("requiredWorkloads", "requiredDataConnectors"):
+            records = container.get(key)
+            if isinstance(records, list):
+                for record in records:
+                    if isinstance(record, dict) and isinstance(record.get("dataTypes"), list):
+                        for dt in record["dataTypes"]:
+                            if isinstance(dt, str) and dt.strip():
+                                tables.add(dt.strip())
+    for query_list in (
+        provenance.get("queries"),
+        provenance.get("nativeReview", {}).get("queries") if isinstance(provenance.get("nativeReview"), dict) else None,
+    ):
+        if isinstance(query_list, list):
+            for query_entry in query_list:
+                if not isinstance(query_entry, dict):
+                    continue
+                if isinstance(query_entry.get("tables"), list):
+                    for dt in query_entry["tables"]:
+                        if isinstance(dt, str) and dt.strip():
+                            tables.add(dt.strip())
+                conv = query_entry.get("conversion")
+                if isinstance(conv, dict):
+                    for list_key in ("resolvedTables", "targetTables"):
+                        vals = conv.get(list_key)
+                        if isinstance(vals, list):
+                            for dt in vals:
+                                if isinstance(dt, str) and dt.strip():
+                                    tables.add(dt.strip())
+    return tables
+
+
 def validate_xdr_detection_kql(
     doc: dict[str, Any],
     *,
@@ -982,7 +1022,7 @@ def validate_xdr_detection_kql(
     if query_text is None:
         query_text = doc.get("query")
 
-    declared_tables: set[str] = set(known_tables)
+    declared_tables: set[str] = set(known_tables) | _provenance_known_tables(doc)
     fn_aliases: set[str] = set(known_functions)
 
     return validate_kql_query_static(
@@ -1004,7 +1044,7 @@ def validate_xdr_workbook_kql(
     if not isinstance(doc, dict):
         return {"valid": False, "errors": ["XDR Workbook document must be a JSON object"], "queries": []}
 
-    declared_tables: set[str] = set(known_tables)
+    declared_tables: set[str] = set(known_tables) | _provenance_known_tables(doc)
     fn_aliases: set[str] = set(known_functions)
 
     surfaces = workbook.query_surfaces(doc)
@@ -1074,10 +1114,27 @@ def _solution_parser_aliases(solution_root: Path) -> set[str]:
     return aliases
 
 
+def _solution_connector_tables(solution_root: Path) -> set[str]:
+    try:
+        from solution_manager.authoring.workbook_dependencies import _connectors
+        from solution_manager.migration.workbooks import _solution_data
+        connectors = _connectors(solution_root, _solution_data(solution_root))
+    except Exception:
+        return set()
+    return {
+        dt.strip()
+        for c in connectors
+        if isinstance(c, dict) and isinstance(c.get("dataTypes"), list)
+        for dt in c["dataTypes"]
+        if isinstance(dt, str) and dt.strip()
+    }
+
+
 def validate_xdr_artifacts_kql(solution_path: Path | str) -> dict[str, Any]:
     """Perform offline static KQL validation across XDR Detections and XDR Workbooks in a solution."""
     root = Path(solution_path).expanduser().resolve()
     parser_aliases = _solution_parser_aliases(root)
+    connector_tables = _solution_connector_tables(root)
 
     detection_results: list[dict[str, Any]] = []
     workbook_results: list[dict[str, Any]] = []
@@ -1103,7 +1160,7 @@ def validate_xdr_artifacts_kql(solution_path: Path | str) -> dict[str, Any]:
                 all_errors.append(f"{rel}: {err}")
                 continue
 
-            res = validate_xdr_detection_kql(doc, known_functions=parser_aliases)
+            res = validate_xdr_detection_kql(doc, known_functions=parser_aliases, known_tables=connector_tables)
             detection_results.append(
                 {
                     "path": rel,
@@ -1131,7 +1188,7 @@ def validate_xdr_artifacts_kql(solution_path: Path | str) -> dict[str, Any]:
                 all_errors.append(f"{rel}: {err}")
                 continue
 
-            res = validate_xdr_workbook_kql(doc, known_functions=parser_aliases)
+            res = validate_xdr_workbook_kql(doc, known_functions=parser_aliases, known_tables=connector_tables)
             workbook_results.append(
                 {
                     "path": rel,

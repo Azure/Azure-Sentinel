@@ -438,7 +438,7 @@ def _parse_cosmetic_summarize_agg(item: str, default_time_col: str) -> tuple[str
         arg = args[0].strip()
         if arg not in COSMETIC_TIME_COLUMNS:
             return None, None, False, False
-        target_col = default_time_col if arg in {"TimeGenerated", "Timestamp"} else arg
+        target_col = arg
         out_alias = alias or f"{func}_{arg}"
         return out_alias, target_col, False, True
 
@@ -787,7 +787,7 @@ def rewrite_cosmetic_nrt_summarize(query: str) -> tuple[str, bool, list[str]]:
             g_expr = m_assign.group(2).strip()
             m_bin = re.match(r"^bin\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,.*\)$", g_expr, re.IGNORECASE | re.DOTALL)
             if m_bin and m_bin.group(1) in COSMETIC_TIME_COLUMNS:
-                target_t = default_time_col if m_bin.group(1) in {"TimeGenerated", "Timestamp"} else m_bin.group(1)
+                target_t = m_bin.group(1)
                 if g_alias != target_t:
                     extend_assignments.append(f"{g_alias} = {target_t}")
             elif g_alias != g_expr:
@@ -797,7 +797,7 @@ def rewrite_cosmetic_nrt_summarize(query: str) -> tuple[str, bool, list[str]]:
             continue
         m_bin_unaliased = re.match(r"^bin\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,.*\)$", item_stripped, re.IGNORECASE | re.DOTALL)
         if m_bin_unaliased and m_bin_unaliased.group(1) in COSMETIC_TIME_COLUMNS:
-            target_t = default_time_col if m_bin_unaliased.group(1) in {"TimeGenerated", "Timestamp"} else m_bin_unaliased.group(1)
+            target_t = m_bin_unaliased.group(1)
             if target_t not in group_projected_cols:
                 group_projected_cols.append(target_t)
             continue
@@ -1498,15 +1498,11 @@ def constrain_event_window(
             "but the source query does not establish an event-time column"
         )
     bound_query = target_query
-    if source_time_column == "TimeGenerated":
-        bound_query = _replace_event_time_column(
-            bound_query, "TimeGenerated", "Timestamp",
-        )
-        if bound_query is None:
-            return target_query, None, (
-                "Original Sentinel lookback is shorter than the native XDR service window, "
-                "but TimeGenerated cannot be safely bound to the target Timestamp column"
-            )
+    target_time_column = (
+        "TimeGenerated"
+        if "TimeGenerated" in _tokens(bound_query)
+        else ("Timestamp" if "Timestamp" in _tokens(bound_query) else source_time_column)
+    )
 
     source_bound, source_issue = _event_window(source_query, source_time_column)
     if source_issue and source_issue != "no explicit event-time bound proves equivalence to Defender ingestion-time evaluation":
@@ -1516,7 +1512,7 @@ def constrain_event_window(
         )
     effective_window = min(source_period, source_bound) if source_bound is not None else source_period
 
-    target_bound, target_issue = _event_window(bound_query, "Timestamp")
+    target_bound, target_issue = _event_window(bound_query, target_time_column)
     if target_issue and target_issue != "no explicit event-time bound proves equivalence to Defender ingestion-time evaluation":
         return target_query, None, (
             "Original Sentinel lookback is shorter than the native XDR service window, "
@@ -1551,7 +1547,7 @@ def constrain_event_window(
         span = _format_kql_duration(effective_window)
         bound_query = (
             bound_query[:first_table.end()]
-            + f" | where Timestamp >= ago({span})"
+            + f" | where {target_time_column} >= ago({span})"
             + bound_query[first_table.end():]
         )
 
@@ -1561,15 +1557,15 @@ def constrain_event_window(
         "effectiveEventWindowSeconds": effective_window,
         "xdrServiceWindowSeconds": service_window,
         "sourceTimeColumn": source_time_column,
-        "targetTimeColumn": "Timestamp",
+        "targetTimeColumn": target_time_column,
         "filterInjected": injected,
         "rationale": (
             "A conservative single-native-table pipeline proof established the source and target "
-            "input and time-column binding. The target Timestamp filter is placed immediately "
+            "input and time-column binding. The target event-time filter is placed immediately "
             "after the table input and before all filters, projections, and aggregations."
         ),
         "lateIngestionRisk": (
-            "Late-ingestion risk: events ingested after their Timestamp falls outside this "
+            "Late-ingestion risk: events ingested after their event time falls outside this "
             "constrained event-time window can be missed; runtime qualification is required."
         ),
     }
@@ -1622,8 +1618,9 @@ def assess_schedule(
     if reason:
         return [f"{summary}; {reason}. See {SCHEDULE_REFERENCE}"], []
     source_time = "TimeGenerated" if "TimeGenerated" in _tokens(source_query) else "Timestamp"
+    target_time = "TimeGenerated" if "TimeGenerated" in _tokens(target_query) else "Timestamp"
     source_bound, source_issue = _event_window(source_query, source_time)
-    target_bound, target_issue = _event_window(target_query, "Timestamp")
+    target_bound, target_issue = _event_window(target_query, target_time)
     narrower_source_period = source_period < target_period
     if (
         narrower_source_period
@@ -3171,13 +3168,34 @@ def validate_solution(solution: str | Path) -> dict[str, Any]:
             for result in duplicates:
                 result["errors"].append(f"duplicate Custom Detection id {detection_id!r}")
                 result["valid"] = False
+    from solution_manager.qualification.pr_check_runner import scan_solution_urls
+
+    url_scan = scan_solution_urls(root)
+    locale_issues = url_scan["localeIssues"]
+    results_by_path = {
+        Path(item["file"]).resolve(): item for item in results if item.get("file")
+    }
+    non_detection_locale_issues = 0
+    for issue in locale_issues:
+        issue_path = (root / issue["file"]).resolve()
+        matched_detection = results_by_path.get(issue_path)
+        if matched_detection is not None:
+            matched_detection["errors"].append(issue["message"])
+            matched_detection["valid"] = False
+        else:
+            non_detection_locale_issues += 1
     return {
         "solution": str(root),
         "conversionScope": conversion_scope(root),
         "total": len(results),
         "valid": sum(item["valid"] for item in results),
-        "invalid": sum(not item["valid"] for item in results),
+        "invalid": sum(not item["valid"] for item in results) + non_detection_locale_issues,
         "results": results,
+        "documentsLinkValidation": {
+            "valid": not locale_issues,
+            "issueCount": len(locale_issues),
+            "issues": locale_issues,
+        },
     }
 
 

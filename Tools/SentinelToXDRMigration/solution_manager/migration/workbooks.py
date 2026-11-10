@@ -291,16 +291,23 @@ def _dependencies(queries: list[dict], configured: dict | None, reviewed_sources
             targets.add(target)
         for target_table in telemetry_data_types(contract.get("targetTables") or []):
             targets.add(target_table)
-    records, unknown = workload_records(sorted(targets))
     settings = configured if configured is not None else {}
     if not isinstance(settings, dict):
         raise ValueError("Workbook dependencies must be an object.")
-    records = deepcopy(settings.get("requiredWorkloads", records))
     connectors = settings.get("requiredDataConnectors")
-    if not isinstance(records, list) or any(not isinstance(r, dict) for r in records):
-        raise ValueError("Workbook workload prerequisites must be object records.")
     if connectors is not None and not isinstance(connectors, list):
         raise ValueError("Workbook connector prerequisites must be an array.")
+    connector_sentinel_tables = {
+        source_targets.get(t, catalog.get(t, {}).get("ahTable") or t)
+        for connector in (connectors or [])
+        if isinstance(connector, dict) and isinstance(connector.get("dataTypes"), list)
+        for t in connector["dataTypes"]
+        if isinstance(t, str) and t.strip()
+    }
+    records, unknown = workload_records(sorted(targets), sentinel_tables=connector_sentinel_tables)
+    records = deepcopy(settings.get("requiredWorkloads", records))
+    if not isinstance(records, list) or any(not isinstance(r, dict) for r in records):
+        raise ValueError("Workbook workload prerequisites must be object records.")
     reasons = []
     # Connector records must explicitly identify source tables; rewrite that
     # association to output names rather than guessing from a connector ID.
@@ -421,28 +428,48 @@ def convert_workbooks(solution, *, config=None, report_directory=None, overwrite
                 for r in (dep_cfg.get("requiredWorkloads") or [])
             )
         )
+        reviewed_sources = set()
+        originals_by_path = {q["path"]: q["querySha256"] for q in row["queries"]}
+        for pointer, resolution in query_resolutions.items():
+            if (isinstance(resolution, dict) and resolution.get("querySha256") == originals_by_path.get(pointer)
+                    and isinstance(resolution.get("tables"), list) and resolution.get("evidence")
+                    and all(isinstance(table, str) and table.strip() for table in resolution["tables"])):
+                reviewed_sources.update(resolution["tables"])
+        preliminary_dependency = _dependencies([], dep_cfg, reviewed_sources)
+        allowed_tables = (
+            {
+                t
+                for r in (dep_cfg.get("requiredWorkloads") or [])
+                if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
+                for t in r["dataTypes"]
+                if isinstance(t, str) and t
+            } | {
+                t
+                for r in (dep_cfg.get("requiredDataConnectors") or [])
+                if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
+                for t in r["dataTypes"]
+                if isinstance(t, str) and t
+            }
+            if isinstance(dep_cfg, dict) and not preliminary_dependency["dependencyReviewRequired"]
+            else set()
+        )
         converted = workbook.convert_workbook(
             source, resolutions=query_resolutions,
             allowed_workspace_functions=[r["functionAlias"] for r in functions],
-            preserve_sentinel_tables=preserve_sentinel_tables)
+            preserve_sentinel_tables=preserve_sentinel_tables,
+            allowed_tables=sorted(allowed_tables))
         target, report = converted["workbook"], converted["report"]
         used_functions = {name for q in report["queries"] for name in q.get("workspaceFunctions", [])}
         if used_functions != {r["functionAlias"] for r in functions}:
             report["issues"].append({"code": "workspace-function-coverage",
                                     "message": "Workspace prerequisites must match exact query aliases."})
         output_surfaces = {q["path"]: q for q in workbook.query_surfaces(target)}
-        originals = {q["path"]: q["querySha256"] for q in row["queries"]}
+        originals = originals_by_path
         for query in report["queries"]:
             query["sourceSha256"] = originals[query["sourcePath"]]
             query["targetSha256"] = (workbook.query_hash(
                 output_surfaces[query["outputPath"]]["node"]["query"])
                 if query.get("outputPath") else None)
-        reviewed_sources = set()
-        for pointer, resolution in query_resolutions.items():
-            if (isinstance(resolution, dict) and resolution.get("querySha256") == originals[pointer]
-                    and isinstance(resolution.get("tables"), list) and resolution.get("evidence")
-                    and all(isinstance(table, str) and table.strip() for table in resolution["tables"])):
-                reviewed_sources.update(resolution["tables"])
         dependency = _dependencies(report["queries"], dependencies.get(row["path"]), reviewed_sources)
         if version is None:
             report["issues"].append({
@@ -656,8 +683,31 @@ def validate_workbooks(solution, *, selected_only=False, _documents=None) -> dic
                     if preserved_provider:
                         source_aliases, target_aliases, explicit_calls = set(), set(), set()
                     else:
-                        source_aliases = workbook.opaque_functions(raw_source) if source_query else set()
-                        target_aliases = workbook.opaque_functions(raw_target) if output_query else set()
+                        allowed_for_opaque = (
+                            sorted({
+                                t
+                                for r in (provenance.get("requiredWorkloads") or [])
+                                if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
+                                for t in r["dataTypes"]
+                                if isinstance(t, str) and t
+                            } | {
+                                t
+                                for r in (provenance.get("requiredDataConnectors") or [])
+                                if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
+                                for t in r["dataTypes"]
+                                if isinstance(t, str) and t
+                            })
+                            if not provenance.get("dependencyReviewRequired")
+                            else ()
+                        )
+                        source_aliases = (
+                            workbook.opaque_functions(raw_source, allowed_tables=allowed_for_opaque)
+                            if source_query else set()
+                        )
+                        target_aliases = (
+                            workbook.opaque_functions(raw_target, allowed_tables=allowed_for_opaque)
+                            if output_query else set()
+                        )
                         explicit_calls = (
                             (workbook.opaque_functions(raw_source, include_bare=False) if source_query else set())
                             | (workbook.opaque_functions(raw_target, include_bare=False) if output_query else set())
@@ -710,12 +760,30 @@ def validate_workbooks(solution, *, selected_only=False, _documents=None) -> dic
                         and bool(set(r["dataTypes"]) & {"SecurityAlert", "SecurityIncident"})
                         for r in (provenance.get("requiredWorkloads") or [])
                     )
+                    allowed_tables = (
+                        sorted({
+                            t
+                            for r in (provenance.get("requiredWorkloads") or [])
+                            if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
+                            for t in r["dataTypes"]
+                            if isinstance(t, str) and t
+                        } | {
+                            t
+                            for r in (provenance.get("requiredDataConnectors") or [])
+                            if isinstance(r, dict) and isinstance(r.get("dataTypes"), list)
+                            for t in r["dataTypes"]
+                            if isinstance(t, str) and t
+                        })
+                        if not provenance.get("dependencyReviewRequired")
+                        else []
+                    )
                     try:
                         replay = workbook.migrator.convert(
                             workbook._raw_query(source_query["node"]["query"], source_query["queryType"]),
                             tables=contract.get("resolvedTables"), source_id=source_pointer,
                             artifact_type="workbook", resolve=False,
-                            preserve_sentinel_tables=preserve_sentinel_tables)
+                            preserve_sentinel_tables=preserve_sentinel_tables,
+                            allowed_tables=allowed_tables)
                         if replay != contract:
                             errors.append("Shared query contract does not match current deterministic conversion.")
                     except ValueError as exc:

@@ -1,0 +1,152 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SquidProxy
+  dataTypes:
+  - SquidProxy_CL
+- connectorId: Zscaler
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - SquidProxy_CL
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+    - SquidProxy_CL
+  - connectorId: Zscaler
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: afa4cb9e-6fec-4742-a17f-f494b54c01e7
+    path: Analytic Rules/DomainEntity_imWebSession.yaml
+    version: 1.0.12
+    querySha256: 14fa26f9b6d1be36eec353734025c450813dad9ec58adeb2a4c763f13b55b69b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventTime' column `Event_TimeGenerated` requires runtime output-schema binding verification
+    - customDetails 'IoCDescription' column `Description` requires runtime output-schema binding verification
+    - customDetails 'ActivityGroupNames' column `ActivityGroupNames` requires runtime output-schema binding verification
+    - customDetails 'IndicatorId' column `IndicatorId` requires runtime output-schema binding verification
+    - customDetails 'ThreatType' column `ThreatType` requires runtime output-schema binding verification
+    - customDetails 'IoCExpirationTime' column `ValidUntil` requires runtime output-schema binding verification
+    - customDetails 'IoCConfidenceScore' column `Confidence` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 9da753f67b256ddbbc8c68d18e993d50d34091f5c1e709b68624e7d309b04ab2
+      targetQuerySha256: 03e568bb71d53ae1d3ae1b50f1eea52bfe29c2373c4b025279630f1b4cf883f8
+properties:
+  id: xdr-afa4cb9e-6fec-4742-a17f-f494b54c01e7
+  displayName: TI Map Domain entity to Web Session Events (ASIM Web Session schema)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let HAS_ANY_MAX = 10000;
+      let dt_lookBack = 1h;
+      let ioc_lookBack = 14d;
+      //Create a list of TLDs in our threat feed for later validation
+      let DOMAIN_TI=ThreatIntelIndicators
+      // Picking up only IOC's that contain the entities we want
+      | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+      | where IndicatorType == "domain-name"
+      | extend DomainName = tolower(ObservableValue)
+      | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+      | extend IndicatorId = tostring(split(Id, "--")[2])
+      | extend Url = iff(ObservableKey == "url:value", ObservableValue, "")
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
+      let DOMAIN_TI_list= toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName)
+        | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) );
+      DOMAIN_TI
+      | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName, Type
+      // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+      | join kind=innerunique (
+          _Im_WebSession(starttime=ago(dt_lookBack), url_has_any= DOMAIN_TI_list )
+          //Extract domain patterns from syslog message
+          | extend domain = tostring(parse_url(Url)["Host"])
+          | where isnotempty(domain)
+          | extend tld = tostring(split(domain, '.')[-1])
+          | extend Event_TimeGenerated = TimeGenerated
+      ) on $left.DomainName==$right.domain
+      | where Event_TimeGenerated < ValidUntil
+      | summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain
+      | extend Description = tostring(parse_json(Data).description)
+      | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+      | extend ThreatType = tostring(Data.indicator_types[0])
+      | project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ValidUntil, Confidence, domain, SrcIpAddr, Url, ThreatType
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Domain entity to Web Session Events (ASIM Web Session schema)
+      description: '''This rule identifies Web Sessions for which the target URL hostname is a known IoC. This rule uses the
+        [Advanced Security Information Model (ASIM)](https:/aka.ms/AboutASIM) and supports any web session source that complies
+        with ASIM.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        EventTime: Event_TimeGenerated
+        IoCDescription: Description
+        ActivityGroupNames: ActivityGroupNames
+        IndicatorId: IndicatorId
+        ThreatType: ThreatType
+        IoCExpirationTime: ValidUntil
+        IoCConfidenceScore: Confidence

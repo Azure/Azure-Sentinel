@@ -3,7 +3,8 @@
 # Validates modified ASIM parsers by running schema and data tests against a Log Analytics workspace.
 #
 # The script performs the following steps:
-#   1. Detects ASIM parser YAML files modified in the current PR by diffing against upstream/master.
+#   1. Detects ASIM query-time parser YAML files modified in the current PR, excluding
+#      IngestTimeParsers, by diffing against upstream/master.
 #   2. Converts each parser YAML to an object and wraps its query in a KQL let statement.
 #   3. Runs the ASimSchemaTester against each parser to verify its output conforms to the ASIM schema.
 #   4. Runs the ASimDataTester against each parser using the last 30 minutes of ingested data.
@@ -71,8 +72,8 @@ function run {
         # Assigning the first part to $status and the last part to $file
         $status = $parts[0]
         $file = $parts[-1]  # -1 index refers to the last element
-        # Check if the file is a YAML file
-        if ($file -like "*.yaml") {
+        # Select query-time parser YAML files only.
+        if ($file -like "*.yaml" -and 'IngestTimeParsers' -cnotin ($file -split '[/\\]')) {
             # Add the file name and status to the array
             $global:modifiedFiles += New-Object PSObject -Property @{
                 Name = $file

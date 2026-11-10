@@ -1,0 +1,228 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailUrlInfo
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mdo
+    dataTypes:
+    - EmailEvents
+    - EmailUrlInfo
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - EmailUrlInfo
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b56e2290-c65b-45a5-9636-3651e85bbe5d
+    path: Analytic Rules/DomainEntity_EmailUrlInfo_Updated.yaml
+    version: 1.0.7
+    querySha256: 73d51d11afa0535260fc54dca29a60cd45ffb5170613362a3db354219b23ebe7
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.7
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `RecipientEmailAddress`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `RecipientEmailAddress` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 892e153071fff9d8056e83a31618a1f44b7c678ecd5b07fa7d9f0592e6a0a7df
+      targetQuerySha256: 88562aed1d2a20631f6dba78939c2dfa13107284059caf65875bbd1bf7493dde
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: RecipientEmailAddress
+      column: RecipientEmailAddress
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-b56e2290-c65b-45a5-9636-3651e85bbe5d
+  displayName: TI Map Domain entity to EmailUrlInfo
+  status: disabled
+  queryCondition:
+    queryText: 'let dt_lookBack = 1h; // Define the lookback period for email data
+      as 1 hour
+
+      let ioc_lookBack = 14d; // Define the lookback period for threat intelligence
+      data as 14 days
+
+      let EmailUrlInfo_ = EmailUrlInfo| where isnotempty(Url) or isnotempty(UrlDomain)
+      // Filter for non-empty URLs or URL domains
+
+      | where TimeGenerated >= ago(dt_lookBack) // Filter for records within the lookback
+      period
+
+      | extend Url = tolower(Url), UrlDomain = tolower(UrlDomain) // Convert URLs
+      and domains to lowercase
+
+      | extend EmailUrlInfo_TimeGenerated = TimeGenerated; // Create a new column
+      for the time generated
+
+      let EmailEvents_ = EmailEvents
+
+      | where TimeGenerated >= ago(dt_lookBack); // Filter email events within the
+      lookback period
+
+      let TI_Urls = ThreatIntelIndicators
+
+      | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators
+      within the lookback period
+
+      | summarize arg_max(TimeGenerated, *) by Id, ObservableValue // Get latest record
+      per Id FIRST
+
+      | where IsActive == true and ValidUntil > now() // THEN filter for active indicators
+      that haven''t expired
+
+      | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey,
+      ":", 0)))
+
+      | where isnotempty(IndicatorType) and IndicatorType == "url"
+
+      | extend Url = tolower(ObservableValue)
+
+      | where isnotempty(Url) // Filter for non-empty URLs
+
+      | join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on
+      URL
+
+      | extend Description = tostring(parse_json(Data).description)
+
+      | extend ActivityGroupNames = extract("ActivityGroup:([^,]+)", 1, tostring(parse_json(Data).labels))
+
+      | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil,
+      Confidence, Url, UrlLocation, NetworkMessageId; // Select relevant columns
+
+      let TI_Domains = ThreatIntelIndicators
+
+      | where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators
+      within the lookback period
+
+      | where isnotempty(ObservableValue) // Filter for non-empty domain names
+
+      | extend DomainName = tolower(ObservableValue) // Convert domain names to lowercase
+
+      | where ObservableKey == "domain-name:value"
+
+      | summarize arg_max(TimeGenerated, *) by Id, ObservableValue // Get latest record
+      per Id FIRST
+
+      | where IsActive == true // THEN filter for active indicators
+
+      | extend TrafficLightProtocolLevel = AdditionalFields.TLPLevel
+
+      | extend IndicatorId = tostring(split(Id, "--")[2]);
+
+      let TI_Domains_UrlInfo = TI_Domains
+
+      | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel, DomainName,
+      Type
+
+      | join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain
+      // Join with email URL info on domain name
+
+      | extend ExpirationDateTime = ValidUntil
+
+      | extend Description = Data.description
+
+      | extend ThreatType =  Data.type
+
+      | extend ConfidenceScore = Confidence
+
+      | extend ActivityGroupNames = replace_string(tostring(parse_json(tostring(Data.labels))[0]),"ActivityGroup:","")
+
+      | where ExpirationDateTime > now() // Filter for indicators that haven''t expired
+
+      | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId,
+      ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId;
+      // Select relevant columns
+
+      union TI_Urls, TI_Domains_UrlInfo // Combine URL and domain threat intelligence
+      data
+
+      | extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column
+
+      | join kind=inner (EmailEvents_) on NetworkMessageId // Join with email events
+      on network message ID
+
+      | where DeliveryAction !has "Blocked" // Filter out blocked delivery actions
+
+      | extend Name = tostring(split(RecipientEmailAddress, ''@'', 0)[0]), UPNSuffix
+      = tostring(split(RecipientEmailAddress, ''@'', 1)[0]); // Extract name and UPN
+      suffix from recipient email address"'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Domain entity to EmailUrlInfo
+      description: '''Identifies a match in EmailUrlInfo table from any Domain IOC
+        from TI.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      customDetails:
+        AccountFullName: RecipientEmailAddress

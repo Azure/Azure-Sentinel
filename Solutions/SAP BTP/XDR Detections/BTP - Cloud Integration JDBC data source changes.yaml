@@ -1,0 +1,115 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e
+    path: Analytic Rules/BTP - Cloud Integration JDBC data source changes.yaml
+    version: 1.0.1
+    querySha256: a03ecb007eb5ea31d9c953a15b753f126a07474b3cdb8764c658148fcade107a
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - LateralMovement
+    originalTechniques:
+    - T1552
+    - T1021
+    reviewScope:
+      sourceDocumentSha256: 09e568dfe8a63f854b4a8db2128c08e4b34f6b2fe862170c469af196fed7ee8e
+      targetQuerySha256: a4dcc5b5eb15a541e0989a3862af4cdd260eac4bd0ca8af7b8a79e0de53a89e0
+properties:
+  id: xdr-b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e
+  displayName: SAP BTP - Cloud Integration JDBC data source changes
+  status: disabled
+  queryCondition:
+    queryText: "SAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n\
+      | extend data_s = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n\
+      | extend parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n\
+      \         objectType = tostring(parsedData.objectType),\n         objectId =\
+      \ tostring(parsedData.objectId)\n| where objectType == \"Data Source\"\n| where\
+      \ action in (\"PasswordStore\", \"PasswordDelete\")\n| extend normalizedAction\
+      \ = case(\n    action == \"PasswordStore\", \"deployed\",\n    action == \"\
+      PasswordDelete\", \"undeployed\",\n    action\n)\n| extend MessageText = strcat(\"\
+      JDBC data source '\", objectId, \"' was \", normalizedAction)\n| project\n \
+      \   UpdatedOn,\n    UserName,\n    MessageText,\n    DataSourceName = objectId,\n\
+      \    Action = action,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud\
+      \ Integration\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix\
+      \ = split(UserName, \"@\")[1]"
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - Cloud Integration JDBC data source changes
+      description: 'Identifies deployment and undeployment of JDBC data source configurations
+        in SAP Cloud Integration.
+
+        JDBC data sources contain database connection credentials and configuration
+        that enable
+
+        integration flows to access backend databases.
+
+
+        Unauthorized JDBC data source manipulation could indicate:
+
+        - Attacker adding rogue database connections for data exfiltration
+
+        - Credential theft by accessing stored database passwords
+
+        - Modification of connection strings to redirect traffic to attacker-controlled
+        systems'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ipAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1552
+      customDetails:
+        DataSourceName: DataSourceName
+        Action: Action
+        SourceIP: ipAddress

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.2       | 20-04-2026                     | Repackaged the **Solution** to V3.1 version 3.2.2 and updated **Data Connector** documentation links. |
 | 3.0.8       | 14-04-2026                     | Deprecate Sophos Endpoint Protection (using Azure Function) |
 | 3.0.7       | 24-03-2026                     | Sophos Endpoint Protection (via Codeless Connector Platform)           |
 | 3.0.6       | 23-10-2025                     | Updated the solution to be compatible with tool changes for the connection name.            |

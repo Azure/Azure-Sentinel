@@ -39,8 +39,318 @@ VALID_SEVERITIES: frozenset[str] = frozenset(
 )
 
 _SEMVER_RE = re.compile(r"\b(\d+)\.(\d+)\.(\d+)\b")
-_URL_RE = re.compile(r"https?://[^\s\"'<>)\]]+")
+_URL_RE = re.compile(r"https?://[^\s\"'<>)\]]+", re.IGNORECASE)
 _MITRE_TECHNIQUE_RE = re.compile(r"^T\d{4}(?:\.\d{3})?$", re.IGNORECASE)
+DOCUMENTS_LINK_LOCALE_RE = re.compile(
+    r"(https://docs\.microsoft\.com|https://azure\.microsoft\.com)(/[a-z]{2}-[a-z]{2})",
+    re.IGNORECASE,
+)
+_MICROSOFT_LOCALE_URL_RE = re.compile(
+    r"^(https://(?:docs|azure|learn|support)\.microsoft\.com)/[a-z]{2}-[a-z]{2}(?=/|$|[?#])",
+    re.IGNORECASE,
+)
+_URL_SCAN_SKIP_SUFFIXES: frozenset[str] = frozenset(
+    {
+        ".zip",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".ico",
+        ".webp",
+        ".pdf",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".eot",
+        ".dll",
+        ".exe",
+        ".bin",
+    }
+)
+
+
+def strip_microsoft_url_locale(url: str) -> str:
+    """Strip locale segment (e.g. /en-us) from Microsoft documentation and redirect URLs."""
+    cleaned = str(url or "").strip()
+    if not cleaned:
+        return cleaned
+    cleaned = _MICROSOFT_LOCALE_URL_RE.sub(r"\1", cleaned)
+    return DOCUMENTS_LINK_LOCALE_RE.sub(r"\1", cleaned)
+
+
+def _url_entry_failed(item: Mapping[str, Any]) -> bool:
+    status_val = item.get("status")
+    status_code_val = item.get("statusCode")
+    status_str = str(status_val or "").strip()
+    return bool(
+        item.get("passed") is False
+        or item.get("broken") is True
+        or item.get("reachable") is False
+        or status_str.upper() in {"FAIL", "FAILED", "BROKEN", "ERROR", "UNREACHABLE"}
+        or (
+            isinstance(status_val, int)
+            and not isinstance(status_val, bool)
+            and (status_val >= 400 or status_val == 0)
+        )
+        or (
+            isinstance(status_code_val, int)
+            and not isinstance(status_code_val, bool)
+            and (status_code_val >= 400 or status_code_val == 0)
+        )
+        or (status_str.isdigit() and (int(status_str) >= 400 or int(status_str) == 0))
+    )
+
+
+def _normalize_url_verification_entry(entry: Any) -> Any:
+    if not isinstance(entry, Mapping):
+        return entry
+    normalized = dict(entry)
+    if _url_entry_failed(normalized):
+        return normalized
+    for key in ("resolvedUrl", "finalUrl"):
+        val = normalized.get(key)
+        if isinstance(val, str) and val.strip():
+            normalized[key] = strip_microsoft_url_locale(val)
+    return normalized
+
+
+def _normalize_url_section(section: Mapping[str, Any]) -> dict[str, Any]:
+    normalized = dict(section)
+    entry_failures = 0
+    if isinstance(normalized.get("urls"), list):
+        normalized["urls"] = [
+            _normalize_url_verification_entry(item) for item in normalized["urls"]
+        ]
+        entry_failures = sum(
+            1
+            for item in normalized["urls"]
+            if isinstance(item, Mapping) and _url_entry_failed(item)
+        )
+    if (
+        isinstance(normalized.get("urls"), list)
+        or "brokenCount" in normalized
+        or "brokenUrlCount" in normalized
+    ):
+        broken_count = max(
+            int(normalized.get("brokenCount") or 0),
+            int(normalized.get("brokenUrlCount") or 0),
+            entry_failures,
+        )
+        if "brokenCount" in normalized or entry_failures > 0 or "brokenUrlCount" in normalized:
+            normalized["brokenCount"] = broken_count
+        if broken_count > 0 and "passed" in normalized:
+            normalized["passed"] = False
+    return normalized
+
+
+def normalize_url_verification_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize recorded resolvedUrl values in URL verification evidence payloads."""
+    normalized = _normalize_url_section(payload)
+    for nested_key in ("urlVerification", "browserUrls"):
+        nested = normalized.get(nested_key)
+        if isinstance(nested, Mapping):
+            normalized[nested_key] = _normalize_url_section(nested)
+    return normalized
+
+
+def build_url_verification_evidence(
+    urls: Iterable[Mapping[str, Any]],
+    *,
+    verified_by: str | None = None,
+    verified_at_utc: str | None = None,
+) -> dict[str, Any]:
+    """Construct URL verification evidence with locale-stripped resolvedUrl values."""
+    normalized_urls = [_normalize_url_verification_entry(item) for item in urls]
+    checked_count = len(normalized_urls)
+    broken_count = sum(
+        1
+        for item in normalized_urls
+        if isinstance(item, Mapping) and _url_entry_failed(item)
+    )
+    payload: dict[str, Any] = {
+        "passed": broken_count == 0,
+        "checkedCount": checked_count,
+        "brokenCount": broken_count,
+        "urls": normalized_urls,
+    }
+    if verified_by:
+        payload["verifiedBy"] = verified_by
+    if verified_at_utc:
+        payload["verifiedAtUtc"] = verified_at_utc
+    return payload
+
+
+def normalize_solution_url_verification_files(solution_root: str | Path) -> list[str]:
+    """Normalize resolvedUrl values in on-disk URL verification evidence files."""
+    root = Path(solution_root).expanduser().resolve()
+    ev_dir = root / "Evidence"
+    if not ev_dir.is_dir() or ev_dir.is_symlink():
+        return []
+    candidate_rel_paths = (
+        "Evidence/qualification-evidence.json",
+        "Evidence/pr-qualification-evidence.json",
+        "Evidence/live-qualification-evidence.json",
+        "Evidence/evidence.json",
+        "Evidence/receipts/url-and-asset-verification.json",
+        "Evidence/url-and-asset-verification.json",
+    )
+    updated: list[str] = []
+    for rel in candidate_rel_paths:
+        fpath = root / rel
+        if not fpath.is_file() or fpath.is_symlink():
+            continue
+        try:
+            raw_text = fpath.read_text(encoding="utf-8-sig")
+            loaded = json.loads(raw_text)
+        except Exception:
+            continue
+        if not isinstance(loaded, Mapping):
+            continue
+        normalized = normalize_url_verification_payload(loaded)
+        if normalized != dict(loaded):
+            fpath.write_text(json.dumps(normalized, indent=2) + "\n", encoding="utf-8")
+            updated.append(rel)
+    return updated
+
+
+def _collect_solution_text_files_for_url_scan(
+    solution_root: Path,
+    files_by_type: Mapping[str, list[str]] | None = None,
+    changed_files: list[str] | None = None,
+) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def _add(rel_path: str) -> None:
+        norm = str(rel_path or "").replace("\\", "/").strip("/")
+        if not norm or norm in seen:
+            return
+        low = norm.lower()
+        if low.startswith("logs/") or low.startswith("evidence/pr-qualification/"):
+            return
+        if Path(norm).name.lower() == ".env":
+            return
+        fpath = solution_root / norm
+        if not fpath.is_file() or fpath.is_symlink():
+            return
+        try:
+            rel_parts = fpath.relative_to(solution_root).parts
+        except ValueError:
+            return
+        cur = solution_root
+        for part in rel_parts[:-1]:
+            cur = cur / part
+            if cur.is_symlink():
+                return
+        if fpath.suffix.lower() in _URL_SCAN_SKIP_SUFFIXES:
+            return
+        seen.add(norm)
+        ordered.append(norm)
+
+    if isinstance(files_by_type, Mapping):
+        for rel_list in files_by_type.values():
+            if isinstance(rel_list, list):
+                for rel in rel_list:
+                    _add(rel)
+
+    if changed_files:
+        for rel in changed_files:
+            _add(rel)
+        ev_dir = solution_root / "Evidence"
+        if ev_dir.is_dir() and not ev_dir.is_symlink():
+            for fpath in sorted(ev_dir.rglob("*")):
+                if fpath.is_file():
+                    try:
+                        _add(fpath.relative_to(solution_root).as_posix())
+                    except ValueError:
+                        continue
+    elif solution_root.is_dir() and not solution_root.is_symlink():
+        for fpath in sorted(solution_root.rglob("*")):
+            if fpath.is_file():
+                try:
+                    _add(fpath.relative_to(solution_root).as_posix())
+                except ValueError:
+                    continue
+
+    return ordered
+
+
+def scan_solution_urls(
+    solution_root: str | Path,
+    *,
+    files_by_type: Mapping[str, list[str]] | None = None,
+    changed_files: list[str] | None = None,
+) -> dict[str, Any]:
+    """Scan solution text files for insecure HTTP URLs and CI DocumentsLinkValidation locale URLs."""
+    root = Path(solution_root).expanduser().resolve()
+    rel_files = _collect_solution_text_files_for_url_scan(
+        root,
+        files_by_type=files_by_type,
+        changed_files=changed_files,
+    )
+    urls_found: list[str] = []
+    bad_urls: list[str] = []
+    insecure_urls: list[dict[str, str]] = []
+    locale_issues: list[dict[str, str]] = []
+    checked_files: list[str] = []
+    aka_ms_count = 0
+
+    for rel in rel_files:
+        fpath = root / rel
+        try:
+            txt = fpath.read_text(encoding="utf-8-sig")
+        except Exception:
+            continue
+        checked_files.append(rel)
+        rel_low = rel.lower()
+        is_rule_or_query_yaml = fpath.suffix.lower() in {".yaml", ".yml"} and any(
+            seg in rel_low
+            for seg in ("analytic rules/", "xdr detections/", "hunting queries/", "parsers/")
+        )
+        is_exempt_from_insecure_http = (
+            is_rule_or_query_yaml
+            or "sample data/" in f"/{rel_low}"
+            or fpath.name.lower() == "mock.json"
+            or fpath.suffix.lower() == ".csv"
+        )
+        for m in _URL_RE.finditer(txt):
+            u = m.group(0).rstrip(".,;\"'\\")
+            urls_found.append(u)
+            if "aka.ms/" in u.lower():
+                aka_ms_count += 1
+            if (
+                not is_exempt_from_insecure_http
+                and u.lower().startswith("http://")
+                and not u.lower().startswith("http://schemas.")
+            ):
+                msg = f"{rel}: insecure HTTP URL {u}"
+                insecure_urls.append({"file": rel, "url": u, "message": msg})
+                bad_urls.append(msg)
+            if DOCUMENTS_LINK_LOCALE_RE.search(u):
+                recommended = strip_microsoft_url_locale(u)
+                msg = (
+                    f"{rel}: locale URL {u} fails CI DocumentsLinkValidation "
+                    f"(recommended fix: {recommended})"
+                )
+                locale_issues.append(
+                    {
+                        "file": rel,
+                        "url": u,
+                        "recommendedUrl": recommended,
+                        "message": msg,
+                    }
+                )
+                bad_urls.append(msg)
+
+    return {
+        "checkedFiles": checked_files,
+        "urlsFound": urls_found,
+        "akaMsCount": aka_ms_count,
+        "badUrls": bad_urls,
+        "insecureUrls": insecure_urls,
+        "localeIssues": locale_issues,
+    }
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -1325,37 +1635,46 @@ def _evaluate_validation_checks(
         # VAL-URL-01: Short URLs (aka.ms) and documentation/logo URLs valid
         # ---------------------------------------------------------------------
         elif cid == "VAL-URL-01":
-            urls_found: list[str] = []
-            bad_urls: list[str] = []
-            aka_ms_count = 0
-            refs = []
-            for ct in ("solution-package", "logos", "data-connectors", "workbooks", "xdr-workbooks"):
-                for rel in files_by_type.get(ct, []):
-                    fpath = solution_root / rel
-                    if not fpath.is_file() or fpath.is_symlink() or fpath.suffix.lower() == ".zip":
-                        continue
-                    try:
-                        txt = fpath.read_text(encoding="utf-8-sig")
-                    except Exception:
-                        continue
-                    for m in _URL_RE.finditer(txt):
-                        u = m.group(0).rstrip(".,;\"'\\")
-                        urls_found.append(u)
-                        if "aka.ms/" in u.lower():
-                            aka_ms_count += 1
-                        if u.startswith("http://") and not u.startswith("http://schemas."):
-                            bad_urls.append(f"{rel}: insecure HTTP URL {u}")
-                    if len(refs) < 4:
-                        refs.append(_make_evidence_ref("URL-checked file", rel))
+            url_scan = scan_solution_urls(
+                solution_root,
+                files_by_type=files_by_type,
+                changed_files=applicability.get("changedFiles") or None,
+            )
+            urls_found = url_scan["urlsFound"]
+            bad_urls = url_scan["badUrls"]
+            locale_issues = url_scan["localeIssues"]
+            insecure_urls = url_scan["insecureUrls"]
+            aka_ms_count = url_scan["akaMsCount"]
+            refs = [
+                _make_evidence_ref("URL-checked file", rel)
+                for rel in url_scan["checkedFiles"][:4]
+            ]
 
             if bad_urls:
+                fixes_summary = ", ".join(
+                    f"{item['url']} -> {item['recommendedUrl']}"
+                    for item in locale_issues[:3]
+                )
+                if locale_issues and insecure_urls:
+                    why_failed = (
+                        "One or more URLs use insecure http:// or contain locale segments (/xx-yy) "
+                        "rejected by CI DocumentsLinkValidation. "
+                        f"Recommended locale-stripped fix(es): {fixes_summary}."
+                    )
+                elif locale_issues:
+                    why_failed = (
+                        "CI DocumentsLinkValidation rejects locale segments in docs.microsoft.com / azure.microsoft.com URLs. "
+                        f"Recommended locale-stripped fix(es): {fixes_summary}."
+                    )
+                else:
+                    why_failed = "One or more URLs use insecure http:// or invalid formatting."
                 results.append(
                     _build_check_result(
                         cdef,
                         status="FAIL",
-                        what_we_checked="Extracted and validated all documentation, short-link (aka.ms), and logo URLs across solution files.",
+                        what_we_checked="Extracted and validated all documentation, short-link (aka.ms), and logo URLs across solution files (including Evidence/, rules, and metadata).",
                         what_we_observed=f"Checked {len(urls_found)} URL(s) ({aka_ms_count} aka.ms); found {len(bad_urls)} invalid URL(s): {'; '.join(bad_urls[:3])}.",
-                        why_passed_or_failed="One or more URLs use insecure http:// or invalid formatting.",
+                        why_passed_or_failed=why_failed,
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
@@ -1365,9 +1684,9 @@ def _evaluate_validation_checks(
                     _build_check_result(
                         cdef,
                         status="PASS",
-                        what_we_checked="Extracted and validated all documentation, short-link (aka.ms), and logo URLs across solution files.",
-                        what_we_observed=f"Validated {len(urls_found)} URL(s) ({aka_ms_count} aka.ms short link(s)) across solution metadata and content with 0 malformed or insecure URLs.",
-                        why_passed_or_failed="All discovered URLs and logo links are properly formatted HTTPS URIs.",
+                        what_we_checked="Extracted and validated all documentation, short-link (aka.ms), and logo URLs across solution files (including Evidence/, rules, and metadata).",
+                        what_we_observed=f"Validated {len(urls_found)} URL(s) ({aka_ms_count} aka.ms short link(s)) across solution metadata, rules, and evidence with 0 malformed, insecure, or locale-bearing URLs.",
+                        why_passed_or_failed="All discovered URLs and logo links are properly formatted HTTPS URIs without disallowed locale segments.",
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
@@ -2497,17 +2816,19 @@ def _evaluate_qualification_checks(
         # QUAL-URL-01: Changed URLs opened and verified in browser
         # ---------------------------------------------------------------------
         elif cid == "QUAL-URL-01":
-            url_ev = qualification_evidence.get("urlVerification") or qualification_evidence.get("browserUrls") or {}
+            raw_url_ev = qualification_evidence.get("urlVerification") or qualification_evidence.get("browserUrls") or {}
+            url_ev = normalize_url_verification_payload(raw_url_ev) if isinstance(raw_url_ev, Mapping) else {}
             refs = [_make_evidence_ref("Browser URL verification", "qualification_evidence.urlVerification", kind="receipt")]
             if not simulated_flag and isinstance(url_ev, Mapping) and url_ev:
-                checked_urls = int(url_ev.get("checkedCount") or len(url_ev.get("urls") or []) or 1)
+                urls_entries = url_ev.get("urls") if isinstance(url_ev.get("urls"), list) else []
+                checked_urls = int(url_ev.get("checkedCount") or len(urls_entries) or 1)
                 broken_urls = int(url_ev.get("brokenCount") or 0)
                 if broken_urls == 0 and url_ev.get("passed") is not False:
                     results.append(
                         _build_check_result(
                             cdef,
                             status="PASS",
-                            what_we_checked="Opened and verified all changed documentation, aka.ms, and logo URLs in a live browser.",
+                            what_we_checked="Opened and verified all changed documentation, aka.ms, and logo URLs in a live browser (with locale-normalized resolvedUrl values).",
                             what_we_observed=f"Verified {checked_urls} URL(s) in browser with HTTP 200 and 0 broken links.",
                             why_passed_or_failed="All changed URLs resolved and rendered cleanly in the browser.",
                             evidence_refs=refs,
@@ -2519,7 +2840,7 @@ def _evaluate_qualification_checks(
                         _build_check_result(
                             cdef,
                             status="FAIL",
-                            what_we_checked="Opened and verified all changed documentation, aka.ms, and logo URLs in a live browser.",
+                            what_we_checked="Opened and verified all changed documentation, aka.ms, and logo URLs in a live browser (with locale-normalized resolvedUrl values).",
                             what_we_observed=f"Checked {checked_urls} URL(s); found {broken_urls} broken link(s).",
                             why_passed_or_failed=f"Browser URL check found {broken_urls} broken URL(s).",
                             evidence_refs=refs,
@@ -3605,7 +3926,11 @@ def run_pr_qualification_checks(
         workflow_state=workflow_state,
         decision_manifest=decision_manifest,
     )
-    qual_ev: dict[str, Any] = dict(qualification_evidence) if isinstance(qualification_evidence, Mapping) else {}
+    qual_ev: dict[str, Any] = (
+        normalize_url_verification_payload(qualification_evidence)
+        if isinstance(qualification_evidence, Mapping)
+        else {}
+    )
     exceptions_by_id = _normalize_author_exceptions(author_exceptions, decision_manifest=dec_manifest)
     quartet = _extract_version_quartet(root, target_version=target_version)
 
@@ -3880,6 +4205,14 @@ def evaluate_solution_pr_qualification(
                     loaded_ev, ev_err = _load_json_safe(fpath)
                     if not ev_err and isinstance(loaded_ev, Mapping):
                         qual_ev_dict.update(loaded_ev)
+                        break
+        if not qual_ev_dict.get("urlVerification") and not qual_ev_dict.get("browserUrls"):
+            for receipt_rel in ("receipts/url-and-asset-verification.json", "url-and-asset-verification.json"):
+                rpath = cdir / receipt_rel
+                if rpath.is_file():
+                    loaded_uv, uv_err = _load_json_safe(rpath)
+                    if not uv_err and isinstance(loaded_uv, Mapping):
+                        qual_ev_dict["urlVerification"] = normalize_url_verification_payload(loaded_uv)
                         break
         if dec_manifest_dict is None and (cdir / "decision-manifest.json").is_file():
             loaded_dm, dm_err = _load_json_safe(cdir / "decision-manifest.json")

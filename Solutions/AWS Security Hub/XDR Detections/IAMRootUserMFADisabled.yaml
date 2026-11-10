@@ -1,0 +1,136 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWSSecurityHub
+  dataTypes:
+  - AWSSecurityHubFindings
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSSecurityHubFindings
+  requiredDataConnectors:
+  - connectorId: AWSSecurityHub
+    dataTypes:
+    - AWSSecurityHubFindings
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6b3b9b1d-0d5d-4d4a-9f0f-8d1e2c7a5f44
+    path: Analytic Rules/IAMRootUserMFADisabled.yaml
+    version: 1.0.0
+    querySha256: 382738e9bd87752a84f77ca3c8ea95df3aa20060c2c286621292df86807a56d4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved as customDetails.AccountName from query
+      column `AwsAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.CloudAppAccountId mismatch is informational because its original value is preserved as customDetails.RootUserARN
+      from query column `RootUserARN`; supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    - Persistence
+    - CredentialAccess
+    - DefenseEvasion
+    originalTechniques:
+    - T1098
+    - T1110
+    - T1556.006
+    reviewScope:
+      sourceDocumentSha256: f7c17ef84167505c349ed60eb377fa4929d879b58eadd21737dda153b17489c1
+      targetQuerySha256: 8c26007efbb590f1bd4540b0ba8f2c98bd7fe44cd8994c6fbb4b567a0af45a5d
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: f7c17ef84167505c349ed60eb377fa4929d879b58eadd21737dda153b17489c1
+      targetQuerySha256: 8c26007efbb590f1bd4540b0ba8f2c98bd7fe44cd8994c6fbb4b567a0af45a5d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RootUserARN
+      column: RootUserARN
+      status: available
+      customDetailKey: RootUserARN
+properties:
+  id: xdr-6b3b9b1d-0d5d-4d4a-9f0f-8d1e2c7a5f44
+  displayName: AWS Security Hub - Detect root user lacking MFA
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSSecurityHubFindings
+      | where RecordState == "ACTIVE" and ComplianceStatus == "FAILED"
+      | where tostring(AwsSecurityFindingGeneratorId) == "security-control/IAM.9"
+        or tostring(ComplianceSecurityControlId) == "IAM.9"
+      | extend RootUserARN = tostring(Resources[0].Id)
+      | summarize TimeGenerated = max(TimeGenerated)
+          by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,
+             AwsSecurityFindingId, ComplianceSecurityControlId, RootUserARN
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWS Security Hub - Detect root user lacking MFA
+      description: |-
+        This query detects AWS accounts where the root user does not have multi-factor authentication (MFA) enabled, using AWS Security Hub control IAM.9 findings.
+        Lack of MFA on the root user increases the risk of unauthorized access and privilege abuse.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AwsAccountId
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+      customDetails:
+        ComplianceControlId: ComplianceSecurityControlId
+        Region: AwsRegion
+        FindingId: AwsSecurityFindingId
+        RootUserARN: RootUserARN
+        AccountName: AwsAccountId

@@ -142,20 +142,24 @@ def _column_overlap(source_cols: Dict[str, str], ah_cols: Dict[str, str]) -> tup
 
 def recommend_table(table: str, source_cols: Optional[Dict[str, str]] = None,
                     ah_schemas: Optional[Dict[str, Dict[str, str]]] = None,
-                    top: int = 3) -> dict:
+                    top: int = 3, *,
+                    allowed_tables: Optional[List[str]] = None) -> dict:
     """Rank the best-fit AH tables for one unmapped Sentinel table."""
     ah_schemas = ah_schemas if ah_schemas is not None else _ah_schemas()
     pool = _candidate_pool(ah_schemas)
     recs: List[dict] = []
     seen: set[str] = set()
+    allowed = set(allowed_tables or ())
 
     # 0. catalog self-mapping wins outright. A table mapped 1:1 to itself is
     #    already a valid AH table on the target tenant - it is its own best
     #    home, so never recommend a different table (kills self->self noise and
     #    now-obsolete category hints like WindowsEvent->DeviceEvents).
     meta = mapping_catalog.load_mapping_catalog()["tables"].get(table)
-    if (meta and meta.get("tier") == "1to1" and meta.get("ahTable") == table) or (
-        not meta and isinstance(table, str) and table.endswith("_CL")
+    if (
+        (meta and meta.get("tier") == "1to1" and meta.get("ahTable") == table)
+        or (not meta and isinstance(table, str) and (table.endswith("_CL") or table in allowed))
+        or (meta and meta.get("tier") == "blocked" and table in allowed)
     ):
         return {"sentinelTable": table,
                 "recommendations": [{
@@ -229,20 +233,22 @@ def recommend_table(table: str, source_cols: Optional[Dict[str, str]] = None,
 def recommend_for_tables(tables: List[str],
                          source_schemas: Optional[Dict[str, Dict[str, str]]] = None,
                          ah_schemas: Optional[Dict[str, Dict[str, str]]] = None,
-                         top: int = 3) -> List[dict]:
+                         top: int = 3, *,
+                         allowed_tables: Optional[List[str]] = None) -> List[dict]:
     """Recommend best-fit AH tables for each unmapped Sentinel table."""
     source_schemas = source_schemas or {}
     return [recommend_table(t, source_cols=source_schemas.get(t),
-                            ah_schemas=ah_schemas, top=top) for t in tables]
+                            ah_schemas=ah_schemas, top=top,
+                            allowed_tables=allowed_tables) for t in tables]
 
 
-def unmapped_tables(tables: Optional[List[str]]) -> List[str]:
+def unmapped_tables(tables: Optional[List[str]], *,
+                    allowed_tables: Optional[List[str]] = None) -> List[str]:
     """The subset of resolved tables that have no convertible AH mapping
     (catalog tier `blocked`, or absent from the catalog = `unknown`)."""
-    cat = mapping_catalog.load_mapping_catalog()["tables"]
     out = []
     for t in (tables or []):
-        tier = cat[t]["tier"] if t in cat else ("1to1" if isinstance(t, str) and t.endswith("_CL") else "unknown")
+        tier = mapping_catalog.tier_of(t, allowed_tables=allowed_tables or ())
         if tier in ("blocked", "unknown"):
             out.append(t)
     return out

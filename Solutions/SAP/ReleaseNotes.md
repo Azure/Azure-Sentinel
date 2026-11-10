@@ -7,6 +7,7 @@ For the current release notes and version history of the agentless package on SA
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 | --- | --- | --- |
+| 3.5.11 | 26-10-2026 | Updated "WEBSITE_NODE_DEFAULT_VERSION" from "~12" to "~22" in the Basic-SAPLockUser-STD and SAPCollectorRemediate-STD **Playbooks** deployment configurations. |
 | 3.5.10 | 30-06-2026 | Removal of Agent-based connector from solution. Zip file link redirected to SAP Business Accelerator Hub (moved from editable to configure-only release). |
 
 Prior version history (since 2023) for Agent-based connector compacted.

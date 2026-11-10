@@ -1,0 +1,117 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityEvent
+  requiredDataConnectors:
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5a7fccb8-3ed0-44f2-8477-540af3ef4d92
+    path: Analytic Rules/EatonUnautorizedLogins.yaml
+    version: 1.0.0
+    querySha256: 59e9fbd917d697af74b67145ec6f4148be0f149a25cacecb203555194f85faae
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved as customDetails.AccountName from query
+      column `UserEntity`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Process.CommandLine mismatch is informational because its original value is preserved as customDetails.ProcessCommandLine
+      from query column `Process`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 492cb7d86eeed417efb14372a58048cbb94578cbe6cd51d8ab8099c797c629ff
+      targetQuerySha256: f2b4ec937891557475986da49df976c7c567db19b026343643a97d407cc164ed
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: UserEntity
+      column: UserEntity
+      status: available
+      customDetailKey: AccountName
+    - entityType: Process
+      entityIndex: 4
+      identifier: CommandLine
+      sourceColumn: Process
+      column: Process
+      status: available
+      customDetailKey: ProcessCommandLine
+properties:
+  id: xdr-5a7fccb8-3ed0-44f2-8477-540af3ef4d92
+  displayName: EatonForeseer - Unauthorized Logins
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      // Look for all events relating to user logins
+      | where EventID in (4624,4625,4648,4675,4634,4647)
+      | where AccountType == "User"
+      // Filter for data present
+      | where isnotempty(TargetUserName)
+      // Look for all events that relate to the Eaton Foreseer application
+      | where ProcessName has "Foreseer"
+      // Ignore known user accounts (please edit based on your allowed users)
+      | where TargetUserName !in ("janedoe", "johndoe")
+      // De-duplicate multiple entries for the same user accessing a particular device
+      | summarize TimeGenerated=arg_min(TimeGenerated, *) by TargetUserName, Computer
+      | project
+          TimeGenerated,
+          IPCustomEntity = IpAddress,
+          HostCustomEntity = Computer,
+          UserEntity = TargetUserName,
+          Process,
+          ProcessName
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: EatonForeseer - Unauthorized Logins
+      description: '''Detects Unauthorized Logins into Eaton Foreseer'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: UserEntity
+        ProcessCommandLine: Process

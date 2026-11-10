@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 |---|---|---|
+| 3.2.2 | 20-04-2026 | Migrated Analytic Rules and Workbooks to Microsoft Defender XDR detections and workbooks. |
 | 3.1.2 | 23-07-2026 | Updated CCF Data Connector graph queries pattern. |
 | 3.1.1 | 17-07-2026 | Promoted CCF connector (`TrendMicroCASConnector`) to General Availability: set `isPreview` to `false` and removed Preview disclaimer from solution description. |
 | 3.1.0       | 02-07-2026                     | Updated Underlying Microsoft Technologies list in the solution description to include Codeless Connector Framework (CCF), Log Ingestion API, and Data Collection Rules (DCR) for the CCF data connector. |

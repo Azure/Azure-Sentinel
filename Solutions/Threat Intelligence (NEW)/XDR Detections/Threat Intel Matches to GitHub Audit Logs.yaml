@@ -1,0 +1,124 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 43d6c173-64c8-4416-b32e-636a9f318d15
+    path: Analytic Rules/Threat Intel Matches to GitHub Audit Logs.yaml
+    version: 1.0.9
+    querySha256: 4865f16a8c451934224db251906259bbb502e02d24958a87b63fd1bc65b2f0d9
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Actor`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Actor` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 842a16624c38e8fa72aefce059b99cc81918333d43e9652898f6ac5eb99f3c93
+      targetQuerySha256: cf8e8ae9ae18d6cea4c64e05aa227fc40ff90e5549a9037a5ea3ef248338547e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Actor
+      column: Actor
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-43d6c173-64c8-4416-b32e-636a9f318d15
+  displayName: TI Map IP entity to GitHub_CL
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let dt_lookBack = 1h; // Look back 1 hour for VMConnection events
+      let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
+      ThreatIntelIndicators
+      //extract key part of kv pair
+           | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+           | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
+           | extend NetworkSourceIP = toupper(ObservableValue)
+           | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+      // Picking up only IOC's that contain the entities we want
+      // | where Action == true
+      | where TimeGenerated >= ago(ioc_lookBack)
+      // Taking the first non-empty value based on potential IOC match availability
+      | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)
+      | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
+        | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
+      | join (
+        GitHubAudit
+        | where TimeGenerated >= ago(dt_lookBack)
+        | extend GitHubAudit_TimeGenerated = TimeGenerated
+      )
+      on $left.TI_ipEntity == $right.IPaddress
+      | extend Description = tostring(parse_json(Data).description)
+      | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+      | project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkSourceIP
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP entity to GitHub_CL
+      description: '''Identifies a match in GitHub_CL table from any IP IOC from TI'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPaddress
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountFullName: Actor

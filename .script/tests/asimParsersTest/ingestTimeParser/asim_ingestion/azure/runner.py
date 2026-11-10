@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from ..parser.kql import compact_kql
 from .client import AzureMonitorClient
 from .common import (
     HARNESS_RESULT_VERSION,
@@ -121,9 +120,7 @@ class AsimIngestionHarness(AzureMonitorClient):
         input_stream = str(
             parser_document.get("InputStream") or ""
         ).strip()
-        parser_query = compact_kql(
-            str(parser_document["ParserQuery"])
-        )
+        parser_query = str(parser_document["ParserQuery"])
         if str(parser_document["SourceRawTable"]) != source_table:
             raise ValueError(
                 "Prepared fixture SourceRawTable does not match parser."
@@ -356,12 +353,15 @@ class AsimIngestionHarness(AzureMonitorClient):
                     )
                     attempted_dcr_ids.append(raw_resource_id)
                     with self._stage("raw-dcr"):
+                        raw_transform = self.build_raw_replay_transform(
+                            source_table, schema
+                        )
                         raw_handle = self.create_dcr(
                             name=names["rawDcr"],
                             stream_name=names["rawStream"],
                             destination_name=names["destination"],
                             schema=schema,
-                            transform_kql="source",
+                            transform_kql=raw_transform,
                             output_stream=input_stream,
                         )
                 except HarnessError as exc:

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                											      	    |
 |-------------|--------------------------------|----------------------------------------------------------------------------------------|
+| 3.2.2       | 28-10-2026                     | Added Defender **XDR Detections** and **XDR Workbooks** and updated **Analytical Rules** |
 | 3.0.5       | 13-01-2025                     | Removed Custom Entity mappings from **Analytic rules**									|
 | 3.0.4       | 17-12-2024                     | Removed Deprecated **Data connectors**    											  	| 
 | 3.0.3       | 01-08-2024                     | Update **Parser** as part of Syslog migration                         					|

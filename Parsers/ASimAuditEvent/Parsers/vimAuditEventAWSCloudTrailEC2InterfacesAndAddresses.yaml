@@ -1,0 +1,245 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for AWS CloudTrail EC2 InterfacesAndAddresses activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+- Title: Amazon EC2 API actions
+  Link: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Operations.html
+Description: |
+  Filters and normalizes AWSCloudTrail events from ec2.amazonaws.com for network interfaces, interface
+  permissions and attachments, trunk interfaces, private IPv4 and IPv6 assignments,
+  Elastic IPs, and address transfers. Includes security-group quota validation for network
+  interfaces. This parser is referenced by vimAuditEventAWSCloudTrail.
+ParserName: vimAuditEventAWSCloudTrailEC2InterfacesAndAddresses
+ParentParser: vimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AWSCloudTrailEC2InterfacesAndAddresses
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    actorusername_has_any:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool=false,
+    pack:bool=false
+  ) {
+  let Events = datatable(EventName: string, EventType: string, Object: string)
+  [
+    "AcceptAddressTransfer", "Execute", "Elastic IP Address",
+    "AllocateAddress", "Create", "Elastic IP Address",
+    "AssignIpv6Addresses", "Set", "Network Interface",
+    "AssignPrivateIpAddresses", "Set", "Network Interface",
+    "AssociateAddress", "Set", "Elastic IP Association",
+    "AssociateTrunkInterface", "Set", "Trunk Network Interface",
+    "AttachNetworkInterface", "Set", "EC2 Instance",
+    "CreateNetworkInterface", "Create", "Network Interface",
+    "CreateNetworkInterfacePermission", "Create", "Network Interface Permission",
+    "DeleteNetworkInterface", "Delete", "Network Interface",
+    "DeleteNetworkInterfacePermission", "Delete", "Network Interface Permission",
+    "DescribeAddressTransfers", "Read", "Elastic Ip Address Transfer",
+    "DescribeAddresses", "Read", "Elastic Ip Address",
+    "DescribeAddressesAttribute", "Read", "Elastic Ip Address",
+    "DescribeMovingAddresses", "Read", "Elastic IP address",
+    "DescribeNetworkInterfaceAttribute", "Read", "Network Interface",
+    "DescribeNetworkInterfacePermissions", "Read", "Network Interface",
+    "DescribeNetworkInterfaces", "Read", "Network Interface",
+    "DescribeTrunkInterfaceAssociations", "Read", "Trunk Interface Association",
+    "DetachNetworkInterface", "Set", "Network Interface",
+    "DisableAddressTransfer", "Disable", "Elastic IP Address",
+    "DisassociateAddress", "Delete", "Elastic IP Address",
+    "DisassociateTrunkInterface", "Delete", "Trunk Interface Association",
+    "EnableAddressTransfer", "Enable", "Elastic IP Address",
+    "ModifyAddressAttribute", "Set", "Elastic IP address",
+    "ModifyNetworkInterfaceAttribute", "Set", "Network Interface",
+    "MoveAddressToVpc", "Execute", "Elastic Ip Address",
+    "ReleaseAddress", "Delete", "Elastic IP address",
+    "ResetAddressAttribute", "Execute", "Elastic IP address",
+    "ResetNetworkInterfaceAttribute", "Execute", "Network Interface",
+    "RestoreAddressToClassic", "Set", "Elastic Ip Address",
+    "UnassignIpv6Addresses", "Delete", "Network Interface",
+    "UnassignPrivateIpAddresses", "Delete", "Network Interface",
+    "ValidateSecurityGroupQuotasForInterface", "Execute", "Network Interface Security Group Quotas"
+  ]
+  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+  | where array_length(object_has_any) == 0 or Object has_any (object_has_any);
+  AWSCloudTrail
+  | where not(disabled)
+  | where EventSource == "ec2.amazonaws.com"
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+  | where array_length(operation_has_any) == 0 or EventName has_any (operation_has_any)
+  | where array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any)
+  | where array_length(srcipaddr_has_any_prefix) == 0
+      or (ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0")
+          and has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+  | where EventName in (Events | project EventName)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | where eventresult == "*" or EventResult == eventresult
+  | lookup kind=inner Events on EventName
+  | extend Req = todynamic(RequestParameters), Resp = todynamic(ResponseElements)
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AllocateAddress", Resp.allocationId,
+      EventName == "AssignIpv6Addresses", Resp.assignedIpv6Addresses,
+      EventName == "AssignPrivateIpAddresses", Resp.assignedIpv4PrefixSet,
+      EventName == "AssociateAddress", Resp.associationId,
+      EventName == "AssociateTrunkInterface", Resp.interfaceAssociation,
+      EventName == "AttachNetworkInterface", Resp.attachmentId,
+      EventName == "CreateNetworkInterface", Resp.networkInterface,
+      EventName == "CreateNetworkInterfacePermission", Resp.interfacePermission,
+      EventName == "EnableAddressTransfer", Resp.addressTransfer,
+      EventName in ("ModifyAddressAttribute", "ResetAddressAttribute"), Resp.address,
+      EventName == "MoveAddressToVpc", Resp.status,
+      ""
+    ), "")
+  | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+  | extend ObjectId = case(
+      EventName == "AcceptAddressTransfer", Resp.addressTransfer,
+      EventName == "AllocateAddress", Resp.allocationId,
+      EventName in ("AssignIpv6Addresses", "AssignPrivateIpAddresses", "AssociateAddress",
+        "DeleteNetworkInterface", "DescribeNetworkInterfaceAttribute", "DescribeNetworkInterfaces",
+        "ModifyNetworkInterfaceAttribute", "ResetNetworkInterfaceAttribute", "UnassignIpv6Addresses",
+        "UnassignPrivateIpAddresses"), Req.NetworkInterfaceId,
+      EventName == "AssociateTrunkInterface", Req.TrunkInterfaceId,
+      EventName == "AttachNetworkInterface", Req.InstanceId,
+      EventName == "CreateNetworkInterface", Resp.networkInterface.networkInterfaceId,
+      EventName == "CreateNetworkInterfacePermission",
+        Resp.interfacePermission.interfacePermissionId,
+      EventName in ("DeleteNetworkInterfacePermission", "DescribeNetworkInterfacePermissions"),
+        Req.NetworkInterfacePermissionId,
+      EventName == "DescribeAddressTransfers", Resp.addressTransferSet,
+      EventName == "DescribeAddresses", Resp.addressesSet,
+      EventName == "DescribeAddressesAttribute", Resp.addressSet,
+      EventName in ("DescribeTrunkInterfaceAssociations", "DisassociateAddress", "DisassociateTrunkInterface"),
+        Req.AssociationId,
+      EventName == "DetachNetworkInterface", Req.AttachmentId,
+      EventName in ("DisableAddressTransfer", "EnableAddressTransfer", "ModifyAddressAttribute",
+        "ReleaseAddress", "ResetAddressAttribute"), Req.AllocationId,
+      EventName in ("MoveAddressToVpc", "RestoreAddressToClassic"), Req.PublicIp,
+      ""
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service"
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      ActorUserEntityKey = "",
+      AdditionalEntities = dynamic([]),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", Req,
+      "ResponseElements", Resp
+    ), dynamic({}))
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  | project
+      TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+      EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+      EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+      ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+      SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+      Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+      ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+      AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+      TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(
+    starttime,
+    endtime,
+    srcipaddr_has_any_prefix,
+    actorusername_has_any,
+    operation_has_any,
+    eventtype_in,
+    eventresult,
+    object_has_any,
+    newvalue_has_any,
+    disabled,
+    pack
+  )

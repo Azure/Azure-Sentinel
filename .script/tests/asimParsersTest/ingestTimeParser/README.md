@@ -23,7 +23,8 @@ by tests. Business logic lives under `asim_ingestion/`.
 asim_ingestion/
 ├── parser/
 │   ├── common.py             Safe YAML loading, shared models, repository evidence
-│   ├── kql.py                KQL tokenization and deterministic compatibility checks
+│   ├── kql.py                DCR policy and AST-derived fixture/source checks
+│   ├── kusto_analyzer.py     Bridge to the trusted Microsoft Kusto.Language helper
 │   ├── discovery.py          ITP trigger fan-in and optional QTP resolution
 │   └── static_validation.py  Field-level ITP and optional QTP eligibility validation
 ├── fixtures/
@@ -40,6 +41,9 @@ asim_ingestion/
 └── workflow/
     ├── contracts.py          Matrix validation, target export, and deterministic cleanup
     └── reporting.py          Result aggregation, summaries, and annotations
+kusto_analyzer/
+├── Program.cs                Syntax and AST fact extraction without query execution
+└── kusto_analyzer.csproj     Locked .NET 8 Microsoft.Azure.Kusto.Language helper
 ```
 
 ## Validation flow
@@ -64,6 +68,23 @@ parser files under `Parsers/`; its changed-file filter excludes
 workflow above, without requiring query-time union-parser metadata or a
 corresponding `vim*` parser.
 
+Static KQL parsing uses the official `Microsoft.Azure.Kusto.Language` package,
+pinned to version `12.4.1`, through a trusted .NET 8 helper. The helper parses
+but never executes parser KQL and returns syntax diagnostics plus AST facts to
+Python, including normalized statements and operators, named assignments, and
+tabular source references. `KQL001` reports official syntax diagnostics, while
+`KQL000` reports a helper build, execution, or contract failure. Python retains
+the DCR-specific policy decisions, but filter consistency, fixture metadata,
+QTP source matching, and runtime pass-through detection all consume helper
+facts instead of custom KQL tokenization. CI restores the NuGet dependency in
+locked mode for discovery, template validation, and ingestion validation and
+passes the built trusted DLL through `ASIM_KUSTO_ANALYZER_DLL`.
+
+`ParserQuery` is submitted to the parser DCR exactly as decoded from YAML.
+Static validation rejects queries longer than 14,800 characters with
+`KQL044`; comments, indentation, and line breaks count toward that limit.
+The workflow does not compact or otherwise rewrite the parser query.
+
 Parser validation does not depend on raw-table replay. QTP source replay is
 optional. If its table or DCR cannot be established, the report records a
 warning and blocks QTP/parity without failing the required parser validation
@@ -72,12 +93,29 @@ QTP execution and parity also fail the target when they run and fail.
 Parser ingestion is reported as passed only when both upload and target
 visibility pass.
 
+Before creating the optional raw-replay DCR, the harness reads destination
+column types from the workspace Tables management API, including both
+`columns` and `standardColumns`. Unlike Log Analytics query-result metadata,
+this preserves GUID types required for ingestion. It casts fixture columns
+whose input types differ from the destination, including string IDs to `guid`
+with `toguid`. DCR input declarations and the immutable fixture remain
+unchanged; matching columns keep the pass-through transform.
+Unavailable or invalid destination metadata follows the existing replay
+setup warning path and blocks QTP/parity. The parser DCR is unaffected.
+Fixture GUID values must be valid GUID strings: `toguid` converts malformed
+values to null, so type alignment alone cannot repair invalid sample IDs.
+
 Before ASIM data testing, the `ASimDnsActivityLogs` table slice normalizes
 `ThreatFirstReportedTime` and `ThreatLastReportedTime` to `datetime` and
 `ThreatOriginalRiskLevel` to `string`. This accommodates the documented
 physical-table/logical-ASIM type discrepancy, preferring the corrected `_d`
 and `_s` columns and falling back to casts of the legacy columns. This
 normalization affects only the data-tester input, not ingestion or QTP parity.
+
+For `ASimAlertEventLogs`, the data-tester input casts `FileSize` to `long`.
+The [physical table](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimalerteventlogs)
+stores this column as `string`, while logical ASIM requires `long`. This
+normalization likewise leaves ingestion and QTP parity unchanged.
 
 Static validation requires `ParserFilterQuery` to contain a `where` stage when
 `ParserQuery` contains one. This is a presence check only; it does not require
@@ -121,6 +159,17 @@ QTP and ITP types. A shared-column type mismatch fails schema parity. When
 shared types are consistent, it filters both row sets into
 `qtp_rows_filtered` and `itp_rows_filtered` and runs the typed duplicate-aware
 row comparison across that shared schema.
+
+For the dynamic `AdditionalFields` property bag only, parity compares the
+case-sensitive set of top-level key names per row, not their values. Nested
+keys and values are not compared. This accommodates ingestion serialization
+changes such as date-shaped strings becoming datetimes. Row counts, duplicate
+multiplicity, schema types, and values in every other column remain strict.
+An empty property bag is still distinct from null or a non-object value;
+non-object `AdditionalFields` values retain the existing value comparison.
+Canonical mismatch examples replace property-bag values with null to represent
+key presence. The stored QTP/ITP rows and filtered rows retain their original
+values.
 
 ## Tests
 
