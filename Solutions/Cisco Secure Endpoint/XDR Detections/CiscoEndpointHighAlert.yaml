@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CiscoSecureEndpointLogsCCPDefinition
+  dataTypes:
+  - CiscoSecureEndpointAuditLogsV2_CL
+  - CiscoSecureEndpointEventsV2_CL
+- connectorId: CiscoSecureEndpoint
+  dataTypes:
+  - CiscoSecureEndpoint_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSecureEndpoint_CL
+  requiredDataConnectors:
+  - connectorId: CiscoSecureEndpointLogsCCPDefinition
+    dataTypes:
+    - CiscoSecureEndpointAuditLogsV2_CL
+    - CiscoSecureEndpointEventsV2_CL
+  - connectorId: CiscoSecureEndpoint
+    dataTypes:
+    - CiscoSecureEndpoint_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4683ebce-07ad-4089-89e3-39d8fe83c011
+    path: Analytic Rules/CiscoEndpointHighAlert.yaml
+    version: 1.0.1
+    querySha256: 1ea2a5e82da02053797a863f191890e3ec1452bad6b7026caf0e301deb7cb943
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - InitialAccess
+    originalTechniques:
+    - T1204.002
+    - T1190
+    reviewScope:
+      sourceDocumentSha256: 1b677f46db019002f44846b7a2f9f1c0b16ce63a1de022dd505811c08f4598e7
+      targetQuerySha256: 34b6d93f37c806e26f44eaf5481de2661996ec2923f9ee81a282557b11f2ea26
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 1b677f46db019002f44846b7a2f9f1c0b16ce63a1de022dd505811c08f4598e7
+      targetQuerySha256: 34b6d93f37c806e26f44eaf5481de2661996ec2923f9ee81a282557b11f2ea26
+properties:
+  id: xdr-4683ebce-07ad-4089-89e3-39d8fe83c011
+  displayName: Cisco SE High Events Last Hour
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let endtime = 1h;
+      CiscoSecureEndpoint_CL
+      | where TimeGenerated >= ago(endtime)
+      | where severity_s == "High"
+      | project TimeGenerated, NetworkAddresses = parse_json(computer_network_addresses_s), computer_hostname_s, date_t, event_type_s, computer_links_trajectory_s
+      | summarize CountInLastHour = count(), TimeGenerated = max(TimeGenerated) by computer_hostname_s, date_t, event_type_s, NetworkAddresses_ip = tostring(NetworkAddresses.ip), computer_links_trajectory_s
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco SE High Events Last Hour
+      description: '''Find events from Cisco Secure Endpoint that are of High severity in the last hour.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: NetworkAddresses_ip
+        hosts:
+        - id: host1
+          nameColumn: computer_hostname_s
+        urls:
+        - id: url1
+          addressColumn: computer_links_trajectory_s
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204
+          subTechniques:
+          - T1204.002
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
