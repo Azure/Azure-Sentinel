@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.2       | 21-10-2026                     | Migrated **Analytic Rules** to Microsoft Defender XDR **Custom Detections** (XDR Detections) and the **Workbook** to an XDR Workbook; fixed EventType field in 2 login-failure **Analytic Rules** (LoginEventType). |
 | 3.2.0       | 22-09-2026                     | Added V3 Snowflake tables for nested ingestion. |
 | 3.1.0       | 04-08-2026                     | Updated **CCF Data Connector** to fix pagination and migrate to V2 tables |
 | 3.0.9       | 03-02-2026                     | Updated the **analytic rule** query.|

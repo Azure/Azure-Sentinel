@@ -1,0 +1,163 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4d94d4a9-dc96-410a-8dea-4d4d4584188b
+    path: Analytic Rules/UseraddedtoPrivilgedGroups.yaml
+    version: 1.0.7
+    querySha256: cc334d350596dd5cba41b2987464e34c7a6471ad08905894f808eb38dd4ba46a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `TargetUserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `TargetUserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1098
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 87e7e2f9f8c0bc5d9a19fcd2bb857f3759b55c1285db64a4f8ef285dfcbd0307
+      targetQuerySha256: cf2fe66f4527a5e8ac6347ffd4d239820d9da31b148052b01405a041f69a1e92
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 87e7e2f9f8c0bc5d9a19fcd2bb857f3759b55c1285db64a4f8ef285dfcbd0307
+      targetQuerySha256: cf2fe66f4527a5e8ac6347ffd4d239820d9da31b148052b01405a041f69a1e92
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: TargetUserPrincipalName
+      column: TargetUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-4d94d4a9-dc96-410a-8dea-4d4d4584188b
+  displayName: User added to Microsoft Entra ID Privileged Groups
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let OperationList = dynamic(["Add member to role","Add eligible member to role"]);
+      let PrivilegedGroups = dynamic(["UserAccountAdmins","PrivilegedRoleAdmins","TenantAdmins","PrivilegedAuthenticationAdmins"]);
+      AuditLogs
+      | where Category =~ "RoleManagement"
+      | where OperationName in~ (OperationList)
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type =~ "User"
+            | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),
+                     modProps = TargetResource.modifiedProperties
+        )
+      | mv-apply Property = modProps on
+        (
+            where Property.displayName =~ "Role.WellKnownObjectName"
+            | extend DisplayName = trim('"',tostring(Property.displayName)),
+                     GroupName = trim('"',tostring(Property.newValue))
+        )
+      | extend InitiatingAppId = InitiatedBy.app.appId
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | extend InitiatingUserRoles = InitiatedBy.user.roles
+      | where GroupName in~ (PrivilegedGroups)
+      // If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.
+      //| where InitiatingAppName != "MS-PIM" and InitiatingAppName != "MS-PIM-Fairfax"
+      | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppId, InitiatingAppName, InitiatingAppServicePrincipalName, InitiatingAppServicePrincipalId, InitiatingIpAddress, DisplayName, GroupName, InitiatingUserRoles, TargetUserPrincipalName
+      | extend AccountName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), AccountUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+      | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: User added to Microsoft Entra ID Privileged Groups
+      description: |-
+        'This will alert when a user is added to any of the Privileged Groups.
+        For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.
+        For Administrator role permissions in Microsoft Entra ID please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        - id: account2
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+        - technique: T1078
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+        - technique: T1078
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName
+        AccountFullName_2: TargetUserPrincipalName

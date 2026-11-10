@@ -1,0 +1,313 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for AWS CloudTrail EC2 instance activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query-ec2.html
+- Title: Amazon EC2 API actions
+  Link: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Operations.html
+Description: |
+  Filters and normalizes AWSCloudTrail events from ec2.amazonaws.com for EC2 instance lifecycle,
+  attributes, monitoring, metadata options, IAM instance-profile associations, SQL high
+  availability, and scheduled-event notifications and windows. Launch templates, console
+  access, instance-type discovery, images, storage, fleets, and reservation lifecycle
+  actions are handled separately. Includes application status checks, instance application
+  health, and check suppression. This parser is referenced by vimAuditEventAWSCloudTrail.
+ParserName: vimAuditEventAWSCloudTrailEC2Instances
+ParentParser: vimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AWSCloudTrailEC2Instances
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    actorusername_has_any:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool=false,
+    pack:bool=false
+  ) {
+  let Events = datatable(EventName: string, EventType: string, Object: string)
+  [
+    "AssociateApplicationStatusCheck", "Set", "Application Status Check Association",
+    "AssociateIamInstanceProfile", "Set", "EC2 Instance",
+    "AssociateInstanceEventWindow", "Set", "Instance Event Window",
+    "CreateApplicationStatusCheck", "Create", "Application Status Check",
+    "CreateInstanceEventWindow", "Create", "Instance Event Window",
+    "DeleteApplicationStatusCheck", "Delete", "Application Status Check",
+    "DeleteInstanceEventWindow", "Delete", "Instance Event Window",
+    "DescribeApplicationStatus", "Read", "EC2 Instance Application Status",
+    "DescribeApplicationStatusCheckAssociations", "Read", "Application Status Check Association",
+    "DescribeApplicationStatusChecks", "Read", "Application Status Check",
+    "DescribeIamInstanceProfileAssociations", "Read", "IAM Instance Profile Association",
+    "DescribeInstanceAttribute", "Read", "EC2 Instance",
+    "DescribeInstanceCreditSpecifications", "Read", "EC2 Instance",
+    "DescribeInstanceEventNotificationAttributes", "Read", "Instance Event Notification Attribute",
+    "DescribeInstanceEventWindows", "Read", "Instance Event Window",
+    "DescribeInstanceImageMetadata", "Read", "EC2 Instance",
+    "DescribeInstanceSqlHaHistoryStates", "Read", "EC2 Instance",
+    "DescribeInstanceSqlHaStates", "Read", "EC2 Instance",
+    "DescribeInstanceStatus", "Read", "EC2 Instance",
+    "DescribeInstances", "Read", "EC2 Instance",
+    "DisableApplicationStatusCheckSuppression", "Disable", "Application Status Check Suppression",
+    "DisableInstanceSqlHaStandbyDetections", "Disable", "EC2 Instance",
+    "DisassociateApplicationStatusCheck", "Delete", "Application Status Check Association",
+    "DisassociateIamInstanceProfile", "Delete", "IAM Instance Profile Association",
+    "DisassociateInstanceEventWindow", "Set", "Instance Event Window",
+    "EnableApplicationStatusCheckSuppression", "Enable", "Application Status Check Suppression",
+    "EnableInstanceSqlHaStandbyDetections", "Enable", "EC2 Instance",
+    "GetDefaultCreditSpecification", "Read", "EC2 Instance",
+    "GetInstanceMetadataDefaults", "Read", "Instance Metadata Defaults",
+    "GetInstanceUefiData", "Read", "EC2 Instance",
+    "ModifyApplicationStatusCheck", "Set", "Application Status Check",
+    "ModifyDefaultCreditSpecification", "Set", "EC2 Instance",
+    "ModifyInstanceAttribute", "Set", "EC2 Instance",
+    "ModifyInstanceCapacityReservationAttributes", "Set", "EC2 Instance",
+    "ModifyInstanceCpuOptions", "Set", "EC2 Instance",
+    "ModifyInstanceCreditSpecification", "Set", "EC2 Instance",
+    "ModifyInstanceEventStartTime", "Set", "EC2 Instance",
+    "ModifyInstanceEventWindow", "Set", "Instance Event Window",
+    "ModifyInstanceMaintenanceOptions", "Set", "IMDS",
+    "ModifyInstanceMetadataDefaults", "Set", "EC2 Instance",
+    "ModifyInstanceMetadataOptions", "Set", "EC2 Instance",
+    "ModifyInstanceNetworkPerformanceOptions", "Set", "EC2 Instance",
+    "ModifyInstancePlacement", "Set", "EC2 Instance",
+    "ModifyPrivateDnsNameOptions", "Set", "EC2 Instance",
+    "ModifyPublicIpDnsNameOptions", "Set", "Network Interface",
+    "MonitorInstances", "Execute", "EC2 Instance",
+    "RebootInstances", "Execute", "EC2 Instance",
+    "RegisterInstanceEventNotificationAttributes", "Create", "Instance Event Notification Attribute",
+    "ReplaceIamInstanceProfileAssociation", "Set", "IAM Instance Profile Association",
+    "ReportInstanceStatus", "Other", "EC2 Instance",
+    "ResetInstanceAttribute", "Execute", "EC2 Instance",
+    "RunInstances", "Start", "EC2 Instance",
+    "SendDiagnosticInterrupt", "Execute", "EC2 Instance",
+    "StartInstances", "Start", "EC2 Instance",
+    "StopInstances", "Stop", "EC2 Instance",
+    "TerminateInstances", "Stop", "EC2 Instance",
+    "UnmonitorInstances", "Execute", "EC2 Instance"
+  ]
+  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+  | where array_length(object_has_any) == 0 or Object has_any (object_has_any);
+  AWSCloudTrail
+  | where not(disabled)
+  | where EventSource == "ec2.amazonaws.com"
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+  | where array_length(operation_has_any) == 0 or EventName has_any (operation_has_any)
+  | where array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any)
+  | where array_length(srcipaddr_has_any_prefix) == 0
+      or (ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0")
+          and has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+  | where EventName in (Events | project EventName)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | where eventresult == "*" or EventResult == eventresult
+  | lookup kind=inner Events on EventName
+  | extend Req = todynamic(RequestParameters), Resp = todynamic(ResponseElements)
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AssociateApplicationStatusCheck", Resp.successfulResultSet,
+      EventName == "AssociateIamInstanceProfile", Resp.iamInstanceProfileAssociation,
+      EventName == "AssociateInstanceEventWindow", Resp.instanceEventWindow,
+      EventName == "CreateApplicationStatusCheck", Resp.applicationStatusCheck,
+      EventName == "CreateInstanceEventWindow", Resp.instanceEventWindow,
+      EventName == "DisableApplicationStatusCheckSuppression", Resp.successfulResultSet,
+      EventName == "EnableApplicationStatusCheckSuppression", Resp.successfulResultSet,
+      EventName == "ModifyApplicationStatusCheck", Resp.applicationStatusCheck,
+      EventName == "ModifyDefaultCreditSpecification", Resp.instanceFamilyCreditSpecification,
+      EventName == "ModifyInstanceAttribute", Req.Attribute,
+      EventName == "ModifyInstanceCapacityReservationAttributes",
+        Req.CapacityReservationSpecification,
+      EventName == "ModifyInstanceCpuOptions", Resp,
+      EventName == "ModifyInstanceEventStartTime", Resp.event,
+      EventName == "ModifyPublicIpDnsNameOptions", Req.HostnameType,
+      EventName == "MonitorInstances", Resp.instancesSet,
+      EventName == "RegisterInstanceEventNotificationAttributes", Resp.instanceTagAttribute,
+      EventName == "ReplaceIamInstanceProfileAssociation", Resp.iamInstanceProfileAssociation,
+      EventName == "RunInstances", Resp.groupSet,
+      EventName == "StartInstances", Resp.instancesSet,
+      EventName == "StopInstances", Resp.instancesSet,
+      EventName == "UnmonitorInstances", Resp.instancesSet,
+      ""
+    ), "")
+  | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+  | extend ObjectId = case(
+      EventName == "AssociateApplicationStatusCheck", coalesce(Req.applicationStatusCheckId,
+        Req.ApplicationStatusCheckId),
+      EventName == "AssociateIamInstanceProfile", Req.InstanceId,
+      EventName == "AssociateInstanceEventWindow", Req.InstanceEventWindowId,
+      EventName == "CreateApplicationStatusCheck",
+        Resp.applicationStatusCheck.applicationStatusCheckId,
+      EventName == "CreateInstanceEventWindow", Resp.instanceEventWindow.instanceEventWindowId,
+      EventName == "DeleteApplicationStatusCheck", coalesce(Req.applicationStatusCheckId,
+        Req.ApplicationStatusCheckId),
+      EventName == "DeleteInstanceEventWindow", Req.InstanceEventWindowId,
+      EventName == "DescribeIamInstanceProfileAssociations", Req.AssociationId,
+      EventName == "DescribeInstanceAttribute", Req.InstanceId,
+      EventName == "DescribeInstanceCreditSpecifications", Req.InstanceId,
+      EventName == "DescribeInstanceEventWindows", Req.InstanceEventWindowId.N,
+      EventName == "DescribeInstanceImageMetadata", Req.InstanceId.N,
+      EventName == "DescribeInstanceSqlHaHistoryStates", Req.InstanceId.N,
+      EventName == "DescribeInstanceSqlHaStates", Req.InstanceId.N,
+      EventName == "DescribeInstanceStatus", Req.InstanceId.N,
+      EventName == "DescribeInstances", Req.InstanceId.N,
+      EventName == "DisableInstanceSqlHaStandbyDetections", Req.InstanceId,
+      EventName == "DisassociateApplicationStatusCheck", coalesce(Req.applicationStatusCheckId,
+        Req.ApplicationStatusCheckId),
+      EventName == "DisassociateIamInstanceProfile", Req.AssociationId,
+      EventName == "DisassociateInstanceEventWindow", Req.InstanceEventWindowId,
+      EventName == "EnableInstanceSqlHaStandbyDetections", Req.InstanceId,
+      EventName == "GetInstanceUefiData", Resp.instanceId,
+      EventName == "ModifyApplicationStatusCheck", coalesce(Req.applicationStatusCheckId,
+        Req.ApplicationStatusCheckId),
+      EventName == "ModifyDefaultCreditSpecification",
+        Resp.instanceFamilyCreditSpecification.instanceFamilyCreditSpecificationId,
+      EventName == "ModifyInstanceAttribute", Req.InstanceId,
+      EventName == "ModifyInstanceCapacityReservationAttributes", Req.InstanceId,
+      EventName == "ModifyInstanceCpuOptions", Resp.instanceId,
+      EventName == "ModifyInstanceCreditSpecification", Req.InstanceCreditSpecification,
+      EventName == "ModifyInstanceEventStartTime", Req.InstanceEventId,
+      EventName == "ModifyInstanceEventWindow", Req.InstanceEventWindowId,
+      EventName == "ModifyInstanceMaintenanceOptions", Resp.instanceId,
+      EventName == "ModifyInstanceMetadataOptions", Resp.instanceId,
+      EventName == "ModifyInstanceNetworkPerformanceOptions", Resp.instanceId,
+      EventName == "ModifyInstancePlacement", Resp.instanceId,
+      EventName == "ModifyPrivateDnsNameOptions", Req.InstanceId,
+      EventName == "ModifyPublicIpDnsNameOptions", Req.NetworkInterfaceId,
+      EventName == "MonitorInstances", Req.InstanceId,
+      EventName == "RebootInstances", Req.InstanceId,
+      EventName == "ReplaceIamInstanceProfileAssociation",
+        Resp.iamInstanceProfileAssociation.associationId,
+      EventName == "ReportInstanceStatus", Req.InstanceId,
+      EventName == "ResetInstanceAttribute", Req.InstanceId,
+      EventName == "RunInstances", Resp.requesterId,
+      EventName == "SendDiagnosticInterrupt", Req.InstanceId,
+      EventName == "StartInstances", Req.InstanceId,
+      EventName == "StopInstances", Req.InstanceId,
+      EventName == "TerminateInstances", Req.InstanceId,
+      EventName == "UnmonitorInstances", Req.InstanceId,
+      ""
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service"
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      ActorUserEntityKey = "",
+      AdditionalEntities = dynamic([]),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", Req,
+      "ResponseElements", Resp
+    ), dynamic({}))
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  | project
+      TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+      EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+      EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+      ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+      SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+      Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+      ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+      AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+      TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(
+    starttime,
+    endtime,
+    srcipaddr_has_any_prefix,
+    actorusername_has_any,
+    operation_has_any,
+    eventtype_in,
+    eventresult,
+    object_has_any,
+    newvalue_has_any,
+    disabled,
+    pack
+  )

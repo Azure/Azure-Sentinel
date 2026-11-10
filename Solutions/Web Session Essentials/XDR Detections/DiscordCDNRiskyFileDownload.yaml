@@ -1,0 +1,132 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b7fe8f27-7010-404b-aec5-6e5245cea580
+    path: Analytic Rules/DiscordCDNRiskyFileDownload.yaml
+    version: 1.0.0
+    querySha256: 7e102131dd2da6bd660b863f79ce0e9cff2cb049d8e10f9e2557b110f557aec4
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071.001
+    reviewScope:
+      sourceDocumentSha256: 1f5c67b1b0bd9adda38d415549ebf2112ac7eecc11d631bf26e9813e780a28c2
+      targetQuerySha256: f3b512c88299b4d21d69c5a109e7ab080c6713912d2db0cb982d55e15415b58f
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: 1f5c67b1b0bd9adda38d415549ebf2112ac7eecc11d631bf26e9813e780a28c2
+      targetQuerySha256: f3b512c88299b4d21d69c5a109e7ab080c6713912d2db0cb982d55e15415b58f
+properties:
+  id: xdr-b7fe8f27-7010-404b-aec5-6e5245cea580
+  displayName: The download of potentially risky files from the Discord Content Delivery Network (CDN) (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback = 1d;
+      let connectionThreshold = 1;
+      let RiskyFileExtensions = materialize(externaldata(Extensions: string)
+          [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv"]
+          with(format="csv", ignoreFirstRecord=True));
+      let CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw("Web_RiskyFileExtensions") // Create new Watchlist and add your custom indicators(Optional)
+          | extend
+              Extensions = tostring(WatchlistItem["Extensions"])
+          | project Extensions
+          | where isnotempty(Extensions));
+      let CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;
+      let knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions
+          | where isnotempty(Extensions)
+          | summarize make_set(Extensions, 1000));
+      let discord=dynamic(["cdn.discordapp.com", "media.discordapp.com"]);
+      let WebData = _Im_WebSession(starttime=ago(lookback), url_has_any=discord, eventresult='Success')
+          | where isnotempty(Url)
+          | project Url, SrcUsername, SrcIpAddr, TimeGenerated, SrcHostname
+          | where Url has "attachments"
+          | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, Url);
+      WebData
+      | summarize
+          dcount(Url),
+          min(TimeGenerated),
+          max(TimeGenerated)
+          by DiscordServerId
+      | join kind=inner (WebData) on DiscordServerId
+      | where dcount_Url <= connectionThreshold and Url has_any (knownRiskyFileExtensions)
+      | summarize EventCount = count()
+          by
+          EventStartTime=min_TimeGenerated,
+          EventEndTime=max_TimeGenerated,
+          SrcUsername,
+          SrcHostname,
+          SrcIpAddr,
+          Url
+      | extend
+          Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+          UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: The download of potentially risky files from the Discord Content Delivery Network (CDN) (ASIM Web Session)
+      description: "'This detection mechanism identifies instances where requests are made to Discord CDN addresses for file\
+        \ extensions that are considered risky.\n  It triggers when a callout is made to a Discord server that has only been\
+        \ encountered once in your environment. The uniqueness of Discord servers is determined based on the server ID present\
+        \ in the request URL (DiscordServerId in the query).\n  Discord CDN has been utilized in numerous campaigns to download\
+        \ additional payloads, highlighting the importance of monitoring such activities.\n  The query includes a sample set\
+        \ of popular web script extensions "
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        urls:
+        - id: url1
+          addressColumn: Url
+        hosts:
+        - id: host1
+          nameColumn: SrcHostname
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+          subTechniques:
+          - T1071.001
+      customDetails:
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime

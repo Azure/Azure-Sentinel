@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                  |
 |-------------|--------------------------------|---------------------------------------------------------------------|
+| 3.2.4       | 25-10-2026                     | Migrated **Analytic Rules** to Defender XDR Custom Detection format and added **XDR Workbooks**. |
 | 3.2.3       | 23-02-2026                     | Updated **Dataverse - Activity after failed logons** hunting query to use valid Enterprise technique |
 | 3.2.2       | 22-04-2025                     |<ul><li>Updated solution description.</li></ul> |
 | 3.2.1       | 11-04-2025                     |<ul><li>Move solution and content to GA.</li><li>Minor analytic rule update.</li></ul> |

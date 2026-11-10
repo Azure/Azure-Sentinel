@@ -398,6 +398,19 @@ artifacts are retained as historical evidence before rebuilding. This lifecycle
 does not waive technical or entity-review gates: unresolved `reviewRequired`
 flags continue to block packaging.
 
+If the initial version action produced an unaccepted candidate and no successful
+package exists, changed inputs can use this same explicit new-release command.
+The old candidate report must still match its consumed attempt and artifact
+hashes. Planning retains that failed action and attempt in release history and
+archives the candidate report and package artifacts without accepting them.
+Fresh validation and a current applied package selection (or the existing
+eligible offline Authoring evidence) are still required. Missing or stale
+conversion, runtime, target, or review evidence must be repaired through the
+normal workflow first. Unchanged inputs remain a `--version-bump none` retry;
+running candidates cannot be replaced. A new candidate must repeat official
+validation, ARM validation, consent and acceptance gates. No prior candidate
+receipt or approval is copied into current success evidence.
+
 An author may select a canonical target version instead of a patch/minor/major
 bump. The target must satisfy `>= 3.2.2 and < 4.0.0` and need not be consecutive
 with the current version. For example, an initial release may go directly from
@@ -716,22 +729,9 @@ Install the CLI when necessary:
 python -m pip install -e Tools\SentinelToXDRMigration
 ```
 
-Run `workflow-status` first. If state does not exist, default to `authoring`
-(or confirm whether the user wants optional `qualification`) before
-initializing:
-
-```powershell
-sentinel-xdr-migration workflow-init `
-  --solution "<solution-path>" `
-  --workflow-profile authoring `
-  --version-bump none
-```
-
-For an approved qualification run, use `qualification` and include
-the complete locked target. Alternatively, after reviewing the per-solution
-configuration above, use `--confirm-configured-target` instead of supplying
-tenant/workspace values; the workflow derives the subscription and reads the
-customer ID only from that exact approved workspace:
+Run `workflow-status` first. If state does not exist, default to `qualification`
+(with `--workflow-profile authoring` available as an explicit offline/ISV
+fallback when no live lab is available) before initializing:
 
 ```powershell
 sentinel-xdr-migration workflow-init `
@@ -739,6 +739,16 @@ sentinel-xdr-migration workflow-init `
   --workflow-profile qualification `
   --confirm-configured-target `
   --version-bump "<none-patch-minor-or-major>"
+```
+
+When no live lab is available, explicitly select the offline `authoring`
+fallback:
+
+```powershell
+sentinel-xdr-migration workflow-init `
+  --solution "<solution-path>" `
+  --workflow-profile authoring `
+  --version-bump none
 ```
 
 Before requesting a workspace value, inspect `doctor`. If

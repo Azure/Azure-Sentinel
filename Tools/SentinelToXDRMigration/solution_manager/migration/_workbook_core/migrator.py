@@ -24,11 +24,11 @@ _CONTRACT_TIERS = {"1to1", "renamed", "merged", "blocked"}
 _CONFIDENCE = {"converted": 0.7, "needs-review": 0.3, "blocked": 0.0}
 
 
-def classify(tables: Optional[List[str]]) -> dict:
+def classify(tables: Optional[List[str]], *,
+             allowed_tables: Optional[List[str]] = None) -> dict:
     """Per-table tier + worst overall tier for a set of resolved tables."""
-    cat = mapping_catalog.load_mapping_catalog()["tables"]
     tiers = {
-        t: (cat[t]["tier"] if t in cat else ("1to1" if isinstance(t, str) and t.endswith("_CL") else "unknown"))
+        t: mapping_catalog.tier_of(t, allowed_tables=allowed_tables or ())
         for t in (tables or [])
     }
     if not tiers:
@@ -53,7 +53,8 @@ def convert(kql: str, tables: Optional[List[str]] = None,
             source_id: Optional[str] = None, artifact_type: str = "analyticRule",
             resolve: bool = False,
             *,
-            preserve_sentinel_tables: bool = False) -> dict:
+            preserve_sentinel_tables: bool = False,
+            allowed_tables: Optional[List[str]] = None) -> dict:
     """Convert one Sentinel KQL query and return the output contract.
 
     tables   - resolved data sources; pass them for offline/batch use.
@@ -64,7 +65,8 @@ def convert(kql: str, tables: Optional[List[str]] = None,
     if resolve:
         raise ValueError("Live resolution is not supported by the offline converter.")
 
-    res = rewrite.rewrite(kql, tables, preserve_sentinel_tables=preserve_sentinel_tables)
+    res = rewrite.rewrite(kql, tables, preserve_sentinel_tables=preserve_sentinel_tables,
+                          allowed_tables=allowed_tables)
     effective_tables = list(tables) if tables is not None else (
         sorted(res["renamedTables"].keys()) if res.get("renamedTables") else None
     )
@@ -94,8 +96,11 @@ def convert(kql: str, tables: Optional[List[str]] = None,
 
     # For tables with no confirmed AH mapping, recommend the best-fit AH table(s)
     # so a reviewer/LLM can re-home the query instead of hitting a dead end.
-    unmapped = recommend.unmapped_tables(effective_tables)
-    recommendations = recommend.recommend_for_tables(unmapped) if unmapped else []
+    unmapped = recommend.unmapped_tables(effective_tables, allowed_tables=allowed_tables)
+    recommendations = (
+        recommend.recommend_for_tables(unmapped, allowed_tables=allowed_tables)
+        if unmapped else []
+    )
 
     contract = {
         "sourceId": source_id,

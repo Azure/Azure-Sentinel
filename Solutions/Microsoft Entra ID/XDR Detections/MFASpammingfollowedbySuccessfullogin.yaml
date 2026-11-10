@@ -1,0 +1,117 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a8cc6d5c-4e7e-4b48-b4ac-d8a116c62a8b
+    path: Analytic Rules/MFASpammingfollowedbySuccessfullogin.yaml
+    version: 1.0.4
+    querySha256: bb75773bd62b33f9c77e1b69e448ff8a497d09eb0658867b656f3f885fd59fef
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserPrincipalName`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 5da4976e6433ea2008877a237d761996c360126a8685ce2fe8ec1213ca363a7e
+      targetQuerySha256: 1edb1c39f8fe24ece5b44bf2e986bd1cbefeacd3587285ad4ed8aca0816e38cd
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-a8cc6d5c-4e7e-4b48-b4ac-d8a116c62a8b
+  displayName: MFA Spamming followed by Successful login
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Filter for sign-in logs ingested within the last day
+      SigninLogs
+      | where ingestion_time() > ago(1d)
+      // Filter for records with AuthenticationRequirement set to multiFactorAuthentication
+      | where AuthenticationRequirement == "multiFactorAuthentication"
+      // Extract information from dynamic columns DeviceDetail and LocationDetails
+      | extend DeviceDetail = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
+      // Extract specific attributes from DeviceDetail and LocationDetails
+      | extend
+            OS = tostring(DeviceDetail.operatingSystem),
+            Browser = tostring(DeviceDetail.browser),
+            State = tostring(LocationDetails.state),
+            City = tostring(LocationDetails.city),
+            Region = tostring(LocationDetails.countryOrRegion)
+      // Expand multi-value property AuthenticationDetails into separate records
+      | mv-expand todynamic(AuthenticationDetails)
+      // Parse AuthResult from JSON in AuthenticationDetails and convert to string
+      | extend AuthResult = tostring(parse_json(AuthenticationDetails).authenticationStepResultDetail)
+      // Summarize data by aggregating statistics for each user, IP, and AuthResult
+      | summarize FailedAttempts = countif(AuthResult == "MFA denied; user declined the authentication" or AuthResult == "MFA denied; user did not respond to mobile app notification"), SuccessfulAttempts = countif(AuthResult == "MFA successfully completed"), InvolvedOS = make_set(OS, 5), InvolvedBrowser = make_set(Browser), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, IPAddress, State, City, Region
+      // Calculate AuthenticationWindow by finding time difference between start and end times
+      | extend AuthenticationWindow = (EndTime - StartTime)
+      // Filter for records with more than 10 failed attempts in 5-minute window and at least 1 successful attempt
+      | where FailedAttempts > 10 and AuthenticationWindow <= 5m and SuccessfulAttempts >= 1
+      // Extract user's name and UPN suffix using split function
+      | extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: MFA Spamming followed by Successful login
+      description: |-
+        'Identifies MFA Spamming followed by Successful logins and by a successful authentication within a given time window.
+        Default Failure count is 10 and 1 successful login with default Time Window is 5 minutes.'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        AccountFullName: UserPrincipalName

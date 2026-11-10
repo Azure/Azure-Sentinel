@@ -1,0 +1,150 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d7c9549c-7246-4555-8e53-d7b0db546764
+    path: Analytic Rules/Dataverse - Unusual sign-in following disabled IP address-based cookie binding protection.yaml
+    version: 3.2.0
+    querySha256: 88835a263fe855d81d586af97774906be11d4d34ceccacf8aa2171b445bae385
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName output column `InstanceUrl` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1629
+    reviewScope:
+      sourceDocumentSha256: 2936d9815994d59409a4ea40b302e7e28e02ebbed10374ad549c45391936fe9c
+      targetQuerySha256: cea8b43713797782b1cfc129b57148b826be9ff429fdd533388475d2483350de
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-d7c9549c-7246-4555-8e53-d7b0db546764
+  displayName: Dataverse - Unusual sign-in following disabled IP address-based cookie binding protection
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      let query_lookback = 14d;
+      let cookie_lifetime = 24h;
+      let cookie_binding_disabled_events = DataverseActivity
+          | where TimeGenerated >= ago(query_lookback)
+          | where Message == "Update" and EntityName == "organization"
+          | mv-expand Fields
+          | where Fields.Name == "enableipbasedcookiebinding" and Fields.Value == 'False'
+          | summarize CookieBindingDisabled = min(TimeGenerated) by CookieBindingDisabledBy = UserId, InstanceUrl;
+      let current_activity = cookie_binding_disabled_events
+          | join kind=inner(DataverseActivity
+              | where UserId !endswith "@onmicrosoft.com" and UserId !endswith "@microsoft.com"
+              | where isnotempty(ClientIp) and isnotempty(UserAgent)
+              | where TimeGenerated >= ago(query_frequency + cookie_lifetime)
+              | summarize LatestEvent = arg_max(TimeGenerated, *) by UserId, ClientIp, InstanceUrl)
+              on InstanceUrl;
+      let users_switched_ip = current_activity
+          | summarize IPCount = count() by UserId, InstanceUrl
+          | where IPCount > 1
+          | join kind=inner (current_activity) on UserId, InstanceUrl
+          | summarize arg_max(LatestEvent, *) by UserId, InstanceUrl;
+      users_switched_ip
+      | join kind = inner (DataverseActivity
+          | where TimeGenerated >= ago (query_lookback)
+          | where UserId !endswith "@onmicrosoft.com" and UserId !endswith "@microsoft.com"
+          | where isnotempty(ClientIp) and isnotempty(UserAgent)
+          | project-rename
+              HistoricalTime = TimeGenerated,
+              HistoricalIP = ClientIp,
+              HistoricalAgent = UserAgent)
+          on UserId, InstanceUrl
+      | where HistoricalTime >= ago(query_lookback) and HistoricalTime < LatestEvent
+      | summarize
+          HistoricalIPs = make_set(HistoricalIP, 100),
+          HistoricalAgents = make_set(HistoricalAgent, 100)
+          by
+          UserId,
+          UserAgent,
+          ClientIp,
+          InstanceUrl,
+          LatestEvent,
+          CookieBindingDisabled,
+          CookieBindingDisabledBy
+      | where (HistoricalIPs !has ClientIp) and (HistoricalAgents !has UserAgent)
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          LatestEvent,
+          UserId,
+          ClientIp,
+          UserAgent,
+          InstanceUrl,
+          HistoricalIPs,
+          HistoricalAgents,
+          CookieBindingDisabled,
+          CookieBindingDisabledBy,
+          AccountName,
+          UPNSuffix,
+          CloudAppId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Unusual sign-in following disabled IP address-based cookie binding protection
+      description: Identifies previously unseen IP and user agents in a Dataverse instance following disabling of cookie binding
+        protection. See https://docs.microsoft.com/power-platform/admin/block-cookie-replay-attack
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1629
+      customDetails: {}

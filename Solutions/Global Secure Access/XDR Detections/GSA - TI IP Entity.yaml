@@ -1,0 +1,134 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - NetworkAccessTrafficLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - NetworkAccessTraffic
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - NetworkAccessTrafficLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3ebd25b1-6f54-49f9-b5a5-0246357ce4ca
+    path: Analytic Rules/GSA - TI IP Entity.yaml
+    version: 1.0.1
+    querySha256: 8743e307f026305cb4994e85d22b89f6d8cc8ec931d726c574ce3cfb61e60fc1
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.Name column `UserPrincipalName` was mapped as a complete UPN identity
+    - Process.CommandLine output column `InitiatingProcessName` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Host.AzureID output column `DeviceId` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 828504c4094535c2bf1f174d6662e2d312afa2eb0c5a32f9486b080080f1aedb
+      targetQuerySha256: a63f215349d3f829b4fffc7a3afe766cb539816d515a43af979d5b6b8ba8e525
+    supplementalEntityDetails:
+    - entityType: Process
+      entityIndex: 2
+      identifier: CommandLine
+      sourceColumn: InitiatingProcessName
+      column: InitiatingProcessName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: Host
+      entityIndex: 4
+      identifier: AzureID
+      sourceColumn: DeviceId
+      column: DeviceId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-3ebd25b1-6f54-49f9-b5a5-0246357ce4ca
+  displayName: GSA - TI IP Entity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let dt_lookBack = 1h;
+      let ioc_lookBack = 14d;
+      let NetworkAccessTraffic_ =
+          NetworkAccessTraffic
+          | where TimeGenerated >= ago(dt_lookBack)
+          | where TrafficType == "internet"
+          | project-rename GSANetworkAccessTraffic_TimeGenerated = TimeGenerated;
+      let IPList = NetworkAccessTraffic_ | summarize by DestinationIp;
+      ThreatIntelIndicators
+      | project-rename TI_ipEntity = ObservableValue
+      | extend IndicatorType = replace(@'[\[\]"]', "", tostring(split(ObservableKey, ":", 0)))
+      | where IndicatorType in ("ipv4-addr", "network-traffic")
+      | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | where TI_ipEntity in (IPList)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, TI_ipEntity
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))
+      | extend Description = tostring(parse_json(Data).description)
+      | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+      | join kind=innerunique (NetworkAccessTraffic_) on $left.TI_ipEntity == $right.DestinationIp
+      | extend GSAThreatType = ThreatType
+      | summarize GSANetworkAccessTraffic_TimeGenerated = arg_max(GSANetworkAccessTraffic_TimeGenerated, *) by Id, DestinationIp
+      | project-reorder *,
+          Tags,
+          Confidence,
+          TrafficLightProtocolLevel,
+          Type,
+          TI_ipEntity,
+          UserPrincipalName,
+          UserId,
+          DeviceId,
+          InitiatingProcessName,
+          GSAThreatType,
+          DestinationFqdn,
+          DestinationUrl,
+          DestinationPort,
+          SourceIp,
+          SourcePort,
+          HttpUserAgent
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GSA - TI IP Entity
+      description: This query identifies IP indicators of compromise (IOCs) from threat intelligence (TI) by searching for
+        matches in GSA NetworkAccessTraffic.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: UserPrincipalName
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

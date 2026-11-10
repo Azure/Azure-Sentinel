@@ -1,0 +1,94 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9a6554e6-63d9-4f94-9b32-64d1d40628f2
+    path: Analytic Rules/AWS_UserAccessKeyCreated.yaml
+    version: 1.0.2
+    querySha256: aec76a5ebd4bc1dde6bcc2bec10e5eb3e3396b53a6555ce6505b3eb8ff9e804f
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventName' column `EventName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'AWSRegion' column `AWSRegion` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'UserAgent' column `UserAgent` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1098.001
+    reviewScope:
+      sourceDocumentSha256: 2541f074a85c438a3988cab499928d8b289e0aecbc8e6ffef8250902bc1456bf
+      targetQuerySha256: 158b9d97de67cd2d73ad6820649eb0727d27dcbdcd482cb1d01e2373a163d9d3
+properties:
+  id: xdr-9a6554e6-63d9-4f94-9b32-64d1d40628f2
+  displayName: AWSCloudTrail - Creation of Access Key for IAM User
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where EventName == "CreateAccessKey"
+      | project-away SourceSystem,Category,Type,TenantId,EventVersion,SessionIssuerAccountId
+      | extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, ":") + 1)
+      | extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Creation of Access Key for IAM User
+      description: 'Detects creation of a new IAM access key on an existing user account, which could be used to establish
+        persistence. This action should be validated by the AWS account administrator. Reference: https://stratus-red-team.cloud/attack-techniques/AWS/aws.persistence.iam-backdoor-user/'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UpnSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.001
+      customDetails:
+        EventName: EventName
+        AWSRegion: AWSRegion
+        UserAgent: UserAgent

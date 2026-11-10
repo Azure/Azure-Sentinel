@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9da99021-d318-4711-a78a-6dea76129b3a
+    path: Analytic Rules/AWS_GuardDutyDisabled.yaml
+    version: 1.0.3
+    querySha256: d0221487855667c02dc726db913d20bc66d797e008a34bb339836f715a25ebcd
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'SourceIpAddress' column `SourceIpAddress` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: 35387a21c103ad2c903c558f7c97c87fdca50ab49bb7ae65790a6074dd7b633b
+      targetQuerySha256: 405c981e2f56e2aa7a44b1e78375628d6355ede6f3ed9528a2585f52901f5aec
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-9da99021-d318-4711-a78a-6dea76129b3a
+  displayName: AWSCloudTrail - AWS GuardDuty detector disabled or suspended
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where (EventName == "DeleteDetector" and isempty(ErrorCode) and isempty( ErrorMessage)) or (EventName == "UpdateDetector" and tostring(parse_json(RequestParameters).enable) == "false" and isempty(ErrorCode) and isempty( ErrorMessage))
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - AWS GuardDuty detector disabled or suspended
+      description: Identifies AWS GuardDuty detectors being disabled or suspended. This behavior can indicate defense evasion
+        and should be validated with the initiating identity and approved administrative activity.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+      customDetails:
+        EventName: EventName
+        UserIdentityArn: UserIdentityArn
+        UserName: UserName
+        SourceIpAddress: SourceIpAddress
+        AccountCloudAppAccountId: RecipientAccountId

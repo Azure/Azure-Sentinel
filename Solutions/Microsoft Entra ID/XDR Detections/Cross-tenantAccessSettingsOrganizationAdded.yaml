@@ -1,0 +1,141 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 757e6a79-6d23-4ae6-9845-4dac170656b5
+    path: Analytic Rules/Cross-tenantAccessSettingsOrganizationAdded.yaml
+    version: 1.1.1
+    querySha256: 9ef3f2ec1f3378b68f729cca4fe61d87e165f2922cd2f1a8c437489ce7441184
+    schedule:
+      queryFrequency: 2d
+      queryPeriod: 2d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=2d, lookback=2d; target frequency=P2D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    - Discovery
+    originalTechniques:
+    - T1078.004
+    - T1136.003
+    - T1087.004
+    reviewScope:
+      sourceDocumentSha256: 4640daaa7e2d01f142aa8e77cac388815a7184f9a7573236030f12cebd439ad4
+      targetQuerySha256: d65967c060ada95738a0569427e20abb4345909aa3531747add065674edc199d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-757e6a79-6d23-4ae6-9845-4dac170656b5
+  displayName: Cross-tenant Access Settings Organization Added
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Tenants IDs can be found by navigating to Azure Active Directory then from menu on the left, select External Identities, then from menu on the left, select Cross-tenant access settings and from the list shown of Tenants
+      let ExpectedTenantIDs = dynamic(["List of expected tenant IDs","Tenant ID 2"]);
+      AuditLogs
+      | where OperationName has "Add a partner to cross-tenant access setting"
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type =~ "Policy"
+            | extend Properties = TargetResource.modifiedProperties
+        )
+      | mv-apply Property = Properties on
+        (
+            where Property.displayName =~ "tenantId"
+            | extend ExtTenantIDAdded = trim('"',tostring(Property.newValue))
+        )
+      | where ExtTenantIDAdded !in (ExpectedTenantIDs)
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  schedule:
+    frequency: P2D
+  detectionAction:
+    alertTemplate:
+      title: Cross-tenant Access Settings Organization Added
+      description: '''Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound
+        for users and applications. This detection notifies when an Organization is added other than the list that is supposed
+        to exist from the Microsoft Entra ID Cross-tenant Access Settings.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatingAppName
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        - id: account2
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+        - technique: T1136
+          subTechniques:
+          - T1136.003
+      - tactic: Discovery
+        techniques:
+        - technique: T1087
+          subTechniques:
+          - T1087.004
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName

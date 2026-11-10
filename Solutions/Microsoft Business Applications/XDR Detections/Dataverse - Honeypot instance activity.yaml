@@ -1,0 +1,141 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 11650b85-d8cc-49c4-8c04-a8a739635983
+    path: Analytic Rules/Dataverse - Honeypot instance activity.yaml
+    version: 3.2.0
+    querySha256: f8f4dc60e21dad3d5b2c272039c6e746975b088b4d3b7512c1caa90ad1c20abd
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Discovery
+    - Exfiltration
+    originalTechniques:
+    - T1538
+    - T1526
+    - T1567
+    reviewScope:
+      sourceDocumentSha256: 99cad634d3841e92be38b9b4093854be725780ab44bc8919c729d7730f577c71
+      targetQuerySha256: c85faba32ca0726afdd4488c1b7724bc61bc7a00127501a6887c9b0b8071c254
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-11650b85-d8cc-49c4-8c04-a8a739635983
+  displayName: Dataverse - Honeypot instance activity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let honeypot_dataverse_instances = dynamic(["https://myinstance.crm.dynamics.com/"]);
+      let honeypot_authorized_users = dynamic(["scanner@mydomain.com"]);
+      let monitored_dataverse_entities = dynamic(["contact", "account", "opportunity", "lead", "competitor"]);
+      let query_frequency = 1h;
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where InstanceUrl in (honeypot_dataverse_instances)
+      | where UserId !in (honeypot_authorized_users)
+      | where UserId !endswith "@onmicrosoft.com"
+          and UserId != "Unknown"
+          and isnotempty(ClientIp)
+      | where Message in ("UserSignIn") or EntityName in (monitored_dataverse_entities)
+      | summarize
+          TimeStart = min(TimeGenerated),
+          TimeEnd = max(TimeGenerated),
+          Entities = make_set(EntityName, 10),
+          Messages = make_set(Message, 10)
+          by UserId, ClientIp, InstanceUrl
+      | extend Severity = iif(array_length(set_difference(Messages, dynamic(["UserSignIn"]))) > 0, "Medium", "Low")
+      | extend CloudAppId = int(32780)
+      | extend AccountName = tostring(split(UserId, '@')[0])
+      | extend UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          TimeStart,
+          TimeEnd,
+          UserId,
+          ClientIp,
+          InstanceUrl,
+          Messages,
+          Entities,
+          Severity,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Honeypot instance activity
+      description: |-
+        Identifies activities in a predefined Honeypot Dataverse instance. Alerts when either sign-in to the Honeypot is detected or when monitored Dataverse tables in the Honeypot are accessed.
+
+        Note: Requires a dedicated Honeypot Dataverse instance in Power Platform with auditing enabled.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1538
+        - technique: T1526
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 								|
 |-------------|--------------------------------|----------------------------------------------------------------------------------------------------|
+| 3.2.2       | 25-10-2026                     | Added Defender XDR **Custom Detections** and **XDR Workbooks** for DNS Essentials migration, and repackaged the V3.1 solution. |
 | 3.0.6       | 09-09-2026                     | Added  DNSEssentialsCustomParser to parse and normalize the tables used in dependent Security Content. |
 | 3.0.5       | 02-09-2026                     | Added a DNS summarization playbook that uses the Azure Monitor Logs Ingestion API and creates two new V1 summary tables: DNS_Summarized_Logs_ipV1_CL and DNS_Summarized_Logs_sourceInfoV1_CL, avoiding conflicts with existing tables |
 | 3.0.4		  | 02-07-2025					   | Updated new ThreatIntelIndicators table references using **parser**.								|

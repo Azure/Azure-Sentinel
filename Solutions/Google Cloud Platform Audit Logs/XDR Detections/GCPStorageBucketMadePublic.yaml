@@ -1,0 +1,186 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPAuditLogsDefinition
+  dataTypes:
+  - GCPAuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPAuditLogs
+  requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+    - GCPAuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3a8d7f9e-4b2c-4e5d-8c6b-9f1a3d5e8c7b
+    path: Analytic Rules/GCPStorageBucketMadePublic.yaml
+    version: 1.0.0
+    querySha256: fc7e85a127ea52d15f5081809b63070fb2fa3cf8a7baf8f2ed892c05229248f9
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved
+      as customDetails.AccountFullName from query column `PrincipalEmail`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    - CloudApplication.InstanceName mismatch is informational because its original
+      value is preserved as customDetails.ResourceName from query column `ResourceName`;
+      supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - Collection
+    - InitialAccess
+    - Exfiltration
+    originalTechniques:
+    - T1530
+    - T1078.004
+    - T1567.002
+    reviewScope:
+      sourceDocumentSha256: ed57378fc5f60ce20bc735b27c5a69a1ae6a2dd13db596c31affe01f68505326
+      targetQuerySha256: 14ddb4d4047f52e06c38c69242664be232c7730fdeb68da8359ee6ef9f2b3c88
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query;
+        native 4-hour XDR lookback relies on Defender XDR alert deduplication across
+        hourly runs.
+      sourceDocumentSha256: ed57378fc5f60ce20bc735b27c5a69a1ae6a2dd13db596c31affe01f68505326
+      targetQuerySha256: 14ddb4d4047f52e06c38c69242664be232c7730fdeb68da8359ee6ef9f2b3c88
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PrincipalEmail
+      column: PrincipalEmail
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: ResourceName
+      column: ResourceName
+      status: available
+      customDetailKey: ResourceName
+properties:
+  id: xdr-3a8d7f9e-4b2c-4e5d-8c6b-9f1a3d5e8c7b
+  displayName: GCP Audit Logs - Storage Bucket Made Public
+  status: disabled
+  queryCondition:
+    queryText: "GCPAuditLogs\n| where ServiceName == \"storage.googleapis.com\"\n\
+      | where MethodName == \"storage.setIamPermissions\"\n| where GCPResourceType\
+      \ == \"gcs_bucket\"\n| extend\n    ServiceDataJson = parse_json(ServiceData),\n\
+      \    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson =\
+      \ parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n\
+      | extend PolicyDelta = ServiceDataJson.policyDelta.bindingDeltas\n| mv-expand\
+      \ PolicyDelta\n| extend\n    Action = tostring(PolicyDelta.action),\n    Member\
+      \ = tostring(PolicyDelta.member),\n    Role = tostring(PolicyDelta.role)\n|\
+      \ where Action == \"ADD\"\n| where Member in~ (\"allUsers\", \"allAuthenticatedUsers\"\
+      )\n| extend\n    BucketName = extract(@\"buckets/([^/]+)\", 1, GCPResourceName),\n\
+      \    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent\
+      \ = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail =\
+      \ tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n\
+      \    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| extend\n    PublicAccessType\
+      \ = case(\n        Member =~ \"allUsers\", \"Public to Everyone\",\n       \
+      \ Member =~ \"allAuthenticatedUsers\", \"Public to All Authenticated Users\"\
+      ,\n        \"Unknown\"),\n    AccountName = tostring(split(PrincipalEmail, \"\
+      @\")[0]),\n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n\
+      | project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n\
+      \          ProjectId,\n          BucketName,\n          ResourceName = GCPResourceName,\n\
+      \          PublicAccessType,\n          Member,\n          Role,\n         \
+      \ CallerIpAddress,\n          UserAgent,\n          MethodName,\n          ServiceName,\n\
+      \          Severity,\n          Permission,\n          PermissionGranted,\n\
+      \          LogName,\n          InsertId,\n          AccountName,\n         \
+      \ AccountUPNSuffix"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Audit Logs - Storage Bucket Made Public
+      description: '''Detects when a Google Cloud Storage bucket is made publicly
+        accessible by granting permissions to allUsers or allAuthenticatedUsers.
+
+        Making buckets public can expose sensitive data to unauthorized access and
+        may indicate a misconfiguration or malicious activity.
+
+        Adversaries may make buckets public to exfiltrate data or as part of a data
+        exposure attack.
+
+        This rule monitors setIamPermissions operations that add public access roles
+        to storage buckets.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ProjectId
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1530
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+          subTechniques:
+          - T1567.002
+      customDetails:
+        ProjectId: ProjectId
+        BucketName: BucketName
+        ResourceName: ResourceName
+        PublicAccessType: PublicAccessType
+        RoleGranted: Role
+        UserAgent: UserAgent
+        Permission: Permission
+        AccountFullName: PrincipalEmail
+status: Available

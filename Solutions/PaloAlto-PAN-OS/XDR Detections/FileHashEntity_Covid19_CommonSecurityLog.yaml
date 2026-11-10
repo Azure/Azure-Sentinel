@@ -1,0 +1,130 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2be4ef67-a93f-4d8a-981a-88158cb73abd
+    path: Analytic Rules/FileHashEntity_Covid19_CommonSecurityLog.yaml
+    version: 1.3.6
+    querySha256: 99c8135d2eba816a1e50b5874420594f1aba20103985437bb6791163cffe68aa
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `DeviceName` is provisionally represented by hosts.nameColumn `HostName`; confirm that this column is the intended host identifier. The original value is also retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - 'converter cannot map FileHash.Algorithm/Value: requires a query-proven constant SHA1 or SHA256 algorithm and an available hash value column; MD5, unknown algorithms and linked file/process references are not inferred'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `SourceUserName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `SourceUserName` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `DeviceName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `DeviceName` requires runtime output-schema binding verification
+    - FileHash.Value value is retained as customDetails.FileHashValue from query column `FileHashValue`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.FileHashValue column `FileHashValue` requires runtime output-schema binding verification
+    - FileHash.Algorithm value is retained as customDetails.FileHashAlgorithm from query column `FileHashType`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.FileHashAlgorithm column `FileHashType` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204.002
+    reviewScope:
+      status: approved
+      actor: user
+      reviewedAt: '2026-11-03T12:00:00Z'
+      reference: approve_batch_7c_fixes_and_qualify=true
+      rationale: Reviewed and approved CommonSecurityLog / CefAma dependencies, entity mappings, customDetails retention, and single primary MITRE tactic for Graph Custom Detection compatibility.
+      sourceDocumentSha256: 25d5486113629aff0716b661f9da311a18e0a4ab2458abfed42c8fafe936cc2c
+      targetQuerySha256: 4164a8e6f119c7fd4a9204a9d5cdee62843a5e9d7fe367a611787b80de7327ea
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: SourceUserName
+      column: SourceUserName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: DeviceName
+      column: DeviceName
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+    - entityType: FileHash
+      entityIndex: 4
+      identifier: Value
+      sourceColumn: FileHashValue
+      column: FileHashValue
+      status: runtime-binding-pending
+      customDetailKey: FileHashValue
+    - entityType: FileHash
+      entityIndex: 4
+      identifier: Algorithm
+      sourceColumn: FileHashType
+      column: FileHashType
+      status: runtime-binding-pending
+      customDetailKey: FileHashAlgorithm
+properties:
+  id: xdr-2be4ef67-a93f-4d8a-981a-88158cb73abd
+  displayName: Microsoft COVID-19 file hash indicator matches
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )\n[@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv\"] with (format=\"csv\"));\nlet fileHashIndicators = covidIndicators\n| where isnotempty(FileHashValue);\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n   CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n   | where isnotempty(FileHash)\n   | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n   )\non $left.FileHashValue == $right.FileHash\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by FileHashValue\n| project CommonSecurityLog_TimeGenerated, FileHashValue, FileHashType, Description, ThreatType,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity\n| extend AccountName = tostring(split(SourceUserName, \"@\")[0]), AccountUPNSuffix = tostring(split(SourceUserName, \"@\")[1])\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Microsoft COVID-19 file hash indicator matches
+      description: Identifies a match in CommonSecurityLog Event data from any FileHash published in the Microsoft COVID-19 Threat Intel Feed - as described at https://www.microsoft.com/en-us/security/blog/2020/05/14/open-sourcing-covid-threat-intelligence/
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204
+          subTechniques:
+          - T1204.002
+      customDetails:
+        AccountFullName: SourceUserName
+        HostFullName: DeviceName
+        FileHashValue: FileHashValue
+        FileHashAlgorithm: FileHashType

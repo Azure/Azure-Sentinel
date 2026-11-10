@@ -1,5 +1,9 @@
 # Changelog for ASimWebSessionFortinetFortiGate.yaml
 
+## Version 0.3.1
+
+- (2026-10-28) Standardize EventProduct casing to FortiGate - [PR #15478](https://github.com/Azure/Azure-Sentinel/pull/15478)
+
 ## Version 0.2.0
 
 - (2025-06-26) FortinetFortigateParserVersionUpdate - [PR #12424](https://github.com/Azure/Azure-Sentinel/pull/12424)
@@ -31,4 +35,3 @@
 ## Version 0.2
 
 - (2022-06-24) Updated Fortinet FortiGate ASIM parser - [PR #5441](https://github.com/Azure/Azure-Sentinel/pull/5441)
-

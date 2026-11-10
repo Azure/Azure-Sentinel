@@ -1,0 +1,138 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8540c842-5bbc-4a24-9fb2-a836c0e55a51
+    path: Analytic Rules/NRT_ADFSDomainTrustMods.yaml
+    version: 1.0.3
+    querySha256: 27eca53e39fe5f05f8c1cf49ef9abce7bd7a77e5d58b57b44810a2f75131e1f9
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore
+      entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values
+      are unverified and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries
+      only the first tactic and its compatible techniques; this classification loss is not validated parity.
+      Direct Graph deployment requires a single tactic.
+    - 'Schedule assessment: source kind=NRT; target frequency=PT0S (Continuous); single-table Continuous
+      (NRT) execution is supported in Defender XDR. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1555
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 2f33a50bccdef4b15814424ade4f8a14185c736eb8d8c5e2d8d04d667b86e392
+      targetQuerySha256: 73b534ef4b7e2646c66f60b3cfd77e455bfcff5051915467a3f2421645b43b6d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+  targetQuerySha256: 73b534ef4b7e2646c66f60b3cfd77e455bfcff5051915467a3f2421645b43b6d
+properties:
+  id: xdr-8540c842-5bbc-4a24-9fb2-a836c0e55a51
+  displayName: NRT Modified domain federation trust settings
+  status: disabled
+  queryCondition:
+    queryText: "AuditLogs\n| where OperationName =~ \"Set federation settings on domain\" or OperationName\
+      \ =~ \"Set domain authentication\"\n\n| mv-expand TargetResources\n| extend modifiedProperties =\
+      \ parse_json(TargetResources).modifiedProperties\n| mv-apply Property = modifiedProperties on\n\
+      \  (\n      where Property.displayName =~ \"LiveType\"\n      | extend targetDisplayName = tostring(Property.displayName),\n\
+      \               NewDomainValue = tostring(Property.newValue)\n  )\n| extend Federated = iif(OperationName\
+      \ =~ \"Set domain authentication\", iif(NewDomainValue has \"Federated\", True, False), True)\n\
+      | where Federated == True\n| mv-expand AdditionalDetails\n| mv-apply AdditionalDetail = AdditionalDetails\
+      \ on\n  (\n      where AdditionalDetail.key =~ \"User-Agent\"\n      | extend UserAgent = tostring(AdditionalDetail.value)\n\
+      \  )\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId\
+      \ = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n\
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress),\
+      \ InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| project-reorder TimeGenerated, OperationName,\
+      \ InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId,\
+      \ InitiatingIpAddress, AADOperationType, targetDisplayName, Result, UserAgent, CorrelationId, TenantId,\
+      \ AADTenantId\n| extend Name = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), UPNSuffix\
+      \ = tostring(split(InitiatingUserPrincipalName,'@',1)[0])"
+  schedule:
+    frequency: PT0S
+  detectionAction:
+    alertTemplate:
+      title: NRT Modified domain federation trust settings
+      description: 'This will alert when a user or application modifies the federation settings on the domain or Update domain authentication from Managed to Federated. For example, this alert will trigger when a new Active Directory Federated Service (ADFS) TrustedRealm object, such as a signing certificate, is added to the domain. Modification to domain federation settings should be rare. Confirm the added or modified target domain/URL is legitimate administrator behavior.'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account3
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1555
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName
+queryText: "AuditLogs\n| where OperationName =~ \"Set federation settings on domain\" or OperationName\
+  \ =~ \"Set domain authentication\"\n\n| mv-expand TargetResources\n| extend modifiedProperties = parse_json(TargetResources).modifiedProperties\n\
+  | mv-apply Property = modifiedProperties on\n  (\n      where Property.displayName =~ \"LiveType\"\n\
+  \      | extend targetDisplayName = tostring(Property.displayName),\n               NewDomainValue =\
+  \ tostring(Property.newValue)\n  )\n| extend Federated = iif(OperationName =~ \"Set domain authentication\"\
+  , iif(NewDomainValue has \"Federated\", True, False), True)\n| where Federated == True\n| mv-expand\
+  \ AdditionalDetails\n| mv-apply AdditionalDetail = AdditionalDetails on\n  (\n      where AdditionalDetail.key\
+  \ =~ \"User-Agent\"\n      | extend UserAgent = tostring(AdditionalDetail.value)\n  )\n| extend InitiatingAppName\
+  \ = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n\
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId\
+  \ = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress),\
+  \ InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| project-reorder TimeGenerated, OperationName,\
+  \ InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId,\
+  \ InitiatingIpAddress, AADOperationType, targetDisplayName, Result, UserAgent, CorrelationId, TenantId,\
+  \ AADTenantId\n| extend Name = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])"

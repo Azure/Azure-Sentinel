@@ -1,0 +1,152 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 050b9b3d-53d0-4364-a3da-1b678b8211ec
+    path: Analytic Rules/UserAssignedPrivilegedRole.yaml
+    version: 1.1.1
+    querySha256: fb85a376b54a147a2a48f1b05bfe3cf2b05eeacb014ddc60139392aba4600555
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Target`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Target` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `InitiatingUserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `InitiatingUserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 9ff870ac3587782fcc1fe37a738daaeeaad64e00f8ead592bec37213f62b70e2
+      targetQuerySha256: b1ee6ebe47f79e03d87f91b08b867701ee9fd710c242d750c92baf64e9377745
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Target
+      column: Target
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-050b9b3d-53d0-4364-a3da-1b678b8211ec
+  displayName: New User Assigned to Privileged Role
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Define the start and end times based on input values
+      let starttime = now()-1h;
+      let endtime = now();
+      // Set a lookback period of 14 days
+      let lookback = starttime - 14d;
+      // Define a reusable function to query audit logs
+      let awsFunc = (start:datetime, end:datetime) {
+        AuditLogs
+        | where TimeGenerated between (start..end)
+        | where Category =~ "RoleManagement"
+        | where AADOperationType in ("Assign", "AssignEligibleRole")
+        | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+        | mv-apply TargetResource = TargetResources on
+          (
+            where TargetResource.type in~ ("User", "ServicePrincipal")
+            | extend Target = iff(TargetResource.type =~ "ServicePrincipal", tostring(TargetResource.displayName), tostring(TargetResource.userPrincipalName)),
+            props = TargetResource.modifiedProperties
+          )
+        | mv-apply Property = props on
+          (
+            where Property.displayName =~ "Role.DisplayName"
+            | extend RoleName = trim('"', tostring(Property.newValue))
+          )
+        | where RoleName contains "Admin" and Result == "success"
+      };
+      // Query for audit events in the current day
+      let EventInfo_CurrentDay = awsFunc(starttime, endtime);
+      // Query for audit events in the historical period (lookback)
+      let EventInfo_historical = awsFunc(lookback, starttime);
+      // Find unseen events by performing a left anti-join
+      let EventInfo_Unseen = (EventInfo_CurrentDay
+        | join kind=leftanti(EventInfo_historical) on Target, RoleName, OperationName
+      );
+      // Extend and clean up the results
+      EventInfo_Unseen
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
+      // You can uncomment the lines below to filter out PIM activations
+      // | where Initiator != "MS-PIM" and Initiator != "MS-PIM-Fairfax"
+      // | summarize StartTime=min(TimeGenerated), EndTime=min(TimeGenerated) by OperationName, RoleName, Target, Initiator, Result
+      // Project specific columns and split them for further analysis
+      | project TimeGenerated, OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result
+      | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: New User Assigned to Privileged Role
+      description: Identifies when a privileged role is assigned to a new user. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account2
+          nameColumn: InitiatorName
+          upnSuffixColumn: InitiatorUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: Target
+        AccountFullName_2: InitiatingUserPrincipalName

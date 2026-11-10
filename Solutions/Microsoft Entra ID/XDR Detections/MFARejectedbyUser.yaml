@@ -1,0 +1,175 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - BehaviorAnalytics
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - IdentityInfo
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - IdentityInfo
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+    - BehaviorAnalytics
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - BehaviorAnalytics
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - IdentityInfo
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d99cf5c3-d660-436c-895b-8a8f8448da23
+    path: Analytic Rules/MFARejectedbyUser.yaml
+    version: 2.0.4
+    querySha256: fa91815064c3d3138c4df2026799ab85b20bce9b1b64840e6a7ac83831a98e0f
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserPrincipalName` cannot be proven after a
+      destructive projection; no supplemental customDetails binding was added and
+      KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 19a55b742ebdbc37387a42b17853e3ec737c4c9f4483606abe8cf98d2c9deb81
+      targetQuerySha256: 2c6aa763dfe539d255dcd8ad23a609ebf6e04f13799426ac7cb9ab21d48be0e4
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 19a55b742ebdbc37387a42b17853e3ec737c4c9f4483606abe8cf98d2c9deb81
+      targetQuerySha256: 2c6aa763dfe539d255dcd8ad23a609ebf6e04f13799426ac7cb9ab21d48be0e4
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    reviewDecisions:
+    - reason: catalog column mappings were not applied because table/alias scope is
+        ambiguous
+      decision: accepted
+      sourceDocumentSha256: 19a55b742ebdbc37387a42b17853e3ec737c4c9f4483606abe8cf98d2c9deb81
+      targetQuerySha256: 2c6aa763dfe539d255dcd8ad23a609ebf6e04f13799426ac7cb9ab21d48be0e4
+    acceptedReviewReasons:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+properties:
+  id: xdr-d99cf5c3-d660-436c-895b-8a8f8448da23
+  displayName: MFA Rejected by User
+  status: disabled
+  queryCondition:
+    queryText: "let BehaviorAnalytics = BehaviorInfo\n| extend UserPrincipalName =\
+      \ AccountUpn, UserName = tostring(split(AccountUpn, \"@\")[0]), UsersInsights\
+      \ = parse_json(\"{}\"), DevicesInsights = parse_json(\"{}\"), ActivityInsights\
+      \ = parse_json(\"{}\"), InvestigationPriority = int(0), SourceIPAddress = \"\
+      \", EventSource = ServiceSource, ActivityType = Categories, SourceDevice = \"\
+      \";\nlet riskScoreCutoff = 3; //Adjust this score threshold based on volume\
+      \ of results. Activities identified as the most abnormal receive the highest\
+      \ scores (on a scale of 0-10)\nSigninLogs\n| where ResultType == 500121\n| extend\
+      \ additionalDetails_ = tostring(Status.additionalDetails)\n| extend UserPrincipalName\
+      \ = tolower(UserPrincipalName)\n| where additionalDetails_ =~ \"MFA denied;\
+      \ user declined the authentication\" or additionalDetails_ has \"fraud\"\n|\
+      \ summarize StartTime = min(TimeGenerated), EndTIme = max(TimeGenerated) by\
+      \ UserPrincipalName, UserId, AADTenantId, FailedIPAddress = IPAddress\n| extend\
+      \ Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n\
+      | join kind=leftouter (\n    IdentityInfo\n    | summarize LatestReportTime\
+      \ = arg_max(TimeGenerated, *) by AccountUpn\n    | project AccountUpn, Tags,\
+      \ JobTitle, GroupMembership, AssignedRoles, Type, IsAccountEnabled\n    | summarize\n\
+      \        Tags = make_set(Tags, 1000),\n        GroupMembership = make_set(GroupMembership,\
+      \ 1000),\n        AssignedRoles = make_set(AssignedRoles, 1000),\n        Type\
+      \ = make_set(Type, 1000),\n        UserAccountControl = make_set(Type, 1000)\n\
+      \    by AccountUpn\n    | extend UserPrincipalName=tolower(AccountUpn)\n) on\
+      \ UserPrincipalName\n//Below it will be joined with BehaviorAnalytics table\
+      \ to the Failed IP Addresses\n| join kind=leftouter (\n    BehaviorAnalytics\n\
+      \    | where ActivityType in (\"FailedLogOn\", \"LogOn\")\n    | where isnotempty(SourceIPAddress)\n\
+      \    | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority,\
+      \ SourceIPAddress, UserName\n    | project-rename FailedIPAddress = SourceIPAddress,\
+      \ Name = UserName\n    | summarize\n      MaxInvestigationScore = max(InvestigationPriority)\
+      \  // Only retrieve maximum Investigation Property score for both FailedIP and\
+      \ User\n    by FailedIPAddress, Name)\non FailedIPAddress, Name  // Joining\
+      \ on both IP and User so as to only return context associated with same user\n\
+      | extend UEBARiskScore = MaxInvestigationScore\n| project-away *1 // removing\
+      \ duplicate columns post outer join from output\n| where  UEBARiskScore > riskScoreCutoff\n\
+      | sort by UEBARiskScore desc"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: MFA Rejected by User
+      description: "'Identifies occurances where a user has rejected an MFA prompt.\
+        \ This could be an indicator that a threat actor has compromised the username\
+        \ and password of this user account and is using it to try and log into the\
+        \ account.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins\n\
+        This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics\
+        \ for contextual information around the results. \nPlease note, MFA Failed\
+        \ logons from known IP ranges can be benign depending on the conditional acc"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: UserId
+        ips:
+        - id: ip1
+          addressColumn: FailedIPAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004

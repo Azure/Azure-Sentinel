@@ -405,9 +405,46 @@ class WorkflowTests(unittest.TestCase):
     def test_profile_selection_is_required(self) -> None:
         with self.assertRaisesRegex(ValueError, "profile selection is required"):
             initialize_workflow(self.solution, workflow_profile=None)
-        defaulted = initialize_workflow(self.solution)
-        self.assertEqual("authoring", defaulted["context"]["workflowProfile"])
+        with self.assertRaisesRegex(ValueError, "qualification requires a locked target context"):
+            initialize_workflow(self.solution)
+        defaulted = initialize_workflow(self.solution, **self._qualification_args())
+        self.assertEqual("qualification", defaulted["context"]["workflowProfile"])
         self.assertTrue(defaulted["context"]["profileSelectionConfirmed"])
+
+    def test_operator_hash_recorded_and_validated(self) -> None:
+        import os
+        import subprocess
+        from solution_manager.core.workflow import resolve_operator_hash
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "GITHUB_ACTOR": "Alice.Example",
+                "GIT_AUTHOR_EMAIL": "",
+                "GIT_COMMITTER_EMAIL": "",
+            },
+            clear=False,
+        ):
+            expected = hashlib.sha256(b"alice.example").hexdigest()[:16]
+            self.assertEqual(expected, resolve_operator_hash())
+            created = initialize_workflow(self.solution, workflow_profile="authoring")
+            self.assertEqual(expected, created["operatorHash"])
+            self.assertEqual(expected, created["context"]["operatorHash"])
+            self.assertRegex(created["operatorHash"], r"^[0-9a-f]{16}$")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "GITHUB_ACTOR": "",
+                "GIT_AUTHOR_EMAIL": "",
+                "GIT_COMMITTER_EMAIL": "",
+            },
+            clear=False,
+        ), mock.patch(
+            "solution_manager.core.workflow.subprocess.run",
+            return_value=subprocess.CompletedProcess(["git"], 1, "", ""),
+        ):
+            self.assertEqual("0000000000000000", resolve_operator_hash())
 
     def test_initialize_creates_resumable_state(self) -> None:
         created = initialize_workflow(
@@ -2659,6 +2696,244 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual("none", retry["effectiveVersionBump"])
             package.assert_called_once()
 
+    def _mock_unaccepted_candidate(self, solution: Path, **kwargs: str) -> dict:
+        packager = (
+            self._mock_v3_1_patch_package
+            if kwargs["version_bump"] == "patch" else self._mock_v3_1_package
+        )
+        result = packager(solution, **kwargs)
+        result.update({
+            "packageAccepted": False,
+            "packageLifecycleStatus": "candidate-generated",
+            "armValidationMethod": "lab-deployment",
+        })
+        Path(result["packageReport"]).write_text(json.dumps(result), encoding="utf-8")
+        return result
+
+    def _prepare_unaccepted_qualification_candidate(self) -> tuple[str, dict]:
+        self._ensure_solution_release()
+        data_path = self.solution / "Data" / "Solution_Sample.json"
+        data_path.write_text(json.dumps({"Name": "Sample", "Version": "3.0.7"}))
+        source = self.solution / "Analytic Rules" / "Rule.yaml"
+        source.parent.mkdir()
+        source.write_text(RULE)
+        initialized = initialize_workflow(
+            self.solution,
+            version_bump="none",
+            target_version="3.2.2",
+            workflow_profile="qualification",
+            workbook_capability_version=1,
+            arm_validation_method="lab-deployment",
+            **self._qualification_args(),
+        )
+        for stage in ("discovery", "conversion", "validation"):
+            self._complete_passed_stage(stage)
+        selection = {
+            "plan": {"planSha256": "e" * 64, "summary": {
+                "outcome": "complete", "analyticRuleIncluded": 1,
+                "xdrDetectionIncluded": 1, "coverageNumerator": 1,
+                "coverageDenominator": 1, "partialPublicationAllowed": True,
+            }},
+            "planPath": "Logs/plan.json", "receiptPath": "Logs/applied.json",
+        }
+        with mock.patch.object(
+            workflow_module, "package_solution_v3_1",
+            side_effect=self._mock_unaccepted_candidate,
+        ):
+            package_workflow_v3_1(
+                self.solution, requested_version_bump="none",
+                requested_target_version="3.2.2",
+            )
+        return initialized["runId"], selection
+
+    def test_unaccepted_candidate_new_target_archives_failure_and_remains_unaccepted(self) -> None:
+        run_id, selection = self._prepare_unaccepted_qualification_candidate()
+        before = workflow_status(self.solution)
+        consumed = before["packaging"]["lastConsumedAction"]
+        artifacts = before["stages"]["packaging"]["artifacts"]
+        original = {
+            name: (self.solution / artifacts[name]).read_bytes()
+            for name in ("packageReport", "mainTemplate", "createUiDefinition", "testParameters", "zip")
+        }
+        (self.solution / "ReleaseNotes.md").write_text("Approved 3.2.3 release notes\n")
+        identity = package_input_identity(self.solution)["sha256"]
+        with using_run(self.solution, run_id), mock.patch.object(
+            workflow_module, "verify_applied_package_selection", return_value=selection,
+        ), mock.patch.object(
+            workflow_module, "package_solution_v3_1",
+            side_effect=self._mock_unaccepted_candidate,
+        ) as packager:
+            with self.assertRaisesRegex(ValueError, "select an explicit new release action"):
+                package_workflow_v3_1(
+                    self.solution, requested_version_bump="none", requested_target_version="3.2.3",
+                )
+            output = io.StringIO()
+            with mock.patch("sys.stdout", output), mock.patch.object(cli_module, "configure_logging"):
+                code = cli_module.main([
+                    "workflow-plan-package-release", "--solution", str(self.solution),
+                    "--run-id", run_id, "--target-version", "3.2.3",
+                    "--expected-package-input-sha256", identity,
+                ])
+            self.assertEqual(0, code, output.getvalue())
+            planned = workflow_status(self.solution)
+            self.assertIsNone(planned["packaging"]["lastSuccessful"])
+            self.assertEqual(consumed, planned["packaging"]["lastConsumedAction"])
+            self.assertEqual(before["context"], planned["context"])
+            history = planned["packaging"]["releaseActions"][-1]["historicalEvidence"]
+            for name, content in original.items():
+                self.assertEqual(content, (self.solution / history[name]).read_bytes())
+            snapshot = json.loads((self.solution / history["unacceptedAttempt"]).read_bytes())
+            self.assertEqual(consumed, snapshot["lastConsumedAction"])
+            self.assertEqual(before["packaging"]["currentAttempt"], snapshot["currentAttempt"])
+            with self.assertRaisesRegex(ValueError, "pending release action"):
+                package_workflow_v3_1(
+                    self.solution, requested_version_bump="none", requested_target_version="3.2.4",
+                )
+            notes = self.solution / "ReleaseNotes.md"
+            approved_notes = notes.read_bytes()
+            notes.write_bytes(approved_notes + b"Unapproved change\n")
+            with self.assertRaisesRegex(ValueError, "pending release action"):
+                package_workflow_v3_1(
+                    self.solution, requested_version_bump="none", requested_target_version="3.2.3",
+                )
+            notes.write_bytes(approved_notes)
+            result = package_workflow_v3_1(
+                self.solution, requested_version_bump="none", requested_target_version="3.2.3",
+            )
+            packager.assert_called_once()
+            self.assertEqual("3.2.3", result["version"])
+            self.assertFalse(result["packageAccepted"])
+            final = workflow_status(self.solution)
+            self.assertIsNone(final["packaging"]["lastSuccessful"])
+            self.assertIsNone(final["packaging"]["pendingReleaseAction"])
+            self.assertEqual("consumed", final["packaging"]["releaseActions"][-1]["status"])
+            self.assertNotEqual(consumed["attemptId"], final["packaging"]["currentAttempt"]["attemptId"])
+            for stage in ("packaging", "deployment", "mockIngestion", "alertParity", "report"):
+                self.assertEqual("blocked", final["stages"][stage]["status"])
+            for name, content in original.items():
+                self.assertEqual(content, (self.solution / history[name]).read_bytes())
+            with self.assertRaisesRegex(ValueError, "stale or belongs to another"):
+                workflow_module._validate_packaging_evidence(
+                    final, final["stages"]["packaging"]["artifacts"], self.solution,
+                )
+            retry = package_workflow_v3_1(self.solution, requested_version_bump="none")
+            self.assertEqual("3.2.3", retry["version"])
+            self.assertFalse(retry["packageAccepted"])
+            self.assertEqual(2, packager.call_count)
+
+    def test_unaccepted_candidate_new_bump_supersedes_initial_target_choice(self) -> None:
+        run_id, selection = self._prepare_unaccepted_qualification_candidate()
+        (self.solution / "ReleaseNotes.md").write_text("Approved patch release\n")
+        with using_run(self.solution, run_id), mock.patch.object(
+            workflow_module, "verify_applied_package_selection", return_value=selection,
+        ), mock.patch.object(
+            workflow_module, "package_solution_v3_1",
+            side_effect=self._mock_unaccepted_candidate,
+        ) as packager:
+            plan_new_package_release(
+                self.solution, version_bump="patch",
+                expected_package_input_sha256=package_input_identity(self.solution)["sha256"],
+            )
+            result = package_workflow_v3_1(self.solution, requested_version_bump="patch")
+            self.assertEqual("patch", result["effectiveVersionBump"])
+            self.assertEqual("3.2.3", result["version"])
+            self.assertIsNone(packager.call_args.kwargs["target_version"])
+            self.assertFalse(result["packageAccepted"])
+
+    def test_unaccepted_candidate_recovery_rejects_stale_hash_unchanged_and_running(self) -> None:
+        run_id, selection = self._prepare_unaccepted_qualification_candidate()
+        with using_run(self.solution, run_id), mock.patch.object(
+            workflow_module, "verify_applied_package_selection", return_value=selection,
+        ):
+            with self.assertRaisesRegex(ValueError, "initial version action was consumed"):
+                plan_new_package_release(
+                    self.solution, target_version="3.2.3",
+                    expected_package_input_sha256=package_input_identity(self.solution)["sha256"],
+                )
+            (self.solution / "ReleaseNotes.md").write_text("Approved release\n")
+            path, state = workflow_module._load(self.solution)
+            before = path.read_bytes()
+            with self.assertRaisesRegex(ValueError, "changed after release action selection"):
+                plan_new_package_release(
+                    self.solution, target_version="3.2.3",
+                    expected_package_input_sha256="0" * 64,
+                )
+            self.assertEqual(before, path.read_bytes())
+            state["packaging"]["currentAttempt"]["status"] = "running"
+            path.write_text(json.dumps(state))
+            before = path.read_bytes()
+            with self.assertRaisesRegex(ValueError, "packaging is running"):
+                plan_new_package_release(
+                    self.solution, target_version="3.2.3",
+                    expected_package_input_sha256=package_input_identity(self.solution)["sha256"],
+                )
+            self.assertEqual(before, path.read_bytes())
+            self.assertFalse((path.parent / "package-history").exists())
+
+    def test_unaccepted_candidate_recovery_rejects_modified_receipt_and_artifacts(self) -> None:
+        run_id, selection = self._prepare_unaccepted_qualification_candidate()
+        (self.solution / "ReleaseNotes.md").write_text("Approved release\n")
+        with using_run(self.solution, run_id), mock.patch.object(
+            workflow_module, "verify_applied_package_selection", return_value=selection,
+        ):
+            path, state = workflow_module._load(self.solution)
+            artifacts = state["stages"]["packaging"]["artifacts"]
+            for name in ("packageReport", "mainTemplate"):
+                with self.subTest(artifact=name):
+                    artifact = self.solution / artifacts[name]
+                    original = artifact.read_bytes()
+                    artifact.write_bytes(original + b"\n")
+                    before = path.read_bytes()
+                    with self.assertRaisesRegex(ValueError, "stale or modified|artifact is stale"):
+                        plan_new_package_release(
+                            self.solution, target_version="3.2.3",
+                            expected_package_input_sha256=package_input_identity(self.solution)["sha256"],
+                        )
+                    self.assertEqual(before, path.read_bytes())
+                    artifact.write_bytes(original)
+            self.assertFalse((path.parent / "package-history").exists())
+
+    def test_unaccepted_candidate_recovery_keeps_validation_selection_and_review_gates(self) -> None:
+        run_id, selection = self._prepare_unaccepted_qualification_candidate()
+        (self.solution / "ReleaseNotes.md").write_text("Approved release\n")
+        with using_run(self.solution, run_id):
+            path, state = workflow_module._load(self.solution)
+            for gate in ("validation", "selection", "review"):
+                with self.subTest(gate=gate):
+                    state["stages"]["validation"]["status"] = "blocked" if gate == "validation" else "passed"
+                    path.write_text(json.dumps(state))
+                    detection = self.solution / "XDR Detections" / "Rule.yaml"
+                    document = yaml.safe_load(detection.read_bytes())
+                    document["contentProvenance"]["conversion"] = {"reviewRequired": gate == "review"}
+                    detection.write_text(yaml.safe_dump(document))
+                    before = path.read_bytes()
+                    with mock.patch.object(
+                        workflow_module, "verify_applied_package_selection",
+                        return_value=None if gate == "selection" else selection,
+                    ):
+                        with self.assertRaisesRegex(
+                            ValueError, "validation stage to pass|first release planning|unresolved detection review",
+                        ):
+                            plan_new_package_release(
+                                self.solution, target_version="3.2.3",
+                                expected_package_input_sha256=package_input_identity(self.solution)["sha256"],
+                            )
+                    self.assertEqual(before, path.read_bytes())
+            self.assertFalse((path.parent / "package-history").exists())
+
+    def test_unaccepted_candidate_recovery_rechecks_runtime_before_validation_can_pass(self) -> None:
+        run_id, _ = self._prepare_unaccepted_qualification_candidate()
+        with using_run(self.solution, run_id):
+            detection = self.solution / "XDR Detections" / "Rule.yaml"
+            document = yaml.safe_load(detection.read_bytes())
+            document["properties"]["queryCondition"]["queryText"] += " | take 1"
+            detection.write_text(yaml.safe_dump(document))
+            workflow_module.invalidate_runtime_completion(self.solution, ["Rule.yaml"])
+            start_workflow_stage(self.solution, "validation")
+            with self.assertRaisesRegex(ValueError, "runtime evidence bound to every current query"):
+                complete_workflow_stage(self.solution, "validation", status="passed")
+            self.assertIsNone(workflow_status(self.solution)["packaging"]["lastSuccessful"])
+
     def test_stale_package_status_is_read_only_and_new_release_preserves_history(self) -> None:
         run_id = self._prepare_workflow_for_package("none")
         with using_run(self.solution, run_id), mock.patch.object(
@@ -3422,7 +3697,7 @@ class WorkflowTests(unittest.TestCase):
         target_query = yaml.safe_load(
             (self.solution / "XDR Detections/Rule.yaml").read_text()
         )["properties"]["queryCondition"]["queryText"]
-        self.assertIn("Timestamp >= ago(2h)", target_query)
+        self.assertIn("TimeGenerated >= ago(2h)", target_query)
 
         stages = workflow_status(self.solution)["stages"]
         self.assertEqual("blocked", stages["validation"]["status"])
@@ -4482,6 +4757,53 @@ class WorkflowTests(unittest.TestCase):
             ])
         self.assertEqual(0, rc_ver, stderr.getvalue())
         self.assertTrue(json.loads(stdout.getvalue())["verified"])
+
+    def test_validate_solution_FlagsLocaleUrlsInRuleAndMetadataFiles(self) -> None:
+        from sentinel_xdr_migration.converter import validate_solution
+
+        def _ms_locale_url(subdomain: str, locale: str, path: str) -> str:
+            return f"https://{subdomain}.microsoft.com/{locale}/{path.lstrip('/')}"
+
+        docs_locale_url = _ms_locale_url("docs", "en-us", "azure/sentinel/hunting")
+        azure_locale_url = _ms_locale_url("azure", "en-us", "support/legal/preview-supplemental-terms/")
+
+        rule_dir = self.solution / "Analytic Rules"
+        rule_dir.mkdir(parents=True, exist_ok=True)
+        rule_doc = yaml.safe_load(RULE)
+        rule_doc["description"] = f"Detects activity. Reference: {docs_locale_url}"
+        (rule_dir / "Rule.yaml").write_text(yaml.safe_dump(rule_doc, sort_keys=False), encoding="utf-8")
+        convert_solution(self.solution)
+
+        (self.solution / "SolutionMetadata.json").write_text(
+            json.dumps(
+                {
+                    "version": "3.0.0",
+                    "support": {
+                        "tier": "Microsoft",
+                        "name": "Microsoft Corporation",
+                        "link": azure_locale_url,
+                    },
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        report = validate_solution(self.solution)
+        self.assertFalse(report["documentsLinkValidation"]["valid"])
+        self.assertGreaterEqual(report["documentsLinkValidation"]["issueCount"], 2)
+        self.assertGreaterEqual(report["invalid"], 2)
+        issues_by_file = {item["file"]: item for item in report["documentsLinkValidation"]["issues"]}
+        self.assertIn("Analytic Rules/Rule.yaml", issues_by_file)
+        self.assertEqual(
+            "https://docs.microsoft.com/azure/sentinel/hunting",
+            issues_by_file["Analytic Rules/Rule.yaml"]["recommendedUrl"],
+        )
+        self.assertIn("SolutionMetadata.json", issues_by_file)
+        self.assertEqual(
+            "https://azure.microsoft.com/support/legal/preview-supplemental-terms/",
+            issues_by_file["SolutionMetadata.json"]["recommendedUrl"],
+        )
 
 
 if __name__ == "__main__":

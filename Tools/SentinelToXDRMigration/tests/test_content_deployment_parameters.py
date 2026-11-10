@@ -506,7 +506,7 @@ class ContentDeploymentTests(unittest.TestCase):
                     expected["id"] = f"[if(true(), '{expected['id']}', '{expected['id']}')]"
                     expected["detectionAction"]["alertTemplate"]["tactics"] = [authored[0]]
                     expected["contentProvenance"] = {
-                        "packageId": "testpublisher.test-sentinel",
+                        "packageId": "[if(true(), 'testpublisher.test-sentinel', 'testpublisher.test-sentinel')]",
                         "packageVersion": "3.2.2",
                         "contentId": "xdr-" + document["contentProvenance"]["source"]["id"],
                         "contentVersion": document["version"],

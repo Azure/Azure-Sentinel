@@ -1,0 +1,129 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7bb55d05-ef39-4a40-8079-0bc3c05e7881
+    path: Analytic Rules/LocalFileInclusion-LFI.yaml
+    version: 1.0.0
+    querySha256: e0d3b98228f59927e8ea9019bf1e3d59fedccc19469b40f4356827faf55cb2ba
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventCount' column `EventCount` requires runtime output-schema binding verification
+    - customDetails 'Decoded_url' column `Decoded_url` requires runtime output-schema binding verification
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Execution
+    originalTechniques:
+    - T1190
+    - T1133
+    - T1059
+    reviewScope:
+      sourceDocumentSha256: 355344fcbf8f52116fc2a455fc6022f0cc1bd630ef5384aa2b11757aa29bc354
+      targetQuerySha256: b68759ff4205d65aa030182edcfd4673af5501f86644f7020ce5a86f48fb6a51
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: 355344fcbf8f52116fc2a455fc6022f0cc1bd630ef5384aa2b11757aa29bc354
+      targetQuerySha256: b68759ff4205d65aa030182edcfd4673af5501f86644f7020ce5a86f48fb6a51
+properties:
+  id: xdr-7bb55d05-ef39-4a40-8079-0bc3c05e7881
+  displayName: Detect Local File Inclusion(LFI) in web requests (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback = 5m;
+      let LFI_Indicators = materialize(externaldata(Indicators: string)
+          [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/LocalFileInclusionIndicators.csv"]
+          with(format="csv", ignoreFirstRecord=True));
+      let CustomLocalFileInclusionIndicators = (_ASIM_GetWatchlistRaw("Web_LocalFileInclusionIndicators") // Create new Watchlist and add your custom indicators(Optional)
+          | extend
+              Indicators = tostring(WatchlistItem["Indicators"])
+          | project Indicators
+          | where isnotempty(Indicators));
+      let CombinedLFIList = union LFI_Indicators, CustomLocalFileInclusionIndicators;
+      let knownLFIIndicators=toscalar(CombinedLFIList
+          | where isnotempty(Indicators)
+          | summarize make_set(Indicators, 1000));
+      _Im_WebSession(starttime=ago(lookback), url_has_any=knownLFIIndicators, eventresult='Success')
+      | where isnotempty(Url)
+      | project Url, SrcIpAddr, SrcUsername, SrcHostname, TimeGenerated
+      | extend Decoded_url = url_decode(Url)
+      | where Decoded_url has_any (knownLFIIndicators)
+      | summarize
+          EventCount=count(),
+          EventStartTime=min(TimeGenerated),
+          EventEndTime=max(TimeGenerated)
+          by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url
+      | extend
+          Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+          UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
+      | order by EventCount desc
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Detect Local File Inclusion(LFI) in web requests (ASIM Web Session)
+      description: '''LFI vulnerabilities allow an attacker to read (and sometimes execute) files on the victim machine. This
+        can be very dangerous because if the web server is misconfigured and running with high privileges, the attacker may
+        gain access to sensitive information'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        urls:
+        - id: url1
+          addressColumn: Url
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: SrcHostname
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      customDetails:
+        EventCount: EventCount
+        Decoded_url: Decoded_url
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime

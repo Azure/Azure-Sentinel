@@ -1,0 +1,127 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9e457dc4-81f0-4d25-bc37-a5fa4a17946a
+    path: Analytic Rules/SuspiciousAWSEC2ComputeResourceDeployments.yaml
+    version: 1.0.2
+    querySha256: 474ba187af092955e3d43c9cd6f182e53c565feb64d234e559c4b848993c8577
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'TotalCoreCount' column `totalgpu` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.CloudAppAccountId mismatch is informational because its original value is preserved as customDetails.AccountCloudAppAccountId
+      from query column `RecipientAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1496
+    reviewScope:
+      sourceDocumentSha256: a7fe65b0e5a67a0087cb6805ef54acbf9137e967f8633785d59b44eacae3af7a
+      targetQuerySha256: 4894899087177cd5feabdd9fff4a52be0544dd843cbadfdbf4a129bc2c011539
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: available
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-9e457dc4-81f0-4d25-bc37-a5fa4a17946a
+  displayName: AWSCloudTrail - Suspicious AWS EC2 Compute Resource Deployments
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Retrieve AWS CloudTrail events generated within the last day
+      AWSCloudTrail
+      // Filter events related to instance creation
+      | where EventName =~ "RunInstances"
+      // Exclude events with error messages
+      | where isempty(ErrorMessage)
+      // Extract the event source type
+      | extend EventSourceSplit = split(EventSource, ".")
+      | extend Type = tostring(EventSourceSplit[0])
+      // Extract instance-related details from the event data
+      | extend instance = tostring(parse_json(RequestParameters).instanceType),platform = tostring(parse_json(ResponseElements).instancesSet.items[0].platform)
+      // Determine the operating system platform
+      | extend OSplatform = iff(isempty(platform), tostring("Linux"), platform),CPU = tostring(parse_json(ResponseElements).instancesSet.items[0].cpuOptions),core = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.coreCount),corThread = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.threadsPerCore),InstanceId = tostring(parse_json(ResponseElements).instancesSet.items[0].instanceId)
+      // Filter out instances with empty core values
+      | where isnotempty(core)
+      // Calculate the total compute based on core and thread counts
+      | extend totalCorecompute = core * corThread
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      // Summarize relevant information for analysis
+      | summarize Start= min(TimeGenerated),
+        end=   max(TimeGenerated),
+        totalgpu= sum(totalCorecompute)
+        by SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserAgent
+      // Filter results based on total GPU compute and time duration
+      | where totalgpu > 800
+      | where datetime_diff('hour', end, Start) < 8
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Suspicious AWS EC2 Compute Resource Deployments
+      description: '''This detection focused on Suspicious deployment of AWS EC2 resource (virtual machine) scale sets was
+        detected. This behavior might indicate that the threat actor is deploying computing resources for cryptocurrency mining
+        activities.This detection centers around identifying suspicious instances of AWS EC2 resource deployment, particularly
+        scale sets. Such behavior raises concerns of potential threat actor involvement, potentially indicative of efforts
+        to deploy computing resources for the purpose of cryptocurrency mining activities.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1496
+      customDetails:
+        UserAgent: UserAgent
+        AWSUser: UserIdentityArn
+        SourceIpAddress: SourceIpAddress
+        TotalCoreCount: totalgpu
+        AccountCloudAppAccountId: RecipientAccountId

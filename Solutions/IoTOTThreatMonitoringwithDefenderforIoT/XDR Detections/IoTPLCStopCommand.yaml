@@ -1,0 +1,139 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: IoT
+  dataTypes:
+  - SecurityAlert (ASC for IoT)
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertInfo
+  requiredDataConnectors:
+  - connectorId: IoT
+    dataTypes:
+    - SecurityAlert (ASC for IoT)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a7d3f642-15d8-4e83-99ee-83ca3352525d
+    path: Analytic Rules/IoTPLCStopCommand.yaml
+    version: 1.0.3
+    querySha256: 2bf78770e85ebdaaaa10f927c27043877d2488775c83724e39101c6e899d5cc9
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - No valid source mapping survived; inferred entities from projected columns
+    - customDetails 'Sensor' column `DeviceId` requires runtime output-schema binding verification
+    - customDetails 'Protocol' column `Protocol` requires runtime output-schema binding verification
+    - customDetails 'VendorOriginalKey' column `VendorOriginalId` requires runtime output-schema binding verification
+    - customDetails 'AlertManagementUri' column `AlertManagementUri` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    notes:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo/AlertEvidence schema.'
+    errors: []
+    originalTactics:
+    - Evasion
+    originalTechniques:
+    - T0858
+    reviewScope:
+      sourceDocumentSha256: 640fa848b824435988b84d5e405e2284d4fb5d61862003cd32ff70f074bc761f
+      targetQuerySha256: 68de2a2328defb8bdd437d51b281af5fd79de91fa0434e3df9f6439612b4b039
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 640fa848b824435988b84d5e405e2284d4fb5d61862003cd32ff70f074bc761f
+      targetQuerySha256: 68de2a2328defb8bdd437d51b281af5fd79de91fa0434e3df9f6439612b4b039
+properties:
+  id: xdr-a7d3f642-15d8-4e83-99ee-83ca3352525d
+  displayName: PLC Stop Command (Microsoft Defender for IoT)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let alertList = dynamic(["Controller Reset", "An S7 Stop PLC Command was Sent", "Controller Stop", "Excessive Restart Rate of an Outstation", "GE SRTP Stop PLC Command was Sent", "Outstation Restarted", "Outstation Restarts Frequently", "Profinet Device Factory Reset", "Slave Device Unrecoverable Failure", "Suspicion of Hardware Problems in Outstation"]);
+      AlertInfo
+      | join kind=leftouter AlertEvidence on AlertId
+      | extend AlertName = Title, AlertSeverity = Severity, ProviderName = DetectionSource, ProductName = ServiceSource, Tactics = AttackTechniques, Description = Title, Entities = AdditionalFields, ExtendedProperties = AdditionalFields, RemediationSteps = "[]", ProductComponentName = ServiceSource, VendorOriginalId = AlertId, AlertLink = "", Techniques = AttackTechniques
+      | where DetectionSource == "IoTSecurity"
+      | where Title has_any (alertList)
+      | extend ExtendedProperties = parse_json(ExtendedProperties)
+      | where tostring(ExtendedProperties.isNew) == "True"
+      | extend DeviceId = tostring(ExtendedProperties.DeviceId),
+               SourceDeviceAddress = tostring(ExtendedProperties.SourceDeviceAddress),
+               DestDeviceAddress = tostring(ExtendedProperties.DestinationDeviceAddress),
+               RemediationSteps = tostring(parse_json(RemediationSteps)[0]),
+               Protocol = tostring(ExtendedProperties.Protocol),
+               AlertManagementUri = tostring(ExtendedProperties.AlertManagementUri)
+      | project
+        Timestamp,
+        DeviceId,
+        ServiceSource,
+        ProductComponentName,
+        Severity,
+        Title,
+        Description,
+        Protocol,
+        SourceDeviceAddress,
+        DestDeviceAddress,
+        RemediationSteps,
+        AttackTechniques,
+        AdditionalFields,
+        VendorOriginalId,
+        AlertLink,
+        AlertManagementUri,
+        Techniques
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: PLC Stop Command (Microsoft Defender for IoT)
+      description: '''This alert leverages Defender for IoT to detect PLC stop commands which could indicate improper configuration
+        or malicious activity on the network such as a threat manipulating PLC programming to affect the function of the network.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          deviceIdColumn: DeviceId
+      tactics:
+      - tactic: Evasion
+        techniques:
+        - technique: T0858
+      customDetails:
+        Sensor: DeviceId
+        Protocol: Protocol
+        VendorOriginalKey: VendorOriginalId
+        AlertManagementUri: AlertManagementUri

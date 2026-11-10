@@ -1,0 +1,152 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 83ba3057-9ea3-4759-bf6a-933f2e5bc7ee
+    path: Analytic Rules/RareApplicationConsent.yaml
+    version: 1.1.5
+    querySha256: 3bff21dab5edbaf8367d133ae552ff5ac8606139e6b07994f93fd34d90ae0638
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatedBy`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `InitiatedBy` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1136
+    - T1068
+    reviewScope:
+      sourceDocumentSha256: 8a616d366880a55014b844f91fb897c8956e73e3025f14735ac9cb1f18ff7744
+      targetQuerySha256: a20e70cde7172ee162ce4bf784a1ee2b6f5787c10a38b7fcfdd6c0441524b548
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatedBy
+      column: InitiatedBy
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-83ba3057-9ea3-4759-bf6a-933f2e5bc7ee
+  displayName: Rare application consent
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let current = 1d;
+      let auditLookback = 7d;
+      // Setting threshold to 3 as a default, change as needed.
+      // Any operation that has been initiated by a user or app more than 3 times in the past 7 days will be excluded
+      let threshold = 3;
+      // Gather initial data from lookback period, excluding current, adjust current to more than a single day if no results
+      let AuditTrail = AuditLogs | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current)
+      // 2 other operations that can be part of malicious activity in this situation are
+      // "Add OAuth2PermissionGrant" and "Add service principal", extend the filter below to capture these too
+      | where OperationName has "Consent to application"
+      | extend InitiatedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)),
+                tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type =~ "ServicePrincipal"
+            | extend TargetResourceName = tolower(tostring(TargetResource.displayName))
+        )
+      | summarize max(TimeGenerated), OperationCount = count() by OperationName, InitiatedBy, TargetResourceName
+      // only including operations initiated by a user or app that is above the threshold so we produce only rare and has not occurred in last 7 days
+      | where OperationCount > threshold;
+      // Gather current period of audit data
+      let RecentConsent = AuditLogs | where TimeGenerated >= ago(current)
+      | where OperationName has "Consent to application"
+      | extend IpAddress = case(
+                    isnotempty(tostring(InitiatedBy.user.ipAddress)) and tostring(InitiatedBy.user.ipAddress) != 'null', tostring(InitiatedBy.user.ipAddress),
+                    isnotempty(tostring(InitiatedBy.app.ipAddress)) and tostring(InitiatedBy.app.ipAddress) != 'null', tostring(InitiatedBy.app.ipAddress),
+                    'Not Available')
+      | extend InitiatedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)),
+                                tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type =~ "ServicePrincipal"
+            | extend TargetResourceName = tolower(tostring(TargetResource.displayName)),
+                     props = TargetResource.modifiedProperties
+        )
+      | parse props with * "ConsentType: " ConsentType "]" *
+      | mv-apply AdditionalDetail = AdditionalDetails on
+        (
+            where AdditionalDetail.key =~ "User-Agent"
+            | extend UserAgent = tostring(AdditionalDetail.value)
+        )
+      | project TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType, UserAgent, CorrelationId, Type;
+      // Exclude previously seen audit activity for "Consent to application" that was seen in the lookback period
+      // First for rare InitiatedBy
+      let RareConsentBy = RecentConsent | join kind= leftanti AuditTrail on OperationName, InitiatedBy
+      | extend Reason = "Previously unseen user consenting";
+      // Second for rare TargetResourceName
+      let RareConsentApp = RecentConsent | join kind= leftanti AuditTrail on OperationName, TargetResourceName
+      | extend Reason = "Previously unseen app granted consent";
+      RareConsentBy | union RareConsentApp
+      | summarize Reason = make_set(Reason,100) by TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType, UserAgent, CorrelationId, Type
+      | extend timestamp = TimeGenerated, Name = tolower(tostring(split(InitiatedBy,'@',0)[0])), UPNSuffix = tolower(tostring(split(InitiatedBy,'@',1)[0]))
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Rare application consent
+      description: |-
+        'This will alert when the "Consent to application" operation occurs by a user that has not done this operation before or rarely does this.
+        This could indicate that permissions to access the listed Azure App were provided to a malicious actor.
+        Consent to application, Add service principal and Add OAuth2PermissionGrant should typically be rare events.
+        This may help detect the Oauth2 attack that can be initiated by this publicly available tool - https://github.com/fireeye/PwnAuth
+        For further information on AuditLogs please see https://learn.microsoft.com/entra/identity/monitoring-health/reference-audit-activities.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: TargetResourceName
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1136
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1068
+      customDetails:
+        AccountFullName: InitiatedBy

@@ -16,6 +16,7 @@ from sentinel_xdr_migration.artifacts import report_directory, using_run, write_
 from sentinel_xdr_migration.dependencies import dependency_identity
 from sentinel_xdr_migration.packaging_selection import (
     PLAN_NAME,
+    STRUCTURAL_NAME,
     _build_package_selection_plan,
     _analytic_rule_structure_errors,
     _content_reference,
@@ -35,6 +36,7 @@ from sentinel_xdr_migration.packaging_selection import (
     _exchange_paths,
     _write_selection_receipt,
     apply_package_selection,
+    create_package_selection_plan,
     verify_applied_package_selection,
 )
 from sentinel_xdr_migration import runtime_consent
@@ -654,6 +656,7 @@ class PackagingSelectionTests(unittest.TestCase):
         review_decision_change: bool = False,
         reuse_existing_review: bool = False,
         global_runtime_inventory_error: bool = False,
+        plan_operation=None,
     ) -> dict:
         source_id = "11111111-1111-1111-1111-111111111111"
         source = self.solution / "Analytic Rules" / "Keep.yaml"
@@ -867,7 +870,112 @@ class PackagingSelectionTests(unittest.TestCase):
             ),
         )
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            if plan_operation is not None:
+                return plan_operation()
             return _build_package_selection_plan(self.solution, self.run_id)
+
+    def test_crlf_structural_report_retains_exact_reviewed_hash_before_apply_commit(self) -> None:
+        def write_crlf_artifact(solution, path, document):
+            write_json_artifact(solution, path, document)
+            path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+
+        def check_plan_and_apply():
+            plan = create_package_selection_plan(self.solution, self.run_id)
+            with using_run(self.solution, self.run_id):
+                structural = report_directory(self.solution) / STRUCTURAL_NAME
+            saved = structural.read_bytes()
+            self.assertIn(b"\r\n", saved)
+            self.assertEqual(hashlib.sha256(saved).hexdigest(), plan["input"]["structuralValidationSha256"])
+            refreshed = _build_package_selection_plan(self.solution, self.run_id)
+            self.assertEqual(plan["planSha256"], refreshed["planSha256"])
+            before = self.data_path.read_bytes()
+            with mock.patch(
+                "sentinel_xdr_migration.packaging_selection._atomic_exchange_if_unchanged",
+                side_effect=RuntimeError("serialization checks reached commit boundary"),
+            ) as commit, self.assertRaisesRegex(RuntimeError, "reached commit boundary"):
+                apply_package_selection(
+                    self.solution, self.run_id, expected_plan_sha256=plan["planSha256"],
+                )
+            commit.assert_called_once()
+            self.assertEqual(before, self.data_path.read_bytes())
+            self.assertEqual(saved, structural.read_bytes())
+            return plan
+
+        with mock.patch(
+            "sentinel_xdr_migration.packaging_selection.write_json_artifact",
+            side_effect=write_crlf_artifact,
+        ):
+            self._build_one_rule_plan(
+                source_status="passed", review_required=False,
+                plan_operation=check_plan_and_apply,
+            )
+
+    def test_structural_report_byte_edits_still_invalidate_reviewed_plan(self) -> None:
+        for edit in ("line-endings", "whitespace"):
+            with self.subTest(edit=edit):
+                def check_rejection():
+                    plan = create_package_selection_plan(self.solution, self.run_id)
+                    with using_run(self.solution, self.run_id):
+                        structural = report_directory(self.solution) / STRUCTURAL_NAME
+                    saved = structural.read_bytes()
+                    if edit == "line-endings":
+                        changed = (
+                            saved.replace(b"\r\n", b"\n")
+                            if b"\r\n" in saved else saved.replace(b"\n", b"\r\n")
+                        )
+                    else:
+                        changed = saved + b" \n"
+                    structural.write_bytes(changed)
+                    refreshed = _build_package_selection_plan(self.solution, self.run_id)
+                    self.assertNotEqual(plan["planSha256"], refreshed["planSha256"])
+                    self.assertEqual(
+                        hashlib.sha256(changed).hexdigest(),
+                        refreshed["input"]["structuralValidationSha256"],
+                    )
+                    before = self.data_path.read_bytes()
+                    with mock.patch(
+                        "sentinel_xdr_migration.packaging_selection._atomic_exchange_if_unchanged",
+                    ) as commit, self.assertRaisesRegex(ValueError, "selection plan is stale"):
+                        apply_package_selection(
+                            self.solution, self.run_id, expected_plan_sha256=plan["planSha256"],
+                        )
+                    commit.assert_not_called()
+                    self.assertEqual(before, self.data_path.read_bytes())
+                    return plan
+
+                self._build_one_rule_plan(
+                    source_status="passed", review_required=False, plan_operation=check_rejection,
+                )
+
+    def test_structural_report_changed_findings_and_invalid_json_block_apply(self) -> None:
+        for edit in ("findings", "invalid-json"):
+            with self.subTest(edit=edit):
+                def check_rejection():
+                    plan = create_package_selection_plan(self.solution, self.run_id)
+                    with using_run(self.solution, self.run_id):
+                        structural = report_directory(self.solution) / STRUCTURAL_NAME
+                    if edit == "findings":
+                        changed = json.loads(structural.read_bytes())
+                        changed["results"][0]["status"] = "failed"
+                        structural.write_text(json.dumps(changed), encoding="utf-8")
+                    else:
+                        structural.write_bytes(b"not a JSON report")
+                    before = self.data_path.read_bytes()
+                    with mock.patch(
+                        "sentinel_xdr_migration.packaging_selection._atomic_exchange_if_unchanged",
+                    ) as commit, self.assertRaisesRegex(
+                        ValueError, "structural-validation evidence changed|structural-validation evidence is invalid",
+                    ):
+                        apply_package_selection(
+                            self.solution, self.run_id, expected_plan_sha256=plan["planSha256"],
+                        )
+                    commit.assert_not_called()
+                    self.assertEqual(before, self.data_path.read_bytes())
+                    return plan
+
+                self._build_one_rule_plan(
+                    source_status="passed", review_required=False, plan_operation=check_rejection,
+                )
 
     def test_plan_hash_does_not_mutate_nested_plan_data(self) -> None:
         plan = {

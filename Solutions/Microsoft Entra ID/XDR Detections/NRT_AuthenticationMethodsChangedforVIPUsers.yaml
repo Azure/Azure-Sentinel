@@ -1,0 +1,156 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - ConfidentialWatchlist
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 29e99017-e28d-47be-8b9a-c8c711f8a903
+    path: Analytic Rules/NRT_AuthenticationMethodsChangedforVIPUsers.yaml
+    version: 1.0.6
+    querySha256: 46439b273cf685107a9fa8f647186d2ff008660e0202d481328bd9ab1925b7e8
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - nrt_behavioral_summarize_fallback_pt1h
+    - 'nrt_behavioral_summarize_fallback_pt1h: Source NRT rule uses a behavioral summarize
+      aggregation with threshold/grouping semantics not supported in Continuous (PT0S)
+      mode; automatically fell back schedule frequency to PT1H (queryPeriod: PT4H).'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `Target`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Target` requires runtime
+      output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query
+      column `InitiatingUserPrincipalName`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName_2 column `InitiatingUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - nrt_behavioral_summarize_fallback_pt1h
+    - 'nrt_behavioral_summarize_fallback_pt1h: Source NRT rule uses a behavioral summarize
+      aggregation with threshold/grouping semantics not supported in Continuous (PT0S)
+      mode; automatically fell back schedule frequency to PT1H (queryPeriod: PT4H).'
+    - 'Schedule assessment: source kind=NRT with behavioral summarize; fell back to
+      target frequency=PT1H, queryPeriod=PT4H. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    notes:
+    - nrt_behavioral_summarize_fallback_pt1h
+    - 'nrt_behavioral_summarize_fallback_pt1h: Source NRT rule uses a behavioral summarize
+      aggregation with threshold/grouping semantics not supported in Continuous (PT0S)
+      mode; automatically fell back schedule frequency to PT1H (queryPeriod: PT4H).'
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 740e7d052f2aec56d64b134d56cc2d6de0fcf29c762959e9bb3f51e63b7d60b8
+      targetQuerySha256: 11ccc991d6adfac13186794c9c979404f1c47086b9256f231876db9c9bd2c593
+    eventTimeWindow:
+      status: nrt-behavioral-summarize-fallback
+      appliedDefault: nrt-behavioral-summarize-to-pt1h-pt4h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      xdrServiceWindowSeconds: 14400
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Target
+      column: Target
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-29e99017-e28d-47be-8b9a-c8c711f8a903
+  displayName: NRT Authentication Methods Changed for VIP Users
+  status: disabled
+  queryCondition:
+    queryText: "let security_info_actions = dynamic([\"User registered security info\"\
+      , \"User changed default security info\", \"User deleted security info\", \"\
+      Admin updated security info\", \"User reviewed security info\", \"Admin deleted\
+      \ security info\", \"Admin registered security info\"]);\nlet VIPUsers = _GetWatchlist('VIPUsers')\n\
+      \  | extend [\"User Principal Name\"] = column_ifexists(\"User Principal Name\"\
+      ,\"\")\n  | distinct [\"User Principal Name\"];\nAuditLogs\n| where Category\
+      \ =~ \"UserManagement\"\n| where ActivityDisplayName in (security_info_actions)\n\
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend\
+      \ InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n\
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n\
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress\
+      \ = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress,\
+      \ InitiatedBy.app.ipAddress))\n| mv-apply TargetResource = TargetResources on\n\
+      \  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = trim(@'\"\
+      ',tolower(tostring(TargetResource.userPrincipalName)))\n  )\n| where Target\
+      \ in~ (VIPUsers)\n| summarize Start=min(TimeGenerated), End=max(TimeGenerated),\
+      \ Actions = make_set(ResultReason) by InitiatingUserPrincipalName, InitiatingAadUserId,\
+      \ InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result,\
+      \ Target\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix\
+      \ = tostring(split(Target,'@',1)[0])\n| extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]),\
+      \ InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])"
+  schedule:
+    frequency: PT1H
+    queryPeriod: PT4H
+  detectionAction:
+    alertTemplate:
+      title: NRT Authentication Methods Changed for VIP Users
+      description: '''Identifies authentication methods being changed for a list of
+        VIP users watchlist. This could be an indication of an attacker adding an
+        auth method to the account so they can have continued access.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account2
+          nameColumn: InitiatedByName
+          upnSuffixColumn: InitiatedByUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      customDetails:
+        AccountFullName: Target
+        AccountFullName_2: InitiatingUserPrincipalName

@@ -17,6 +17,8 @@ HARNESS = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = HARNESS
 SPEC.loader.exec_module(HARNESS)
 
+from asim_ingestion.azure.common import build_fixture_snapshot
+
 
 class FakeResponse:
     def __init__(self, status_code=200, payload=None, headers=None):
@@ -52,6 +54,17 @@ class FakeSession:
         if callable(response):
             return response(method, url, kwargs)
         return response
+
+
+class DeadlineResponse:
+    def __init__(self, clock, deadline, response):
+        self.clock = clock
+        self.deadline = deadline
+        self.response = response
+
+    def __call__(self, method, url, kwargs):
+        self.clock.value = self.deadline
+        return self.response
 
 
 class FakeTokenProvider:
@@ -161,6 +174,17 @@ def query_payload(columns, rows):
     return {"tables": [{"columns": columns, "rows": rows}]}
 
 
+def table_payload(columns, standard_columns=None):
+    return {
+        "properties": {
+            "schema": {
+                "columns": columns,
+                "standardColumns": standard_columns or [],
+            }
+        }
+    }
+
+
 class IngestionHarnessUnitTests(unittest.TestCase):
     def config(self):
         return HARNESS.CanaryConfig(
@@ -186,6 +210,30 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             random_source=__import__("random").Random(0),
         )
         return harness, session, clock
+
+    def test_snapshot_rejects_case_insensitive_schema_duplicates(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+
+        with self.assertRaisesRegex(
+            HARNESS.HarnessError,
+            "case-insensitive duplicate columns",
+        ):
+            build_fixture_snapshot(
+                target_id="parser-a",
+                table_name="Contoso_CL",
+                timestamps=[timestamp],
+                schema=[
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {"name": "DvcOs", "type": "string"},
+                    {"name": "DvcOS", "type": "string"},
+                ],
+                fixture_rows=[
+                    {
+                        "TimeGenerated": timestamp,
+                        "DvcOs": "Windows",
+                    }
+                ],
+            )
 
     def test_builds_exact_timestamp_query(self):
         query = HARNESS.build_exact_timestamp_query(
@@ -348,6 +396,213 @@ class IngestionHarnessUnitTests(unittest.TestCase):
 
         self.assertEqual(1, len(table["rows"]))
         self.assertEqual([5], clock.sleeps)
+
+    def test_wait_for_rows_deadline_preserves_latest_observation(self):
+        first = "2026-10-16T19:55:00.1234567Z"
+        second = "2026-10-16T19:54:59.1234567Z"
+        third = "2026-10-16T19:54:58.1234567Z"
+        filtered = "2026-10-16T19:54:57.1234567Z"
+        columns = [{"name": "TimeGenerated", "type": "datetime"}]
+        latest_table = query_payload(columns, [[first], [second]])["tables"][0]
+        expected = {first: 1, second: 2, third: 1, filtered: 0}
+        harness, session, clock = self.harness(
+            [
+                FakeResponse(200, query_payload(columns, [])),
+                FakeResponse(200, {"tables": [latest_table]}),
+            ],
+            deadline=3,
+        )
+
+        with self.assertRaises(HARNESS.HarnessError) as caught:
+            harness.wait_for_exact_rows(
+                "Contoso_CL", list(expected), expected,
+                stage="target-visibility",
+            )
+
+        self.assertEqual("query", caught.exception.stage)
+        self.assertEqual(
+            "Validation deadline expired.", str(caught.exception)
+        )
+        self.assertIsNone(caught.exception.status_code)
+        self.assertEqual(
+            {
+                "expectedCounts": expected,
+                "observedCounts": {first: 1, second: 1, third: 0, filtered: 0},
+                "missingTimestamps": [second, third],
+                "observedQueryTable": latest_table,
+            },
+            caught.exception.details,
+        )
+        self.assertEqual([1, 2], clock.sleeps)
+        self.assertEqual(2, len(session.calls))
+        self.assertEqual(2, len(harness.request_attempts))
+
+    def test_wait_for_rows_deadline_before_first_query(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        harness, session, _ = self.harness([], deadline=0)
+
+        with self.assertRaises(HARNESS.HarnessError) as caught:
+            harness.wait_for_exact_rows(
+                "Contoso_CL", [timestamp], {timestamp: 1},
+                stage="target-visibility",
+            )
+
+        self.assertEqual(
+            {
+                "expectedCounts": {timestamp: 1},
+                "observedCounts": {},
+                "missingTimestamps": [timestamp],
+                "observedQueryTable": None,
+            },
+            caught.exception.details,
+        )
+        self.assertEqual([], session.calls)
+
+    def test_wait_for_rows_deadline_during_settling(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        payload = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}],
+            [[timestamp]],
+        )
+        harness, session, _ = self.harness(
+            [FakeResponse(200, payload)], deadline=1,
+        )
+
+        with self.assertRaises(HARNESS.HarnessError) as caught:
+            harness.wait_for_exact_rows(
+                "Contoso_CL", [timestamp], {timestamp: 1},
+                stage="target-visibility",
+            )
+
+        self.assertEqual(
+            {timestamp: 1}, caught.exception.details["observedCounts"]
+        )
+        self.assertEqual([], caught.exception.details["missingTimestamps"])
+        self.assertEqual(
+            payload["tables"][0],
+            caught.exception.details["observedQueryTable"],
+        )
+        self.assertEqual(1, len(session.calls))
+
+    def test_wait_for_rows_deadline_after_final_response(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        payload = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}], [],
+        )
+        for rows in ([], [[timestamp]]):
+            with self.subTest(rows=rows):
+                payload["tables"][0]["rows"] = rows
+                harness, _, clock = self.harness([], deadline=1)
+
+                def final_response(method, url, kwargs):
+                    clock.value = 1
+                    return FakeResponse(200, payload)
+
+                harness.session.responses.append(final_response)
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.wait_for_exact_rows(
+                        "Contoso_CL", [timestamp], {timestamp: 1},
+                        stage="target-visibility",
+                    )
+
+                self.assertEqual(
+                    [timestamp] if not rows else [],
+                    caught.exception.details["missingTimestamps"],
+                )
+                self.assertEqual(
+                    {timestamp: len(rows)},
+                    caught.exception.details["observedCounts"],
+                )
+                self.assertEqual(
+                    payload["tables"][0],
+                    caught.exception.details["observedQueryTable"],
+                )
+                self.assertEqual(
+                    "Timed out waiting for exact table rows."
+                    if not rows else "Validation deadline expired.",
+                    str(caught.exception),
+                )
+
+    def test_wait_for_rows_preserves_query_errors_at_deadline(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        for status, payload, message in (
+            (
+                400,
+                {"error": {"code": "BadArgumentError"}},
+                "POST failed with HTTP 400.",
+            ),
+            (
+                403,
+                {"error": {"code": "Forbidden"}},
+                "POST failed with HTTP 403.",
+            ),
+            (
+                200,
+                {"tables": []},
+                "Log Analytics returned no result table.",
+            ),
+        ):
+            with self.subTest(status=status):
+                harness, _, clock = self.harness(
+                    [
+                        FakeResponse(
+                            200,
+                            query_payload(
+                                [{"name": "TimeGenerated", "type": "datetime"}],
+                                [],
+                            ),
+                        ),
+                    ],
+                    deadline=2,
+                )
+
+                harness.session.responses.append(
+                    DeadlineResponse(
+                        clock,
+                        2,
+                        FakeResponse(status, payload),
+                    )
+                )
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.wait_for_exact_rows(
+                        "Contoso_CL", [timestamp], {timestamp: 1},
+                        stage="target-visibility",
+                    )
+
+                self.assertEqual("query", caught.exception.stage)
+                self.assertEqual(message, str(caught.exception))
+                self.assertEqual(
+                    status if status != 200 else None,
+                    caught.exception.status_code,
+                )
+                self.assertEqual(
+                    payload if status != 200 else None,
+                    caught.exception.details,
+                )
+
+    def test_wait_for_rows_enriches_deadline_error_without_replacing_it(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        harness, _, _ = self.harness([])
+        cause = requests.Timeout("query transport timed out")
+        error = HARNESS.HarnessError(
+            "deadline", "Validation deadline expired."
+        )
+        error.__cause__ = cause
+        with unittest.mock.patch.object(
+            harness, "query_exact_rows", side_effect=error,
+        ):
+            with self.assertRaises(HARNESS.HarnessError) as caught:
+                harness.wait_for_exact_rows(
+                    "Contoso_CL", [timestamp], {timestamp: 1},
+                    stage="target-visibility",
+                )
+
+        self.assertIs(error, caught.exception)
+        self.assertIs(cause, caught.exception.__cause__)
+        self.assertEqual("deadline", caught.exception.stage)
+        self.assertEqual(
+            {timestamp: 1}, caught.exception.details["expectedCounts"]
+        )
 
     def test_wait_for_rows_fails_on_contamination(self):
         harness, _, _ = self.harness(
@@ -576,8 +831,8 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         parser_flow = dcr_puts[0]["json"]["properties"]["dataFlows"][0]
         self.assertEqual(
             (
-                "source\n"
-                "| project TimeGenerated, Type, Value"
+                "    source // remove this comment\n"
+                "      | project TimeGenerated, Type, Value"
             ),
             parser_flow["transformKql"],
         )
@@ -644,6 +899,93 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "cleanup",
             harness.last_result["telemetry"]["stageTimingsSeconds"],
         )
+        self.assertEqual(
+            "not-run",
+            harness.last_result["targetVisibility"]["status"],
+        )
+
+    def test_run_persists_target_visibility_failure_details(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        query_table = query_payload(
+            [{"name": "TimeGenerated", "type": "datetime"}],
+            [],
+        )["tables"][0]
+        error = HARNESS.HarnessError(
+            "query",
+            "Validation deadline expired.",
+            details={
+                "expectedCounts": {timestamp: 1},
+                "observedCounts": {timestamp: 0},
+                "missingTimestamps": [timestamp],
+                "observedQueryTable": query_table,
+            },
+        )
+        harness, _, _ = self.harness(
+            [
+                FakeResponse(201),  # parser DCR PUT
+                FakeResponse(
+                    200,
+                    {
+                        "id": "/subscriptions/s/parser",
+                        "properties": {
+                            "provisioningState": "Succeeded",
+                            "immutableId": "parser-immutable",
+                        },
+                    },
+                ),
+                FakeResponse(204),  # parser upload
+                FakeResponse(204),  # parser cleanup
+            ]
+        )
+        prepared = {
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso_CL",
+            "rowCount": 1,
+            "schema": [
+                {"name": "TimeGenerated", "type": "datetime"},
+            ],
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [{"TimeGenerated": timestamp}],
+        }
+        parser = {
+            "ParserName": "ASimAuthenticationContoso",
+            "SourceRawTable": "Contoso_CL",
+            "TargetASIMTable": "ASimAuthenticationEventLogs",
+            "ParserQuery": "source",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            with unittest.mock.patch.object(
+                harness,
+                "wait_for_exact_rows",
+                side_effect=error,
+            ):
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.run(
+                        prepared,
+                        parser,
+                        snapshot_output=Path(directory) / "snapshot.json",
+                        expected_target_counts={timestamp: 1},
+                    )
+
+        self.assertIs(error, caught.exception)
+        visibility = harness.last_result["targetVisibility"]
+        self.assertEqual("failed", visibility["status"])
+        self.assertEqual("query", visibility["error"]["stage"])
+        self.assertEqual(
+            "Validation deadline expired.",
+            visibility["error"]["message"],
+        )
+        self.assertEqual(
+            error.details,
+            visibility["error"]["details"],
+        )
+        self.assertIsNone(harness.last_result["outputValidation"])
 
     def test_full_run_uses_validation_runner_counts_and_outputs(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
@@ -724,6 +1066,15 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual(
             "passed", result["outputValidation"]["status"]
         )
+        self.assertEqual(
+            {
+                "status": "passed",
+                "expectedCounts": {timestamp: 1},
+                "observedCounts": {timestamp: 1},
+                "missingTimestamps": [],
+            },
+            result["targetVisibility"],
+        )
         self.assertIn(
             "filter-validation",
             result["telemetry"]["stageTimingsSeconds"],
@@ -733,6 +1084,210 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             result["telemetry"]["stageTimingsSeconds"],
         )
         self.assertTrue(result["telemetry"]["requestAttempts"])
+
+    def test_raw_replay_transform_uses_management_destination_types(self):
+        destination_schema = [
+            {"name": "TimeGenerated", "type": "datetime"},
+            {"name": "AwsEventId", "type": "guid"},
+            {"name": "AwsRequestId", "type": "guid"},
+            {"name": "SharedEventId", "type": "guid"},
+            {"name": "Enabled", "type": "bool"},
+            {"name": "Count", "type": "long"},
+            {"name": "Properties", "type": "dynamic"},
+            {"name": "PlatformOnly", "type": "string"},
+        ]
+        harness, session, _ = self.harness([
+            FakeResponse(200, table_payload(
+                destination_schema[:1], destination_schema[1:]
+            )),
+        ])
+        schema = [
+            {"name": column["name"], "type": "string"}
+            for column in destination_schema
+            if column["name"] != "PlatformOnly"
+        ]
+        schema[0]["type"] = "datetime"
+        schema[4]["type"] = "boolean"
+        original_schema = [dict(column) for column in schema]
+
+        transform = harness.build_raw_replay_transform("AWSCloudTrail", schema)
+
+        self.assertEqual(
+            "source\n| extend AwsEventId = toguid(AwsEventId), "
+            "AwsRequestId = toguid(AwsRequestId), "
+            "SharedEventId = toguid(SharedEventId), "
+            "Count = tolong(Count), Properties = parse_json(Properties)",
+            transform,
+        )
+        self.assertEqual(original_schema, schema)
+        self.assertEqual("GET", session.calls[0]["method"])
+        self.assertEqual(
+            "https://management.azure.com"
+            f"{harness.config.workspace_resource_id}/tables/AWSCloudTrail"
+            "?api-version=2022-10-01",
+            session.calls[0]["url"],
+        )
+        self.assertEqual([HARNESS.MANAGEMENT_SCOPE], harness.token_provider.scopes)
+
+    def test_raw_replay_transform_preserves_matching_types(self):
+        schema = [
+            {"name": "TimeGenerated", "type": "datetime"},
+            {"name": "Value", "type": "string"},
+        ]
+        harness, _, _ = self.harness([
+            FakeResponse(200, table_payload(schema)),
+        ])
+        self.assertEqual(
+            "source",
+            harness.build_raw_replay_transform("Contoso_CL", schema),
+        )
+
+    def test_raw_replay_transform_quotes_column_names(self):
+        harness, _, _ = self.harness([
+            FakeResponse(200, table_payload([
+                {"name": "Event Id", "type": "guid"},
+            ])),
+        ])
+        self.assertEqual(
+            "source\n| extend ['Event Id'] = toguid(['Event Id'])",
+            harness.build_raw_replay_transform(
+                "Contoso", [{"name": "Event Id", "type": "string"}]
+            ),
+        )
+
+    def test_raw_replay_transform_converts_supported_destination_types(self):
+        conversions = {
+            "bool": "tobool",
+            "datetime": "todatetime",
+            "dynamic": "parse_json",
+            "guid": "toguid",
+            "int": "toint",
+            "long": "tolong",
+            "real": "toreal",
+            "string": "tostring",
+        }
+        for column_type, function in conversions.items():
+            with self.subTest(column_type=column_type):
+                harness, _, _ = self.harness([
+                    FakeResponse(200, table_payload([
+                        {"name": "Value", "type": column_type},
+                    ])),
+                ])
+                input_type = "long" if column_type == "string" else "string"
+                self.assertEqual(
+                    f"source\n| extend Value = {function}(Value)",
+                    harness.build_raw_replay_transform(
+                        "Contoso", [{"name": "Value", "type": input_type}]
+                    ),
+                )
+
+    def test_raw_replay_schema_read_failure_warns_and_blocks_parity(self):
+        timestamp = "2026-10-16T19:55:00.1234567Z"
+        schema = [{"name": "TimeGenerated", "type": "datetime"}]
+        query_result = query_payload(schema, [[timestamp]])
+        harness, session, _ = self.harness([
+            FakeResponse(201),
+            FakeResponse(200, {
+                "properties": {
+                    "provisioningState": "Succeeded",
+                    "immutableId": "parser-immutable",
+                },
+            }),
+            FakeResponse(204),
+            FakeResponse(200, query_result),
+            FakeResponse(200, query_result),
+            FakeResponse(403, {"error": {"code": "Forbidden"}}),
+            FakeResponse(404),
+            FakeResponse(204),
+        ])
+        prepared = {
+            "targetId": "parser-a",
+            "sourceRawTable": "Contoso",
+            "rowCount": 1,
+            "schema": schema,
+            "namespace": {
+                "pullRequest": "123",
+                "runId": "456",
+                "runAttempt": 1,
+                "timestampValues": [timestamp],
+            },
+            "rows": [{"TimeGenerated": timestamp}],
+        }
+        validation_runner = FakeValidationRunner(timestamp)
+        with tempfile.TemporaryDirectory() as directory:
+            result = harness.run(
+                prepared,
+                {
+                    "InputStream": "Microsoft-Contoso",
+                    "SourceRawTable": "Contoso",
+                    "TargetASIMTable": "ASimAuthenticationEventLogs",
+                    "ParserQuery": "source",
+                },
+                snapshot_output=Path(directory) / "snapshot.json",
+                validation_runner=validation_runner,
+                query_time_document={"ParserQuery": "Contoso"},
+            )
+        self.assertEqual("completed", result["status"])
+        self.assertEqual("warning", result["qtpSourceReplay"]["status"])
+        self.assertEqual(
+            "raw-schema", result["qtpSourceReplay"]["error"]["stage"]
+        )
+        self.assertEqual(
+            403, result["qtpSourceReplay"]["error"]["statusCode"]
+        )
+        self.assertIsNone(result["rawDcr"])
+        self.assertEqual("blocked", result["outputValidation"]["parity"]["status"])
+        self.assertEqual(0, validation_runner.parity_calls)
+        self.assertEqual(
+            1, sum(call["method"] == "PUT" for call in session.calls)
+        )
+        self.assertEqual(2, len(result["cleanup"]))
+
+    def test_raw_replay_transform_rejects_invalid_destination_schema(self):
+        for columns in (
+            [],
+            [{"name": "Value"}],
+            [{"name": "Value", "type": "unknown"}],
+            [
+                {"name": "Value", "type": "string"},
+                {"name": "Value", "type": "guid"},
+            ],
+        ):
+            with self.subTest(columns=columns):
+                harness, _, _ = self.harness([
+                    FakeResponse(200, table_payload(columns)),
+                ])
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.build_raw_replay_transform(
+                        "Contoso", [{"name": "Value", "type": "string"}]
+                    )
+                self.assertEqual("raw-schema", caught.exception.stage)
+
+    def test_raw_replay_transform_rejects_invalid_management_schema(self):
+        for payload in (
+            [],
+            {},
+            {"properties": None},
+            {"properties": {"schema": None}},
+            table_payload(None),
+            table_payload({"name": "Value", "type": "guid"}),
+            {
+                "properties": {
+                    "schema": {"columns": [], "standardColumns": "invalid"}
+                }
+            },
+            table_payload(
+                [{"name": "Value", "type": "string"}],
+                [{"name": "Value", "type": "guid"}],
+            ),
+        ):
+            with self.subTest(payload=payload):
+                harness, _, _ = self.harness([FakeResponse(200, payload)])
+                with self.assertRaises(HARNESS.HarnessError) as caught:
+                    harness.build_raw_replay_transform(
+                        "Contoso", [{"name": "Value", "type": "string"}]
+                    )
+                self.assertEqual("raw-schema", caught.exception.stage)
 
     def test_qtp_source_replay_uses_itp_input_stream(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
@@ -756,6 +1311,12 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(204),  # parser upload
                 FakeResponse(200, query_result),  # target visibility
                 FakeResponse(200, query_result),  # target stable
+                FakeResponse(200, table_payload([
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {"name": "AwsEventId", "type": "guid"},
+                    {"name": "AwsRequestId", "type": "guid"},
+                    {"name": "SharedEventId", "type": "guid"},
+                ])),
                 FakeResponse(201),  # QTP raw DCR PUT
                 FakeResponse(
                     200,
@@ -779,7 +1340,10 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "sourceRawTable": "Contoso",
             "rowCount": 1,
             "schema": [
-                {"name": "TimeGenerated", "type": "datetime"}
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "AwsEventId", "type": "string"},
+                {"name": "AwsRequestId", "type": "string"},
+                {"name": "SharedEventId", "type": "string"},
             ],
             "namespace": {
                 "pullRequest": "123",
@@ -791,6 +1355,9 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 {
                     "TimeGenerated": timestamp,
                     "Type": "Contoso",
+                    "AwsEventId": "11111111-2222-4333-8444-555555555555",
+                    "AwsRequestId": "",
+                    "SharedEventId": "",
                 }
             ],
         }
@@ -827,6 +1394,13 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "Microsoft-SentinelContoso",
             dcr_puts[1]["dataFlows"][0]["outputStream"],
         )
+        self.assertEqual("source", dcr_puts[0]["dataFlows"][0]["transformKql"])
+        self.assertEqual(
+            "source\n| extend AwsEventId = toguid(AwsEventId), "
+            "AwsRequestId = toguid(AwsRequestId), "
+            "SharedEventId = toguid(SharedEventId)",
+            dcr_puts[1]["dataFlows"][0]["transformKql"],
+        )
         parser_columns = next(
             iter(dcr_puts[0]["streamDeclarations"].values())
         )["columns"]
@@ -840,6 +1414,13 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertNotIn(
             "Type",
             {column["name"] for column in raw_columns},
+        )
+        self.assertEqual(
+            "string",
+            next(
+                column["type"] for column in raw_columns
+                if column["name"] == "AwsEventId"
+            ),
         )
         self.assertEqual(
             "passed", result["qtpSourceReplay"]["status"]
@@ -887,6 +1468,9 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(204),  # parser upload
                 FakeResponse(200, query_result),  # target visibility
                 FakeResponse(200, query_result),  # target stable
+                FakeResponse(200, table_payload(
+                    [{"name": "TimeGenerated", "type": "datetime"}]
+                )),
                 FakeResponse(
                     400,
                     {
@@ -990,6 +1574,10 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(204),  # parser upload
                 FakeResponse(200, target_result),
                 FakeResponse(200, target_result),
+                FakeResponse(200, table_payload([
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {"name": "Value", "type": "string"},
+                ])),
                 FakeResponse(201),  # raw DCR PUT
                 FakeResponse(
                     200,

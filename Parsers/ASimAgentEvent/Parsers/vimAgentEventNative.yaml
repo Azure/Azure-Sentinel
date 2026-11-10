@@ -1,0 +1,91 @@
+Parser:
+  Title: Agent Event ASIM filtering parser for Microsoft Sentinel native Agent Event table
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: Native
+Normalization:
+  Schema: AgentEvent
+  Version: '1.0.0'
+References:
+  - Title: Native Agent Event table
+    Link: https://learn.microsoft.com/azure/azure-monitor/reference/tables/asimagenteventlogs
+  - Title: ASIM Agent Event Schema
+    Link: https://aka.ms/ASimAgentEventDoc
+Description: |
+  This ASIM parser supports normalizing the native Agent Event table (ASimAgentEventLogs) to the ASIM Agent Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: vimAgentEventNative
+EquivalentBuiltInParser: _Im_AgentEvent_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: agentid_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: agentname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime:datetime=datetime(null), endtime:datetime=datetime(null),
+      agentid_has_any:dynamic=dynamic([]), agentname_has_any:dynamic=dynamic([]),
+      username_has_any:dynamic=dynamic([]), disabled:bool=false, pack:bool=false) {
+    ASimAgentEventLogs
+    | where not(disabled)
+    | where isnull(starttime) or coalesce(EventStartTime, TimeGenerated) >= starttime
+    | where isnull(endtime) or coalesce(EventEndTime, TimeGenerated) <= endtime
+    | where array_length(agentid_has_any) == 0
+        or SrcAgentId has_any (agentid_has_any)
+        or TargetAgentId has_any (agentid_has_any)
+        or PlatformTargetAgentId has_any (agentid_has_any)
+    | where array_length(agentname_has_any) == 0
+        or SrcAgentName has_any (agentname_has_any)
+        or TargetAgentName has_any (agentname_has_any)
+        or PlatformTargetAgentName has_any (agentname_has_any)
+    | where array_length(username_has_any) == 0
+        or ActorUsername has_any (username_has_any)
+        or TargetAgentUsername has_any (username_has_any)
+    | extend
+        EventSchema = "AgentEvent",
+        EventStartTime = coalesce(EventStartTime, TimeGenerated),
+        EventEndTime = coalesce(EventEndTime, TimeGenerated),
+        PlatformTargetAgentEntityKey = column_ifexists("PlatformTargetAgentEntityKey", ""),
+        AdditionalFields = iff(pack, AdditionalFields, dynamic({}))
+    | project
+        TimeGenerated, Type, EventUid, EventOriginalUid, EventSchema, EventSchemaVersion,
+        EventStartTime, EventEndTime, EventCount, EventVendor, EventProduct,
+        SrcAgentId, SrcAgentName, SrcAgentOriginalType, SrcAgentDescription, SrcAgentBlueprintId,
+        SrcIpAddr, SrcFQDN, SrcPortNumber, TargetAgentId, TargetAgentName,
+        TargetAgentUsername, TargetAgentUserId, TargetAgentOriginalType,
+        TargetAgentDescription, TargetAgentBlueprintId, TargetAgentEntityKey,
+        PlatformTargetAgentId, PlatformTargetAgentName, PlatformTargetAgentDescription,
+        PlatformTargetAgentEntityKey, PlatformTargetOriginalAgentType,
+        ActorUserId, ActorUserIdType, ActorUserScope, ActorUserScopeId,
+        ActorUsername, ActorUsernameType, ActorUserAdditionalIds, ActorUserEntityKey,
+        ActingAppName, ActingAppId, ActingAppType, ActingApplicationEntityKey,
+        SrcAgentEntityKey, DvcEntityKey, EventSessionId, EventSessionName,
+        EventType, EventOriginalType, EventRequestId, EventRequestTemperature,
+        EventRequestTopP, EventRequestPresencePenalty, EventRequestFrequencyPenalty,
+        EventRequestSeed, EventResponseId, EventOriginalRequestDetails,
+        EventOriginalResultDetails, EventErrorDetails, EventOriginalErrorType,
+        EventThoughtProcessDetails, EventThoughtProcessId, EventFinishReasons,
+        EventOutputType, ToolId, ToolName, ToolDescription, ToolOriginalType,
+        ModelProviderName, ModelName, InputTokensUsed, OutputTokensUsed,
+        AdditionalEntities, AdditionalFields
+  };
+  parser(starttime=starttime, endtime=endtime, agentid_has_any=agentid_has_any,
+      agentname_has_any=agentname_has_any, username_has_any=username_has_any,
+      disabled=disabled, pack=pack)

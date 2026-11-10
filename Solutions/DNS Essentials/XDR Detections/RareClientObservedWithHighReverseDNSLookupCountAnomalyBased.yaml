@@ -1,0 +1,80 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0fe6bde4-b215-480c-99b4-84a96edcdbd7
+    path: Analytic Rules/RareClientObservedWithHighReverseDNSLookupCountAnomalyBased.yaml
+    version: 1.0.2
+    querySha256: ec6fff3093ea49471233012c318abb3ee20aee26e15bfed4df620c0ad7a4dbed
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - IP.Address column `SrcIpAddr` is not produced by the query
+    - customDetails 'DNSQueries' column `DNSQueries` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'AnomalyScore' column `score` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'baseline' column `baseline` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'Total' column `Total` has an unproven output binding after a destructive projection; the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - IP.Address output column `SrcIpAddr` cannot be proven after a destructive projection; no supplemental customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Reconnaissance
+    originalTechniques:
+    - T1590
+    reviewScope:
+      sourceDocumentSha256: ca5eb20a55a46a8996bd4291bc6c94bc2e5adcbbd0337ed195253b988f32ba4f
+      targetQuerySha256: 2c07b5c0c9dadb6afb01ef41715e8cbbdfbc1f3faa747536547c1c1b8e84fcab
+    supplementalEntityDetails:
+    - entityType: IP
+      entityIndex: 1
+      identifier: Address
+      sourceColumn: SrcIpAddr
+      column: SrcIpAddr
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-0fe6bde4-b215-480c-99b4-84a96edcdbd7
+  displayName: Rare client observed with high reverse DNS lookup count - Anomaly based (ASIM DNS Solution)
+  status: disabled
+  queryCondition:
+    queryText: "let threshold = 2.5;\nlet SearchDomain = dynamic([\"in-addr.arpa\"]);\nlet min_t = ago(14d);\nlet max_t = now();\nlet timeframe = 1d;\nlet DNSEvents=(stime: datetime, etime: datetime) {\n  _Im_Dns(starttime=stime, endtime=etime, domain_has_any=SearchDomain)\n};\nDNSEvents(stime=min_t, etime=max_t)\n| make-series QueryCount=dcount(DnsQuery) on TimeGenerated from min_t to max_t step timeframe by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(QueryCount, threshold, -1, 'linefit')\n| mv-expand anomalies, score, baseline, TimeGenerated, QueryCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(TimeGenerated),\n  Total = tolong(QueryCount)\n| where EventTime >= ago(timeframe)\n| where score >= threshold * 2\n| join kind = inner (DNSEvents(stime=ago(timeframe), etime=max_t)\n  | summarize DNSQueries=make_set(DnsQuery, 1000) by SrcIpAddr)\n  on SrcIpAddr\n| project-away SrcIpAddr1"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Rare client observed with high reverse DNS lookup count - Anomaly based (ASIM DNS Solution)
+      description: '''This rule makes use of the series decompose anomaly method to identify clients with high reverse DNS counts. This helps in detecting the possible initial phases of an attack, like discovery and reconnaissance. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1590
+      customDetails:
+        DNSQueries: DNSQueries
+        AnomalyScore: score
+        baseline: baseline
+        Total: Total

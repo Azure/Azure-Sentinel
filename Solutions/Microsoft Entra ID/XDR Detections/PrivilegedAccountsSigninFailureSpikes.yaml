@@ -1,0 +1,165 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - IdentityInfo
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - IdentityInfo
+  - workload: sentinel
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - IdentityInfo
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 34c5aff9-a8c2-4601-9654-c7e46342d03b
+    path: Analytic Rules/PrivilegedAccountsSigninFailureSpikes.yaml
+    version: 1.1.1
+    querySha256: 47a2157807815666af669c18c1694980f4e2920f018661a33f3b4b4d7ea75511
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `UserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 30e43ce68a39a318e10346a8cc0b5a6ade0895f3390d6e4c0adc89adc1d2a0fb
+      targetQuerySha256: 44aa595452feb2e3f7ff7ea8479fce7e39959b778185d6fcbc404452f49a8db3
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 30e43ce68a39a318e10346a8cc0b5a6ade0895f3390d6e4c0adc89adc1d2a0fb
+      targetQuerySha256: 44aa595452feb2e3f7ff7ea8479fce7e39959b778185d6fcbc404452f49a8db3
+    - reason: catalog column mappings were not applied because table/alias scope is
+        ambiguous
+      decision: accepted
+      sourceDocumentSha256: 30e43ce68a39a318e10346a8cc0b5a6ade0895f3390d6e4c0adc89adc1d2a0fb
+      targetQuerySha256: 44aa595452feb2e3f7ff7ea8479fce7e39959b778185d6fcbc404452f49a8db3
+    acceptedReviewReasons:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-34c5aff9-a8c2-4601-9654-c7e46342d03b
+  displayName: Privileged Accounts - Sign in Failure Spikes
+  status: disabled
+  queryCondition:
+    queryText: "let starttime = 14d;\nlet timeframe = 1d;\nlet scorethreshold = 3;\n\
+      let baselinethreshold = 5;\nlet aadFunc = (tableName:string){\n    IdentityInfo\n\
+      \    | where TimeGenerated > ago(starttime)\n    | summarize arg_max(TimeGenerated,\
+      \ *) by AccountUpn\n    | mv-expand AssignedRoles\n    | where AssignedRoles\
+      \ contains 'Admin' or GroupMembership has \"Admin\"\n    | summarize Roles =\
+      \ make_list(AssignedRoles) by AccountUpn = tolower(AccountUpn)\n    | join kind=inner\
+      \ (\n        table(tableName)\n        | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))\n\
+      \        | where ResultType != 0\n        | extend UserPrincipalName = tolower(UserPrincipalName)\n\
+      \    ) on $left.AccountUpn == $right.UserPrincipalName\n    | extend timestamp\
+      \ = TimeGenerated, AccountCustomEntity = UserPrincipalName, Roles = tostring(Roles)\n\
+      };\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\"\
+      );\nlet allSignins = union isfuzzy=true aadSignin, aadNonInt;\nlet TimeSeriesAlerts\
+      \ =\n    allSignins\n    | make-series HourlyCount=count() on TimeGenerated\
+      \ from startofday(ago(starttime)) to startofday(now()) step 1h by UserPrincipalName,\
+      \ Roles\n    | extend (anomalies, score, baseline) = series_decompose_anomalies(HourlyCount,\
+      \ scorethreshold, -1, 'linefit')\n    | mv-expand HourlyCount to typeof(double),\
+      \ TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double),\
+      \ baseline to typeof(long)\n    // Filtering low count events per baselinethreshold\n\
+      \    | where anomalies > 0 and baseline > baselinethreshold\n    | extend AnomalyHour\
+      \ = TimeGenerated\n    | project UserPrincipalName, Roles, AnomalyHour, TimeGenerated,\
+      \ HourlyCount, baseline, anomalies, score;\n// Filter the alerts for specified\
+      \ timeframe\nTimeSeriesAlerts\n| where TimeGenerated > startofday(ago(timeframe))\n\
+      | join kind=inner (\n    allSignins\n    | where TimeGenerated > startofday(ago(timeframe))\n\
+      \    // create a new column and round to hour\n    | extend DateHour = bin(TimeGenerated,\
+      \ 1h)\n    | summarize PartialFailedSignins = count(), LatestAnomalyTime = arg_max(TimeGenerated,\
+      \ *) by bin(TimeGenerated, 1h), OperationName, Category, ResultType, ResultDescription,\
+      \ UserPrincipalName, Roles, UserDisplayName, AppDisplayName, ClientAppUsed,\
+      \ IPAddress, ResourceDisplayName\n) on UserPrincipalName, $left.AnomalyHour\
+      \ == $right.DateHour\n| project LatestAnomalyTime, OperationName, Category,\
+      \ UserPrincipalName, Roles = todynamic(Roles), UserDisplayName, ResultType,\
+      \ ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location,\
+      \ AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins,\
+      \ TotalFailedSignins = HourlyCount, baseline, anomalies, score\n| extend Name\
+      \ = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Privileged Accounts - Sign in Failure Spikes
+      description: ''' Identifies spike in failed sign-ins from Privileged accounts.
+        Privileged accounts list can be based on IdentityInfo UEBA table.
+
+        Spike is determined based on Time series anomaly which will look at historical
+        baseline values.
+
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: UserPrincipalName

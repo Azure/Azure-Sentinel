@@ -1,0 +1,138 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AWSS3
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8c2ef238-67a0-497d-b1dd-5c8a0f533e25
+    path: Analytic Rules/AWS_ChangeToRDSDatabase.yaml
+    version: 1.0.5
+    querySha256: d1615a09734f0c3ab55211328dedd71d76646aac615a7e2dd5f69c89471242d9
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - customDetails 'UserAgent' column `UserAgent` requires runtime output-schema binding verification
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'EventSource' column `EventSource` requires runtime output-schema binding verification
+    - customDetails 'EventType' column `EventTypeName` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    - DefenseEvasion
+    originalTechniques:
+    - T1098.001
+    - T1562.007
+    reviewScope:
+      sourceDocumentSha256: cdc9283de8fdd47ee2bda81fcb47c3443c167c3c536894c9f660d37d3e802250
+      targetQuerySha256: b04d07aa50ef7cb762524f3569f3c4702172886bf706becfd8b545bfad8cae2e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-8c2ef238-67a0-497d-b1dd-5c8a0f533e25
+  displayName: AWSCloudTrail - Changes to internet facing AWS RDS Database instances
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let EventNameList = dynamic(["AuthorizeDBSecurityGroupIngress","CreateDBSecurityGroup","DeleteDBSecurityGroup","RevokeDBSecurityGroupIngress"]);
+      AWSCloudTrail
+      | where EventName in~ (EventNameList)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Changes to internet facing AWS RDS Database instances
+      description: |-
+        Identifies AWS CloudTrail events associated with changes to Amazon RDS database security groups and database
+        security group ingress rules, which may indicate unauthorized modification of internet-facing RDS access. Validate whether
+        the change was authorized and consistent with change control policy.
+        RDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.001
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.001
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.007
+      customDetails:
+        AWSRegion: AWSRegion
+        UserAgent: UserAgent
+        EventName: EventName
+        EventSource: EventSource
+        EventType: EventTypeName
+        AccountCloudAppAccountId: RecipientAccountId

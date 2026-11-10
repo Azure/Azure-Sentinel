@@ -1,0 +1,136 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mdo
+    dataTypes:
+    - EmailEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - EmailEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: bc3bb047-70b8-4a4b-ac21-e3b1172881a4
+    path: Analytic Rules/DomainEntity_EmailEvents_Updated.yaml
+    version: 1.0.5
+    querySha256: 05f83a40b73e1aa78373ed5cf2d1b1722b8c23ea2f0bf1a7b1c8641132ef63de
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.5
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `RecipientEmailAddress` cannot be proven after
+      a destructive projection; no supplemental customDetails binding was added and
+      KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 2d2473d4ac51e18da537c8d838ed708b643a1e6cbcb5c3dffa413e42552f253c
+      targetQuerySha256: 34c037cd8ddfcdfcd0af270a8d3e79560b692baa1eed47ee11e475a97aa14d77
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: RecipientEmailAddress
+      column: RecipientEmailAddress
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-bc3bb047-70b8-4a4b-ac21-e3b1172881a4
+  displayName: TI Map Domain entity to EmailEvents
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailEvents_ =\
+      \ materialize(EmailEvents | where isnotempty(RecipientEmailAddress) and isnotempty(SenderFromAddress)\
+      \ and TimeGenerated >= ago(dt_lookBack) and DeliveryAction !has \"Blocked\"\
+      \ | project-rename  EmailEvents_TimeGenerated = TimeGenerated | extend SenderFromDomain\
+      \ = tolower(SenderFromDomain) | extend RecipientEmailDomain = tolower(tostring(split(RecipientEmailAddress,\
+      \ '@', 1))));\nlet SenderDomains = EmailEvents_ | distinct  SenderFromDomain\
+      \ | summarize make_list(SenderFromDomain);\nlet RecipientDomains = EmailEvents_\
+      \ | distinct  RecipientEmailDomain | summarize make_list(RecipientEmailDomain);\n\
+      let TI = materialize(ThreatIntelIndicators\n| where TimeGenerated >= ago(ioc_lookBack)\n\
+      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"domain-name\"\n| extend DomainName\
+      \ = tolower(ObservableValue)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | extend IndicatorId = tostring(split(Id, \"--\")[2])\n| where DomainName in\
+      \ (SenderDomains) or DomainName in (RecipientDomains)\n| summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil\
+      \ > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n\
+      | where Description !contains_cs \"State: inactive;\" and Description !contains_cs\
+      \ \"State: falsepos;\");\n(union\n  (TI | join kind=innerunique (EmailEvents_)\
+      \ on $left.DomainName == $right.SenderFromDomain),\n  (TI | join kind=innerunique\
+      \ (EmailEvents_) on $left.DomainName == $right.RecipientEmailDomain))\n| where\
+      \ EmailEvents_TimeGenerated < ValidUntil\n| extend ActivityGroupNames = extract(\"\
+      ActivityGroup:([^,]+)\", 1, tostring(parse_json(Data).labels))\n| summarize\
+      \ EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by Id, RecipientEmailAddress\n\
+      | project EmailEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil,\
+      \ Confidence, DomainName, RecipientEmailAddress, SenderFromAddress, Subject,\
+      \ ConfidenceLevel, Type, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation,\
+      \ EmailDirection\n| extend Name = tostring(split(RecipientEmailAddress, '@',\
+      \ 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n| extend\
+      \ timestamp = EmailEvents_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Domain entity to EmailEvents
+      description: Identifies a match in EmailEvents table from any Domain IOC from
+        TI
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566

@@ -1,0 +1,1023 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "This workbook gives an insight into the health of all the Windows VMs in this subscription running Eaton Foreseer and the unauthorized access into the Eaton Foreseer application running on these VMs."
+      },
+      "name": "text - 1"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "80e332f7-8176-461f-b27a-0a52242fe6c9",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "5a93ede8-361d-4cc6-93f8-967dfc355143",
+            "version": "KqlParameterItem/1.0",
+            "name": "Activity",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "SecurityEvent\r\n| summarize Count = count() by Activity\r\n| order by Count desc, Activity asc\r\n| project Value = Activity, Label = strcat(Activity, ' - ', Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "queryType": "advancedHunting"
+          }
+        ],
+        "style": "pills"
+      },
+      "name": "parameters - 1"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Eaton Foreseer Application Information ##\r\n\r\nLogin information pertaining to the Eaton Foreseer application."
+      },
+      "name": "text - 13"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SecurityEvent\r\n| where ProcessName has \"Foreseer\"\r\n| distinct Computer, IpAddress\r\n| project\r\n    Computer,\r\n    IpAddress;",
+        "size": 0,
+        "title": "Computers running Eaton Foreseer",
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "",
+        "exportParameterName": "EatonComputers",
+        "exportDefaultValue": "{\"TenantId\":\"\",\"Computer\":\"*\"}",
+        "queryType": "advancedHunting"
+      },
+      "customWidth": "18",
+      "name": "query - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where EventID == 4624 and AccountType == 'User'\r\n// Looking for Eaton Foreseer Events\r\n| where ProcessName has \"Foreseer\"\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account));\r\nlet appData = data\r\n| summarize TotalCount = count() by Name, Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name\r\n    | project-away TimeGenerated) on Name\r\n| order by TotalCount desc, Name asc\r\n| project Name, TotalCount, Trend, Computer\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Name, Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name, Activity\r\n    | project-away TimeGenerated) on Name, Activity\r\n| order by TotalCount desc, Name asc\r\n| project Name, Activity, TotalCount, Trend, Computer\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Name\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1, Computer\r\n| union (appData \r\n    | project Id, Name = Name, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+        "size": 0,
+        "title": "Eaton Foreseer Application User login success",
+        "timeContextFromParameter": "TimeRange",
+        "exportParameterName": "Userinfo",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activity Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blueGreen",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "greenDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "IpAddress",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          }
+        }
+      },
+      "customWidth": "41",
+      "name": "query - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where EventID == 4625 and AccountType == 'User'\r\n// Look for Eaton Foreseer events\r\n| where ProcessName has \"Foreseer\"\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account));\r\nlet appData = data\r\n| summarize TotalCount = count() by Name, Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name\r\n    | project-away TimeGenerated) on Name\r\n| order by TotalCount desc, Name asc\r\n| project Name, TotalCount, Trend, Computer\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Name, Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name, Activity\r\n    | project-away TimeGenerated) on Name, Activity\r\n| order by TotalCount desc, Name asc\r\n| project Name, Activity, TotalCount, Trend, Computer\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Name\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1, Computer\r\n| union (appData \r\n    | project Id, Name = Name, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+        "size": 0,
+        "title": "Eaton Foreseer Application User login failure",
+        "timeContextFromParameter": "TimeRange",
+        "exportParameterName": "Userinfo",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "Activity Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "yellowOrangeRed"
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "redDark"
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5
+            },
+            {
+              "columnMatch": "IpAddress",
+              "formatter": 5
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          }
+        }
+      },
+      "customWidth": "40",
+      "name": "query - 6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SecurityEvent\r\n// Look for all events relating to user logins  \r\n| where EventID in (4624,4625,4648,4675,4634,4647)  \r\n| where AccountType == \"User\" \r\n// Filter for data present  \r\n| where isnotempty(ProcessName)  \r\n| where isnotempty(TargetUserName)  \r\n// Look for all events that relate to the Eaton Foreseer application  \r\n| where ProcessName has \"Foreseer\"  \r\n// Ignore known user accounts (please edit based on your allowed users)  \r\n| where TargetUserName !in (\"eaton_superuser\", \"janedoe\", \"johndoe\")  \r\n| summarize TimeGenerated=arg_min(TimeGenerated, *) by TargetUserName, Computer \r\n| extend LoginStatus=iff(EventID==4624, 'Success', 'Failure')\r\n| project      \r\n    TimeGenerated,\r\n    WindowsEventID = EventID,\r\n    IPCustomEntity = IpAddress,\r\n    HostCustomEntity = Computer,\r\n    UserEntity = TargetUserName,\r\n    LoginStatus,\r\n    Process,\r\n    ProcessName\r\n\r\n\r\n",
+        "size": 0,
+        "title": "Eaton Foreseer Application Anomalous Logins",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting"
+      },
+      "name": "query - 7"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "# Additional Information #\r\n\r\nInformation on security related activity and processes in all the machines that are running Eaton application."
+      },
+      "name": "text - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| join kind=leftsemi (Computers) on Computer\r\n;\r\ndata\r\n| summarize Count = count() by Activity\r\n| join kind = fullouter (datatable(Activity:string)['Medium', 'high', 'low']) on Activity\r\n| project Activity = iff(Activity == '', Activity1, Activity), Count = iff(Activity == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Activity)\r\n on Activity\r\n| project-away Activity1, TimeGenerated\r\n| extend Activitys = Activity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend Activity = 'All', Activitys = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "title": "Top 10 activities - click to filter by activity",
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "Activity",
+        "exportParameterName": "ActivityPiker",
+        "exportDefaultValue": "All",
+        "queryType": "advancedHunting",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Activity",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "palette": "lightBlue",
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\" and AccountType == 'User'\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account));\r\nlet appData = data\r\n| summarize TotalCount = count() by Name\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name\r\n    | project-away TimeGenerated) on Name\r\n| order by TotalCount desc, Name asc\r\n| project Name, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Name\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name, Activity\r\n    | project-away TimeGenerated) on Name, Activity\r\n| order by TotalCount desc, Name asc\r\n| project Name, Activity, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Name\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Name, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+        "size": 0,
+        "title": "All Security related User activities",
+        "timeContextFromParameter": "TimeRange",
+        "exportParameterName": "Userinfo",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activity Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blueGreen",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "greenDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "IpAddress",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\" and AccountType == 'Machine'\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where dynamic({Userinfo}).Type == '*' or (dynamic({Userinfo}).Type == 'Computer' and user == dynamic({Userinfo}).Name);\r\nlet appData = data\r\n| summarize TotalCount = count() by Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Computer\r\n    | project-away TimeGenerated) on Computer\r\n| order by TotalCount desc, Computer asc\r\n| project Computer, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Computer, Activity\r\n    | project-away TimeGenerated) on Computer, Activity\r\n| order by TotalCount desc, Computer asc\r\n| project Computer, Activity, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Computer\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Computer, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+        "size": 0,
+        "title": "All Security related Machine activities",
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "",
+        "exportParameterName": "MachineInfo",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activity Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet Users = dynamic({Userinfo});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where LogonTypeName != \"\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and user == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by LogonTypeName = strcat( \"Logon type: \", LogonTypeName), Activity, user\r\n| order by Count",
+        "size": 0,
+        "title": "Logon activity types",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "green",
+                "showIcon": true,
+                "aggregation": "Sum"
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "treeType": 1,
+            "groupBy": [
+              "LogonTypeName",
+              "Activity"
+            ],
+            "expandTopLevel": false
+          }
+        }
+      },
+      "name": "query - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet Users = dynamic({Userinfo});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where Process != \"\" and Process != \"-\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and Name == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by Process, bin(TimeGenerated, 1h)",
+        "size": 0,
+        "title": "All Processes",
+        "color": "lightBlue",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "visualization": "areachart"
+      },
+      "customWidth": "30",
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet Users = dynamic({Userinfo});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where Process != \"\" and Process != \"-\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and user == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by Process, Activity, user, Computer, bin(TimeGenerated, 1h)\r\n| order by TimeGenerated, Count",
+        "size": 0,
+        "title": "All Processes details",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": "advancedHunting",
+        "gridSettings": {
+          "filter": true
+        }
+      },
+      "customWidth": "70",
+      "name": "query - 10"
+    }
+  ],
+  "fromTemplateId": "sentinel-EatonForeseerHealthAndAccess",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "xdrMetadata": {
+    "contentId": "1634cf9e-79b7-524c-bbed-3a2620e0b449",
+    "instanceId": "496e9e4a-04d7-5161-b534-37339a2a6be3",
+    "version": "3.2.3",
+    "schemaVersion": "1.0.0",
+    "displayName": "EatonForeseerHealthAndAccess"
+  },
+  "contentProvenance": {
+    "source": {
+      "path": "Workbooks/EatonForeseerHealthAndAccess.json",
+      "sha256": "5cdfac27d494ddfb9f08eb45b9b11b24d1639045c5cf533015dec0e4c6fd31d7",
+      "contentId": "sentinel-EatonForeseerHealthAndAccess",
+      "originalMetadataVersion": null
+    },
+    "conversion": {
+      "tool": "sentinel-xdr-migration",
+      "version": "0.1.0",
+      "reviewRequired": false,
+      "queries": [
+        {
+          "sourcePath": "/items/1/content/parameters/1/query",
+          "parameter": true,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "bf5dab5c02f148ca90c2724966d7e5ddffbaa7e8e1db1d27557f5efce2c86d65"
+          },
+          "conversion": {
+            "sourceId": "/items/1/content/parameters/1/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "SecurityEvent\r\n| summarize Count = count() by Activity\r\n| order by Count desc, Activity asc\r\n| project Value = Activity, Label = strcat(Activity, ' - ', Count)",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/1/content/parameters/1/query",
+          "sourceSha256": "bf5dab5c02f148ca90c2724966d7e5ddffbaa7e8e1db1d27557f5efce2c86d65",
+          "targetSha256": "bf5dab5c02f148ca90c2724966d7e5ddffbaa7e8e1db1d27557f5efce2c86d65"
+        },
+        {
+          "sourcePath": "/items/3/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "ad42b0791263d4b8d15be18d064ff31659ef12148b88e04ea51bd271fae5721c"
+          },
+          "conversion": {
+            "sourceId": "/items/3/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "SecurityEvent\r\n| where ProcessName has \"Foreseer\"\r\n| distinct Computer, IpAddress\r\n| project\r\n    Computer,\r\n    IpAddress;",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/3/content/query",
+          "sourceSha256": "ad42b0791263d4b8d15be18d064ff31659ef12148b88e04ea51bd271fae5721c",
+          "targetSha256": "ad42b0791263d4b8d15be18d064ff31659ef12148b88e04ea51bd271fae5721c"
+        },
+        {
+          "sourcePath": "/items/4/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "87d1c829a730641545172a17c95615af51a444c36dc06fc80b701e6702e38576"
+          },
+          "conversion": {
+            "sourceId": "/items/4/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where EventID == 4624 and AccountType == 'User'\r\n// Looking for Eaton Foreseer Events\r\n| where ProcessName has \"Foreseer\"\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account));\r\nlet appData = data\r\n| summarize TotalCount = count() by Name, Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name\r\n    | project-away TimeGenerated) on Name\r\n| order by TotalCount desc, Name asc\r\n| project Name, TotalCount, Trend, Computer\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Name, Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name, Activity\r\n    | project-away TimeGenerated) on Name, Activity\r\n| order by TotalCount desc, Name asc\r\n| project Name, Activity, TotalCount, Trend, Computer\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Name\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1, Computer\r\n| union (appData \r\n    | project Id, Name = Name, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/4/content/query",
+          "sourceSha256": "87d1c829a730641545172a17c95615af51a444c36dc06fc80b701e6702e38576",
+          "targetSha256": "87d1c829a730641545172a17c95615af51a444c36dc06fc80b701e6702e38576"
+        },
+        {
+          "sourcePath": "/items/5/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "972aa5a0ba651ebf7de5ddde1b7f17c18d2b1f17eea4441675cdee5b47dfc997"
+          },
+          "conversion": {
+            "sourceId": "/items/5/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where EventID == 4625 and AccountType == 'User'\r\n// Look for Eaton Foreseer events\r\n| where ProcessName has \"Foreseer\"\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account));\r\nlet appData = data\r\n| summarize TotalCount = count() by Name, Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name\r\n    | project-away TimeGenerated) on Name\r\n| order by TotalCount desc, Name asc\r\n| project Name, TotalCount, Trend, Computer\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Name, Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name, Activity\r\n    | project-away TimeGenerated) on Name, Activity\r\n| order by TotalCount desc, Name asc\r\n| project Name, Activity, TotalCount, Trend, Computer\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Name\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1, Computer\r\n| union (appData \r\n    | project Id, Name = Name, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/5/content/query",
+          "sourceSha256": "972aa5a0ba651ebf7de5ddde1b7f17c18d2b1f17eea4441675cdee5b47dfc997",
+          "targetSha256": "972aa5a0ba651ebf7de5ddde1b7f17c18d2b1f17eea4441675cdee5b47dfc997"
+        },
+        {
+          "sourcePath": "/items/6/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "3aa94fa1798a274b69c81897b67d1c25e5b2f1b9a2b707492d264bbdbdbd9d3a"
+          },
+          "conversion": {
+            "sourceId": "/items/6/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "SecurityEvent\r\n// Look for all events relating to user logins  \r\n| where EventID in (4624,4625,4648,4675,4634,4647)  \r\n| where AccountType == \"User\" \r\n// Filter for data present  \r\n| where isnotempty(ProcessName)  \r\n| where isnotempty(TargetUserName)  \r\n// Look for all events that relate to the Eaton Foreseer application  \r\n| where ProcessName has \"Foreseer\"  \r\n// Ignore known user accounts (please edit based on your allowed users)  \r\n| where TargetUserName !in (\"eaton_superuser\", \"janedoe\", \"johndoe\")  \r\n| summarize TimeGenerated=arg_min(TimeGenerated, *) by TargetUserName, Computer \r\n| extend LoginStatus=iff(EventID==4624, 'Success', 'Failure')\r\n| project      \r\n    TimeGenerated,\r\n    WindowsEventID = EventID,\r\n    IPCustomEntity = IpAddress,\r\n    HostCustomEntity = Computer,\r\n    UserEntity = TargetUserName,\r\n    LoginStatus,\r\n    Process,\r\n    ProcessName\r\n\r\n\r\n",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/6/content/query",
+          "sourceSha256": "3aa94fa1798a274b69c81897b67d1c25e5b2f1b9a2b707492d264bbdbdbd9d3a",
+          "targetSha256": "3aa94fa1798a274b69c81897b67d1c25e5b2f1b9a2b707492d264bbdbdbd9d3a"
+        },
+        {
+          "sourcePath": "/items/8/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "38364dcd3dbedc3a1fb01469062f41c6329a434ca8fde476aa01c679eac1e202"
+          },
+          "conversion": {
+            "sourceId": "/items/8/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| join kind=leftsemi (Computers) on Computer\r\n;\r\ndata\r\n| summarize Count = count() by Activity\r\n| join kind = fullouter (datatable(Activity:string)['Medium', 'high', 'low']) on Activity\r\n| project Activity = iff(Activity == '', Activity1, Activity), Count = iff(Activity == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Activity)\r\n on Activity\r\n| project-away Activity1, TimeGenerated\r\n| extend Activitys = Activity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend Activity = 'All', Activitys = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/8/content/query",
+          "sourceSha256": "38364dcd3dbedc3a1fb01469062f41c6329a434ca8fde476aa01c679eac1e202",
+          "targetSha256": "38364dcd3dbedc3a1fb01469062f41c6329a434ca8fde476aa01c679eac1e202"
+        },
+        {
+          "sourcePath": "/items/9/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "635712e0066c42e208e3eb0bf9385a0987c9466036136afa6d44e01f264aed1b"
+          },
+          "conversion": {
+            "sourceId": "/items/9/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\" and AccountType == 'User'\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account));\r\nlet appData = data\r\n| summarize TotalCount = count() by Name\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name\r\n    | project-away TimeGenerated) on Name\r\n| order by TotalCount desc, Name asc\r\n| project Name, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Name\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name, Activity\r\n    | project-away TimeGenerated) on Name, Activity\r\n| order by TotalCount desc, Name asc\r\n| project Name, Activity, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Name\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Name, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/9/content/query",
+          "sourceSha256": "635712e0066c42e208e3eb0bf9385a0987c9466036136afa6d44e01f264aed1b",
+          "targetSha256": "635712e0066c42e208e3eb0bf9385a0987c9466036136afa6d44e01f264aed1b"
+        },
+        {
+          "sourcePath": "/items/10/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "25997e143b85330b77565a596d735d77372a1f5fd82f8e0849f1853056680f34"
+          },
+          "conversion": {
+            "sourceId": "/items/10/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\" and AccountType == 'Machine'\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where dynamic({Userinfo}).Type == '*' or (dynamic({Userinfo}).Type == 'Computer' and user == dynamic({Userinfo}).Name);\r\nlet appData = data\r\n| summarize TotalCount = count() by Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Computer\r\n    | project-away TimeGenerated) on Computer\r\n| order by TotalCount desc, Computer asc\r\n| project Computer, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Computer, Activity\r\n    | project-away TimeGenerated) on Computer, Activity\r\n| order by TotalCount desc, Computer asc\r\n| project Computer, Activity, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Computer\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Computer, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/10/content/query",
+          "sourceSha256": "25997e143b85330b77565a596d735d77372a1f5fd82f8e0849f1853056680f34",
+          "targetSha256": "25997e143b85330b77565a596d735d77372a1f5fd82f8e0849f1853056680f34"
+        },
+        {
+          "sourcePath": "/items/11/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "8aa1c35829795c18b3d374c9a6d3a51332ebcd51e674d04db673796334889e54"
+          },
+          "conversion": {
+            "sourceId": "/items/11/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet Users = dynamic({Userinfo});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where LogonTypeName != \"\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and user == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by LogonTypeName = strcat( \"Logon type: \", LogonTypeName), Activity, user\r\n| order by Count",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/11/content/query",
+          "sourceSha256": "8aa1c35829795c18b3d374c9a6d3a51332ebcd51e674d04db673796334889e54",
+          "targetSha256": "8aa1c35829795c18b3d374c9a6d3a51332ebcd51e674d04db673796334889e54"
+        },
+        {
+          "sourcePath": "/items/12/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "6ea85cc9b8e401ff658d5c8dd470c2fad39066f6fa7adfdef33632fa1bcaec63"
+          },
+          "conversion": {
+            "sourceId": "/items/12/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet Users = dynamic({Userinfo});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where Process != \"\" and Process != \"-\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and Name == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by Process, bin(TimeGenerated, 1h)",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/12/content/query",
+          "sourceSha256": "6ea85cc9b8e401ff658d5c8dd470c2fad39066f6fa7adfdef33632fa1bcaec63",
+          "targetSha256": "6ea85cc9b8e401ff658d5c8dd470c2fad39066f6fa7adfdef33632fa1bcaec63"
+        },
+        {
+          "sourcePath": "/items/13/content/query",
+          "parameter": false,
+          "resolutionEvidence": {
+            "actor": "user-approved",
+            "reference": "batch-5-consolidated-review",
+            "planSha256": "6813ec1cb4ca646966a6bdb7c44490e210b4e2425af63a6c4918d0e1dac1dde6",
+            "decision": "change",
+            "querySha256": "9a5bd06c745e8cd7c91a337a06a0a508cb0b021eb0215fe34887d47923d8afbe"
+          },
+          "conversion": {
+            "sourceId": "/items/13/content/query",
+            "artifactType": "workbook",
+            "status": "converted",
+            "convertedKql": "let Computers = (\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where AccountType == 'User'\r\n| where ProcessName has \"Foreseer\"\r\n| summarize by Computer\r\n);\r\nlet Users = dynamic({Userinfo});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where Process != \"\" and Process != \"-\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| join kind=leftsemi (Computers) on Computer\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and user == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by Process, Activity, user, Computer, bin(TimeGenerated, 1h)\r\n| order by TimeGenerated, Count",
+            "resolvedTables": [
+              "SecurityEvent"
+            ],
+            "mappingTier": "1to1",
+            "renamedTables": {},
+            "renamedAsimTables": {},
+            "diff": [],
+            "schemaMap": [
+              {
+                "sentinelTable": "SecurityEvent",
+                "ahTable": "SecurityEvent",
+                "identical": true,
+                "verdict": "Easy",
+                "score": 1.0,
+                "columnCount": 229,
+                "note": "schema identical; no column changes"
+              }
+            ],
+            "recommendations": [],
+            "confidence": 0.7,
+            "unsupported": [],
+            "validation": null,
+            "blockedReason": null
+          },
+          "status": "converted",
+          "outputPath": "/items/13/content/query",
+          "sourceSha256": "9a5bd06c745e8cd7c91a337a06a0a508cb0b021eb0215fe34887d47923d8afbe",
+          "targetSha256": "9a5bd06c745e8cd7c91a337a06a0a508cb0b021eb0215fe34887d47923d8afbe"
+        }
+      ]
+    },
+    "requiredWorkloads": [
+      {
+        "workload": "sentinel",
+        "dataTypes": [
+          "SecurityEvent"
+        ]
+      }
+    ],
+    "requiredDataConnectors": [
+      {
+        "connectorId": "WindowsSecurityEvents",
+        "dataTypes": [
+          "SecurityEvent"
+        ]
+      }
+    ],
+    "dependencyReviewRequired": false
+  }
+}

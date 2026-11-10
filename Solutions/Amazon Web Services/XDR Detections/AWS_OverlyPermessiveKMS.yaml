@@ -1,0 +1,114 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 60dfc193-0f73-4279-b43c-110ade02b201
+    path: Analytic Rules/AWS_OverlyPermessiveKMS.yaml
+    version: 1.0.5
+    querySha256: fe7c8e4d78215c28a8e351fef1d1ef3b89a835000701850aed627a142090c043
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'EventSource' column `EventSource` requires runtime output-schema binding verification
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1486
+    reviewScope:
+      sourceDocumentSha256: 4a9d631f7ea9680da64e208cf14fed6bbc7ebaecdc71e90d14a94b86e5d7206e
+      targetQuerySha256: 663a85195835225a5e26ecdb562daf9dfcc4d77a3a99b1c2836ef380d4cd4fa5
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-60dfc193-0f73-4279-b43c-110ade02b201
+  displayName: AWSCloudTrail - Suspicious overly permissive KMS key policy created
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let kmsActions = dynamic(["kms:Encrypt", "kms:*"]); //Add other overly permissive APIs to this list.
+      AWSCloudTrail
+      | where EventName in ("CreateKey","PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend Statement = parse_json(tostring((parse_json(RequestParameters).policy))).Statement
+      | mvexpand Statement
+      | extend Action = tostring(parse_json(Statement).Action), Effect = tostring(parse_json(Statement).Effect), Principal = iff(isnotempty(tostring(parse_json(Statement).Principal.AWS)),tostring(parse_json(Statement).Principal.AWS), tostring(parse_json(Statement).Principal))
+      | where Effect =~ "Allow" and Action has_any (kmsActions) and Principal == "*"
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Suspicious overly permissive KMS key policy created
+      description: |-
+        Detects creation or update of KMS key policies that grant broad encryption permissions to all principals.
+        Overly permissive key policies can be abused for malicious encryption operations and indicate potential account
+        compromise or risky misconfiguration.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1486
+      customDetails:
+        EventName: EventName
+        EventSource: EventSource
+        AWSRegion: AWSRegion
+        UserIdentityArn: UserIdentityArn
+        AccountCloudAppAccountId: RecipientAccountId

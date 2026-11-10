@@ -1,0 +1,130 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: AzureKeyVault
+  dataTypes:
+  - KeyVaultData
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureDiagnostics
+    - Event
+    - KeyVaultData
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: AzureKeyVault
+    dataTypes:
+    - KeyVaultData
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7c8051a7-3d29-4c0d-a340-893423f7b0a5
+    path: Analytic Rules/IPEntity_AzureKeyVault.yaml
+    version: 1.3.8
+    querySha256: f6353d35e0d32a03ee7aff2594146b285a4bb90e5118b7e85d5aac724e80cfe5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.3.8
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 77b0b0120f26407c4914986e550f0a7d7449966911197ee282c2be9295d06da1
+      targetQuerySha256: 9d6e97d980cd78c6f40de6a761adfb3d1ee3c76346ab76197c210cee52ca3718
+properties:
+  id: xdr-7c8051a7-3d29-4c0d-a340-893423f7b0a5
+  displayName: TI Map IP entity to Azure Key Vault logs
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h; // Look back 1 hour for AzureDiagnostics logs\n\
+      let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n\
+      // Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators\
+      \ = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\"\
+      )\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated\
+      \ >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP),\
+      \ NetworkSourceIP, NetworkSourceIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity)\
+      \ and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | where\
+      \ ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\"\
+      \ and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n\
+      \  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      \  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Perform\
+      \ a join between IP indicators and AzureDiagnostics logs for Key Vault events\n\
+      IP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP,\
+      \ Type, TI_ipEntity\n  // Use innerunique to keep performance fast and result\
+      \ set low, as we only need one match to indicate potential malicious activity\
+      \ that needs investigation\n  | join kind=innerunique (\n      AzureDiagnostics\n\
+      \      | where ResourceType =~ \"VAULTS\"\n      | where TimeGenerated >= ago(dt_lookBack)\n\
+      \      | extend KeyVaultEvents_TimeGenerated = TimeGenerated, ClientIP = CallerIPAddress\n\
+      \  )\n  on $left.TI_ipEntity == $right.ClientIP\n  // Filter out logs that occurred\
+      \ after the expiration of the corresponding indicator\n  | where KeyVaultEvents_TimeGenerated\
+      \ < ValidUntil\n  // Group the results by IndicatorId and ClientIP, and keep\
+      \ the log entry with the latest timestamp\n  | summarize KeyVaultEvents_TimeGenerated\
+      \ = arg_max(KeyVaultEvents_TimeGenerated, *) by Id, ClientIP\n  // Select the\
+      \ desired output fields\n  | extend Description = tostring(parse_json(Data).description)\n\
+      \  | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      \  | project KeyVaultEvents_TimeGenerated, Description, ActivityGroupNames,\
+      \ Id, ValidUntil, Confidence,\n    TI_ipEntity, ClientIP, ResourceId, SubscriptionId,\
+      \ OperationName, ResultType, CorrelationId, id_s, clientInfo_s, httpStatusCode_d,\n\
+      \    identity_claim_appid_g, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g,\
+      \ Type\n  // Rename the timestamp field\n  | extend timestamp = KeyVaultEvents_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP entity to Azure Key Vault logs
+      description: Identifies a match in Azure Key Vault logs from any IP IOC from
+        TI
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+        azureResources:
+        - id: azureResource1
+          resourceIdColumn: ResourceId
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

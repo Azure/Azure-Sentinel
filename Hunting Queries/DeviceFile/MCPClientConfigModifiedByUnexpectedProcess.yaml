@@ -1,0 +1,86 @@
+id: 0224ae5f-e049-4c9c-8c22-48015b6fc599
+name: MCP client configuration written by an unexpected process
+description: |
+  Identifies writes to the files where AI coding assistants keep their Model Context Protocol (MCP) server
+  list, made by a process other than the assistant or editor that owns the file. Adding a server entry to
+  one of these files makes the assistant start an attacker-chosen command, or connect to an attacker-chosen
+  URL, the next time it runs, so an unexpected writer is a persistence signal.
+  Files covered: Cursor (.cursor/mcp.json), VS Code (.vscode/mcp.json and the user profile mcp.json),
+  Claude Desktop (claude_desktop_config.json) and Claude Code (~/.claude.json for user scope, .mcp.json in
+  a project root). Editors, git and package managers also write these files legitimately, so extend
+  ExpectedWriters for your environment and treat results as leads to review.
+  References:
+  https://code.visualstudio.com/docs/copilot/reference/mcp-configuration
+  https://code.claude.com/docs/en/mcp
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1546
+  - T1574
+query: |
+  let timeframe = 7d;
+  let ConfigFileNames = dynamic(["mcp.json", ".mcp.json", "claude_desktop_config.json", ".claude.json"]);
+  // Processes that normally own these files. Extend for your environment.
+  let ExpectedWriters = dynamic([
+      "cursor", "cursor.exe", "cursor helper", "cursor helper (plugin)", "code", "code.exe", "code helper", "code helper (plugin)",
+      "code - insiders", "code - insiders.exe", "claude", "claude.exe", "git", "git.exe"
+  ]);
+  DeviceFileEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where ActionType in ("FileCreated", "FileModified", "FileRenamed")
+  | where FileName in~ (ConfigFileNames)
+  | extend NormalizedPath = replace_string(tolower(FolderPath), @"\", "/")
+  | where (FileName =~ "mcp.json" and (NormalizedPath contains "/.cursor/" or NormalizedPath contains "/.vscode/" or NormalizedPath contains "/code/user/"))
+      or FileName =~ ".mcp.json"
+      or FileName =~ "claude_desktop_config.json"
+      or FileName =~ ".claude.json"
+  | where not(tolower(InitiatingProcessFileName) in (ExpectedWriters))
+  // Older npm installs of Claude Code run as node, with the package's cli.js (or the claude bin link to it on
+  // macOS and Linux) as the script; newer ones run the claude binary listed above. Only that entrypoint is
+  // exempt, so other node processes writing these files stay in the results.
+  | where not(InitiatingProcessFileName in~ ("node", "node.exe")
+      and (InitiatingProcessCommandLine contains "@anthropic-ai/claude-code/cli."
+          or InitiatingProcessCommandLine contains @"@anthropic-ai\claude-code\cli."
+          or InitiatingProcessCommandLine matches regex @"^\S*node\s+\S*/claude(\s|$)"))
+  | extend AccountCustomEntity = InitiatingProcessAccountName
+  | extend HostCustomEntity = DeviceName
+  | project
+      TimeGenerated,
+      DeviceName,
+      HostCustomEntity,
+      InitiatingProcessAccountName,
+      AccountCustomEntity,
+      InitiatingProcessAccountDomain,
+      ActionType,
+      FolderPath,
+      InitiatingProcessFileName,
+      InitiatingProcessCommandLine,
+      InitiatingProcessParentFileName,
+      ReportId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: eeee2345
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

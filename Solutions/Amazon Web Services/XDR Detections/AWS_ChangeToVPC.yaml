@@ -1,0 +1,127 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AWSS3
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AWSS3
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 65360bb0-8986-4ade-a89d-af3cf44d28aa
+    path: Analytic Rules/AWS_ChangeToVPC.yaml
+    version: 1.0.8
+    querySha256: 3b3a5f48ca1906619d15c6827f0fb96ece072b5e158cfe7875126aae435db560
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` requires runtime output-schema binding verification
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'EventSource' column `EventSource` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.RecipientAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.RecipientAccountId column `RecipientAccountId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    - DefenseEvasion
+    originalTechniques:
+    - T1078
+    - T1562.007
+    reviewScope:
+      sourceDocumentSha256: 6d91e4e0071fc3f2a85e40bc20fdd21705e951757b356a1401b5296d0471e1fe
+      targetQuerySha256: eb7215ed218644e03d265d696c7e85f9fa4ef1257cbe64dfe9e014c68973b4c0
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: RecipientAccountId
+properties:
+  id: xdr-65360bb0-8986-4ade-a89d-af3cf44d28aa
+  displayName: AWSCloudTrail - Changes to Amazon VPC settings
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let EventNameList = dynamic(["CreateNetworkAclEntry","CreateRoute","CreateRouteTable","CreateInternetGateway","CreateNatGateway"]);
+      AWSCloudTrail
+      | where EventName in~ (EventNameList)
+      | where EventSource != "apigateway.amazonaws.com"
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,
+      UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Changes to Amazon VPC settings
+      description: "Identifies changes to Amazon VPC(Virtual Private Cloud) settings that can alter network exposure, routing,\
+        \ or access controls.\nThis rule identifies changes to Amazon VPC (Virtual Private Cloud) settings such as new ACL\
+        \ entries, routes, routetable or Gateways. \nAWS VPC API Docs: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/OperationList-query-vpc.html'"
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1078
+        - technique: T1562
+          subTechniques:
+          - T1562.007
+      customDetails:
+        AWSRegion: AWSRegion
+        RecipientAccountId: RecipientAccountId
+        EventName: EventName
+        EventSource: EventSource

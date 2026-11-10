@@ -1,0 +1,196 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - BehaviorAnalytics
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - IdentityInfo
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - IdentityInfo
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+    - AADNonInteractiveUserSignInLogs
+    - BehaviorAnalytics
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - BehaviorAnalytics
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - IdentityInfo
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 02ef8d7e-fc3a-4d86-a457-650fa571d8d2
+    path: Analytic Rules/SuccessThenFail_DiffIP_SameUserandApp.yaml
+    version: 2.1.11
+    querySha256: aefc6f7f9b34a0d4479639d7feda9c1c8d86cc68d146b66e12a4966aa4354d50
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserPrincipalName` cannot be proven after a
+      destructive projection; no supplemental customDetails binding was added and
+      KQL was not rewritten. Runtime output-schema verification is required
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - InitialAccess
+    originalTechniques:
+    - T1110
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: c7d7f95915ea52a9a9cd5db686cd4349ec7e9e6a801eb77900d721f25f4552aa
+      targetQuerySha256: 5279c20d98fbc762079cb223bcd1f76c81c0e31545e6097aa8ced3655024fbc6
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: c7d7f95915ea52a9a9cd5db686cd4349ec7e9e6a801eb77900d721f25f4552aa
+      targetQuerySha256: 5279c20d98fbc762079cb223bcd1f76c81c0e31545e6097aa8ced3655024fbc6
+    - reason: catalog column mappings were not applied because table/alias scope is
+        ambiguous
+      decision: accepted
+      sourceDocumentSha256: c7d7f95915ea52a9a9cd5db686cd4349ec7e9e6a801eb77900d721f25f4552aa
+      targetQuerySha256: 5279c20d98fbc762079cb223bcd1f76c81c0e31545e6097aa8ced3655024fbc6
+    acceptedReviewReasons:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-02ef8d7e-fc3a-4d86-a457-650fa571d8d2
+  displayName: Successful logon from IP and failure from a different IP
+  status: disabled
+  queryCondition:
+    queryText: "let BehaviorAnalytics = BehaviorInfo\n| extend UserPrincipalName =\
+      \ AccountUpn, UserName = tostring(split(AccountUpn, \"@\")[0]), UsersInsights\
+      \ = parse_json(\"{}\"), DevicesInsights = parse_json(\"{}\"), ActivityInsights\
+      \ = parse_json(\"{}\"), InvestigationPriority = int(0), SourceIPAddress = \"\
+      \", EventSource = ServiceSource, ActivityType = Categories, SourceDevice = \"\
+      \";\nlet riskScoreCutoff = 3; //Adjust this score threshold based on volume\
+      \ of results. Activities identified as the most abnormal receive the highest\
+      \ scores (on a scale of 0-10)\nlet logonDiff = 10m;\nlet aadFunc = (tableName:string)\n\
+      {\ntable(tableName)\n| where ResultType == \"0\"\n| where AppDisplayName !in\
+      \ (\"Office 365 Exchange Online\", \"Skype for Business Online\") // To remove\
+      \ false-positives, add more Apps to this array\n// ---------- Fix for SuccessBlock\
+      \ to also consider IPv6\n| extend SuccessIPv6Block = strcat(split(IPAddress,\
+      \ \":\")[0], \":\", split(IPAddress, \":\")[1], \":\", split(IPAddress, \":\"\
+      )[2], \":\", split(IPAddress, \":\")[3])\n| extend SuccessIPv4Block = strcat(split(IPAddress,\
+      \ \".\")[0], \".\", split(IPAddress, \".\")[1])\n// ------------------\n| project\
+      \ SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress,\
+      \ SuccessLocation = Location, AppDisplayName, SuccessIPBlock = iff(IPAddress\
+      \ contains \":\", strcat(split(IPAddress, \":\")[0], \":\", split(IPAddress,\
+      \ \":\")[1]), strcat(split(IPAddress, \".\")[0], \".\", split(IPAddress, \"\
+      .\")[1])), Type\n| join kind= inner (\n    table(tableName)\n    | where ResultType\
+      \ !in (\"0\", \"50140\")\n    | where ResultDescription !~ \"Other\"\n    |\
+      \ where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business\
+      \ Online\")\n    | project FailedLogonTime = TimeGenerated, UserPrincipalName,\
+      \ FailedIPAddress = IPAddress, FailedLocation = Location, AppDisplayName, ResultType,\
+      \ ResultDescription, Type\n) on UserPrincipalName, AppDisplayName\n| where SuccessLogonTime\
+      \ < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and\
+      \ FailedIPAddress !startswith SuccessIPBlock\n| summarize FailedLogonTime =\
+      \ max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName,\
+      \ SuccessIPAddress, SuccessLocation, AppDisplayName, FailedIPAddress, FailedLocation,\
+      \ ResultType, ResultDescription, Type\n| extend timestamp = SuccessLogonTime\n\
+      | extend UserPrincipalName = tolower(UserPrincipalName)};\nlet aadSignin = aadFunc(\"\
+      SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\"\
+      );\nunion isfuzzy=true aadSignin, aadNonInt\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]),\
+      \ UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n// UEBA context below\
+      \ - make sure you have these 2 datatypes, otherwise the query will not work.\
+      \ If so, comment all that is below.\n| join kind=leftouter (\n    IdentityInfo\n\
+      \    | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUpn\n\
+      \    | project AccountUpn, Tags, JobTitle, GroupMembership, AssignedRoles, Type,\
+      \ IsAccountEnabled\n    | summarize\n        Tags = make_set(Tags, 1000),\n\
+      \        GroupMembership = make_set(GroupMembership, 1000),\n        AssignedRoles\
+      \ = make_set(AssignedRoles, 1000),\n        Type = make_set(Type, 1000),\n \
+      \       UserAccountControl = make_set(Type, 1000)\n    by AccountUpn\n    |\
+      \ extend UserPrincipalName=tolower(AccountUpn)\n) on UserPrincipalName\n//Below\
+      \ it will be joined with BehaviorAnalytics table to the Failed IP Addresses\n\
+      | join kind=leftouter (\n    BehaviorAnalytics\n    | where ActivityType in\
+      \ (\"FailedLogOn\", \"LogOn\")\n    | where isnotempty(SourceIPAddress)\n  \
+      \  | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority,\
+      \ SourceIPAddress, UserName\n    | project-rename FailedIPAddress = SourceIPAddress,\
+      \ Name = UserName\n    | summarize\n        MaxInvestigationScore = max(InvestigationPriority)\
+      \  // Only retrieve maximum Investigation Property score for both FailedIP and\
+      \ User\n    by FailedIPAddress, Name)\non FailedIPAddress, Name  // Joining\
+      \ on both IP and User so as to only return context associated with same user\n\
+      | extend UEBARiskScore = MaxInvestigationScore\n| project-away *1 // removing\
+      \ duplicate columns post outer join from output\n| where  UEBARiskScore > riskScoreCutoff\n\
+      | sort by UEBARiskScore desc"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Successful logon from IP and failure from a different IP
+      description: "'Identifies when a user account successfully logs onto an Azure\
+        \ App from one IP and within 10 mins failed to logon to the same App via a\
+        \ different IP (may indicate a malicious attempt at password guessing with\
+        \ known account). \nUEBA added for context to gather all asoociated information\
+        \ assocaited with IP addressed initiating Faile Logon and affected user. \n\
+        Please note, Failed logons from known IP ranges can be benign depending on\
+        \ the conditional access policies. In case of noisy behavior, consider tuning\
+        \ the source IP ranges after careful consideration'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SuccessIPAddress
+        - id: ip2
+          addressColumn: FailedIPAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078

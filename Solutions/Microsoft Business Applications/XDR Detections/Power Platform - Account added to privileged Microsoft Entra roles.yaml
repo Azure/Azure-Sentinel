@@ -1,0 +1,118 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 71d829d6-eb50-4a17-8a64-655fae8d71e1
+    path: Analytic Rules/Power Platform - Account added to privileged Microsoft Entra roles.yaml
+    version: 3.2.1
+    querySha256: 26394129107bc8b3af8891b90b0a47f728dfce921195f0f9c71f587c783ccfca
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    - T1068
+    - T1548
+    reviewScope:
+      sourceDocumentSha256: 38af73c582c65f3565f6df299c2b509886116c3c83a7555012a91ff64ebcc2d8
+      targetQuerySha256: 2b1893700bbd03613fecc654404fac21ad1e9c774bc590c6d2c45534bba64a3e
+properties:
+  id: xdr-71d829d6-eb50-4a17-8a64-655fae8d71e1
+  displayName: Power Platform - Account added to privileged Microsoft Entra roles
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // 44367163-eba1-44c3-98af-f5787879f96a = Dynamics 365 Administrator
+      // 11648597-926c-4cf3-9c36-bcebb0ba8dcc = Power Platform Administrator
+      // a9ea8996-122f-4c74-9520-8edcd192826c = Fabric Administrator
+      let query_frequency = 1h;
+      let role_template_ids = dynamic(["44367163-eba1-44c3-98af-f5787879f96a", "11648597-926c-4cf3-9c36-bcebb0ba8dcc", "a9ea8996-122f-4c74-9520-8edcd192826c"]);
+      let monitored_activities = dynamic(["Assign", "AssignGrantedRole", "AssignPermanentGrantedRole", "AssignPermanentEligibleRole", "RoleElevatedOutsidePimAlert"]);
+      AuditLogs
+      | where TimeGenerated >= ago(query_frequency)
+      | where Category == "RoleManagement"
+          and TargetResources has_any (role_template_ids)
+          and AADOperationType in (monitored_activities)
+          and Identity != "MS-PIM" and Identity != "MS-PIM-Fairfax"
+      | extend
+          UserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName),
+          AadUserId = tostring(parse_json(tostring(InitiatedBy.user)).id),
+          IPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+          RoleName = tostring(TargetResources[0].displayName),
+          UserAdded = tostring(TargetResources[2].userPrincipalName)
+      | extend
+          RoleName = iif(isempty(RoleName), tostring(parse_json(tostring(TargetResources[0].modifiedProperties))[1].newValue), RoleName),
+          UserAdded = iif(isempty(UserAdded), tostring(parse_json(tostring(TargetResources[0].userPrincipalName))), UserAdded),
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserPrincipalName, '@')[0]),
+          UPNSuffix = tostring(split(UserPrincipalName, '@')[1])
+      | project
+          TimeGenerated,
+          Identity,
+          UserPrincipalName,
+          AadUserId,
+          RoleName,
+          OperationName,
+          UserAdded,
+          TargetResources,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Power Platform - Account added to privileged Microsoft Entra roles
+      description: |-
+        Identifies changes to privileged directory roles impacting Power Platform:
+        - Dynamics 365 Admins
+        - Power Platform Admins
+        - Fabric Admins
+      severity: low
+      entityMappings:
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1078
+        - technique: T1068
+        - technique: T1548

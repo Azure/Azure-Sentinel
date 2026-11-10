@@ -1,0 +1,152 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f0be259a-34ac-4946-aa15-ca2b115d5feb
+    path: Analytic Rules/PaloAlto-NetworkBeaconing.yaml
+    version: 1.0.7
+    querySha256: 349daad7298e7ee455919fbd18bea7b86003c44de1307b0ea0bc2530d8c30d8c
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 2d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=2d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - 'Best-effort entity mapping requires review: source Host.FullName column `DeviceName` is provisionally represented by hosts.nameColumn `DeviceName`; confirm that this column is the intended host identifier. The original value is also retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `SourceUserID`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `SourceUserID` requires runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column `DeviceName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `DeviceName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    - T1571
+    reviewScope:
+      status: approved
+      actor: user
+      reviewedAt: '2026-11-03T12:00:00Z'
+      reference: approve_batch_7c_fixes_and_qualify=true
+      rationale: Reviewed and approved CommonSecurityLog / CefAma dependencies, entity mappings, customDetails retention, and single primary MITRE tactic for Graph Custom Detection compatibility.
+      sourceDocumentSha256: a2e96a7a1bc3152c3362b3d60ee63db519dc4a83df222dce0dae2ae444ba570e
+      targetQuerySha256: 946c0b71c829ddabfb83fdfa6b1ae69757b38b62833c3a49563d513adcdb628d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: SourceUserID
+      column: SourceUserID
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: DeviceName
+      column: DeviceName
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+properties:
+  id: xdr-f0be259a-34ac-4946-aa15-ca2b115d5feb
+  displayName: Palo Alto - potential beaconing detected
+  status: disabled
+  queryCondition:
+    queryText: 'let starttime = 2d;
+
+      let endtime = 1d;
+
+      let TimeDeltaThreshold = 25;
+
+      let TotalEventsThreshold = 30;
+
+      let MostFrequentTimeDeltaThreshold = 25;
+
+      let PercentBeaconThreshold = 80;
+
+      CommonSecurityLog
+
+      | where DeviceVendor == "Palo Alto Networks" and Activity == "TRAFFIC"
+
+      | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+
+      | where ipv4_is_private(DestinationIP)== false
+
+      | project TimeGenerated, DeviceName, SourceUserID, SourceIP, SourcePort, DestinationIP, DestinationPort, ReceivedBytes, SentBytes
+
+      | sort by SourceIP asc,TimeGenerated asc, DestinationIP asc, DestinationPort asc
+
+      | serialize
+
+      | extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(SourceIP, 1)
+
+      | extend TimeDeltainSeconds = datetime_diff(''second'',nextTimeGenerated,TimeGenerated)
+
+      | where SourceIP == nextSourceIP
+
+      //Whitelisting criteria/ threshold criteria
+
+      | where TimeDeltainSeconds > TimeDeltaThreshold
+
+      | summarize count(), sum(ReceivedBytes), sum(SentBytes)
+
+      by TimeDeltainSeconds, bin(TimeGenerated, 1h), DeviceName, SourceUserID, SourceIP, DestinationIP, DestinationPort
+
+      | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SentBytes), TotalReceivedBytes = sum(sum_ReceivedBytes)
+
+      by bin(TimeGenerated, 1h), DeviceName, SourceUserID, SourceIP, DestinationIP, DestinationPort
+
+      | where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold
+
+      | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
+
+      | where BeaconPercent > PercentBeaconThreshold'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Palo Alto - potential beaconing detected
+      description: 'Identifies beaconing patterns from Palo Alto Network traffic logs based on recurrent timedelta patterns. The query calculates time deltas and compares them with total events in a day to find the percentage of beaconing. This outbound beaconing pattern to untrusted public networks should be investigated for malware callbacks or exfiltration. Reference Blog: https://medium.com/@HuntOperator/detect-beaconing-with-flare-elastic-stack-and-intrusion-detection-systems-110dc74e0c56'
+      severity: low
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: DeviceName
+        ips:
+        - id: ip1
+          addressColumn: DestinationIP
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+        - technique: T1571
+      customDetails:
+        AccountFullName: SourceUserID
+        HostFullName: DeviceName

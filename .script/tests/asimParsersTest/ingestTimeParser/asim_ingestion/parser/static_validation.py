@@ -22,20 +22,19 @@ from .common import (
     _get_nested,
     load_yaml_file,
 )
+from .kusto_analyzer import KustoAnalyzerError, analyze_kql
 from .kql import (
-    ALLOWED_DCR_OPERATORS,
     ALLOWED_FILTER_OPERATORS,
-    KQL_RULES,
+    ASIM_HELPER_RULE,
+    KQL_CONSTRUCT_RULES,
+    KQL_FUNCTION_RULES,
+    KQL_OPERATOR_RULES,
+    KqlRule,
     _identity_key,
-    _pipeline_operator,
-    _query_uses_source_table,
-    _validate_statement_shape,
-    compact_kql,
-    mask_kql,
+    query_uses_source_table,
     resolve_source_specific_fixture,
-    split_kql_statements,
-    split_pipeline,
 )
+
 
 def _require_string(
     document: dict[str, Any],
@@ -74,34 +73,123 @@ def _validate_version(
         )
 
 
-def _scan_kql(query: str, field: str) -> list[Finding]:
-    findings: list[Finding] = []
-    masked_query = mask_kql(query)
-    for rule in KQL_RULES:
-        for match in rule.pattern.finditer(masked_query):
-            line_number = masked_query.count("\n", 0, match.start()) + 1
-            findings.append(
-                Finding(
-                    rule.code,
-                    field,
-                    f"Unsupported DCR construct '{rule.construct}'. {rule.message}",
-                    line=line_number,
-                )
+def _finding_for_kql_fact(
+    rule: KqlRule,
+    field: str,
+    fact: dict[str, Any],
+) -> Finding:
+    location = fact.get("location", {})
+    line = location.get("line")
+    return Finding(
+        rule.code,
+        field,
+        f"Unsupported DCR construct '{rule.construct}'. {rule.message}",
+        line=line if isinstance(line, int) else None,
+    )
+
+
+def _scan_kql(
+    analysis: dict[str, Any],
+    field: str,
+) -> list[Finding]:
+    matches: list[tuple[str, int, Finding]] = []
+
+    def add(rule: KqlRule, fact: dict[str, Any]) -> None:
+        location = fact.get("location", {})
+        start = location.get("start")
+        matches.append(
+            (
+                rule.code,
+                start if isinstance(start, int) else -1,
+                _finding_for_kql_fact(rule, field, fact),
             )
-    return findings
+        )
+
+    for operator in analysis["operators"]:
+        rule = KQL_OPERATOR_RULES.get(operator["type"])
+        if rule is not None:
+            add(rule, operator)
+    for function in analysis["functions"]:
+        name = function.get("name")
+        rule = (
+            KQL_FUNCTION_RULES.get(name.casefold())
+            if isinstance(name, str)
+            else None
+        )
+        if rule is not None:
+            add(rule, function)
+    for construct in analysis["constructs"]:
+        name = construct.get("name")
+        if (
+            isinstance(name, str)
+            and name.casefold().startswith("_asim_")
+        ):
+            add(ASIM_HELPER_RULE, construct)
+            continue
+        kind = construct["kind"]
+        rule = KQL_CONSTRUCT_RULES.get(kind)
+        if rule is None:
+            rule = KQL_CONSTRUCT_RULES.get(construct["type"])
+        if rule is None:
+            continue
+        if (
+            kind == "WildcardedName"
+            and construct.get("ownerOperator")
+            not in {"ProjectAwayOperator", "ProjectKeepOperator"}
+        ):
+            continue
+        add(rule, construct)
+    return [
+        finding
+        for _, _, finding in sorted(
+            matches,
+            key=lambda match: (match[0], match[1]),
+        )
+    ]
+
+
+def _validate_statement_shape(
+    analysis: dict[str, Any],
+    field: str,
+    findings: list[Finding],
+) -> dict[str, Any] | None:
+    if not analysis["sourcePipeline"]["isValid"]:
+        findings.append(
+            Finding(
+                "KQL039",
+                field,
+                "Query must contain exactly one expression statement "
+                "rooted at lowercase source.",
+            )
+        )
+        return None
+    return analysis.get("pipeline")
+
+
+def _operator_name(operator: dict[str, Any]) -> str | None:
+    location = operator.get("location")
+    text = location.get("text") if isinstance(location, dict) else None
+    if not isinstance(text, str):
+        return None
+    parts = text.split(maxsplit=1)
+    return parts[0].casefold() if parts else None
 
 
 def _validate_pipeline_operators(
-    query: str,
+    analysis: dict[str, Any],
     field: str,
-    allowed_operators: set[str],
+    allowed_operators: set[str] | None,
     findings: list[Finding],
-) -> list[str]:
-    final_statement = _validate_statement_shape(query, field, findings)
-    if final_statement is None:
-        return []
-    stages = split_pipeline(final_statement)
-    if not stages or stages[0].casefold() != "source":
+) -> None:
+    pipeline = _validate_statement_shape(analysis, field, findings)
+    if pipeline is None:
+        return
+    root_text = pipeline.get("rootText")
+    if (
+        pipeline.get("rootType") != "NameReference"
+        or not isinstance(root_text, str)
+        or root_text != "source"
+    ):
         findings.append(
             Finding(
                 "KQL039",
@@ -109,59 +197,119 @@ def _validate_pipeline_operators(
                 "Query must be a single source-rooted pipeline.",
             )
         )
-        return stages
-    for stage_index, stage in enumerate(stages[1:], start=1):
-        operator = _pipeline_operator(stage)
+        return
+    for stage_index, operator_fact in enumerate(
+        pipeline["operators"],
+        start=1,
+    ):
+        operator = _operator_name(operator_fact)
+        location = operator_fact.get("location", {})
+        line = location.get("line")
         if operator is None:
             findings.append(
                 Finding(
                     "KQL040",
                     field,
                     f"Pipeline stage {stage_index} does not start with a recognized operator.",
+                    line=line if isinstance(line, int) else None,
                 )
             )
-        elif operator not in allowed_operators:
+        elif (
+            allowed_operators is not None
+            and operator not in allowed_operators
+        ):
             findings.append(
                 Finding(
                     "KQL041",
                     field,
                     f"Pipeline operator '{operator}' is not supported by the ingestion parser contract.",
+                    line=line if isinstance(line, int) else None,
                 )
             )
-    return stages
+
+
+def _validate_kql(
+    query: str,
+    field: str,
+    allowed_operators: set[str] | None,
+    findings: list[Finding],
+) -> dict[str, Any] | None:
+    try:
+        analysis = analyze_kql(query)
+    except KustoAnalyzerError as exc:
+        findings.append(
+            Finding(
+                "KQL000",
+                field,
+                f"Trusted Kusto.Language analyzer failed: {exc}",
+            )
+        )
+        return None
+
+    diagnostics = [
+        diagnostic
+        for diagnostic in analysis["diagnostics"]
+        if diagnostic["severity"] == "Error"
+    ]
+    for diagnostic in diagnostics:
+        findings.append(
+            Finding(
+                "KQL001",
+                field,
+                "Kusto syntax diagnostic "
+                f"{diagnostic['code']} at column "
+                f"{diagnostic['column']}: {diagnostic['message']}",
+                line=diagnostic["line"],
+            )
+        )
+    if diagnostics:
+        return analysis
+
+    _validate_pipeline_operators(
+        analysis,
+        field,
+        allowed_operators,
+        findings,
+    )
+    findings.extend(_scan_kql(analysis, field))
+    return analysis
 
 
 def _validate_filter_consistency(
-    filter_query: str, parser_query: str, findings: list[Finding]
+    filter_analysis: dict[str, Any],
+    parser_analysis: dict[str, Any],
+    findings: list[Finding],
 ) -> None:
-    filter_statements = split_kql_statements(filter_query)
-    parser_statements = split_kql_statements(parser_query)
-    if not filter_statements or not parser_statements:
+    filter_pipeline = filter_analysis.get("pipeline")
+    parser_pipeline = parser_analysis.get("pipeline")
+    if (
+        not isinstance(filter_pipeline, dict)
+        or filter_pipeline.get("rootType") != "NameReference"
+        or filter_pipeline.get("rootText") != "source"
+        or not isinstance(parser_pipeline, dict)
+    ):
         return
-    filter_lets = filter_statements[:-1]
-    parser_lets = parser_statements[:-1]
-    parser_let_index = 0
-    for filter_let in filter_lets:
-        try:
-            parser_let_index = parser_lets.index(
-                filter_let, parser_let_index
-            ) + 1
-        except ValueError:
-            findings.append(
-                Finding(
-                    "FILTER003",
-                    "ParserFilterQuery",
-                    "Every filter let statement must appear in ParserQuery in the same order.",
-                )
+    filter_operators = filter_pipeline["operators"]
+    parser_operators = parser_pipeline["operators"]
+    filter_has_where = any(
+        operator["type"] == "FilterOperator"
+        for operator in filter_operators
+    )
+    parser_has_where = any(
+        operator["type"] == "FilterOperator"
+        for operator in parser_operators
+    )
+    if parser_has_where and not filter_has_where:
+        findings.append(
+            Finding(
+                "FILTER004",
+                "ParserFilterQuery",
+                "ParserFilterQuery must contain a where stage when ParserQuery contains one.",
             )
-            return
-    filter_stages = split_pipeline(filter_statements[-1])
-    parser_stages = split_pipeline(parser_statements[-1])
-    if not filter_stages or filter_stages[0].casefold() != "source":
+        )
+    if not filter_operators:
         return
-    if len(filter_stages) == 1:
-        return
-    if not any(_pipeline_operator(stage) == "where" for stage in filter_stages[1:]):
+    if not filter_has_where:
         findings.append(
             Finding(
                 "FILTER001",
@@ -169,8 +317,13 @@ def _validate_filter_consistency(
                 "A non-pass-through filter must contain at least one where stage.",
             )
         )
-    search_index = 1
-    for filter_stage in filter_stages[1:]:
+    parser_stages = [
+        operator["location"]["normalizedText"]
+        for operator in parser_operators
+    ]
+    search_index = 0
+    for filter_operator in filter_operators:
+        filter_stage = filter_operator["location"]["normalizedText"]
         try:
             found_index = parser_stages.index(filter_stage, search_index)
         except ValueError:
@@ -185,28 +338,9 @@ def _validate_filter_consistency(
         search_index = found_index + 1
 
 
-def _validate_dcr_metadata(
-    dcr_type: str | None,
-    input_stream: str | None,
-    findings: list[Finding],
-) -> None:
-    if (
-        dcr_type == "Workspace"
-        and input_stream is not None
-        and input_stream.casefold() != "none"
-    ):
-        findings.append(
-            Finding(
-                "SOURCE001",
-                "InputStream",
-                "Workspace parsers must use InputStream: none.",
-            )
-        )
-
-
 def _validate_fixture_contract(
     repo_root: Path | None,
-    parser_query: str | None,
+    parser_analysis: dict[str, Any] | None,
     schema: str | None,
     source_raw_table: str | None,
     findings: list[Finding],
@@ -218,7 +352,7 @@ def _validate_fixture_contract(
         "path": None,
     }
     if (
-        parser_query is None
+        parser_analysis is None
         or schema is None
         or source_raw_table is None
     ):
@@ -226,7 +360,7 @@ def _validate_fixture_contract(
     try:
         event_vendor, event_product, fixture_path = (
             resolve_source_specific_fixture(
-                parser_query,
+                parser_analysis,
                 schema,
                 source_raw_table,
             )
@@ -364,8 +498,12 @@ def validate_ingest_time_parser(
             document, findings, "ParserName", "ParserName"
         )
         dcr_type = _require_string(document, findings, "DCRType", "DCRType")
-        input_stream = _require_string(
-            document, findings, "InputStream", "InputStream"
+        raw_input_stream = document.get("InputStream")
+        input_stream = (
+            raw_input_stream.strip()
+            if isinstance(raw_input_stream, str)
+            and raw_input_stream.strip()
+            else None
         )
         source_raw_table = _require_string(
             document, findings, "SourceRawTable", "SourceRawTable"
@@ -435,8 +573,10 @@ def validate_ingest_time_parser(
             )
         if (
             dcr_type == "Standard"
-            and input_stream is not None
-            and input_stream.casefold() == "none"
+            and (
+                input_stream is None
+                or input_stream.casefold() == "none"
+            )
         ):
             findings.append(
                 Finding(
@@ -487,48 +627,50 @@ def validate_ingest_time_parser(
                 )
 
         effective_repo_root = repo_root or _find_repo_root(parser_path)
-        _validate_dcr_metadata(
-            dcr_type,
-            input_stream,
-            findings,
-        )
+        filter_analysis: dict[str, Any] | None = None
+        parser_analysis: dict[str, Any] | None = None
 
         if filter_query is not None:
-            _validate_pipeline_operators(
+            filter_analysis = _validate_kql(
                 filter_query,
                 "ParserFilterQuery",
                 ALLOWED_FILTER_OPERATORS,
                 findings,
             )
-            findings.extend(_scan_kql(filter_query, "ParserFilterQuery"))
         if parser_query is not None:
             if isinstance(raw_parser_query, str):
-                compacted_length = len(compact_kql(raw_parser_query))
-                if compacted_length > MAX_DCR_TRANSFORM_KQL_CHARS:
+                query_length = len(raw_parser_query)
+                if query_length > MAX_DCR_TRANSFORM_KQL_CHARS:
                     findings.append(
                         Finding(
                             "KQL044",
                             "ParserQuery",
-                            f"ParserQuery is {compacted_length} characters "
-                            "after removing comments and indentation "
-                            f"({len(raw_parser_query)} before compaction); "
+                            f"ParserQuery is {query_length} characters; "
                             "Azure DCR TransformKql supports at most "
                             f"{MAX_DCR_TRANSFORM_KQL_CHARS} characters.",
                         )
                     )
-            _validate_pipeline_operators(
+            parser_analysis = _validate_kql(
                 parser_query,
                 "ParserQuery",
-                ALLOWED_DCR_OPERATORS,
+                None,
                 findings,
             )
-            findings.extend(_scan_kql(parser_query, "ParserQuery"))
-        if filter_query is not None and parser_query is not None:
-            _validate_filter_consistency(filter_query, parser_query, findings)
+        if (
+            filter_analysis is not None
+            and parser_analysis is not None
+            and filter_analysis["sourcePipeline"]["isValid"]
+            and parser_analysis["sourcePipeline"]["isValid"]
+        ):
+            _validate_filter_consistency(
+                filter_analysis,
+                parser_analysis,
+                findings,
+            )
 
         fixture_resolution = _validate_fixture_contract(
             effective_repo_root,
-            parser_query,
+            parser_analysis,
             schema,
             source_raw_table,
             findings,
@@ -558,6 +700,7 @@ def validate_ingest_time_parser(
                 query_product = _get_nested(query_document, "Product", "Name")
                 query_parser_name = query_document.get("ParserName")
                 query_body = query_document.get("ParserQuery")
+                query_analysis: dict[str, Any] | None = None
                 required_query_values = {
                     "ParserName": query_parser_name,
                     "Normalization.Schema": query_schema,
@@ -571,6 +714,16 @@ def validate_ingest_time_parser(
                             field,
                             "Mapped query-time parser execution metadata "
                             "must be a non-empty string.",
+                        )
+                if isinstance(query_body, str) and query_body.strip():
+                    try:
+                        query_analysis = analyze_kql(query_body)
+                    except KustoAnalyzerError as exc:
+                        block_query(
+                            "KQL000",
+                            "ParserQuery",
+                            "Trusted Kusto.Language analyzer failed: "
+                            f"{exc}",
                         )
                 if schema != query_schema:
                     block_query(
@@ -592,9 +745,10 @@ def validate_ingest_time_parser(
                     )
                 if (
                     source_raw_table is not None
-                    and isinstance(query_body, str)
-                    and not _query_uses_source_table(
-                        query_body, source_raw_table
+                    and query_analysis is not None
+                    and not query_uses_source_table(
+                        query_analysis,
+                        source_raw_table,
                     )
                 ):
                     block_query(

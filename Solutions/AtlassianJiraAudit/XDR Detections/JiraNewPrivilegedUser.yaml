@@ -1,0 +1,132 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: JiraAuditCCPDefinition
+  dataTypes:
+  - Jira_Audit_v2_CL
+- connectorId: JiraAuditAPI
+  dataTypes:
+  - Jira_Audit_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Jira_Audit_v2_CL
+    - Jira_Audit_CL
+  requiredDataConnectors:
+  - connectorId: JiraAuditCCPDefinition
+    dataTypes:
+    - Jira_Audit_v2_CL
+  - connectorId: JiraAuditAPI
+    dataTypes:
+    - Jira_Audit_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b894593a-2b4c-4573-bc47-78715224a6f5
+    path: Analytic Rules/JiraNewPrivilegedUser.yaml
+    version: 1.0.1
+    querySha256: 124fdf510b01d20d55779f136360d4cf04622bd4a5f9b35f95bd6feacca3d516
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped
+      to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise
+      project an Entra user ID, SID, or account name plus domain'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved
+      as customDetails.AccountName from query column `AccountCustomEntity`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: c09fa19b98bdaa205500c001ac1cf49a21d2ed77cbd459bbf3b997cf50bbacb1
+      targetQuerySha256: dc229aa2aac05380792b49d816c41a35d1da3d2ae0dd9855797e1a462e055cd2
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query;
+        native 4-hour XDR lookback relies on Defender XDR alert deduplication across
+        hourly runs.
+      sourceDocumentSha256: c09fa19b98bdaa205500c001ac1cf49a21d2ed77cbd459bbf3b997cf50bbacb1
+      targetQuerySha256: dc229aa2aac05380792b49d816c41a35d1da3d2ae0dd9855797e1a462e055cd2
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-b894593a-2b4c-4573-bc47-78715224a6f5
+  displayName: Jira - New site admin user
+  status: disabled
+  queryCondition:
+    queryText: 'JiraAudit
+
+      | where EventMessage =~ ''User added to group''
+
+      | where ObjectItemName =~ ''site-admins''
+
+      | extend user = todynamic(AssociatedItems)[0][''name'']
+
+      | extend AccountCustomEntity = user'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Jira - New site admin user
+      description: '''Detects new site admin user.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity

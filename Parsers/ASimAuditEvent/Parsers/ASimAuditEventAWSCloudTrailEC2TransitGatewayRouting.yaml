@@ -1,0 +1,249 @@
+Parser:
+  Title: Audit Event ASIM parser for AWS CloudTrail EC2 TransitGatewayRouting activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+- Title: Amazon EC2 API actions
+  Link: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Operations.html
+Description: |
+  Normalizes AWSCloudTrail events from ec2.amazonaws.com for Transit Gateway routes, route
+  and policy tables, prefix lists, metering policies, propagation, and multicast. Includes
+  creation, modification, and deletion of policy-table entries. This parser is referenced
+  by ASimAuditEventAWSCloudTrail.
+ParserName: ASimAuditEventAWSCloudTrailEC2TransitGatewayRouting
+ParentParser: ASimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _ASim_AuditEvent_AWSCloudTrailEC2TransitGatewayRouting
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+    let Events = datatable(EventName: string, EventType: string, Object: string)
+    [
+      "AcceptTransitGatewayMulticastDomainAssociations", "Execute", "Transit Gateway Attachment",
+      "AssociateTransitGatewayMulticastDomain", "Set", "Transit Gateway Multicast Domain",
+      "AssociateTransitGatewayPolicyTable", "Set", "Transit Gateway Policy Table",
+      "AssociateTransitGatewayRouteTable", "Set", "Transit Gateway Route Table",
+      "CreateTransitGatewayMeteringPolicy", "Create", "Transit Gateway Metering Policy",
+      "CreateTransitGatewayMeteringPolicyEntry", "Create", "Transit Gateway Metering Policy Entry",
+      "CreateTransitGatewayMulticastDomain", "Create", "Transit Gateway Multicast Domain",
+      "CreateTransitGatewayPolicyTable", "Create", "Transit Gateway Policy Table",
+      "CreateTransitGatewayPolicyTableEntry", "Create", "Transit Gateway Policy Table Entry",
+      "CreateTransitGatewayPrefixListReference", "Create", "Transit Gateway Prefix List Reference",
+      "CreateTransitGatewayRoute", "Create", "Transit Gateway Route Table",
+      "CreateTransitGatewayRouteTable", "Create", "Transit Gateway Route Table",
+      "CreateTransitGatewayRouteTableAnnouncement", "Create", "Transit Gateway Route Table Announcement",
+      "DeleteTransitGatewayMeteringPolicy", "Delete", "Transit Gateway Metering Policy",
+      "DeleteTransitGatewayMeteringPolicyEntry", "Set", "Transit Gateway Metering Policy",
+      "DeleteTransitGatewayMulticastDomain", "Delete", "Transit Gateway Multicast Domain",
+      "DeleteTransitGatewayPolicyTable", "Delete", "Transit Gateway Policy Table",
+      "DeleteTransitGatewayPolicyTableEntry", "Delete", "Transit Gateway Policy Table Entry",
+      "DeleteTransitGatewayPrefixListReference", "Set", "Transit Gateway Route Table",
+      "DeleteTransitGatewayRoute", "Set", "Transit Gateway Route Table",
+      "DeleteTransitGatewayRouteTable", "Delete", "Transit Gateway Route Table",
+      "DeleteTransitGatewayRouteTableAnnouncement", "Execute", "Transit Gateway Route Table Announcement",
+      "DeregisterTransitGatewayMulticastGroupMembers", "Delete", "Transit Gateway Multicast Domain",
+      "DeregisterTransitGatewayMulticastGroupSources", "Delete", "Transit Gateway Multicast Domain",
+      "DescribeTransitGatewayMulticastDomains", "Read", "Transit Gateway Multicast Domain",
+      "DescribeTransitGatewayPolicyTables", "Read", "Transit Gateway Policy Table",
+      "DescribeTransitGatewayRouteTableAnnouncements", "Read", "Transit Gateway Route Table Announcement",
+      "DescribeTransitGatewayRouteTables", "Read", "Transit Gateway Route Table",
+      "DisableTransitGatewayRouteTablePropagation", "Disable", "Transit Gateway Route Table",
+      "DisassociateTransitGatewayMulticastDomain", "Set", "Transit Gateway Multicast Domain",
+      "DisassociateTransitGatewayPolicyTable", "Delete", "Transit Gateway Policy Table",
+      "DisassociateTransitGatewayRouteTable", "Delete", "Transit Gateway Route Table",
+      "EnableTransitGatewayRouteTablePropagation", "Enable", "Transit Gateway Table Propagation",
+      "ExportTransitGatewayRoutes", "Execute", "Transit Gateway Route Table",
+      "GetTransitGatewayAttachmentPropagations", "Read", "Transit Gateway Attachment",
+      "GetTransitGatewayMeteringPolicyEntries", "Read", "Transit Gateway Petering Policy",
+      "GetTransitGatewayMulticastDomainAssociations", "Read", "Transit Gateway Multicast Domain",
+      "GetTransitGatewayPolicyTableAssociations", "Read", "Transit Gateway Policy Table",
+      "GetTransitGatewayPolicyTableEntries", "Read", "Transit Gateway Policy Table",
+      "GetTransitGatewayPrefixListReferences", "Read", "Transit Gateway Policy Table",
+      "GetTransitGatewayRouteTableAssociations", "Read", "Transit Gateway Policy Table",
+      "GetTransitGatewayRouteTablePropagations", "Read", "Transit Gateway Policy Table",
+      "ModifyTransitGatewayMeteringPolicy", "Set", "Transit Gateway Metering Policy",
+      "ModifyTransitGatewayPolicyTableEntry", "Set", "Transit Gateway Policy Table Entry",
+      "ModifyTransitGatewayPrefixListReference", "Set", "Transit Gateway Prefix List Reference",
+      "RegisterTransitGatewayMulticastGroupMembers", "Set", "Transit Gateway Multicast Domain",
+      "RegisterTransitGatewayMulticastGroupSources", "Create", "Transit Gateway Multicast Group Source",
+      "RejectTransitGatewayMulticastDomainAssociations", "Execute", "Transit Gateway Multicast Domain",
+      "ReplaceTransitGatewayRoute", "Set", "Transit Gateway Route Table",
+      "SearchTransitGatewayMulticastGroups", "Read", "Transit Gateway Multicast Group",
+      "SearchTransitGatewayRoutes", "Read", "Transit Gateway Route Table"
+    ];
+    AWSCloudTrail
+    | where not(disabled)
+    | where EventSource == "ec2.amazonaws.com"
+    | where EventName in (Events | project EventName)
+    | lookup kind=inner Events on EventName
+    | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+    | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+    | extend NewValue = iff(EventResult == "Success", case(
+        EventName in ("AcceptTransitGatewayMulticastDomainAssociations", "AssociateTransitGatewayMulticastDomain",
+          "RejectTransitGatewayMulticastDomainAssociations"), ResponseElements.associations,
+        EventName in ("AssociateTransitGatewayPolicyTable", "AssociateTransitGatewayRouteTable"),
+          ResponseElements.association,
+        EventName in ("CreateTransitGatewayMeteringPolicy", "ModifyTransitGatewayMeteringPolicy"),
+          ResponseElements.transitGatewayMeteringPolicy,
+        EventName in ("CreateTransitGatewayMeteringPolicyEntry", "DeleteTransitGatewayMeteringPolicyEntry"),
+          ResponseElements.transitGatewayMeteringPolicyEntry,
+        EventName == "CreateTransitGatewayMulticastDomain", ResponseElements.transitGatewayMulticastDomain,
+        EventName == "CreateTransitGatewayPolicyTable", ResponseElements.transitGatewayPolicyTable,
+        EventName in ("CreateTransitGatewayPolicyTableEntry", "ModifyTransitGatewayPolicyTableEntry"),
+          ResponseElements.transitGatewayPolicyTableEntry,
+        EventName in ("CreateTransitGatewayPrefixListReference", "DeleteTransitGatewayPrefixListReference",
+          "ModifyTransitGatewayPrefixListReference"), ResponseElements.transitGatewayPrefixListReference,
+        EventName in ("CreateTransitGatewayRoute", "DeleteTransitGatewayRoute"), ResponseElements.route,
+        EventName == "CreateTransitGatewayRouteTable", ResponseElements.transitGatewayRouteTable,
+        EventName == "CreateTransitGatewayRouteTableAnnouncement",
+          ResponseElements.transitGatewayRouteTableAnnouncement,
+        EventName == "DeregisterTransitGatewayMulticastGroupMembers",
+          ResponseElements.deregisteredMulticastGroupMembers,
+        EventName == "DeregisterTransitGatewayMulticastGroupSources",
+          ResponseElements.deregisteredMulticastGroupSources,
+        EventName == "EnableTransitGatewayRouteTablePropagation", ResponseElements.propagation,
+        EventName == "ExportTransitGatewayRoutes", ResponseElements.s3Location,
+        EventName == "RegisterTransitGatewayMulticastGroupMembers",
+          ResponseElements.registeredMulticastGroupMembers,
+        EventName == "RegisterTransitGatewayMulticastGroupSources",
+          ResponseElements.registeredMulticastGroupSources,
+        ""
+      ), "")
+    | extend ObjectId = case(
+        EventName in ("AcceptTransitGatewayMulticastDomainAssociations",
+          "EnableTransitGatewayRouteTablePropagation", "GetTransitGatewayAttachmentPropagations"),
+          RequestParameters.TransitGatewayAttachmentId,
+        EventName in ("AssociateTransitGatewayMulticastDomain", "DeleteTransitGatewayMulticastDomain",
+          "DeregisterTransitGatewayMulticastGroupMembers", "DeregisterTransitGatewayMulticastGroupSources",
+          "DisassociateTransitGatewayMulticastDomain", "GetTransitGatewayMulticastDomainAssociations",
+          "RegisterTransitGatewayMulticastGroupMembers", "RegisterTransitGatewayMulticastGroupSources",
+          "RejectTransitGatewayMulticastDomainAssociations", "SearchTransitGatewayMulticastGroups"),
+          RequestParameters.TransitGatewayMulticastDomainId,
+        EventName in ("AssociateTransitGatewayPolicyTable", "DeleteTransitGatewayPolicyTable",
+          "DeleteTransitGatewayPrefixListReference", "DisassociateTransitGatewayPolicyTable",
+          "GetTransitGatewayPolicyTableAssociations", "GetTransitGatewayPolicyTableEntries"),
+          RequestParameters.TransitGatewayPolicyTableId,
+        EventName in ("AssociateTransitGatewayRouteTable", "CreateTransitGatewayRoute",
+          "DeleteTransitGatewayRoute", "DeleteTransitGatewayRouteTable",
+          "DisableTransitGatewayRouteTablePropagation", "DisassociateTransitGatewayRouteTable",
+          "ExportTransitGatewayRoutes", "GetTransitGatewayPrefixListReferences",
+          "GetTransitGatewayRouteTableAssociations", "GetTransitGatewayRouteTablePropagations",
+          "ReplaceTransitGatewayRoute", "SearchTransitGatewayRoutes"),
+          RequestParameters.TransitGatewayRouteTableId,
+        EventName == "CreateTransitGatewayMeteringPolicy",
+          ResponseElements.transitGatewayMeteringPolicy.transitGatewayMeteringPolicyId,
+        EventName == "CreateTransitGatewayMeteringPolicyEntry",
+          ResponseElements.transitGatewayMeteringPolicyEntry.transitGatewayMeteringPolicyEntryId,
+        EventName == "CreateTransitGatewayMulticastDomain",
+          ResponseElements.transitGatewayMulticastDomain.transitGatewayId,
+        EventName == "CreateTransitGatewayPolicyTable",
+          ResponseElements.transitGatewayPolicyTable.transitGatewayPolicyTableId,
+        EventName in ("CreateTransitGatewayPolicyTableEntry", "DeleteTransitGatewayPolicyTableEntry",
+          "ModifyTransitGatewayPolicyTableEntry"),
+          iff(isnotempty(coalesce(RequestParameters.transitGatewayPolicyTableId,
+          RequestParameters.TransitGatewayPolicyTableId)) and
+          isnotempty(coalesce(RequestParameters.policyRuleNumber, RequestParameters.PolicyRuleNumber)),
+          strcat(coalesce(RequestParameters.transitGatewayPolicyTableId,
+          RequestParameters.TransitGatewayPolicyTableId), ":", coalesce(RequestParameters.policyRuleNumber,
+          RequestParameters.PolicyRuleNumber)), ""),
+        EventName == "CreateTransitGatewayPrefixListReference",
+          ResponseElements.transitGatewayPrefixListReference.transitGatewayRouteTableId,
+        EventName == "CreateTransitGatewayRouteTable",
+          ResponseElements.transitGatewayRouteTable.transitGatewayRouteTableId,
+        EventName == "CreateTransitGatewayRouteTableAnnouncement",
+          ResponseElements.transitGatewayRouteTableAnnouncement.transitGatewayRouteTableAnnouncementId,
+        EventName in ("DeleteTransitGatewayMeteringPolicy", "DeleteTransitGatewayMeteringPolicyEntry",
+          "GetTransitGatewayMeteringPolicyEntries", "ModifyTransitGatewayMeteringPolicy"),
+          RequestParameters.TransitGatewayMeteringPolicyId,
+        EventName == "DeleteTransitGatewayRouteTableAnnouncement",
+          RequestParameters.TransitGatewayRouteTableAnnouncementId,
+        EventName == "DescribeTransitGatewayMulticastDomains", RequestParameters.TransitGatewayAttachmentIds,
+        EventName == "DescribeTransitGatewayPolicyTables", RequestParameters.TransitGatewayPolicyTableIds,
+        EventName == "DescribeTransitGatewayRouteTableAnnouncements",
+          RequestParameters.TransitGatewayRouteTableAnnouncementIds,
+        EventName == "DescribeTransitGatewayRouteTables", RequestParameters.TransitGatewayRouteTableIds,
+        EventName == "ModifyTransitGatewayPrefixListReference",
+          ResponseElements.transitGatewayPrefixListReference.prefixListId,
+        ""
+      )
+    | extend
+        Type = "AWSCloudTrail",
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventSeverity = "Informational",
+        EventSchema = "AuditEvent",
+        EventSchemaVersion = "1.0.0",
+        EventVendor = "AWS",
+        EventProduct = "CloudTrail",
+        Dvc = "CloudTrail",
+        EventMessage = ErrorMessage,
+        ObjectType = "Cloud Resource",
+        TargetAppName = "Amazon Elastic Compute Cloud",
+        TargetAppType = "Service"
+    | project-rename
+        EventOriginalSubType = EventTypeName,
+        EventOriginalType = EventName,
+        EventUid = AwsEventId,
+        EventOriginalResultDetails = ErrorMessage,
+        EventProductVersion = EventVersion,
+        ActorUserId = UserIdentityAccountId,
+        ActorUsername = UserIdentityUserName,
+        ActorOriginalUserType = UserIdentityType,
+        HttpUserAgent = UserAgent
+    | extend
+        ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+        ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+        SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+        ActingApplicationEntityKey = "",
+        ActorUserAdditionalIds = dynamic([]),
+        ActorUserEntityKey = "",
+        AdditionalEntities = dynamic([]),
+        DvcEntityKey = "",
+        SrcSystemEntityKey = "",
+        TargetApplicationEntityKey = "",
+        TargetSystemEntityKey = ""
+    | extend AdditionalFields = iff(pack, bag_pack(
+        "ActorAccessKeyId", UserIdentityAccessKeyId,
+        "AWSRegion", AWSRegion,
+        "APIVersion", APIVersion,
+        "ManagementEvent", ManagementEvent,
+        "ReadOnly", ReadOnly,
+        "RequestParameters", RequestParameters,
+        "ResponseElements", ResponseElements
+      ), dynamic({}))
+    | extend
+        Operation = EventOriginalType,
+        User = ActorUsername,
+        IpAddr = SrcIpAddr,
+        Application = TargetAppName,
+        Value = NewValue
+    | project
+        TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+        EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+        EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+        EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+        ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+        SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+        Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+        ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+        AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+        TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(disabled=disabled, pack=pack)

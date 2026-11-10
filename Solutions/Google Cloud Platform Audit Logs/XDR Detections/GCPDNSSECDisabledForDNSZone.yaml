@@ -1,0 +1,196 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPAuditLogsDefinition
+  dataTypes:
+  - GCPAuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPAuditLogs
+  requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+    - GCPAuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9129a43e-e204-4a9a-969e-d8861ce3437c
+    path: Analytic Rules/GCPDNSSECDisabledForDNSZone.yaml
+    version: 1.0.0
+    querySha256: 06e7d9ba1eae3a37463a729c33dbf96b508d1ce6933a43a19956c14e021abc30
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved
+      as customDetails.AccountFullName from query column `PrincipalEmail`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    - CloudApplication.InstanceName mismatch is informational because its original
+      value is preserved as customDetails.ResourceName from query column `ResourceName`;
+      supplemental details do not restore entity identity, correlation, or alert parity
+    - DNS.DomainName is preserved as customDetails.DnsName from query column `DnsName`.
+      The domain-only DNS mapping is omitted because the query does not return DNS
+      server and host IP addresses; custom details do not restore DNS entity correlation.
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - CommandAndControl
+    - ResourceDevelopment
+    originalTechniques:
+    - T1562.001
+    - T1071.004
+    - T1584.002
+    reviewScope:
+      sourceDocumentSha256: ac8cc93ebffc37cdf7609544e38e0d8e6a9f65d9ee9346747212a45c63f14c5c
+      targetQuerySha256: 6b557367dbdf92b8a23e67d96a67968637da00b4a6c9e05c3a17ba0a645e3a0e
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query;
+        native 4-hour XDR lookback relies on Defender XDR alert deduplication across
+        hourly runs.
+      sourceDocumentSha256: ac8cc93ebffc37cdf7609544e38e0d8e6a9f65d9ee9346747212a45c63f14c5c
+      targetQuerySha256: 6b557367dbdf92b8a23e67d96a67968637da00b4a6c9e05c3a17ba0a645e3a0e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PrincipalEmail
+      column: PrincipalEmail
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: ResourceName
+      column: ResourceName
+      status: available
+      customDetailKey: ResourceName
+    - entityType: DNS
+      entityIndex: 4
+      identifier: DomainName
+      sourceColumn: DnsName
+      column: DnsName
+      status: available
+      customDetailKey: DnsName
+properties:
+  id: xdr-9129a43e-e204-4a9a-969e-d8861ce3437c
+  displayName: GCP Audit Logs - DNSSEC Disabled on Managed DNS Zone
+  status: disabled
+  queryCondition:
+    queryText: "GCPAuditLogs\n| where ServiceName == \"dns.googleapis.com\"\n| where\
+      \ MethodName in (\"dns.managedZones.update\", \"dns.managedZones.patch\")\n\
+      | where GCPResourceType == \"dns_managed_zone\" and Severity == \"NOTICE\"\n\
+      | extend\n    ResponseJson = parse_json(Response),\n    RequestMetadataJson\
+      \ = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo)\n\
+      | extend ZoneContext = ResponseJson.operation.zoneContext\n| where isnotempty(ZoneContext)\n\
+      | extend\n    OldDnsSecState = tostring(ZoneContext.oldValue.dnssecConfig.state),\n\
+      \    NewDnsSecState = tostring(ZoneContext.newValue.dnssecConfig.state)\n| where\
+      \ OldDnsSecState == \"ON\" and NewDnsSecState == \"OFF\"\n| extend\n    ManagedZoneName\
+      \ = extract(@\"managedZones/([^/]+)\", 1, GCPResourceName),\n    DnsName = tostring(ResponseJson.managedZone.dnsName),\n\
+      \    ZoneId = tostring(ResponseJson.managedZone.id),\n    ZoneDescription =\
+      \ tostring(ResponseJson.managedZone.description),\n    Visibility = tostring(ResponseJson.managedZone.visibility),\n\
+      \    OperationId = tostring(ResponseJson.operation.id),\n    CallerIpAddress\
+      \ = tostring(RequestMetadataJson.callerIp),\n    AuthEmail = tostring(AuthInfoJson.principalEmail)\n\
+      | extend\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]),\n   \
+      \ AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n\
+      \          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n   \
+      \       ManagedZoneName,\n          DnsName,\n          ResourceName = GCPResourceName,\n\
+      \          Visibility,\n          ZoneId,\n          ZoneDescription,\n    \
+      \      OperationId,\n          CallerIpAddress,\n          MethodName,\n   \
+      \       ServiceName,\n          Severity,\n          LogName,\n          InsertId,\n\
+      \          AccountName,\n          AccountUPNSuffix"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Audit Logs - DNSSEC Disabled on Managed DNS Zone
+      description: '''Detects when DNSSEC (DNS Security Extensions) is disabled on
+        a Google Cloud DNS managed zone.
+
+        DNSSEC provides cryptographic authentication of DNS data, preventing DNS spoofing
+        and cache poisoning attacks.
+
+        Adversaries may disable DNSSEC to enable DNS-based command and control, phishing
+        campaigns, or
+
+        to redirect traffic to malicious infrastructure without cryptographic validation.
+
+        This rule monitors DNS zone patch operations where DNSSEC state changes from
+        ON to OFF.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ProjectId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.001
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+          subTechniques:
+          - T1071.004
+      - tactic: ResourceDevelopment
+        techniques:
+        - technique: T1584
+          subTechniques:
+          - T1584.002
+      customDetails:
+        ProjectId: ProjectId
+        ManagedZoneName: ManagedZoneName
+        DnsName: DnsName
+        ResourceName: ResourceName
+        Visibility: Visibility
+        ZoneId: ZoneId
+        AccountFullName: PrincipalEmail
+status: Available

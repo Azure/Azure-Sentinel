@@ -1,0 +1,137 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (SharePoint)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (SharePoint)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 95e02f1b-5886-4043-8f0e-a42e6e23330f
+    path: Analytic Rules/Dataverse - Mass download from SharePoint document management.yaml
+    version: 3.2.0
+    querySha256: 433c58dd0cb029743f6271faf49f730e888f2a9ad55c994a15ef4a9ebc3dba06
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName_2 from query column `SharePointUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName_2 column `SharePointUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+    reviewScope:
+      sourceDocumentSha256: f7cbf37a24ecfef44b2ea49cc69c3bd50e84df739c48eb68807bb2d9066c6cb0
+      targetQuerySha256: 65e69eb0411928015b1717c3a36339fcd395e392b5d6b98b50239d060a605df9
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+    - entityType: CloudApplication
+      entityIndex: 4
+      identifier: InstanceName
+      sourceColumn: SharePointUrl
+      column: SharePointUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName_2
+properties:
+  id: xdr-95e02f1b-5886-4043-8f0e-a42e6e23330f
+  displayName: Dataverse - Mass download from SharePoint document management
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Set threshold for number of downloaded files
+      let detection_threshold = 10000;
+      let query_frequency = 1h;
+      DataverseSharePointSites
+      | join kind=inner (
+          OfficeActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where OfficeWorkload == "SharePoint" and Operation == "FileDownloaded")
+          on $left.SharePointUrl == $right.Site_Url
+      | summarize FileDownloadCount = count() by UserId, SharePointUrl, InstanceUrl, ClientIP
+      | where FileDownloadCount > detection_threshold
+      | extend
+          CloudAppId = int(32780),
+          SharePointId = int(20892),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          UserId,
+          ClientIP,
+          FileDownloadCount,
+          SharePointUrl,
+          InstanceUrl,
+          CloudAppId,
+          SharePointId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Mass download from SharePoint document management
+      description: Identifies mass download (in the last hour) of files from SharePoint sites configured for document management
+        in Dynamics 365. This analytics rule utilizes the MSBizApps-Configuration watchlist to identify SharePoint sites used
+        for Document Management.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        - id: cloudApplication2
+          appIdColumn: SharePointId
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl
+        CloudApplicationInstanceName_2: SharePointUrl

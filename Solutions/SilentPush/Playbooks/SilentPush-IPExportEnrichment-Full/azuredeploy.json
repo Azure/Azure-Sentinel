@@ -3,14 +3,21 @@
   "contentVersion": "1.0.0.0",
   "metadata": {
     "title": "SilentPush-IPExportEnrichment-Full",
-    "description": "Silent Push IPs export with enrichment and TI upload",
+    "description": "Silent Push IPs export with enrichment and TI upload. Flow: Every 24 hours -> Export (needs user input) -> Enrich -> Upload TI",
+    "prerequisites": [
+      "1. Deploy the Silent Push custom connector BEFORE creating this playbook. Installing the solution does not create it. Deploy it with the Deploy to Azure button on https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SilentPush/Connector/SilentPushCustomConnector (or deploy its azuredeploy.json as a custom template).",
+      "2. Deploy the connector into the same resource group where you create this playbook and keep its name as SilentPush-API (or use the same name in the CustomConnectorName parameter)."
+    ],
+    "prerequisitesDeployTemplateFile": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SilentPush/Connector/SilentPushCustomConnector/azuredeploy.json",
     "postDeployment": [
       "**Authorize the SilentPush connector connection**",
       "This playbook deploys with a placeholder (empty) API key for the SilentPush connector. Complete the connection before enabling/running the playbook:",
       "1. Go to your Logic App -> API connections -> select the <PlaybookName> connection resource",
       "2. Go to General -> Edit API connection",
       "3. Enter your Silent Push API key (sign up at https://app.silentpush.com)",
-      "4. Click Save"
+      "4. Click Save",
+      "**Choose the export to process**",
+      "The playbook has no default export. Before enabling it, open the playbook in the Logic app designer, select the Export IP action, fill in export_category and file_name with the Silent Push export you want to process, and click Save."
     ]
   },
   "parameters": {
@@ -28,7 +35,7 @@
         "description": "The SilentPush API custom connector"
       }
     },
-    "workspace": {
+    "WorkspaceName": {
       "type": "string",
       "metadata": {
         "description": "Log Analytics workspace name where Microsoft Sentinel is enabled"
@@ -36,10 +43,9 @@
     }
   },
   "variables": {
-    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/workspaces', parameters('workspace'))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]",
     "SilentPushConnectionName": "[parameters('PlaybookName')]",
     "MicrosoftSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
-    "silentPushApiId": "[resourceId('Microsoft.Web/customApis', parameters('CustomConnectorName'))]",
     "_SentinelContributorRoleGuid": "ab8e14d6-4a74-4a29-9ba8-549422addade",
     "SentinelContributorRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('_SentinelContributorRoleGuid'))]",
     "maxExportSizeChars": "20000000",
@@ -55,7 +61,7 @@
       "properties": {
         "displayName": "[variables('SilentPushConnectionName')]",
         "api": {
-          "id": "[variables('silentPushApiId')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
         },
         "parameterValues": {
           "api_key": ""
@@ -72,13 +78,16 @@
         "displayName": "[variables('MicrosoftSentinelConnectionName')]",
         "parameterValueType": "Alternative",
         "api": {
-          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', reference(resourceId('microsoft.OperationalInsights/workspaces', parameters('workspace')), '2025-07-01', 'Full').location, '/managedApis/azuresentinel')]"
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
         }
       }
     },
     {
       "name": "[parameters('PlaybookName')]",
       "type": "Microsoft.Logic/workflows",
+      "tags": {
+        "hidden-SentinelTemplateVersion": "1.4"
+      },
       "location": "[resourceGroup().location]",
       "identity": {
         "type": "SystemAssigned"
@@ -117,7 +126,7 @@
             }
           },
           "actions": {
-            "Export_IOFA": {
+            "Export_IP": {
               "type": "ApiConnection",
               "runAfter": {},
               "inputs": {
@@ -127,18 +136,18 @@
                   }
                 },
                 "method": "get",
-                "path": "/api/v1/export/@{encodeURIComponent('iofa-exports')}/@{encodeURIComponent('all_iofas_ips.txt')}/"
+                "path": "/api/v1/export/@{encodeURIComponent('')}/@{encodeURIComponent('')}/"
               }
             },
             "Extract_Location": {
               "type": "Compose",
               "runAfter": {
-                "Export_IOFA": [
+                "Export_IP": [
                   "Succeeded",
                   "Failed"
                 ]
               },
-              "inputs": "@outputs('Export_IOFA')?['headers']?['Location']"
+              "inputs": "@outputs('Export_IP')?['headers']?['Location']"
             },
             "Check_Location_Valid": {
               "type": "If",
@@ -264,7 +273,7 @@
                                   "id": "@{concat('indicator--', guid())}",
                                   "value": "@{item()?['ip']}",
                                   "name": "@{concat('Malicious IP: ', item()?['ip'])}",
-                                  "description": "Enriched via Silent Push IOFA export",
+                                  "description": "Enriched via Silent Push export",
                                   "pattern": "@{concat('[ipv4-addr:value = ''', item()?['ip'], ''']')}",
                                   "pattern_type": "stix",
                                   "confidence": "@int(coalesce(item()?['sp_risk_score'], 0))",
@@ -278,7 +287,7 @@
                                     "x-silentpush-ext": {
                                       "extension_type": "property-extension",
                                       "vendor": "Silent Push",
-                                      "datasource": "SilentPush IOFA Export",
+                                      "datasource": "SilentPush",
                                       "asname": "@item()?['asname']",
                                       "asn": "@item()?['asn']",
                                       "asn_allocation_age": "@item()?['asn_allocation_age']",
@@ -339,10 +348,10 @@
                                 },
                                 "method": "post",
                                 "body": {
-                                  "sourcesystem": "Silent Push - IOFA Export",
+                                  "sourcesystem": "Silent Push - Export",
                                   "indicators": "@body('Build_TI_Indicators')"
                                 },
-                                "path": "[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), '2025-07-01').customerId, '/UploadIndicators/')]",
+                                "path": "[concat('/V2/ThreatIntelligence/', reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName')), '2025-07-01').customerId, '/UploadIndicators/')]",
                                 "retryPolicy": {
                                   "type": "exponential",
                                   "count": 10,
@@ -363,7 +372,7 @@
                               "runStatus": "Failed",
                               "error": {
                                 "code": "ExportTooLarge",
-                                "message": "@concat('Silent Push IOFA IP export exceeded the maximum supported size (', string(parameters('maxExportSizeChars')), ' characters, approximate - measured via string length, not exact byte count). The export was not processed to avoid excessive run duration/cost.')"
+                                "message": "@concat('Silent Push IP export exceeded the maximum supported size (', string(parameters('maxExportSizeChars')), ' characters, approximate - measured via string length, not exact byte count). The export was not processed to avoid excessive run duration/cost.')"
                               }
                             }
                           }
@@ -379,7 +388,7 @@
                           "runStatus": "Failed",
                           "error": {
                             "code": "UntrustedRedirect",
-                            "message": "Silent Push IOFA IP export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
+                            "message": "Silent Push IP export returned a redirect Location that does not point to the trusted host - the response may have been manipulated or is unexpected/untrusted."
                           }
                         }
                       }
@@ -395,7 +404,7 @@
                       "runStatus": "Failed",
                       "error": {
                         "code": "ExportFailed",
-                        "message": "@concat('Silent Push IOFA IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IOFA')?['statusCode'], 'unknown')))"
+                        "message": "@concat('Silent Push IP export did not return a valid https redirect Location - the export request likely failed (authentication, rate limiting, or a server error). HTTP status: ', string(coalesce(outputs('Export_IP')?['statusCode'], 'unknown')))"
                       }
                     }
                   }
@@ -416,7 +425,7 @@
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
                 "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', reference(resourceId('microsoft.OperationalInsights/workspaces', parameters('workspace')), '2025-07-01', 'Full').location, '/managedApis/azuresentinel')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
                 "connectionProperties": {
                   "authentication": {
                     "type": "ManagedServiceIdentity"

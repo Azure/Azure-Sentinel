@@ -1,0 +1,155 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPAuditLogsDefinition
+  dataTypes:
+  - GCPAuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPAuditLogs
+  requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+    - GCPAuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 205e1c9f-faee-43f1-b3b8-1952ffbbeea4
+    path: Analytic Rules/GCPOrgPolicyDeletion.yaml
+    version: 1.0.1
+    querySha256: b23a73201979f1fc187c7da56bc73ae9a8a4fa74af0f2ea4fead16970f9b8d11
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved
+      as customDetails.AccountFullName from query column `PrincipalEmail`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    - CloudApplication.InstanceName mismatch is informational because its original
+      value is preserved as customDetails.ResourceName from query column `ResourceName`;
+      supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.001
+    reviewScope:
+      sourceDocumentSha256: b9c459e3e059a76181031b05451bcdbe13596f536045c3a6a2ad33ba7b38e347
+      targetQuerySha256: 5d094318e3cf452773311ce7229e0838c25e0cbb83d19bf4f3510b8b35c2f026
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query;
+        native 4-hour XDR lookback relies on Defender XDR alert deduplication across
+        hourly runs.
+      sourceDocumentSha256: b9c459e3e059a76181031b05451bcdbe13596f536045c3a6a2ad33ba7b38e347
+      targetQuerySha256: 5d094318e3cf452773311ce7229e0838c25e0cbb83d19bf4f3510b8b35c2f026
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PrincipalEmail
+      column: PrincipalEmail
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: ResourceName
+      column: ResourceName
+      status: available
+      customDetailKey: ResourceName
+properties:
+  id: xdr-205e1c9f-faee-43f1-b3b8-1952ffbbeea4
+  displayName: GCP Audit Logs - Detect Organization Policy Deletion or Updation
+  status: disabled
+  queryCondition:
+    queryText: "GCPAuditLogs\n| where ServiceName == \"orgpolicy.googleapis.com\"\n\
+      | where MethodName has_any (\"OrgPolicy.DeletePolicy\", \"OrgPolicy.UpdatePolicy\"\
+      )\n| extend\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson\
+      \ = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n\
+      | extend\n    PolicyName = split(GCPResourceName, \"/\")[-1],\n    CallerIpAddress\
+      \ = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n\
+      \    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n\
+      \    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| extend\n    AccountName\
+      \ = tostring(split(PrincipalEmail, \"@\")[0]),\n    AccountUPNSuffix = tostring(split(PrincipalEmail,\
+      \ \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n        \
+      \  AuthEmail,\n          ProjectId,\n          ResourceName = GCPResourceName,\n\
+      \          PolicyName,\n          CallerIpAddress,\n          UserAgent,\n \
+      \         MethodName,\n          ServiceName,\n          Severity,\n       \
+      \   Permission,\n          PermissionGranted,\n          LogName,\n        \
+      \  InsertId,\n          AccountName,\n          AccountUPNSuffix"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Audit Logs - Detect Organization Policy Deletion or Updation
+      description: "'Detects when a Google Cloud Platform organization policy is deleted\
+        \ or updated. \nOrganization policies provide centralized control over your\
+        \ organization's cloud resources and help ensure security and compliance.\n\
+        Deletion or modification of org policies may indicate an attempt to bypass\
+        \ security controls or weaken the security posture of GCP projects.\nAdversaries\
+        \ may delete or update organization policies to disable security constraints\
+        \ before performing malicious activities.'"
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ProjectId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.001
+      customDetails:
+        ProjectId: ProjectId
+        PolicyName: PolicyName
+        ResourceName: ResourceName
+        UserAgent: UserAgent
+        Permission: Permission
+        MethodName: MethodName
+        AccountFullName: PrincipalEmail
+status: Available

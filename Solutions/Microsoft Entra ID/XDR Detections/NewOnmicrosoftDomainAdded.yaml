@@ -1,0 +1,129 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4f42b94f-b210-42d1-a023-7fa1c51d969f
+    path: Analytic Rules/NewOnmicrosoftDomainAdded.yaml
+    version: 1.0.1
+    querySha256: 1ddcd25306edf9f9d45ed2d73152c43d01599afa3ff74052d21ddd55ab589eee
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUser`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUser` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - ResourceDevelopment
+    originalTechniques:
+    - T1585.003
+    reviewScope:
+      sourceDocumentSha256: dc30c02e9e70f6a4200e48ae21ea13f8f438f80f2c2ad2414550effb68997716
+      targetQuerySha256: b93fd0058cd2ea8b3eaa77ce5e4b3b3ee020ea2716709ab5d297f8d7deb0ea12
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: dc30c02e9e70f6a4200e48ae21ea13f8f438f80f2c2ad2414550effb68997716
+      targetQuerySha256: b93fd0058cd2ea8b3eaa77ce5e4b3b3ee020ea2716709ab5d297f8d7deb0ea12
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: InitiatingUser
+      column: InitiatingUser
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-4f42b94f-b210-42d1-a023-7fa1c51d969f
+  displayName: New onmicrosoft domain added to tenant
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AuditLogs
+      | where AADOperationType == "Add"
+      | where Result == "success"
+      | where OperationName in ("Add verified domain", "Add unverified domain")
+      | extend InitiatedBy = parse_json(InitiatedBy)
+      | extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIp = tostring(InitiatedBy.user.ipAddress)
+      | extend InitiatingApp = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingSPID = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend DomainAdded = tostring(TargetResources[0].displayName)
+      | where DomainAdded has "onmicrosoft"
+      | extend ActionInitiatedBy = case(isnotempty(InitiatingUser), InitiatingUser, strcat(InitiatingApp, " - ", InitiatingSPID))
+      | extend UserName = split(InitiatingUser, "@")[0]
+      | extend UPNSuffix = split(InitiatingUser, "@")[1]
+      | project-reorder TimeGenerated, OperationName, DomainAdded, ActionInitiatedBy, InitiatingIp
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: New onmicrosoft domain added to tenant
+      description: "'This detection looks for new onmicrosoft domains being added to a tenant. \nAn attacker who compromises a tenant may register a new onmicrosoft domain in order to masquerade as a service provider for launching phishing campaigns.\nDomain additions are not a common occurrence and users should validate that the domain was added by a legitimate user, with a legitimate purpose.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: UserName
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account3
+          aadUserIdColumn: InitiatingSPID
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIp
+        dns:
+        - id: dn1
+          domainNameColumn: DomainAdded
+      tactics:
+      - tactic: ResourceDevelopment
+        techniques:
+        - technique: T1585
+          subTechniques:
+          - T1585.003
+      customDetails:
+        AccountFullName: InitiatingUser

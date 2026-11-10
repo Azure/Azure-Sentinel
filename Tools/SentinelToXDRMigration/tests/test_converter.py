@@ -97,7 +97,7 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual((self.solution / "Analytic Rules/SampleRule.yaml").read_text(), RULE)
         self.assertEqual(document["resourceType"], "Microsoft.Security/detectionRules")
         self.assertEqual(document["properties"]["status"], "disabled")
-        self.assertIn("Timestamp", document["properties"]["queryCondition"]["queryText"])
+        self.assertIn("TimeGenerated", document["properties"]["queryCondition"]["queryText"])
         self.assertEqual(
             document["contentProvenance"]["source"]["id"],
             "11111111-2222-3333-4444-555555555555",
@@ -306,7 +306,7 @@ class ConverterTests(unittest.TestCase):
         result = runtime_validation_plan(self.solution)
         self.assertEqual(len(result["rules"]), 1)
         self.assertIn("TimeGenerated", result["rules"][0]["sentinelQuery"])
-        self.assertIn("Timestamp", result["rules"][0]["advancedHuntingQuery"])
+        self.assertIn("TimeGenerated", result["rules"][0]["advancedHuntingQuery"])
         self.assertEqual(
             hashlib.sha256(result["rules"][0]["sentinelQuery"].encode()).hexdigest(),
             result["rules"][0]["sentinelQuerySha256"],
@@ -394,7 +394,7 @@ DeviceEvents
         query = output["properties"]["queryCondition"]["queryText"]
         self.assertIn('"TimeGenerated"', query)
         self.assertIn("// TimeGenerated stays in this comment", query)
-        self.assertIn("| where Timestamp", query)
+        self.assertIn("| where TimeGenerated", query)
 
     def test_passthrough_table_preserves_timegenerated(self) -> None:
         path = self.solution / "Analytic Rules" / "SampleRule.yaml"
@@ -431,7 +431,7 @@ union Native, Sentinel
 """
         path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
         result = convert_solution(self.solution)
-        self.assertEqual(result["needsReview"], 1)
+        self.assertEqual(result["needsReview"], 0)
         output = yaml.safe_load(
             (self.solution / "XDR Detections" / "SampleRule.yaml").read_text(encoding="utf-8")
         )

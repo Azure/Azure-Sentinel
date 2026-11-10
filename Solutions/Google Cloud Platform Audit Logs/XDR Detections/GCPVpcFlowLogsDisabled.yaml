@@ -1,0 +1,165 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPAuditLogsDefinition
+  dataTypes:
+  - GCPAuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPAuditLogs
+  requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+    - GCPAuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8f3e9c2d-5b4a-4d6e-9a7c-2f8b5e1d3c9a
+    path: Analytic Rules/GCPVpcFlowLogsDisabled.yaml
+    version: 1.0.0
+    querySha256: 67de5ee14b6b868dbc282b4cc92978f8bc357ae6e10da3556912d8c468ee623b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved
+      as customDetails.AccountFullName from query column `PrincipalEmail`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    - CloudApplication.InstanceName mismatch is informational because its original
+      value is preserved as customDetails.ResourceName from query column `ResourceName`;
+      supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.001
+    reviewScope:
+      sourceDocumentSha256: f8ee715fa1709c2108f8db932353247ad946e31cb501d2a1fedc1d9b67477f01
+      targetQuerySha256: 50ba12a2562d442bf92e295ed3ac5f2f9d1054fbf9665497a5214b6277a70dff
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query;
+        native 4-hour XDR lookback relies on Defender XDR alert deduplication across
+        hourly runs.
+      sourceDocumentSha256: f8ee715fa1709c2108f8db932353247ad946e31cb501d2a1fedc1d9b67477f01
+      targetQuerySha256: 50ba12a2562d442bf92e295ed3ac5f2f9d1054fbf9665497a5214b6277a70dff
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PrincipalEmail
+      column: PrincipalEmail
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: ResourceName
+      column: ResourceName
+      status: available
+      customDetailKey: ResourceName
+properties:
+  id: xdr-8f3e9c2d-5b4a-4d6e-9a7c-2f8b5e1d3c9a
+  displayName: GCP Audit Logs - VPC Flow Logs Disabled
+  status: disabled
+  queryCondition:
+    queryText: "GCPAuditLogs\n| where ServiceName == \"networkmanagement.googleapis.com\"\
+      \n| where MethodName has_any (\"VpcFlowLogsService.UpdateVpcFlowLogsConfig\"\
+      , \"VpcFlowLogsService.DeleteVpcFlowLogsConfig\")\n| extend\n    RequestJson\
+      \ = parse_json(Request),\n    RequestMetadataJson = parse_json(RequestMetadata),\n\
+      \    AuthInfoJson = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n\
+      | extend\n    FlowLogsConfigName = split(GCPResourceName, \"/\")[-1],\n    ConfigState\
+      \ = tostring(RequestJson.vpc_flow_logs_config.state),\n    CallerIpAddress =\
+      \ tostring(RequestMetadataJson.callerIp),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n\
+      \    Permission = tostring(AuthzInfoJson[0].permission),\n    PermissionType\
+      \ = tostring(AuthzInfoJson[0].permissionType),\n    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n\
+      | where PermissionType == \"ADMIN_WRITE\"\n| where MethodName has \"DeleteVpcFlowLogsConfig\"\
+      \ or ConfigState == \"DISABLED\"\n| extend\n    Action = case(\n        MethodName\
+      \ has \"DeleteVpcFlowLogsConfig\", \"Deleted\",\n        ConfigState == \"DISABLED\"\
+      , \"Disabled\",\n        \"Modified\"),\n    AccountName = tostring(split(PrincipalEmail,\
+      \ \"@\")[0]),\n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n\
+      | project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n\
+      \          ProjectId,\n          ResourceName = GCPResourceName,\n         \
+      \ FlowLogsConfigName,\n          Action,\n          CallerIpAddress,\n     \
+      \     MethodName,\n          ServiceName,\n          Severity,\n          Permission,\n\
+      \          PermissionGranted,\n          LogName,\n          InsertId,\n   \
+      \       AccountName,\n          AccountUPNSuffix"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Audit Logs - VPC Flow Logs Disabled
+      description: '''Detects when Google Cloud Platform VPC Flow Logs configurations
+        are disabled or deleted.
+
+        VPC Flow Logs capture information about IP traffic going to and from network
+        interfaces in VPC networks, providing critical visibility for security monitoring
+        and forensic analysis.
+
+        Disabling VPC Flow Logs reduces network visibility and may indicate an attempt
+        to evade detection before performing malicious activities.
+
+        Adversaries may disable flow logs to hide lateral movement, data exfiltration,
+        or command and control traffic.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ProjectId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.001
+      customDetails:
+        ProjectId: ProjectId
+        FlowLogsConfigName: FlowLogsConfigName
+        ResourceName: ResourceName
+        Action: Action
+        Permission: Permission
+        AccountFullName: PrincipalEmail
+status: Available

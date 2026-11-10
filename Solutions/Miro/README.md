@@ -197,7 +197,7 @@ Key columns:
 - `ai`: AI-related information about the action, as returned by the API (JSON).
 - `state`: Item state information (JSON).
 
-### MiroAILogs_CL
+### MiroAIInteractionLogs_CL
 
 AI interaction logs, one row per step of an interaction:
 
@@ -275,7 +275,7 @@ MiroContentLogs_CL
 ### AI interactions by surface and event type
 
 ```kusto
-MiroAILogs_CL
+MiroAIInteractionLogs_CL
 | where TimeGenerated > ago(7d)
 | summarize Interactions = count() by surface, eventType
 | order by Interactions desc
@@ -284,7 +284,7 @@ MiroAILogs_CL
 ### AI activity by user
 
 ```kusto
-MiroAILogs_CL
+MiroAIInteractionLogs_CL
 | where TimeGenerated > ago(30d) and eventType == "input"
 | summarize Prompts = count() by actor_email
 | top 10 by Prompts desc

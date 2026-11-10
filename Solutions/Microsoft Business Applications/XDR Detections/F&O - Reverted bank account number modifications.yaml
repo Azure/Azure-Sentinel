@@ -1,0 +1,113 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dynamics365Finance
+  dataTypes:
+  - FinanceOperationsActivity_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - FinanceOperationsActivity_CL
+  requiredDataConnectors:
+  - connectorId: Dynamics365Finance
+    dataTypes:
+    - FinanceOperationsActivity_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 44b1021c-d517-4b7a-9ba6-a91eab94e632
+    path: Analytic Rules/F&O - Reverted bank account number modifications.yaml
+    version: 3.2.1
+    querySha256: 012e2780c71f8e012cf9ba75c576da76f3d5819599ce4a3a0880b9a979e88aaf
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=1d; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1565
+    - T1496
+    - T0828
+    - T0831
+    reviewScope:
+      sourceDocumentSha256: 5c9e0015a281e418254f91c012428b336246252eb3815b6ee28d1cca7805b85a
+      targetQuerySha256: d47cadff664ff5a3118e57d1d4ab90a7ad3b88902100147cb090fa59f3af6f1d
+properties:
+  id: xdr-44b1021c-d517-4b7a-9ba6-a91eab94e632
+  displayName: F&O - Reverted bank account number modifications
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let detection_window = 24h;
+      let query_frequency = 15m;
+      let bank_changes = FinanceOperationsActivity_CL
+          | where LogType == "Update" and TableName == "BankAccountTable"
+          | extend AccountId = tostring(parse_json(tostring(FormattedData.AccountID)).NewData)
+          | extend AccountNum = parse_json(tostring(FormattedData.AccountNum))
+          | extend
+              CurrentAccountNum = tostring(AccountNum.NewData),
+              OldAccountNum = tostring(AccountNum.OldData)
+          | where CurrentAccountNum != OldAccountNum;
+      bank_changes
+      | join kind=inner (bank_changes
+          | where TimeGenerated >= ago(query_frequency)
+          | project-rename UpdatedTime = LogCreatedDateTime, UpdatedAccount = CurrentAccountNum)
+          on $left.OldAccountNum == $right.UpdatedAccount
+      | where UpdatedTime between (LogCreatedDateTime .. (LogCreatedDateTime + detection_window))
+      | extend
+          FinOpsAppId = 32780,
+          AccountName = tostring(split(Username, '@')[0]),
+          UPNSuffix = tostring(split(Username, '@')[1])
+      | project
+          TimeGenerated,
+          LogCreatedDateTime,
+          LogType,
+          TableName,
+          Username,
+          AccountName,
+          UPNSuffix,
+          AccountId,
+          CurrentAccountNum,
+          OldAccountNum,
+          FinOpsAppId
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: F&O - Reverted bank account number modifications
+      description: Identifies changes to bank account numbers in Finance & Operations, whereby a bank account number is modified
+        but then subsequently reverted a short time later.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: FinOpsAppId
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1565
+        - technique: T1496
+        - technique: T0828
+        - technique: T0831

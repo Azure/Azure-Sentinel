@@ -403,9 +403,24 @@ def validate_content(solution: str | Path) -> dict[str, Any]:
     if not state or not enabled(state):
         return validate_solution(root)
     verify_inventory(root, state)
-    result = validate_solution(root) if has_analytic_rules(root) else {
-        "solution": str(root), "total": 0, "valid": 0, "invalid": 0, "results": [],
-    }
+    if has_analytic_rules(root):
+        result = validate_solution(root)
+    else:
+        from solution_manager.qualification.pr_check_runner import scan_solution_urls
+
+        locale_issues = scan_solution_urls(root)["localeIssues"]
+        result = {
+            "solution": str(root),
+            "total": 0,
+            "valid": 0,
+            "invalid": len(locale_issues),
+            "results": [],
+            "documentsLinkValidation": {
+                "valid": not locale_issues,
+                "issueCount": len(locale_issues),
+                "issues": locale_issues,
+            },
+        }
     workbook_result = validate_evidence(root, state)
     return {**result, "workbooks": workbook_result,
             "workbookExcluded": state["workbooks"]["selection"]["excluded"]}

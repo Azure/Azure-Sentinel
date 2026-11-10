@@ -49,8 +49,9 @@ the ARM ID again. Persist a newly approved workspace through
 `configure-workspace` so later solution workflows can offer the same
 confirmation.
 
-Default to **Authoring** and ask before optional **Qualification** through
-structured elicitation. If selection is cancelled, do not create workflow state.
+Default to **Qualification** (with **Authoring** available as an explicit
+offline/ISV fallback when no live lab is available) through structured
+elicitation. If selection is cancelled, do not create workflow state.
 A test tenant or workspace does not imply qualification consent. Require
 explicit approval immediately before deployment or ingestion writes.
 

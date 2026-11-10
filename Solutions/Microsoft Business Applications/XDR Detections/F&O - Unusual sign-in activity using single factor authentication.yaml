@@ -1,0 +1,119 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 919e939f-95e2-4978-846e-13a721c89ea1
+    path: Analytic Rules/F&O - Unusual sign-in activity using single factor authentication.yaml
+    version: 3.2.0
+    querySha256: 917145d77268c5849a02a4c12ac54836b30c1b33b5a2b1cfbdd07c0048034b15
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - InitialAccess
+    originalTechniques:
+    - T1552
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 87c87eb722f5d9b14f728a9e6aea7b7c4d5d397732ad9e5556eb7c005824503e
+      targetQuerySha256: 9201c196d5777ff9b6809a648eb2a009dff722011bf4ce5fe5bf739476872272
+properties:
+  id: xdr-919e939f-95e2-4978-846e-13a721c89ea1
+  displayName: F&O - Unusual sign-in activity using single factor authentication
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Dynamics Lifecycle services: 913c6de4-2a4a-4a61-a9ce-945d2b2ce2e0
+      // Microsoft Dynamics ERP: 00000015-0000-0000-c000-000000000000
+      let appid_list = dynamic(["913c6de4-2a4a-4a61-a9ce-945d2b2ce2e0", "00000015-0000-0000-c000-000000000000"]);
+      let query_frequency = 1h;
+      let query_lookback = 14d;
+      let historical_sign_in_activity = SigninLogs
+          | where TimeGenerated between (ago(query_lookback) .. ago(query_frequency));
+      let historical_sign_in_locations = historical_sign_in_activity
+          | summarize by Location;
+      let multifactor_sign_in_count = toscalar(historical_sign_in_activity
+          | where AppId in (appid_list) and ResultType == 0
+          | where AuthenticationRequirement == "multiFactorAuthentication"
+          | summarize count());
+      SigninLogs
+      | where TimeGenerated >= ago(query_frequency)
+      | where AppId in (appid_list) and ResultType == 0
+      | where multifactor_sign_in_count > 0
+      | where Location !in (historical_sign_in_locations)
+      | where NetworkLocationDetails !has "trustedNamedLocation"
+      | summarize by UserPrincipalName, AppDisplayName, IPAddress, Location
+      | extend
+          CloudAppId = 32780,
+          AccountName = tostring(split(UserPrincipalName, "@")[0]),
+          UPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+      | project
+          UserPrincipalName,
+          AppDisplayName,
+          IPAddress,
+          Location,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: F&O - Unusual sign-in activity using single factor authentication
+      description: Identifies sucessful sign-in events to Finance & Operations and Lifecycle Services using single factor/password
+        authentication. Sign-in events from tenants not using MFA, coming from a Microsoft Entra trusted network location,
+        or from geolocations seen previously in the last 14 days are excluded.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1552
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078

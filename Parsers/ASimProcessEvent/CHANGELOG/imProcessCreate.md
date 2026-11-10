@@ -1,5 +1,9 @@
 # Changelog for imProcessCreate.yaml
 
+## Version 0.1.4
+
+- (2026-11-04) Fixed parser argument forwarding - [PR #15556](https://github.com/Azure/Azure-Sentinel/pull/15556)
+
 ## Version 0.1.3
 
 - (2026-08-28) Top-level parser consistency fixes - [PR #14763](https://github.com/Azure/Azure-Sentinel/pull/14763)
@@ -15,4 +19,3 @@
 ## Version 0.1
 
 - (2021-06-22) Normalized Process Events package - Take 2 - [PR #2552](https://github.com/Azure/Azure-Sentinel/pull/2552)
-

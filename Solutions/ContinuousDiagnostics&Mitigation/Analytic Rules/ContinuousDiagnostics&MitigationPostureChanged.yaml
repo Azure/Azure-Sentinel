@@ -1,11 +1,14 @@
 id: fd950af9-d9db-4879-a60a-7267cc041beb
 name: CDM_ContinuousDiagnostics&Mitigation_PostureChanged
 description: |
-  'This alert is designed to monitor Azure policies aligned with the Continuous Diagnostics & Mitigation (CDM) Program. The alert triggers when policy compliance falls below 70% within a 1 week timeframe.'
+  This alert is designed to monitor Azure policies aligned with the Continuous Diagnostics & Mitigation (CDM) Program. The alert triggers when policy compliance falls below 70% within a 1 week timeframe.
 severity: Medium
-status: Available 
-requiredDataConnectors: []
-queryFrequency: 7d
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityRecommendation
+queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
@@ -15,6 +18,7 @@ relevantTechniques:
   - T1082
 query: |
   SecurityRecommendation
+  | where TimeGenerated > ago(7d)
   | where RecommendationDisplayName <> ""
   | extend MaturityLevel=iff(RecommendationDisplayName has_any("log", "defender", "asset", "arc"), "Hardware Asset Management (HWAM)",
       iff(RecommendationDisplayName has_any("allow", "software", "application"), "Software Asset Management (SWAM)",
@@ -28,27 +32,33 @@ query: |
       iff(RecommendationDisplayName has_any("data", "storage", "sql", "cmk", "key"), "Data Protection Management (DPM)", "Other"))))))))))
   | where MaturityLevel in ('Hardware Asset Management (HWAM)', 'Software Asset Management (SWAM)', 'User Trust (TRUST)', 'Credentials & Authenticators (CRED)', 'Privileges (PRIV)', 'Boundary Protection (BOUND)', 'Manage Events (MNGEVT)', 'Endpoint Detection & Response (EDR)', 'Design & Build in Security (DBS)', 'Data Protection Management (DPM)')
   | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationDisplayName
+  | extend DeviceName = tostring(split(AssessedResourceId, "/")[-1]), LinkToDefenderPortal = coalesce(column_ifexists("LinkToDefenderPortal", ""), RecommendationLink)
   | summarize
       Failed = countif(RecommendationState == "Unhealthy"),
       Passed = countif(RecommendationState == "Healthy"),
       NotApplicable = countif(RecommendationState == "NotApplicable" or RecommendationState == "Removed"),
       Applicable = countif(RecommendationState == "Unhealthy" or RecommendationState == "Healthy"),
-      Total = countif(RecommendationState == "Unhealthy" or RecommendationState == "Healthy" or RecommendationState == "NotApplicable" or RecommendationState == "Removed")
+      Total = countif(RecommendationState == "Unhealthy" or RecommendationState == "Healthy" or RecommendationState == "NotApplicable" or RecommendationState == "Removed"),
+      DeviceName = take_any(DeviceName),
+      LinkToDefenderPortal = take_any(LinkToDefenderPortal)
       by MaturityLevel
   | extend PassedControls = (Passed / todouble(Applicable)) * 100
-  | project MaturityLevel, Total, PassedControls, Passed, Failed, Applicable, NotApplicable
+  | project MaturityLevel, Total, PassedControls, Passed, Failed, Applicable, NotApplicable, DeviceName, LinkToDefenderPortal
   | sort by Total, Passed desc
   | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
-  | project CapabilityArea=MaturityLevel, Total, PassedControls, Passed, Failed, RemediationLink, LastObserved=now()
+  | project CapabilityArea=MaturityLevel, Total, PassedControls, Passed, Failed, RemediationLink, LastObserved=now(), DeviceName, LinkToDefenderPortal
   | where CapabilityArea <> ''
   | where PassedControls < 70 
   //Adjust Either FailedRatePercentage or PassedRatePercentage Thresholds within organizational requirements
   | sort by PassedControls desc
-  | extend URLCustomEntity = RemediationLink
 entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: URLCustomEntity
-version: 1.0.0
+        columnName: LinkToDefenderPortal
+version: 1.0.1
 kind: Scheduled

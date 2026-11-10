@@ -1,0 +1,130 @@
+Parser:
+  DisplayName: Ingestion-time Email Event ASIM parser for Proofpoint TAP blocked messages
+  Version: '0.1.0'
+  LastUpdated: '2026-11-02'
+Product:
+  Name: Proofpoint TAP
+Normalization:
+  Schema: EmailEvent
+  Version: '1.0.0'
+Author: Microsoft
+Description: |
+  Normalizes Proofpoint TAP messages-blocked events from ProofPointTAPMessagesBlockedV2_CL
+  to ASimEmailEventLogs during ingestion.
+ParserName: ASimEmailEventProofpointTAPBlocked
+DCRType: Standard
+InputStream: Custom-ProofPointTAPMessagesBlockedV2_CL
+SourceRawTable: ProofPointTAPMessagesBlockedV2_CL
+TargetASIMTable: ASimEmailEventLogs
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend Type = "ProofPointTAPMessagesBlockedV2_CL"
+  | extend
+      _itpFromText = iff(gettype(fromAddress) == "array",
+          iff(array_length(fromAddress) == 1, tostring(fromAddress[0]), ""), tostring(fromAddress)),
+      _itpHeaderFromText = tostring(headerFrom),
+      _itpReplyToText = iff(gettype(replyToAddress) == "array",
+          iff(array_length(replyToAddress) == 1, tostring(replyToAddress[0]), ""), tostring(replyToAddress)),
+      _itpHeaderReplyToText = tostring(headerReplyTo),
+      _itpSenderText = tostring(sender)
+  | extend
+      _itpFrom = replace(@"^ +| +$", "", iff(indexof(_itpFromText, "<") >= 0,
+          tostring(split(tostring(split(_itpFromText, "<")[1]), ">")[0]), _itpFromText)),
+      _itpHeaderFrom = replace(@"^ +| +$", "", iff(indexof(_itpHeaderFromText, "<") >= 0,
+          tostring(split(tostring(split(_itpHeaderFromText, "<")[1]), ">")[0]), _itpHeaderFromText)),
+      _itpReplyTo = replace(@"^ +| +$", "", iff(indexof(_itpReplyToText, "<") >= 0,
+          tostring(split(tostring(split(_itpReplyToText, "<")[1]), ">")[0]), _itpReplyToText)),
+      _itpHeaderReplyTo = replace(@"^ +| +$", "", iff(indexof(_itpHeaderReplyToText, "<") >= 0,
+          tostring(split(tostring(split(_itpHeaderReplyToText, "<")[1]), ">")[0]), _itpHeaderReplyToText)),
+      _itpSender = replace(@"^ +| +$", "", iff(indexof(_itpSenderText, "<") >= 0,
+          tostring(split(tostring(split(_itpSenderText, "<")[1]), ">")[0]), _itpSenderText))
+  | extend
+      EmailFromAddress = iif(isnotempty(_itpFrom), _itpFrom, _itpHeaderFrom),
+      EmailReplyToAddress = iif(isnotempty(_itpReplyTo), _itpReplyTo, _itpHeaderReplyTo),
+      EmailMailFromAddress = _itpSender,
+      EmailToRecipients = parse_json(replace(">", "", replace("<", "",
+          tostring(iif(isnotnull(toAddresses), toAddresses, parse_json('[]')))))),
+      EmailCCRecipients = parse_json(replace(">", "", replace("<", "",
+          tostring(iif(isnotnull(ccAddresses), ccAddresses, parse_json('[]')))))),
+      EnvelopeRecipients = parse_json(replace(">", "", replace("<", "",
+          tostring(iif(isnotnull(recipient), recipient, parse_json('[]')))))),
+      Threat = case(gettype(threatsInfoMap) == "dictionary", threatsInfoMap,
+          array_length(threatsInfoMap) == 1, threatsInfoMap[0], parse_json('null')),
+      Part = case(gettype(messageParts) == "dictionary", messageParts,
+          array_length(messageParts) == 1, messageParts[0], parse_json('null'))
+  | extend
+      EventStartTime = iif(isnotnull(messageTime), messageTime, TimeGenerated),
+      EventEndTime = iif(isnotnull(messageTime), messageTime, TimeGenerated),
+      EventCount = int(1),
+      EventType = "EmailDelivery",
+      EventOriginalType = "messagesBlocked",
+      EventResult = "Failure",
+      EventSchema = "EmailEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "Proofpoint",
+      EventProduct = "TAP Messages",
+      EventOriginalUid = iif(isnotempty(GUID), GUID, tostring(columnifexists("id", ""))),
+      Dvc = iif(isnotempty(cluster), cluster, "Proofpoint TAP"),
+      DvcAction = "Quarantined",
+      DvcEntityKey = "",
+      AdditionalEntities = parse_json('[]'),
+      EmailFromDomain = tostring(split(EmailFromAddress, "@")[1]),
+      EmailMailFromDomain = tostring(split(EmailMailFromAddress, "@")[1]),
+      EmailReplyToDomain = tostring(split(EmailReplyToAddress, "@")[1]),
+      EmailDirection = "Unknown",
+      EmailDeliveryLocation = "Quarantine",
+      EmailProtocolName = "SMTP",
+      EmailSizeBytes = tolong(messageSize),
+      Dst = iff(array_length(EnvelopeRecipients) == 1, tostring(EnvelopeRecipients[0]),
+          iff(array_length(EnvelopeRecipients) > 1, tostring(EnvelopeRecipients), "")),
+      ThreatOriginalCategory = tostring(Threat.classification),
+      ThreatId = tostring(Threat.threatID),
+      ThreatName = tostring(Threat.threat),
+      ThreatFirstReportedTime = todatetime(Threat.threatTime),
+      ThreatIsActive = case(tolower(tostring(Threat.threatStatus)) == "active", true,
+          tolower(tostring(Threat.threatStatus)) in ("cleared", "falsepositive"), false, bool(null)),
+      EventReportUrl = tostring(Threat.threatUrl),
+      EmailFiles = iff(tolower(tostring(Part.disposition)) == "attached", pack_array(Part), parse_json('[]')),
+      RuleName = quarantineRule,
+      AdditionalFields = pack(
+          "GUID", GUID, "messageID", messageID, "QID", QID,
+          "cluster", cluster, "completelyRewritten", completelyRewritten,
+          "fromAddress", fromAddress, "headerFrom", headerFrom, "headerReplyTo", headerReplyTo,
+          "replyToAddress", replyToAddress, "sender", sender,
+          "recipient", recipient, "toAddresses", toAddresses, "ccAddresses", ccAddresses,
+          "impostorScore", impostorScore, "malwareScore", malwareScore,
+          "phishScore", phishScore, "spamScore", spamScore,
+          "messageParts", messageParts, "threatsInfoMap", threatsInfoMap,
+          "messageTime", messageTime, "messageSize", messageSize,
+          "modulesRun", modulesRun, "policyRoutes", policyRoutes,
+          "quarantineFolder", quarantineFolder, "quarantineRule", quarantineRule,
+          "xmailer", xmailer)
+  | extend
+      EventUid = EventOriginalUid,
+      SrcUserName = EmailMailFromAddress,
+      Src = senderIP,
+      ThreatCategory = case(tolower(ThreatOriginalCategory) == "phish", "Phishing",
+          tolower(ThreatOriginalCategory) == "malware", "Malware",
+          tolower(ThreatOriginalCategory) == "spam", "Spam",
+          tolower(ThreatOriginalCategory) == "impostor", "Impersonation",
+          tolower(ThreatOriginalCategory) == "toad", "TOAD", ""),
+      EventResultDetails = case(tolower(ThreatOriginalCategory) == "phish", "PhishingDetected",
+          tolower(ThreatOriginalCategory) == "malware", "MalwareDetected", "Other")
+  | project-rename EmailSubject = subject, SrcIpAddr = senderIP, EmailOriginalDeliveryLocation = quarantineFolder
+  | extend IpAddr = SrcIpAddr, User = SrcUserName, Rule = RuleName
+  | project
+      TimeGenerated, Type, EventStartTime, EventEndTime, EventCount, EventType, EventOriginalType,
+      EventResult, EventResultDetails, EventSchema, EventSchemaVersion, EventVendor, EventProduct,
+      EventOriginalUid, EventUid, EventReportUrl, Dvc, DvcAction, DvcEntityKey, AdditionalEntities,
+      EmailFromAddress, EmailFromDomain, EmailMailFromAddress, EmailMailFromDomain,
+      EmailReplyToAddress, EmailReplyToDomain, EmailToRecipients, EmailCCRecipients,
+      EmailSubject, EmailSizeBytes, EmailDirection, EmailDeliveryLocation, EmailOriginalDeliveryLocation,
+      EmailProtocolName, EmailFiles,
+      Dst, Src, SrcIpAddr, IpAddr, SrcUserName, User, RuleName, Rule,
+      ThreatId, ThreatName, ThreatCategory, ThreatOriginalCategory, ThreatFirstReportedTime,
+      ThreatIsActive, AdditionalFields
+Change:
+  Date: '2026-11-02'
+  Description: Initial ingestion-time conversion.

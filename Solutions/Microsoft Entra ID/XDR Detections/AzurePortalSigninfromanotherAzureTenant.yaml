@@ -1,0 +1,154 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 87210ca1-49a4-4a7d-bb4a-4988752f978c
+    path: Analytic Rules/AzurePortalSigninfromanotherAzureTenant.yaml
+    version: 2.0.3
+    querySha256: c3ee300388ad69aba669494485a08897104e435e6f09742fe07f058a9851485d
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `UserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1199
+    reviewScope:
+      sourceDocumentSha256: ba6bd910950376ab8088c7a3e65df5e8ed7a6c994f250311ef63450d0958edfd
+      targetQuerySha256: 52364f90c5aeb78830a27979d9f0a4c7f2cca8076c2012c670fb73caa916bc95
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: ba6bd910950376ab8088c7a3e65df5e8ed7a6c994f250311ef63450d0958edfd
+      targetQuerySha256: 52364f90c5aeb78830a27979d9f0a4c7f2cca8076c2012c670fb73caa916bc95
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: ba6bd910950376ab8088c7a3e65df5e8ed7a6c994f250311ef63450d0958edfd
+      targetQuerySha256: 52364f90c5aeb78830a27979d9f0a4c7f2cca8076c2012c670fb73caa916bc95
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+properties:
+  id: xdr-87210ca1-49a4-4a7d-bb4a-4988752f978c
+  displayName: Azure Portal sign in from another Azure Tenant
+  status: disabled
+  queryCondition:
+    queryText: "// Get details of current Azure Ranges (note this URL updates regularly\
+      \ so will need to be manually updated over time)\n// You may find the name of\
+      \ the new JSON here: https://www.microsoft.com/download/details.aspx?id=56519\n\
+      // On the downloads page, click the 'details' button, and then replace just\
+      \ the filename in the URL below\nlet azure_ranges = externaldata(changeNumber:\
+      \ string, cloud: string, values: dynamic)\n[\"https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MSFTIPRanges/ServiceTags_Public.json\"\
+      ] with(format='multijson')\n| mv-expand values\n| mv-expand values.properties.addressPrefixes\n\
+      | mv-expand values_properties_addressPrefixes\n| summarize by tostring(values_properties_addressPrefixes)\n\
+      | extend isipv4 = parse_ipv4(values_properties_addressPrefixes)\n| extend isipv6\
+      \ = parse_ipv6(values_properties_addressPrefixes)\n| extend ip_type = case(isnotnull(isipv4),\
+      \ \"v4\", \"v6\")\n| summarize make_list(values_properties_addressPrefixes)\
+      \ by ip_type\n;\nSigninLogs\n// Limiting to Azure Portal really reduces false\
+      \ positives and helps focus on potential admin activity\n| where ResultType\
+      \ == 0\n| where AppDisplayName =~ \"Azure Portal\"\n| extend isipv4 = parse_ipv4(IPAddress)\n\
+      | extend ip_type = case(isnotnull(isipv4), \"v4\", \"v6\")\n // Only get logons\
+      \ where the IP address is in an Azure range\n| join kind=fullouter (azure_ranges)\
+      \ on ip_type\n| extend ipv6_match = ipv6_is_in_any_range(IPAddress,  list_values_properties_addressPrefixes)\n\
+      | extend ipv4_match = ipv4_is_in_any_range(IPAddress,  list_values_properties_addressPrefixes)\n\
+      | where ipv4_match or ipv6_match\n// Limit to where the user is external to\
+      \ the tenant\n| where HomeTenantId != ResourceTenantId\n// Further limit it\
+      \ to just access to the current tenant (you can drop this if you wanted to look\
+      \ elsewhere as well but it helps reduce FPs)\n| where ResourceTenantId == AADTenantId\n\
+      | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), make_set(ResourceDisplayName)\
+      \ by UserPrincipalName, IPAddress, UserAgent, Location, HomeTenantId, ResourceTenantId,\
+      \ UserId\n| extend AccountName = split(UserPrincipalName, \"@\")[0]\n| extend\
+      \ UPNSuffix = split(UserPrincipalName, \"@\")[1]"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Azure Portal sign in from another Azure Tenant
+      description: '''This query looks for successful sign in attempts to the Azure
+        Portal where the user who is signing in from another Azure tenant, and the
+        IP address the login attempt is from is an Azure IP. A threat actor who compromises
+        an Azure tenant may look to pivot to other tenants leveraging cross-tenant
+        delegated access in this manner.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: UserId
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1199
+      customDetails:
+        AccountFullName: UserPrincipalName

@@ -1,0 +1,126 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWSSecurityHub
+  dataTypes:
+  - AWSSecurityHubFindings
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSSecurityHubFindings
+  requiredDataConnectors:
+  - connectorId: AWSSecurityHub
+    dataTypes:
+    - AWSSecurityHubFindings
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0aa20f8c-b8e4-4a34-a5b8-8b2d9dd7d1c2
+    path: Analytic Rules/SSMDocumentsPublicSharingEnabled.yaml
+    version: 1.0.0
+    querySha256: 4da464cd787dce2aa9cd4b53993dba76253a9058505a2c1022d7d75c4ff1f602
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved as customDetails.AccountName from query
+      column `AwsAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.CloudAppAccountId mismatch is informational because its original value is preserved as customDetails.AccountName
+      from query column `AwsAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1059
+    reviewScope:
+      sourceDocumentSha256: 421eedbb9ae6cfb50bb83732cffef6a04eb2dd4f27ccfb08256292d8beae30e4
+      targetQuerySha256: e62b85d2536c2132e38644c5c7559ba41e20ba10325b1370889214b440c6949d
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 421eedbb9ae6cfb50bb83732cffef6a04eb2dd4f27ccfb08256292d8beae30e4
+      targetQuerySha256: e62b85d2536c2132e38644c5c7559ba41e20ba10325b1370889214b440c6949d
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-0aa20f8c-b8e4-4a34-a5b8-8b2d9dd7d1c2
+  displayName: AWS Security Hub - Detect SSM documents public sharing enabled
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSSecurityHubFindings
+      | where RecordState == "ACTIVE" and ComplianceStatus == "FAILED"
+      | where tostring(AwsSecurityFindingGeneratorId) == "security-control/SSM.7"
+            or tostring(ComplianceSecurityControlId) == "SSM.7"
+      | summarize TimeGenerated = max(TimeGenerated)
+          by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,
+             AwsSecurityFindingId, ComplianceSecurityControlId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWS Security Hub - Detect SSM documents public sharing enabled
+      description: |-
+        This query detects AWS accounts where public sharing is enabled, using AWS Security Hub control SSM.7 findings.
+        Allowing public sharing of SSM documents can expose automation content and enable unauthorized execution or tampering.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AwsAccountId
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      customDetails:
+        ComplianceControlId: ComplianceSecurityControlId
+        Region: AwsRegion
+        FindingId: AwsSecurityFindingId
+        AccountName: AwsAccountId

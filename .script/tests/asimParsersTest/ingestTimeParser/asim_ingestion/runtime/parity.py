@@ -13,6 +13,16 @@ from asim_ingestion.fixtures.timestamps import (
 )
 from .queries import MAX_MISMATCH_EXAMPLES, _normalize_column_type
 
+ADDITIONAL_FIELDS_IGNORED_KEYS = frozenset(
+    {
+        "TenantId",
+        "TimeGenerated",
+        "Type",
+        "_ResourceId",
+    }
+)
+
+
 def _normalize_dynamic(value: Any) -> Any:
     if isinstance(value, str):
         try:
@@ -29,7 +39,9 @@ def _normalize_dynamic(value: Any) -> Any:
     return value
 
 
-def _canonical_value(value: Any, column_type: str) -> Any:
+def _canonical_value(
+    value: Any, column_type: str, *, column_name: str = ""
+) -> Any:
     if value is None:
         return None
     if column_type == "datetime":
@@ -37,7 +49,14 @@ def _canonical_value(value: Any, column_type: str) -> Any:
             parse_kusto_datetime_ticks(value)
         )
     if column_type == "dynamic":
-        return _normalize_dynamic(value)
+        normalized = _normalize_dynamic(value)
+        if column_name == "AdditionalFields" and isinstance(normalized, dict):
+            return {
+                key: None
+                for key in normalized
+                if key not in ADDITIONAL_FIELDS_IGNORED_KEYS
+            }
+        return normalized
     if column_type == "real" and isinstance(value, float):
         if math.isnan(value):
             return {"specialReal": "NaN"}
@@ -68,7 +87,9 @@ def _canonical_row(
         {
             "column": column,
             "type": schema[column],
-            "value": _canonical_value(row.get(column), schema[column]),
+            "value": _canonical_value(
+                row.get(column), schema[column], column_name=column
+            ),
         }
         for column in columns
     ]
@@ -161,10 +182,10 @@ def _stable_key_diagnostics(
             differences = []
             for column in columns:
                 expected_value = _canonical_value(
-                    expected.get(column), schema[column]
+                    expected.get(column), schema[column], column_name=column
                 )
                 actual_value = _canonical_value(
-                    actual.get(column), schema[column]
+                    actual.get(column), schema[column], column_name=column
                 )
                 if expected_value != actual_value:
                     differences.append(

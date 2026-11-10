@@ -1,0 +1,96 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - Update
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c385944b-17b9-4b2b-921e-0e8d0341a675
+    path: Analytic Rules/Conditional Access - Dynamic Group Exclusion Changes.yaml
+    version: 1.0.2
+    querySha256: 192c39e4e7af8c1afbb95a1aaf5a81942e1e54dd82b17af6d60ccdfab5f82592
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1484
+    reviewScope:
+      sourceDocumentSha256: 55b28d6d67a26f7a6a5fd3f8b8ab7e4490226a3002a5612ae04eec583a4d601d
+      targetQuerySha256: 192c39e4e7af8c1afbb95a1aaf5a81942e1e54dd82b17af6d60ccdfab5f82592
+properties:
+  id: xdr-c385944b-17b9-4b2b-921e-0e8d0341a675
+  displayName: Conditional Access - Dynamic Group Exclusion Changes
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)
+      let monitoredGroups = dynamic(["Group1", "Group2"]);  // <-- Customize this list
+      AuditLogs
+      | where OperationName == "Update group"
+      | where AdditionalDetails[0].value == "DynamicMembership"
+      | extend DynamicGroupName = tostring(TargetResources[0].displayName)
+      | where DynamicGroupName in (monitoredGroups)
+      | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+      | extend accountName = tostring(split(modifiedBy, "@")[0])
+      | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+      | extend oldRule = tostring(TargetResources[0].modifiedProperties[0].oldValue)
+      | extend newRule = tostring(TargetResources[0].modifiedProperties[0].newValue)
+      | where oldRule != newRule
+      | project
+          TimeGenerated,
+          OperationName,
+          DynamicGroupName,
+          modifiedBy,
+          accountName,
+          upnSuffix,
+          result = Result,
+          oldRule,
+          newRule
+      | order by TimeGenerated desc
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Conditional Access - Dynamic Group Exclusion Changes
+      description: // Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: accountName
+          upnSuffixColumn: upnSuffix
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1484
