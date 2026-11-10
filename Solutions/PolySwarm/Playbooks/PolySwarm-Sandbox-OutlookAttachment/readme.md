@@ -2,7 +2,7 @@
 
 **Preview.** This playbook deploys and passes every local check, but it has not yet
 been run against a live Exchange Online mailbox. If you try it, please tell us how it
-went at support@polyswarm.io.
+went at customersuccess@polyswarm.io.
 
 For every MailMessage entity on a Microsoft Sentinel incident, retrieves the message's
 attachments via the Office 365 Outlook connector and detonates each in the PolySwarm

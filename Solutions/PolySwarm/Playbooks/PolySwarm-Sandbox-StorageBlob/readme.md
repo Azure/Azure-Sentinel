@@ -62,6 +62,7 @@ plus two storage-specific parameters:
 | --- | --- |
 | `StorageAccountName` | The storage account holding the blobs to detonate. No default; required. |
 | `ContainerName` | The container within that account. No default; required. |
+| `SolutionVersion` | Default `3.0.0`. The solution version sent in the User-Agent header on every PolySwarm call. Leave it as it is. |
 
 All other parameters (`PlaybookName` default
 `PolySwarm-Sandbox-StorageBlob-IncidentTriggered`, `Community`,

@@ -15,7 +15,7 @@ Two playbooks ship as **preview**: the Defender for Endpoint file detonation pla
 and the Outlook attachment detonation playbook. Both deploy cleanly and pass every
 local check, but they have not yet been run against a live Defender for Endpoint
 tenant or Exchange Online mailbox. If you try either one, please tell us how it went
-at support@polyswarm.io.
+at customersuccess@polyswarm.io.
 
 ## What the solution does
 
@@ -89,7 +89,7 @@ or unconnected, and each item has one action that turns it on.
 3. **Incident-triggered playbooks (every enrichment, sandbox and check quota playbook,
    and the Defender for Endpoint file playbook).** None runs until an automation rule
    runs it. Create an automation rule that runs the playbook when an incident is
-   created or updated. Grant the playbook's managed identity its roles first
+   created. Grant the playbook's managed identity its roles first
    (`docs/permissions.md`).
 4. **Entity-triggered playbooks.** No automation rule applies to these.
    Entity-triggered playbooks run only when someone starts them on one entity. As of
@@ -171,7 +171,7 @@ wherever they come up.
     hunt results into native Sentinel indicators.
   - **Curated feed / TAXII entitlement** (`taxii`, plus the specific feed's own
     entitlement, for example `taxii_trustgroup`), for the curated feed data connector.
-  Contact your PolySwarm representative or support@polyswarm.io to confirm
+  Contact your PolySwarm representative or customersuccess@polyswarm.io to confirm
   which entitlements are on your account.
 - For the Defender for Endpoint file detonation playbook only: Microsoft Defender for
   Endpoint Plan 2, with **Live response** and **Live response for servers** enabled in
@@ -339,14 +339,15 @@ Three analytics rules ship with the solution, all Scheduled rules:
 
 - **PolySwarm malicious file observed**, severity High. Joins active PolySwarm
   file-hash indicators against your device and security event tables (file and
-  process events, security events, common security log) on SHA-256, and raises an
+  process events, security events, common security log) on SHA-256, SHA-1 or MD5, and raises an
   incident carrying the file hash, host and account. Depends on either the hunting or
   the curated feed data connector, both of which write to the native
   `ThreatIntelIndicators` table.
 - **PolySwarm high-confidence hunt hit**, severity Medium. Raises an incident on any
-  PolySwarm indicator with a confidence of 90 or higher created in the last hour,
-  grouped by malware family. Depends on either the hunting or the curated feed data
-  connector. The rule's own severity and MITRE tactic are fixed at rule level, as
+  PolySwarm Hunting indicator with a confidence of 90 or higher created in the last
+  hour, grouped by malware family. Only indicators that carry a hunt rule name qualify,
+  so curated feed indicators never match. The rule lists both connectors as data
+  connectors, but only the hunting connector produces matching rows. The rule's own severity and MITRE tactic are fixed at rule level, as
   Microsoft Sentinel requires; the malware family and hunt rule name that produced the
   indicator are carried on the incident as columns rather than changing the rule's
   tactic dynamically.
@@ -393,7 +394,7 @@ solution's own name and version and the calling component's name.
 
 ## Support
 
-PolySwarm Customer Success: support@polyswarm.io
+PolySwarm Customer Success: customersuccess@polyswarm.io
 
 For Microsoft Sentinel and Logic Apps configuration questions not specific to
 PolySwarm, see the

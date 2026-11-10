@@ -48,6 +48,7 @@ and is never parsed.
 | `ApiQuotaWarningThresholdPercent` | Default `20`. Warn when remaining API quota falls below this percentage. |
 | `SandboxQuotaWarningThresholdPercent` | Default `20`. Warn when remaining sandbox quota falls below this percentage. |
 | `SandboxFeatureTagFilter` | Default `sandbox`. The account-features tag this playbook reads to find the sandbox quota entry. |
+| `SolutionVersion` | Default `3.0.0`. The solution version sent in the User-Agent header on every PolySwarm call. Leave it as it is. |
 
 ## Post-deployment steps
 

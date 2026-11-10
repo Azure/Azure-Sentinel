@@ -41,6 +41,7 @@ benign software, so a long association list is expected and not itself a verdict
 | `PolySwarmCommunity` | `default` unless you have a private community. |
 | `PolySwarmApiBaseUrl` | Leave as-is unless directed otherwise. |
 | `SampleHashCount` | Maximum number of associated sample hashes listed in the comment. Default `10`. |
+| `SolutionVersion` | Default `3.0.0`. The solution version sent in the User-Agent header on every PolySwarm call. Leave it as it is. |
 
 ## Post-deployment steps
 

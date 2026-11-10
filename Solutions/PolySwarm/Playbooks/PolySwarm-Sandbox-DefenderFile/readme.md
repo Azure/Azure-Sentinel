@@ -2,7 +2,7 @@
 
 **Preview.** This playbook deploys and passes every local check, but it has not yet
 been run against a live Defender for Endpoint tenant. If you try it, please tell us how it
-went at support@polyswarm.io.
+went at customersuccess@polyswarm.io.
 
 Starting from a Microsoft Sentinel incident with a FileHash entity, runs a Microsoft
 Defender for Endpoint advanced hunting query to find where the SHA-256 was last seen,
@@ -180,6 +180,7 @@ hangs silently until its own timeout rather than failing with a clear error. See
 | `ApproverEmail` | No default; required when `RequireAnalystApproval` is `true`. Where the approval email is sent. |
 | `ApprovalTimeoutHours` | Default `4`. How long to wait for the approval response before treating it as a timeout. |
 | `DeniedPathFragments` | Array, defaults to common credential and secret store paths (browser profile directories, Windows Credentials/Protect/Vault, `System32\config`, `NTDS`, `.kdbx`, `id_rsa`). Case-insensitive substring match against the retrieved file's full path; a match stops the playbook before retrieval. |
+| `SolutionVersion` | Default `3.0.0`. The solution version sent in the User-Agent header on every PolySwarm call. Leave it as it is. |
 
 ## Post-deployment steps
 

@@ -51,6 +51,7 @@ a 204 there is the normal answer and adds nothing.
 | `PolySwarmCommunity` | `default` unless you have a private community. |
 | `PolySwarmApiBaseUrl` | Leave as-is unless directed otherwise. |
 | `PolySwarmMaliciousThreshold` | Fallback PolyScore threshold, used only when the API returns no explicit verdict. Default `0.8`; at or above half that reports "Suspicious". A string, because ARM templates have no float parameter type. |
+| `SolutionVersion` | Default `3.0.0`. The solution version sent in the User-Agent header on every PolySwarm call. Leave it as it is. |
 
 The playbook no longer accepts the API key as a plain deployment parameter. It reads
 the key at runtime through its own Key Vault API connection, and every HTTP action
@@ -78,7 +79,7 @@ PolySwarm enrichment
 Hash (SHA256): 5da5a1e3983982a92341953929d4c7726da65fe5125d264dd8932a870f2f154a
 Assessment: Malicious (PolyScore 0.9999)
 Detections: 6 malicious / 2 benign of 8 engines
-Malicious engines: Qihoo 360, SecondWrite, SecureAge, Lionic, DrWeb, Filseclab, Crowdstrike Falcon ML, NanoAV, ClamAV, SentinelOne Static ML, Ikarus
+Malicious engines: Qihoo 360, SecondWrite, SecureAge, Lionic, DrWeb, Filseclab
 Malware family: BlackMatter
 Labels: ransomware, trojan
 Tags: Ransomware, Trojan, PE32, Windows

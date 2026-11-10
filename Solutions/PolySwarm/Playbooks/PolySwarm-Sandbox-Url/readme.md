@@ -94,6 +94,7 @@ All polling loops are bounded twice: a count limit and a timeout (TimeoutMinutes
 | `SuspiciousScoreThreshold` | Default `4`. |
 | `WorkspaceName` | Name of the Log Analytics workspace Microsoft Sentinel runs on, in the same resource group. The template creates the `PolySwarmSandbox_CL` table, DCE and DCR in it (fixed names, idempotent). No default; required. |
 | `create_role_assignment` | Boolean, default `true`. Whether the template auto-assigns Monitoring Metrics Publisher on the sandbox DCR to its own managed identity. |
+| `SolutionVersion` | Default `3.0.0`. The solution version sent in the User-Agent header on every PolySwarm call. Leave it as it is. |
 
 ## Post-deployment steps
 

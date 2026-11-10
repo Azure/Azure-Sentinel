@@ -11,7 +11,7 @@ When you are done, Microsoft Sentinel will:
 - show what has arrived on a status page, and
 - add PolySwarm's verdict to an incident when you ask it to.
 
-If anything here does not match what you see, email support@polyswarm.io.
+If anything here does not match what you see, email customersuccess@polyswarm.io.
 
 ## What you need before you start
 
@@ -271,7 +271,7 @@ did. Each one has its own page in the Playbooks folder explaining what it needs.
 Two playbooks are in **preview**: the Defender for Endpoint file playbook and the
 Outlook attachment playbook. They work in our tests but have not yet been tried on a
 live Defender for Endpoint tenant or Exchange Online mailbox. If you try one, please
-tell us how it went at support@polyswarm.io.
+tell us how it went at customersuccess@polyswarm.io.
 
 ## If something goes wrong
 
@@ -284,4 +284,4 @@ tell us how it went at support@polyswarm.io.
 - **A playbook does nothing.** Open the playbook in the Azure portal and look at its
   **Runs history**. A failed Key Vault step almost always means the playbook has not
   been given permission to read the key yet (step 7).
-- **Anything else.** Email support@polyswarm.io.
+- **Anything else.** Email customersuccess@polyswarm.io.
