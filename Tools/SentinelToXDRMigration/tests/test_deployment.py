@@ -231,7 +231,7 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no review required"):
             graph_detection_payload(value)
 
-    def test_payload_projects_first_tactic_and_keeps_compatible_techniques(self) -> None:
+    def test_payload_preserves_all_tactics_and_compatible_techniques(self) -> None:
         value = document()
         value["properties"]["detectionAction"]["alertTemplate"]["tactics"] = [
             {
@@ -264,7 +264,11 @@ class DeploymentTests(unittest.TestCase):
                             "subTechniques": ["T1059.001", "T1059.003"],
                         }
                     ],
-                }
+                },
+                {
+                    "tactic": "Persistence",
+                    "techniques": [{"technique": "T1547"}],
+                },
             ],
         )
         self.assertEqual(value, authored)
@@ -293,9 +297,9 @@ class DeploymentTests(unittest.TestCase):
         readiness = report["payloadReadiness"][0]
         self.assertEqual(readiness["status"], "ready")
         projection = readiness["graphTacticProjection"]
-        self.assertEqual(projection["projectedTactics"], ["Execution"])
-        self.assertEqual(projection["omittedTactics"], ["Persistence"])
-        self.assertEqual(projection["classificationParity"], "not-established")
+        self.assertEqual(projection["projectedTactics"], ["Execution", "Persistence"])
+        self.assertEqual(projection["omittedTactics"], [])
+        self.assertEqual(projection["classificationParity"], "preserved")
         self.assertEqual(report["permissions"]["writeAuthorization"], "not-tested")
 
     def test_preflight_read_only_rule_check_does_not_claim_write_readiness(self) -> None:
@@ -974,8 +978,12 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(result["succeeded"], 0)
         self.assertFalse(result["results"][0]["tacticProjectionVerified"])
         self.assertEqual(
+            result["results"][0]["tacticProjection"]["projectedTactics"],
+            ["Execution", "Persistence"],
+        )
+        self.assertEqual(
             result["results"][0]["tacticProjection"]["omittedTactics"],
-            ["Persistence"],
+            [],
         )
 
     @mock.patch(

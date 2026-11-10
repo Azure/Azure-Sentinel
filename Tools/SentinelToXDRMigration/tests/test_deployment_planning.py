@@ -219,13 +219,13 @@ class DeploymentPlanningTests(unittest.TestCase):
 
         self.assertEqual(eligible, self.RULE_IDS)
         self.assertEqual(ineligible, [])
-        self.assertEqual(projections[self.RULE_IDS[0]]["projectedTactics"], ["Exfiltration"])
-        self.assertEqual(projections[self.RULE_IDS[0]]["omittedTactics"], ["Impact"])
+        self.assertEqual(projections[self.RULE_IDS[0]]["projectedTactics"], ["Exfiltration", "Impact"])
+        self.assertEqual(projections[self.RULE_IDS[0]]["omittedTactics"], [])
         self.assertEqual(
             projections[self.RULE_IDS[0]]["omittedTechniques"],
-            [{"tactic": "Impact", "techniques": ["T1498"]}],
+            [],
         )
-        self.assertEqual(projections[self.RULE_IDS[0]]["classificationParity"], "not-established")
+        self.assertEqual(projections[self.RULE_IDS[0]]["classificationParity"], "preserved")
 
         candidates = {
             self.RULE_IDS[0].casefold(): self._candidate(

@@ -133,7 +133,7 @@ class TacticPreservationTests(unittest.TestCase):
             self.tactics(document)[0] = change
             self.assertTrue(validate_document(document))
 
-    def test_repeated_conversion_is_idempotent_source_untouched_not_graph_ready(self):
+    def test_repeated_conversion_is_idempotent_source_untouched_and_graph_ready(self):
         self.build()
         before = self.source.read_bytes()
         first = convert_solution(self.solution)
@@ -142,33 +142,33 @@ class TacticPreservationTests(unittest.TestCase):
         second = convert_solution(self.solution)
         self.assertEqual(first["converted"], 1)
         self.assertEqual(first["needsReview"], 0)
-        self.assertEqual(first["deploymentReady"], 0)
-        self.assertFalse(first["results"][0]["directGraphDeploymentReady"])
+        self.assertEqual(first["deploymentReady"], 1)
+        self.assertTrue(first["results"][0]["directGraphDeploymentReady"])
         self.assertEqual(second["conflicts"], 0)
         self.assertEqual(target.read_bytes(), draft)
         self.assertEqual(self.source.read_bytes(), before)
         solution_report = build_solution_report(self.solution)
-        self.assertEqual(solution_report["summary"]["deploymentReady"], 0)
+        self.assertEqual(solution_report["summary"]["deploymentReady"], 1)
         self.assertEqual(solution_report["rules"][0]["customDetection"]["structuralStatus"], "passed")
 
-    def test_graph_projects_multiple_tactics_without_mutating_authored_document(self):
+    def test_graph_preserves_multiple_tactics_without_mutating_authored_document(self):
         document = self.build()
         before = deepcopy(document)
         payload, projection = graph_detection_payload_with_projection(document)
         self.assertEqual(document, before)
         self.assertEqual(
             payload["detectionAction"]["alertTemplate"]["tactics"],
-            before["properties"]["detectionAction"]["alertTemplate"]["tactics"][:1],
+            before["properties"]["detectionAction"]["alertTemplate"]["tactics"],
         )
         self.assertEqual(
             projection["projectedTactics"],
-            ["Persistence"],
+            ["Persistence", "CommandAndControl", "Discovery"],
         )
         self.assertEqual(
             projection["omittedTactics"],
-            ["CommandAndControl", "Discovery"],
+            [],
         )
-        self.assertEqual(projection["classificationParity"], "not-established")
+        self.assertEqual(projection["classificationParity"], "preserved")
         single = self.build(["Discovery"], ["T1087"])
         self.assertEqual(graph_detection_payload(single)["detectionAction"], single["properties"]["detectionAction"])
 

@@ -253,7 +253,7 @@ class ConversionResult:
             "errors": list(self.errors),
             "informational": list(self.informational),
             "directGraphDeploymentReady": (
-                self.status == "converted" and not self.review_required and self.tactic_count <= 1
+                self.status == "converted" and not self.review_required
             ),
         }
 
@@ -2549,12 +2549,6 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
     )
     errors.extend(classification_errors)
     warnings.extend(classification_warnings)
-    if len(tactic_payload) > 1:
-        informational.append(
-            "All source MITRE tactics are preserved in source order in authored YAML. "
-            "V3.1 ARM packaging carries only the first tactic and its compatible techniques; "
-            "this classification loss is not validated parity. Direct Graph deployment requires a single tactic."
-        )
     if not mappings:
         errors.append("no supported entity mappings were produced")
     elif not REQUIRED_ASSET_COLLECTIONS.intersection(mappings):
@@ -3272,7 +3266,7 @@ def convert_solution(
         "needsReview": sum(result.status == "needsReview" for result in results),
         "reviewRequired": sum(result.review_required for result in results),
         "deploymentReady": sum(
-            result.status == "converted" and not result.review_required and result.tactic_count <= 1
+            result.status == "converted" and not result.review_required
             for result in results
         ),
         "conflicts": sum(result.status == "conflict" for result in results),

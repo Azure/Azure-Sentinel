@@ -512,7 +512,7 @@ AzureActivity
         )
 
         self.assertEqual(result["needsReview"], 0)
-        self.assertEqual(result["deploymentReady"], 0)
+        self.assertEqual(result["deploymentReady"], 1)
         self.assertEqual(output["properties"]["detectionAction"]["alertTemplate"]["tactics"], [
             {"tactic": "Persistence", "techniques": [{"technique": "T1505"}]},
             {"tactic": "CommandAndControl", "techniques": [{"technique": "T1071"}]},

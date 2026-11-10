@@ -1769,7 +1769,7 @@ def build_solution_report(
                     "and omits "
                     f"{', '.join(tactic_projection.get('omittedTactics') or []) or '(none)'}; "
                     "authored YAML is unchanged and this projection is not parity"
-                ] if tactic_projection else []) + ([
+                ] if tactic_projection and (tactic_projection.get("omittedTactics") or []) else []) + ([
                     "V3.1 ARM packaging normalized Custom Detection ID "
                     f"{identity_projection.get('inputId')!r} to {identity_projection.get('packagedId')!r}; "
                     "source/provenance YAML remains unchanged and deployed IDs are not migrated"
@@ -1839,7 +1839,6 @@ def build_solution_report(
                 item["customDetection"]["conversionStatus"] == "converted"
                 and not item["customDetection"]["reviewRequired"]
                 and item["customDetection"]["structuralStatus"] == "passed"
-                and len(item["attackClassification"].get("draftTactics") or []) <= 1
                 for item in rules
             ),
             "strictParityPassed": sum(
