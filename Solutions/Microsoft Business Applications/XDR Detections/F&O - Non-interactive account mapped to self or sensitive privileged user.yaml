@@ -1,0 +1,145 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dynamics365Finance
+  dataTypes:
+  - FinanceOperationsActivity_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - FinanceOperationsActivity_CL
+  requiredDataConnectors:
+  - connectorId: Dynamics365Finance
+    dataTypes:
+    - FinanceOperationsActivity_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5b7cc7f9-fe54-4138-9fb0-d650807345d3
+    path: Analytic Rules/F&O - Non-interactive account mapped to self or sensitive privileged user.yaml
+    version: 3.2.0
+    querySha256: fd3570148a9fb912dfdd0776d799439487e68d2cb8ed5e992476ef46bdd70f60
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `LogCreatedBy`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `LogCreatedBy` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `MappedUser`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `MappedUser` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1556
+    - T1098
+    - T1136
+    - T1078
+    - T0859
+    reviewScope:
+      sourceDocumentSha256: 11be5edc1206c1cdac48e90ff01a5804c0c71dc79b7c816a0c6f7bdad1a20aa1
+      targetQuerySha256: f7e715774e2ef70544f2805603e0f35cea04e63c621c59baba4b87a2615542d9
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: LogCreatedBy
+      column: LogCreatedBy
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 4
+      identifier: FullName
+      sourceColumn: MappedUser
+      column: MappedUser
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-5b7cc7f9-fe54-4138-9fb0-d650807345d3
+  displayName: F&O - Non-interactive account mapped to self or sensitive privileged user
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Add sensitive privilege accounts to the privileged_user_accounts variable.
+      // Example: let privileged_user_accounts = dynamic(["Admin1", "Admin"]);
+      let privileged_user_accounts = dynamic([]);
+      FinanceOperationsActivity_CL
+      | where TableName == "SysAADClientTable" and LogType in ("Insert", "Update")
+      | extend ClientId = tostring(parse_json(tostring(FormattedData.["03::AADClientId"])).NewData)
+      | extend User = parse_json(tostring(FormattedData.UserId))
+      | extend
+          MappedUser = tostring(User.NewData),
+          PreviousUserId = tostring(User.OldData),
+          TargetAppName = tostring(parse_json(tostring(FormattedData.Name)).NewData),
+          FinOpsAppId = 32780
+      | where MappedUser in (privileged_user_accounts) or LogCreatedBy == MappedUser
+      | project
+          LogCreatedDateTime,
+          LogCreatedBy,
+          LogType,
+          TargetAppName,
+          MappedUser,
+          PreviousUserId,
+          ClientId,
+          FinOpsAppId
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: F&O - Non-interactive account mapped to self or sensitive privileged user
+      description: Identifies changes to Microsoft Entra client apps registered for Finance & Operations, specifically when
+        a new client is mapped to a predefined list of sensitive privileged user accounts, or when a user associates a client
+        app with their own account.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          aadUserIdColumn: ClientId
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: FinOpsAppId
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1556
+      - tactic: Persistence
+        techniques:
+        - technique: T1556
+        - technique: T1098
+        - technique: T1136
+        - technique: T1078
+        - technique: T0859
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+        - technique: T1078
+      customDetails:
+        AccountFullName: LogCreatedBy
+        AccountFullName_2: MappedUser

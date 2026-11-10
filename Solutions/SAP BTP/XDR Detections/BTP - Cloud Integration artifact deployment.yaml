@@ -1,0 +1,129 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+    path: Analytic Rules/BTP - Cloud Integration artifact deployment.yaml
+    version: 1.1.1
+    querySha256: 3375351213b43ee95eb049d8283586e195699b74ac19374dd97677b8d952b01b
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    - Persistence
+    originalTechniques:
+    - T1059
+    - T1546
+    reviewScope:
+      sourceDocumentSha256: a538e96fd2bc3ca996f79ff17aaa8ab02aee8cb1bcb13bd9a28f9444a7528b3d
+      targetQuerySha256: 44730253b356b6a8737b96d48aa6621b7869271b9f67ca27cb1f8a4b98f289bb
+properties:
+  id: xdr-a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d
+  displayName: SAP BTP - Cloud Integration artifact deployment
+  status: disabled
+  queryCondition:
+    queryText: "SAPBTPAuditLog_CL\n| where Category == \"audit.configuration\"\n|\
+      \ extend objectType = tostring(Message.object.type)\n| where objectType in (\"\
+      Deployment\", \"Undeployment\")\n| extend attributes = todynamic(Message.attributes)\n\
+      | mv-apply attr = attributes on (\n    summarize\n        SymbolicName = take_anyif(tostring(coalesce(attr.[\"\
+      new\"], attr.[\"old\"])), tostring(attr.name) == \"symbolicName\"),\n      \
+      \  ArtifactId = take_anyif(tostring(coalesce(attr.[\"new\"], attr.[\"old\"])),\
+      \ tostring(attr.name) == \"id\"),\n        ArtifactVersion = take_anyif(tostring(coalesce(attr.[\"\
+      new\"], attr.[\"old\"])), tostring(attr.name) == \"version\"),\n        DeployedBy\
+      \ = take_anyif(tostring(attr.[\"new\"]), tostring(attr.name) == \"deployedBy\"\
+      ),\n        UndeployedBy = take_anyif(tostring(attr.[\"new\"]), tostring(attr.name)\
+      \ == \"undeployedBy\"),\n        Creator = take_anyif(tostring(coalesce(attr.[\"\
+      new\"], attr.[\"old\"])), tostring(attr.name) == \"creator\"),\n        TenantName\
+      \ = take_anyif(tostring(attr.[\"new\"]), tostring(attr.name) == \"tenantName\"\
+      ),\n        RuntimeLocationId = take_anyif(tostring(coalesce(attr.[\"new\"],\
+      \ attr.[\"old\"])), tostring(attr.name) == \"runtimeLocationId\")\n)\n| extend\
+      \ Actor = case(\n    isnotempty(DeployedBy), DeployedBy,\n    isnotempty(UndeployedBy),\
+      \ UndeployedBy,\n    isnotempty(Creator), Creator,\n    \"\"\n)\n| extend ActionCategory\
+      \ = iff(objectType == \"Deployment\", \"Deploy\", \"Undeploy\"),\n         normalizedAction\
+      \ = iff(objectType == \"Deployment\", \"deployed\", \"undeployed\")\n| extend\
+      \ MessageText = strcat(\"Integration artifact '\", SymbolicName, \"' (version\
+      \ \", ArtifactVersion, \") was \", normalizedAction, \" in tenant \", TenantName)\n\
+      | extend AccountName = iff(Actor has \"@\", tostring(split(Actor, \"@\")[0]),\
+      \ \"\"),\n         UPNSuffix   = iff(Actor has \"@\", tostring(split(Actor,\
+      \ \"@\")[1]), \"\")\n| project\n    UpdatedOn,\n    Actor,\n    AccountName,\n\
+      \    UPNSuffix,\n    MessageText,\n    ArtifactName = SymbolicName,\n    ArtifactId,\n\
+      \    ArtifactVersion,\n    ActionCategory,\n    ObjectType = objectType,\n \
+      \   TenantName,\n    RuntimeLocationId,\n    Tenant,\n    CloudApp = \"SAP Cloud\
+      \ Integration\""
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - Cloud Integration artifact deployment
+      description: 'Identifies deployment and undeployment of integration artifacts
+        in SAP Cloud Integration.
+
+        Integration flows are executable code that can process, transform, and route
+        data between
+
+        systems.
+
+
+        Unauthorized artifact deployment could indicate:
+
+        - Attacker deploying malicious integration flows for data exfiltration
+
+        - Deployment of rogue code for persistent access
+
+        - Undeployment of critical integrations causing denial of service'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      customDetails:
+        ArtifactName: ArtifactName
+        ArtifactId: ArtifactId
+        ArtifactVersion: ArtifactVersion
+        ActionCategory: ActionCategory
+        TenantName: TenantName
+        RuntimeLocationId: RuntimeLocationId

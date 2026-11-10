@@ -1,0 +1,139 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 32c08696-2e37-4730-86f8-97d9c8b184c9
+    path: Analytic Rules/CommandInURL.yaml
+    version: 1.0.1
+    querySha256: c013cf48d056eeeba61b72c8b7992e6b874905b4b846728e003a86708db19449
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - externaldata availability must be verified by runtime validation
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventCount' column `EventCount` requires runtime output-schema binding verification
+    - customDetails 'Decoded_url' column `Decoded_url` requires runtime output-schema binding verification
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `SrcUsername`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `SrcUsername` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - CommandAndControl
+    originalTechniques:
+    - T1190
+    - T1133
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 40ee409ea96e3fab8b48cb77bf610fde3e1de1caafa3a5cff83b6248ad5fef2d
+      targetQuerySha256: 963fc43fcc1c6fe417b00c6b5f11f17ef72bcfa7c4a17b4680851581f1234ef2
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 4
+      identifier: FullName
+      sourceColumn: SrcUsername
+      column: SrcUsername
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    acceptedReviewReasons:
+    - externaldata availability must be verified by runtime validation
+    reviewDecisions:
+    - reason: externaldata availability must be verified by runtime validation
+      decision: accepted
+      sourceDocumentSha256: 40ee409ea96e3fab8b48cb77bf610fde3e1de1caafa3a5cff83b6248ad5fef2d
+      targetQuerySha256: 963fc43fcc1c6fe417b00c6b5f11f17ef72bcfa7c4a17b4680851581f1234ef2
+properties:
+  id: xdr-32c08696-2e37-4730-86f8-97d9c8b184c9
+  displayName: Detect URLs containing known malicious keywords or commands (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookback = 5m;
+      let RiskyCommandsInUrl = materialize(externaldata(Commands: string)
+          [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/CommandsInURL.csv"]
+          with(format="csv", ignoreFirstRecord=True));
+      let CustomRiskyCommandsInUrl = (_ASIM_GetWatchlistRaw("Web_RiskyCommandsInUrl") // Create new Watchlist and add your custom indicators(Optional)
+          | extend
+              Commands = tostring(WatchlistItem["Commands"])
+          | project Commands
+          | where isnotempty(Commands));
+      let CombinedRiskyCommandsInUrl = union RiskyCommandsInUrl, CustomRiskyCommandsInUrl;
+      let knownRiskyCommandsInUrl=toscalar(CombinedRiskyCommandsInUrl
+          | where isnotempty(Commands)
+          | summarize make_set(Commands, 1000));
+      // You can add more keywords to the query as necessary, depending on the specific indicators you want to detect.
+      _Im_WebSession (starttime=ago(lookback), eventresult='Success', url_has_any=knownRiskyCommandsInUrl)
+      | where isnotempty(Url)
+      | project Url, SrcIpAddr, SrcUsername, SrcHostname, DstIpAddr, TimeGenerated
+      | extend Decoded_url = url_decode(Url)
+      | where Decoded_url has_any (knownRiskyCommandsInUrl)
+      | summarize
+          EventCount=count(),
+          EventStartTime=min(TimeGenerated),
+          EventEndTime=max(TimeGenerated)
+          by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url, DstIpAddr
+      | extend
+          Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+          UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Detect URLs containing known malicious keywords or commands (ASIM Web Session)
+      description: '''The utilization of system commands or functions in the request URL may suggest that an attacker is trying
+        to gain unauthorized access to the environment by exploiting a vulnerable service.'''
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        - id: ip2
+          addressColumn: DstIpAddr
+        urls:
+        - id: url1
+          addressColumn: Url
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        EventCount: EventCount
+        Decoded_url: Decoded_url
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime
+        AccountFullName: SrcUsername

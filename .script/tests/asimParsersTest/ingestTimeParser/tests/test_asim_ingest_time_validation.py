@@ -127,7 +127,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                 "| project TimeGenerated, EventType, "
                 "EventVendor, EventProduct"
             )
-        return {
+        document = {
             "Parser": {
                 "DisplayName": f"{product} ingestion-time parser",
                 "Version": "1.0.0",
@@ -142,7 +142,6 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "Description": f"Normalizes {source_table} into {target_table}.",
             "ParserName": parser_name,
             "DCRType": dcr_type,
-            "InputStream": input_stream,
             "SourceRawTable": source_table,
             "TargetASIMTable": target_table,
             "ParserFilterQuery": parser_filter_query,
@@ -152,6 +151,9 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                 "Description": "Initial ingestion-time parser.",
             },
         }
+        if input_stream is not None:
+            document["InputStream"] = input_stream
+        return document
 
     def parser_query_with_length(self, length):
         prefix = (
@@ -166,19 +168,8 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         padding_length = length - len(prefix) - len(suffix)
         self.assertGreaterEqual(padding_length, 0)
         query = prefix + ("x" * padding_length) + suffix
-        self.assertEqual(length, len(VALIDATION.compact_kql(query)))
+        self.assertEqual(length, len(query))
         return query
-
-    def formatted_parser_query_with_length(self, length):
-        query = self.parser_query_with_length(length)
-        indented = "\n".join(
-            f"    {line}" for line in query.splitlines()
-        )
-        return (
-            f"// {'x' * 100}\n"
-            f"{indented}\n"
-            "// this comment is not sent to the DCR"
-        )
 
     def test_discovers_exact_pair_from_ingestion_change(self):
         query_path = (
@@ -562,8 +553,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
     def test_allows_parser_query_at_dcr_transform_limit(self):
         limit = VALIDATION.parser_common.MAX_DCR_TRANSFORM_KQL_CHARS
-        parser_query = self.formatted_parser_query_with_length(limit)
-        self.assertGreater(len(parser_query), limit)
+        parser_query = self.parser_query_with_length(limit)
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -578,9 +568,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
     def test_rejects_parser_query_over_dcr_transform_limit(self):
         limit = VALIDATION.parser_common.MAX_DCR_TRANSFORM_KQL_CHARS
-        parser_query = self.formatted_parser_query_with_length(
-            limit + 1
-        )
+        parser_query = self.parser_query_with_length(limit + 1)
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -600,29 +588,27 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertIn(str(limit + 1), finding["message"])
         self.assertIn(str(limit), finding["message"])
 
-    def test_compact_kql_removes_comments_and_indentation(self):
-        query = (
-            "    source // remove this comment\n"
-            '      | extend Message = "  // keep  ", '
-            "Text = '  don''t trim  ', "
-            'Path = @"C:\\logs\\//keep"\n'
-            "      // remove this whole comment\n"
-            "      | project Message, Text, Path  // remove trailing\n"
+    def test_query_length_includes_comments_and_indentation(self):
+        limit = VALIDATION.parser_common.MAX_DCR_TRANSFORM_KQL_CHARS
+        parser_query = (
+            "// formatting counts toward TransformKql length\n"
+            "    " + self.parser_query_with_length(limit)
+        )
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(parser_query=parser_query),
         )
 
-        compacted = VALIDATION.compact_kql(query)
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
-        self.assertEqual(
-            (
-                "source\n"
-                '| extend Message = "  // keep  ", '
-                "Text = '  don''t trim  ', "
-                'Path = @"C:\\logs\\//keep"\n'
-                "\n"
-                "| project Message, Text, Path"
-            ),
-            compacted,
+        finding = next(
+            item
+            for item in result["findings"]
+            if item["code"] == "KQL044"
         )
+        self.assertFalse(result["valid"])
+        self.assertIn(str(len(parser_query)), finding["message"])
 
     def test_standalone_ingestion_parser_is_valid_without_qtp(self):
         ingest_path = self.write_yaml(
@@ -722,7 +708,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "META012", {finding["code"] for finding in result["findings"]}
         )
 
-    def test_rejects_standard_parser_without_input_stream(self):
+    def test_rejects_standard_parser_with_none_input_stream(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -735,11 +721,47 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "META008", {finding["code"] for finding in result["findings"]}
         )
 
+    def test_rejects_standard_parser_without_input_stream(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(input_stream=None),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("META008", codes)
+        self.assertNotIn("META001", codes)
+
     def test_standard_parser_allows_connector_specific_input_stream(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
             self.ingest_parser(input_stream="Custom-Bogus_CL"),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_workspace_parser_accepts_missing_input_stream(self):
+        self.write_fixture(
+            "Legacy",
+            "Legacy",
+            "Authentication",
+            "Legacy_CL",
+        )
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationLegacy.yaml",
+            self.ingest_parser(
+                parser_name="ASimAuthenticationLegacy",
+                product="Legacy",
+                source_table="Legacy_CL",
+                dcr_type="Workspace",
+                input_stream=None,
+            ),
         )
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
@@ -769,7 +791,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         self.assertTrue(result["valid"], result["findings"])
 
-    def test_workspace_parser_rejects_non_none_input_stream(self):
+    def test_workspace_parser_accepts_declared_input_stream(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -781,9 +803,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
-        self.assertIn(
-            "SOURCE001", {finding["code"] for finding in result["findings"]}
-        )
+        self.assertTrue(result["valid"], result["findings"])
 
     def test_rejects_filter_stage_missing_from_parser_query(self):
         ingest_path = self.write_yaml(
@@ -802,6 +822,58 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "FILTER002", {finding["code"] for finding in result["findings"]}
         )
 
+    def test_requires_filter_where_when_parser_has_where(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(parser_filter_query="source"),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertIn(
+            "FILTER004", {finding["code"] for finding in result["findings"]}
+        )
+
+    def test_allows_filter_with_one_of_multiple_parser_wheres(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_query=(
+                    'source\n| where EventType == "Login"\n'
+                    '| where EventResult == "Success"\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, EventResult, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_allows_pass_through_filter_when_parser_has_no_where(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query="source",
+                parser_query=(
+                    'source\n| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
     def test_rejects_unsupported_kql_construct(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
@@ -819,6 +891,55 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         codes = {finding["code"] for finding in result["findings"]}
         self.assertIn("KQL031", codes)
         self.assertIn("KQL041", codes)
+
+    def test_allows_supported_ip_utility_functions(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_query=(
+                    'source\n| where EventType == "Login"\n'
+                    "| extend ParsedIpv4 = parse_ipv4(SourceIp),\n"
+                    "    ParsedIpv6 = parse_ipv6(SourceIp),\n"
+                    '    Ipv4Match = ipv4_is_match(SourceIp, "10.0.0.0/8"),\n'
+                    '    Ipv4InRange = ipv4_is_in_range(SourceIp, "10.0.0.0/8"),\n'
+                    "    Ipv4IsPrivate = ipv4_is_private(SourceIp),\n"
+                    '    EventVendor = "Contoso", EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, ParsedIpv4, "
+                    "ParsedIpv6, Ipv4Match, Ipv4InRange, Ipv4IsPrivate, "
+                    "EventVendor, EventProduct"
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_rejects_unsupported_ip_utility_functions(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_query=(
+                    'source\n| where EventType == "Login"\n'
+                    '| extend Ipv6Match = ipv6_is_match(SourceIp, "::1"),\n'
+                    "    NetmaskSuffix = ipv4_netmask_suffix(SourceIp),\n"
+                    '    EventVendor = "Contoso", EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, Ipv6Match, "
+                    "NetmaskSuffix, EventVendor, EventProduct"
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        findings = [
+            finding
+            for finding in result["findings"]
+            if finding["code"] == "KQL033"
+        ]
+        self.assertEqual(2, len(findings), result["findings"])
 
     def test_allows_supported_scalar_let_statement(self):
         query = (
@@ -999,10 +1120,6 @@ class CurrentRepositoryIngestionParserTests(unittest.TestCase):
             "Parsers/ASimNetworkSession/IngestTimeParsers/"
             "ASimNetworkSessionAWSVPC.yaml",
         }
-        oversized_query_parsers = {
-            "Parsers/ASimAuthentication/IngestTimeParsers/"
-            "ASimAuthenticationSalesforceServiceCloud.yaml",
-        }
         manifest = VALIDATION.build_validation_manifest(
             repo_root, list(pairs.keys())
         )
@@ -1034,19 +1151,6 @@ class CurrentRepositoryIngestionParserTests(unittest.TestCase):
                         finding["code"]
                         for finding in result["findings"]
                     },
-                )
-            elif ingest_path in oversized_query_parsers:
-                self.assertFalse(result["valid"])
-                self.assertIn(
-                    "KQL044",
-                    {
-                        finding["code"]
-                        for finding in result["findings"]
-                    },
-                )
-                self.assertEqual(
-                    "resolved",
-                    targets_by_path[ingest_path]["fixtureStatus"],
                 )
             else:
                 self.assertTrue(

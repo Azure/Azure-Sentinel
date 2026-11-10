@@ -1,0 +1,140 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 57000f0d-ff5d-4166-94b6-aa5fb62b16ec
+    path: Analytic Rules/Dataverse - Mass export of records to Excel.yaml
+    version: 3.2.0
+    querySha256: 38cb64e49b79741ba97795d548ae4ccdc24e029f4c68b399b3018928cb7f4da8
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+    reviewScope:
+      sourceDocumentSha256: f0ffc82204746c4647cea5fa4b8b060e3d169f265144fa2c6173f3891c3e80e0
+      targetQuerySha256: b2c18ec48c6b1596572a7c59ebbe596de23ff1d45828fbf05092d0e8361fa0b6
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-57000f0d-ff5d-4166-94b6-aa5fb62b16ec
+  displayName: Dataverse - Mass export of records to Excel
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Set a mass export threshold for users who have no historical activity.
+      let mass_export_threshold = 10000;
+      let query_lookback = 14d;
+      let query_frequency = 1h;
+      let export_activity = DataverseActivity
+          | where Message == "ExportToExcel"
+          | extend QueryCount = iif(QueryResults has ",", todouble(countof(tostring(QueryResults), ',') + 1), double(1));
+      let current_activity = export_activity
+          | where TimeGenerated > ago(query_frequency)
+          | extend RecordId = split(QueryResults, ",")
+          | summarize
+              FirstEvent = min(TimeGenerated),
+              CurrentExportRate = sum(QueryCount),
+              SampleRecordIds = make_set(RecordId, 1000)
+              by UserId, InstanceUrl;
+      let historical_activity = export_activity
+          | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+          | summarize HistoricalBaseline = sum(QueryCount) by HistoricalUserId = UserId, InstanceUrl;
+      current_activity
+      | join kind=leftouter(historical_activity) on $left.UserId == $right.HistoricalUserId, InstanceUrl
+      | extend BaselineThreshold = iif(isnotnull(HistoricalBaseline), HistoricalBaseline, todouble(mass_export_threshold))
+      | where CurrentExportRate > BaselineThreshold
+      | join kind=inner(export_activity
+          | where TimeGenerated > ago(query_frequency)
+          | summarize EntityCount = sum(QueryCount) by UserId, ClientIp, InstanceUrl, EntityName
+          | extend Details = bag_pack("EntityName", EntityName, "EntityCount", EntityCount)
+          | summarize Details = make_set(Details, 100) by UserId, ClientIp, InstanceUrl)
+          on UserId, InstanceUrl
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          FirstEvent,
+          UserId,
+          ClientIp,
+          BaselineThreshold,
+          CurrentExportRate,
+          Details,
+          SampleRecordIds,
+          InstanceUrl,
+          AccountName,
+          UPNSuffix,
+          CloudAppId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Mass export of records to Excel
+      description: Identifies users exporting a large amount of records from Dynamics 365 to Excel, significantly more records
+        exported than any other recent activity by that user. Large exports from users with no recent activity are identified
+        using a predefined threshold.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

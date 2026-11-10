@@ -66,11 +66,10 @@ KQL_RULES = (
         "KQL033",
         "IP utility",
         re.compile(
-            r"\b(ipv4_is_in_range|ipv4_is_match|ipv4_is_private|parse_ipv4|"
-            r"parse_ipv6|ipv6_is_match|ipv4_netmask_suffix)\s*\(",
+            r"\b(ipv6_is_match|ipv4_netmask_suffix)\s*\(",
             re.I,
         ),
-        "The IP utility is not supported by DCR transformations.",
+        "This IP utility is not supported by DCR transformations.",
     ),
     KqlRule("KQL034", "url_decode", re.compile(r"\burl_decode\s*\(", re.I), "No exact DCR equivalent is available."),
     KqlRule("KQL035", "toscalar", re.compile(r"\btoscalar\s*\(", re.I), "Subqueries are not supported by the parser contract."),
@@ -143,75 +142,6 @@ def mask_kql(text: str) -> str:
             continue
         index += 1
     return "".join(chars)
-
-
-def compact_kql(text: str) -> str:
-    """Remove non-semantic indentation and line comments outside strings."""
-    output: list[str] = []
-    index = 0
-    length = len(text)
-    quote: str | None = None
-    verbatim = False
-    at_line_start = True
-    while index < length:
-        char = text[index]
-        if quote is not None:
-            output.append(char)
-            if char in {"\r", "\n"}:
-                at_line_start = True
-            else:
-                at_line_start = False
-            if char == quote:
-                if index + 1 < length and text[index + 1] == quote:
-                    output.append(text[index + 1])
-                    index += 2
-                    continue
-                quote = None
-                verbatim = False
-            elif not verbatim and char == "\\" and index + 1 < length:
-                output.append(text[index + 1])
-                if text[index + 1] in {"\r", "\n"}:
-                    at_line_start = True
-                else:
-                    at_line_start = False
-                index += 2
-                continue
-            index += 1
-            continue
-        if char == "/" and index + 1 < length and text[index + 1] == "/":
-            index += 2
-            while index < length and text[index] not in {"\r", "\n"}:
-                index += 1
-            continue
-        if char in {"\r", "\n"}:
-            while output and output[-1] in {" ", "\t"}:
-                output.pop()
-            output.append(char)
-            at_line_start = True
-            index += 1
-            continue
-        if at_line_start and char in {" ", "\t"}:
-            index += 1
-            continue
-        if (
-            char == "@"
-            and index + 1 < length
-            and text[index + 1] in {'"', "'"}
-        ):
-            verbatim = True
-            quote = text[index + 1]
-            output.append(char)
-            output.append(quote)
-            at_line_start = False
-            index += 2
-            continue
-        if char in {'"', "'"}:
-            quote = char
-        output.append(char)
-        if char not in {" ", "\t"}:
-            at_line_start = False
-        index += 1
-    return "".join(output).strip()
 
 
 def _canonical_kql(value: str) -> str:

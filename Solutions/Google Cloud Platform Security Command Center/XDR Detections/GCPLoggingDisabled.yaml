@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GoogleSCCDefinition
+  dataTypes:
+  - GoogleCloudSCC
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GoogleCloudSCC
+  requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+    - GoogleCloudSCC
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d1fe8d30-4852-463a-b6ee-3b459788b75d
+    path: Analytic Rules/GCPLoggingDisabled.yaml
+    version: 1.0.0
+    querySha256: 560db61a4a244718addd321c84624fa925a5402cb43b75efdbb0af5f8d383742
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: 4f3aaa23cbabfb98b416f957f1515c1ccb9904f201d4eeb36e7dca961483175f
+      targetQuerySha256: 0d586cd7436a6b627ed839bca8a33d2edaa7a2b49c692c00270ce7be0a273ef2
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 4f3aaa23cbabfb98b416f957f1515c1ccb9904f201d4eeb36e7dca961483175f
+      targetQuerySha256: 0d586cd7436a6b627ed839bca8a33d2edaa7a2b49c692c00270ce7be0a273ef2
+properties:
+  id: xdr-d1fe8d30-4852-463a-b6ee-3b459788b75d
+  displayName: GCP Security Command Center - Detect Resources with Logging Disabled
+  status: disabled
+  queryCondition:
+    queryText: |-
+      GoogleCloudSCC
+      | where tostring(Findings.state) == "ACTIVE"
+      | extend FindingCategory = tostring(Findings.category)
+      | where FindingCategory in ("BUCKET_LOGGING_DISABLED", "FIREWALL_RULE_LOGGING_DISABLED", "DNS_LOGGING_DISABLED")
+      | extend FindingsJson = parse_json(Findings)
+      | extend Resource = tostring(FindingsJson.resourceName),
+               ExternalUri = tostring(FindingsJson.externalUri),
+               Description = tostring(FindingsJson.description),
+               Severity = tostring(FindingsJson.severity),
+               ProjectName = extract(@"projects/([^/]+)", 1, tostring(FindingsJson.resourceName)),
+               ResourceType = extract(@"//([a-z0-9_.-]+)/", 1, tostring(FindingsJson.resourceName)),
+               SourceProps = parse_json(tostring(FindingsJson.sourceProperties))
+      // Normalize display-friendly resource id
+      | extend ResourceName = case(
+          Resource contains "firewalls/", extract(@"firewalls/([^/]+)", 1, Resource),
+          Resource contains "storage.googleapis.com/", extract(@'storage.googleapis.com/([^/\"]+)', 1, Resource),
+          Resource contains "networks/", extract(@"networks/([^/]+)", 1, Resource),
+          Resource
+        )
+      | project TimeGenerated, ProjectName, ResourceType, ResourceName, Resource, FindingCategory, Severity, ExternalUri, Description
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Security Command Center - Detect Resources with Logging Disabled
+      description: Detects Google Cloud resources where logging is disabled for services like (Cloud Storage buckets, Firewall
+        rules, Cloud DNS networks) based on Google Cloud Security Command Center findings.
+      severity: medium
+      entityMappings:
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ResourceName
+        hosts:
+        - id: host1
+          nameColumn: ResourceName
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+      customDetails:
+        ProjectName: ProjectName
+        ResourceType: ResourceType
+        FindingCategory: FindingCategory
+        ExternalUri: ExternalUri
+        Description: Description
+        Severity: Severity

@@ -1,0 +1,119 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a6f6b734-3db8-4259-a988-69e0b8eac0c2
+    path: Analytic Rules/Dataverse - Organization settings modified.yaml
+    version: 3.2.0
+    querySha256: 2d3b62bd7df26e2ecd71a213a7ef782c95db488068ade67921fa8c5f3f2102ce
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 2fe17e72b10401156bff5cdfa71300c8aefbee1b0280b16e0f2f0f906dbdc800
+      targetQuerySha256: cef769e1365349c4b38111f2e725da01b43f5614ea7f6c345929ea4a8b97e8c5
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-a6f6b734-3db8-4259-a988-69e0b8eac0c2
+  displayName: Dataverse - Organization settings modified
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "Update" and EntityName == "organization"
+      | mv-expand Fields
+      | extend FieldName = tostring(Fields.Name)
+      | extend Value = tostring(Fields.Value)
+      | where FieldName != "organizationid"
+      | lookup MSBizAppsOrgSettings on FieldName
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          TimeGenerated,
+          UserId,
+          ClientIp,
+          FieldName,
+          Value,
+          DisplayName,
+          Description,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Organization settings modified
+      description: Identifies changes made at organization level in the Dataverse environment.
+      severity: informational
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

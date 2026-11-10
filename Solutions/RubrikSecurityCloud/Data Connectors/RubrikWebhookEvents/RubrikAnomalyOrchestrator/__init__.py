@@ -1,25 +1,61 @@
-"""This __init__ file will be called by Http Starter function to pass the Anomaly data to activity function."""
+"""This __init__ file is called by the Http Starter to pass Anomaly data to the activity function."""
+import inspect
 import azure.durable_functions as df
-from shared_code.consts import ANOMALY_LOG_TYPE, LOGS_STARTS_WITH
+from shared_code.consts import (
+    ANOMALY_LOG_TYPE,
+    ANOMALY_STREAM,
+    DCR_WEBHOOK_RULE_ID,
+    LOGS_STARTS_WITH,
+    LOG_FORMAT,
+)
 from shared_code.logger import applogger
+
+FUNCTION_NAME = "RubrikAnomalyOrchestrator"
 
 
 def orchestrator_function(context: df.DurableOrchestrationContext):
-    """Get Anomaly data from durable orchestration context and schedule an activity for execution.
+    """Route Anomaly data from the orchestration context to the activity function.
 
     Args:
-        context (df.DurableOrchestrationContext): Context of the durable orchestration execution.
+        context (df.DurableOrchestrationContext): durable orchestration context.
 
     Returns:
-        str: result of Activity function
+        str: result of the Activity function.
     """
-    applogger.info("{} AnomalyOrchestrator function called!".format(LOGS_STARTS_WITH))
+    __method_name = inspect.currentframe().f_code.co_name
+    applogger.info(
+        LOG_FORMAT.format(
+            LOGS_STARTS_WITH, FUNCTION_NAME, __method_name, "function called!"
+        )
+    )
     json_data = context.get_input()
+    applogger.debug(
+        LOG_FORMAT.format(
+            LOGS_STARTS_WITH, FUNCTION_NAME, __method_name,
+            "Routing Anomaly data to RubrikActivity (log_type={}, stream={}).".format(
+                ANOMALY_LOG_TYPE, ANOMALY_STREAM
+            ),
+        )
+    )
     result1 = yield context.call_activity(
-        "RubrikActivity", {"data": json_data, "log_type": ANOMALY_LOG_TYPE}
+        "RubrikActivity",
+        {
+            "data": json_data,
+            "log_type": ANOMALY_LOG_TYPE,
+            "stream_name": ANOMALY_STREAM,
+            "rule_id": DCR_WEBHOOK_RULE_ID,
+        },
+    )
+    applogger.debug(
+        LOG_FORMAT.format(
+            LOGS_STARTS_WITH, FUNCTION_NAME, __method_name,
+            "RubrikActivity returned: {}".format(result1),
+        )
     )
     applogger.info(
-        "{} AnomalyOrchestrator function completed!".format(LOGS_STARTS_WITH)
+        LOG_FORMAT.format(
+            LOGS_STARTS_WITH, FUNCTION_NAME, __method_name, "function completed!"
+        )
     )
     return result1
 

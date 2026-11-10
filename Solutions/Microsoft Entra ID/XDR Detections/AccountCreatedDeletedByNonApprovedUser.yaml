@@ -1,0 +1,114 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 6d63efa6-7c25-4bd4-a486-aa6bf50fde8a
+    path: Analytic Rules/AccountCreatedDeletedByNonApprovedUser.yaml
+    version: 1.1.1
+    querySha256: 76cff52a42deb4f374cdb3d5bad05c9ff515690f035492fd34ac15a3c80af34b
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 1c086d9ead3fa98489ee864f93247cd99d15c734d3467a1dce5b458ad8fc62c5
+      targetQuerySha256: 960c90d5d3e7474ea4f55039d214a7809554baa30783d0a8616ec58fa01b283c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-6d63efa6-7c25-4bd4-a486-aa6bf50fde8a
+  displayName: Account created or deleted by non-approved user
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Add non-approved user principal names or apps to the list below to search for their account creation/deletion activity
+      // ex: dynamic(["UPN1", "upn123"])
+      let nonapproved_users = dynamic([]);
+      let nonapproved_apps = dynamic([]);
+      AuditLogs
+      | where OperationName =~ "Add user" or OperationName =~ "Delete user"
+      | where Result =~ "success"
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | where InitiatingUserPrincipalName has_any (nonapproved_users) or InitiatingAppName has_any (nonapproved_apps)
+      | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Account created or deleted by non-approved user
+      description: |-
+        'Identifies accounts that were created or deleted by a defined list of non-approved user principal names. Add to this list before running the query for accurate results.
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatingAppName
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        - id: account2
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName

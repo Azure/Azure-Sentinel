@@ -1,0 +1,149 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 34a5d79b-8f9a-420c-aa64-7f4d262ac29a
+    path: Analytic Rules/Dataverse - New user agent type that was not used before.yaml
+    version: 3.2.0
+    querySha256: 8215e9cce2cb056d273aa0e85fcd62daec12bb25aab42a73d40a6ae9f4a949c6
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - DefenseEvasion
+    originalTechniques:
+    - T1078
+    - T0866
+    - T0819
+    - T1036
+    reviewScope:
+      sourceDocumentSha256: eb93e59e6d775e3b17e98efc7814cdabfc484bcfee75c87ed6f0224dec6800d4
+      targetQuerySha256: 30c3ce3aefa80a20557bff60fc819730be9fb180ecefdd39ac4207ed1f609dfd
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-34a5d79b-8f9a-420c-aa64-7f4d262ac29a
+  displayName: Dataverse - New user agent type that was not used before
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_lookback = 14d;
+      let query_frequency = 1h;
+      let known_useragents = dynamic([
+          // Enter known user agents to exclude.
+          // example:
+          // "Agent1", "Agent2", "Agent3"
+          ]);
+      DataverseActivity
+      | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+      | where isnotempty(UserAgent)
+      | summarize by UserAgent
+      | join kind = rightanti (DataverseActivity
+          | where TimeGenerated > ago(query_frequency)
+          | where not (UserId has_any ("@onmicrosoft.com", "@microsoft.com", "Unknown"))
+          | where isnotempty(UserAgent)
+          | where UserAgent !in~ (known_useragents)
+          | where UserAgent !hasprefix "azure-logic-apps" and UserAgent !hasprefix "PowerApps")
+          on UserAgent
+      // Exclude user agents with a render agent to reduce noise.
+      | join kind = leftanti(
+          DataverseActivity
+          | where TimeGenerated > ago(query_frequency)
+          | where UserAgent has_any ("Gecko", "WebKit", "Presto", "Trident", "EdgeHTML", "Blink"))
+          on UserAgent
+      | summarize
+          FirstSeen = min(TimeGenerated),
+          LatestIP = arg_max(ClientIp, TimeGenerated)
+          by UserAgent, UserId, InstanceUrl
+      | extend
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1]),
+          CloudAppId = int(32780)
+      | project
+          FirstSeen,
+          UserId,
+          UserAgent,
+          LatestIP,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - New user agent type that was not used before
+      description: Identifies users accessing Dataverse from a User Agent that has not been seen in any Dataverse instance
+        in the last 14 days.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        ips:
+        - id: ip1
+          addressColumn: LatestIP
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+        - technique: T0866
+        - technique: T0819
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1078
+        - technique: T1036
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

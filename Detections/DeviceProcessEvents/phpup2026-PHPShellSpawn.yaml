@@ -1,0 +1,111 @@
+id: 56cda6d3-8402-4d6c-a2e7-f72b1efed280
+name: PHP Worker Process Spawning Shell/Recon Tool
+description: |
+  '[Unvalidated] Identifies a shell or reconnaissance tool spawned
+  directly under a PHP worker process (php-fpm, lsphp, or Apache
+  mod_php, where PHP runs in-process inside the apache2/httpd worker).
+  This is a generic PHP child-process-monitoring indicator, useful
+  against any PHP RCE regardless of root cause - it does not itself
+  detect or confirm exploitation of CVE-2026-109618 or CVE-2026-109619
+  specifically.
+
+  CVE attribution is unvalidated: the reference sample this rule's
+  field-matching was checked against
+  (https://github.com/rjmendez/phpup-2026/blob/master/examples/INDEX.md)
+  was produced by a direct shell_exec() test endpoint, not by triggering
+  either CVE''s actual longjmp/bailout mechanism
+  (https://github.com/rjmendez/phpup-2026/blob/master/ANALYSIS.md). No
+  representative malicious sample produced by exploiting either CVE has
+  been validated against this query.
+
+  Benign-use tuning: legitimate applications routinely invoke shells,
+  Python, curl, or wget from PHP (build steps, package managers, image
+  processing, health checks). Expect overlap with existing generic
+  "process spawned a shell" content already present in most
+  environments; this rule adds PHP-worker-specific parentage as a
+  narrowing filter, not a new detection category. Tune the command-line
+  tokens and account/parent filters to your own environment before
+  enabling as an alert.
+
+  2026-10-21, same day, second fix: FileHash entity was mapped to this
+  table's SHA256 column - Microsoft's own DeviceProcessEvents schema
+  reference states that field "is usually not populated - use the SHA1
+  column when available". Switched to SHA1, confirmed as the convention
+  a real, already-merged detection in this same repo uses for the same
+  table (Detections/DeviceProcessEvents/
+  SolarWinds_SUNBURST_Process-IOCs.yaml).
+  References:
+  - https://github.com/php/php-src/security/advisories/GHSA-6wmf-4rv5-p3rp
+  - https://github.com/php/php-src/security/advisories/GHSA-w8hw-w9fx-j79w
+  - https://github.com/rjmendez/phpup-2026'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1190
+  - T1059
+  - T1059.004
+tags:
+  - CVE-2026-109618
+  - CVE-2026-109619
+  - phpup-2026
+  - unvalidated
+query: |
+  DeviceProcessEvents
+  | where InitiatingProcessFileName matches regex @"(?i)^(php-fpm[\d.]*|php[\d.]*|lsphp[\d]*|apache2|httpd)$"
+  | where FileName in~ ("sh", "bash", "dash", "zsh", "ash", "python", "python2", "python3",
+      "perl", "ruby", "curl", "wget", "nc", "ncat", "nmap", "whoami", "id")
+       or ProcessCommandLine has_any (
+           "/bin/sh", "/bin/bash", "bash -i", "python -c", "python3 -c",
+           "exec(", "eval(", "base64 -d", "curl ", "wget "
+         )
+  | extend HashAlgorithm = "SHA1"
+  | project TimeGenerated, DeviceName,
+            InitiatingProcessAccountName, InitiatingProcessAccountDomain,
+            InitiatingProcessAccountSid,
+            InitiatingProcessFileName, InitiatingProcessCommandLine,
+            FileName, ProcessCommandLine, FolderPath, SHA1, HashAlgorithm
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingProcessAccountName
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountDomain
+      - identifier: Sid
+        columnName: InitiatingProcessAccountSid
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: HashAlgorithm
+      - identifier: Value
+        columnName: SHA1
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: rjmendez
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

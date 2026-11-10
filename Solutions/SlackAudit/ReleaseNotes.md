@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.2.2       | 20-04-2026                     | Migrated **Analytic Rules** and **Workbooks** to **Defender XDR** Custom Detections and Workbooks and packaged with V3.1. |
 | 3.0.6       | 29-05-2025                     | Updated the **Analytic Rules**, **Hunting Queries** and **Workbook** |
 | 3.0.5       | 12-12-2025                     | Updated the **Parser** yaml file. |
 | 3.0.4       | 28-07-2025                     | Removed Deprecated **Data Connector**. |

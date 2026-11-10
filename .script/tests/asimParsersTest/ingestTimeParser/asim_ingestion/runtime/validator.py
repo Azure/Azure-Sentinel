@@ -21,6 +21,8 @@ from .queries import (
     build_query_time_parser_query,
 )
 
+PARITY_EXCLUDED_COLUMNS = {"Type"}
+
 
 def _intersect_schemas(
     qtp_schema: Sequence[Mapping[str, str]],
@@ -39,7 +41,10 @@ def _intersect_schemas(
     itp_intersect_schema: list[dict[str, str]] = []
     for column in qtp_schema:
         name = str(column["name"])
-        if name not in itp_types:
+        if (
+            name in PARITY_EXCLUDED_COLUMNS
+            or name not in itp_types
+        ):
             continue
         qtp_type = str(column["type"])
         itp_type = itp_types[name]

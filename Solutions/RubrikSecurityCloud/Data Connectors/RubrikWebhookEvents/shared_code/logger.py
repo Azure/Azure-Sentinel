@@ -8,7 +8,7 @@ log_level = LOG_LEVEL
 applogger = None
 applogger = logging.getLogger("azure")
 log_level = log_level.upper()
-numeric_level = getattr(logging, log_level, default_log_level)
+numeric_level = getattr(logging, log_level, logging.INFO)
 applogger.setLevel(level=numeric_level)
 handler = logging.StreamHandler(stream=sys.stdout)
 applogger.addHandler(handler)

@@ -1,0 +1,140 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: IoT
+  dataTypes:
+  - SecurityAlert (ASC for IoT)
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertInfo
+  requiredDataConnectors:
+  - connectorId: IoT
+    dataTypes:
+    - SecurityAlert (ASC for IoT)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c52ec521-9188-4a9e-a4cd-34a3dfbc3d27
+    path: Analytic Rules/IoTUnauthorizedNetworkConfiguration.yaml
+    version: 1.0.3
+    querySha256: f6a72a718bf8f954a105dde72cc29c98211b9c043062d2c4a0cd9c251b3f53ca
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=14400s; source and native
+      service windows differ; no explicit event-time bound proves equivalence to Defender ingestion-time evaluation. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - No valid source mapping survived; inferred entities from projected columns
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    notes:
+    - security_alert_migrated_to_alert_info_and_evidence
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert query to AlertInfo | join kind=leftouter
+      AlertEvidence on AlertId with AlertInfo/AlertEvidence column mappings.'
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T0842
+    reviewScope:
+      sourceDocumentSha256: ce6260d4cd0c0c23e0b7662418d09cd7462079c1912f32dab621991290ab7a3e
+      targetQuerySha256: 0bb3537d3c7c2e163359a9cb1646ef0052f4c5b17618ac236c1cd907d13a635d
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: ce6260d4cd0c0c23e0b7662418d09cd7462079c1912f32dab621991290ab7a3e
+      targetQuerySha256: 0bb3537d3c7c2e163359a9cb1646ef0052f4c5b17618ac236c1cd907d13a635d
+properties:
+  id: xdr-c52ec521-9188-4a9e-a4cd-34a3dfbc3d27
+  displayName: Unauthorized DHCP configuration in the network (Microsoft Defender for IoT)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AlertInfo
+      | join kind=leftouter AlertEvidence on AlertId
+      | extend AlertName = Title, AlertSeverity = Severity, ProviderName = DetectionSource, ProductName = ServiceSource, Tactics = AttackTechniques, Description = Title, Entities = AdditionalFields, ExtendedProperties = AdditionalFields, RemediationSteps = "[]", ProductComponentName = ServiceSource, VendorOriginalId = AlertId, AlertLink = "", Techniques = AttackTechniques
+      | where DetectionSource == "IoTSecurity"
+      | where Title == "Device Failed to Receive a Dynamic IP Address"
+      | extend ExtendedProperties = parse_json(ExtendedProperties)
+      | where tostring(ExtendedProperties.isNew) == "True"
+      | extend DeviceId = tostring(ExtendedProperties.DeviceId),
+               SourceDeviceAddress = tostring(ExtendedProperties.SourceDeviceAddress),
+               DestDeviceAddress = tostring(ExtendedProperties.DestinationDeviceAddress),
+               RemediationSteps = tostring(parse_json(RemediationSteps)[0]),
+               Protocol = tostring(ExtendedProperties.Protocol),
+               AlertManagementUri = tostring(ExtendedProperties.AlertManagementUri)
+      | project
+        Timestamp,
+        DeviceId,
+        ProductName,
+        ProductComponentName,
+        AlertSeverity,
+        AlertName,
+        Description,
+        Protocol,
+        SourceDeviceAddress,
+        DestDeviceAddress,
+        RemediationSteps,
+        Tactics,
+        Entities,
+        VendorOriginalId,
+        AlertLink,
+        AlertManagementUri,
+        Techniques, Title, Severity, ServiceSource, AttackTechniques, AdditionalFields
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Unauthorized DHCP configuration in the network (Microsoft Defender for IoT)
+      description: '''This alert leverages Defender for IoT to detect an unauthorized DHCP configuration indicating a possible
+        unauthorized device configuration.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          deviceIdColumn: DeviceId
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T0842
+      customDetails:
+        Sensor: DeviceId
+        Protocol: Protocol
+        VendorOriginalKey: VendorOriginalId
+        AlertManagementUri: AlertManagementUri

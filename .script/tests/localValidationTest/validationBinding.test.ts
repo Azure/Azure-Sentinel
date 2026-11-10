@@ -21,6 +21,18 @@ const actualSolutionsAvailable =
   actualSolutionPaths.every(solution => fs.existsSync(solution));
 const powershellAvailable = spawnSync("pwsh", ["--version"], { encoding: "utf8" }).status === 0;
 
+function getPythonExecutable(): string {
+  for (const command of ["python3.12", "python3", "python"]) {
+    const result = spawnSync(command, [
+      "-c", "import sys; sys.exit(0 if sys.version_info >= (3, 12) else 1)",
+    ], { encoding: "utf8" });
+    if (result.status === 0) {
+      return command;
+    }
+  }
+  throw new Error("Python 3.12 or newer is required for validation-binding identity tests.");
+}
+
 function sha256(value: Buffer | string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
@@ -248,7 +260,7 @@ describe("V3.1 validation evidence producer", () => {
     }
 
     const python = spawnSync(
-      "python3.12",
+      getPythonExecutable(),
       [
         "-c",
         [
@@ -314,7 +326,7 @@ describe("V3.1 validation evidence producer", () => {
     function () {
       this.timeout(30000);
       const python = spawnSync(
-        "python3.12",
+        getPythonExecutable(),
         [
           "-c",
           [
@@ -389,7 +401,7 @@ describe("V3.1 validation evidence producer", () => {
         "Azure Activity",
       );
       const copy = spawnSync(
-        "python3.12",
+        getPythonExecutable(),
         [
           "-c",
           [

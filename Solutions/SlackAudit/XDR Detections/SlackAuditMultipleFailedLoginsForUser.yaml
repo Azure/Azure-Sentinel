@@ -1,0 +1,155 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SlackAuditAPI
+  dataTypes:
+  - SlackAudit_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SlackAuditV2_CL
+    - SlackAudit_CL
+  requiredDataConnectors:
+  - connectorId: SlackAuditAPI
+    dataTypes:
+    - SlackAudit_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 93a91c37-032c-4380-847c-957c001957ad
+    path: Analytic Rules/SlackAuditMultipleFailedLoginsForUser.yaml
+    version: 1.0.1
+    querySha256: 16e85f1dc68cb40042289fd399ec9452b3ec8d7d5557d5ae7642f29f5cd87caa
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: e345c368c7925daa89b16dc3d91ca31bbc97d42fa69e28dd7e4b36f4fd3f6eda
+      targetQuerySha256: e1ab2e44cbfd332689fc3a308e351b3a1c0e07cdbf6accca2f57ec201186b48b
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: e345c368c7925daa89b16dc3d91ca31bbc97d42fa69e28dd7e4b36f4fd3f6eda
+      targetQuerySha256: e1ab2e44cbfd332689fc3a308e351b3a1c0e07cdbf6accca2f57ec201186b48b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-93a91c37-032c-4380-847c-957c001957ad
+  displayName: SlackAudit - Multiple failed logins for user
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let _SlackAudit = union isfuzzy=true
+          (SlackAuditV2_CL),
+          (SlackAudit_CL),
+          (datatable(TimeGenerated:datetime, Id:string, DateCreate:string, Action:string, Actor:dynamic, Entity:dynamic, Context:dynamic, Details:dynamic, ActionDescription:string)[])
+      | extend TimeGenerated = iff(isnotempty(column_ifexists('DateCreate', '')) and isnotnull(todatetime(column_ifexists('DateCreate', ''))), todatetime(column_ifexists('DateCreate', '')), TimeGenerated)
+      | extend actor = todynamic(Actor), entity = todynamic(Entity), context = todynamic(Context), details = todynamic(Details)
+      | extend
+          EventVendor = 'Slack',
+          EventProduct = 'Audit',
+          EventSchemaVersion = '0.1.0',
+          EventId = column_ifexists('Id', ''),
+          EventEndTime = column_ifexists('DateCreate', ''),
+          Action = column_ifexists('Action', ''),
+          DvcAction = column_ifexists('Action', ''),
+          DvcActionDesc = column_ifexists('ActionDescription', ''),
+          ActorType = tostring(actor.type),
+          SrcUserIdentity = tostring(actor.user.id),
+          SrcUserName = tostring(actor.user.name),
+          SrcUserEmail = tostring(actor.user.email),
+          SrcUserTeam = tostring(actor.user.team),
+          EntityType = tostring(entity.type),
+          EntityFileId = tostring(entity.file.id),
+          EntityFileName = tostring(entity.file.name),
+          EntityFileFiletype = tostring(entity.file.filetype),
+          EntityFileTitle = tostring(entity['file']['title']),
+          EntityUserId = tostring(entity.user.id),
+          EntityUserName = tostring(entity.user.name),
+          EntityUserEmail = tostring(entity.user.email),
+          EntityUserTeam = tostring(entity.user.team),
+          UserAgentOriginal = tostring(context.ua),
+          SrcIpAddr = tostring(context.ip_address),
+          SessionId = tostring(context.session_id),
+          DetailsType = tostring(details.type),
+          DetailsNewValue = tostring(details.new_value),
+          DetailsPreviousValue = tostring(details.previous_value);
+      let threshold = 10;
+      _SlackAudit
+      | where DvcAction in~ ('user_login_failed')
+      | summarize FailedLogins = count(), SrcUserEmail = take_any(SrcUserEmail), SrcIpAddr = take_any(SrcIpAddr) by SrcUserName, bucket = bin(TimeGenerated, 5m)
+      | where FailedLogins > threshold
+      | extend AccountCustomEntity = SrcUserName
+      | project SrcUserName, SrcUserEmail, SrcIpAddr, bucket, FailedLogins, AccountCustomEntity
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: SlackAudit - Multiple failed logins for user
+      description: |-
+        'Identifies multiple failed Slack logins for a user account within a short time window, which may indicate password
+        guessing or brute-force activity.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: SrcUserEmail
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        FailedLogins: FailedLogins
+        UserAccount: SrcUserName
+        TimeBucket: bucket
+        AccountFullName: AccountCustomEntity

@@ -1,0 +1,124 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GoogleSCCDefinition
+  dataTypes:
+  - GoogleCloudSCC
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GoogleCloudSCC
+  requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+    - GoogleCloudSCC
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 395f3ced-3923-4b83-b05d-8d077fd48c1e
+    path: Analytic Rules/GCPAPIKeyExists.yaml
+    version: 1.0.0
+    querySha256: 3fad08d5067339489aced56e350ffb13cc181aa60c63e5a959053af0d4ca2945
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1552
+    reviewScope:
+      sourceDocumentSha256: d0d6b46d109279f3ecc9e41746585b4e1ec3bfd2fcdb1aa1601626f77051f5c1
+      targetQuerySha256: dfe6193b5b2baa8166aa6b8500173d624a982342b7bfb685849efc095116af18
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: d0d6b46d109279f3ecc9e41746585b4e1ec3bfd2fcdb1aa1601626f77051f5c1
+      targetQuerySha256: dfe6193b5b2baa8166aa6b8500173d624a982342b7bfb685849efc095116af18
+properties:
+  id: xdr-395f3ced-3923-4b83-b05d-8d077fd48c1e
+  displayName: GCP Security Command Center - Detect projects with API Keys present
+  status: disabled
+  queryCondition:
+    queryText: |-
+      GoogleCloudSCC
+       | where tostring(Findings.state) == "ACTIVE"
+       | extend FindingCategory = tostring(Findings.category)
+       | where FindingCategory == "API_KEY_EXISTS"
+       | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)
+       | extend ResourceName = tostring(FindingsJson.resourceName)
+       | extend ProjectId = extract(@"projects/([^/]+)", 1, ResourceName)
+       | extend ProjectName = tostring(FindingsResourceJson.displayName)
+       | extend Severity = tostring(FindingsJson.severity),
+                FindingName = tostring(FindingsJson.name),
+                ExternalUri = tostring(FindingsJson.externalUri),
+                Description = tostring(FindingsJson.description)
+       // Produce one row per project with an API key finding
+       | summarize TimeGenerated = max(TimeGenerated),
+                   FindingsCount = count(),
+                   ExternalUri = any(ExternalUri),
+                   Description = any(Description)
+         by ProjectId, ProjectName, Severity, ResourceName
+       | project TimeGenerated, ProjectId, ProjectName, ResourceName, FindingsCount, Severity, ExternalUri, Description
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Security Command Center - Detect projects with API Keys present
+      description: |-
+        Detects Google Cloud projects that have API Keys present using Security Command Center API_KEY_EXISTS findings.
+        Projects with API Keys may expose credentials that enable unauthorized access if keys are leaked.
+      severity: medium
+      entityMappings:
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ProjectName
+          appIdColumn: ProjectId
+        hosts:
+        - id: host1
+          nameColumn: ResourceName
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1552
+      customDetails:
+        ProjectId: ProjectId
+        ProjectName: ProjectName
+        FindingsCount: FindingsCount
+        SampleExternalUri: ExternalUri
+        SampleDescription: Description

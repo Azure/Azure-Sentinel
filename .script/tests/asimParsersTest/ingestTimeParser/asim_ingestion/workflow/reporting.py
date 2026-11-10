@@ -13,6 +13,14 @@ from .contracts import (
     _short_message,
 )
 
+OPTIONAL_STAGES = {
+    "rawDcr",
+    "rawIngestion",
+    "qtpExecution",
+    "parity",
+}
+
+
 def _read_optional_json(path: Path | None) -> Any:
     if path is None or not path.is_file():
         return None
@@ -73,6 +81,162 @@ def _error_detail(error: Any) -> str:
         if fragment not in unique:
             unique.append(fragment)
     return "; ".join(unique)
+
+
+def _target_visibility_stage(
+    validation: Mapping[str, Any],
+    *,
+    error: Any,
+    error_stage: Any,
+) -> dict[str, Any]:
+    outcome = validation.get("targetVisibility")
+    if isinstance(outcome, Mapping):
+        status = outcome.get("status")
+        if not isinstance(status, str) or status not in {
+            "passed",
+            "failed",
+            "not-run",
+        }:
+            status = "not-run"
+        detail = (
+            _error_detail(outcome.get("error"))
+            if status == "failed"
+            else ""
+        )
+        return _stage(str(status), detail, outcome)
+
+    if error_stage == "target-visibility":
+        return _stage("failed", _error_detail(error), {"legacy": True})
+
+    telemetry = validation.get("telemetry")
+    timings = (
+        telemetry.get("stageTimingsSeconds")
+        if isinstance(telemetry, Mapping)
+        else None
+    )
+    if not isinstance(timings, Mapping):
+        timings = {}
+    output_validation = validation.get("outputValidation")
+    # Older artifacts need both the exact deadline and stage timing to infer
+    # this failure; other generic query errors remain unattributed.
+    if (
+        error_stage == "query"
+        and isinstance(error, Mapping)
+        and error.get("message") == "Validation deadline expired."
+        and "target-visibility" in timings
+        and "output-validation" not in timings
+        and output_validation is None
+    ):
+        return _stage("failed", _error_detail(error), {"legacy": True})
+
+    if (
+        validation.get("status") == "completed"
+        or isinstance(output_validation, Mapping)
+        or "output-validation" in timings
+    ):
+        return _stage("passed", evidence={"legacy": True})
+
+    return _stage("not-run", evidence={"legacy": True})
+
+
+def _row_payload(example: Any) -> dict[str, Any]:
+    if not isinstance(example, Mapping):
+        return {}
+    row = example.get("row")
+    if not isinstance(row, list):
+        return {}
+    return {
+        str(item["column"]): item.get("value")
+        for item in row
+        if isinstance(item, Mapping)
+        and isinstance(item.get("column"), str)
+    }
+
+
+def _parity_detail(
+    parity: Any,
+    fallback: str,
+) -> str:
+    if not isinstance(parity, Mapping):
+        return fallback
+    schema = parity.get("schema")
+    if isinstance(schema, Mapping):
+        type_mismatches = schema.get("typeMismatches")
+        if isinstance(type_mismatches, list) and type_mismatches:
+            columns = [
+                str(item.get("column"))
+                for item in type_mismatches
+                if isinstance(item, Mapping)
+            ]
+            return (
+                "Shared-column type mismatch: "
+                + ", ".join(columns[:5])
+                + "."
+            )
+        missing = schema.get("missingInIngestTime")
+        if isinstance(missing, list) and missing:
+            return (
+                "Columns missing from ingestion-time output: "
+                + ", ".join(str(column) for column in missing[:5])
+                + "."
+            )
+
+    rows = parity.get("rows")
+    if not isinstance(rows, Mapping):
+        return fallback
+    missing_count = int(rows.get("missingRowCount") or 0)
+    extra_count = int(rows.get("extraRowCount") or 0)
+    differing_columns: list[str] = []
+    diagnostics = rows.get("columnDiagnostics")
+    if isinstance(diagnostics, Mapping):
+        mismatches = diagnostics.get("mismatches")
+        if isinstance(mismatches, list):
+            for mismatch in mismatches:
+                if not isinstance(mismatch, Mapping):
+                    continue
+                differences = mismatch.get("differences")
+                if not isinstance(differences, list):
+                    continue
+                for difference in differences:
+                    if (
+                        isinstance(difference, Mapping)
+                        and isinstance(
+                            difference.get("column"), str
+                        )
+                        and difference["column"]
+                        not in differing_columns
+                    ):
+                        differing_columns.append(
+                            difference["column"]
+                        )
+    if not differing_columns:
+        missing_examples = rows.get("missingExamples")
+        extra_examples = rows.get("extraExamples")
+        if (
+            isinstance(missing_examples, list)
+            and missing_examples
+            and isinstance(extra_examples, list)
+            and extra_examples
+        ):
+            expected = _row_payload(missing_examples[0])
+            actual = _row_payload(extra_examples[0])
+            differing_columns = [
+                column
+                for column in expected
+                if column in actual
+                and expected[column] != actual[column]
+            ]
+    detail = (
+        f"{missing_count} QTP row(s) missing from ITP output; "
+        f"{extra_count} extra ITP row(s)."
+    )
+    if differing_columns:
+        detail += (
+            " Differing column(s): "
+            + ", ".join(differing_columns[:5])
+            + "."
+        )
+    return detail
 
 
 def build_report(
@@ -170,6 +334,12 @@ def build_report(
         else None
     )
     error_detail = _error_detail(error)
+    target_visibility = _target_visibility_stage(
+        validation,
+        error=error,
+        error_stage=error_stage,
+    )
+    visibility_failed = target_visibility["status"] == "failed"
 
     if isinstance(prepared_fixture, Mapping):
         fixture = _stage(
@@ -218,18 +388,15 @@ def build_report(
         else None
     )
     qtp_replay_detail = _error_detail(qtp_replay_error)
-    qtp_replay_error_stage = (
-        qtp_replay_error.get("stage")
-        if isinstance(qtp_replay_error, Mapping)
-        else None
-    )
     parser_dcr_failed = (
         not parser_dcr_value
         and error_stage in {"dcr-create", "dcr-provisioning"}
     )
     raw_dcr = _stage(
         (
-            "passed"
+            "not-run"
+            if visibility_failed
+            else "passed"
             if raw_dcr_value
             else "warning"
             if qtp_replay_status == "warning"
@@ -238,7 +405,9 @@ def build_report(
             else "not-run"
         ),
         (
-            qtp_replay_detail
+            ""
+            if visibility_failed
+            else qtp_replay_detail
             if qtp_replay_status == "warning"
             else ""
         ),
@@ -247,36 +416,21 @@ def build_report(
                 "dcr": raw_dcr_value,
                 "qtpSourceReplay": qtp_source_replay,
             }
-            if isinstance(qtp_source_replay, Mapping)
+            if not visibility_failed
+            and isinstance(qtp_source_replay, Mapping)
+            else None
+            if visibility_failed
             else raw_dcr_value
         ),
     )
-    raw_ingestion_failed = error_stage in {
-        "upload",
-        "upload-reconciliation",
-        "raw-visibility",
-        "source-snapshot",
-    } and not validation.get("parserDcr")
-    qtp_raw_ingestion_warning = (
-        qtp_replay_status == "warning"
-        and (
-            bool(raw_dcr_value)
-            or qtp_replay_error_stage
-            in {
-                "upload",
-                "upload-reconciliation",
-                "raw-visibility",
-            }
-        )
-    )
     raw_ingestion = _stage(
         (
-            "warning"
-            if qtp_raw_ingestion_warning
+            "not-run"
+            if visibility_failed
+            else "failed"
+            if qtp_replay_status == "failed"
             else "blocked"
             if qtp_replay_status == "warning"
-            else "failed"
-            if raw_ingestion_failed
             else "passed"
             if validation.get("rawUpload")
             else "not-applicable"
@@ -284,15 +438,17 @@ def build_report(
             else "not-run"
         ),
         (
-            qtp_replay_detail
-            if qtp_raw_ingestion_warning
-            else "Blocked by QTP raw DCR warning."
+            ""
+            if visibility_failed
+            else qtp_replay_detail
+            if qtp_replay_status == "failed"
+            else "Blocked by QTP raw DCR creation warning."
             if qtp_replay_status == "warning"
-            else error_detail
-            if raw_ingestion_failed
             else ""
         ),
-        {
+        None
+        if visibility_failed
+        else {
             "upload": validation.get("rawUpload", []),
             "qtpSourceReplay": qtp_source_replay,
         },
@@ -321,20 +477,31 @@ def build_report(
         error_detail if parser_dcr_failed else "",
         parser_dcr_value,
     )
-    parser_ingestion_failed = error_stage in {
+    parser_upload_failed = error_stage in {
         "upload",
         "upload-reconciliation",
-        "target-visibility",
-    } and bool(validation.get("parserDcr"))
-    parser_ingestion = _stage(
+    }
+    parser_ingestion_status = (
         "failed"
-        if parser_ingestion_failed
+        if parser_upload_failed or target_visibility["status"] == "failed"
         else "passed"
         if validation.get("parserUpload")
-        else "not-run",
-        error_detail if parser_ingestion_failed else "",
+        and target_visibility["status"] == "passed"
+        else "not-run"
+    )
+    parser_ingestion_detail = (
+        error_detail
+        if parser_upload_failed
+        else target_visibility["detail"]
+        if target_visibility["status"] == "failed"
+        else ""
+    )
+    parser_ingestion = _stage(
+        parser_ingestion_status,
+        parser_ingestion_detail,
         validation.get("parserUpload", []),
     )
+    parser_ingestion["targetVisibility"] = target_visibility
 
     output_validation = validation.get("outputValidation")
     schema_validation = (
@@ -357,16 +524,33 @@ def build_report(
         if isinstance(output_validation, Mapping)
         else None
     )
+    schema_status = (
+        "not-run"
+        if visibility_failed
+        else str(schema_validation.get("status"))
+        if isinstance(schema_validation, Mapping)
+        and isinstance(schema_validation.get("status"), str)
+        and schema_validation.get("status")
+        in {"passed", "failed", "blocked", "not-run", "not-applicable"}
+        else "not-run"
+    )
+    schema_detail = (
+        ""
+        if visibility_failed
+        else _short_message(schema_validation.get("detail"))
+        if isinstance(schema_validation, Mapping)
+        else ""
+    )
     schema_stage = _stage(
-        "passed" if validation.get("parserDcr") else (
-            "failed" if error_stage == "output-validation" else "not-run"
-        ),
-        error_detail if error_stage == "output-validation" else "",
-        schema_validation,
+        schema_status,
+        schema_detail,
+        None if visibility_failed else schema_validation,
     )
     data_stage = _stage(
         (
-            str(data_validation.get("status"))
+            "not-run"
+            if visibility_failed
+            else str(data_validation.get("status"))
             if isinstance(data_validation, Mapping)
             else "passed"
             if error_stage
@@ -375,10 +559,25 @@ def build_report(
             if error_stage == "asim-data"
             else "not-run"
         ),
-        error_detail if error_stage == "asim-data" else "",
-        data_validation,
+        (
+            error_detail
+            if error_stage == "asim-data" and not visibility_failed
+            else ""
+        ),
+        None if visibility_failed else data_validation,
     )
-    if counterpart["status"] in {"not-applicable", "blocked"}:
+    if visibility_failed:
+        qtp_stage = _stage(
+            "not-run",
+            "Not run because parser target visibility failed.",
+            None,
+        )
+        parity_stage = _stage(
+            "not-run",
+            "Not run because parser target visibility failed.",
+            None,
+        )
+    elif counterpart["status"] in {"not-applicable", "blocked"}:
         qtp_stage = counterpart
         parity_stage = _stage(
             counterpart["status"], counterpart["detail"]
@@ -412,8 +611,13 @@ def build_report(
                 else "not-run"
             ),
             (
-                error_detail
-                if error_stage in {"target-output", "parity"}
+                _parity_detail(
+                    parity_validation,
+                    error_detail,
+                )
+                if error_stage == "parity"
+                else error_detail
+                if error_stage == "target-output"
                 else str(parity_validation.get("detail") or "")
                 if isinstance(parity_validation, Mapping)
                 else ""
@@ -493,13 +697,13 @@ def build_report(
             "counterpart": counterpart,
             "template": template,
             "fixture": fixture,
-            "rawDcr": raw_dcr,
-            "rawIngestion": raw_ingestion,
             "filtering": filtering,
             "parserDcr": parser_dcr,
             "parserIngestion": parser_ingestion,
             "schema": schema_stage,
             "data": data_stage,
+            "rawDcr": raw_dcr,
+            "rawIngestion": raw_ingestion,
             "qtpExecution": qtp_stage,
             "parity": parity_stage,
             "cleanup": cleanup_stage,
@@ -536,10 +740,12 @@ def render_summary(report: Mapping[str, Any]) -> str:
                 continue
             stage_status = str(stage.get("status", "not-run"))
             detail = _short_message(stage.get("detail")).replace("|", "\\|")
+            label = f"*{name}" if name in OPTIONAL_STAGES else name
             lines.append(
-                f"| {name} | {STATUS_ICON.get(stage_status, '')} "
+                f"| {label} | {STATUS_ICON.get(stage_status, '')} "
                 f"`{stage_status}` | {detail} |"
             )
+    lines.extend(["", "\\* Optional QTP replay stage."])
     return "\n".join(lines) + "\n"
 
 

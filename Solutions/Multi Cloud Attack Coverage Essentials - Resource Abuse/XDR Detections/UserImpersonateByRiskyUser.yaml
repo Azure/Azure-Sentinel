@@ -1,0 +1,94 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f4a28082-2808-4783-9736-33c1ae117475
+    path: Analytic Rules/UserImpersonateByRiskyUser.yaml
+    version: 1.0.1
+    querySha256: 15e6720cae7f5ea4c161ca208e8c8a60b280e4310a09b4a703d0c98832e96694
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AwsUser' column `UserIdentityArn` requires runtime output-schema binding verification
+    - customDetails 'RiskEventTypes' column `RiskEventTypes` requires runtime output-schema binding verification
+    - customDetails 'AzureUser' column `UserPrincipalName` requires runtime output-schema binding verification
+    - customDetails 'AWSEventName' column `EventName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1134
+    - T1078.002
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: 8edf69f71bc8b4f0a29479c86453b01442cc39c875df1e1785249f9e4355e03a
+      targetQuerySha256: be327d329d7d398c5b19699b29827472b5eb25621856bd2bf5bc38b99bddba32
+properties:
+  id: xdr-f4a28082-2808-4783-9736-33c1ae117475
+  displayName: High-Risk Cross-Cloud User Impersonation
+  status: disabled
+  queryCondition:
+    queryText: "// Retrieve Azure AD SigninLogs within the last day\nSigninLogs\n// Filter for specific AppDisplayNames, ResultType, and Risk Levels\n| where AppDisplayName in (\"Azure Portal\", \"ADFS Trust\", \"Microsoft Azure PowerShell\")\n    and RiskLevelAggregated == \"high\"\n    and RiskLevelDuringSignIn == \"high\"\n// Summarize AppDisplayNames by relevant attributes\n| extend Result = iff(ResultType == 0, \"Successful Signin\", \"Failed Signin\")\n| summarize make_set(AppDisplayName)\n    by\n    IPAddress,\n    signInTime=TimeGenerated,\n    UserPrincipalName,\n    RiskEventTypes,\n    RiskEventTypes_V2\n// Inner join with AWS CloudTrail events\n| join kind=inner (\n    AWSCloudTrail\n    | where isempty(ErrorMessage)\n    | where EventSource in (\"iam.amazonaws.com\", \"identitystore.amazonaws.com\", \"workmail.amazonaws.com\", \"workdocs.amazonaws.com\")\n    // List of AWS event names\n    | where EventName in~ (\"CreateRole\", \"DeleteRole\", \"CreateUser\", \"CreateAccessKey\"\
+      , \"DeleteAccessKey\", \"CreateGroup\", \"AddUserToGroup\", \"ChangePassword\", \"DeleteGroup\", \"DeleteUser\", \"RemoveUserFromGroup\", \"CreateVirtualMFADevice\", \"DeleteLoginProfile\", \"CreateOrganization\", \"SetDefaultMailDomain\", \"SetMailUserDetails\", \"CreateMailUser\", \"ResetPassword\", \"RegisterToWorkMail\", \"DisableMailUsers\", \"EnableMailUsers\", \"DeleteServiceSpecificCredential\", \"CreateServiceSpecificCredential\", \"UpdateAccountEmailAddress\", \"DeleteGroupPolicy\", \"UploadServerCertificate\")\n    // Summarize relevant attributes\n    | summarize make_set(RequestParameters), make_set(ResponseElements)\n        by\n        SourceIpAddress,\n        UserIdentityArn,\n        UserIdentityType,\n        EventName,\n        EventTime=TimeGenerated,\n        EventSource\n    )\n    on $left.IPAddress == $right.SourceIpAddress\n// Calculate time difference in hours between AWS event and Azure sign-in\n| extend timedef = datetime_diff(\"hour\", EventTime, signInTime)\n\
+      // Filter for time differences within a certain range\n| where timedef between (0 .. 8)"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: High-Risk Cross-Cloud User Impersonation
+      description: '''This detection focuses on identifying high-risk cross-cloud activities and sign-in anomalies that may indicate potential security threats. The query starts by analyzing Microsoft Entra ID Signin Logs to pinpoint instances where specific applications, risk levels, and result types align. It then correlates this information with relevant AWS CloudTrail events to identify activities across Azure and AWS environments.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1134
+        - technique: T1078
+          subTechniques:
+          - T1078.002
+          - T1078.004
+      customDetails:
+        AwsUser: UserIdentityArn
+        RiskEventTypes: RiskEventTypes
+        AzureUser: UserPrincipalName
+        AWSEventName: EventName

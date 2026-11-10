@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                    |
 |-------------|--------------------------------|-----------------------------------------------------------------------|
+| 3.2.3       | 09-11-2026                     | Updated **Parser** `NetworkSessionEssentialsCustomParser` to include a fallback empty schema when optional custom summary tables are not present in the workspace. |
+| 3.2.2       | 25-10-2026                     | Added 6 Microsoft Defender XDR custom detections for ASIM Network Session analytics rules and packaged V3.1 solution. |
 | 3.0.13      | 16-09-2026                     | Added  NetworkSessionEssentialsCustomParser to parse and normalize the tables used in dependent Security Content. Updated Workbooks and Analytic rules to use parser. |
 | 3.0.12      | 02-09-2026                     | Added **Summarize Data for Network Session Essentials using log ingestion API** Playbook |
 | 3.0.11      | 24-03-2026                     | Bump solution version and Updated links to remove review.learn.                                 |

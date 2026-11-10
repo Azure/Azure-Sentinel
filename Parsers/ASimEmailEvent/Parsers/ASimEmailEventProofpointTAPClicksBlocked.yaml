@@ -1,0 +1,101 @@
+Parser:
+  Title: ASIM Email Event parser for Proofpoint TAP blocked clicks
+  Version: '0.1.0'
+  LastUpdated: Oct 30, 2026
+Product:
+  Name: Proofpoint Targeted Attack Protection
+Normalization:
+  Schema: EmailEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Email Event Schema
+  Link: https://aka.ms/ASimEmailEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Proofpoint TAP SIEM API
+  Link: https://help.proofpoint.com/Threat_Insight_Dashboard/API_Documentation/SIEM_API
+Description: |
+  Normalizes ProofPointTAPClicksBlockedV2_CL URL Defense blocked-click records as
+  EmailInteraction activity, preserving one event per source row and the original
+  blocking action without asserting email delivery or delivery failure.
+  This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
+ParserName: ASimEmailEventProofpointTAPClicksBlocked
+EquivalentBuiltInParser: _ASim_EmailEvent_ProofpointTAPClicksBlocked
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false, pack:bool=false) {
+      ProofPointTAPClicksBlockedV2_CL
+      | where not(disabled)
+      | project-rename
+          Dst=recipient,
+          EmailMailFromAddress=sender,
+          SrcIpAddr=clickIP,
+          ThreatId=threatID,
+          ThreatOriginalCategory=classification,
+          ThreatFirstReportedTime=threatTime,
+          EventReportUrl=threatURL
+      | extend
+          Type="ProofPointTAPClicksBlockedV2_CL",
+          EventVendor="Proofpoint",
+          EventProduct="TAP",
+          EventSchema="EmailEvent",
+          EventSchemaVersion="1.0.0",
+          EventType="EmailInteraction",
+          EventOriginalType="clicksBlocked",
+          EventOriginalUid=tostring(id),
+          EventCount=int(1),
+          EventStartTime=coalesce(clickTime, TimeGenerated),
+          EventResult="NA",
+          DvcOriginalAction="Blocked",
+          DvcAction="NA",
+          DvcEntityKey="",
+          EmailDirection="Unknown",
+          EmailUrls=iff(isempty(url), dynamic([]), pack_array(url)),
+          AdditionalEntities=dynamic([]),
+          AdditionalFields=iff(pack, bag_pack(
+              "CampaignId", campaignId,
+              "MessageGuid", GUID,
+              "MessageId", messageID,
+              "SenderIpAddr", senderIP,
+              "ThreatStatus", threatStatus,
+              "UserAgent", userAgent), dynamic({}))
+      | extend
+          EventEndTime=EventStartTime,
+          Dvc=EventProduct,
+          Src=SrcIpAddr,
+          IpAddr=SrcIpAddr,
+          EmailMailFromDomain=tostring(split(EmailMailFromAddress, "@")[1]),
+          ThreatCategory=case(
+              ThreatOriginalCategory =~ "malware", "Malware",
+              ThreatOriginalCategory in~ ("phish", "phishing"), "Phishing",
+              ThreatOriginalCategory =~ "spam", "Spam",
+              ""),
+          ThreatIsActive=case(
+              threatStatus =~ "active", true,
+              threatStatus in~ ("cleared", "falsepositive"), false,
+              bool(null)),
+          ThreatField=iff(isnotempty(url), "EmailUrls", ""),
+          EventResultDetails=case(
+              ThreatOriginalCategory =~ "malware", "MalwareDetected",
+              ThreatOriginalCategory in~ ("phish", "phishing"), "PhishingDetected",
+              isnotempty(ThreatOriginalCategory), "Other",
+              "")
+      | project
+          TimeGenerated, Type,
+          EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+          EventType, EventOriginalType, EventCount, EventStartTime, EventEndTime,
+          EventResult, EventResultDetails, EventOriginalUid, EventReportUrl,
+          Dvc, DvcOriginalAction, DvcAction, DvcEntityKey,
+          Src, SrcIpAddr, IpAddr, Dst,
+          EmailMailFromAddress, EmailMailFromDomain, EmailDirection, EmailUrls,
+          ThreatId, ThreatOriginalCategory, ThreatCategory, ThreatIsActive,
+          ThreatFirstReportedTime, ThreatField,
+          AdditionalEntities, AdditionalFields
+  };
+  parser(disabled=disabled, pack=pack)

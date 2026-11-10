@@ -30,7 +30,6 @@ from .kql import (
     _pipeline_operator,
     _query_uses_source_table,
     _validate_statement_shape,
-    compact_kql,
     mask_kql,
     resolve_source_specific_fixture,
     split_kql_statements,
@@ -159,9 +158,25 @@ def _validate_filter_consistency(
     parser_stages = split_pipeline(parser_statements[-1])
     if not filter_stages or filter_stages[0].casefold() != "source":
         return
+    filter_has_where = any(
+        _pipeline_operator(stage) == "where"
+        for stage in filter_stages[1:]
+    )
+    parser_has_where = any(
+        _pipeline_operator(stage) == "where"
+        for stage in parser_stages[1:]
+    )
+    if parser_has_where and not filter_has_where:
+        findings.append(
+            Finding(
+                "FILTER004",
+                "ParserFilterQuery",
+                "ParserFilterQuery must contain a where stage when ParserQuery contains one.",
+            )
+        )
     if len(filter_stages) == 1:
         return
-    if not any(_pipeline_operator(stage) == "where" for stage in filter_stages[1:]):
+    if not filter_has_where:
         findings.append(
             Finding(
                 "FILTER001",
@@ -183,25 +198,6 @@ def _validate_filter_consistency(
             )
             return
         search_index = found_index + 1
-
-
-def _validate_dcr_metadata(
-    dcr_type: str | None,
-    input_stream: str | None,
-    findings: list[Finding],
-) -> None:
-    if (
-        dcr_type == "Workspace"
-        and input_stream is not None
-        and input_stream.casefold() != "none"
-    ):
-        findings.append(
-            Finding(
-                "SOURCE001",
-                "InputStream",
-                "Workspace parsers must use InputStream: none.",
-            )
-        )
 
 
 def _validate_fixture_contract(
@@ -364,8 +360,12 @@ def validate_ingest_time_parser(
             document, findings, "ParserName", "ParserName"
         )
         dcr_type = _require_string(document, findings, "DCRType", "DCRType")
-        input_stream = _require_string(
-            document, findings, "InputStream", "InputStream"
+        raw_input_stream = document.get("InputStream")
+        input_stream = (
+            raw_input_stream.strip()
+            if isinstance(raw_input_stream, str)
+            and raw_input_stream.strip()
+            else None
         )
         source_raw_table = _require_string(
             document, findings, "SourceRawTable", "SourceRawTable"
@@ -435,8 +435,10 @@ def validate_ingest_time_parser(
             )
         if (
             dcr_type == "Standard"
-            and input_stream is not None
-            and input_stream.casefold() == "none"
+            and (
+                input_stream is None
+                or input_stream.casefold() == "none"
+            )
         ):
             findings.append(
                 Finding(
@@ -487,11 +489,6 @@ def validate_ingest_time_parser(
                 )
 
         effective_repo_root = repo_root or _find_repo_root(parser_path)
-        _validate_dcr_metadata(
-            dcr_type,
-            input_stream,
-            findings,
-        )
 
         if filter_query is not None:
             _validate_pipeline_operators(
@@ -503,15 +500,13 @@ def validate_ingest_time_parser(
             findings.extend(_scan_kql(filter_query, "ParserFilterQuery"))
         if parser_query is not None:
             if isinstance(raw_parser_query, str):
-                compacted_length = len(compact_kql(raw_parser_query))
-                if compacted_length > MAX_DCR_TRANSFORM_KQL_CHARS:
+                query_length = len(raw_parser_query)
+                if query_length > MAX_DCR_TRANSFORM_KQL_CHARS:
                     findings.append(
                         Finding(
                             "KQL044",
                             "ParserQuery",
-                            f"ParserQuery is {compacted_length} characters "
-                            "after removing comments and indentation "
-                            f"({len(raw_parser_query)} before compaction); "
+                            f"ParserQuery is {query_length} characters; "
                             "Azure DCR TransformKql supports at most "
                             f"{MAX_DCR_TRANSFORM_KQL_CHARS} characters.",
                         )

@@ -134,7 +134,7 @@ The local validation pipeline is designed to stay in sync with CI by **sharing c
 | **TypeScript validators** (Step 2) | **Yes — same code** | `validate.js` imports the same checker functions from `.script/utils/` that CI uses. No duplication. |
 | **.NET validators** (Step 3) | **Yes — same test projects** | Both CI and local run `dotnet test` against the same `.csproj` files. No duplication. |
 | **PowerShell validators** (Step 4) | **Yes — same scripts** | `build-and-validate.ps1` calls the same `.script/package-automation/*.ps1` scripts that CI workflows invoke. |
-| **ARM-TTK** (Step 3) | **Yes — same module + skips** | Local uses the same `Test-AzTemplate` invocation with identical skip lists as `.github/actions/entrypoint.ps1`. |
+| **ARM-TTK** (Step 3) | **Yes — same module + exemptions** | Local and `.github/actions/entrypoint.ps1` both dot-source `.script/package-automation/arm-ttk-sentinel-filters.ps1` for the same tests, ARM-TTK parameters and ID exemptions. |
 | **File discovery** | **No — by design** | CI uses GitHub API (`octokit.pulls.listFiles`); local uses `git diff` or glob. This is the only intentional divergence. |
 | **Workflow config** (trigger paths, env vars) | **No — CI-only concern** | CI workflow YAML files contain trigger paths and environment variables that don't apply locally. |
 

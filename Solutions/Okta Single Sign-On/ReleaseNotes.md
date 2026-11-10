@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.2.2 | 25-10-2026 | Restored `DeployParser` parameter and `Parser` resource deployment condition for the `OktaSSO` **Parser** alongside the nine disabled **Defender XDR Custom Detections** and one **Defender XDR Workbook** so Content Hub installation and multi-workspace deployment succeed. |
 | 3.2.1 | 15-10-2026 | Added 9 disabled **Defender XDR Custom Detections** and 1 **Defender XDR Workbook** (`OktaSingleSignOn.json`) alongside the existing Sentinel content, updated the reference link in `azuredeploy_Okta_native_poller_connector_v2.json`, and updated the solution package to 3.2.1. |
 | 3.1.11       | 28-09-2026                     | Removed the deprecated Okta Single Sign-On Azure Function data connector from the solution package |
 | 3.1.10      | 09-09-2026                     | Updated the Okta **Data Connector** to retrieve up to 1000 events per page, throttle initial and paginated requests, and handle HTTP 429 responses using rate-limit-aware retries. |

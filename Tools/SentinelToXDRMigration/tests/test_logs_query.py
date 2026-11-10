@@ -316,6 +316,25 @@ class LogsQueryExecutionTests(unittest.TestCase):
         self.assertEqual(["passed", "not-run"], [item["status"] for item in results])
         self.assertEqual(1, len(client.calls))
 
+    def test_query_family_preserves_order_with_concurrent_workers(self):
+        client = FakeClient([
+            success(logs_table("events", ["A"], [[1]])),
+            success(logs_table("events", ["A"], [[2]])),
+            success(logs_table("events", ["A"], [[3]])),
+        ])
+        items = [
+            {"detection": "one.yaml", "query": "T | take 1", "querySha256": "1" * 64},
+            {"detection": "two.yaml", "query": "U | take 1", "querySha256": "2" * 64},
+            {"detection": "three.yaml", "query": "V | take 1", "querySha256": "3" * 64},
+        ]
+        results = query_family(client, WORKSPACE, items, max_workers=2)
+        self.assertEqual(
+            ["one.yaml", "two.yaml", "three.yaml"],
+            [item["detection"] for item in results],
+        )
+        self.assertEqual(["passed", "passed", "passed"], [item["status"] for item in results])
+        self.assertEqual(3, len(client.calls))
+
     def test_preflight_adapter_reuses_sdk_executor_and_locked_workspace(self):
         client = FakeClient([success(logs_table("events", ["A"], []))])
         request = {

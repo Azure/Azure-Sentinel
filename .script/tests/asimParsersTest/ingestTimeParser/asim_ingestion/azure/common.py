@@ -17,6 +17,11 @@ from typing import Any, Mapping, Protocol, Sequence
 import requests
 import yaml
 
+from asim_ingestion.fixtures.timestamps import (
+    parse_kusto_datetime_ticks,
+    ticks_to_kusto_datetime,
+)
+
 HARNESS_RESULT_VERSION = 1
 SNAPSHOT_VERSION = 1
 
@@ -41,10 +46,6 @@ DEFAULT_LOCATION = "eastus2euap"
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 RESOURCE_NAME_RE = re.compile(r"[^a-z0-9-]+")
-KUSTO_TIMESTAMP_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}Z$"
-)
-
 REPLAY_EXCLUDED_COLUMNS = {
     "_BilledSize",
     "_IsBillable",
@@ -178,11 +179,14 @@ def _require_identifier(value: str, field: str) -> str:
 
 
 def _validate_timestamp(value: str) -> str:
-    if not KUSTO_TIMESTAMP_RE.fullmatch(value):
-        raise ValueError(
-            f"Expected exact Kusto timestamp with seven digits: {value}"
+    try:
+        return ticks_to_kusto_datetime(
+            parse_kusto_datetime_ticks(value)
         )
-    return value
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Expected a valid Kusto timestamp: {value}"
+        ) from exc
 
 
 def _compact_json_bytes(value: Any) -> bytes:
@@ -408,6 +412,70 @@ def _query_timestamp_counts(
             )
         counts[_validate_timestamp(timestamp)] += 1
     return dict(counts)
+
+
+def build_observed_query_rows(
+    query_table: Mapping[str, Any],
+    *,
+    stage: str,
+) -> dict[str, Any]:
+    columns = query_table.get("columns")
+    raw_rows = query_table.get("rows")
+    if not isinstance(columns, list) or not isinstance(raw_rows, list):
+        raise HarnessError(
+            stage, "Log Analytics result must contain columns and rows."
+        )
+    schema: list[dict[str, str]] = []
+    column_names: list[str] = []
+    for column in columns:
+        if not isinstance(column, Mapping):
+            raise HarnessError(
+                stage, "Invalid Log Analytics column metadata."
+            )
+        name = column.get("name")
+        column_type = column.get("type")
+        if not isinstance(name, str) or not isinstance(column_type, str):
+            raise HarnessError(
+                stage, "Invalid Log Analytics column metadata."
+            )
+        if name in column_names:
+            raise HarnessError(
+                stage,
+                f"Log Analytics returned duplicate column {name}.",
+            )
+        column_names.append(name)
+        schema.append(
+            {
+                "name": name,
+                "type": _normalize_dcr_type(column_type),
+            }
+        )
+    type_by_name = {
+        column["name"]: column["type"] for column in schema
+    }
+    rows: list[dict[str, Any]] = []
+    for raw_row in raw_rows:
+        if (
+            not isinstance(raw_row, list)
+            or len(raw_row) != len(column_names)
+        ):
+            raise HarnessError(stage, "Invalid Log Analytics row shape.")
+        row = {
+            name: _json_safe_value(value, type_by_name[name])
+            for name, value in zip(column_names, raw_row)
+        }
+        timestamp = row.get("TimeGenerated")
+        if isinstance(timestamp, str):
+            row["TimeGenerated"] = _validate_timestamp(timestamp)
+        rows.append(row)
+    return {
+        "schema": schema,
+        "rows": rows,
+        "countsByTimestamp": _query_timestamp_counts(
+            query_table,
+            stage,
+        ),
+    }
 
 
 def build_upload_batches(

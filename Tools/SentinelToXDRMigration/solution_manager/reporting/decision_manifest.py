@@ -306,6 +306,20 @@ def verify_sanitized_decision_manifest(
             "Unsafe content remained: unsanitized secret or bearer token detected in decision manifest"
         )
 
+    overrides = manifest.get("overrides")
+    if overrides is not None:
+        if not isinstance(overrides, list):
+            raise ValueError("Decision manifest 'overrides' must be a list when present.")
+        for idx, ov in enumerate(overrides):
+            if not isinstance(ov, Mapping):
+                raise ValueError(f"Override at index {idx} must be a mapping.")
+            for req_ov_key in ("itemId", "overrideType", "reason", "timestampUtc"):
+                if req_ov_key not in ov:
+                    raise ValueError(f"Override at index {idx} missing required key {req_ov_key!r}.")
+            ov_type = str(ov.get("overrideType") or "")
+            if ov_type not in {"waiver", "manual_edit", "rejection"}:
+                raise ValueError(f"Invalid overrideType {ov_type!r} at index {idx}.")
+
 
 def _contains_raw_private_data(
     raw_value: Any,
@@ -1063,6 +1077,104 @@ def build_sanitized_decision_manifest(
         key=lambda r: (r["scope"], r["itemId"], r["decision"], r["id"]),
     )
 
+    default_timestamp_utc = str(
+        state.get("updatedAt")
+        or state.get("generatedAtUtc")
+        or state.get("createdAt")
+        or "1970-01-01T00:00:00Z"
+    ).strip()
+
+    overrides: list[dict[str, str]] = []
+    seen_overrides: set[tuple[str, str, str]] = set()
+
+    def add_override(
+        item_id_val: Any,
+        override_type: str,
+        reason_val: Any,
+        timestamp_val: Any = None,
+    ) -> None:
+        if override_type not in {"waiver", "manual_edit", "rejection"}:
+            return
+        clean_item = sanitize_decision_text(
+            str(item_id_val or "solution"),
+            private_identifiers=private_ids,
+            solution_root=root,
+        )
+        clean_reason = sanitize_decision_text(
+            str(reason_val or f"Recorded {override_type} decision."),
+            private_identifiers=private_ids,
+            solution_root=root,
+        )
+        clean_ts = sanitize_decision_text(
+            str(timestamp_val or default_timestamp_utc),
+            private_identifiers=private_ids,
+            solution_root=root,
+        )
+        ov_key = (clean_item, override_type, clean_reason)
+        if ov_key in seen_overrides:
+            return
+        seen_overrides.add(ov_key)
+        overrides.append(
+            {
+                "itemId": clean_item,
+                "overrideType": override_type,
+                "reason": clean_reason,
+                "timestampUtc": clean_ts,
+            }
+        )
+
+    for src_container in state_sources:
+        raw_ovs = src_container.get("overrides")
+        if isinstance(raw_ovs, list):
+            for raw_ov in raw_ovs:
+                if not isinstance(raw_ov, Mapping):
+                    continue
+                ov_type = str(raw_ov.get("overrideType") or raw_ov.get("type") or "").strip().lower()
+                if ov_type not in {"waiver", "manual_edit", "rejection"}:
+                    ov_type = "manual_edit"
+                add_override(
+                    raw_ov.get("itemId") or raw_ov.get("id") or raw_ov.get("checkId"),
+                    ov_type,
+                    raw_ov.get("reason") or raw_ov.get("rationale") or raw_ov.get("authorJustification"),
+                    raw_ov.get("timestampUtc") or raw_ov.get("timestamp"),
+                )
+
+    for rec in decisions:
+        sc = rec["scope"]
+        dec_lower = rec["decision"].strip().lower()
+        if sc == "waiver" or "waive" in dec_lower:
+            add_override(rec["itemId"], "waiver", rec["rationale"])
+        elif sc == "exclusion" or dec_lower in {"excluded", "exclude", "rejected", "reject"}:
+            add_override(rec["itemId"], "rejection", rec["rationale"])
+        elif any(
+            tok in dec_lower
+            for tok in ("change", "manual", "override", "overridden", "edit", "modified", "fallback", "approved_with_")
+        ):
+            add_override(rec["itemId"], "manual_edit", rec["rationale"])
+
+    for rule_id, override in sorted(rule_overrides.items()):
+        if not isinstance(override, Mapping):
+            continue
+        dec_val = str(override.get("decision") or override.get("action") or "").strip().lower()
+        reason_val = (
+            override.get("rationale")
+            or override.get("reason")
+            or override.get("justification")
+            or "Applied manual rule override."
+        )
+        ts_val = override.get("timestampUtc") or override.get("updatedAt")
+        if dec_val in {"reject", "rejected", "exclude", "excluded"}:
+            add_override(rule_id, "rejection", reason_val, ts_val)
+        elif (
+            dec_val in {"change", "manual_edit", "manual_override", "overridden", "modified"}
+            or (isinstance(override.get("description"), str) and override["description"].strip())
+            or isinstance(override.get("entityMappings"), Mapping)
+            or isinstance(override.get("query"), str)
+        ):
+            add_override(rule_id, "manual_edit", reason_val, ts_val)
+
+    overrides.sort(key=lambda o: (o["overrideType"], o["itemId"], o["reason"]))
+
     normalized_payload = {
         "schemaVersion": DECISION_MANIFEST_SCHEMA_VERSION,
         "solutionName": solution_name,
@@ -1070,6 +1182,7 @@ def build_sanitized_decision_manifest(
         "workflowProfile": workflow_profile,
         "armValidationMethod": arm_validation_method,
         "decisions": decisions,
+        "overrides": overrides,
     }
     manifest_sha256 = _sha256_canonical(normalized_payload)
     manifest: dict[str, Any] = {

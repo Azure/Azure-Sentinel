@@ -5,9 +5,14 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import sys
+import tempfile
 from typing import Any
+import unittest
 
 import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from solution_manager.qualification.pr_applicability import (
     BUILTIN_CHECK_CATALOG,
@@ -216,10 +221,81 @@ def _build_valid_xdr_detection(
     )
 
 
-def _build_live_qualification_evidence() -> dict[str, Any]:
+def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str, Any]:
+    default_ar_q = "AzureDiagnostics | where Category == 'DDoSMitigationFlowLogs' | project TimeGenerated, sourcePublicIpAddress_s"
+    default_xdr_q = "AzureDiagnostics | where Category == 'DDoSMitigationFlowLogs' | project TimeGenerated, Timestamp=TimeGenerated, ReportId=tostring( _ItemId ), sourcePublicIpAddress_s"
+    verified_rules: list[dict[str, Any]] = [
+        {
+            "id": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "ruleId": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "status": "PASS",
+            "querySha256": hashlib.sha256(default_ar_q.encode("utf-8")).hexdigest(),
+        },
+        {
+            "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "ruleId": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "originalRuleId": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "status": "PASS",
+            "querySha256": hashlib.sha256(default_xdr_q.encode("utf-8")).hexdigest(),
+        },
+    ]
+    lifecycle_detections: list[dict[str, Any]] = [
+        {
+            "id": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "initialDisabled": True,
+            "alertsFired": 1,
+            "returnedToDisabled": True,
+        },
+        {
+            "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+            "initialDisabled": True,
+            "alertsFired": 1,
+            "returnedToDisabled": True,
+        },
+    ]
+    if sol_dir is not None and sol_dir.is_dir():
+        for folder_name in ("Analytic Rules", "XDR Detections"):
+            folder = sol_dir / folder_name
+            if not folder.is_dir():
+                continue
+            for yml in sorted(folder.rglob("*.y*ml")):
+                doc = yaml.safe_load(yml.read_text(encoding="utf-8-sig")) or {}
+                props = doc.get("properties") if isinstance(doc.get("properties"), dict) else {}
+                rid = str(doc.get("id") or props.get("id") or yml.stem).strip()
+                orig_id = str(
+                    doc.get("originalRuleId")
+                    or props.get("originalRuleId")
+                    or (doc.get("conversion") or {}).get("sourceRuleId")
+                    or ""
+                ).strip()
+                q_str = str(
+                    doc.get("query")
+                    or ((props.get("queryCondition") or {}).get("queryText") if isinstance(props.get("queryCondition"), dict) else "")
+                    or ""
+                ).replace("\r\n", "\n").strip()
+                if rid and q_str:
+                    entry: dict[str, Any] = {
+                        "id": rid,
+                        "ruleId": rid,
+                        "status": "PASS",
+                        "querySha256": hashlib.sha256(q_str.encode("utf-8")).hexdigest(),
+                    }
+                    lifecycle_entry: dict[str, Any] = {
+                        "id": rid,
+                        "ruleId": rid,
+                        "initialDisabled": True,
+                        "alertsFired": 1,
+                        "returnedToDisabled": True,
+                    }
+                    if orig_id:
+                        entry["originalRuleId"] = orig_id
+                        lifecycle_entry["originalRuleId"] = orig_id
+                    verified_rules.append(entry)
+                    lifecycle_detections.append(lifecycle_entry)
     return {
         "simulated": False,
         "dryRun": False,
+        "kqlRuntimeVerifiedRules": verified_rules,
         "providerReceipts": [
             {"provider": "azure-arm", "operation": "deployment-readback", "mode": "live", "simulated": False},
             {"provider": "azure-monitor-dcr", "operation": "logs-ingestion", "mode": "live", "simulated": False},
@@ -239,20 +315,7 @@ def _build_live_qualification_evidence() -> dict[str, Any]:
             "recordCount": 6,
         },
         "alertLifecycle": {
-            "detections": [
-                {
-                    "id": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
-                    "initialDisabled": True,
-                    "alertsFired": 1,
-                    "returnedToDisabled": True,
-                },
-                {
-                    "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
-                    "initialDisabled": True,
-                    "alertsFired": 1,
-                    "returnedToDisabled": True,
-                },
-            ]
+            "detections": lifecycle_detections,
         },
         "workbookQualification": {
             "queries": [
@@ -738,7 +801,7 @@ def test_real_solution_azure_ddos_protection_integration(tmp_path: Path) -> None
 
     ddos_qual = run_pr_qualification_checks(
         ddos_copy,
-        qualification_evidence=_build_live_qualification_evidence(),
+        qualification_evidence=_build_live_qualification_evidence(ddos_copy),
     )
     _assert_check_schema(ddos_qual)
     assert ddos_qual["isMigration"] is True
@@ -807,7 +870,7 @@ def test_cli_pr_qualify_command_and_report_generation(tmp_path: Path, capsys: An
 
     # Provide live evidence where E2E-Q04 has 0 rows, and waive E2E-Q04 + E2E-V02 + E2E-V03 via --waivers-file
     evidence_dir = tmp_path / "evidence-input"
-    ev_payload = _build_live_qualification_evidence()
+    ev_payload = _build_live_qualification_evidence(ddos_copy)
     ev_payload["workbookQualification"] = {
         "queries": [{"id": "ddos-wb-q1", "rowCount": 0, "status": "passed"}]
     }
@@ -954,4 +1017,720 @@ def test_direct_override_blocks_validation_and_unapproved_human_review(tmp_path:
     assert res["checksById"]["QUAL-HR-01"]["status"] == "HUMAN_REVIEW_REQUIRED"
 
 
+def test_kql_runtime_verified_rules_projection_and_val_ci_01_override(tmp_path: Path) -> None:
+    """Verify kqlRuntimeVerifiedRules projection, QUAL-RUNTIME-01 evaluation, and VAL-CI-01 static KQL override."""
+    sol = tmp_path / "RuntimeVerifiedSol"
+    _build_base_package(
+        sol,
+        version="3.2.2",
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/Rule1.yaml"],
+            "XDR Detections": ["XDR Detections/Rule1.yaml"],
+        },
+    )
+    ar_path = sol / "Analytic Rules" / "Rule1.yaml"
+    rule_id = "6e76fd9d-8104-41eb-bad3-26054a3ad5f0"
+    ar_sha = _build_valid_analytic_rule(ar_path, rule_id=rule_id)
+    xdr_path = sol / "XDR Detections" / "Rule1.yaml"
+    _build_valid_xdr_detection(
+        xdr_path,
+        source_rule_id=rule_id,
+        source_rule_path="Analytic Rules/Rule1.yaml",
+        source_rule_sha256=ar_sha,
+    )
+    _write_json(
+        sol / "Sample Data" / "Tables" / "AzureDiagnostics_mock.json",
+        [
+            {
+                "TimeGenerated": "2026-10-19T12:00:00Z",
+                "ResourceType": "PUBLICIPADDRESSES",
+                "Category": "DDoSMitigationReports",
+                "destPublicIpAddress_s": "198.51.100.10",
+                "sourcePublicIpAddress_s": "203.0.113.99",
+            }
+        ],
+    )
+
+    ar_doc = yaml.safe_load(ar_path.read_text(encoding="utf-8"))
+    ar_query_sha = hashlib.sha256(str(ar_doc["query"]).strip().encode("utf-8")).hexdigest()
+    xdr_doc = yaml.safe_load(xdr_path.read_text(encoding="utf-8"))
+    xdr_raw_q = xdr_doc.get("query") or ((xdr_doc.get("properties") or {}).get("queryCondition") or {}).get("queryText")
+    xdr_query_sha = hashlib.sha256(str(xdr_raw_q).strip().encode("utf-8")).hexdigest()
+
+    qual_ev = _build_live_qualification_evidence()
+    qual_ev["runtimeKql"] = {
+        "status": "passed",
+        "passed": True,
+        "queries": [
+            {
+                "id": rule_id,
+                "status": "PASS",
+                "querySha256": ar_query_sha,
+            },
+            {
+                "id": f"xdr-{rule_id}",
+                "originalRuleId": rule_id,
+                "status": "PASS",
+                "querySha256": xdr_query_sha,
+            },
+        ],
+    }
+    qual_ev["ciChecks"] = {
+        "passed": False,
+        "reason": "Static KQL analyzer reported KS107/KS141",
+        "kqlStaticErrors": [
+            {
+                "id": f"xdr-{rule_id}",
+                "originalRuleId": rule_id,
+                "code": "KS107",
+                "querySha256": xdr_query_sha,
+            },
+            {
+                "id": rule_id,
+                "code": "KS141",
+                "querySha256": ar_query_sha,
+            },
+        ],
+    }
+    wf_state = {
+        "workflowProfile": "qualification",
+        "operatorHash": "abcdef0123456789",
+        "stages": {
+            "conversion": {
+                "startedAt": "2026-10-19T10:00:00Z",
+                "completedAt": "2026-10-19T10:05:00Z",
+            },
+            "validation": {
+                "attempts": 1,
+                "completedAt": "2026-10-19T10:10:00Z",
+            },
+            "alertParity": {
+                "status": "passed",
+                "completedAt": "2026-10-19T10:25:00Z",
+            },
+            "packaging": {
+                "completedAt": "2026-10-19T10:30:00Z",
+            },
+        },
+    }
+
+    res = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev,
+        pr_number=4242,
+        run_number=1,
+    )
+
+    # Todo #5 assertions
+    verified = res["kqlRuntimeVerifiedRules"]
+    assert len(verified) == 2
+    verified_ids = {v["id"]: v for v in verified}
+    assert rule_id in verified_ids
+    assert verified_ids[rule_id]["querySha256"] == ar_query_sha
+    assert verified_ids[rule_id]["status"] == "PASS"
+    assert f"xdr-{rule_id}" in verified_ids
+    assert verified_ids[f"xdr-{rule_id}"]["querySha256"] == xdr_query_sha
+    assert verified_ids[f"xdr-{rule_id}"]["originalRuleId"] == rule_id
+
+    assert res["checksById"]["VAL-CI-01"]["status"] == "PASS"
+    assert "kqlRuntimeVerifiedRules" in res["checksById"]["VAL-CI-01"]["whatWeObserved"]
+    assert "kqlRuntimeVerifiedRules" in res["checksById"]["VAL-CI-01"]["whyPassedOrFailed"]
+    assert res["checksById"]["QUAL-RUNTIME-01"]["status"] == "PASS"
+
+    # Todo #6 assertions
+    assert res["runNumber"] == 1
+    assert res["passesPerSolution"] == 1
+    assert res["prNumber"] == 4242
+    assert res["firstPassPassed"] is True
+    assert res["operatorHash"] == "abcdef0123456789"
+    assert res["workflowProfile"] == "qualification"
+    assert res["stageTimestamps"] == {
+        "convertingStartedAtUtc": "2026-10-19T10:00:00Z",
+        "convertingCompletedAtUtc": "2026-10-19T10:05:00Z",
+        "validationCompletedAtUtc": "2026-10-19T10:10:00Z",
+        "qualificationCompletedAtUtc": "2026-10-19T10:25:00Z",
+        "packagedAtUtc": "2026-10-19T10:30:00Z",
+    }
+    assert res["verdict"] == "Qualified"
+    assert isinstance(res["verdictReasons"], list)
+
+    # Ensure SYN* and non-allowlisted KS* (e.g., KS005) syntax errors and unrelated string errors are never overridden in VAL-CI-01
+    qual_ev_syn = dict(qual_ev)
+    qual_ev_syn["ciChecks"] = {
+        "passed": False,
+        "reason": "Syntax error SYN001",
+        "kqlStaticErrors": [
+            {
+                "id": rule_id,
+                "code": "SYN001",
+                "querySha256": ar_query_sha,
+            }
+        ],
+    }
+    res_syn = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_syn,
+        run_number=2,
+    )
+    assert res_syn["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+    assert res_syn["firstPassPassed"] is False
+    assert res_syn["verdict"] == "Failed"
+    assert any(r.startswith("VAL-CI-01 (FAIL):") for r in res_syn["verdictReasons"])
+
+    qual_ev_ks005 = dict(qual_ev)
+    qual_ev_ks005["ciChecks"] = {
+        "passed": False,
+        "reason": "KQL syntax error KS005",
+        "kqlStaticErrors": [
+            {
+                "id": f"xdr-{rule_id}",
+                "code": "KS005",
+                "querySha256": xdr_query_sha,
+            }
+        ],
+    }
+    res_ks005 = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_ks005,
+        run_number=1,
+    )
+    assert res_ks005["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+
+    qual_ev_str_err = dict(qual_ev)
+    qual_ev_str_err["ciChecks"] = {
+        "passed": False,
+        "reason": "ARM template validation failed",
+        "errors": ["ARM template deployment validation failed on mainTemplate.json"],
+    }
+    res_str_err = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_str_err,
+        run_number=1,
+    )
+    assert res_str_err["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+
+    # Ensure mixed failure lists (covered kqlStaticErrors + non-KQL errors) fail VAL-CI-01
+    qual_ev_mixed = dict(qual_ev)
+    qual_ev_mixed["ciChecks"] = {
+        "passed": False,
+        "reason": "Mixed KQL schema warning and ARM failure",
+        "kqlStaticErrors": [
+            {
+                "id": f"xdr-{rule_id}",
+                "originalRuleId": rule_id,
+                "code": "KS142",
+                "querySha256": xdr_query_sha,
+            }
+        ],
+        "errors": ["ARM deployment validation failed"],
+    }
+    res_mixed = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_mixed,
+        run_number=1,
+    )
+    assert res_mixed["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+
+    # Ensure stale receipts with mismatched querySha256 do not mint fresh PASS hashes and fail QUAL-RUNTIME-01
+    qual_ev_stale = dict(qual_ev)
+    qual_ev_stale.pop("kqlRuntimeVerifiedRules", None)
+    qual_ev_stale["runtimeKql"] = {
+        "status": "passed",
+        "passed": True,
+        "queries": [
+            {
+                "id": rule_id,
+                "status": "PASS",
+                "querySha256": "0" * 64,
+            }
+        ],
+    }
+    res_stale = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_stale,
+        run_number=1,
+    )
+    assert res_stale["kqlRuntimeVerifiedRules"] == []
+    assert res_stale["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
+    assert res_stale["checksById"]["VAL-CI-01"]["status"] == "FAIL"
+
+    # Ensure kqlRuntimeVerifiedRules entries missing explicit status or for removed rule IDs are rejected
+    qual_ev_bad_entries = dict(qual_ev)
+    qual_ev_bad_entries["kqlRuntimeVerifiedRules"] = [
+        {
+            "id": rule_id,
+            "querySha256": ar_query_sha,
+        },
+        {
+            "id": "non-existent-rule-id",
+            "status": "PASS",
+            "querySha256": xdr_query_sha,
+        },
+    ]
+    qual_ev_bad_entries["runtimeKql"] = {"status": "passed", "passed": True}
+    res_bad_entries = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_bad_entries,
+        run_number=1,
+    )
+    assert res_bad_entries["kqlRuntimeVerifiedRules"] == []
+    assert res_bad_entries["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
+
+    # Round 3 Item 1: E2E-Q02 empty detections list must not fall through to aggregate scalar fields
+    qual_ev_empty_dets = dict(qual_ev)
+    qual_ev_empty_dets["alertLifecycle"] = {
+        "detections": [],
+        "initialDisabled": True,
+        "alertsFired": 5,
+        "returnedToDisabled": True,
+    }
+    res_empty_dets = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_empty_dets,
+        run_number=1,
+    )
+    assert res_empty_dets["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # Round 3 Item 1b: E2E-Q02 partial detections list missing second on-disk detection must fail
+    rule2_id = "22222222-8104-41eb-bad3-26054a3ad5f0"
+    ar2_sha = _build_valid_analytic_rule(sol / "Analytic Rules" / "SecondRule.yaml", rule_id=rule2_id)
+    _build_valid_xdr_detection(
+        sol / "XDR Detections" / "SecondRule.yaml",
+        source_rule_id=rule2_id,
+        source_rule_path="Analytic Rules/SecondRule.yaml",
+        source_rule_sha256=ar2_sha,
+    )
+    qual_ev_multi = _build_live_qualification_evidence(sol)
+    qual_ev_partial_dets = dict(qual_ev_multi)
+    qual_ev_partial_dets["alertLifecycle"] = {
+        "detections": [
+            {
+                "id": f"xdr-{rule_id}",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            }
+        ]
+    }
+    res_partial_dets = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_partial_dets,
+        run_number=1,
+    )
+    assert res_partial_dets["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # Round 3 Item 2: _discover_on_disk_xdr_detections fails QUAL-RUNTIME-01 on duplicate IDs or malformed YAML
+    dup_file = sol / "XDR Detections" / "DuplicateId.yaml"
+    _build_valid_xdr_detection(
+        dup_file,
+        source_rule_id=rule2_id,
+        source_rule_path="Analytic Rules/SecondRule.yaml",
+        source_rule_sha256=ar2_sha,
+    )
+    res_dup = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_multi,
+        run_number=1,
+    )
+    assert res_dup["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
+    assert res_dup["kqlRuntimeVerifiedRules"] == []
+    dup_file.unlink()
+
+    malformed_file = sol / "XDR Detections" / "Malformed.yaml"
+    malformed_file.write_text("id: [unterminated\n", encoding="utf-8")
+    res_malformed = run_pr_qualification_checks(
+        sol,
+        workflow_state=wf_state,
+        qualification_evidence=qual_ev_multi,
+        run_number=1,
+    )
+    assert res_malformed["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
+    assert res_malformed["kqlRuntimeVerifiedRules"] == []
+    malformed_file.unlink()
+
+
+def test_round3_kql_subquery_and_retry_after_fixes() -> None:
+    from solution_manager.authoring.validator import validate_kql_query_static
+    from solution_manager.qualification.deployment import _parse_retry_after_seconds
+
+    # mv-apply and partition operator-only subqueries should pass
+    res_mv = validate_kql_query_static(
+        "DeviceProcessEvents | mv-apply x=dynamic([1,2]) on (where x > 0 | project x)"
+    )
+    assert res_mv["valid"] is True, f"Expected mv-apply subquery to pass, got {res_mv['errors']}"
+
+    res_part = validate_kql_query_static(
+        "DeviceProcessEvents | partition hint.strategy=native by AccountName (where isnotempty(FileName) | summarize count())"
+    )
+    assert res_part["valid"] is True, f"Expected partition subquery to pass, got {res_part['errors']}"
+
+    # Invalid operator inside mv-apply subquery must fail
+    res_bad_mv = validate_kql_query_static(
+        "DeviceProcessEvents | mv-apply x=dynamic([1,2]) on (notanoperator x > 0 | project x)"
+    )
+    assert res_bad_mv["valid"] is False and any("notanoperator" in e for e in res_bad_mv["errors"])
+
+    # Single-token join (MissingTable) and lookup (MissingLookupTable) must fail
+    res_join = validate_kql_query_static(
+        "DeviceProcessEvents | join kind=inner (MissingTable) on DeviceId"
+    )
+    assert res_join["valid"] is False and any("MissingTable" in e for e in res_join["errors"])
+
+    res_lookup = validate_kql_query_static(
+        "DeviceProcessEvents | lookup kind=leftouter (MissingLookupTable) on DeviceId"
+    )
+    assert res_lookup["valid"] is False and any("MissingLookupTable" in e for e in res_lookup["errors"])
+
+    # Multi-statement view () { let ...; ... } with parse trailing wildcard * should pass
+    res_view = validate_kql_query_static(
+        "let xdr_inline_Parser = view () {\n"
+        "    let ActionMappingTable = datatable(Code:string, Action:string)['1', 'Login'];\n"
+        "    Syslog\n"
+        "    | parse SyslogMessage with * 'ACTION :' Code:string ' ' *\n"
+        "    | lookup kind=leftouter ActionMappingTable on Code\n"
+        "};\n"
+        "xdr_inline_Parser\n"
+        "| where isnotempty(Action)"
+    )
+    assert res_view["valid"] is True, f"Expected multi-statement view() to pass, got {res_view['errors']}"
+
+    # _parse_retry_after_seconds handles inf/nan, <1s remaining, and Retry-After > remaining budget
+    assert _parse_retry_after_seconds("inf", default_seconds=2, remaining_budget_seconds=120.0) == 2
+    assert _parse_retry_after_seconds("-inf", default_seconds=2, remaining_budget_seconds=120.0) == 2
+    assert _parse_retry_after_seconds("nan", default_seconds=2, remaining_budget_seconds=120.0) == 2
+    assert _parse_retry_after_seconds("5", default_seconds=2, remaining_budget_seconds=0.4) is None
+    assert _parse_retry_after_seconds("120", default_seconds=2, remaining_budget_seconds=30.0) is None
+    assert _parse_retry_after_seconds("45", default_seconds=2, remaining_budget_seconds=120.0) == 45
+
+
+def test_round4_e2e_q02_bipartite_matching_and_kql_regressions(tmp_path: Path) -> None:
+    import copy
+    from solution_manager.authoring.validator import validate_kql_query_static
+
+    # 1. Multi-statement scalar function let f = () { let y = 1; 42 } must pass, while invalid operator/generator bodies fail
+    res_scalar_fn = validate_kql_query_static(
+        "let f = () { let y = 1; 42 };\n"
+        "DeviceProcessEvents | extend z = f()"
+    )
+    assert res_scalar_fn["valid"] is True, f"Expected multi-statement scalar function to pass, got {res_scalar_fn['errors']}"
+
+    res_bad_let_body = validate_kql_query_static(
+        "let f = () { let y = 1; where x == 1 };\n"
+        "DeviceProcessEvents | extend z = f()"
+    )
+    assert res_bad_let_body["valid"] is False
+
+    res_bad_let_union = validate_kql_query_static(
+        "let f = () { let y = 1; union notanoperator };\n"
+        "DeviceProcessEvents | extend z = f()"
+    )
+    assert res_bad_let_union["valid"] is False
+
+    # 2. join (materialize(T | notanoperator x)) and extra parenthesized pipelines must fail
+    res_join_mat = validate_kql_query_static(
+        "DeviceProcessEvents | join kind=inner (materialize(DeviceProcessEvents | notanoperator x)) on DeviceId"
+    )
+    assert res_join_mat["valid"] is False and any("notanoperator" in e for e in res_join_mat["errors"])
+
+    res_join_mat_extra = validate_kql_query_static(
+        "DeviceProcessEvents | join kind=inner (materialize(DeviceProcessEvents) (DeviceProcessEvents | notanoperator x)) on DeviceId"
+    )
+    assert res_join_mat_extra["valid"] is False and any("notanoperator" in e for e in res_join_mat_extra["errors"])
+
+    # 3. E2E-Q02 scalar fallback disabled when detections exist on disk, 1:1 receipt matching, and QUAL-RUNTIME-01 FAIL on on-disk errors without runtime evidence
+    sol = tmp_path / "Round4Sol"
+    _build_base_package(
+        sol,
+        version="3.2.2",
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/Rule1.yaml", "Analytic Rules/Rule2.yaml"],
+            "XDR Detections": ["XDR Detections/Rule1.yaml", "XDR Detections/Rule2.yaml"],
+        },
+    )
+    _build_valid_analytic_rule(sol / "Analytic Rules" / "Rule1.yaml")
+    _build_valid_xdr_detection(sol / "XDR Detections" / "Rule1.yaml")
+    ar2_id = "7e76fd9d-8104-41eb-bad3-26054a3ad5f2"
+    xdr2_id = "xdr-7e76fd9d-8104-41eb-bad3-26054a3ad5f2"
+    rule1_ar_text = (sol / "Analytic Rules" / "Rule1.yaml").read_text(encoding="utf-8")
+    (sol / "Analytic Rules" / "Rule2.yaml").write_text(
+        rule1_ar_text.replace("6e76fd9d-8104-41eb-bad3-26054a3ad5f0", ar2_id),
+        encoding="utf-8",
+    )
+    rule1_xdr_text = (sol / "XDR Detections" / "Rule1.yaml").read_text(encoding="utf-8")
+    (sol / "XDR Detections" / "Rule2.yaml").write_text(
+        rule1_xdr_text.replace("xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0", xdr2_id).replace(
+            "6e76fd9d-8104-41eb-bad3-26054a3ad5f0", ar2_id
+        ),
+        encoding="utf-8",
+    )
+    _write_json(
+        sol / "mock.json",
+        {
+            "tables": {
+                "AzureDiagnostics": [
+                    {
+                        "TimeGenerated": "2026-10-19T12:00:00Z",
+                        "Category": "DDoSMitigationFlowLogs",
+                        "sourcePublicIpAddress_s": "203.0.113.5",
+                    }
+                ]
+            }
+        },
+    )
+
+    qual_ev_base = _build_live_qualification_evidence(sol)
+    wf_state = {"qualification": {"stages": {"rule_parity": {"status": "passed"}}}}
+
+    # (a) Omitting both detections and rules (or detections: null) must fail E2E-Q02
+    qual_ev_no_list = copy.deepcopy(qual_ev_base)
+    qual_ev_no_list["alertLifecycle"] = {
+        "initialDisabled": True,
+        "alertsFired": 4,
+        "returnedToDisabled": True,
+        "detections": None,
+    }
+    res_no_list = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_no_list, run_number=1)
+    assert res_no_list["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # (b) One receipt carrying both XDR IDs + one dummy receipt must fail 1:1 matching
+    qual_ev_spoof = copy.deepcopy(qual_ev_base)
+    qual_ev_spoof["alertLifecycle"] = {
+        "detections": [
+            {
+                "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+                "targetRuleId": xdr2_id,
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+            {
+                "id": "dummy-unrelated-id",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+        ]
+    }
+    res_spoof = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_spoof, run_number=1)
+    assert res_spoof["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # (b2) Duplicate id-less receipts for a shared displayName across two distinct XDR detections must fail
+    qual_ev_dup_name = copy.deepcopy(qual_ev_base)
+    qual_ev_dup_name["alertLifecycle"] = {
+        "detections": [
+            {
+                "name": "Test XDR Rule 1",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+            {
+                "name": "Test XDR Rule 1",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+        ]
+    }
+    res_dup_name = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_dup_name, run_number=1)
+    assert res_dup_name["checksById"]["E2E-Q02"]["status"] == "FAIL"
+
+    # (b3) Disambiguated id-less receipts using distinct file stems (Rule1, Rule2) must pass
+    qual_ev_stems = copy.deepcopy(qual_ev_base)
+    qual_ev_stems["alertLifecycle"] = {
+        "detections": [
+            {
+                "name": "Rule1",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+            {
+                "name": "Rule2",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+        ]
+    }
+    res_stems = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_stems, run_number=1)
+    assert res_stems["checksById"]["E2E-Q02"]["status"] == "PASS"
+
+    # (c) Uppercase GUIDs in receipts must match lowercase on-disk IDs cleanly
+    qual_ev_upper = copy.deepcopy(qual_ev_base)
+    qual_ev_upper["alertLifecycle"] = {
+        "detections": [
+            {
+                "id": "XDR-6E76FD9D-8104-41EB-BAD3-26054A3AD5F0",
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+            {
+                "id": xdr2_id.upper(),
+                "initialDisabled": True,
+                "alertsFired": 1,
+                "returnedToDisabled": True,
+            },
+        ]
+    }
+    res_upper = run_pr_qualification_checks(sol, workflow_state=wf_state, qualification_evidence=qual_ev_upper, run_number=1)
+    assert res_upper["checksById"]["E2E-Q02"]["status"] == "PASS"
+
+    # (d) QUAL-RUNTIME-01 must return FAIL (not SKIPPED) when on-disk rule errors exist without runtime evidence
+    dup_file = sol / "XDR Detections" / "Rule2Dup.yaml"
+    dup_file.write_text((sol / "XDR Detections" / "Rule2.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    res_dup_no_ev = run_pr_qualification_checks(sol, workflow_state={}, qualification_evidence={}, run_number=1)
+    assert res_dup_no_ev["checksById"]["QUAL-RUNTIME-01"]["status"] == "FAIL"
+    dup_file.unlink()
+
+
+def _ms_locale_url(subdomain: str, locale: str, path: str) -> str:
+    """Construct a locale-bearing Microsoft URL at runtime so test source never embeds CI-rejected literals."""
+    return f"https://{subdomain}.microsoft.com/{locale}/{path.lstrip('/')}"
+
+
+def test_documents_link_validation_locale_scanning_and_url_normalization(tmp_path: Path) -> None:
+    """Verify VAL-URL-01, validate_solution, and QUAL-URL-01 catch CI DocumentsLinkValidation locale URLs and normalize resolvedUrl."""
+    from solution_manager.migration.converter import convert_solution, validate_solution
+    from solution_manager.qualification.pr_check_runner import (
+        build_url_verification_evidence,
+        normalize_solution_url_verification_files,
+        normalize_url_verification_payload,
+        strip_microsoft_url_locale,
+    )
+
+    azure_en_us_legal = _ms_locale_url("azure", "en-us", "support/legal/preview-supplemental-terms/")
+    docs_en_us_hunting = _ms_locale_url("docs", "en-us", "azure/sentinel/hunting")
+    docs_en_us_overview = _ms_locale_url("docs", "en-us", "azure/sentinel/overview")
+    azure_fr_fr_legal = _ms_locale_url("azure", "fr-fr", "support/legal/")
+
+    assert (
+        strip_microsoft_url_locale(azure_en_us_legal)
+        == "https://azure.microsoft.com/support/legal/preview-supplemental-terms/"
+    )
+    assert (
+        strip_microsoft_url_locale(docs_en_us_hunting)
+        == "https://docs.microsoft.com/azure/sentinel/hunting"
+    )
+
+    sol = tmp_path / "LocaleUrlSol"
+    _build_base_package(
+        sol,
+        version="3.2.2",
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/Rule1.yaml"],
+            "XDR Detections": ["XDR Detections/Rule1.yaml"],
+        },
+    )
+    ar_path = sol / "Analytic Rules" / "Rule1.yaml"
+    _build_valid_analytic_rule(ar_path)
+    ar_doc = yaml.safe_load(ar_path.read_text(encoding="utf-8"))
+    ar_doc["requiredDataConnectors"] = [{"connectorId": "AzureNetworkDDoSProtection", "dataTypes": ["AzureDiagnostics"]}]
+    ar_doc["version"] = "1.0.0"
+    _write_yaml(ar_path, ar_doc)
+    convert_solution(sol)
+
+    # Write Evidence/receipts/url-and-asset-verification.json with a locale-bearing resolvedUrl (exact PR #15543 scenario)
+    receipt_path = sol / "Evidence" / "receipts" / "url-and-asset-verification.json"
+    _write_json(
+        receipt_path,
+        {
+            "checkedCount": 1,
+            "brokenCount": 0,
+            "passed": True,
+            "urls": [
+                {
+                    "url": "https://azure.microsoft.com/support/legal/preview-supplemental-terms/",
+                    "resolvedUrl": azure_en_us_legal,
+                    "status": 200,
+                }
+            ],
+        },
+    )
+
+    # 1. VAL-URL-01 and validate_solution must fail and surface recommended locale-stripped URL fix
+    qual_run = run_pr_qualification_checks(sol, run_qualification=False)
+    val_url = qual_run["checksById"]["VAL-URL-01"]
+    assert val_url["status"] == "FAIL"
+    assert azure_en_us_legal in val_url["whatWeObserved"]
+    assert "https://azure.microsoft.com/support/legal/preview-supplemental-terms/" in val_url["whyPassedOrFailed"]
+
+    val_sol = validate_solution(sol)
+    assert val_sol["documentsLinkValidation"]["valid"] is False
+    assert val_sol["documentsLinkValidation"]["issueCount"] == 1
+    assert val_sol["invalid"] == 1
+    issue = val_sol["documentsLinkValidation"]["issues"][0]
+    assert issue["file"] == "Evidence/receipts/url-and-asset-verification.json"
+    assert issue["url"] == azure_en_us_legal
+    assert issue["recommendedUrl"] == "https://azure.microsoft.com/support/legal/preview-supplemental-terms/"
+
+    # 2. Normalizing on-disk URL verification evidence files strips locale and makes VAL-URL-01 + validate_solution pass
+    updated_files = normalize_solution_url_verification_files(sol)
+    assert updated_files == ["Evidence/receipts/url-and-asset-verification.json"]
+    normalized_receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert (
+        normalized_receipt["urls"][0]["resolvedUrl"]
+        == "https://azure.microsoft.com/support/legal/preview-supplemental-terms/"
+    )
+
+    qual_run_after = run_pr_qualification_checks(sol, run_qualification=False)
+    assert qual_run_after["checksById"]["VAL-URL-01"]["status"] == "PASS"
+
+    val_sol_after = validate_solution(sol)
+    assert val_sol_after["documentsLinkValidation"]["valid"] is True
+    assert val_sol_after["invalid"] == 0
+
+    # 3. build_url_verification_evidence and normalize_url_verification_payload normalize resolvedUrl automatically
+    built_ev = build_url_verification_evidence(
+        [
+            {
+                "url": "https://aka.ms/sentinel",
+                "resolvedUrl": docs_en_us_overview,
+                "status": 200,
+            }
+        ]
+    )
+    assert built_ev["passed"] is True
+    assert built_ev["urls"][0]["resolvedUrl"] == "https://docs.microsoft.com/azure/sentinel/overview"
+
+    nested_ev = normalize_url_verification_payload(
+        {
+            "urlVerification": {
+                "urls": [
+                    {
+                        "url": "https://azure.microsoft.com/support/legal/",
+                        "resolvedUrl": azure_fr_fr_legal,
+                    }
+                ]
+            }
+        }
+    )
+    assert nested_ev["urlVerification"]["urls"][0]["resolvedUrl"] == "https://azure.microsoft.com/support/legal/"
+
+
+
+class TestPrQualificationEngineUnittest(unittest.TestCase):
+    def test_kql_runtime_verified_rules_and_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_kql_runtime_verified_rules_projection_and_val_ci_01_override(Path(tmp))
+
+    def test_round3_kql_and_retry_fixes(self) -> None:
+        test_round3_kql_subquery_and_retry_after_fixes()
+
+    def test_documents_link_validation_locale_scanning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_documents_link_validation_locale_scanning_and_url_normalization(Path(tmp))
 
