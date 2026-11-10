@@ -1,0 +1,224 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPDNSLogsCCPDefinition
+  dataTypes:
+  - GCPDNS
+- connectorId: GCPDNSDataConnector
+  dataTypes:
+  - GCP_DNS_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPDNS
+    - GCP_DNS_CL
+  requiredDataConnectors:
+  - connectorId: GCPDNSLogsCCPDefinition
+    dataTypes:
+    - GCPDNS
+  - connectorId: GCPDNSDataConnector
+    dataTypes:
+    - GCP_DNS_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7e81a935-5e91-45a5-92fd-3b58c180513b
+    path: Analytic Rules/GCPDNSMultipleErrorsFromIp.yaml
+    version: 1.0.0
+    querySha256: c42e0aa73c7062ea1646c2d1c2de4557b3b1222b3154652bc3832220c95992dc
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1095
+    reviewScope:
+      sourceDocumentSha256: f25de660a26fe3161fe194ded1807c0d2666d80e8ec9e052c7bceb1937eadbe9
+      targetQuerySha256: 581e95df30932eab1eb1345b297e0407c2dc46ba3bcd460bd096f1f88f3c5fec
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: f25de660a26fe3161fe194ded1807c0d2666d80e8ec9e052c7bceb1937eadbe9
+      targetQuerySha256: 5352a3684d344a73afae7948ad7418dbaaf35c9581cedb1e19c2ac6cbbcb7077
+properties:
+  id: xdr-7e81a935-5e91-45a5-92fd-3b58c180513b
+  displayName: Google DNS - Multiple errors for source
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let GCPCloudDNS_view  = view () {
+      let DNSQuery_GcpDns_empty = datatable(
+             Query_e:string,
+             QueryTypeName_e:string,
+             ResponseName_e:string,
+             EventResultDetails_e:string,
+             NetworkProtocol_e:string,
+             SrcIpAddr_e:string,
+             EventOriginalUid_e:string,
+             EventSeverity_e:string,
+             EventCount_e:int,
+             EventProduct_e:string,
+             EventVendor_e:string,
+             EventSchemaVersion_e:string,
+             Dvc_e:string,
+             EventType_e:string,
+             EventResult_e:string,
+             EventSubType_e:string,
+             EventEndTime_e:datetime,
+             ResponseCodeName_e:string,
+             Domain_e:string,
+             IpAddr_e:string,
+             EventStartTime_e:datetime,
+             payload_serverLatency_d:real
+      )[];
+      let DNSQuery_GcpDns = union isfuzzy=true GCP_DNS_CL, DNSQuery_GcpDns_empty
+         | extend
+             Query_e=column_ifexists('payload_queryName_s', ''),
+             QueryTypeName_e=column_ifexists('payload_queryType_s', ''),
+             ResponseName_e=column_ifexists('payload_rdata_s', ''),
+             EventResultDetails_e=column_ifexists('payload_responseCode_s', ''),
+             NetworkProtocol_e=column_ifexists('payload_protocol_s', ''),
+             SrcIpAddr_e=column_ifexists('payload_sourceIP_s', ''),
+             EventOriginalUid_e=column_ifexists('insert_id_s', ''),
+             EventSeverity_e=column_ifexists('severity_s', ''),
+             EventCount_e=(1),
+             EventProduct_e="Cloud DNS",
+             EventVendor_e="GCP",
+             EventSchemaVersion_e="0.1.0",
+             Dvc_e="GCPDNS",
+             EventType_e=iif (column_ifexists('resource_type_s', '') == "dns_query", "lookup", column_ifexists('resource_type_s', '')),
+             EventResult_e=iff(EventResultDetails_e =~ 'NOERROR', 'Success', 'Failure'),
+             EventSubType_e='response',
+             EventEndTime_e=todatetime(column_ifexists('timestamp_t', ''))
+          // ---Aliases
+         | extend
+             ResponseCodeName_e=EventResultDetails_e,
+             Domain_e=Query_e,
+             IpAddr_e=SrcIpAddr_e,
+             EventStartTime_e=EventEndTime_e
+         | project-rename
+             Query=Query_e,
+             QueryTypeName=QueryTypeName_e,
+             ResponseName=ResponseName_e,
+             EventResultDetails=EventResultDetails_e,
+             NetworkProtocol=NetworkProtocol_e,
+             SrcIpAddr=SrcIpAddr_e,
+             EventOriginalUid=EventOriginalUid_e,
+             EventSeverity=EventSeverity_e,
+             EventCount=EventCount_e,
+             EventProduct=EventProduct_e,
+             EventVendor=EventVendor_e,
+             EventSchemaVersion=EventSchemaVersion_e,
+             Dvc=Dvc_e,
+             EventType=EventType_e,
+             EventResult=EventResult_e,
+             EventSubType=EventSubType_e,
+             EventEndTime=EventEndTime_e,
+             ResponseCodeName=ResponseCodeName_e,
+             Domain=Domain_e,
+             IpAddr=IpAddr_e,
+             EventStartTime=EventStartTime_e;
+      let DNSQuery_GcpDnsV2 = union isfuzzy=true GCPDNS, DNSQuery_GcpDns_empty
+         | extend
+             Query_e=column_ifexists('QueryName', ''),
+             QueryTypeName_e=column_ifexists('QueryType', ''),
+             ResponseName_e=column_ifexists('Rdata', ''),
+             EventResultDetails_e=column_ifexists('ResponseCode', ''),
+             NetworkProtocol_e=column_ifexists('Protocol', ''),
+             SrcIpAddr_e=column_ifexists('SourceIP', ''),
+             EventOriginalUid_e=column_ifexists('InsertId', ''),
+             EventSeverity_e=column_ifexists('Severity', ''),
+             EventCount_e=(1),
+             EventProduct_e="Cloud DNS",
+             EventVendor_e="GCP",
+             EventSchemaVersion_e="0.1.0",
+             Dvc_e="GCPDNS",
+             EventType_e=iif (column_ifexists('ResourceType', '') == "dns_query", "lookup", column_ifexists('ResourceType', '')),
+             EventResult_e=iff(EventResultDetails_e =~ 'NOERROR', 'Success', 'Failure'),
+             EventSubType_e='response',
+             EventEndTime_e=todatetime(column_ifexists('Timestamp', ''))
+          // ---Aliases
+         | extend
+             ResponseCodeName_e=EventResultDetails_e,
+             Domain_e=Query_e,
+             IpAddr_e=SrcIpAddr_e,
+             EventStartTime_e=EventEndTime_e,
+             payload_serverLatency_d=toreal(column_ifexists('ServerLatency', ''))
+         | project-rename
+             Query=Query_e,
+             QueryTypeName=QueryTypeName_e,
+             ResponseName=ResponseName_e,
+             EventResultDetails=EventResultDetails_e,
+             NetworkProtocol=NetworkProtocol_e,
+             SrcIpAddr=SrcIpAddr_e,
+             EventOriginalUid=EventOriginalUid_e,
+             EventSeverity=EventSeverity_e,
+             EventCount=EventCount_e,
+             EventProduct=EventProduct_e,
+             EventVendor=EventVendor_e,
+             EventSchemaVersion=EventSchemaVersion_e,
+             Dvc=Dvc_e,
+             EventType=EventType_e,
+             EventResult=EventResult_e,
+             EventSubType=EventSubType_e,
+             EventEndTime=EventEndTime_e,
+             ResponseCodeName=ResponseCodeName_e,
+             Domain=Domain_e,
+             IpAddr=IpAddr_e,
+             EventStartTime=EventStartTime_e;
+             union isfuzzy=true DNSQuery_GcpDns, DNSQuery_GcpDnsV2
+             | project-reorder Query, QueryTypeName, ResponseName, EventResultDetails, NetworkProtocol, SrcIpAddr, EventOriginalUid, EventSeverity, EventCount, EventProduct, EventVendor, EventSchemaVersion, Dvc, EventType, EventResult, EventSubType, EventEndTime, ResponseCodeName, Domain, IpAddr, EventStartTime;
+      };
+      let threshold = 10;
+      let err = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
+      GCPCloudDNS_view
+      | where EventResultDetails in~ (err)
+      | summarize count() by SrcIpAddr, bin(TimeGenerated, 10m)
+      | where count_ > threshold
+      | extend IPCustomEntity = SrcIpAddr
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Google DNS - Multiple errors for source
+      description: '''Detects multiple errors for the same source IP address.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1095

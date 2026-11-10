@@ -21,10 +21,11 @@ from .common import (
     load_yaml_file,
     normalize_changed_path,
 )
+from .kusto_analyzer import analyze_kql
 from .kql import (
     _identity_key,
-    _query_uses_source_table,
     _token_overlap,
+    query_uses_source_table,
     resolve_source_specific_fixture,
 )
 
@@ -81,7 +82,7 @@ def build_parser_record(repo_root: Path, relative_path: str) -> ParserRecord:
                     event_product,
                     fixture_path,
                 ) = resolve_source_specific_fixture(
-                    parser_query,
+                    analyze_kql(parser_query),
                     schema,
                     source_raw_table,
                 )
@@ -132,8 +133,9 @@ def resolve_query_time_pair(
         and isinstance(ingest_record.source_raw_table, str)
         and _identity_key(record.product)
         == _identity_key(ingest_record.product)
-        and _query_uses_source_table(
-            record.parser_query, ingest_record.source_raw_table
+        and query_uses_source_table(
+            analyze_kql(record.parser_query),
+            ingest_record.source_raw_table,
         )
     ]
 
