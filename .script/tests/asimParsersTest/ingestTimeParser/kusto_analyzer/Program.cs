@@ -58,6 +58,16 @@ internal sealed record SourceReferenceFact(
     [property: JsonPropertyName("context")] string Context,
     [property: JsonPropertyName("location")] LocationFact Location);
 
+internal sealed record SourcePipelineFact(
+    [property: JsonPropertyName("isValid")] bool IsValid,
+    [property: JsonPropertyName("failure")] string? Failure,
+    [property: JsonPropertyName("statementCount")] int StatementCount,
+    [property: JsonPropertyName("statementType")] string? StatementType,
+    [property: JsonPropertyName("rootType")] string? RootType,
+    [property: JsonPropertyName("rootText")] string? RootText,
+    [property: JsonPropertyName("sourceLocation")]
+    LocationFact? SourceLocation);
+
 internal sealed record PipelineFact(
     [property: JsonPropertyName("rootType")] string? RootType,
     [property: JsonPropertyName("rootKind")] string? RootKind,
@@ -71,6 +81,8 @@ internal sealed record AnalyzerResponse(
     IReadOnlyList<DiagnosticFact> Diagnostics,
     [property: JsonPropertyName("statements")]
     IReadOnlyList<StatementFact> Statements,
+    [property: JsonPropertyName("sourcePipeline")]
+    SourcePipelineFact SourcePipeline,
     [property: JsonPropertyName("pipeline")] PipelineFact? Pipeline,
     [property: JsonPropertyName("operators")]
     IReadOnlyList<SyntaxFact> Operators,
@@ -186,6 +198,11 @@ internal static class Program
         });
 
         var sourceReferences = GetSourceReferences(query, code.Syntax);
+        var codeDiagnostics = code.GetDiagnostics().ToArray();
+        var sourcePipeline = AnalyzeSourcePipeline(
+            query,
+            code,
+            codeDiagnostics);
         var statements = new List<StatementFact>();
         PipelineFact? pipeline = null;
         if (code.Syntax is QueryBlock queryBlock)
@@ -229,7 +246,7 @@ internal static class Program
             }
         }
 
-        var diagnostics = code.GetSyntaxDiagnostics()
+        var diagnostics = codeDiagnostics
             .Select(diagnostic =>
             {
                 var (line, column) = GetLineAndColumn(
@@ -247,15 +264,86 @@ internal static class Program
             .ToArray();
 
         return new AnalyzerResponse(
-            2,
+            3,
             diagnostics,
             statements,
+            sourcePipeline,
             pipeline,
             operators,
             functions,
             constructs,
             assignments,
             sourceReferences);
+    }
+
+    private static SourcePipelineFact AnalyzeSourcePipeline(
+        string query,
+        KustoCode code,
+        IReadOnlyList<Diagnostic> diagnostics)
+    {
+        var statements = code.Syntax
+            .GetDescendants<Statement>()
+            .ToArray();
+        if (
+            diagnostics.Any(
+                diagnostic =>
+                    diagnostic.Severity == DiagnosticSeverity.Error))
+        {
+            return new SourcePipelineFact(
+                false,
+                "diagnostics",
+                statements.Length,
+                null,
+                null,
+                null,
+                null);
+        }
+        if (statements.Length != 1)
+        {
+            return new SourcePipelineFact(
+                false,
+                "statementCount",
+                statements.Length,
+                null,
+                null,
+                null,
+                null);
+        }
+        if (statements[0] is not ExpressionStatement statement)
+        {
+            return new SourcePipelineFact(
+                false,
+                "statementType",
+                statements.Length,
+                statements[0].GetType().Name,
+                null,
+                null,
+                null);
+        }
+
+        var root = GetPipelineRoot(statement.Expression);
+        if (
+            root is not NameReference sourceReference
+            || sourceReference.Name.SimpleName != "source")
+        {
+            return new SourcePipelineFact(
+                false,
+                "root",
+                statements.Length,
+                statement.GetType().Name,
+                root.GetType().Name,
+                GetText(query, root),
+                null);
+        }
+
+        return new SourcePipelineFact(
+            true,
+            null,
+            statements.Length,
+            statement.GetType().Name,
+            sourceReference.GetType().Name,
+            sourceReference.Name.SimpleName,
+            CreateLocation(query, sourceReference));
     }
 
     private static AssignmentFact CreateAssignmentFact(

@@ -79,8 +79,9 @@ Use the exact error path. Common causes:
 | `SOURCE001` | Workspace parser does not use `InputStream: none` | Set the exact Workspace contract value |
 | `FILTER*` | Filter query is not a valid ordered subset of parser row-selection logic | Preserve prerequisite calculations and predicate order |
 | `FIXTURE*` | Fixture missing, malformed, or incompatible | Add/fix exact CSV and `Type` values |
-| `KQL033` | An unsupported IP utility was detected | Use only functions allowed by current DCR validation |
-| `KQL039`–`KQL043` | Query is not a valid single source-rooted contract | Remove external statements/subqueries and preserve one source pipeline |
+| Contract KQL findings (`KQL002`, `KQL003`, `KQL004`, `KQL006`, `KQL007`, `KQL027`, `KQL028`, `KQL029`, `KQL031`, `KQL035`, `KQL037`, `KQL038`) | Query violates an ASIM invariant such as one source, independent rows, no aggregation/fan-out/correlation, or an explicit output schema | Remove the named contract violation; DCR function/operator capability is validated live |
+| `KQL039` | Query is not exactly one lowercase `source`-rooted expression statement | Remove leading statements and non-`source` roots |
+| `KQL041` | `ParserFilterQuery` contains an operator outside its row-selection contract | Keep only supported filter prerequisite and predicate operators |
 | `KQL044` | Compacted transform exceeds Azure's limit | Remove comments/no-ops, simplify expressions, or reduce mappings without changing semantics |
 
 A clean static result does not prove semantic compilation. Azure DCR creation
