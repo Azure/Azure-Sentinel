@@ -1,0 +1,257 @@
+Parser:
+  DisplayName: 'Ingestion-time Audit Event ASIM parser for AWS CloudTrail EC2 InterfacesAndAddresses activity'
+  Version: '0.1.0'
+  LastUpdated: '2026-11-06'
+Product:
+  Name: 'AWS CloudTrail'
+Normalization:
+  Schema: 'AuditEvent'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes AWS CloudTrail EC2 InterfacesAndAddresses activity from AWSCloudTrail to ASimAuditEventLogs during ingestion.
+ParserName: 'ASimAuditEventAWSCloudTrailEC2InterfacesAndAddresses'
+DCRType: 'Workspace'
+InputStream: 'Microsoft-AWSCloudTrail'
+SourceRawTable: 'AWSCloudTrail'
+TargetASIMTable: 'ASimAuditEventLogs'
+ParserFilterQuery: |
+  source
+  | where EventSource == "ec2.amazonaws.com"
+  | where EventName in (
+      "AcceptAddressTransfer",
+      "AllocateAddress",
+      "AssignIpv6Addresses",
+      "AssignPrivateIpAddresses",
+      "AssociateAddress",
+      "AssociateTrunkInterface",
+      "AttachNetworkInterface",
+      "CreateNetworkInterface",
+      "CreateNetworkInterfacePermission",
+      "DeleteNetworkInterface",
+      "DeleteNetworkInterfacePermission",
+      "DescribeAddressTransfers",
+      "DescribeAddresses",
+      "DescribeAddressesAttribute",
+      "DescribeMovingAddresses",
+      "DescribeNetworkInterfaceAttribute",
+      "DescribeNetworkInterfacePermissions",
+      "DescribeNetworkInterfaces",
+      "DescribeTrunkInterfaceAssociations",
+      "DetachNetworkInterface",
+      "DisableAddressTransfer",
+      "DisassociateAddress",
+      "DisassociateTrunkInterface",
+      "EnableAddressTransfer",
+      "ModifyAddressAttribute",
+      "ModifyNetworkInterfaceAttribute",
+      "MoveAddressToVpc",
+      "ReleaseAddress",
+      "ResetAddressAttribute",
+      "ResetNetworkInterfaceAttribute",
+      "RestoreAddressToClassic",
+      "UnassignIpv6Addresses",
+      "UnassignPrivateIpAddresses",
+      "ValidateSecurityGroupQuotasForInterface"
+  )
+ParserQuery: |
+  source
+  | where EventSource == "ec2.amazonaws.com"
+  | where EventName in (
+      "AcceptAddressTransfer",
+      "AllocateAddress",
+      "AssignIpv6Addresses",
+      "AssignPrivateIpAddresses",
+      "AssociateAddress",
+      "AssociateTrunkInterface",
+      "AttachNetworkInterface",
+      "CreateNetworkInterface",
+      "CreateNetworkInterfacePermission",
+      "DeleteNetworkInterface",
+      "DeleteNetworkInterfacePermission",
+      "DescribeAddressTransfers",
+      "DescribeAddresses",
+      "DescribeAddressesAttribute",
+      "DescribeMovingAddresses",
+      "DescribeNetworkInterfaceAttribute",
+      "DescribeNetworkInterfacePermissions",
+      "DescribeNetworkInterfaces",
+      "DescribeTrunkInterfaceAssociations",
+      "DetachNetworkInterface",
+      "DisableAddressTransfer",
+      "DisassociateAddress",
+      "DisassociateTrunkInterface",
+      "EnableAddressTransfer",
+      "ModifyAddressAttribute",
+      "ModifyNetworkInterfaceAttribute",
+      "MoveAddressToVpc",
+      "ReleaseAddress",
+      "ResetAddressAttribute",
+      "ResetNetworkInterfaceAttribute",
+      "RestoreAddressToClassic",
+      "UnassignIpv6Addresses",
+      "UnassignPrivateIpAddresses",
+      "ValidateSecurityGroupQuotasForInterface"
+  )
+  | extend EventType = case(
+      EventName in ("AllocateAddress", "CreateNetworkInterface", "CreateNetworkInterfacePermission"), "Create",
+      EventName in ("DeleteNetworkInterface", "DeleteNetworkInterfacePermission", "DisassociateAddress", "DisassociateTrunkInterface", "ReleaseAddress", "UnassignIpv6Addresses", "UnassignPrivateIpAddresses"), "Delete",
+      EventName in ("DisableAddressTransfer"), "Disable",
+      EventName in ("EnableAddressTransfer"), "Enable",
+      EventName in ("AcceptAddressTransfer", "MoveAddressToVpc", "ResetAddressAttribute", "ResetNetworkInterfaceAttribute", "ValidateSecurityGroupQuotasForInterface"), "Execute",
+      EventName in ("DescribeAddressTransfers", "DescribeAddresses", "DescribeAddressesAttribute", "DescribeMovingAddresses", "DescribeNetworkInterfaceAttribute", "DescribeNetworkInterfacePermissions", "DescribeNetworkInterfaces", "DescribeTrunkInterfaceAssociations"), "Read",
+      EventName in ("AssignIpv6Addresses", "AssignPrivateIpAddresses", "AssociateAddress", "AssociateTrunkInterface", "AttachNetworkInterface", "DetachNetworkInterface", "ModifyAddressAttribute", "ModifyNetworkInterfaceAttribute", "RestoreAddressToClassic"), "Set",
+      "")
+  | extend Object = case(
+      EventName in ("AttachNetworkInterface"), "EC2 Instance",
+      EventName in ("DescribeAddresses", "DescribeAddressesAttribute", "MoveAddressToVpc", "RestoreAddressToClassic"), "Elastic Ip Address",
+      EventName in ("DescribeMovingAddresses", "ModifyAddressAttribute", "ReleaseAddress", "ResetAddressAttribute"), "Elastic IP address",
+      EventName in ("AcceptAddressTransfer", "AllocateAddress", "DisableAddressTransfer", "DisassociateAddress", "EnableAddressTransfer"), "Elastic IP Address",
+      EventName in ("DescribeAddressTransfers"), "Elastic Ip Address Transfer",
+      EventName in ("AssociateAddress"), "Elastic IP Association",
+      EventName in ("AssignIpv6Addresses", "AssignPrivateIpAddresses", "CreateNetworkInterface", "DeleteNetworkInterface", "DescribeNetworkInterfaceAttribute", "DescribeNetworkInterfacePermissions", "DescribeNetworkInterfaces", "DetachNetworkInterface", "ModifyNetworkInterfaceAttribute", "ResetNetworkInterfaceAttribute", "UnassignIpv6Addresses", "UnassignPrivateIpAddresses"), "Network Interface",
+      EventName in ("CreateNetworkInterfacePermission", "DeleteNetworkInterfacePermission"), "Network Interface Permission",
+      EventName in ("ValidateSecurityGroupQuotasForInterface"), "Network Interface Security Group Quotas",
+      EventName in ("DescribeTrunkInterfaceAssociations", "DisassociateTrunkInterface"), "Trunk Interface Association",
+      EventName in ("AssociateTrunkInterface"), "Trunk Network Interface",
+      "")
+  | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AllocateAddress", ResponseElements.allocationId,
+      EventName == "AssignIpv6Addresses", ResponseElements.assignedIpv6Addresses,
+      EventName == "AssignPrivateIpAddresses", ResponseElements.assignedIpv4PrefixSet,
+      EventName == "AssociateAddress", ResponseElements.associationId,
+      EventName == "AssociateTrunkInterface", ResponseElements.interfaceAssociation,
+      EventName == "AttachNetworkInterface", ResponseElements.attachmentId,
+      EventName == "CreateNetworkInterface", ResponseElements.networkInterface,
+      EventName == "CreateNetworkInterfacePermission", ResponseElements.interfacePermission,
+      EventName == "EnableAddressTransfer", ResponseElements.addressTransfer,
+      EventName in ("ModifyAddressAttribute", "ResetAddressAttribute"), ResponseElements.address,
+      EventName == "MoveAddressToVpc", ResponseElements.status,
+      parse_json('null')
+    ), parse_json('null'))
+  | extend ObjectId = case(
+      EventName == "AcceptAddressTransfer", ResponseElements.addressTransfer,
+      EventName == "AllocateAddress", ResponseElements.allocationId,
+      EventName in ("AssignIpv6Addresses", "AssignPrivateIpAddresses", "AssociateAddress",
+        "DeleteNetworkInterface", "DescribeNetworkInterfaceAttribute", "DescribeNetworkInterfaces",
+        "ModifyNetworkInterfaceAttribute", "ResetNetworkInterfaceAttribute", "UnassignIpv6Addresses",
+        "UnassignPrivateIpAddresses"), RequestParameters.NetworkInterfaceId,
+      EventName == "AssociateTrunkInterface", RequestParameters.TrunkInterfaceId,
+      EventName == "AttachNetworkInterface", RequestParameters.InstanceId,
+      EventName == "CreateNetworkInterface", ResponseElements.networkInterface.networkInterfaceId,
+      EventName == "CreateNetworkInterfacePermission",
+        ResponseElements.interfacePermission.interfacePermissionId,
+      EventName in ("DeleteNetworkInterfacePermission", "DescribeNetworkInterfacePermissions"),
+        RequestParameters.NetworkInterfacePermissionId,
+      EventName == "DescribeAddressTransfers", ResponseElements.addressTransferSet,
+      EventName == "DescribeAddresses", ResponseElements.addressesSet,
+      EventName == "DescribeAddressesAttribute", ResponseElements.addressSet,
+      EventName in ("DescribeTrunkInterfaceAssociations", "DisassociateAddress", "DisassociateTrunkInterface"),
+        RequestParameters.AssociationId,
+      EventName == "DetachNetworkInterface", RequestParameters.AttachmentId,
+      EventName in ("DisableAddressTransfer", "EnableAddressTransfer", "ModifyAddressAttribute",
+        "ReleaseAddress", "ResetAddressAttribute"), RequestParameters.AllocationId,
+      EventName in ("MoveAddressToVpc", "RestoreAddressToClassic"), RequestParameters.PublicIp,
+      parse_json('null')
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service",
+      EventUid = tostring(AwsEventId)
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = parse_json('[]'),
+      ActorUserEntityKey = "",
+      AdditionalEntities = parse_json('[]'),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", RequestParameters,
+      "ResponseElements", ResponseElements
+    )
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  // NOTE(DCR-LOSSY: destination-schema projection) - approved alias removal, UID mapping and dynamic serialization
+  | extend NewValue = tostring(NewValue), ObjectId = tostring(ObjectId)
+  | project-rename EventOriginalUid = EventUid
+  | project
+      TimeGenerated,
+      Type,
+      EventCount,
+      EventStartTime,
+      EventEndTime,
+      EventSeverity,
+      EventSchemaVersion,
+      EventVendor,
+      EventProduct,
+      EventResult,
+      EventMessage,
+      TargetAppName,
+      EventOriginalSubType,
+      EventOriginalType,
+      EventOriginalUid,
+      EventOriginalResultDetails,
+      EventProductVersion,
+      ActorUserId,
+      ActorUsername,
+      ActorOriginalUserType,
+      HttpUserAgent,
+      ActorUserIdType,
+      ActorUsernameType,
+      SrcIpAddr,
+      AdditionalFields,
+      EventType,
+      NewValue,
+      ObjectId,
+      ObjectType,
+      Object,
+      TargetAppType,
+      Operation,
+      ActingApplicationEntityKey,
+      ActorUserAdditionalIds,
+      ActorUserEntityKey,
+      AdditionalEntities,
+      DvcEntityKey,
+      SrcSystemEntityKey,
+      TargetApplicationEntityKey,
+      TargetSystemEntityKey
+Change:
+  Date: '2026-11-06'
+  Description: 'Initial ingestion-time conversion.'
