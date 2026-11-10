@@ -1,0 +1,87 @@
+schemaVersion: 1.0.0
+version: 3.5.7
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: RubrikSecurityCloudAzureFunctions
+  dataTypes:
+  - RubrikEventsData
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Rubrik_Events_Data_CL
+  requiredDataConnectors:
+  - connectorId: RubrikSecurityCloudAzureFunctions
+    dataTypes:
+    - RubrikEventsData
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0083cbc4-776e-42ca-8694-6950fd605df9
+    path: Analytic Rules/RubrikThreatMonitoring.yaml
+    version: 1.0.1
+    querySha256: 4f75b3aaf5f83202ff9bd7d6ba19eca2c5b67f94ab369795ae2d5c08dbf4e3b0
+    schedule:
+      queryFrequency: 10m
+      queryPeriod: 10m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10m, lookback=10m; target frequency=PT10M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1546
+    reviewScope:
+      sourceDocumentSha256: 95e1408338474421678f267c023862e2e755040ac1bc32a9858ba2595c0d963c
+      targetQuerySha256: 73b540bd3ae37fc0e5d6560aad63583698dfc76f2279c3a0627104161514fc51
+properties:
+  id: xdr-0083cbc4-776e-42ca-8694-6950fd605df9
+  displayName: Rubrik Threat Monitoring
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Rubrik_Events_Data_CL
+      | where custom_details_eventName_s endswith "AnalysisMatchesFound" or custom_details_eventName_s contains "ThreatMonitoringHashCatalogAnalysisFailed" or custom_details_eventName_s contains "ThreatMonitoringHashMatchesFound" or custom_details_eventName_s contains "ThreatMonitoringYaraMatchesFound"
+      | extend hashMatchCount = toint(extract("Found ([0-9]+) hash matches",1, summary_s)),    yaraMatchCount = toint(extract("Found ([0-9]+) YARA rule matches", 1, summary_s)),    fileHashMatchCount = toint(extract("Found file hash matches for ([0-9]+) files", 1, summary_s))
+      | extend count_ = coalesce(hashMatchCount,yaraMatchCount, fileHashMatchCount), eventname = substring(custom_details_eventName_s,16, strlen(custom_details_eventName_s) - 28)
+      | where count_ > 0
+      | summarize arg_max(TimeGenerated,*) by eventname, custom_details_objectId_g, count_
+      | extend custom_details_objectName_s = custom_details_objectName_s, custom_details_eventName_s = custom_details_eventName_s, summary_s = summary_s, custom_details_clusterId_g = custom_details_clusterId_g, custom_details_objectType_s = custom_details_objectType_s, custom_details_url_s = custom_details_url_s
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: Rubrik Threat Monitoring
+      description: '''Rubrik Threat Monitoring matches Event Name and if match found then generate the incident for each object.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: custom_details_objectName_s
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1546
+      customDetails:
+        EventName: custom_details_eventName_s
+        Summary: summary_s
+        ClusterIdentifier: custom_details_clusterId_g
+        ObjectId: custom_details_objectId_g
+        ObjectName: custom_details_objectName_s
+        ObjectType: custom_details_objectType_s
+        Url: custom_details_url_s
