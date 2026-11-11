@@ -109,15 +109,18 @@ warning and blocks QTP/parity without failing the required parser validation
 stages. Once the raw DCR exists, upload or visibility failures fail the target;
 QTP execution and parity also fail the target when they run and fail.
 Parser ingestion is reported as passed only when both upload and target
-visibility pass.
+visibility pass. Workspace parsers without a replayable `InputStream` report
+raw replay as not applicable rather than warning.
 
 Before creating the optional raw-replay DCR, the harness reads destination
 column types from the workspace Tables management API, including both
 `columns` and `standardColumns`. Unlike Log Analytics query-result metadata,
 this preserves GUID types required for ingestion. It casts fixture columns
 whose input types differ from the destination, including string IDs to `guid`
-with `toguid`. DCR input declarations and the immutable fixture remain
-unchanged; matching columns keep the pass-through transform.
+with `toguid`. Raw replay uses the immutable snapshot schema and rows so
+fixture fields not declared in the repository schema are preserved. The
+platform-managed `TenantId` and `Type` columns are excluded from the raw DCR;
+matching columns keep the pass-through transform.
 Unavailable or invalid destination metadata follows the existing replay
 setup warning path and blocks QTP/parity. The parser DCR is unaffected.
 Fixture GUID values must be valid GUID strings: `toguid` converts malformed
@@ -130,10 +133,9 @@ physical-table/logical-ASIM type discrepancy, preferring the corrected `_d`
 and `_s` columns and falling back to casts of the legacy columns. This
 normalization affects only the data-tester input, not ingestion or QTP parity.
 
-For `ASimAlertEventLogs`, the data-tester input casts `FileSize` to `long`.
-The [physical table](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimalerteventlogs)
-stores this column as `string`, while logical ASIM requires `long`. This
-normalization likewise leaves ingestion and QTP parity unchanged.
+For `ASimAlertEventLogs` and `ASimWebSessionLogs`, the data-tester input casts
+`FileSize` to `long` to match the logical ASIM schema. This normalization
+likewise leaves ingestion and QTP parity unchanged.
 
 Static validation requires `ParserFilterQuery` to contain a `where` stage when
 `ParserQuery` contains one. This is a presence check only; it does not require
