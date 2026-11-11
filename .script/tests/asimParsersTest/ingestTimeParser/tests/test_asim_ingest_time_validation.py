@@ -1589,6 +1589,41 @@ source
 
 
 class CurrentRepositoryIngestionParserTests(unittest.TestCase):
+    def test_authentication_pairs_emit_current_schema_version(self):
+        repo_root = Path(__file__).resolve().parents[5]
+        paths = (
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationOktaV2.yaml",
+            "Parsers/ASimAuthentication/Parsers/"
+            "vimAuthenticationOktaV2.yaml",
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationOktaV2.yaml",
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationSalesforceSC.yaml",
+            "Parsers/ASimAuthentication/Parsers/"
+            "vimAuthenticationSalesforceSC.yaml",
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationSalesforceServiceCloud.yaml",
+        )
+        for relative_path in paths:
+            with self.subTest(path=relative_path):
+                document = VALIDATION.load_yaml_file(
+                    repo_root / relative_path
+                )
+                expected = document["Normalization"]["Version"]
+                assignments = [
+                    assignment["stringValue"]
+                    for assignment in analyze_kql(
+                        document["ParserQuery"]
+                    )["assignments"]
+                    if assignment["name"] == "EventSchemaVersion"
+                ]
+                self.assertTrue(assignments)
+                self.assertEqual(
+                    {expected},
+                    set(assignments),
+                )
+
     def test_current_ingestion_parsers_validate_and_pair(self):
         repo_root = Path(__file__).resolve().parents[5]
         pairs = {
@@ -1617,12 +1652,6 @@ class CurrentRepositoryIngestionParserTests(unittest.TestCase):
                 "Parsers/ASimWebSession/Parsers/"
                 "ASimWebSessionSalesforceServiceCloud.yaml",
         }
-        missing_fixture_parsers = {
-            "Parsers/ASimAuthentication/IngestTimeParsers/"
-            "ASimAuthenticationOktaV2.yaml",
-            "Parsers/ASimNetworkSession/IngestTimeParsers/"
-            "ASimNetworkSessionAWSVPC.yaml",
-        }
         manifest = VALIDATION.build_validation_manifest(
             repo_root, list(pairs.keys())
         )
@@ -1642,28 +1671,14 @@ class CurrentRepositoryIngestionParserTests(unittest.TestCase):
                 repo_root / ingest_path,
                 query_time_path=repo_root / query_path,
             )
-            if ingest_path in missing_fixture_parsers:
-                self.assertFalse(result["valid"])
-                self.assertEqual(
-                    "missing",
-                    targets_by_path[ingest_path]["fixtureStatus"],
-                )
-                self.assertIn(
-                    "FIXTURE002",
-                    {
-                        finding["code"]
-                        for finding in result["findings"]
-                    },
-                )
-            else:
-                self.assertTrue(
-                    result["valid"],
-                    f"{ingest_path}: {result['findings']}",
-                )
-                self.assertEqual(
-                    "resolved",
-                    targets_by_path[ingest_path]["fixtureStatus"],
-                )
+            self.assertTrue(
+                result["valid"],
+                f"{ingest_path}: {result['findings']}",
+            )
+            self.assertEqual(
+                "resolved",
+                targets_by_path[ingest_path]["fixtureStatus"],
+            )
 
 
 if __name__ == "__main__":

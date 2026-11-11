@@ -660,6 +660,18 @@ class FixturePreparationTests(unittest.TestCase):
                 "SalesforceServiceCloudV3_CL",
                 "ASimWebSessionLogs",
             ),
+            (
+                "Okta_Okta_Authentication_"
+                "OktaV2_CL_IngestedLogs.csv",
+                "OktaV2_CL",
+                "ASimAuthenticationEventLogs",
+            ),
+            (
+                "AWS_VPC_NetworkSession_"
+                "AWSVPCFlow_IngestedLogs.csv",
+                "AWSVPCFlow",
+                "ASimNetworkSessionLogs",
+            ),
         )
         for index, (filename, source_table, target_group) in enumerate(
             cases
