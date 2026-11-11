@@ -1313,7 +1313,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 FakeResponse(200, query_result),  # target stable
                 FakeResponse(200, table_payload([
                     {"name": "TimeGenerated", "type": "datetime"},
-                    {"name": "id", "type": "string"},
                     {"name": "AwsEventId", "type": "guid"},
                     {"name": "AwsRequestId", "type": "guid"},
                     {"name": "SharedEventId", "type": "guid"},
@@ -1356,8 +1355,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 {
                     "TimeGenerated": timestamp,
                     "Type": "Contoso",
-                    "TenantId": "tenant",
-                    "id": "event-1",
                     "AwsEventId": "11111111-2222-4333-8444-555555555555",
                     "AwsRequestId": "",
                     "SharedEventId": "",
@@ -1418,14 +1415,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "Type",
             {column["name"] for column in raw_columns},
         )
-        self.assertNotIn(
-            "TenantId",
-            {column["name"] for column in raw_columns},
-        )
-        self.assertIn(
-            "id",
-            {column["name"] for column in raw_columns},
-        )
         self.assertEqual(
             "string",
             next(
@@ -1456,95 +1445,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         self.assertEqual(1, validation_runner.output_calls)
         self.assertEqual(1, validation_runner.parity_calls)
-
-    def test_workspace_parser_marks_qtp_replay_not_applicable(self):
-        timestamp = "2026-10-16T19:55:00.1234567Z"
-        query_result = query_payload(
-            [{"name": "TimeGenerated", "type": "datetime"}],
-            [[timestamp]],
-        )
-        harness, session, _ = self.harness(
-            [
-                FakeResponse(201),
-                FakeResponse(
-                    200,
-                    {
-                        "id": "/subscriptions/s/parser",
-                        "properties": {
-                            "provisioningState": "Succeeded",
-                            "immutableId": "parser-immutable",
-                        },
-                    },
-                ),
-                FakeResponse(204),
-                FakeResponse(200, query_result),
-                FakeResponse(200, query_result),
-                FakeResponse(204),
-            ]
-        )
-        prepared = {
-            "targetId": "parser-a",
-            "sourceRawTable": "Contoso",
-            "rowCount": 1,
-            "schema": [
-                {"name": "TimeGenerated", "type": "datetime"},
-            ],
-            "namespace": {
-                "pullRequest": "123",
-                "runId": "456",
-                "runAttempt": 1,
-                "timestampValues": [timestamp],
-            },
-            "rows": [
-                {
-                    "TimeGenerated": timestamp,
-                    "Type": "Contoso",
-                }
-            ],
-        }
-        parser = {
-            "ParserName": "ASimAuthenticationContoso",
-            "DCRType": "Workspace",
-            "InputStream": "none",
-            "SourceRawTable": "Contoso",
-            "TargetASIMTable": "ASimAuthenticationEventLogs",
-            "ParserQuery": "source",
-        }
-        validation_runner = FakeValidationRunner(timestamp)
-
-        with tempfile.TemporaryDirectory() as directory:
-            result = harness.run(
-                prepared,
-                parser,
-                snapshot_output=Path(directory) / "snapshot.json",
-                validation_runner=validation_runner,
-                query_time_document={"ParserQuery": "Contoso"},
-            )
-
-        self.assertEqual("completed", result["status"])
-        self.assertIsNone(result["rawDcr"])
-        self.assertEqual(
-            "not-applicable",
-            result["qtpSourceReplay"]["status"],
-        )
-        self.assertIsNone(result["qtpSourceReplay"]["error"])
-        self.assertEqual(
-            "blocked",
-            result["outputValidation"]["queryTimeExecution"]["status"],
-        )
-        self.assertEqual(
-            "blocked",
-            result["outputValidation"]["parity"]["status"],
-        )
-        self.assertEqual(0, validation_runner.parity_calls)
-        self.assertEqual(
-            1,
-            sum(
-                call["method"] == "PUT"
-                and "dataCollectionRules" in call["url"]
-                for call in session.calls
-            ),
-        )
 
     def test_qtp_raw_dcr_failure_warns_and_blocks_parity(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"

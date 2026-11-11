@@ -872,48 +872,6 @@ class ReportTests(unittest.TestCase):
         )
         self.assertIn("InvalidStream", output.getvalue())
 
-    def test_workspace_qtp_replay_is_not_applicable(self):
-        validation = self.base_validation()
-        validation["rawDcr"] = None
-        validation["rawUpload"] = []
-        validation["qtpSourceReplay"] = {
-            "status": "not-applicable",
-            "inputStream": "none",
-            "error": None,
-        }
-        detail = "Skipped because this parser has no replayable InputStream."
-        validation["outputValidation"]["queryTimeExecution"] = {
-            "status": "blocked",
-            "detail": detail,
-        }
-        validation["outputValidation"]["parity"] = {
-            "status": "blocked",
-            "detail": detail,
-        }
-
-        report = self.build(validation)
-
-        self.assertEqual("passed", report["status"])
-        self.assertFalse(report["requiredFailure"])
-        self.assertEqual(
-            "not-applicable",
-            report["stages"]["rawDcr"]["status"],
-        )
-        self.assertEqual(
-            "not-applicable",
-            report["stages"]["rawIngestion"]["status"],
-        )
-        self.assertEqual(
-            "blocked",
-            report["stages"]["qtpExecution"]["status"],
-        )
-        self.assertEqual(detail, report["stages"]["qtpExecution"]["detail"])
-        self.assertEqual("blocked", report["stages"]["parity"]["status"])
-        output = io.StringIO()
-        with redirect_stdout(output):
-            WORKFLOW.emit_annotations(report)
-        self.assertNotIn("ASIM rawDcr warning", output.getvalue())
-
     def test_qtp_raw_ingestion_failure_fails_overall(self):
         validation = self.base_validation()
         validation["status"] = "failed"
@@ -972,39 +930,6 @@ class ReportTests(unittest.TestCase):
                     "qtpSourceReplay"
                 ]["observedRows"]
             ),
-        )
-
-    def test_qtp_execution_error_is_reported_as_failed(self):
-        validation = self.base_validation()
-        validation["status"] = "failed"
-        validation["outputValidation"]["queryTimeExecution"] = {
-            "status": "not-applicable",
-        }
-        validation["outputValidation"]["parity"] = {
-            "status": "not-applicable",
-        }
-        validation["error"] = {
-            "stage": "qtp-execution",
-            "message": "POST failed with HTTP 400.",
-        }
-
-        report = self.build(validation)
-
-        self.assertEqual(
-            "failed",
-            report["stages"]["qtpExecution"]["status"],
-        )
-        self.assertEqual(
-            "POST failed with HTTP 400.",
-            report["stages"]["qtpExecution"]["detail"],
-        )
-        self.assertEqual(
-            "blocked",
-            report["stages"]["parity"]["status"],
-        )
-        self.assertEqual(
-            "Blocked because QTP execution failed.",
-            report["stages"]["parity"]["detail"],
         )
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):

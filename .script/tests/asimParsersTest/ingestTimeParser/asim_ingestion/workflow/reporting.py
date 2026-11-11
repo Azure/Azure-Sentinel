@@ -585,12 +585,12 @@ def build_report(
     else:
         qtp_stage = _stage(
             (
-                "failed"
-                if error_stage == "qtp-execution"
-                else str(qtp_execution.get("status"))
+                str(qtp_execution.get("status"))
                 if isinstance(qtp_execution, Mapping)
                 else "passed"
                 if error_stage in {"target-output", "parity"}
+                else "failed"
+                if error_stage == "qtp-execution"
                 else "not-run"
             ),
             (
@@ -604,9 +604,7 @@ def build_report(
         )
         parity_stage = _stage(
             (
-                "blocked"
-                if error_stage == "qtp-execution"
-                else str(parity_validation.get("status"))
+                str(parity_validation.get("status"))
                 if isinstance(parity_validation, Mapping)
                 else "failed"
                 if error_stage in {"target-output", "parity"}
@@ -620,8 +618,6 @@ def build_report(
                 if error_stage == "parity"
                 else error_detail
                 if error_stage == "target-output"
-                else "Blocked because QTP execution failed."
-                if error_stage == "qtp-execution"
                 else str(parity_validation.get("detail") or "")
                 if isinstance(parity_validation, Mapping)
                 else ""

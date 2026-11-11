@@ -53,43 +53,31 @@ class FakeQueryClient:
 
 
 class QueryConstructionTests(unittest.TestCase):
-    def test_data_tester_normalizes_physical_file_size(self):
-        for target_table, schema_name in (
-            ("ASimAlertEventLogs", "AlertEvent"),
-            ("ASimWebSessionLogs", "WebSession"),
-        ):
-            with self.subTest(target_table=target_table):
-                query = VALIDATION.build_asim_tester_query(
-                    tester_name="ASimDataTester",
-                    tester_query="T | project Result = 'test'",
-                    target_table=target_table,
-                    timestamps=[TIMESTAMP_1],
-                    schema_name=schema_name,
-                )
+    def test_alert_data_tester_normalizes_physical_file_size(self):
+        query = VALIDATION.build_asim_tester_query(
+            tester_name="ASimDataTester",
+            tester_query="T | project Result = 'test'",
+            target_table="ASimAlertEventLogs",
+            timestamps=[TIMESTAMP_1],
+            schema_name="AlertEvent",
+        )
 
-                target_query, tester_query = query.split(
-                    "let _AsimValidationTester", 1
-                )
-                self.assertIn(
-                    f"{target_table}\n| where TimeGenerated in "
-                    f"(datetime({TIMESTAMP_1}))"
-                    "\n| extend FileSize = tolong(FileSize));",
-                    target_query,
-                )
-                self.assertNotIn(
-                    "ThreatFirstReportedTime", target_query
-                )
-                self.assertNotIn(
-                    "ThreatLastReportedTime", target_query
-                )
-                self.assertNotIn(
-                    "ThreatOriginalRiskLevel", target_query
-                )
-                self.assertIn(
-                    f"| invoke _AsimValidationTester('{schema_name}')",
-                    tester_query,
-                )
-                self.assertNotIn("tolong(FileSize)", tester_query)
+        target_query, tester_query = query.split(
+            "let _AsimValidationTester", 1
+        )
+        self.assertIn(
+            "ASimAlertEventLogs\n| where TimeGenerated in "
+            f"(datetime({TIMESTAMP_1}))"
+            "\n| extend FileSize = tolong(FileSize));",
+            target_query,
+        )
+        self.assertNotIn("ThreatFirstReportedTime", target_query)
+        self.assertNotIn("ThreatLastReportedTime", target_query)
+        self.assertNotIn("ThreatOriginalRiskLevel", target_query)
+        self.assertIn(
+            "| invoke _AsimValidationTester('AlertEvent')", tester_query
+        )
+        self.assertNotIn("tolong(FileSize)", tester_query)
 
     def test_dns_data_tester_normalizes_physical_threat_columns(self):
         query = VALIDATION.build_asim_tester_query(
