@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.3       | 11-11-2026                     | Updated **Analytic Rules**, **XDR Detections**, and **Parser** and repackaged **Solution** |
 | 3.2.2       | 03-11-2026                     | Added **XDR Detections** and **XDR Workbooks** and repackaged **Solution** for Defender XDR migration |
 | 3.1.4       | 28-09-2026                     | Removed the deprecated SentinelOne Azure Function **Data Connector** from the solution package |
 | 3.1.3       | 25-08-2026                     | Fixed the SentinelOne parser to restore ActivityType and CCF records while preserving SentinelOne V2 alerts |
