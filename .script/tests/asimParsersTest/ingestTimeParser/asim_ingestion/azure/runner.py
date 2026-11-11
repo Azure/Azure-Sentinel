@@ -19,6 +19,8 @@ from .common import (
     count_rows_by_timestamp,
 )
 
+RAW_REPLAY_EXCLUDED_COLUMNS = frozenset({"TenantId", "Type"})
+
 
 def _error_payload(
     exc: HarnessError,
@@ -333,91 +335,106 @@ class AsimIngestionHarness(AzureMonitorClient):
                 and validation_runner is not None
             ):
                 qtp_replay = result["qtpSourceReplay"]
-                try:
-                    if (
-                        not input_stream
-                        or input_stream.casefold() == "none"
-                    ):
-                        raise HarnessError(
-                            "raw-dcr",
-                            "QTP source replay requires a non-none "
-                            "InputStream.",
-                        )
-                    with self._stage("raw-table"):
-                        self.ensure_raw_table(
-                            source_table,
-                            schema,
-                        )
-                    raw_resource_id = self.dcr_resource_id(
-                        names["rawDcr"]
-                    )
-                    attempted_dcr_ids.append(raw_resource_id)
-                    with self._stage("raw-dcr"):
-                        raw_transform = self.build_raw_replay_transform(
-                            source_table, schema
-                        )
-                        raw_handle = self.create_dcr(
-                            name=names["rawDcr"],
-                            stream_name=names["rawStream"],
-                            destination_name=names["destination"],
-                            schema=schema,
-                            transform_kql=raw_transform,
-                            output_stream=input_stream,
-                        )
-                except HarnessError as exc:
-                    qtp_replay["status"] = "warning"
-                    qtp_replay["error"] = _error_payload(exc)
+                if (
+                    not input_stream
+                    or input_stream.casefold() == "none"
+                ):
+                    qtp_replay["status"] = "not-applicable"
                 else:
-                    result["rawDcr"] = raw_handle.to_dict()
-                    raw_counts = count_rows_by_timestamp(rows)
+                    replay_schema = [
+                        column
+                        for column in snapshot["schema"]
+                        if column["name"]
+                        not in RAW_REPLAY_EXCLUDED_COLUMNS
+                    ]
+                    replay_names = {
+                        column["name"] for column in replay_schema
+                    }
+                    replay_rows = [
+                        {
+                            name: value
+                            for name, value in row.items()
+                            if name in replay_names
+                        }
+                        for row in snapshot["rows"]
+                    ]
                     try:
-                        with self._stage("raw-upload"):
-                            result["rawUpload"] = self.upload_rows(
-                                raw_handle,
-                                rows,
-                                reconcile_table=source_table,
-                                expected_counts_by_timestamp=raw_counts,
+                        with self._stage("raw-table"):
+                            self.ensure_raw_table(
+                                source_table,
+                                replay_schema,
                             )
-                        with self._stage("raw-visibility"):
-                            observed_query_table = (
-                                self.wait_for_exact_rows(
-                                    source_table,
-                                    timestamps,
-                                    raw_counts,
-                                    stage="raw-visibility",
-                                )
-                            )
-                        _record_qtp_observation(
-                            qtp_replay,
-                            observed_query_table,
+                        raw_resource_id = self.dcr_resource_id(
+                            names["rawDcr"]
                         )
-                        qtp_replay["status"] = "passed"
+                        attempted_dcr_ids.append(raw_resource_id)
+                        with self._stage("raw-dcr"):
+                            raw_transform = self.build_raw_replay_transform(
+                                source_table,
+                                replay_schema,
+                            )
+                            raw_handle = self.create_dcr(
+                                name=names["rawDcr"],
+                                stream_name=names["rawStream"],
+                                destination_name=names["destination"],
+                                schema=replay_schema,
+                                transform_kql=raw_transform,
+                                output_stream=input_stream,
+                            )
                     except HarnessError as exc:
-                        details = exc.details
-                        if isinstance(details, Mapping):
+                        qtp_replay["status"] = "warning"
+                        qtp_replay["error"] = _error_payload(exc)
+                    else:
+                        result["rawDcr"] = raw_handle.to_dict()
+                        raw_counts = count_rows_by_timestamp(replay_rows)
+                        try:
+                            with self._stage("raw-upload"):
+                                result["rawUpload"] = self.upload_rows(
+                                    raw_handle,
+                                    replay_rows,
+                                    reconcile_table=source_table,
+                                    expected_counts_by_timestamp=raw_counts,
+                                )
+                            with self._stage("raw-visibility"):
+                                observed_query_table = (
+                                    self.wait_for_exact_rows(
+                                        source_table,
+                                        timestamps,
+                                        raw_counts,
+                                        stage="raw-visibility",
+                                    )
+                                )
                             _record_qtp_observation(
                                 qtp_replay,
-                                details.get("observedQueryTable"),
+                                observed_query_table,
                             )
-                            cleaned_details = dict(details)
-                            cleaned_details.pop(
-                                "observedQueryTable",
-                                None,
+                            qtp_replay["status"] = "passed"
+                        except HarnessError as exc:
+                            details = exc.details
+                            if isinstance(details, Mapping):
+                                _record_qtp_observation(
+                                    qtp_replay,
+                                    details.get("observedQueryTable"),
+                                )
+                                cleaned_details = dict(details)
+                                cleaned_details.pop(
+                                    "observedQueryTable",
+                                    None,
+                                )
+                                exc.details = cleaned_details
+                            qtp_replay["status"] = "failed"
+                            qtp_replay["error"] = _error_payload(exc)
+                            result["outputValidation"] = (
+                                _block_optional_parity(
+                                    result["outputValidation"],
+                                    detail=(
+                                        "Blocked by QTP raw ingestion "
+                                        "failure."
+                                    ),
+                                    qtp_replay=qtp_replay,
+                                )
                             )
-                            exc.details = cleaned_details
-                        qtp_replay["status"] = "failed"
-                        qtp_replay["error"] = _error_payload(exc)
-                        result["outputValidation"] = (
-                            _block_optional_parity(
-                                result["outputValidation"],
-                                detail=(
-                                    "Blocked by QTP raw ingestion "
-                                    "failure."
-                                ),
-                                qtp_replay=qtp_replay,
-                            )
-                        )
-                        raise
+                            raise
 
             if (
                 validation_runner is not None
@@ -431,6 +448,15 @@ class AsimIngestionHarness(AzureMonitorClient):
                             detail=(
                                 "Skipped because QTP raw DCR "
                                 "creation failed."
+                            ),
+                            qtp_replay=qtp_replay,
+                        )
+                    elif qtp_replay.get("status") == "not-applicable":
+                        output_validation = _block_optional_parity(
+                            result["outputValidation"],
+                            detail=(
+                                "Skipped because this parser has no "
+                                "replayable InputStream."
                             ),
                             qtp_replay=qtp_replay,
                         )
