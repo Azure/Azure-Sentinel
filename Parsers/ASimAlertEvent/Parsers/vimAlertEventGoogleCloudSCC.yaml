@@ -1,7 +1,7 @@
 Parser:
   Title: Alert Event ASIM filtering parser for Google Cloud Security Command Center (GoogleCloudSCC)
   Version: '0.1.0'
-  LastUpdated: Nov 06, 2026
+  LastUpdated: Nov 11, 2026
 Product:
   Name: Google Cloud Security Command Center
 Normalization:
@@ -81,74 +81,69 @@ ParserQuery: |
           and (isnull(endtime) or TimeGenerated <= endtime)
       | where array_length(alertverdict_has_any) == 0 // Source does not support AlertVerdict
       | extend
-          _FindingClass = tostring(Findings.findingClass)
-          , _Severity = tostring(Findings.severity)
+          EventOriginalType = tostring(Findings.findingClass)
+          , EventOriginalSeverity = tostring(Findings.severity)
       // SCC_ERROR findings report SCC operational errors, not security alerts
-      | where _FindingClass != "SCC_ERROR"
+      | where EventOriginalType != "SCC_ERROR"
       | extend
           EventSeverity = case(
-              _Severity in ("CRITICAL", "HIGH"), "High"
-              , _Severity == "MEDIUM", "Medium"
-              , _Severity == "LOW", "Low"
+              EventOriginalSeverity in ("CRITICAL", "HIGH"), "High"
+              , EventOriginalSeverity == "MEDIUM", "Medium"
+              , EventOriginalSeverity == "LOW", "Low"
               , "Informational"
           )
       | where array_length(eventseverity_has_any) == 0 or EventSeverity in~ (eventseverity_has_any)
       | extend
-          _Category = tostring(Findings.category)
+          AlertName = tostring(Findings.category)
           , _SourceName = coalesce(tostring(Findings.parentDisplayName), tostring(Findings.sourceDisplayName))
           , _SP = iff(array_length(bag_keys(SourceProperties)) > 0, SourceProperties, Findings.sourceProperties)
       | extend
           EventSubType = case(
-              _FindingClass == "THREAT", "Threat"
-              , _FindingClass == "OBSERVATION", "Suspicious Activity"
-              , _FindingClass in ("VULNERABILITY", "SECRET", "EXTERNAL_EXPOSURE", "TOXIC_COMBINATION", "CHOKEPOINT"), "Vulnerability"
-              , _FindingClass in ("POSTURE_VIOLATION", "SENSITIVE_DATA_RISK"), "Policy Violation"
+              EventOriginalType == "THREAT", "Threat"
+              , EventOriginalType == "OBSERVATION", "Suspicious Activity"
+              , EventOriginalType in ("VULNERABILITY", "SECRET", "EXTERNAL_EXPOSURE", "TOXIC_COMBINATION", "CHOKEPOINT"), "Vulnerability"
+              , EventOriginalType in ("POSTURE_VIOLATION", "SENSITIVE_DATA_RISK"), "Policy Violation"
               , "Compliance Violation"
           )
       | extend
           ThreatCategory = case(
-              _Category has "Ransomware", "Ransomware"
-              , _Category has_any ("Cryptomining", "Cryptocurrency Mining", "Coin Mining"), "Cryptominer"
-              , _Category has "Phishing", "Phishing"
-              , _Category has "Rootkit", "Rootkit"
-              , _Category has "Malicious URL", "MaliciousUrl"
-              , _Category has "Malware", "Malware"
+              AlertName has "Ransomware", "Ransomware"
+              , AlertName has_any ("Cryptomining", "Cryptocurrency Mining", "Coin Mining"), "Cryptominer"
+              , AlertName has "Phishing", "Phishing"
+              , AlertName has "Rootkit", "Rootkit"
+              , AlertName has "Malicious URL", "MaliciousUrl"
+              , AlertName has "Malware", "Malware"
               , EventSubType in ("Compliance Violation", "Policy Violation"), "Security Policy Violation"
               , "Unknown"
           )
       | where array_length(threatcategory_has_any) == 0 or ThreatCategory in~ (threatcategory_has_any)
       | extend
-          _TacticList = set_difference(
+          // SCC MITRE values are enum names (e.g. COMMAND_AND_CONTROL), not ATT&CK IDs
+          AttackTactics = replace_string(strcat_array(set_difference(
               array_concat(
                   pack_array(tostring(Findings.mitreAttack.primaryTactic))
                   , todynamic(coalesce(tostring(Findings.mitreAttack.additionalTactics), "[]"))
               )
               , dynamic(["", "TACTIC_UNSPECIFIED"])
-          )
-          , _TechniqueList = set_difference(
+          ), ", "), "_", " ")
+          , AttackTechniques = replace_string(strcat_array(set_difference(
               array_concat(
                   todynamic(coalesce(tostring(Findings.mitreAttack.primaryTechniques), "[]"))
                   , todynamic(coalesce(tostring(Findings.mitreAttack.additionalTechniques), "[]"))
               )
               , dynamic(["", "TECHNIQUE_UNSPECIFIED"])
-          )
-      | extend
-          // SCC MITRE values are enum names (e.g. COMMAND_AND_CONTROL), not ATT&CK IDs
-          AttackTactics = replace_string(strcat_array(_TacticList, ", "), "_", " ")
-          , AttackTechniques = replace_string(strcat_array(_TechniqueList, ", "), "_", " ")
+          ), ", "), "_", " ")
       | where array_length(attacktactics_has_any) == 0 or AttackTactics has_any (attacktactics_has_any)
       | where array_length(attacktechniques_has_any) == 0 or AttackTechniques has_any (attacktechniques_has_any)
       | extend
           Username = tostring(Findings.access.principalEmail)
       | where array_length(username_has_any) == 0 or Username has_any (username_has_any)
       | extend
-          _ResourceName = tostring(Findings.resourceName)
-          , _ResType = tostring(FindingsResource.type)
-          , _ResDisplayName = coalesce(tostring(FindingsResource.displayName), tostring(FindingsResource.display_name))
+          DvcId = tostring(Findings.resourceName)
       | extend
           _InstanceName = iff(
-              _ResType == "google.compute.Instance" or _ResourceName has "/instances/"
-              , coalesce(_ResDisplayName, extract(@'/instances/([^/]+)$', 1, _ResourceName))
+              tostring(FindingsResource.type) == "google.compute.Instance" or DvcId has "/instances/"
+              , coalesce(tostring(FindingsResource.displayName), tostring(FindingsResource.display_name), extract(@'/instances/([^/]+)$', 1, DvcId))
               , ""
           )
       | extend
@@ -164,26 +159,16 @@ ParserQuery: |
           or has_any_ipv4_prefix(DvcIpAddr, ipaddr_has_any_prefix)
           or ipv6_is_in_any_range(DvcIpAddr, ipaddr_has_any_prefix)
       | extend
-          _EventTime = todatetime(Findings.eventTime)
-          , _CreateTime = todatetime(Findings.createTime)
-          , _State = tostring(Findings.state)
-          , _Description = tostring(Findings.description)
-          , _Explanation = tostring(_SP.Explanation)
-          , _PrincipalSubject = tostring(Findings.access.principalSubject)
-          , _ProjectName = coalesce(
-              tostring(FindingsResource.gcpMetadata["project"])
-              , tostring(FindingsResource["project"])
-              , tostring(FindingsResource.project_name)
-          )
-          , _ProjectDisplayName = coalesce(
-              tostring(FindingsResource.gcpMetadata.projectDisplayName)
-              , tostring(FindingsResource.projectDisplayName)
-              , tostring(FindingsResource.project_display_name)
-          )
-          , _AttackExposureScore = todouble(Findings.attackExposure.score)
+          ThreatLastReportedTime = todatetime(Findings.eventTime)
+          // createTime can be minutes after eventTime on a new finding; the earlier of the two is the first report
+          , ThreatFirstReportedTime = min_of(todatetime(Findings.createTime), todatetime(Findings.eventTime))
+          , AlertOriginalStatus = tostring(Findings.state)
+          , RuleDescription = tostring(_SP.Explanation)
+          , UserId = tostring(Findings.access.principalSubject)
+          , ThreatOriginalRiskLevel = iff(todouble(Findings.attackExposure.score) > 0, tostring(Findings.attackExposure.score), "")
       | extend
-          EventStartTime = coalesce(_EventTime, TimeGenerated)
-          , EventEndTime = coalesce(_EventTime, TimeGenerated)
+          EventStartTime = coalesce(ThreatFirstReportedTime, ThreatLastReportedTime, TimeGenerated)
+          , EventEndTime = coalesce(ThreatLastReportedTime, TimeGenerated)
           , EventCount = toint(1)
           , EventType = "Alert"
           , EventResult = "NA"
@@ -193,37 +178,30 @@ ParserQuery: |
           , EventSchemaVersion = "1.0.0"
           , EventUid = tostring(Findings.name)
           , EventOriginalUid = tostring(Findings.canonicalName)
-          , EventOriginalType = _FindingClass
-          , EventOriginalSeverity = _Severity
-          , EventMessage = coalesce(_Description, _Explanation, _Category)
+          , EventMessage = coalesce(tostring(Findings.description), RuleDescription, AlertName)
           , EventReportUrl = coalesce(
               tostring(Findings.externalUri)
               , tostring(_SP.contextUris.cloudLoggingQueryUri[0].url)
           )
-          , AlertName = _Category
-          , AlertOriginalStatus = _State
           , AlertStatus = case(
-              _State == "ACTIVE", "Active"
-              , _State == "INACTIVE", "Closed"
+              AlertOriginalStatus == "ACTIVE", "Active"
+              , AlertOriginalStatus == "INACTIVE", "Closed"
               , ""
           )
-          , RuleName = coalesce(tostring(_SP.detectionCategory.ruleName), _Category)
-          , RuleDescription = _Explanation
+          , RuleName = coalesce(tostring(_SP.detectionCategory.ruleName), AlertName)
           , AttackRemediationSteps = coalesce(tostring(Findings.nextSteps), tostring(_SP.Recommendation))
           , DetectionMethod = case(
               _SourceName has "Threat Detection" or _SourceName == "Sensitive Actions Service", "Behavioral Analytics"
               , _SourceName == "Web Security Scanner", "Cloud Application Security"
               , _SourceName in ("Security Health Analytics", "Security Posture", "Data Security Posture Management", "Risk Engine", "External Exposure"), "Cloud Security Posture Management"
               // Sources not listed above fall back to the finding class
-              , _FindingClass in ("THREAT", "OBSERVATION"), "Behavioral Analytics"
-              , _FindingClass in ("MISCONFIGURATION", "POSTURE_VIOLATION", "SENSITIVE_DATA_RISK", "VULNERABILITY", "SECRET", "EXTERNAL_EXPOSURE", "TOXIC_COMBINATION", "CHOKEPOINT"), "Cloud Security Posture Management"
+              , EventOriginalType in ("THREAT", "OBSERVATION"), "Behavioral Analytics"
+              , EventOriginalType in ("MISCONFIGURATION", "POSTURE_VIOLATION", "SENSITIVE_DATA_RISK", "VULNERABILITY", "SECRET", "EXTERNAL_EXPOSURE", "TOXIC_COMBINATION", "CHOKEPOINT"), "Cloud Security Posture Management"
               , "Other"
           )
-          , ThreatFirstReportedTime = _CreateTime
-          , ThreatLastReportedTime = _EventTime
-          , ThreatIsActive = _State == "ACTIVE"
-          , ThreatOriginalRiskLevel = iff(_AttackExposureScore > 0, tostring(_AttackExposureScore), "")
-          , ThreatRiskLevel = iff(_AttackExposureScore > 0, toint(round(_AttackExposureScore * 10)), int(null))
+          , ThreatIsActive = AlertOriginalStatus == "ACTIVE"
+          // attackExposure.score is usually 0-10 but can exceed it; RiskLevel must be 0-100
+          , ThreatRiskLevel = iff(isnotempty(ThreatOriginalRiskLevel), toint(min_of(round(todouble(ThreatOriginalRiskLevel) * 10), 100)), int(null))
           , UsernameType = case(
               isempty(Username), ""
               , Username has "@", "UPN"
@@ -234,18 +212,27 @@ ParserQuery: |
               , Username endswith "gserviceaccount.com", "Service Principal"
               , "Regular"
           )
-          , UserId = _PrincipalSubject
-          , UserIdType = iff(isnotempty(_PrincipalSubject), "Other", "")
-          , OriginalUserType = extract(@'^([^:]+):', 1, _PrincipalSubject)
-          , DvcId = _ResourceName
-          , DvcIdType = iff(isnotempty(_ResourceName), "Other", "")
-          , DvcScopeId = extract(@'projects/([^/]+)$', 1, _ProjectName)
-          , DvcScope = _ProjectDisplayName
+          , UserIdType = iff(isnotempty(UserId), "Other", "")
+          , OriginalUserType = extract(@'^([^:]+):', 1, UserId)
+          , DvcIdType = iff(isnotempty(DvcId), "Other", "")
+          , DvcScopeId = extract(@'projects/([^/]+)$', 1, coalesce(
+              tostring(FindingsResource.gcpMetadata["project"])
+              , tostring(FindingsResource["project"])
+              , tostring(FindingsResource.project_name)
+          ))
+          , DvcScope = coalesce(
+              tostring(FindingsResource.gcpMetadata.projectDisplayName)
+              , tostring(FindingsResource.projectDisplayName)
+              , tostring(FindingsResource.project_display_name)
+          )
           , IndicatorType = case(
               isnotempty(_InstanceName), "Host"
               , isnotempty(Username), "User"
               , "Cloud Resource"
           )
+          , FilePath = tostring(Findings.files[0].path)
+          , ProcessId = tostring(Findings.processes[0].pid)
+          , ProcessName = coalesce(tostring(Findings.processes[0].binary.path), tostring(Findings.processes[0].name))
       | extend
           AlertId = EventUid
           , AlertDescription = EventMessage
@@ -265,6 +252,9 @@ ParserQuery: |
                   , "Access", Findings.access
                   , "ExternalExposure", Findings.externalExposure
                   , "Vulnerability", Findings.vulnerability
+                  , "Processes", Findings.processes
+                  , "Files", Findings.files
+                  , "Indicator", Findings.indicator
                   , "SecurityMarks", Findings.securityMarks
                   , "Mute", Findings.mute
                   , "Resource", FindingsResource
@@ -327,6 +317,9 @@ ParserQuery: |
           , Hostname
           , IpAddr
           , IndicatorType
+          , ProcessId
+          , ProcessName
+          , FilePath
           , AdditionalFields
           , Type
   };
