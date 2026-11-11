@@ -173,10 +173,8 @@ def _is_source_passthrough(filter_query: str) -> bool:
     analysis = analyze_kql(filter_query)
     pipeline = analysis.get("pipeline")
     return (
-        not analysis["diagnostics"]
+        analysis["sourcePipeline"]["isValid"]
         and isinstance(pipeline, dict)
-        and pipeline.get("rootType") == "NameReference"
-        and str(pipeline.get("rootText", "")).casefold() == "source"
         and not pipeline["operators"]
     )
 
@@ -474,8 +472,11 @@ def build_asim_tester_query(
                 'column_ifexists("ThreatOriginalRiskLevel_s", ""), '
                 'tostring(column_ifexists("ThreatOriginalRiskLevel", int(null))))'
             )
-        elif target_table == "ASimAlertEventLogs":
-            # The physical table stores FileSize as string; logical ASIM uses long.
+        elif target_table in {
+            "ASimAlertEventLogs",
+            "ASimWebSessionLogs",
+        }:
+            # Physical table types differ; logical ASIM uses long.
             target_expression += "\n| extend FileSize = tolong(FileSize)"
         signature = "T:(*), selected_schema:string=''"
         invocation = (

@@ -53,31 +53,43 @@ class FakeQueryClient:
 
 
 class QueryConstructionTests(unittest.TestCase):
-    def test_alert_data_tester_normalizes_physical_file_size(self):
-        query = VALIDATION.build_asim_tester_query(
-            tester_name="ASimDataTester",
-            tester_query="T | project Result = 'test'",
-            target_table="ASimAlertEventLogs",
-            timestamps=[TIMESTAMP_1],
-            schema_name="AlertEvent",
-        )
+    def test_data_tester_normalizes_physical_file_size(self):
+        for target_table, schema_name in (
+            ("ASimAlertEventLogs", "AlertEvent"),
+            ("ASimWebSessionLogs", "WebSession"),
+        ):
+            with self.subTest(target_table=target_table):
+                query = VALIDATION.build_asim_tester_query(
+                    tester_name="ASimDataTester",
+                    tester_query="T | project Result = 'test'",
+                    target_table=target_table,
+                    timestamps=[TIMESTAMP_1],
+                    schema_name=schema_name,
+                )
 
-        target_query, tester_query = query.split(
-            "let _AsimValidationTester", 1
-        )
-        self.assertIn(
-            "ASimAlertEventLogs\n| where TimeGenerated in "
-            f"(datetime({TIMESTAMP_1}))"
-            "\n| extend FileSize = tolong(FileSize));",
-            target_query,
-        )
-        self.assertNotIn("ThreatFirstReportedTime", target_query)
-        self.assertNotIn("ThreatLastReportedTime", target_query)
-        self.assertNotIn("ThreatOriginalRiskLevel", target_query)
-        self.assertIn(
-            "| invoke _AsimValidationTester('AlertEvent')", tester_query
-        )
-        self.assertNotIn("tolong(FileSize)", tester_query)
+                target_query, tester_query = query.split(
+                    "let _AsimValidationTester", 1
+                )
+                self.assertIn(
+                    f"{target_table}\n| where TimeGenerated in "
+                    f"(datetime({TIMESTAMP_1}))"
+                    "\n| extend FileSize = tolong(FileSize));",
+                    target_query,
+                )
+                self.assertNotIn(
+                    "ThreatFirstReportedTime", target_query
+                )
+                self.assertNotIn(
+                    "ThreatLastReportedTime", target_query
+                )
+                self.assertNotIn(
+                    "ThreatOriginalRiskLevel", target_query
+                )
+                self.assertIn(
+                    f"| invoke _AsimValidationTester('{schema_name}')",
+                    tester_query,
+                )
+                self.assertNotIn("tolong(FileSize)", tester_query)
 
     def test_dns_data_tester_normalizes_physical_threat_columns(self):
         query = VALIDATION.build_asim_tester_query(
@@ -487,7 +499,7 @@ class FilterValidationTests(unittest.TestCase):
         self.assertEqual("pass-through", result["mode"])
         self.assertEqual(0, result["rejectedRowCount"])
 
-    def test_source_passthrough_allows_scalar_let_prerequisite(self):
+    def test_source_passthrough_rejects_scalar_let_prerequisite(self):
         client = FakeQueryClient(
             [
                 (
@@ -512,18 +524,20 @@ class FilterValidationTests(unittest.TestCase):
             ]
         )
 
-        result = self.validator().evaluate_filter(
-            client,
-            self.snapshot(),
-            {
-                "SourceRawTable": "Contoso_CL",
-                "ParserFilterQuery": (
-                    "let accepted = true;\nsource"
-                ),
-            },
-        )
-
-        self.assertEqual("pass-through", result["mode"])
+        with self.assertRaisesRegex(
+            VALIDATION.ValidationError,
+            "at least one rejected row",
+        ):
+            self.validator().evaluate_filter(
+                client,
+                self.snapshot(),
+                {
+                    "SourceRawTable": "Contoso_CL",
+                    "ParserFilterQuery": (
+                        "let accepted = true;\nsource"
+                    ),
+                },
+            )
 
 
 class ParityTests(unittest.TestCase):
@@ -651,6 +665,38 @@ class ParityTests(unittest.TestCase):
             [{"new": 2}], actual["AdditionalFields"]["Nested"]
         )
 
+    def test_parity_ignores_platform_additional_fields_keys(self):
+        schema = [
+            *self.schema(),
+            {"name": "AdditionalFields", "type": "dynamic"},
+        ]
+        expected = {
+            "TimeGenerated": TIMESTAMP_1,
+            "EventUid": "event-1",
+            "AdditionalFields": {
+                "APIVersion": "2016-11-15",
+                "TenantId": "tenant",
+                "TimeGenerated": TIMESTAMP_1,
+                "Type": "Custom-Table",
+                "_ResourceId": "/subscriptions/example",
+            },
+        }
+        actual = {
+            **expected,
+            "AdditionalFields": {
+                "APIVersion": "different-value",
+            },
+        }
+
+        result = VALIDATION.compare_parser_outputs(
+            expected_schema=schema,
+            expected_rows=[expected],
+            actual_schema=schema,
+            actual_rows=[actual],
+        )
+
+        self.assertEqual("passed", result["status"])
+
     def test_parity_rejects_additional_fields_key_or_shape_differences(self):
         schema = [
             *self.schema(),
@@ -660,6 +706,10 @@ class ParityTests(unittest.TestCase):
             ({"APIVersion": "2016-11-15"}, {}),
             ({"APIVersion": "2016-11-15"}, {"APIVersion": None, "Extra": 1}),
             ({"APIVersion": "2016-11-15"}, {"apiversion": "2016-11-15"}),
+            (
+                {"APIVersion": "2016-11-15", "tenantid": "tenant"},
+                {"APIVersion": "2016-11-15"},
+            ),
             ({"APIVersion": "2016-11-15"}, ["APIVersion"]),
             ({}, None),
             ({}, []),
