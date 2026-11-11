@@ -406,7 +406,7 @@ def validate_content(solution: str | Path) -> dict[str, Any]:
     if has_analytic_rules(root):
         result = validate_solution(root)
     else:
-        from solution_manager.qualification.pr_check_runner import scan_solution_urls
+        from solution_manager.core.content_paths import scan_solution_urls
 
         locale_issues = scan_solution_urls(root)["localeIssues"]
         result = {

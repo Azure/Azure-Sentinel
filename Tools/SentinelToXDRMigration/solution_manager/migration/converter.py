@@ -4,8 +4,6 @@ import hashlib
 import json
 import logging
 import re
-import subprocess
-from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,7 +32,16 @@ from solution_manager.migration.catalog import (
 )
 from solution_manager.authoring.columns import projected_columns
 from solution_manager.authoring.dependencies import dependency_plan, dependency_validation_errors
-from solution_manager.core.content_paths import content_path, yaml_files
+from solution_manager.core.content_paths import (
+    _bump_patch_version,
+    _git_head_tracked_files,
+    _load_git_head_yaml,
+    _version_tuple,
+    _without_version,
+    content_path,
+    scan_solution_urls,
+    yaml_files,
+)
 from solution_manager.migration.parser_bindings import normalize_parser_bindings
 from solution_manager.reporting.report import write_transformation_report
 
@@ -2148,28 +2155,6 @@ def _extract_raw_yaml_version(raw_text: str, doc: dict[str, Any]) -> str:
     return str(doc.get("version") or "")
 
 
-def _version_tuple(version: Any) -> tuple[int, int, int]:
-    parts = str(version).strip().split(".")
-    if len(parts) == 3 and all(part.isdigit() for part in parts):
-        return int(parts[0]), int(parts[1]), int(parts[2])
-    if len(parts) == 2 and all(part.isdigit() for part in parts):
-        return int(parts[0]), int(parts[1]), 0
-    return (0, 0, 0)
-
-
-def _bump_patch_version(version: Any) -> str:
-    parts = str(version).strip().split(".")
-    if len(parts) == 3 and all(part.isdigit() for part in parts):
-        return f"{int(parts[0])}.{int(parts[1])}.{int(parts[2]) + 1}"
-    if len(parts) == 2 and all(part.isdigit() for part in parts):
-        return f"{int(parts[0])}.{int(parts[1])}.1"
-    return str(version).strip()
-
-
-def _without_version(document: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in document.items() if key != "version"}
-
-
 def _replace_raw_yaml_top_level_version(raw_text: str, new_version: str) -> str:
     pattern = re.compile(
         r"(?m)^(version[ \t]*:[ \t]*)(['\"]?)[^'\"\r\n#]+?\2([ \t]*(?:#.*)?)$"
@@ -2177,69 +2162,6 @@ def _replace_raw_yaml_top_level_version(raw_text: str, new_version: str) -> str:
     if pattern.search(raw_text):
         return pattern.sub(rf"\g<1>\g<2>{new_version}\g<2>\g<3>", raw_text, count=1)
     return raw_text
-
-
-def _find_git_repo_root(path: Path) -> Path | None:
-    resolved = path.resolve()
-    current = resolved if resolved.is_dir() else resolved.parent
-    for candidate in (current, *current.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return None
-
-
-def _git_head_tracked_files(solution_root: Path) -> tuple[Path | None, set[str]]:
-    repo_root = _find_git_repo_root(solution_root)
-    if repo_root is None:
-        return None, set()
-    try:
-        rel_root = solution_root.resolve().relative_to(repo_root.resolve()).as_posix()
-        proc = subprocess.run(
-            ["git", "-C", str(repo_root), "ls-tree", "-r", "--name-only", "HEAD", "--", rel_root],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-        )
-    except (OSError, ValueError):
-        return repo_root, set()
-    if proc.returncode != 0 or not proc.stdout.strip():
-        return repo_root, set()
-    return repo_root, {line.strip() for line in proc.stdout.splitlines() if line.strip()}
-
-
-def _load_git_head_yaml(
-    path: Path,
-    repo_root: Path | None,
-    tracked_rel_paths: set[str] | None = None,
-) -> dict[str, Any] | None:
-    if repo_root is None:
-        return None
-    try:
-        rel_posix = path.resolve().relative_to(repo_root.resolve()).as_posix()
-    except ValueError:
-        return None
-    if tracked_rel_paths is not None and rel_posix not in tracked_rel_paths:
-        return None
-    try:
-        proc = subprocess.run(
-            ["git", "-C", str(repo_root), "show", f"HEAD:{rel_posix}"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-        )
-    except OSError:
-        return None
-    if proc.returncode != 0 or not proc.stdout.strip():
-        return None
-    try:
-        loaded = yaml.safe_load(proc.stdout)
-    except yaml.YAMLError:
-        return None
-    return loaded if isinstance(loaded, dict) else None
 
 
 def _solution_release_version(solution_root: Path, config: dict[str, Any] | None = None) -> str:
@@ -3322,8 +3244,6 @@ def validate_solution(solution: str | Path) -> dict[str, Any]:
             for result in duplicates:
                 result["errors"].append(f"duplicate Custom Detection id {detection_id!r}")
                 result["valid"] = False
-    from solution_manager.qualification.pr_check_runner import scan_solution_urls
-
     url_scan = scan_solution_urls(root)
     locale_issues = url_scan["localeIssues"]
     results_by_path = {
