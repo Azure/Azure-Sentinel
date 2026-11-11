@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                    |
 |-------------|--------------------------------|-----------------------------------------------------------------------|
+| 3.2.4       | 09-11-2026                     | Consolidated conditional `_Im_NetworkSession` union branches in **Analytic Rules** (`AnomalyFoundInNetworkSessionTraffic`, `DetectPortMisuseByAnomalyBasedDetection`) and **Hunting Query** (`DetectPortMisuseByAnomalyHunting`) into a single `_Im_NetworkSession` lookup filtered by `directLookback` to resolve Kusto `CRT0013` semantic pass visitor limit errors. |
 | 3.2.3       | 09-11-2026                     | Updated **Parser** `NetworkSessionEssentialsCustomParser` to include a fallback empty schema when optional custom summary tables are not present in the workspace. |
 | 3.2.2       | 25-10-2026                     | Added 6 Microsoft Defender XDR custom detections for ASIM Network Session analytics rules and packaged V3.1 solution. |
 | 3.0.13      | 16-09-2026                     | Added  NetworkSessionEssentialsCustomParser to parse and normalize the tables used in dependent Security Content. Updated Workbooks and Analytic rules to use parser. |
