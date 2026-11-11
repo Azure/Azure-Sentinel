@@ -2,7 +2,7 @@
 
 ## Version 0.1.2
 
-- (2026-11-11) Correct authentication event timestamps and source IP mappings.
+- (2026-11-11) Correct authentication event timestamps and source IP mappings - [PR #15630](https://github.com/Azure/Azure-Sentinel/pull/15630)
 - Derive `EventStartTime` from `ReceiptTime` as Unix time in milliseconds instead of `DeviceCustomDate1`; `EventEndTime` continues to use `EventStartTime`.
 - Map `DestinationTranslatedAddress` to `SrcIpAddr` instead of `TargetIpAddr`, and expose the `Src` and `IpAddr` aliases instead of `Dst`.
 - Remove `DvcIpAddr` and set `Dvc` to `EventProduct`.
