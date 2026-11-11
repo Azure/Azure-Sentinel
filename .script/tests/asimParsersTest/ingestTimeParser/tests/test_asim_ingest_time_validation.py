@@ -1589,6 +1589,45 @@ source
 
 
 class CurrentRepositoryIngestionParserTests(unittest.TestCase):
+    def test_proofpoint_mail_log_uses_replay_stable_uid(self):
+        repo_root = Path(__file__).resolve().parents[5]
+        expression = (
+            "EventOriginalUid = hash_sha256(strcat(tostring(sm.qid), "
+            '"|", tostring(eventTime), "|", tostring(data)))'
+        )
+        paths = (
+            "Parsers/ASimEmailEvent/Parsers/"
+            "ASimEmailEventProofpointPODMailLog.yaml",
+            "Parsers/ASimEmailEvent/Parsers/"
+            "vimEmailEventProofpointPODMailLog.yaml",
+            "Parsers/ASimEmailEvent/IngestTimeParsers/"
+            "ASimEmailEventProofpointPODMailLog.yaml",
+        )
+        for relative_path in paths:
+            with self.subTest(path=relative_path):
+                query = VALIDATION.load_yaml_file(
+                    repo_root / relative_path
+                )["ParserQuery"]
+                self.assertIn(expression, query)
+                self.assertNotIn(
+                    "EventOriginalUid = tostring(id)",
+                    query,
+                )
+
+    def test_websession_itp_falls_back_from_empty_dst_bytes(self):
+        repo_root = Path(__file__).resolve().parents[5]
+        query = VALIDATION.load_yaml_file(
+            repo_root
+            / "Parsers/ASimWebSession/IngestTimeParsers/"
+            "ASimWebSessionSalesforceServiceCloud.yaml"
+        )["ParserQuery"]
+
+        self.assertIn(
+            "DstBytes = tolong(iif(isnotempty(tostring(DstBytes)), "
+            "DstBytes, ResponseSize))",
+            query,
+        )
+
     def test_authentication_pairs_emit_current_schema_version(self):
         repo_root = Path(__file__).resolve().parents[5]
         paths = (

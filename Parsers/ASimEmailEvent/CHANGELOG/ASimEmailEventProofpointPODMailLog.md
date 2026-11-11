@@ -1,5 +1,9 @@
 # Changelog for ASimEmailEventProofpointPODMailLog.yaml
 
+## Version 0.1.4
+
+- (2026-11-11) Generate replay-stable event identifiers from Proofpoint source fields instead of the platform-managed `id` column - [PR #15623](https://github.com/Azure/Azure-Sentinel/pull/15623)
+
 ## Version 0.1.3
 
 - (2026-10-30) Read Proofpoint MailLog event IDs directly from the source `id` column - [PR #15463](https://github.com/Azure/Azure-Sentinel/pull/15463)
