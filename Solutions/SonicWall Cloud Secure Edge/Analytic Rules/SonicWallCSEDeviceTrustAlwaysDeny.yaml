@@ -1,0 +1,62 @@
+id: 2dafed9a-a8ea-4696-82ac-63ec6e5a3dab
+name: SonicWall CSE - Device trust level dropped to AlwaysDeny
+description: |
+  'A device's SonicWall Cloud Secure Edge (CSE) trust level changed to AlwaysDeny, so the device
+  is denied access to protected resources. Causes include failed trust factors (for example
+  disk encryption or firewall turned off), no trust profile matching the device ("Default"),
+  or an administrator ban. Alerts once per change: the trust state repeats on every Service
+  Tunnel event, so only TrustScoring events are evaluated, and an evaluation that stays at
+  AlwaysDeny does not alert again.
+  Evaluates events by when they reached Sentinel, so events that arrive late (connector
+  delay or a backfill) are evaluated once, when they arrive. The query period is 2 days to
+  include backfilled events, which keep their own time for up to 48 hours.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  let RunWindow = 1h;
+  CSEEvents
+  | where EventType == "TrustScoring" and isnotempty(DeviceSerialNumber)
+  | order by DeviceSerialNumber asc, EventTime asc
+  | extend PreviousLevel = iff(prev(DeviceSerialNumber) == DeviceSerialNumber, prev(TrustLevel), "")
+  | where TrustLevel == "AlwaysDeny" and PreviousLevel != "AlwaysDeny"
+  | where IngestedAt > ago(RunWindow)
+  | project TimeGenerated, EventTime, Action, DeviceSerialNumber, DeviceName, DevicePlatform, UserEmail,
+      PreviousLevel, TrustLevel, TrustScore, TrustProfileName, FailedFactors, EventId
+  | extend
+      AccountName = tostring(split(UserEmail, "@")[0]),
+      UPNSuffix = tostring(split(UserEmail, "@")[1]),
+      HostName = coalesce(DeviceName, DeviceSerialNumber),
+      FailedFactorList = strcat_array(FailedFactors, ", ")
+customDetails:
+  PreviousLevel: PreviousLevel
+  TrustProfile: TrustProfileName
+  FailedFactors: FailedFactorList
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SonicWall CSE: device {{HostName}} trust level AlwaysDeny'
+  alertDescriptionFormat: 'Trust level changed from {{PreviousLevel}} to AlwaysDeny. Failed factors: {{FailedFactorList}}.'
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.1.0
+kind: Scheduled

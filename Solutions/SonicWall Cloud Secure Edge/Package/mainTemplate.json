@@ -1,0 +1,2613 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "SonicWall",
+    "comments": "Solution template for SonicWall Cloud Secure Edge"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "SonicWall Cloud Secure Edge Events",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    },
+    "DeployAnalyticsRule": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel analytic rules carried by this solution (ContentKind AnalyticsRule and its AnalyticsRuleTemplate registration face)."
+      }
+    },
+    "DeployWorkbook": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel workbook content and its Content Hub registration carried by this solution (ContentKind Workbook and WorkbookTemplate)."
+      }
+    },
+    "DeployDataConnector": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the data connectors carried by this solution, together with their metadata and catalog entries (ContentKind DataConnector, ResourceDataConnector and DataType)."
+      }
+    },
+    "DeployHuntingQuery": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel hunting queries carried by this solution."
+      }
+    },
+    "DeployParser": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the parsers and their registrations carried by this solution."
+      }
+    }
+  },
+  "variables": {
+    "_solutionName": "SonicWall Cloud Secure Edge",
+    "_solutionVersion": "3.2.2",
+    "solutionId": "sonicwall-inc.azure-sentinel-solution-sonicwall-cse",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "3.2.2",
+    "_dataConnectorContentIdConnectorDefinition1": "SonicWallCSEEvents",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "SonicWallCSEEventsConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','CSEEvents')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'CSEEvents')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('CSEEvents-Parser')))]",
+      "parserVersion1": "1.1.0",
+      "parserContentId1": "CSEEvents-Parser"
+    },
+    "workbookVersion1": "1.2.0",
+    "workbookContentId1": "SonicWallCSEEventsWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1'))))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]",
+    "_workbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','wb','-', uniqueString(concat(variables('_solutionId'),'-','Workbook','-',variables('_workbookContentId1'),'-', variables('workbookVersion1'))))]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.0",
+      "_analyticRulecontentId1": "deb9b2cb-3ada-4276-bf1f-b2e3de3adb01",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', 'deb9b2cb-3ada-4276-bf1f-b2e3de3adb01')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('deb9b2cb-3ada-4276-bf1f-b2e3de3adb01')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','deb9b2cb-3ada-4276-bf1f-b2e3de3adb01','-', '1.0.0')))]"
+    },
+    "analyticRuleObject2": {
+      "analyticRuleVersion2": "1.1.0",
+      "_analyticRulecontentId2": "2dafed9a-a8ea-4696-82ac-63ec6e5a3dab",
+      "analyticRuleId2": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '2dafed9a-a8ea-4696-82ac-63ec6e5a3dab')]",
+      "analyticRuleTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('2dafed9a-a8ea-4696-82ac-63ec6e5a3dab')))]",
+      "_analyticRulecontentProductId2": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','2dafed9a-a8ea-4696-82ac-63ec6e5a3dab','-', '1.1.0')))]"
+    },
+    "analyticRuleObject3": {
+      "analyticRuleVersion3": "1.1.0",
+      "_analyticRulecontentId3": "efeba9d3-9f43-47b5-8fff-be22e0c62208",
+      "analyticRuleId3": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', 'efeba9d3-9f43-47b5-8fff-be22e0c62208')]",
+      "analyticRuleTemplateSpecName3": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('efeba9d3-9f43-47b5-8fff-be22e0c62208')))]",
+      "_analyticRulecontentProductId3": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','efeba9d3-9f43-47b5-8fff-be22e0c62208','-', '1.1.0')))]"
+    },
+    "analyticRuleObject4": {
+      "analyticRuleVersion4": "1.1.0",
+      "_analyticRulecontentId4": "8d46a42e-41a7-4f62-8708-57a89f5918da",
+      "analyticRuleId4": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '8d46a42e-41a7-4f62-8708-57a89f5918da')]",
+      "analyticRuleTemplateSpecName4": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('8d46a42e-41a7-4f62-8708-57a89f5918da')))]",
+      "_analyticRulecontentProductId4": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','8d46a42e-41a7-4f62-8708-57a89f5918da','-', '1.1.0')))]"
+    },
+    "analyticRuleObject5": {
+      "analyticRuleVersion5": "1.0.1",
+      "_analyticRulecontentId5": "3b4df6eb-ad70-4896-a82d-07d27b22f6e8",
+      "analyticRuleId5": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '3b4df6eb-ad70-4896-a82d-07d27b22f6e8')]",
+      "analyticRuleTemplateSpecName5": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('3b4df6eb-ad70-4896-a82d-07d27b22f6e8')))]",
+      "_analyticRulecontentProductId5": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','3b4df6eb-ad70-4896-a82d-07d27b22f6e8','-', '1.0.1')))]"
+    },
+    "analyticRuleObject6": {
+      "analyticRuleVersion6": "1.1.1",
+      "_analyticRulecontentId6": "9bcdb741-9d3d-485d-a6f2-e227c2c1d881",
+      "analyticRuleId6": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '9bcdb741-9d3d-485d-a6f2-e227c2c1d881')]",
+      "analyticRuleTemplateSpecName6": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('9bcdb741-9d3d-485d-a6f2-e227c2c1d881')))]",
+      "_analyticRulecontentProductId6": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','9bcdb741-9d3d-485d-a6f2-e227c2c1d881','-', '1.1.1')))]"
+    },
+    "analyticRuleObject7": {
+      "analyticRuleVersion7": "1.0.1",
+      "_analyticRulecontentId7": "503ad035-2d18-43d5-b059-3ab2e1551707",
+      "analyticRuleId7": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '503ad035-2d18-43d5-b059-3ab2e1551707')]",
+      "analyticRuleTemplateSpecName7": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('503ad035-2d18-43d5-b059-3ab2e1551707')))]",
+      "_analyticRulecontentProductId7": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','503ad035-2d18-43d5-b059-3ab2e1551707','-', '1.0.1')))]"
+    },
+    "huntingQueryObject1": {
+      "huntingQueryVersion1": "1.0.0",
+      "_huntingQuerycontentId1": "4dbfdb29-3b0d-4d65-8c9f-108d5b2e6c87",
+      "huntingQueryTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('4dbfdb29-3b0d-4d65-8c9f-108d5b2e6c87')))]"
+    },
+    "huntingQueryObject2": {
+      "huntingQueryVersion2": "1.0.0",
+      "_huntingQuerycontentId2": "9e3e97b0-450b-4914-ac6d-a9639bf53360",
+      "huntingQueryTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('9e3e97b0-450b-4914-ac6d-a9639bf53360')))]"
+    },
+    "huntingQueryObject3": {
+      "huntingQueryVersion3": "1.0.0",
+      "_huntingQuerycontentId3": "0339edc9-58d5-4496-8c99-9d9af67ad89c",
+      "huntingQueryTemplateSpecName3": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('0339edc9-58d5-4496-8c99-9d9af67ad89c')))]"
+    },
+    "huntingQueryObject4": {
+      "huntingQueryVersion4": "1.0.0",
+      "_huntingQuerycontentId4": "85d79a75-92e8-47d3-bef3-b93616f8fb8d",
+      "huntingQueryTemplateSpecName4": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('85d79a75-92e8-47d3-bef3-b93616f8fb8d')))]"
+    },
+    "huntingQueryObject5": {
+      "huntingQueryVersion5": "1.0.0",
+      "_huntingQuerycontentId5": "c2fd48a8-dfb3-439d-8fa8-d3ade70b92a1",
+      "huntingQueryTemplateSpecName5": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('c2fd48a8-dfb3-439d-8fa8-d3ade70b92a1')))]"
+    },
+    "huntingQueryObject6": {
+      "huntingQueryVersion6": "1.0.0",
+      "_huntingQuerycontentId6": "747c46b5-9183-4672-af58-dfddbd7d879c",
+      "huntingQueryTemplateSpecName6": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('747c46b5-9183-4672-af58-dfddbd7d879c')))]"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "SonicWall Cloud Secure Edge Events",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "SonicWallCSEEvents",
+                  "title": "SonicWall Cloud Secure Edge Events",
+                  "publisher": "SonicWall",
+                  "descriptionMarkdown": "The SonicWall Cloud Secure Edge (CSE) connector ingests CSE events (sign-ins, private access, device trust, Internet Access, malware protection, and Command Center sign-ins) from the CSE events API into the `CSEEvents_CL` table, using the Codeless Connector Framework. Events are polled every 5 minutes and usually reach Microsoft Sentinel within 10 minutes.\n\nEvents that occur while the connector is disconnected, being reconnected, or failing (for example after the API key is changed or deleted) are not fetched later. Use the SonicWall CSE backfill tool after any of these to fill the gap.\n\nEach workspace connects to one CSE organization. To collect events from more than one CSE organization, use a separate workspace for each.\n\nQuery the data with the `CSEEvents` function installed with this solution.",
+                  "graphQueriesTableName": "CSEEvents_CL",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total events received",
+                      "legend": "CSE events",
+                      "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Latest CSE events",
+                      "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc\n| take 10"
+                    },
+                    {
+                      "description": "Events by type and sub type",
+                      "query": "{{graphQueriesTableName}}\n| summarize Count = count() by EventType, EventSubType"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": true
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "read": true,
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "CSE API key",
+                        "description": "A CSE Command Center API key with read access to events."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "title": "Connect SonicWall Cloud Secure Edge to Microsoft Sentinel",
+                      "description": "Select the Command Center region, enter the CSE API key, and select Connect.",
+                      "instructions": [
+                        {
+                          "type": "Dropdown",
+                          "parameters": {
+                            "label": "Command Center API host (US: net.banyanops.com, EU: eucc.console.banyanops.com)",
+                            "name": "apiHost",
+                            "options": [
+                              {
+                                "key": "net.banyanops.com",
+                                "text": "net.banyanops.com"
+                              },
+                              {
+                                "key": "eucc.console.banyanops.com",
+                                "text": "eucc.console.banyanops.com"
+                              }
+                            ],
+                            "placeholder": "Select the API host",
+                            "isMultiSelect": false,
+                            "required": true
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "CSE API key",
+                            "placeholder": "API key",
+                            "type": "password",
+                            "name": "apikey"
+                          }
+                        },
+                        {
+                          "type": "ConnectionToggleButton",
+                          "parameters": {
+                            "connectLabel": "Connect",
+                            "disconnectLabel": "Disconnect",
+                            "name": "toggle"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "condition": "[parameters('DeployDataConnector')]"
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CSEEventsDCR",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": "[variables('blanks')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-CSEEventsInput": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "correlation_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "external_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "org_id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "org_name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "sub_type",
+                        "type": "string"
+                      },
+                      {
+                        "name": "message",
+                        "type": "string"
+                      },
+                      {
+                        "name": "result",
+                        "type": "string"
+                      },
+                      {
+                        "name": "created_at",
+                        "type": "long"
+                      },
+                      {
+                        "name": "created_at_ns",
+                        "type": "long"
+                      },
+                      {
+                        "name": "user_principal",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "workload_principal",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "reported_by",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "role",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "trustscore",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "service",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "policy",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "channel",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "link",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "url_filtering",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "cseLogAnalytics"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CSEEventsInput"
+                    ],
+                    "destinations": [
+                      "cseLogAnalytics"
+                    ],
+                    "transformKql": "source | extend TimeGenerated = make_datetime(1970,1,1) + created_at * 1ms | project TimeGenerated, EventId = id, EventType = ['type'], EventSubType = sub_type, Severity = severity, Action = action, Result = result, Message = message, OrgId = org_id, CorrelationId = correlation_id, CreatedAtMs = created_at, RawEvent = pack('id', id, 'correlation_id', correlation_id, 'external_id', external_id, 'org_id', org_id, 'org_name', org_name, 'severity', severity, 'action', action, 'type', ['type'], 'sub_type', sub_type, 'message', message, 'result', result, 'created_at', created_at, 'created_at_ns', created_at_ns, 'user_principal', user_principal, 'workload_principal', workload_principal, 'reported_by', reported_by, 'role', role, 'trustscore', trustscore, 'service', service, 'policy', policy, 'channel', channel, 'link', link, 'url_filtering', url_filtering)",
+                    "outputStream": "Custom-CSEEvents_CL"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "CSEEvents_CL",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "CSEEvents_CL",
+                  "columns": [
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "description": "Event time in UTC, converted from created_at."
+                    },
+                    {
+                      "name": "EventId",
+                      "type": "string",
+                      "description": "CSE event id (unique key)."
+                    },
+                    {
+                      "name": "EventType",
+                      "type": "string",
+                      "description": "CSE type, for example Access or Identity."
+                    },
+                    {
+                      "name": "EventSubType",
+                      "type": "string",
+                      "description": "CSE sub_type, for example ServiceTunnel."
+                    },
+                    {
+                      "name": "Severity",
+                      "type": "string",
+                      "description": "CSE severity: DEBUG, INFO, WARN, or ERROR."
+                    },
+                    {
+                      "name": "Action",
+                      "type": "string",
+                      "description": "CSE action."
+                    },
+                    {
+                      "name": "Result",
+                      "type": "string",
+                      "description": "CSE result."
+                    },
+                    {
+                      "name": "Message",
+                      "type": "string",
+                      "description": "CSE message."
+                    },
+                    {
+                      "name": "OrgId",
+                      "type": "string",
+                      "description": "CSE organization id."
+                    },
+                    {
+                      "name": "CorrelationId",
+                      "type": "string",
+                      "description": "CSE correlation_id, when present."
+                    },
+                    {
+                      "name": "CreatedAtMs",
+                      "type": "long",
+                      "description": "Original created_at in epoch milliseconds."
+                    },
+                    {
+                      "name": "RawEvent",
+                      "type": "dynamic",
+                      "description": "Full event as returned by the CSE API."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      },
+      "condition": "[parameters('DeployDataConnector')]"
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "SonicWallCSEEvents",
+          "title": "SonicWall Cloud Secure Edge Events",
+          "publisher": "SonicWall",
+          "descriptionMarkdown": "The SonicWall Cloud Secure Edge (CSE) connector ingests CSE events (sign-ins, private access, device trust, Internet Access, malware protection, and Command Center sign-ins) from the CSE events API into the `CSEEvents_CL` table, using the Codeless Connector Framework. Events are polled every 5 minutes and usually reach Microsoft Sentinel within 10 minutes.\n\nEvents that occur while the connector is disconnected, being reconnected, or failing (for example after the API key is changed or deleted) are not fetched later. Use the SonicWall CSE backfill tool after any of these to fill the gap.\n\nEach workspace connects to one CSE organization. To collect events from more than one CSE organization, use a separate workspace for each.\n\nQuery the data with the `CSEEvents` function installed with this solution.",
+          "graphQueriesTableName": "CSEEvents_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total events received",
+              "legend": "CSE events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Latest CSE events",
+              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated desc\n| take 10"
+            },
+            {
+              "description": "Events by type and sub type",
+              "query": "{{graphQueriesTableName}}\n| summarize Count = count() by EventType, EventSubType"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": true
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "read": true,
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "CSE API key",
+                "description": "A CSE Command Center API key with read access to events."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect SonicWall Cloud Secure Edge to Microsoft Sentinel",
+              "description": "Select the Command Center region, enter the CSE API key, and select Connect.",
+              "instructions": [
+                {
+                  "type": "Dropdown",
+                  "parameters": {
+                    "label": "Command Center API host (US: net.banyanops.com, EU: eucc.console.banyanops.com)",
+                    "name": "apiHost",
+                    "options": [
+                      {
+                        "key": "net.banyanops.com",
+                        "text": "net.banyanops.com"
+                      },
+                      {
+                        "key": "eucc.console.banyanops.com",
+                        "text": "eucc.console.banyanops.com"
+                      }
+                    ],
+                    "placeholder": "Select the API host",
+                    "isMultiSelect": false,
+                    "required": true
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "CSE API key",
+                    "placeholder": "API key",
+                    "type": "password",
+                    "name": "apikey"
+                  }
+                },
+                {
+                  "type": "ConnectionToggleButton",
+                  "parameters": {
+                    "connectLabel": "Connect",
+                    "disconnectLabel": "Disconnect",
+                    "name": "toggle"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "SonicWall"
+        },
+        "support": {
+          "name": "SonicWall",
+          "tier": "Partner",
+          "link": "https://www.sonicwall.com/support"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployDataConnector')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "SonicWall Cloud Secure Edge Events",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "guidValue": {
+              "defaultValue": "[[newGuid()]",
+              "type": "securestring"
+            },
+            "innerWorkspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "SonicWall Cloud Secure Edge Events",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "securestring"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "apiHost": {
+              "defaultValue": ["net.banyanops.com"],
+              "type": "array"
+            },
+            "apikey": {
+              "defaultValue": "apikey",
+              "type": "securestring",
+              "minLength": 1
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'),'/Microsoft.SecurityInsights/', 'CSEEventsPoller', parameters('guidValue'))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "SonicWallCSEEvents",
+                "dataType": "CSEEvents_CL",
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-CSEEventsInput"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "Authorization",
+                  "ApiKeyIdentifier": "Bearer"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://', first(parameters('apiHost')), '/api/v1/events')]",
+                  "httpMethod": "GET",
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "UnixTimestampInMills",
+                  "startTimeAttributeName": "after",
+                  "endTimeAttributeName": "before",
+                  "queryParameters": {
+                    "order": "ASC",
+                    "severity": "DEBUG"
+                  },
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "SonicWall-CSE-Sentinel-CCF"
+                  },
+                  "rateLimitQPS": 2,
+                  "paginatedCallsPerSecond": 2,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "skip",
+                  "pageSizeParameterName": "limit",
+                  "pageSize": 1000,
+                  "zeroBasedIndexing": true
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data"
+                  ],
+                  "format": "json"
+                },
+                "isActive": true
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      },
+      "condition": "[parameters('DeployDataConnector')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "CSEEvents Data Parser with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2025-07-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Parser for SonicWall Cloud Secure Edge events",
+                "category": "Microsoft Sentinel Parser",
+                "functionAlias": "CSEEvents",
+                "query": "let _OrgNames = CSEEvents_CL\n    | extend _Name = tostring(RawEvent.org_name)\n    | where isnotempty(_Name)\n    | summarize _OrgName = take_any(_Name) by OrgId;\nCSEEvents_CL\n| extend _IngestedAt = ingestion_time()\n| summarize arg_min(_IngestedAt, *) by EventId\n| extend\n    EventTime = make_datetime(1970, 1, 1) + CreatedAtMs * 1ms,\n    OrgName = tostring(RawEvent.org_name),\n    UserEmail = tostring(RawEvent.user_principal.user.email),\n    UserName = tostring(RawEvent.user_principal.user.name),\n    UserRoles = RawEvent.user_principal.user.roles,\n    DeviceId = tostring(RawEvent.user_principal.device.id),\n    DeviceName = tostring(RawEvent.user_principal.device.friendly_name),\n    DeviceSerialNumber = tostring(RawEvent.user_principal.device.serial_number),\n    DevicePlatform = tostring(RawEvent.user_principal.device.platform),\n    DeviceOwnership = tostring(RawEvent.user_principal.device.ownership),\n    ClientIpList = tostring(RawEvent.user_principal.client.ip_address),\n    ClientUserAgent = tostring(RawEvent.user_principal.client.user_agent),\n    ClientCountry = tostring(RawEvent.user_principal.client.geo_location.country),\n    ClientCity = tostring(RawEvent.user_principal.client.geo_location.city),\n    ServiceName = tostring(RawEvent.service.name),\n    ServiceId = tostring(RawEvent.service.id),\n    PolicyName = tostring(RawEvent.policy.name),\n    AccessLevel = tostring(RawEvent.channel.access_level.resource),\n    RequestProtocol = tostring(RawEvent.channel.request_data.protocol),\n    RequestMethod = tostring(RawEvent.channel.request_data.type),\n    RequestPath = tostring(RawEvent.channel.request_data.query_resources),\n    SniName = tostring(RawEvent.channel.sni_data.name_requested),\n    DestinationAddress = tostring(RawEvent.link.destination.ip),\n    TrustLevel = tostring(RawEvent.trustscore.trust_level),\n    TrustScore = toint(RawEvent.trustscore.score),\n    TrustProfileName = tostring(RawEvent.trustscore.trust_profile_name),\n    FailedFactors = RawEvent.trustscore.failed_factors,\n    PassedFactors = RawEvent.trustscore.passed_factors,\n    UrlDomain = tostring(RawEvent.url_filtering.url_details.domain),\n    UrlPath = tostring(RawEvent.url_filtering.url_details.path),\n    UrlFilterAction = tostring(RawEvent.url_filtering.url_filtering_result.action),\n    BlockReason = tostring(RawEvent.url_filtering.url_filtering_result.block_reason),\n    UrlCategory = tostring(RawEvent.url_filtering.url_filtering_result.category),\n    FileHash = tostring(RawEvent.url_filtering.url_filtering_result.file_hash),\n    SaasIdentity = tostring(RawEvent.url_filtering.url_filtering_result.saas_identity),\n    ItpPolicyName = tostring(RawEvent.url_filtering.url_filtering_result.applied_policy.name),\n    ReportedByType = tostring(RawEvent.reported_by.type),\n    ReportedByHost = tostring(RawEvent.reported_by.host_name),\n    AccessTierName = tostring(RawEvent.reported_by.access_tier_name)\n| extend\n    FailedFactors = iff(isnull(FailedFactors), dynamic([]), FailedFactors),\n    PassedFactors = iff(isnull(PassedFactors), dynamic([]), PassedFactors),\n    _Addresses = split(replace_regex(ClientIpList, @\"\\s\", \"\"), \",\"),\n    Message = trim_end(@\"\\s*\\(x\\d+\\)\\s*\", Message)\n| mv-apply _Address = _Addresses to typeof(string) on (\n    extend _Ip = case(\n        _Address matches regex @\"^[0-9.]+(:\\d+)?$\", extract(@\"^([0-9.]+)\", 1, _Address),\n        _Address startswith \"[\", extract(@\"^\\[([^\\]]+)\\]\", 1, _Address),\n        _Address)\n    | extend _IsTunnel = coalesce(ipv4_is_in_range(_Ip, \"100.64.0.0/10\"), false)\n    | summarize\n        ClientIp = tostring(make_list_if(_Ip, isnotempty(_Ip) and not(_IsTunnel))[0]),\n        TunnelIp = tostring(make_list_if(_Ip, _IsTunnel)[0])\n    )\n| extend FailedFactorCount = array_length(FailedFactors)\n| lookup kind=leftouter _OrgNames on OrgId\n| extend OrgName = iff(isempty(OrgName), _OrgName, OrgName)\n| project\n    TimeGenerated, EventTime, EventId, EventType, EventSubType, Action, Severity, Result, Message,\n    OrgId, OrgName, CorrelationId,\n    UserEmail, UserName, UserRoles,\n    DeviceId, DeviceName, DeviceSerialNumber, DevicePlatform, DeviceOwnership,\n    ClientIp, TunnelIp, ClientIpList, ClientUserAgent, ClientCountry, ClientCity,\n    ServiceName, ServiceId, PolicyName,\n    AccessLevel, RequestProtocol, RequestMethod, RequestPath, SniName, DestinationAddress,\n    TrustLevel, TrustScore, TrustProfileName, FailedFactors, FailedFactorCount, PassedFactors,\n    UrlDomain, UrlPath, UrlFilterAction, BlockReason, UrlCategory, FileHash, SaasIdentity, ItpPolicyName,\n    ReportedByType, ReportedByHost, AccessTierName,\n    CreatedAtMs, IngestedAt = _IngestedAt, RawEvent\n",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": ""
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'CSEEvents')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "SonicWall Cloud Secure Edge",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "Parser for SonicWall Cloud Secure Edge events",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.1.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.1.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      },
+      "condition": "[parameters('DeployParser')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2025-07-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "Parser for SonicWall Cloud Secure Edge events",
+        "category": "Microsoft Sentinel Parser",
+        "functionAlias": "CSEEvents",
+        "query": "let _OrgNames = CSEEvents_CL\n    | extend _Name = tostring(RawEvent.org_name)\n    | where isnotempty(_Name)\n    | summarize _OrgName = take_any(_Name) by OrgId;\nCSEEvents_CL\n| extend _IngestedAt = ingestion_time()\n| summarize arg_min(_IngestedAt, *) by EventId\n| extend\n    EventTime = make_datetime(1970, 1, 1) + CreatedAtMs * 1ms,\n    OrgName = tostring(RawEvent.org_name),\n    UserEmail = tostring(RawEvent.user_principal.user.email),\n    UserName = tostring(RawEvent.user_principal.user.name),\n    UserRoles = RawEvent.user_principal.user.roles,\n    DeviceId = tostring(RawEvent.user_principal.device.id),\n    DeviceName = tostring(RawEvent.user_principal.device.friendly_name),\n    DeviceSerialNumber = tostring(RawEvent.user_principal.device.serial_number),\n    DevicePlatform = tostring(RawEvent.user_principal.device.platform),\n    DeviceOwnership = tostring(RawEvent.user_principal.device.ownership),\n    ClientIpList = tostring(RawEvent.user_principal.client.ip_address),\n    ClientUserAgent = tostring(RawEvent.user_principal.client.user_agent),\n    ClientCountry = tostring(RawEvent.user_principal.client.geo_location.country),\n    ClientCity = tostring(RawEvent.user_principal.client.geo_location.city),\n    ServiceName = tostring(RawEvent.service.name),\n    ServiceId = tostring(RawEvent.service.id),\n    PolicyName = tostring(RawEvent.policy.name),\n    AccessLevel = tostring(RawEvent.channel.access_level.resource),\n    RequestProtocol = tostring(RawEvent.channel.request_data.protocol),\n    RequestMethod = tostring(RawEvent.channel.request_data.type),\n    RequestPath = tostring(RawEvent.channel.request_data.query_resources),\n    SniName = tostring(RawEvent.channel.sni_data.name_requested),\n    DestinationAddress = tostring(RawEvent.link.destination.ip),\n    TrustLevel = tostring(RawEvent.trustscore.trust_level),\n    TrustScore = toint(RawEvent.trustscore.score),\n    TrustProfileName = tostring(RawEvent.trustscore.trust_profile_name),\n    FailedFactors = RawEvent.trustscore.failed_factors,\n    PassedFactors = RawEvent.trustscore.passed_factors,\n    UrlDomain = tostring(RawEvent.url_filtering.url_details.domain),\n    UrlPath = tostring(RawEvent.url_filtering.url_details.path),\n    UrlFilterAction = tostring(RawEvent.url_filtering.url_filtering_result.action),\n    BlockReason = tostring(RawEvent.url_filtering.url_filtering_result.block_reason),\n    UrlCategory = tostring(RawEvent.url_filtering.url_filtering_result.category),\n    FileHash = tostring(RawEvent.url_filtering.url_filtering_result.file_hash),\n    SaasIdentity = tostring(RawEvent.url_filtering.url_filtering_result.saas_identity),\n    ItpPolicyName = tostring(RawEvent.url_filtering.url_filtering_result.applied_policy.name),\n    ReportedByType = tostring(RawEvent.reported_by.type),\n    ReportedByHost = tostring(RawEvent.reported_by.host_name),\n    AccessTierName = tostring(RawEvent.reported_by.access_tier_name)\n| extend\n    FailedFactors = iff(isnull(FailedFactors), dynamic([]), FailedFactors),\n    PassedFactors = iff(isnull(PassedFactors), dynamic([]), PassedFactors),\n    _Addresses = split(replace_regex(ClientIpList, @\"\\s\", \"\"), \",\"),\n    Message = trim_end(@\"\\s*\\(x\\d+\\)\\s*\", Message)\n| mv-apply _Address = _Addresses to typeof(string) on (\n    extend _Ip = case(\n        _Address matches regex @\"^[0-9.]+(:\\d+)?$\", extract(@\"^([0-9.]+)\", 1, _Address),\n        _Address startswith \"[\", extract(@\"^\\[([^\\]]+)\\]\", 1, _Address),\n        _Address)\n    | extend _IsTunnel = coalesce(ipv4_is_in_range(_Ip, \"100.64.0.0/10\"), false)\n    | summarize\n        ClientIp = tostring(make_list_if(_Ip, isnotempty(_Ip) and not(_IsTunnel))[0]),\n        TunnelIp = tostring(make_list_if(_Ip, _IsTunnel)[0])\n    )\n| extend FailedFactorCount = array_length(FailedFactors)\n| lookup kind=leftouter _OrgNames on OrgId\n| extend OrgName = iff(isempty(OrgName), _OrgName, OrgName)\n| project\n    TimeGenerated, EventTime, EventId, EventType, EventSubType, Action, Severity, Result, Message,\n    OrgId, OrgName, CorrelationId,\n    UserEmail, UserName, UserRoles,\n    DeviceId, DeviceName, DeviceSerialNumber, DevicePlatform, DeviceOwnership,\n    ClientIp, TunnelIp, ClientIpList, ClientUserAgent, ClientCountry, ClientCity,\n    ServiceName, ServiceId, PolicyName,\n    AccessLevel, RequestProtocol, RequestMethod, RequestPath, SniName, DestinationAddress,\n    TrustLevel, TrustScore, TrustProfileName, FailedFactors, FailedFactorCount, PassedFactors,\n    UrlDomain, UrlPath, UrlFilterAction, BlockReason, UrlCategory, FileHash, SaasIdentity, ItpPolicyName,\n    ReportedByType, ReportedByHost, AccessTierName,\n    CreatedAtMs, IngestedAt = _IngestedAt, RawEvent\n",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": ""
+          }
+        ]
+      },
+      "condition": "[parameters('DeployParser')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'CSEEvents')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "SonicWall Cloud Secure Edge",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "SonicWall"
+        },
+        "support": {
+          "name": "SonicWall",
+          "tier": "Partner",
+          "link": "https://www.sonicwall.com/support"
+        }
+      },
+      "condition": "[parameters('DeployParser')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSEEvents Workbook with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain insights into SonicWall Cloud Secure Edge events: ingestion and connector health, sign-ins and private access, device trust, and Internet Access blocks."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":9,\"content\":{\"version\":\"KqlParameterItem/1.0\",\"query\":\"\",\"parameters\":[{\"id\":\"6d2a8f3c-5b1e-4c7a-9e2d-1f0a3b4c5d6e\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"TimeRange\",\"type\":4,\"isRequired\":true,\"value\":{\"durationMs\":86400000},\"typeSettings\":{\"selectableValues\":[{\"durationMs\":3600000},{\"durationMs\":14400000},{\"durationMs\":43200000},{\"durationMs\":86400000},{\"durationMs\":172800000},{\"durationMs\":259200000},{\"durationMs\":604800000},{\"durationMs\":1209600000}]}},{\"id\":\"3f7e1b4d-5c6a-4d8e-9f0a-1b2c3d4e5f60\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Organization\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"CSEEvents\\r\\n| where isnotempty(OrgId)\\r\\n| summarize Count = count(), Name = take_any(OrgName) by OrgId\\r\\n| order by Count desc\\r\\n| project Value = OrgId, Label = strcat(Name, \\\" (\\\", Count, \\\")\\\")\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"selectAllValue\":\"All\"},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},{\"id\":\"0c4b8e1a-2f3d-4a5b-8c6d-7e8f9a0b1c2d\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"User\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"CSEEvents\\r\\n| where isnotempty(UserEmail)\\r\\n| summarize Count = count(), Name = take_any(UserEmail) by UserEmail\\r\\n| order by Count desc\\r\\n| project Value = UserEmail, Label = strcat(Name, \\\" (\\\", Count, \\\")\\\")\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"selectAllValue\":\"All\"},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},{\"id\":\"1d5c9f2b-3a4e-4b6c-9d7e-8f9a0b1c2d3e\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"Device\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"CSEEvents\\r\\n| where isnotempty(DeviceName)\\r\\n| summarize Count = count(), Name = take_any(DeviceName) by DeviceName\\r\\n| order by Count desc\\r\\n| project Value = DeviceName, Label = strcat(Name, \\\" (\\\", Count, \\\")\\\")\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"selectAllValue\":\"All\"},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},{\"id\":\"2e6d0a3c-4b5f-4c7d-8e8f-9a0b1c2d3e4f\",\"version\":\"KqlParameterItem/1.0\",\"name\":\"ClientIp\",\"type\":2,\"isRequired\":true,\"multiSelect\":true,\"quote\":\"'\",\"delimiter\":\",\",\"query\":\"CSEEvents\\r\\n| where isnotempty(ClientIp)\\r\\n| summarize Count = count(), Name = take_any(ClientIp) by ClientIp\\r\\n| order by Count desc\\r\\n| project Value = ClientIp, Label = strcat(Name, \\\" (\\\", Count, \\\")\\\")\",\"value\":[\"value::all\"],\"typeSettings\":{\"additionalResourceOptions\":[\"value::all\"],\"selectAllValue\":\"All\"},\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"}],\"style\":\"pills\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"parameters - 0\"},{\"type\":1,\"content\":{\"json\":\"## Ingestion and health\"},\"name\":\"text - 1\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| summarize Events = count() by EventType, bin(EventTime, {TimeRange:grain})\",\"size\":0,\"title\":\"Events over time by type\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"query - 2\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| summarize Events = count(), LastSeen = max(EventTime) by EventType, EventSubType, Action, Severity\\r\\n| order by Events desc\",\"size\":1,\"title\":\"Events by type, subtype, and action\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 3\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| extend DelayMinutes = (IngestedAt - EventTime) / 1m\\r\\n| summarize Median = percentile(DelayMinutes, 50), P95 = percentile(DelayMinutes, 95), Maximum = max(DelayMinutes) by bin(EventTime, {TimeRange:grain})\",\"size\":0,\"title\":\"Delay from event to Sentinel (minutes)\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"linechart\"},\"name\":\"query - 4\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"SentinelHealth\\r\\n| where SentinelResourceKind == \\\"ApiPolling\\\" and SentinelResourceName endswith \\\"CSEEventsPoller\\\"\\r\\n| project TimeGenerated, OperationName, Status, Reason, Description\\r\\n| order by TimeGenerated desc\",\"size\":1,\"title\":\"Connector health\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 5\"},{\"type\":1,\"content\":{\"json\":\"## Access and sign-ins\"},\"name\":\"text - 6\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType == \\\"Access\\\" and isnotempty(ServiceName)\\r\\n| summarize Users = dcount(UserEmail), Devices = dcount(DeviceSerialNumber), Connections = countif(Action in (\\\"Connected\\\", \\\"Authorized\\\")), Denials = countif(Action == \\\"Unauthorized\\\"), LastSeen = max(EventTime) by OrgName, ServiceName, EventSubType\\r\\n| order by Connections desc\",\"size\":1,\"title\":\"Services accessed\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 7\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where (EventType == \\\"Access\\\" and Action == \\\"Unauthorized\\\") or (EventType == \\\"Identity\\\" and Action == \\\"Deny\\\")\\r\\n| summarize Denials = count(), Reasons = make_set(Message, 5), LastDenial = max(EventTime) by OrgName, UserEmail\\r\\n| order by Denials desc\\r\\n| take 25\",\"size\":1,\"title\":\"Users with the most access denials\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 8\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType == \\\"Identity\\\" and isnotempty(ClientCountry)\\r\\n| summarize Granted = countif(Action == \\\"Grant\\\"), Denied = countif(Action == \\\"Deny\\\"), Users = dcount(UserEmail), LastSeen = max(EventTime) by OrgName, ClientCountry, ClientCity\\r\\n| order by Denied desc, Granted desc\",\"size\":1,\"title\":\"Sign-ins by location\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 9\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType == \\\"AdminLogin\\\" and Action == \\\"Deny\\\"\\r\\n| project EventTime, OrgName, UserEmail, EventSubType, ClientIp, ClientUserAgent\\r\\n| order by EventTime desc\",\"size\":1,\"title\":\"Failed admin logins\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 10\"},{\"type\":1,\"content\":{\"json\":\"## Devices and trust\"},\"name\":\"text - 11\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType == \\\"TrustScoring\\\" and isnotempty(DeviceSerialNumber)\\r\\n| summarize arg_max(EventTime, TrustLevel, TrustScore, TrustProfileName, FailedFactors, OrgName, UserEmail, DeviceName, DevicePlatform) by DeviceSerialNumber\\r\\n| project-rename LastEvaluated = EventTime\\r\\n| order by TrustScore asc\",\"size\":1,\"title\":\"Current device trust levels\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 12\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType == \\\"TrustScoring\\\" and FailedFactorCount > 0\\r\\n| mv-expand Factor = FailedFactors to typeof(string)\\r\\n| summarize Evaluations = count(), Devices = dcount(DeviceSerialNumber), LastSeen = max(EventTime) by Factor\\r\\n| order by Evaluations desc\",\"size\":1,\"title\":\"Most common failed trust factors\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 13\",\"customWidth\":\"50\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where isnotempty(DeviceSerialNumber) and isnotempty(DevicePlatform)\\r\\n| summarize Devices = dcount(DeviceSerialNumber) by DevicePlatform\",\"size\":1,\"title\":\"Devices by platform\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\"},\"name\":\"query - 14\",\"customWidth\":\"50\"},{\"type\":1,\"content\":{\"json\":\"## Internet Access and threats\"},\"name\":\"text - 15\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType in (\\\"Threat\\\", \\\"Compliance\\\", \\\"Malware\\\", \\\"SAASSecurity\\\") and Action == \\\"Denied\\\"\\r\\n| summarize Blocks = count() by BlockReason, bin(EventTime, {TimeRange:grain})\",\"size\":0,\"title\":\"Internet Access blocks over time by reason\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\"},\"name\":\"query - 16\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType in (\\\"Threat\\\", \\\"Compliance\\\", \\\"Malware\\\", \\\"SAASSecurity\\\") and Action == \\\"Denied\\\"\\r\\n| mv-expand Category = split(iff(isempty(UrlCategory), \\\"(none)\\\", UrlCategory), \\\"|\\\") to typeof(string)\\r\\n| summarize Blocks = count(), Users = dcount(UserEmail), LastSeen = max(EventTime) by Category, BlockReason\\r\\n| order by Blocks desc\",\"size\":1,\"title\":\"Internet Access blocks by category and reason\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 17\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType in (\\\"Threat\\\", \\\"Compliance\\\", \\\"Malware\\\", \\\"SAASSecurity\\\") and Action == \\\"Denied\\\"\\r\\n| summarize Events = count(), Users = dcount(UserEmail), LastSeen = max(EventTime) by OrgName, EventType, UrlDomain, BlockReason\\r\\n| order by Events desc\\r\\n| take 50\",\"size\":1,\"title\":\"Internet Access blocks by destination\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 18\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CSEEvents\\r\\n| where '{Organization:label}' == \\\"All\\\" or OrgId in ({Organization})\\r\\n| where '{User:label}' == \\\"All\\\" or UserEmail in ({User})\\r\\n| where '{Device:label}' == \\\"All\\\" or DeviceName in ({Device})\\r\\n| where '{ClientIp:label}' == \\\"All\\\" or ClientIp in ({ClientIp})\\r\\n| where EventType == \\\"Malware\\\"\\r\\n| summarize Events = count(), Users = dcount(UserEmail), LastSeen = max(EventTime) by OrgName, Action, UrlDomain, BlockReason, FileHash\\r\\n| order by LastSeen desc\",\"size\":1,\"title\":\"Malware inspection and blocks\",\"timeContext\":{\"durationMs\":0},\"timeContextFromParameter\":\"TimeRange\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"name\":\"query - 19\"},{\"type\":1,\"content\":{\"json\":\"SonicWall CSE Events workbook, version 1.2.0\"},\"name\":\"text - version\"}],\"fromTemplateId\":\"sentinel-SonicWallCSEEvents\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=SonicWallCSEEventsWorkbook; logoFileName=sonicwall_logo.svg; description=Gain insights into SonicWall Cloud Secure Edge events: ingestion and connector health, sign-ins and private access, device trust, and Internet Access blocks.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.2.0; title=SonicWall Cloud Secure Edge Events; templateRelativePath=SonicWallCSEEvents.json; subtitle=; provider=SonicWall; support=; author=; source=; categories=}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                },
+                "dependencies": {
+                  "operator": "AND",
+                  "criteria": [
+                    {
+                      "contentId": "CSEEvents_CL",
+                      "kind": "DataType"
+                    },
+                    {
+                      "contentId": "SonicWallCSEEvents",
+                      "kind": "DataConnector"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_workbookContentId1')]",
+        "contentKind": "Workbook",
+        "displayName": "[parameters('workbook1-name')]",
+        "contentProductId": "[variables('_workbookcontentProductId1')]",
+        "id": "[variables('_workbookcontentProductId1')]",
+        "version": "[variables('workbookVersion1')]"
+      },
+      "condition": "[parameters('DeployWorkbook')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSEConnectorHealthFailure_AnalyticalRules Analytics Rule with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "The SonicWall Cloud Secure Edge (CSE) event connector reported a failed data fetch, for\nexample HTTP 401 after the API key was deleted or expired. While it fails, no CSE events are\ningested, and events from the failure period are not fetched later: after fixing the cause,\ndisconnect and connect the connector, then backfill the gap.\nThe rule matches both health records the poller writes: a \"Data fetch status change\" with\nStatus Failure (written once, when the status changes) and the hourly \"Data fetch failure\nsummary\" (written while failures continue). A poller that stops polling without failing\nwrites neither; the rule \"SonicWall CSE - No events ingested\" covers that case.",
+                "displayName": "SonicWall CSE - Event connector failing to fetch data",
+                "enabled": false,
+                "query": "// Only records ingested since the previous run, so each record alerts once although the\n// query period overlaps runs to allow for health ingestion delay.\nSentinelHealth\n| where ingestion_time() > ago(15m)\n| where SentinelResourceType == \"Data connector\" and SentinelResourceKind == \"ApiPolling\"\n| where SentinelResourceName endswith \"CSEEventsPoller\"\n| where Status == \"Failure\" or OperationName == \"Data fetch failure summary\"\n| extend Failures = ExtendedProperties.FailureSummary\n| mv-expand Failure = iff(array_length(Failures) > 0, Failures, dynamic([{}]))\n| extend\n    StatusCode = coalesce(tostring(Failure.StatusCode), Reason),\n    FailureType = tostring(Failure.HealthResultType),\n    StatusMessage = coalesce(tostring(Failure.StatusMessage), Description),\n    FailureStart = todatetime(ExtendedProperties.StartTime),\n    FailureEnd = todatetime(ExtendedProperties.EndTime)\n| project TimeGenerated, SentinelResourceName, OperationName, Status, StatusCode, FailureType,\n    StatusMessage, FailureStart, FailureEnd, SentinelResourceId\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT1H",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "SonicWallCSEEvents",
+                    "dataTypes": [
+                      "CSEEvents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "DefenseEvasion"
+                ],
+                "techniques": [
+                  "T1562"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "AzureResource",
+                    "fieldMappings": [
+                      {
+                        "identifier": "ResourceId",
+                        "columnName": "SentinelResourceId"
+                      }
+                    ]
+                  }
+                ],
+                "customDetails": {
+                  "StatusCode": "StatusCode",
+                  "FailureType": "FailureType"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "SonicWall CSE connector fetch failure: {{StatusCode}}",
+                  "alertDescriptionFormat": "{{StatusMessage}}"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "SonicWall CSE - Event connector failing to fetch data",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject2').analyticRuleTemplateSpecName2]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSEDeviceTrustAlwaysDeny_AnalyticalRules Analytics Rule with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject2')._analyticRulecontentId2]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "A device's SonicWall Cloud Secure Edge (CSE) trust level changed to AlwaysDeny, so the device\nis denied access to protected resources. Causes include failed trust factors (for example\ndisk encryption or firewall turned off), no trust profile matching the device (\"Default\"),\nor an administrator ban. Alerts once per change: the trust state repeats on every Service\nTunnel event, so only TrustScoring events are evaluated, and an evaluation that stays at\nAlwaysDeny does not alert again.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. The query period is 2 days to\ninclude backfilled events, which keep their own time for up to 48 hours.",
+                "displayName": "SonicWall CSE - Device trust level dropped to AlwaysDeny",
+                "enabled": false,
+                "query": "let RunWindow = 1h;\nCSEEvents\n| where EventType == \"TrustScoring\" and isnotempty(DeviceSerialNumber)\n| order by DeviceSerialNumber asc, EventTime asc\n| extend PreviousLevel = iff(prev(DeviceSerialNumber) == DeviceSerialNumber, prev(TrustLevel), \"\")\n| where TrustLevel == \"AlwaysDeny\" and PreviousLevel != \"AlwaysDeny\"\n| where IngestedAt > ago(RunWindow)\n| project TimeGenerated, EventTime, Action, DeviceSerialNumber, DeviceName, DevicePlatform, UserEmail,\n    PreviousLevel, TrustLevel, TrustScore, TrustProfileName, FailedFactors, EventId\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1]),\n    HostName = coalesce(DeviceName, DeviceSerialNumber),\n    FailedFactorList = strcat_array(FailedFactors, \", \")\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P2D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "SonicWallCSEEvents",
+                    "dataTypes": [
+                      "CSEEvents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "DefenseEvasion"
+                ],
+                "techniques": [
+                  "T1562"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Host",
+                    "fieldMappings": [
+                      {
+                        "identifier": "HostName",
+                        "columnName": "HostName"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "FullName",
+                        "columnName": "UserEmail"
+                      },
+                      {
+                        "identifier": "Name",
+                        "columnName": "AccountName"
+                      },
+                      {
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
+                      }
+                    ]
+                  }
+                ],
+                "customDetails": {
+                  "FailedFactors": "FailedFactorList",
+                  "TrustProfile": "TrustProfileName",
+                  "PreviousLevel": "PreviousLevel"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "SonicWall CSE: device {{HostName}} trust level AlwaysDeny",
+                  "alertDescriptionFormat": "Trust level changed from {{PreviousLevel}} to AlwaysDeny. Failed factors: {{FailedFactorList}}."
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject2').analyticRuleId2,'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Analytics Rule 2",
+                "parentId": "[variables('analyticRuleObject2').analyticRuleId2]",
+                "contentId": "[variables('analyticRuleObject2')._analyticRulecontentId2]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject2').analyticRuleVersion2]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject2')._analyticRulecontentId2]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "SonicWall CSE - Device trust level dropped to AlwaysDeny",
+        "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
+        "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
+        "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject3').analyticRuleTemplateSpecName3]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSEFailedAdminLogin_AnalyticalRules Analytics Rule with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject3')._analyticRulecontentId3]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "A sign-in to the SonicWall Cloud Secure Edge (CSE) Command Center failed (AdminLogin Deny).\nCSE logs failed admin logins at INFO severity, so alerting on severity misses them. Admin\nsign-in normally goes through MySonicWall single sign-on; a failed sign-in with a local\naccount, such as the built-in provisioning account, deserves review.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. The query period is 2 days to\ninclude backfilled events, which keep their own time for up to 48 hours.",
+                "displayName": "SonicWall CSE - Failed Command Center admin login",
+                "enabled": false,
+                "query": "CSEEvents\n| where IngestedAt > ago(1h)\n| where EventType == \"AdminLogin\" and Action == \"Deny\"\n| summarize\n    FailedLogins = count(),\n    FirstFailure = min(EventTime),\n    LastFailure = max(EventTime),\n    SubTypes = make_set(EventSubType),\n    ClientIps = make_set_if(ClientIp, isnotempty(ClientIp), 10),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp)),\n    UserAgent = take_any(ClientUserAgent)\n    by UserEmail, UserName\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1])\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P2D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "SonicWallCSEEvents",
+                    "dataTypes": [
+                      "CSEEvents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "CredentialAccess",
+                  "InitialAccess"
+                ],
+                "techniques": [
+                  "T1110",
+                  "T1078"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "FullName",
+                        "columnName": "UserEmail"
+                      },
+                      {
+                        "identifier": "Name",
+                        "columnName": "AccountName"
+                      },
+                      {
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Address",
+                        "columnName": "ClientIp"
+                      }
+                    ]
+                  }
+                ],
+                "customDetails": {
+                  "ClientIps": "ClientIps",
+                  "SubTypes": "SubTypes",
+                  "FailedLogins": "FailedLogins"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "SonicWall CSE: {{FailedLogins}} failed admin login(s) for {{UserEmail}}",
+                  "alertDescriptionFormat": "Failed Command Center sign-in for {{UserEmail}} between {{FirstFailure}} and {{LastFailure}}."
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject3').analyticRuleId3,'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Analytics Rule 3",
+                "parentId": "[variables('analyticRuleObject3').analyticRuleId3]",
+                "contentId": "[variables('analyticRuleObject3')._analyticRulecontentId3]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject3').analyticRuleVersion3]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject3')._analyticRulecontentId3]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "SonicWall CSE - Failed Command Center admin login",
+        "contentProductId": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
+        "id": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
+        "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject4').analyticRuleTemplateSpecName4]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSEMalwareBlocked_AnalyticalRules Analytics Rule with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject4')._analyticRulecontentId4]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge (CSE) Malware Download Protection blocked a file download as\nmalicious (Malware Denied). The user's device attempted to download a malicious file; check\nhow the user reached the source and whether other copies were obtained another way.\nLogged at INFO severity. Malware events can reach the API up to about 10 minutes after they\noccur.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. The query period is 2 days to\ninclude backfilled events, which keep their own time for up to 48 hours.",
+                "displayName": "SonicWall CSE - Malware download blocked",
+                "enabled": false,
+                "query": "CSEEvents\n| where EventType == \"Malware\" and Action == \"Denied\"\n| where IngestedAt > ago(1h)\n| project TimeGenerated, EventTime, UserEmail, DeviceSerialNumber, DeviceName, ClientIp, UrlDomain, UrlPath,\n    BlockReason, FileHash, ItpPolicyName, Message, EventId\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1]),\n    HostName = coalesce(DeviceName, DeviceSerialNumber),\n    Url = strcat(\"https://\", UrlDomain, UrlPath)\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P2D",
+                "severity": "High",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "SonicWallCSEEvents",
+                    "dataTypes": [
+                      "CSEEvents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "Execution",
+                  "InitialAccess"
+                ],
+                "techniques": [
+                  "T1204",
+                  "T1189"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "FullName",
+                        "columnName": "UserEmail"
+                      },
+                      {
+                        "identifier": "Name",
+                        "columnName": "AccountName"
+                      },
+                      {
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Host",
+                    "fieldMappings": [
+                      {
+                        "identifier": "HostName",
+                        "columnName": "HostName"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Address",
+                        "columnName": "ClientIp"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "URL",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Url",
+                        "columnName": "Url"
+                      }
+                    ]
+                  }
+                ],
+                "customDetails": {
+                  "Domain": "UrlDomain",
+                  "FileHash": "FileHash",
+                  "BlockReason": "BlockReason"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "SonicWall CSE: malware download blocked from {{UrlDomain}}",
+                  "alertDescriptionFormat": "{{UserEmail}} was blocked from downloading {{Url}} ({{BlockReason}})."
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject4').analyticRuleId4,'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Analytics Rule 4",
+                "parentId": "[variables('analyticRuleObject4').analyticRuleId4]",
+                "contentId": "[variables('analyticRuleObject4')._analyticRulecontentId4]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject4').analyticRuleVersion4]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject4')._analyticRulecontentId4]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "SonicWall CSE - Malware download blocked",
+        "contentProductId": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
+        "id": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
+        "version": "[variables('analyticRuleObject4').analyticRuleVersion4]"
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject5').analyticRuleTemplateSpecName5]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSENoEventsIngested_AnalyticalRules Analytics Rule with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject5')._analyticRulecontentId5]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "No SonicWall Cloud Secure Edge (CSE) events have been ingested for longer than the\nthreshold. It complements the health rule: it does not depend on health monitoring being\nenabled, and it also fires when the connector is disconnected or ingestion stops for a reason\nthe connector does not report (for example the workspace daily cap).\nPossible causes: the connector stopped polling or was disconnected, the API key is invalid,\nthe workspace daily cap was reached, or CSE produced no events. Check the connector, then\ncompare with the CSE events API before assuming data was lost.\nSet QuietThreshold to the longest normal quiet period for the organization; a short threshold\nalso fires during quiet periods, such as nights or weekends with no CSE activity. Outages\nshorter than the threshold are reported by the connector health rule.",
+                "displayName": "SonicWall CSE - No events ingested",
+                "enabled": false,
+                "query": "let QuietThreshold = 2h;\n// One row is always returned; LastIngested is null when nothing arrived within the query period.\nCSEEvents_CL\n| summarize LastIngested = max(ingestion_time()), LastEventTime = max(TimeGenerated)\n| where isnull(LastIngested) or LastIngested < ago(QuietThreshold)\n| extend HoursSinceLastIngestion = iff(isnull(LastIngested), real(null), round((now() - LastIngested) / 1h, 1))\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P1D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "SonicWallCSEEvents",
+                    "dataTypes": [
+                      "CSEEvents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "DefenseEvasion"
+                ],
+                "techniques": [
+                  "T1562"
+                ],
+                "customDetails": {
+                  "LastIngested": "LastIngested",
+                  "HoursSinceLast": "HoursSinceLastIngestion"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "SonicWall CSE: no events ingested since {{LastIngested}}",
+                  "alertDescriptionFormat": "No CSE events ingested for more than the threshold. Last ingestion: {{LastIngested}}."
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject5').analyticRuleId5,'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Analytics Rule 5",
+                "parentId": "[variables('analyticRuleObject5').analyticRuleId5]",
+                "contentId": "[variables('analyticRuleObject5')._analyticRulecontentId5]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject5').analyticRuleVersion5]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject5')._analyticRulecontentId5]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "SonicWall CSE - No events ingested",
+        "contentProductId": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
+        "id": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
+        "version": "[variables('analyticRuleObject5').analyticRuleVersion5]"
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject6').analyticRuleTemplateSpecName6]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSERepeatedAccessDenials_AnalyticalRules Analytics Rule with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject6')._analyticRulecontentId6]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "One user was denied by SonicWall Cloud Secure Edge (CSE) repeatedly within an hour: blocked\nconnections or requests (Access Unauthorized) and refused sign-ins (Identity Deny), for\nexample a revoked certificate, a trust score that is too low, or roles with no access to the\nservice. Repeated denials can indicate a compromised or non-compliant device, an account\ntrying resources it is not entitled to, or a misconfigured policy.\nMatches on type and action, not severity. Each event counts once. Denials are counted per hour of event time.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. The query period is 2 days to\ninclude backfilled events, which keep their own time for up to 48 hours.",
+                "displayName": "SonicWall CSE - Repeated access denials for one user",
+                "enabled": false,
+                "query": "let DenialThreshold = 5;\nCSEEvents\n| where IngestedAt > ago(1h)\n| where (EventType == \"Access\" and Action == \"Unauthorized\")\n    or (EventType == \"Identity\" and Action == \"Deny\")\n| where isnotempty(UserEmail)\n| summarize\n    Denials = count(),\n    FirstDenial = min(EventTime),\n    LastDenial = max(EventTime),\n    Reasons = make_set(Message, 10),\n    Services = make_set_if(ServiceName, isnotempty(ServiceName), 10),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),\n    DeviceSerialNumber = take_anyif(DeviceSerialNumber, isnotempty(DeviceSerialNumber)),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp))\n    by UserEmail, Hour = bin(EventTime, 1h)\n| where Denials >= DenialThreshold\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1]),\n    HostName = coalesce(tostring(Devices[0]), DeviceSerialNumber)\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P2D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "SonicWallCSEEvents",
+                    "dataTypes": [
+                      "CSEEvents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "InitialAccess",
+                  "Discovery"
+                ],
+                "techniques": [
+                  "T1078",
+                  "T1046"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "FullName",
+                        "columnName": "UserEmail"
+                      },
+                      {
+                        "identifier": "Name",
+                        "columnName": "AccountName"
+                      },
+                      {
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Address",
+                        "columnName": "ClientIp"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "Host",
+                    "fieldMappings": [
+                      {
+                        "identifier": "HostName",
+                        "columnName": "HostName"
+                      }
+                    ]
+                  }
+                ],
+                "customDetails": {
+                  "Services": "Services",
+                  "Reasons": "Reasons",
+                  "Denials": "Denials"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "SonicWall CSE: {{Denials}} access denials for {{UserEmail}}",
+                  "alertDescriptionFormat": "{{UserEmail}} was denied {{Denials}} times, starting at {{FirstDenial}}."
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject6').analyticRuleId6,'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Analytics Rule 6",
+                "parentId": "[variables('analyticRuleObject6').analyticRuleId6]",
+                "contentId": "[variables('analyticRuleObject6')._analyticRulecontentId6]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject6').analyticRuleVersion6]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject6')._analyticRulecontentId6]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "SonicWall CSE - Repeated access denials for one user",
+        "contentProductId": "[variables('analyticRuleObject6')._analyticRulecontentProductId6]",
+        "id": "[variables('analyticRuleObject6')._analyticRulecontentProductId6]",
+        "version": "[variables('analyticRuleObject6').analyticRuleVersion6]"
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject7').analyticRuleTemplateSpecName7]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSESignInNewCountry_AnalyticalRules Analytics Rule with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject7')._analyticRulecontentId7]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "A user signed in to, or was refused by, SonicWall Cloud Secure Edge (CSE) from a country not\nseen for that user in the previous 14 days. This can indicate stolen credentials or a stolen\ndevice, and also normal travel. Users with no earlier sign-ins in the period are skipped, so\nnew users do not alert; the \"New users\" hunting query lists them.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. Country is from the CSE sign-in\nevent (Identity events); the query period of 14 days is the history compared against.",
+                "displayName": "SonicWall CSE - Sign-in from a new country for a user",
+                "enabled": false,
+                "query": "let RunWindow = 1h;\nlet SignIns = CSEEvents\n    | where EventType == \"Identity\" and Action in (\"Grant\", \"Deny\")\n    | where isnotempty(UserEmail) and isnotempty(ClientCountry);\nlet Known = SignIns\n    | where IngestedAt <= ago(RunWindow)\n    | summarize KnownCountries = make_set(ClientCountry, 50) by UserEmail;\nSignIns\n| where IngestedAt > ago(RunWindow)\n| join kind=inner Known on UserEmail\n| where not(set_has_element(KnownCountries, ClientCountry))\n| summarize\n    SignIns = count(),\n    Granted = countif(Action == \"Grant\"),\n    FirstSeen = min(EventTime),\n    LastSeen = max(EventTime),\n    Cities = make_set_if(ClientCity, isnotempty(ClientCity), 5),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp)),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),\n    KnownCountries = take_any(KnownCountries)\n    by UserEmail, ClientCountry\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1])\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P14D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "SonicWallCSEEvents",
+                    "dataTypes": [
+                      "CSEEvents_CL"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "InitialAccess"
+                ],
+                "techniques": [
+                  "T1078"
+                ],
+                "entityMappings": [
+                  {
+                    "entityType": "Account",
+                    "fieldMappings": [
+                      {
+                        "identifier": "FullName",
+                        "columnName": "UserEmail"
+                      },
+                      {
+                        "identifier": "Name",
+                        "columnName": "AccountName"
+                      },
+                      {
+                        "identifier": "UPNSuffix",
+                        "columnName": "UPNSuffix"
+                      }
+                    ]
+                  },
+                  {
+                    "entityType": "IP",
+                    "fieldMappings": [
+                      {
+                        "identifier": "Address",
+                        "columnName": "ClientIp"
+                      }
+                    ]
+                  }
+                ],
+                "customDetails": {
+                  "Granted": "Granted",
+                  "KnownCountries": "KnownCountries",
+                  "Country": "ClientCountry"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "SonicWall CSE: {{UserEmail}} signed in from a new country, {{ClientCountry}}",
+                  "alertDescriptionFormat": "First sign-in from {{ClientCountry}} for {{UserEmail}} in 14 days, at {{FirstSeen}}."
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject7').analyticRuleId7,'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Analytics Rule 7",
+                "parentId": "[variables('analyticRuleObject7').analyticRuleId7]",
+                "contentId": "[variables('analyticRuleObject7')._analyticRulecontentId7]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject7').analyticRuleVersion7]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject7')._analyticRulecontentId7]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "SonicWall CSE - Sign-in from a new country for a user",
+        "contentProductId": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
+        "id": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
+        "version": "[variables('analyticRuleObject7').analyticRuleVersion7]"
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject1').huntingQueryTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSEDeviceRegistrations_HuntingQueries Hunting Query with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "SonicWall_Cloud_Secure_Edge_Hunting_Query_1",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "SonicWall CSE - Device registrations",
+                "category": "Hunting Queries",
+                "query": "CSEEvents\n| where EventType == \"Registration\"\n| project EventTime, Action, Message, UserEmail, DeviceName, DeviceSerialNumber, DevicePlatform, DeviceOwnership, ClientIp, EventId\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1]),\n    HostName = coalesce(DeviceName, DeviceSerialNumber)\n| order by EventTime desc\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "This query searches for devices registered with SonicWall Cloud Secure Edge (CSE), with the user, platform, and ownership of each device."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "Persistence"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1098"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1),'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Hunting Query 1",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1)]",
+                "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+        "contentKind": "HuntingQuery",
+        "displayName": "SonicWall CSE - Device registrations",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject2').huntingQueryTemplateSpecName2]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSEInternetAccessBlocksPerUser_HuntingQueries Hunting Query with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject2').huntingQueryVersion2]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "SonicWall_Cloud_Secure_Edge_Hunting_Query_2",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "SonicWall CSE - Internet Access blocks per user",
+                "category": "Hunting Queries",
+                "query": "CSEEvents\n| where EventType in (\"Threat\", \"Compliance\", \"Malware\", \"SAASSecurity\") and Action == \"Denied\"\n| where isnotempty(UserEmail)\n| summarize\n    Blocks = count(),\n    Domains = make_set(UrlDomain, 20),\n    Categories = make_set_if(UrlCategory, isnotempty(UrlCategory), 10),\n    Reasons = make_set(BlockReason, 10),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),\n    LastSeen = max(EventTime)\n    by UserEmail\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1])\n| order by Blocks desc\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "This query searches for users with the most SonicWall Cloud Secure Edge (CSE) Internet Access blocks, with the blocked domains, categories, and reasons."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "CommandAndControl,InitialAccess"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1071,T1189"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject2')._huntingQuerycontentId2),'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Hunting Query 2",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject2')._huntingQuerycontentId2)]",
+                "contentId": "[variables('huntingQueryObject2')._huntingQuerycontentId2]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject2').huntingQueryVersion2]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject2')._huntingQuerycontentId2]",
+        "contentKind": "HuntingQuery",
+        "displayName": "SonicWall CSE - Internet Access blocks per user",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject3').huntingQueryTemplateSpecName3]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSENewUsers_HuntingQueries Hunting Query with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject3').huntingQueryVersion3]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "SonicWall_Cloud_Secure_Edge_Hunting_Query_3",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "SonicWall CSE - New users",
+                "category": "Hunting Queries",
+                "query": "let Lookback = 14d;\nlet Recent = 1d;\nCSEEvents\n| where EventTime > ago(Lookback) and isnotempty(UserEmail)\n| summarize\n    FirstSeen = min(EventTime),\n    LastSeen = max(EventTime),\n    Events = count(),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 10),\n    Countries = make_set_if(ClientCountry, isnotempty(ClientCountry), 10),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp))\n    by UserEmail\n| where FirstSeen > ago(Recent)\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1])\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Identifies users whose first SonicWall Cloud Secure Edge (CSE) event in the last 14 days was within the last day, with their devices and locations."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "InitialAccess"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1078"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject3')._huntingQuerycontentId3),'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Hunting Query 3",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject3')._huntingQuerycontentId3)]",
+                "contentId": "[variables('huntingQueryObject3')._huntingQuerycontentId3]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject3').huntingQueryVersion3]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject3')._huntingQuerycontentId3]",
+        "contentKind": "HuntingQuery",
+        "displayName": "SonicWall CSE - New users",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject4').huntingQueryTemplateSpecName4]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSEServicesPerUser_HuntingQueries Hunting Query with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject4').huntingQueryVersion4]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "SonicWall_Cloud_Secure_Edge_Hunting_Query_4",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "SonicWall CSE - Private services accessed per user",
+                "category": "Hunting Queries",
+                "query": "CSEEvents\n| where EventType == \"Access\" and isnotempty(ServiceName) and isnotempty(UserEmail)\n| summarize\n    Connections = countif(Action in (\"Connected\", \"Authorized\")),\n    Denials = countif(Action == \"Unauthorized\"),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 10),\n    FirstSeen = min(EventTime),\n    LastSeen = max(EventTime)\n    by UserEmail, ServiceName, EventSubType\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1])\n| order by UserEmail asc, Connections desc\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "This query searches for the SonicWall Cloud Secure Edge (CSE) private services each user connected to or was denied, with devices and connection counts."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "Discovery,LateralMovement"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1046,T1021"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject4')._huntingQuerycontentId4),'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Hunting Query 4",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject4')._huntingQuerycontentId4)]",
+                "contentId": "[variables('huntingQueryObject4')._huntingQuerycontentId4]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject4').huntingQueryVersion4]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject4')._huntingQuerycontentId4]",
+        "contentKind": "HuntingQuery",
+        "displayName": "SonicWall CSE - Private services accessed per user",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject4')._huntingQuerycontentId4,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject4')._huntingQuerycontentId4,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject5').huntingQueryTemplateSpecName5]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSESignInLocationsPerUser_HuntingQueries Hunting Query with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject5').huntingQueryVersion5]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "SonicWall_Cloud_Secure_Edge_Hunting_Query_5",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "SonicWall CSE - Sign-in locations per user",
+                "category": "Hunting Queries",
+                "query": "CSEEvents\n| where EventType == \"Identity\" and isnotempty(ClientCountry) and isnotempty(UserEmail)\n| summarize\n    Granted = countif(Action == \"Grant\"),\n    Denied = countif(Action == \"Deny\"),\n    ClientIps = make_set_if(ClientIp, isnotempty(ClientIp), 10),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp)),\n    FirstSeen = min(EventTime),\n    LastSeen = max(EventTime)\n    by UserEmail, ClientCountry, ClientCity\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1])\n| order by UserEmail asc, LastSeen desc\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "This query searches for the countries and cities each user signed in from through SonicWall Cloud Secure Edge (CSE), with granted and denied counts."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "InitialAccess"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1078"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject5')._huntingQuerycontentId5),'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Hunting Query 5",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject5')._huntingQuerycontentId5)]",
+                "contentId": "[variables('huntingQueryObject5')._huntingQuerycontentId5]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject5').huntingQueryVersion5]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject5')._huntingQuerycontentId5]",
+        "contentKind": "HuntingQuery",
+        "displayName": "SonicWall CSE - Sign-in locations per user",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject5')._huntingQuerycontentId5,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject5')._huntingQuerycontentId5,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject6').huntingQueryTemplateSpecName6]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "SonicWallCSETopDenialSources_HuntingQueries Hunting Query with template version 3.2.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject6').huntingQueryVersion6]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2025-07-01",
+              "name": "SonicWall_Cloud_Secure_Edge_Hunting_Query_6",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "SonicWall CSE - Top sources of denials",
+                "category": "Hunting Queries",
+                "query": "CSEEvents\n| where (EventType == \"Access\" and Action == \"Unauthorized\")\n    or (EventType == \"Identity\" and Action == \"Deny\")\n    or (EventType == \"AdminLogin\" and Action == \"Deny\")\n| where isnotempty(ClientIp)\n| summarize\n    Denials = count(),\n    Users = make_set_if(UserEmail, isnotempty(UserEmail), 10),\n    Reasons = make_set(Message, 5),\n    FirstSeen = min(EventTime),\n    LastSeen = max(EventTime)\n    by ClientIp, ClientCountry, ClientCity\n| order by Denials desc\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "This query searches for client IP addresses and locations with the most SonicWall Cloud Secure Edge (CSE) access denials and refused sign-ins, and the users involved."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "InitialAccess,CredentialAccess"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1078,T1110"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject6')._huntingQuerycontentId6),'/'))))]",
+              "properties": {
+                "description": "SonicWall Cloud Secure Edge Hunting Query 6",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject6')._huntingQuerycontentId6)]",
+                "contentId": "[variables('huntingQueryObject6')._huntingQuerycontentId6]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject6').huntingQueryVersion6]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "SonicWall Cloud Secure Edge",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "SonicWall"
+                },
+                "support": {
+                  "name": "SonicWall",
+                  "tier": "Partner",
+                  "link": "https://www.sonicwall.com/support"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject6')._huntingQuerycontentId6]",
+        "contentKind": "HuntingQuery",
+        "displayName": "SonicWall CSE - Top sources of denials",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject6')._huntingQuerycontentId6,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject6')._huntingQuerycontentId6,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.2.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "SonicWall Cloud Secure Edge",
+        "publisherDisplayName": "SonicWall",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SonicWall%20Cloud%20Secure%20Edge/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.sonicwall.com/products/cloud-secure-edge\">SonicWall Cloud Secure Edge</a> (CSE) solution ingests CSE events into Microsoft Sentinel through the CSE events API, and includes a parser, a workbook, analytic rules, and hunting queries for CSE sign-ins, private access, device trust, and Internet Access.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Azure Monitor Logs Ingestion API</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1, <strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 7, <strong>Hunting Queries:</strong> 6</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/sonicwall_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "SonicWall Cloud Secure Edge",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "SonicWall"
+        },
+        "support": {
+          "name": "SonicWall",
+          "tier": "Partner",
+          "link": "https://www.sonicwall.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject2')._analyticRulecontentId2]",
+              "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject3')._analyticRulecontentId3]",
+              "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject4')._analyticRulecontentId4]",
+              "version": "[variables('analyticRuleObject4').analyticRuleVersion4]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject5')._analyticRulecontentId5]",
+              "version": "[variables('analyticRuleObject5').analyticRuleVersion5]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject6')._analyticRulecontentId6]",
+              "version": "[variables('analyticRuleObject6').analyticRuleVersion6]"
+            },
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject7')._analyticRulecontentId7]",
+              "version": "[variables('analyticRuleObject7').analyticRuleVersion7]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+              "version": "[variables('huntingQueryObject1').huntingQueryVersion1]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject2')._huntingQuerycontentId2]",
+              "version": "[variables('huntingQueryObject2').huntingQueryVersion2]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject3')._huntingQuerycontentId3]",
+              "version": "[variables('huntingQueryObject3').huntingQueryVersion3]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject4')._huntingQuerycontentId4]",
+              "version": "[variables('huntingQueryObject4').huntingQueryVersion4]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject5')._huntingQuerycontentId5]",
+              "version": "[variables('huntingQueryObject5').huntingQueryVersion5]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject6')._huntingQuerycontentId6]",
+              "version": "[variables('huntingQueryObject6').huntingQueryVersion6]"
+            }
+          ]
+        },
+        "firstPublishDate": "2026-11-02",
+        "providers": [
+          "SonicWall"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network",
+            "Identity"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

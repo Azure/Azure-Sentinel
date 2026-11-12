@@ -1,0 +1,86 @@
+id: 72ae807d-b158-4537-a02d-fffdbe294728
+Function:
+  Title: Parser for SonicWall Cloud Secure Edge events
+  Version: '1.1.0'
+  LastUpdated: '2026-11-02'
+Category: Microsoft Sentinel Parser
+FunctionName: CSEEvents
+FunctionAlias: CSEEvents
+FunctionQuery: |
+  let _OrgNames = CSEEvents_CL
+      | extend _Name = tostring(RawEvent.org_name)
+      | where isnotempty(_Name)
+      | summarize _OrgName = take_any(_Name) by OrgId;
+  CSEEvents_CL
+  | extend _IngestedAt = ingestion_time()
+  | summarize arg_min(_IngestedAt, *) by EventId
+  | extend
+      EventTime = make_datetime(1970, 1, 1) + CreatedAtMs * 1ms,
+      OrgName = tostring(RawEvent.org_name),
+      UserEmail = tostring(RawEvent.user_principal.user.email),
+      UserName = tostring(RawEvent.user_principal.user.name),
+      UserRoles = RawEvent.user_principal.user.roles,
+      DeviceId = tostring(RawEvent.user_principal.device.id),
+      DeviceName = tostring(RawEvent.user_principal.device.friendly_name),
+      DeviceSerialNumber = tostring(RawEvent.user_principal.device.serial_number),
+      DevicePlatform = tostring(RawEvent.user_principal.device.platform),
+      DeviceOwnership = tostring(RawEvent.user_principal.device.ownership),
+      ClientIpList = tostring(RawEvent.user_principal.client.ip_address),
+      ClientUserAgent = tostring(RawEvent.user_principal.client.user_agent),
+      ClientCountry = tostring(RawEvent.user_principal.client.geo_location.country),
+      ClientCity = tostring(RawEvent.user_principal.client.geo_location.city),
+      ServiceName = tostring(RawEvent.service.name),
+      ServiceId = tostring(RawEvent.service.id),
+      PolicyName = tostring(RawEvent.policy.name),
+      AccessLevel = tostring(RawEvent.channel.access_level.resource),
+      RequestProtocol = tostring(RawEvent.channel.request_data.protocol),
+      RequestMethod = tostring(RawEvent.channel.request_data.type),
+      RequestPath = tostring(RawEvent.channel.request_data.query_resources),
+      SniName = tostring(RawEvent.channel.sni_data.name_requested),
+      DestinationAddress = tostring(RawEvent.link.destination.ip),
+      TrustLevel = tostring(RawEvent.trustscore.trust_level),
+      TrustScore = toint(RawEvent.trustscore.score),
+      TrustProfileName = tostring(RawEvent.trustscore.trust_profile_name),
+      FailedFactors = RawEvent.trustscore.failed_factors,
+      PassedFactors = RawEvent.trustscore.passed_factors,
+      UrlDomain = tostring(RawEvent.url_filtering.url_details.domain),
+      UrlPath = tostring(RawEvent.url_filtering.url_details.path),
+      UrlFilterAction = tostring(RawEvent.url_filtering.url_filtering_result.action),
+      BlockReason = tostring(RawEvent.url_filtering.url_filtering_result.block_reason),
+      UrlCategory = tostring(RawEvent.url_filtering.url_filtering_result.category),
+      FileHash = tostring(RawEvent.url_filtering.url_filtering_result.file_hash),
+      SaasIdentity = tostring(RawEvent.url_filtering.url_filtering_result.saas_identity),
+      ItpPolicyName = tostring(RawEvent.url_filtering.url_filtering_result.applied_policy.name),
+      ReportedByType = tostring(RawEvent.reported_by.type),
+      ReportedByHost = tostring(RawEvent.reported_by.host_name),
+      AccessTierName = tostring(RawEvent.reported_by.access_tier_name)
+  | extend
+      FailedFactors = iff(isnull(FailedFactors), dynamic([]), FailedFactors),
+      PassedFactors = iff(isnull(PassedFactors), dynamic([]), PassedFactors),
+      _Addresses = split(replace_regex(ClientIpList, @"\s", ""), ","),
+      Message = trim_end(@"\s*\(x\d+\)\s*", Message)
+  | mv-apply _Address = _Addresses to typeof(string) on (
+      extend _Ip = case(
+          _Address matches regex @"^[0-9.]+(:\d+)?$", extract(@"^([0-9.]+)", 1, _Address),
+          _Address startswith "[", extract(@"^\[([^\]]+)\]", 1, _Address),
+          _Address)
+      | extend _IsTunnel = coalesce(ipv4_is_in_range(_Ip, "100.64.0.0/10"), false)
+      | summarize
+          ClientIp = tostring(make_list_if(_Ip, isnotempty(_Ip) and not(_IsTunnel))[0]),
+          TunnelIp = tostring(make_list_if(_Ip, _IsTunnel)[0])
+      )
+  | extend FailedFactorCount = array_length(FailedFactors)
+  | lookup kind=leftouter _OrgNames on OrgId
+  | extend OrgName = iff(isempty(OrgName), _OrgName, OrgName)
+  | project
+      TimeGenerated, EventTime, EventId, EventType, EventSubType, Action, Severity, Result, Message,
+      OrgId, OrgName, CorrelationId,
+      UserEmail, UserName, UserRoles,
+      DeviceId, DeviceName, DeviceSerialNumber, DevicePlatform, DeviceOwnership,
+      ClientIp, TunnelIp, ClientIpList, ClientUserAgent, ClientCountry, ClientCity,
+      ServiceName, ServiceId, PolicyName,
+      AccessLevel, RequestProtocol, RequestMethod, RequestPath, SniName, DestinationAddress,
+      TrustLevel, TrustScore, TrustProfileName, FailedFactors, FailedFactorCount, PassedFactors,
+      UrlDomain, UrlPath, UrlFilterAction, BlockReason, UrlCategory, FileHash, SaasIdentity, ItpPolicyName,
+      ReportedByType, ReportedByHost, AccessTierName,
+      CreatedAtMs, IngestedAt = _IngestedAt, RawEvent

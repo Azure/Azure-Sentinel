@@ -1,0 +1,43 @@
+id: 0339edc9-58d5-4496-8c99-9d9af67ad89c
+name: SonicWall CSE - New users
+description: |
+  'Identifies users whose first SonicWall Cloud Secure Edge (CSE) event in the last 14 days was within the last day, with their devices and locations.'
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let Lookback = 14d;
+  let Recent = 1d;
+  CSEEvents
+  | where EventTime > ago(Lookback) and isnotempty(UserEmail)
+  | summarize
+      FirstSeen = min(EventTime),
+      LastSeen = max(EventTime),
+      Events = count(),
+      Devices = make_set_if(DeviceName, isnotempty(DeviceName), 10),
+      Countries = make_set_if(ClientCountry, isnotempty(ClientCountry), 10),
+      ClientIp = take_anyif(ClientIp, isnotempty(ClientIp))
+      by UserEmail
+  | where FirstSeen > ago(Recent)
+  | extend
+      AccountName = tostring(split(UserEmail, "@")[0]),
+      UPNSuffix = tostring(split(UserEmail, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.0.0
