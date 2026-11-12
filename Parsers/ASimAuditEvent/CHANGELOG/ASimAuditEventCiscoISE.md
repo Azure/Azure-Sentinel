@@ -2,7 +2,7 @@
 
 ## Version 0.1.1
 
-- (2026-11-12) Change regex for extracting EventOriginalType - [PR #XX](https://github.com/Azure/Azure-Sentinel/pull/XX)
+- (2026-11-12) Change regex for extracting EventOriginalType - [PR #15640](https://github.com/Azure/Azure-Sentinel/pull/15640)
 
 ## Version 0.1
 
