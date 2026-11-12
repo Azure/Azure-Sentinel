@@ -1,0 +1,134 @@
+Parser:
+  DisplayName: 'FileEvent ingestion-time ASIM parser for Salesforce Real-Time Event Monitoring'
+  Version: '0.1.0'
+  LastUpdated: '2026-11-12'
+Product:
+  Name: 'Salesforce Real-Time Event Monitoring'
+Normalization:
+  Schema: 'FileEvent'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes SalesForceRealTimeEventMonitoring_CL into ASimFileEventLogs during ingestion. Query-only fields are retained in AdditionalFields.QueryTimeFields; review documented lossy conversions.
+ParserName: 'ASimFileEventSalesforceRealTimeEventMonitoring'
+DCRType: 'Standard'
+InputStream: 'Custom-SalesForceRealTimeEventMonitoring_CL'
+SourceRawTable: 'SalesForceRealTimeEventMonitoring_CL'
+TargetASIMTable: 'ASimFileEventLogs'
+ParserFilterQuery: |
+  source
+  | where EventType == "FileEventStore"
+  | where FileAction in ("API_DOWNLOAD", "UI_DOWNLOAD", "PREVIEW", "UPLOAD")
+ParserQuery: |
+  source
+  | extend Type = "SalesForceRealTimeEventMonitoring_CL"
+  | extend SalesforceDomain = columnifexists("SalesforceDomain", columnifexists("apiUrl", "")),
+      SalesforceObjectId = columnifexists("SalesforceObjectId", columnifexists("Id", "")),
+      UserNameDetail = columnifexists("UserNameDetail", columnifexists("Username", "")),
+      SalesforceResourceId = columnifexists("SalesforceResourceId", columnifexists("ResourceId", "")),
+      TimeGenerated = columnifexists("TimeGenerated", iff(isempty(EventDate), now(), todatetime(EventDate)))
+  | where EventType == "FileEventStore"
+  | where FileAction in ("API_DOWNLOAD", "UI_DOWNLOAD", "PREVIEW", "UPLOAD")
+  | extend
+      _SourceType = EventType,
+      _Org = tostring(SalesforceDomain)
+  | extend
+      // NOTE(DCR-LOSSY: 3.34 parse_url) - regex Host extraction omits URL decoding and bracketed IPv6 handling
+      _OrgHost = tostring(extract(@"^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@/]*@)?([^:/?#]*)", 1, iff(_Org contains "://", _Org, strcat("https://", _Org)))),
+      SrcIpAddr = iff(isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp, "")
+  | extend
+      // NOTE(DCR-LOSSY: 3.4 coalesce non-string) - datetime arguments use isnotnull; typed datetime fallback; toolkit requires review
+      EventStartTime = iif(isnotnull(EventDate), EventDate, TimeGenerated),
+      // NOTE(DCR-LOSSY: 3.4 coalesce non-string) - datetime arguments use isnotnull; typed datetime fallback; toolkit requires review
+      EventEndTime = iif(isnotnull(EventDate), EventDate, TimeGenerated),
+      EventCount = toint(1),
+      EventVendor = "Salesforce",
+      EventProduct = "Real-Time Event Monitoring",
+      EventSchema = "FileEvent",
+      EventSchemaVersion = "1.0.0",
+      EventOriginalType = _SourceType,
+      EventOriginalSubType = FileAction,
+      EventType = iff(FileAction == "UPLOAD", "FileCreatedOrModified", "FileAccessed"),
+      EventSubType = case(FileAction == "UPLOAD", "Checkin", FileAction == "PREVIEW", "Preview", "Download"),
+      EventResult = iff(
+          PolicyOutcome in ("Block", "MeteringBlock", "EndSession", "TwoFADenied", "TwoFAReportedDenied")
+              or PolicyOutcome startswith "Failed" or PolicyOutcome startswith "TwoFAFailed",
+          "Failure", "NA"),
+      EventSeverity = "Informational",
+      EventUid = iif(isnotempty(EventIdentifier), EventIdentifier, iif(isnotempty(SalesforceObjectId), SalesforceObjectId, EventUuid)),
+      EventOriginalUid = SalesforceObjectId,
+      EventOriginalResultDetails = PolicyOutcome,
+      EventMessage = FileAction,
+      TargetFileName = FileName,
+      TargetFilePath = FileName,
+      TargetFilePathType = "FileNameOnly",
+      TargetFileSize = tolong(ContentSize),
+      Dvc = iif(isnotempty(_OrgHost), _OrgHost, "Salesforce Real-Time Event Monitoring"),
+      DvcFQDN = _OrgHost,
+      DvcHostname = tostring(split(_OrgHost, ".")[0]),
+      DvcDomain = iff(indexof(_OrgHost, ".") >= 0, substring(_OrgHost, indexof(_OrgHost, ".") + 1), ""),
+      DvcScope = _OrgHost,
+      DvcOriginalAction = PolicyOutcome,
+      DvcAction = case(
+          PolicyOutcome in ("Block", "MeteringBlock"), "Deny",
+          PolicyOutcome == "EndSession", "Terminate",
+          PolicyOutcome in ("NoAction", "ExemptNoAction", "MeteringNoAction", "Notified"), "Allow",
+          ""),
+      ActorUserId = UserId,
+      ActorUserIdType = iff(isempty(UserId), "", "SalesforceId"),
+      ActorUsername = UserNameDetail,
+      ActorUsernameType = iff(isempty(UserNameDetail), "", iff(UserNameDetail contains "@", "UPN", "Simple")),
+      ActorScope = _OrgHost,
+      ActorSessionId = SessionKey,
+      TargetAppName = "Salesforce",
+      TargetAppType = "SaaS application",
+      RuleName = iif(isnotempty(PolicyId), PolicyId, Policy),
+      AdditionalFields = pack(
+          "DocumentId", DocumentId, "VersionId", VersionId, "VersionNumber", VersionNumber,
+          "FileType", FileType, "FileSource", FileSource,
+          "FileAction", FileAction, "IsLatestVersion", IsLatestVersion,
+          "CanDownloadPdf", CanDownloadPdf, "ProcessDuration", ProcessDuration,
+          "LoginKey", LoginKey, "SourceIp", SourceIp,
+          "SessionLevel", SessionLevel,
+          "PolicyOutcome", PolicyOutcome, "RelatedEventIdentifier", RelatedEventIdentifier,
+          "EvaluationTime", EvaluationTime),
+      DvcEntityKey = "",
+      ActorUserEntityKey = "",
+      SrcSystemEntityKey = "",
+      ActingApplicationEntityKey = "",
+      TargetApplicationEntityKey = "",
+      ActingProcessEntityKey = "",
+      SrcFileEntityKey = "",
+      TargetFileEntityKey = "",
+      ActorUserAdditionalIds = parse_json('[]'),
+      AdditionalEntities = parse_json('[]')
+  | extend
+      DvcDomainType = iff(isempty(DvcDomain), "", "FQDN"),
+      FileName = TargetFileName,
+      FilePath = TargetFilePath,
+      Src = SrcIpAddr,
+      IpAddr = SrcIpAddr,
+      User = ActorUsername,
+      Application = TargetAppName,
+      Rule = RuleName,
+      Type = tostring(Type)
+  | project
+      TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+      EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+      EventOriginalType, EventOriginalSubType, EventType, EventSubType,
+      EventResult, EventSeverity, EventUid, EventOriginalUid,
+      EventOriginalResultDetails, EventMessage,
+      TargetFileName, TargetFilePath, TargetFilePathType, TargetFileSize, FileName, FilePath,
+      Dvc, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, DvcScope, DvcOriginalAction, DvcAction,
+      ActorUserId, ActorUserIdType, ActorUsername, ActorUsernameType,
+      ActorScope, ActorSessionId, User, SrcIpAddr, Src, IpAddr,
+      TargetAppName, TargetAppType, Application, RuleName, Rule, AdditionalFields,
+      DvcEntityKey, ActorUserEntityKey, SrcSystemEntityKey,
+      ActingApplicationEntityKey, TargetApplicationEntityKey, ActingProcessEntityKey,
+      SrcFileEntityKey, TargetFileEntityKey, ActorUserAdditionalIds, AdditionalEntities
+  // NOTE(DCR-LOSSY: storage projection) - query-only fields preserved in AdditionalFields.QueryTimeFields
+  | extend AdditionalFields = bag_merge(AdditionalFields, pack("QueryTimeFields", pack("EventUid", EventUid, "FileName", FileName, "FilePath", FilePath, "Dvc", Dvc, "User", User, "Src", Src, "IpAddr", IpAddr, "Application", Application, "Rule", Rule, "ActingProcessEntityKey", ActingProcessEntityKey)))
+  | project TimeGenerated, Type, EventStartTime, EventEndTime, EventCount, EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventOriginalType, EventOriginalSubType, EventType, EventSubType, EventResult, EventSeverity, EventOriginalUid, EventOriginalResultDetails, EventMessage, TargetFileName, TargetFilePath, TargetFilePathType, TargetFileSize, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, DvcScope, DvcOriginalAction, DvcAction, ActorUserId, ActorUserIdType, ActorUsername, ActorUsernameType, ActorScope, ActorSessionId, SrcIpAddr, TargetAppName, TargetAppType, RuleName, AdditionalFields, DvcEntityKey, ActorUserEntityKey, SrcSystemEntityKey, ActingApplicationEntityKey, TargetApplicationEntityKey, SrcFileEntityKey, TargetFileEntityKey, ActorUserAdditionalIds, AdditionalEntities
+Change:
+  Date: '2026-11-12'
+  Description: 'Initial per-table ingestion-time definition with query-only values preserved in AdditionalFields.QueryTimeFields.'

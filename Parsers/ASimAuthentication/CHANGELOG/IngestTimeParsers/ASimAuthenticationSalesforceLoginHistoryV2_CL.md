@@ -1,5 +1,10 @@
 # Changelog for ASimAuthenticationSalesforceLoginHistoryV2_CL.yaml
 
+## Version 0.1.4
+
+- (2026-11-12) Preserve query-only Login History V2 fields in AdditionalFields.QueryTimeFields and project physical destination columns.
+- Retain the existing parse_ipv4/parse_ipv6 source IP validation and source normalization; runtime validation remains outstanding.
+
 ## Version 0.1.2
 
 - (2026-11-06) Inline transformation-compatible source IP validation for the Salesforce Login History V2 ingestion-time parser - [PR #15573](https://github.com/Azure/Azure-Sentinel/pull/15573)

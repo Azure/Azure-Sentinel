@@ -1,0 +1,173 @@
+Parser:
+  DisplayName: 'Web Session ASIM ingestion-time parser for Salesforce Real-Time Event Monitoring'
+  Version: '0.1.0'
+  LastUpdated: '2026-11-12'
+Product:
+  Name: 'Salesforce Real-Time Event Monitoring'
+Normalization:
+  Schema: 'WebSession'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes SalesForceRealTimeEventMonitoring_CL into ASimWebSessionLogs during ingestion. Query-only fields are retained in AdditionalFields.QueryTimeFields; review documented lossy conversions.
+ParserName: 'ASimWebSessionSalesforceRealTimeEventMonitoring'
+DCRType: 'Standard'
+InputStream: 'Custom-SalesForceRealTimeEventMonitoring_CL'
+SourceRawTable: 'SalesForceRealTimeEventMonitoring_CL'
+TargetASIMTable: 'ASimWebSessionLogs'
+ParserFilterQuery: |
+  source
+  | where EventType in ("LightningUriEvent", "UriEvent")
+  | where EventType != "UriEvent" or isnotempty(RecordId)
+ParserQuery: |
+  source
+  | extend Type = "SalesForceRealTimeEventMonitoring_CL"
+  | extend
+      SalesforceObjectId = columnifexists("SalesforceObjectId", columnifexists("Id", ""))
+      , UserNameDetail = columnifexists("UserNameDetail", columnifexists("Username", ""))
+      , SalesforceDomain = columnifexists("SalesforceDomain", columnifexists("apiUrl", ""))
+      , SalesforceResourceId = columnifexists("SalesforceResourceId", columnifexists("ResourceId", ""))
+      , TimeGenerated = columnifexists("TimeGenerated", iff(isempty(EventDate), now(), todatetime(EventDate)))
+  | where EventType in ("LightningUriEvent", "UriEvent")
+  | where EventType != "UriEvent" or isnotempty(RecordId)
+  | project-rename EventOriginalType = EventType
+  | extend _SalesforceDomain = columnifexists("SalesforceDomain", "")
+  | extend EventResult = case(
+      PolicyOutcome in ("Block", "MeteringBlock"), "Failure",
+      OperationStatus == "Success", "Success",
+      OperationStatus in ("Failure", "Fail"), "Failure",
+      "NA"
+  )
+  | extend Url = case(
+      EventOriginalType == "LightningUriEvent", PageUrl,
+      EventOriginalType == "UriEvent" and isnotempty(RecordId),
+          strcat("/", RecordId),
+      ""
+  )
+  // NOTE(DCR-LOSSY: 3.34 parse_url) - Host regex omits decoding and full IPv6 authority parsing
+  | extend
+      _DomainFQDN = tostring(extract(@"^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@/]*@)?([^:/?#]*)", 1, _SalesforceDomain))
+      , _IsSrcIp = isnotnull(parse_ipv4(SourceIp))
+          or isnotempty(parse_ipv6(SourceIp))
+  | extend _DomainHostname = tostring(split(_DomainFQDN, ".")[0])
+  | extend SrcUserType = case(
+      UserType == "Standard", "Regular",
+      UserType == "Guest", "Guest",
+      UserType == "AutomatedProcess", "System",
+      UserType == "CsnOnly", "Other",
+      UserType == "CspLitePortal", "Other",
+      UserType == "CustomerSuccess", "Other",
+      UserType == "PowerCustomerSuccess", "Other",
+      UserType == "PowerPartner", "Other",
+      UserType == "SelfService", "Other",
+      "")
+  | extend
+      HttpReferrer = iff(
+          PreviousPageUrl startswith "/",
+          strcat(_SalesforceDomain, PreviousPageUrl),
+          PreviousPageUrl
+      )
+      , HttpUserAgent = iff(UserAgent == "N/A", "", UserAgent)
+      , SrcIpAddr = iff(_IsSrcIp, SourceIp, "")
+      , SrcDescription = iff(_IsSrcIp, "", SourceIp)
+      , SrcDeviceType = case(
+          (DevicePlatform has "PHONE" or DevicePlatform has "TABLET"), "Mobile Device",
+          DevicePlatform has "DESKTOP", "Computer",
+          isnotempty(DevicePlatform), "Other",
+          ""
+      )
+      , AdditionalFields = pack(
+              "QueriedEntities", QueriedEntities
+              , "SessionKey", SessionKey
+              , "SessionLevel", SessionLevel
+              , "LoginHistoryId", LoginHistoryId
+              , "AppName", AppName
+              , "RecordId", RecordId
+              , "Name", Name
+              , "PageStartTime", PageStartTime
+              , "Duration", Duration
+              , "EffectivePageTime", EffectivePageTime
+              , "PreviousPageAppName", PreviousPageAppName
+              , "PreviousPageEntityType", PreviousPageEntityType
+              , "PreviousPageEntityId", PreviousPageEntityId
+              , "DevicePlatform", DevicePlatform
+              , "DeviceSessionId", DeviceSessionId
+              , "OsName", OsName
+              , "OsVersion", OsVersion
+              , "PolicyOutcome", PolicyOutcome
+          )
+  | project-rename
+      EventOriginalUid = EventIdentifier
+      , EventOriginalSubType = Operation
+      , EventOriginalResultDetails = OperationStatus
+      , SrcUserId = UserId
+      , SrcUsername = UserNameDetail
+      , SrcOriginalUserType = UserType
+      , NetworkSessionId = LoginKey
+      , UrlOriginal = PageUrl
+  // NOTE(DCR-LOSSY: 3.4 coalesce) - non-string datetime fallback requires empirical equivalence review
+  | extend
+      EventStartTime = iif(isnotnull(EventDate), EventDate, TimeGenerated)
+      , SrcUsernameType = case(
+          isempty(SrcUsername), "",
+          SrcUsername has "@", "UPN",
+          "Simple"
+      )
+  | project
+      TimeGenerated
+      , Type
+      , EventCount = toint(1)
+      , EventStartTime
+      , EventEndTime = EventStartTime
+      , EventType = "WebServerSession"
+      , EventResult
+      , EventOriginalResultDetails
+      , EventOriginalType
+      , EventOriginalSubType
+      , EventOriginalUid
+  // NOTE(DCR-LOSSY: X.2 EventUid) - source EventIdentifier replaces storage-assigned identity; manual review required
+      , EventUid = tostring(EventOriginalUid)
+      , EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+      , EventProduct = "Real-Time Event Monitoring"
+      , EventVendor = "Salesforce"
+      , EventSchema = "WebSession"
+      , EventSchemaVersion = "1.0.0"
+      , Dvc = iif(isnotempty(_DomainFQDN), _DomainFQDN, "Salesforce")
+      , DvcFQDN = _DomainFQDN
+      , DvcHostname = _DomainHostname
+      , DvcDomain = substring(_DomainFQDN, strlen(_DomainHostname) + 1)
+      , DvcDomainType = iff(isnotempty(_DomainFQDN), "FQDN", "")
+      , Url
+      , UrlOriginal
+      , HttpReferrer
+      , HttpUserAgent
+      , UserAgent = HttpUserAgent
+      , Dst = iif(isnotempty(_DomainFQDN), _DomainFQDN, "Salesforce")
+      , DstFQDN = _DomainFQDN
+      , DstHostname = _DomainHostname
+      , Hostname = _DomainHostname
+      , DstDomain = substring(_DomainFQDN, strlen(_DomainHostname) + 1)
+      , DstDomainType = iff(isnotempty(_DomainFQDN), "FQDN", "")
+      , DstAppName = "Salesforce"
+      , DstAppType = "SaaS application"
+      , SrcIpAddr
+      , Src = SrcIpAddr
+      , IpAddr = SrcIpAddr
+      , SrcDescription
+      , SrcDeviceType
+      , SrcUserId
+      , SrcUserIdType = iff(isnotempty(SrcUserId), "SalesforceId", "")
+      , SrcUsername
+      , SrcUsernameType
+      , SrcUserType
+      , SrcOriginalUserType
+      , User = SrcUsername
+      , NetworkSessionId
+      , SessionId = NetworkSessionId
+      , AdditionalFields
+  // NOTE(DCR-LOSSY: storage projection) - query-only fields preserved in AdditionalFields.QueryTimeFields
+  | extend AdditionalFields = bag_merge(AdditionalFields, pack("QueryTimeFields", pack("EventUid", EventUid, "EventSchema", EventSchema, "UserAgent", UserAgent, "Dst", Dst, "Hostname", Hostname, "Src", Src, "IpAddr", IpAddr, "SrcDescription", SrcDescription, "User", User, "SessionId", SessionId)))
+  | project TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventType, EventResult, EventOriginalResultDetails, EventOriginalType, EventOriginalSubType, EventOriginalUid, EventSeverity, EventProduct, EventVendor, EventSchemaVersion, Dvc, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, Url, UrlOriginal, HttpReferrer, HttpUserAgent, DstFQDN, DstHostname, DstDomain, DstDomainType, DstAppName, DstAppType, SrcIpAddr, SrcDeviceType, SrcUserId, SrcUserIdType, SrcUsername, SrcUsernameType, SrcUserType, SrcOriginalUserType, NetworkSessionId, AdditionalFields
+Change:
+  Date: '2026-11-12'
+  Description: 'Initial per-table ingestion-time definition with query-only values preserved in AdditionalFields.QueryTimeFields.'
