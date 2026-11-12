@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from asim_ingestion.columns import is_platform_managed_column
+
 from .parity import compare_parser_outputs
 from .queries import (
     QueryClient,
@@ -20,8 +22,6 @@ from .queries import (
     build_filter_count_query,
     build_query_time_parser_query,
 )
-
-PARITY_EXCLUDED_COLUMNS = {"Type"}
 
 
 def _intersect_schemas(
@@ -42,7 +42,7 @@ def _intersect_schemas(
     for column in qtp_schema:
         name = str(column["name"])
         if (
-            name in PARITY_EXCLUDED_COLUMNS
+            is_platform_managed_column(name)
             or name not in itp_types
         ):
             continue
