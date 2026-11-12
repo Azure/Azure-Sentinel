@@ -23,6 +23,7 @@ from asim_ingestion.runtime.queries import (
     build_asim_tester_query,
     build_exact_slice_expression,
     build_filter_count_query,
+    build_ingestion_time_parser_query,
     build_query_time_parser_query,
 )
 from asim_ingestion.runtime.validator import AsimIngestionValidator
@@ -48,6 +49,7 @@ __all__ = [
     "build_asim_tester_query",
     "build_exact_slice_expression",
     "build_filter_count_query",
+    "build_ingestion_time_parser_query",
     "build_query_time_parser_query",
     "compare_parser_outputs",
     "main",
