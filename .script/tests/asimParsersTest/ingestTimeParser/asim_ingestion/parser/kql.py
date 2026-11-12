@@ -26,13 +26,13 @@ def _named_rules(rule: KqlRule, *names: str) -> dict[str, KqlRule]:
     return {name: rule for name in names}
 
 
-ASIM_HELPER_RULE = KqlRule(
+DENY_ASIM_HELPER_RULE = KqlRule(
     "KQL003",
     "ASIM helper",
     "Inline ASIM helper functions.",
 )
 
-KQL_OPERATOR_RULES = {
+DENY_KQL_OPERATOR_RULES = {
     "InvokeOperator": KqlRule(
         "KQL002", "invoke", "Inline the invoked function."
     ),
@@ -69,7 +69,7 @@ KQL_OPERATOR_RULES = {
     ),
 }
 
-KQL_FUNCTION_RULES = {
+DENY_KQL_FUNCTION_RULES = {
     **_named_rules(
         KqlRule(
             "KQL029",
@@ -85,7 +85,7 @@ KQL_FUNCTION_RULES = {
     ),
 }
 
-KQL_CONSTRUCT_RULES = {
+DENY_KQL_CONSTRUCT_RULES = {
     "ToScalarExpression": KqlRule(
         "KQL035",
         "toscalar",

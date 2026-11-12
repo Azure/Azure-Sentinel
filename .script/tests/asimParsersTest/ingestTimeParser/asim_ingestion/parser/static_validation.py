@@ -25,10 +25,10 @@ from .common import (
 from .kusto_analyzer import KustoAnalyzerError, analyze_kql
 from .kql import (
     ALLOWED_FILTER_OPERATORS,
-    ASIM_HELPER_RULE,
-    KQL_CONSTRUCT_RULES,
-    KQL_FUNCTION_RULES,
-    KQL_OPERATOR_RULES,
+    DENY_ASIM_HELPER_RULE,
+    DENY_KQL_CONSTRUCT_RULES,
+    DENY_KQL_FUNCTION_RULES,
+    DENY_KQL_OPERATOR_RULES,
     KqlRule,
     _identity_key,
     query_uses_source_table,
@@ -106,13 +106,13 @@ def _scan_kql(
         )
 
     for operator in analysis["operators"]:
-        rule = KQL_OPERATOR_RULES.get(operator["type"])
+        rule = DENY_KQL_OPERATOR_RULES.get(operator["type"])
         if rule is not None:
             add(rule, operator)
     for function in analysis["functions"]:
         name = function.get("name")
         rule = (
-            KQL_FUNCTION_RULES.get(name.casefold())
+            DENY_KQL_FUNCTION_RULES.get(name.casefold())
             if isinstance(name, str)
             else None
         )
@@ -124,12 +124,12 @@ def _scan_kql(
             isinstance(name, str)
             and name.casefold().startswith("_asim_")
         ):
-            add(ASIM_HELPER_RULE, construct)
+            add(DENY_ASIM_HELPER_RULE, construct)
             continue
         kind = construct["kind"]
-        rule = KQL_CONSTRUCT_RULES.get(kind)
+        rule = DENY_KQL_CONSTRUCT_RULES.get(kind)
         if rule is None:
-            rule = KQL_CONSTRUCT_RULES.get(construct["type"])
+            rule = DENY_KQL_CONSTRUCT_RULES.get(construct["type"])
         if rule is None:
             continue
         if (
