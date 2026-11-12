@@ -16,6 +16,12 @@ VALIDATION = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = VALIDATION
 SPEC.loader.exec_module(VALIDATION)
 
+from asim_ingestion.parser import static_validation as STATIC_VALIDATION
+from asim_ingestion.parser.kusto_analyzer import (
+    KustoAnalyzerError,
+    analyze_kql,
+)
+
 
 class AsimIngestTimeValidationTests(unittest.TestCase):
     def setUp(self):
@@ -357,6 +363,38 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         self.assertEqual("invalid", target["fixtureStatus"])
         self.assertIsNone(target["fixturePath"])
         self.assertTrue(target["discoveryErrors"])
+
+    def test_any_non_static_event_product_assignment_blocks_fixture(self):
+        ingest_path = (
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml"
+        )
+        self.write_yaml(
+            ingest_path,
+            self.ingest_parser(
+                parser_query=(
+                    "source\n"
+                    "| project-rename EventProduct = ProductName\n"
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                )
+            ),
+        )
+
+        target = VALIDATION.build_validation_manifest(
+            self.repo_root, [ingest_path]
+        )["targets"][0]
+
+        self.assertEqual("invalid", target["fixtureStatus"])
+        self.assertTrue(
+            any(
+                "non-static expression" in error
+                for error in target["discoveryErrors"]
+            ),
+            target["discoveryErrors"],
+        )
 
     def test_deduplicates_target_when_both_parser_files_change(self):
         query_path = (
@@ -835,6 +873,74 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "FILTER004", {finding["code"] for finding in result["findings"]}
         )
 
+    def test_non_pass_through_filter_requires_where(self):
+        stage = '| extend FilterValue = tostring(EventType)'
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=f"source\n{stage}",
+                parser_query=(
+                    f"source\n{stage}\n"
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertIn(
+            "FILTER001", {finding["code"] for finding in result["findings"]}
+        )
+
+    def test_filter_let_is_rejected_by_source_pipeline_shape(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    'let selectedType = "Login";\n'
+                    "source\n"
+                    "| where EventType == selectedType"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertIn(
+            "KQL039", {finding["code"] for finding in result["findings"]}
+        )
+
+    def test_filter_stage_comparison_ignores_formatting(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    "source\n"
+                    '| where EventType=="Login"'
+                ),
+                parser_query=(
+                    "source\n"
+                    '| where EventType == "Login"\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertNotIn(
+            "FILTER002", {finding["code"] for finding in result["findings"]}
+        )
+
     def test_allows_filter_with_one_of_multiple_parser_wheres(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
@@ -879,6 +985,11 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
             self.ingest_parser(
+                parser_filter_query=(
+                    "source\n"
+                    '| where EventType in~ ("login") '
+                    'or EventType !in~ ("logout")'
+                ),
                 parser_query=(
                     'source\n| where EventType == "Login"\n'
                     "| join kind=inner OtherTable on EventUid"
@@ -890,23 +1001,262 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         codes = {finding["code"] for finding in result["findings"]}
         self.assertIn("KQL031", codes)
-        self.assertIn("KQL041", codes)
 
-    def test_allows_supported_ip_utility_functions(self):
+    def test_kusto_analyzer_returns_ast_contract(self):
+        analysis = analyze_kql(
+            'source\n| where EventType in~ ("Login")\n'
+            '// | join OtherTable on EventUid\n'
+            '| extend Message = "coalesce(join)", '
+            "ParsedIp = parse_ipv4(SourceIp)\n"
+            "| project-away Temp*"
+        )
+
+        self.assertEqual(3, analysis["version"])
+        self.assertEqual([], analysis["diagnostics"])
+        self.assertEqual(
+            {
+                "isValid": True,
+                "statementCount": 1,
+                "statementType": "ExpressionStatement",
+                "rootType": "NameReference",
+                "rootText": "source",
+                "sourceLocation": {
+                    "start": 0,
+                    "length": 6,
+                    "line": 1,
+                    "column": 1,
+                    "text": "source",
+                    "normalizedText": "source",
+                },
+            },
+            analysis["sourcePipeline"],
+        )
+        self.assertEqual("source", analysis["pipeline"]["rootText"])
+        self.assertEqual(
+            [
+                "FilterOperator",
+                "ExtendOperator",
+                "ProjectAwayOperator",
+            ],
+            [
+                operator["type"]
+                for operator in analysis["pipeline"]["operators"]
+            ],
+        )
+        self.assertEqual(
+            ["parse_ipv4"],
+            [function["name"] for function in analysis["functions"]],
+        )
+        self.assertEqual(
+            ["InCsExpression", "WildcardedName"],
+            [construct["kind"] for construct in analysis["constructs"]],
+        )
+        self.assertEqual(
+            ["Message", "ParsedIp"],
+            [assignment["name"] for assignment in analysis["assignments"]],
+        )
+        self.assertEqual(
+            ["source"],
+            [
+                reference["name"]
+                for reference in analysis["sourceReferences"]
+            ],
+        )
+
+    def test_kusto_analyzer_validates_exact_source_pipeline_shape(self):
+        cases = {
+            "source": (True, None),
+            "source | where (": (False, "diagnostics"),
+            "let selected = true; source": (
+                False,
+                "statementCount",
+            ),
+            "let selected = source": (False, "statementType"),
+            "Source | project EventType": (False, "root"),
+            "(source | project EventType)": (False, "root"),
+            "print Value=1": (False, "root"),
+            "datatable(Value:int)[1]": (False, "root"),
+        }
+
+        for query, expected in cases.items():
+            with self.subTest(query=query):
+                source_pipeline = analyze_kql(query)["sourcePipeline"]
+                self.assertEqual(expected[0], source_pipeline["isValid"])
+                self.assertEqual(expected[1], source_pipeline.get("failure"))
+
+    def test_ast_policy_mapping_covers_existing_kql_rules(self):
+        query = """\
+let invoke_test = source | invoke f();
+let lookup_test = source | lookup Other on Key;
+let union_test = union source, Other;
+let distinct_test = source | distinct Key;
+let materialize_test = materialize(source | project Key);
+let reorder_test = source | project-reorder Key;
+let parse_kv_test = source | parse-kv Data as (Key:string);
+let parse_where_test = source | parse-where Data with Key ":" Value;
+let mv_apply_test = source | mv-apply Value on (project Value);
+let mv_expand_test = source | mv-expand Value;
+let summarize_test = source | summarize count() by Key;
+let join_test = source | join Other on Key;
+let keep_test = source | project-keep Key*;
+let external_test =
+    externaldata(Key:string)["https://example.test/data"];
+source
+| extend Asim = _ASIM_Test(Key),
+    DynamicValue = dynamic({"a":1}),
+    Coalesced = coalesce(A, B),
+    Existing = column_ifexists("A", ""),
+    Unix = unixtime_seconds_todatetime(Seconds),
+    Packed = bag_pack("a", A),
+    Replaced = replace_string(A, "b", "c"),
+    ArrayIndex = array_index_of(Values, A),
+    ArraySlice = array_slice(Values, 0, 1),
+    Trimmed = trim("a", A),
+    Url = parse_url(A),
+    Agent = parse_user_agent(A, "browser"),
+    Aggregated = make_set(A),
+    Merged = bag_merge(A, B),
+    Hex = tohex(A),
+    Ip = ipv6_is_match(A, B),
+    Decoded = url_decode(A),
+    Scalar = toscalar(Other | count)
+| where Text has_any ("a")
+    and Text has_all ("b")
+    and Text in~ ("a")
+    and Number between (1 .. 2)
+| project-away Temp*
+"""
+        analysis = analyze_kql(query)
+        findings = STATIC_VALIDATION._scan_kql(
+            analysis,
+            "ParserQuery",
+        )
+
+        self.assertEqual([], analysis["diagnostics"])
+        self.assertEqual(
+            sorted(finding.code for finding in findings),
+            [finding.code for finding in findings],
+        )
+        self.assertEqual(
+            {
+                "KQL002",
+                "KQL003",
+                "KQL004",
+                "KQL006",
+                "KQL007",
+                "KQL027",
+                "KQL028",
+                "KQL029",
+                "KQL031",
+                "KQL035",
+                "KQL037",
+                "KQL038",
+            },
+            {
+                finding.code
+                for finding in findings
+            },
+        )
+
+    def test_reports_official_kusto_syntax_diagnostics(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
             self.ingest_parser(
                 parser_query=(
-                    'source\n| where EventType == "Login"\n'
-                    "| extend ParsedIpv4 = parse_ipv4(SourceIp),\n"
-                    "    ParsedIpv6 = parse_ipv6(SourceIp),\n"
-                    '    Ipv4Match = ipv4_is_match(SourceIp, "10.0.0.0/8"),\n'
-                    '    Ipv4InRange = ipv4_is_in_range(SourceIp, "10.0.0.0/8"),\n'
-                    "    Ipv4IsPrivate = ipv4_is_private(SourceIp),\n"
-                    '    EventVendor = "Contoso", EventProduct = "Contoso"\n'
-                    "| project TimeGenerated, EventType, ParsedIpv4, "
-                    "ParsedIpv6, Ipv4Match, Ipv4InRange, Ipv4IsPrivate, "
+                    'source\n| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| where ("
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        syntax_findings = [
+            finding
+            for finding in result["findings"]
+            if finding["code"] == "KQL001"
+        ]
+        self.assertGreaterEqual(len(syntax_findings), 1)
+        self.assertTrue(
+            all("KS" in finding["message"] for finding in syntax_findings)
+        )
+
+    def test_reports_kusto_analyzer_failure(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(),
+        )
+
+        with unittest.mock.patch.object(
+            STATIC_VALIDATION,
+            "analyze_kql",
+            side_effect=KustoAnalyzerError("test failure"),
+        ):
+            result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        analyzer_findings = [
+            finding
+            for finding in result["findings"]
+            if finding["code"] == "KQL000"
+        ]
+        self.assertEqual(2, len(analyzer_findings), result["findings"])
+        self.assertTrue(
+            all(
+                "test failure" in finding["message"]
+                for finding in analyzer_findings
+            )
+        )
+
+    def test_allows_supported_case_insensitive_string_operators(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    "source\n"
+                    '| where EventType =~ "login" '
+                    'or EventType !~ "logout"'
+                ),
+                parser_query=(
+                    "source\n"
+                    '| where EventType =~ "login" '
+                    'or EventType !~ "logout"\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertNotIn(
+            "KQL016",
+            {finding["code"] for finding in result["findings"]},
+        )
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_defers_case_insensitive_membership_to_live_dcr(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    "source\n"
+                    '| where EventType in~ ("login") '
+                    'or EventType !in~ ("logout")'
+                ),
+                parser_query=(
+                    "source\n"
+                    '| where EventType in~ ("login") '
+                    'or EventType !in~ ("logout")\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
                     "EventVendor, EventProduct"
                 )
             ),
@@ -916,7 +1266,98 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         self.assertTrue(result["valid"], result["findings"])
 
-    def test_rejects_unsupported_ip_utility_functions(self):
+    def test_invalid_double_equals_tilde_uses_syntax_diagnostic(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_query=(
+                    "source\n"
+                    '| where EventType ==~ "login"\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        codes = {finding["code"] for finding in result["findings"]}
+        self.assertIn("KQL001", codes)
+        self.assertNotIn("KQL016", codes)
+
+    def test_limits_wildcard_rule_to_projection_operators(self):
+        analysis = analyze_kql("union source, Other*")
+
+        codes = {
+            finding.code
+            for finding in STATIC_VALIDATION._scan_kql(
+                analysis,
+                "ParserQuery",
+            )
+        }
+        self.assertIn("KQL006", codes)
+        self.assertNotIn("KQL037", codes)
+
+    def test_allows_newly_supported_dcr_constructs(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    "source\n"
+                    "| parse-kv Data as (ParsedKey:string)\n"
+                    '| where ParsedKey == "allow"'
+                ),
+                parser_query=(
+                    "source\n"
+                    "| parse-kv Data as (ParsedKey:string)\n"
+                    '| where ParsedKey == "allow"\n'
+                    "| extend MergedBag = bag_merge(BagOne, BagTwo),\n"
+                    "    HexValue = tohex(Number),\n"
+                    "    ParsedIpv4 = parse_ipv4(SourceIp),\n"
+                    "    ParsedIpv6 = parse_ipv6(SourceIp),\n"
+                    '    Ipv4Match = ipv4_is_match(SourceIp, "10.0.0.0/8"),\n'
+                    '    Ipv4InRange = ipv4_is_in_range(SourceIp, "10.0.0.0/8"),\n'
+                    "    Ipv4IsPrivate = ipv4_is_private(SourceIp),\n"
+                    '    EventVendor = "Contoso", EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, ParsedKey, "
+                    "MergedBag, HexValue, ParsedIpv4, ParsedIpv6, "
+                    "Ipv4Match, Ipv4InRange, Ipv4IsPrivate, EventVendor, "
+                    "EventProduct"
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_defers_parser_operator_support_to_live_dcr(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query="source",
+                parser_query=(
+                    "source\n"
+                    '| parse-where Data with ParsedKey ":" ParsedValue\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project-reorder TimeGenerated, EventType\n"
+                    "| project-keep TimeGenerated, EventType, EventVendor, "
+                    "EventProduct"
+                )
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_defers_other_ip_functions_to_live_dcr(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -934,14 +1375,9 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
-        findings = [
-            finding
-            for finding in result["findings"]
-            if finding["code"] == "KQL033"
-        ]
-        self.assertEqual(2, len(findings), result["findings"])
+        self.assertTrue(result["valid"], result["findings"])
 
-    def test_allows_supported_scalar_let_statement(self):
+    def test_rejects_scalar_let_before_source_pipeline(self):
         query = (
             "let selectedType = 'Login';\n"
             "source\n"
@@ -966,9 +1402,17 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
-        self.assertTrue(result["valid"], result["findings"])
+        self.assertFalse(result["valid"])
+        self.assertEqual(
+            2,
+            sum(
+                finding["code"] == "KQL039"
+                for finding in result["findings"]
+            ),
+            result["findings"],
+        )
 
-    def test_detects_multiline_unsupported_function(self):
+    def test_defers_function_support_to_live_dcr(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -977,15 +1421,46 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
                     'source\n| where EventType == "Login"\n'
                     "| extend Result = coalesce\n"
                     "    (PrimaryResult, SecondaryResult)\n"
-                    "| project TimeGenerated, EventType, Result"
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, Result, "
+                    "EventVendor, EventProduct"
                 )
             ),
         )
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
+        self.assertTrue(result["valid"], result["findings"])
+
+    def test_filter_query_keeps_its_stricter_operator_contract(self):
+        filter_query = (
+            "source\n"
+            "| project EventType\n"
+            '| where EventType == "Login"'
+        )
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=filter_query,
+                parser_query=(
+                    f"{filter_query}\n"
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"'
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
         self.assertIn(
-            "KQL013", {finding["code"] for finding in result["findings"]}
+            "KQL041",
+            {
+                finding["code"]
+                for finding in result["findings"]
+                if finding["field"] == "ParserFilterQuery"
+            },
         )
 
     def test_rejects_second_external_table_statement(self):
@@ -1004,7 +1479,6 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         codes = {finding["code"] for finding in result["findings"]}
         self.assertIn("KQL039", codes)
-        self.assertIn("KQL042", codes)
 
     def test_rejects_external_table_in_let_binding(self):
         ingest_path = self.write_yaml(
@@ -1021,7 +1495,36 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
         self.assertIn(
-            "KQL043", {finding["code"] for finding in result["findings"]}
+            "KQL039", {finding["code"] for finding in result["findings"]}
+        )
+
+    def test_rejects_non_lowercase_source_root(self):
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(
+                parser_filter_query=(
+                    'Source | where EventType == "Login"'
+                ),
+                parser_query=(
+                    'Source | where EventType == "Login"\n'
+                    '| extend EventVendor = "Contoso", '
+                    'EventProduct = "Contoso"\n'
+                    "| project TimeGenerated, EventType, "
+                    "EventVendor, EventProduct"
+                ),
+            ),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+        self.assertEqual(
+            2,
+            sum(
+                finding["code"] == "KQL039"
+                for finding in result["findings"]
+            ),
+            result["findings"],
         )
 
     def test_ignores_unsupported_words_in_strings_and_comments(self):

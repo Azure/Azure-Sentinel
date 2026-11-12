@@ -248,16 +248,38 @@ class AzureMonitorClient:
         self, table_name: str, schema: Sequence[Mapping[str, str]]
     ) -> str:
         _require_identifier(table_name, "table_name")
-        destination = self.query_kql(
-            f"{table_name} | take 0", stage="raw-schema"
+        resource_path = (
+            f"{self.config.workspace_resource_id}/tables/{table_name}"
         )
-        columns = destination.get("columns")
-        if not isinstance(columns, list) or not columns:
+        response = self._request(
+            "GET",
+            self._management_url(resource_path, TABLE_API_VERSION),
+            scope=MANAGEMENT_SCOPE,
+            stage="raw-schema",
+            accepted_statuses={200},
+        )
+        body = _safe_response_body(response)
+        properties = body.get("properties") if isinstance(body, Mapping) else None
+        destination = (
+            properties.get("schema") if isinstance(properties, Mapping) else None
+        )
+        if not isinstance(destination, Mapping):
+            raise HarnessError(
+                "raw-schema", "Raw destination returned invalid table metadata."
+            )
+        # Query responses can expose GUID columns as strings; ARM preserves GUIDs.
+        columns = destination.get("columns", [])
+        standard_columns = destination.get("standardColumns", [])
+        if (
+            not isinstance(columns, list)
+            or not isinstance(standard_columns, list)
+            or not (columns or standard_columns)
+        ):
             raise HarnessError(
                 "raw-schema", "Raw destination returned no column metadata."
             )
         destination_types: dict[str, str] = {}
-        for column in columns:
+        for column in columns + standard_columns:
             if not isinstance(column, Mapping):
                 raise HarnessError(
                     "raw-schema", "Invalid raw destination column metadata."

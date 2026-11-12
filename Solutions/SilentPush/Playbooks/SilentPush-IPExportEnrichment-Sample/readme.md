@@ -2,7 +2,13 @@
 
 ## Summary
 
-Runs every 24 hours, downloads the Silent Push IOFA IPv4 export (`iofa-exports/all_iofas_ips.txt`), takes the first 100 IPs and bulk-enriches them with Silent Push. It is a starting point to build your own playbook: it does not write the results anywhere.
+Runs every 24 hours, downloads a Silent Push export of IPs that you choose, takes the first 100 IPs and bulk-enriches them with Silent Push. It is a starting point to build your own playbook: it does not write the results anywhere.
+
+```mermaid
+flowchart LR
+    A["Every 24 hours"] --> B["Export (needs user input)<br/>download the chosen<br/>Silent Push export"]
+    B --> C["Enrich<br/>first 100 only,<br/>results not saved"]
+```
 
 ### Prerequisites
 
@@ -31,6 +37,12 @@ The playbook deploys with an empty API key for the Silent Push connection.
 3. Go to **General > Edit API connection**.
 4. Enter your Silent Push API key and click **Save**.
 
-#### b. Enable the playbook
+#### b. Choose the export to process
 
-The playbook is deployed **Disabled**. Enable it once the connection is authorized.
+1. Open the playbook in the **Logic app designer** and select the **Export IP** action.
+2. Fill in **export_category** and **file_name** with the Silent Push export you want to process.
+3. Click **Save**.
+
+#### c. Enable the playbook
+
+The playbook is deployed **Disabled**. Enable it once the connection is authorized and the export is set.

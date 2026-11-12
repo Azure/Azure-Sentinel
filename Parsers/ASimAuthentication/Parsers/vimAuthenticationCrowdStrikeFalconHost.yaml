@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Authentication parser for CrowdStrike Falcon Endpoint Protection
-  Version: '0.1.1'
-  LastUpdated: Apr 11 2024
+  Version: '0.1.2'
+  LastUpdated: Nov 11, 2026
 Product:
   Name: CrowdStrike Falcon Endpoint Protection
 Normalization:
@@ -93,7 +93,7 @@ ParserQuery: |
           and (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
       | lookup EventSeverityLookup on LogSeverity
       | extend
-          EventStartTime = todatetime(DeviceCustomDate1),
+          EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
           EventCount = int(1),
           EventSchema = "Authentication",
           EventSchemaVersion = "0.1.3",
@@ -101,7 +101,7 @@ ParserQuery: |
           EventVendor = "CrowdStrike",
           Type = "CommonSecurityLog"
       | project-rename 
-          TargetIpAddr = DestinationTranslatedAddress,
+          SrcIpAddr = DestinationTranslatedAddress,
           EventUid = _ItemId,
           EventOriginalSeverity = LogSeverity,
           EventOriginalSubType = DeviceEventClassID,
@@ -121,15 +121,15 @@ ParserQuery: |
           )
       | extend
           EventEndTime = EventStartTime,
-          DvcIpAddr = TargetIpAddr,
           TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
           TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
           TargetAppType = iff(isnotempty(TargetAppName), "Service", ""),
           LogonMethod = iff(EventOriginalSubType =~ "userAuthenticate", "Username & Password", "Multi factor authentication")
       | extend
           User = TargetUsername,
-          Dst = TargetIpAddr,
-          Dvc = coalesce(DvcIpAddr, EventProduct),
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          Dvc = EventProduct,
           Application = TargetAppName
       | project
           TimeGenerated,
@@ -142,7 +142,7 @@ ParserQuery: |
           EventProduct,
           EventVendor,
           Type,
-          TargetIpAddr,
+          SrcIpAddr,
           EventUid,
           EventSeverity,
           EventOriginalSeverity,
@@ -153,13 +153,13 @@ ParserQuery: |
           TargetUsername,
           TargetAppName,
           EventEndTime,
-          DvcIpAddr,
           TargetUsernameType,
           TargetUserType,
           TargetAppType,
           LogonMethod,
           User,
-          Dst,
+          Src,
+          IpAddr,
           Dvc,
           Application,
           ASimMatchingUsername
