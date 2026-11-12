@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.2.2       | 10-11-2026                     | CCF connector: add Feature Adoption usage reporting with a *Disable usage reporting* opt-out; remove legacy x-cybr-telemetry header |
 | 3.2.1       | 02-09-2026                     | Security Patch: Remove logResponseContent attribute from Polling Config                    |
 | 3.2.0       | 06-07-2026                     | Rebrand to Idira and remove deprecated Azure Functions Data Connector                      |
 | 3.1.1       | 16-04-2026                     | Update Azure Function based connector to Python 3.12                                       |
