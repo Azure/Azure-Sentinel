@@ -368,9 +368,9 @@ class FixturePreparationTests(unittest.TestCase):
         )
         for column in artifact["platformManagedColumns"]:
             self.assertNotIn(column, artifact["rows"][0])
-        self.assertTrue(
-            set(artifact["platformManagedColumns"])
-            <= PLATFORM_MANAGED_COLUMNS
+        self.assertLessEqual(
+            set(artifact["platformManagedColumns"]),
+            PLATFORM_MANAGED_COLUMNS,
         )
 
     def test_platform_managed_column_contract(self):
