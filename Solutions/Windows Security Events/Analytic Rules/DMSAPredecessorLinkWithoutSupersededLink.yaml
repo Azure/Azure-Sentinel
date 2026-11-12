@@ -1,0 +1,77 @@
+id: 922e997e-c69c-4a10-8418-0e7cfd641dd4
+name: dMSA predecessor link set without superseded account link (BadSuccessor)
+description: |
+  'Detects a delegated Managed Service Account (dMSA) being linked to a predecessor account through msDS-ManagedAccountPrecededByLink without the matching msDS-SupersededManagedAccountLink being written on that predecessor, using Windows Security Event 5136.
+  This is the BadSuccessor primitive: an attacker who can create or write a dMSA links it to a privileged account, such as a domain administrator, and inherits that account's privileges without needing any permission over the target. Microsoft's supported migration cmdlets (Start-ADServiceAccountMigration and Complete-ADServiceAccountMigration) write both sides of the link, so legitimate migrations are excluded by correlating the two changes on the dMSA and predecessor distinguished names, independent of event order.
+  The rule looks back 2 hours but only alerts on links first seen 1 to 2 hours ago, so both sides of a legitimate migration are always evaluated together and each link is alerted once.
+  Microsoft addressed the privilege escalation in August 2025 (CVE-2025-53779); the directory change remains a strong indicator of attempted abuse on unpatched or mixed domains.
+  Requires Directory Service Changes auditing and a SACL auditing Write Property on the relevant objects on domain controllers.'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1098
+  - T1078.002
+tags:
+  - BadSuccessor
+  - CVE-2025-53779
+query: |
+  SecurityEvent
+  | where EventID == 5136
+  | where EventData has_any ("msDS-ManagedAccountPrecededByLink", "msDS-SupersededManagedAccountLink")
+  | extend Attribute      = extract(@'<Data Name="AttributeLDAPDisplayName">([^<]+)</Data>', 1, EventData),
+           OperationType  = extract(@'<Data Name="OperationType">([^<]+)</Data>', 1, EventData),
+           ObjectDN       = tolower(extract(@'<Data Name="ObjectDN">([^<]+)</Data>', 1, EventData)),
+           AttributeValue = tolower(extract(@'<Data Name="AttributeValue">([^<]+)</Data>', 1, EventData))
+  | where OperationType in~ ("%%14674", "Value Added")
+  | where Attribute in~ ("msDS-ManagedAccountPrecededByLink", "msDS-SupersededManagedAccountLink")
+  | extend IsPrecededBy = Attribute =~ "msDS-ManagedAccountPrecededByLink"
+  // Normalise both sides of the link onto the same (dMSA, predecessor) pair, independent of event order
+  | extend DmsaDN        = iff(IsPrecededBy, ObjectDN, AttributeValue),
+           PredecessorDN = iff(IsPrecededBy, AttributeValue, ObjectDN)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated),
+              Attributes = make_set(Attribute), Accounts = make_set(SubjectAccount), Computers = make_set(Computer)
+      by DmsaDN, PredecessorDN
+  // Legitimate migration writes both attributes; BadSuccessor writes only the dMSA side
+  | where array_length(Attributes) == 1 and tostring(Attributes[0]) =~ "msDS-ManagedAccountPrecededByLink"
+  // Alert once per link, after the other side has had at least an hour to appear
+  | where StartTime between (ago(2h) .. ago(1h))
+  | extend SubjectAccount = tostring(Accounts[0]), Computer = tostring(Computers[0])
+  | extend AccountName = tostring(split(SubjectAccount, @'\')[1]), AccountNTDomain = tostring(split(SubjectAccount, @'\')[0])
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SubjectAccount
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+customDetails:
+  DmsaDN: DmsaDN
+  PredecessorDN: PredecessorDN
+version: 1.0.0
+kind: Scheduled
