@@ -1,5 +1,6 @@
 | **Version**  | **Date Modified (DD-MM-YYYY)**   | **Change History**                                                                    |
 |--------------|--------------------------------|---------------------------------------------------------------------------------------|
+| 3.2.3        | 23-10-2026                      | Optimized **RareProcessAsService.yaml** Analytic Rule  KQL query for performance|
 | 3.2.2        | 15-10-2026                      | Fixed queries, time filters and charts in **XDR Workbooks**. |
 | 3.2.1        | 15-10-2026                      | Added 3 **XDR Workbooks** alongside the existing Sentinel workbooks. |
 | 3.0.18       | 03-09-2026                     | Added 57 new **Hunting Queries** for Microsoft Defender for Office 365 email and collaboration protection. Updated the **Workbook** Microsoft Defender for Office 365 Detections and Insights to version 4.0.0, adding Microsoft Teams collaboration and file malware coverage, and additional Advanced Hunting data types. |
