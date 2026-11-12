@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.3.2       | 10-11-2026                     | Added 4 Defender **XDR Detections** migrated from **Analytic Rules** and 1 **XDR Workbook** migrated from **Workbooks**. |
 | 3.3.0       | 23-10-2026                     | Removed the deprecated Azure Function data connector from the solution. The workbook now queries only the **VaronisAlertsV2_CL** table populated by the CCF Push data connector. Added a note to the connector page that deployment must be done from Microsoft Sentinel in the Azure portal |
 | 3.2.0       | 20-08-2026                     | CCF Push data connector now ingests into the dedicated **VaronisAlertsV2_CL** table to avoid schema conflicts with the legacy Azure Function connector's table |
 | 3.1.1       | 29-07-2026                     | Mark Azure Function data connector as Deprecated |
