@@ -18,7 +18,7 @@ ARM_VALIDATION_METHODS = ("arm-ttk", "lab-deployment")
 DEFAULT_ARM_VALIDATION_METHOD = "lab-deployment"
 
 
-def default_arm_validation_method(workflow_profile: str = "authoring") -> str:
+def default_arm_validation_method(workflow_profile: str = "qualification") -> str:
     if workflow_profile not in ("authoring", "qualification"):
         raise ValueError(f"unsupported workflow profile: {workflow_profile}")
     return DEFAULT_ARM_VALIDATION_METHOD
@@ -406,7 +406,7 @@ def validate_content(solution: str | Path) -> dict[str, Any]:
     if has_analytic_rules(root):
         result = validate_solution(root)
     else:
-        from solution_manager.qualification.pr_check_runner import scan_solution_urls
+        from solution_manager.core.content_paths import scan_solution_urls
 
         locale_issues = scan_solution_urls(root)["localeIssues"]
         result = {
@@ -711,7 +711,7 @@ def build_lab_deployment_preflight_prompt(
     )
     method = (
         (state or {}).get("context", {}).get("armValidationMethod")
-        or default_arm_validation_method((state or {}).get("context", {}).get("workflowProfile", "authoring"))
+        or default_arm_validation_method((state or {}).get("context", {}).get("workflowProfile", "qualification"))
     )
     return {
         "schemaVersion": 1,

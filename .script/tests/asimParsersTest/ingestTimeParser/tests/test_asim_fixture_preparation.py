@@ -340,6 +340,47 @@ class FixturePreparationTests(unittest.TestCase):
         self.assertEqual("Contoso_CL", artifact["sourceRawTable"])
         self.assertEqual("inferred", artifact["schemaSource"])
 
+    def test_canonicalizes_fixture_columns_to_schema_casing(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,DvcOS,DvcOSName\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,Windows,Windows 11\n"
+        )
+        schema_path = self.root / "Schema.csv"
+        schema_path.write_text(
+            "ColumnName,ColumnType\n"
+            "TimeGenerated,datetime\n"
+            "DvcOs,string\n"
+            "DvcOsName,string\n",
+            encoding="utf-8",
+        )
+
+        artifact = self.prepare(fixture, schema_path)
+
+        self.assertIn("DvcOs", artifact["rows"][0])
+        self.assertIn("DvcOsName", artifact["rows"][0])
+        self.assertNotIn("DvcOS", artifact["rows"][0])
+        self.assertNotIn("DvcOSName", artifact["rows"][0])
+        self.assertEqual("Windows", artifact["rows"][0]["DvcOs"])
+
+    def test_rejects_case_insensitive_duplicate_fixture_columns(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,DvcOs,DvcOS\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,Windows,Linux\n"
+        )
+        schema_path = self.root / "Schema.csv"
+        schema_path.write_text(
+            "ColumnName,ColumnType\n"
+            "TimeGenerated,datetime\n"
+            "DvcOs,string\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "case-insensitive duplicate columns",
+        ):
+            self.prepare(fixture, schema_path)
+
     def test_uses_discovered_table_schema(self):
         fixture = self.write_fixture(
             "TimeGenerated,Type,Enabled,Payload\n"
@@ -644,6 +685,19 @@ class FixturePreparationTests(unittest.TestCase):
                 self.assertEqual(
                     "repository", artifact["schemaSource"]
                 )
+                if target_group == "ASimWebSessionLogs":
+                    row_names = set().union(
+                        *(row.keys() for row in artifact["rows"])
+                    )
+                    for canonical, variant in (
+                        ("TimeStamp", "Timestamp"),
+                        ("DvcOs", "DvcOS"),
+                        ("DvcOsName", "DvcOSName"),
+                        ("DvcOsVersion", "DvcOSVersion"),
+                        ("WaveTimeStamp", "WaveTimestamp"),
+                    ):
+                        self.assertIn(canonical, row_names)
+                        self.assertNotIn(variant, row_names)
 
     def test_salesforce_fixtures_include_rejected_filter_rows(self):
         repo_root = Path(__file__).resolve().parents[5]

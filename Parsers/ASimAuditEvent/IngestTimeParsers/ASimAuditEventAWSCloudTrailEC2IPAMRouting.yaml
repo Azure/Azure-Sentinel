@@ -1,0 +1,194 @@
+Parser:
+  DisplayName: 'Ingestion-time Audit Event ASIM parser for AWS CloudTrail EC2 IPAM routing and RPKI activity'
+  Version: '0.1.0'
+  LastUpdated: '2026-11-06'
+Product:
+  Name: 'AWS CloudTrail'
+Normalization:
+  Schema: 'AuditEvent'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes AWS CloudTrail EC2 IPAM routing and RPKI activity from AWSCloudTrail to ASimAuditEventLogs during ingestion.
+ParserName: 'ASimAuditEventAWSCloudTrailEC2IPAMRouting'
+DCRType: 'Workspace'
+InputStream: 'Microsoft-AWSCloudTrail'
+SourceRawTable: 'AWSCloudTrail'
+TargetASIMTable: 'ASimAuditEventLogs'
+ParserFilterQuery: |
+  source
+  | where EventSource == "ec2.amazonaws.com"
+  | where EventName in (
+      "BatchModifyIpamRoutingPolicyRegistrations",
+      "CreateIpamInternetRegistryAssociation",
+      "CreateIpamRoutingPolicyRegistration",
+      "DeleteIpamInternetRegistryAssociation",
+      "DeleteIpamRoutingPolicyRegistration",
+      "DescribeIpamInternetRegistryAssociations",
+      "EnableIpamInternetRegistryAssociation",
+      "GetIpamDiscoveredRoutes",
+      "GetIpamInternetRegistryAssociationAsns",
+      "GetIpamInternetRegistryAssociationCidrs",
+      "GetIpamRouteOriginAuthorizations",
+      "GetIpamRouteProtectionFindings",
+      "GetIpamRoutingPolicyRegistrationDeltas",
+      "GetIpamRoutingPolicyRegistrations",
+      "ModifyIpamRoutingPolicyRegistration"
+  )
+ParserQuery: |
+  source
+  | where EventSource == "ec2.amazonaws.com"
+  | where EventName in (
+      "BatchModifyIpamRoutingPolicyRegistrations",
+      "CreateIpamInternetRegistryAssociation",
+      "CreateIpamRoutingPolicyRegistration",
+      "DeleteIpamInternetRegistryAssociation",
+      "DeleteIpamRoutingPolicyRegistration",
+      "DescribeIpamInternetRegistryAssociations",
+      "EnableIpamInternetRegistryAssociation",
+      "GetIpamDiscoveredRoutes",
+      "GetIpamInternetRegistryAssociationAsns",
+      "GetIpamInternetRegistryAssociationCidrs",
+      "GetIpamRouteOriginAuthorizations",
+      "GetIpamRouteProtectionFindings",
+      "GetIpamRoutingPolicyRegistrationDeltas",
+      "GetIpamRoutingPolicyRegistrations",
+      "ModifyIpamRoutingPolicyRegistration"
+  )
+  | extend EventType = case(
+      EventName in ("CreateIpamInternetRegistryAssociation", "CreateIpamRoutingPolicyRegistration"), "Create",
+      EventName in ("DeleteIpamInternetRegistryAssociation", "DeleteIpamRoutingPolicyRegistration"), "Delete",
+      EventName in ("EnableIpamInternetRegistryAssociation"), "Enable",
+      EventName in ("DescribeIpamInternetRegistryAssociations", "GetIpamDiscoveredRoutes", "GetIpamInternetRegistryAssociationAsns", "GetIpamInternetRegistryAssociationCidrs", "GetIpamRouteOriginAuthorizations", "GetIpamRouteProtectionFindings", "GetIpamRoutingPolicyRegistrationDeltas", "GetIpamRoutingPolicyRegistrations"), "Read",
+      EventName in ("BatchModifyIpamRoutingPolicyRegistrations", "ModifyIpamRoutingPolicyRegistration"), "Set",
+      "")
+  | extend Object = case(
+      EventName in ("GetIpamDiscoveredRoutes"), "IPAM Discovered Route",
+      EventName in ("CreateIpamInternetRegistryAssociation", "DeleteIpamInternetRegistryAssociation", "DescribeIpamInternetRegistryAssociations", "EnableIpamInternetRegistryAssociation", "GetIpamInternetRegistryAssociationAsns", "GetIpamInternetRegistryAssociationCidrs"), "IPAM Internet Registry Association",
+      EventName in ("GetIpamRouteOriginAuthorizations"), "IPAM Route Origin Authorization",
+      EventName in ("GetIpamRouteProtectionFindings"), "IPAM Route Protection Finding",
+      EventName in ("GetIpamRoutingPolicyRegistrations"), "IPAM Routing Policy Registration",
+      EventName in ("BatchModifyIpamRoutingPolicyRegistrations", "CreateIpamRoutingPolicyRegistration", "DeleteIpamRoutingPolicyRegistration", "GetIpamRoutingPolicyRegistrationDeltas", "ModifyIpamRoutingPolicyRegistration"), "IPAM Routing Policy Registration Delta",
+      "")
+  | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName in ("BatchModifyIpamRoutingPolicyRegistrations", "CreateIpamRoutingPolicyRegistration",
+        "ModifyIpamRoutingPolicyRegistration"), ResponseElements.ipamRoutingPolicyRegistrationDelta,
+      EventName in ("CreateIpamInternetRegistryAssociation", "EnableIpamInternetRegistryAssociation"),
+        ResponseElements.ipamInternetRegistryAssociation,
+      parse_json('null')
+    ), parse_json('null'))
+  | extend ObjectId = case(
+      EventName in ("BatchModifyIpamRoutingPolicyRegistrations", "CreateIpamRoutingPolicyRegistration",
+        "DeleteIpamRoutingPolicyRegistration", "ModifyIpamRoutingPolicyRegistration"),
+        ResponseElements.ipamRoutingPolicyRegistrationDelta.deltaId,
+      EventName == "CreateIpamInternetRegistryAssociation",
+        ResponseElements.ipamInternetRegistryAssociation.ipamInternetRegistryAssociationId,
+      EventName in ("DeleteIpamInternetRegistryAssociation", "EnableIpamInternetRegistryAssociation",
+        "GetIpamInternetRegistryAssociationAsns", "GetIpamInternetRegistryAssociationCidrs"),
+  // NOTE(DCR-LOSSY: 3.4 coalesce) - dynamic empty-string/null edge cases require comparison
+        iff(isnotnull(RequestParameters.ipamInternetRegistryAssociationId), RequestParameters.ipamInternetRegistryAssociationId, RequestParameters.IpamInternetRegistryAssociationId),
+  // NOTE(DCR-LOSSY: 3.4 coalesce) - dynamic empty-string/null edge cases require comparison
+      EventName == "GetIpamRoutingPolicyRegistrationDeltas", iff(isnotnull(RequestParameters.deltaId), RequestParameters.deltaId, RequestParameters.DeltaId),
+      parse_json('null')
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service",
+      EventUid = tostring(AwsEventId)
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = parse_json('[]'),
+      ActorUserEntityKey = "",
+      AdditionalEntities = parse_json('[]'),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", RequestParameters,
+      "ResponseElements", ResponseElements
+    )
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  // NOTE(DCR-LOSSY: destination-schema projection) - approved alias removal, UID mapping and dynamic serialization
+  | extend NewValue = tostring(NewValue), ObjectId = tostring(ObjectId)
+  | project-rename EventOriginalUid = EventUid
+  | project
+      TimeGenerated,
+      Type,
+      EventCount,
+      EventStartTime,
+      EventEndTime,
+      EventSeverity,
+      EventSchemaVersion,
+      EventVendor,
+      EventProduct,
+      EventResult,
+      EventMessage,
+      TargetAppName,
+      EventOriginalSubType,
+      EventOriginalType,
+      EventOriginalUid,
+      EventOriginalResultDetails,
+      EventProductVersion,
+      ActorUserId,
+      ActorUsername,
+      ActorOriginalUserType,
+      HttpUserAgent,
+      ActorUserIdType,
+      ActorUsernameType,
+      SrcIpAddr,
+      AdditionalFields,
+      EventType,
+      NewValue,
+      ObjectId,
+      ObjectType,
+      Object,
+      TargetAppType,
+      Operation,
+      ActingApplicationEntityKey,
+      ActorUserAdditionalIds,
+      ActorUserEntityKey,
+      AdditionalEntities,
+      DvcEntityKey,
+      SrcSystemEntityKey,
+      TargetApplicationEntityKey,
+      TargetSystemEntityKey
+Change:
+  Date: '2026-11-06'
+  Description: 'Initial ingestion-time conversion.'

@@ -35,13 +35,55 @@
       "metadata": {
         "description": "Name for the workbook"
       }
+    },
+    "DeployAnalyticsRule": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel analytic rules carried by this solution (ContentKind AnalyticsRule and its AnalyticsRuleTemplate registration face)."
+      }
+    },
+    "DeployWorkbook": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel workbook content and its Content Hub registration carried by this solution (ContentKind Workbook and WorkbookTemplate)."
+      }
+    },
+    "DeployDefenderWorkbook": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy Defender Workbooks and their Content Hub registrations independently of Microsoft Sentinel DeployWorkbook. Candidate provider contract requires approved lab installation, readback and update verification."
+      }
+    },
+    "DeployCustomDetection": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Deploy the XDR-native custom detection resources and their Content Hub registrations (ContentKind CustomDetection and CustomDetectionTemplate). Independent of DeployAnalyticsRule: both kinds can be selected together. Existing analytic-rule instances are not disabled or removed. CD enabled or disabled status is controlled separately from this deployment switch."
+      }
+    },
+    "DeployHuntingQuery": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the Microsoft Sentinel hunting queries carried by this solution."
+      }
+    },
+    "DeployParser": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy the parsers and their registrations carried by this solution."
+      }
     }
   },
   "variables": {
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Claroty",
-    "_solutionVersion": "3.0.5",
+    "_solutionVersion": "3.2.2",
     "solutionId": "azuresentinel.azure-sentinel-solution-claroty",
     "_solutionId": "[variables('solutionId')]",
     "workbookVersion1": "1.0.1",
@@ -55,7 +97,7 @@
       "_parserName1": "[concat(parameters('workspace'),'/','ClarotyEvent')]",
       "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ClarotyEvent')]",
       "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('ClarotyEvent-Parser')))]",
-      "parserVersion1": "1.0.0",
+      "parserVersion1": "1.0.1",
       "parserContentId1": "ClarotyEvent-Parser"
     },
     "huntingQueryObject1": {
@@ -190,7 +232,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyOverview Workbook with template version 3.0.5",
+        "description": "ClarotyOverview Workbook with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -267,7 +309,8 @@
         "contentProductId": "[variables('_workbookcontentProductId1')]",
         "id": "[variables('_workbookcontentProductId1')]",
         "version": "[variables('workbookVersion1')]"
-      }
+      },
+      "condition": "[parameters('DeployWorkbook')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -278,7 +321,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyEvent Data Parser with template version 3.0.5",
+        "description": "ClarotyEvent Data Parser with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -295,7 +338,7 @@
                 "displayName": "Parser for ClarotyEvent",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "ClarotyEvent",
-                "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Claroty'\n| extend EventVendor = 'Claroty'\n| extend EventProduct = 'Claroty'\n| extend EventSchemaVersion = 0.2\n| extend EventCount = 1\n| extend DeviceCustomNumber1 = coalesce(column_ifexists(\"FieldDeviceCustomNumber1\", long(null)),DeviceCustomNumber1),\n         DeviceCustomNumber2 = coalesce(column_ifexists(\"FieldDeviceCustomNumber2\", long(null)),DeviceCustomNumber2),\n         DeviceCustomNumber3 = coalesce(column_ifexists(\"FieldDeviceCustomNumber3\", long(null)),DeviceCustomNumber3),\n         ExternalID = coalesce(column_ifexists(\"ExtID\", \"\"),tostring(ExternalID))\n| extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1\n                     , DeviceCustomNumber2Label, DeviceCustomNumber2\n                     , DeviceCustomNumber3Label, DeviceCustomNumber3\n                     , DeviceCustomString1Label, DeviceCustomString1\n                     , DeviceCustomString2Label, DeviceCustomString2\n                     , DeviceCustomString3Label, DeviceCustomString3\n                     , DeviceCustomString4Label, DeviceCustomString4\n                     , DeviceCustomString5Label, DeviceCustomString5\n                     , DeviceCustomString6Label, DeviceCustomString6\n                     , DeviceCustomDate1Label, DeviceCustomDate1\n                     , DeviceCustomDate2Label, DeviceCustomDate2)\n| evaluate bag_unpack(packed)\n| parse-kv AdditionalExtensions as (cs7Label:string, cs7:string, cs8Label:string, cs8:string, cs9Label:string, cs9:string, cs10Label:string, cs10:string, cat:string) with (pair_delimiter=';', kv_delimiter='=')\n| extend packed2 = pack(cs7Label, cs7\n                     , cs8Label, cs8\n                     , cs9Label, cs9\n                     , cs10Label, cs10)\n| evaluate bag_unpack(packed2)\n| extend EventEndTime = todatetime(ReceiptTime),\n         cat = coalesce(column_ifexists(\"DeviceEventCategory\", \"\"),cat)\n| project-rename EventProductVersion=DeviceVersion\n                , EventSubType=cat\n                , EventOriginalType=DeviceEventClassID\n                , EventSeverity=LogSeverity\n                , EventMessage=Message\n                , DstPortNumber=DestinationPort\n                , DstIpAddr=DestinationIP\n                , DstDvcHostname=DestinationHostName\n                , DstUserName=DestinationUserName\n                , DvcIpAddr=DeviceAddress\n                , DvcHostname=DeviceName\n                , DstMacAddr=DestinationMACAddress\n                , NetworkApplicationProtocol=Protocol\n                , SrcPortNumber=SourcePort\n                , SrcIpAddr=SourceIP\n                , SrcMacAddr=SourceMACAddress\n                , EventId=ExternalID\n                , SrcDvcHostname=SourceHostName\n| extend EventType=Activity\n| project-away AdditionalExtensions\n            , Activity\n            , ReceiptTime\n            , DeviceVendor\n            , DeviceProduct\n            , DeviceCustomNumber1\n            , DeviceCustomNumber1Label\n            , DeviceCustomNumber2\n            , DeviceCustomNumber2Label\n            , DeviceCustomNumber3\n            , DeviceCustomNumber3Label\n            , DeviceCustomString1\n            , DeviceCustomString1Label\n            , DeviceCustomString2\n            , DeviceCustomString2Label\n            , DeviceCustomString3\n            , DeviceCustomString3Label\n            , DeviceCustomString4\n            , DeviceCustomString4Label\n            , DeviceCustomString5\n            , DeviceCustomString5Label\n            , DeviceCustomString6\n            , DeviceCustomString6Label\n            , cs7Label\n            , cs7\n            , cs8Label\n            , cs8\n            , cs9Label\n            , cs9\n            , cs10Label\n            , cs10\n",
+                "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Claroty'\n| extend EventVendor = 'Claroty'\n| extend EventProduct = 'Claroty'\n| extend EventSchemaVersion = 0.2\n| extend EventCount = 1\n| extend DeviceCustomNumber1 = coalesce(column_ifexists(\"FieldDeviceCustomNumber1\", long(null)),DeviceCustomNumber1),\n         DeviceCustomNumber2 = coalesce(column_ifexists(\"FieldDeviceCustomNumber2\", long(null)),DeviceCustomNumber2),\n         DeviceCustomNumber3 = coalesce(column_ifexists(\"FieldDeviceCustomNumber3\", long(null)),DeviceCustomNumber3),\n         ExternalID = coalesce(column_ifexists(\"ExtID\", \"\"),tostring(ExternalID))\n| extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1\n                     , DeviceCustomNumber2Label, DeviceCustomNumber2\n                     , DeviceCustomNumber3Label, DeviceCustomNumber3\n                     , DeviceCustomString1Label, DeviceCustomString1\n                     , DeviceCustomString2Label, DeviceCustomString2\n                     , DeviceCustomString3Label, DeviceCustomString3\n                     , DeviceCustomString4Label, DeviceCustomString4\n                     , DeviceCustomString5Label, DeviceCustomString5\n                     , DeviceCustomString6Label, DeviceCustomString6\n                     , DeviceCustomDate1Label, DeviceCustomDate1\n                     , DeviceCustomDate2Label, DeviceCustomDate2)\n| evaluate bag_unpack(packed)\n| parse-kv AdditionalExtensions as (cs7Label:string, cs7:string, cs8Label:string, cs8:string, cs9Label:string, cs9:string, cs10Label:string, cs10:string, cat:string) with (pair_delimiter=';', kv_delimiter='=')\n| extend packed2 = pack(cs7Label, cs7\n                     , cs8Label, cs8\n                     , cs9Label, cs9\n                     , cs10Label, cs10)\n| evaluate bag_unpack(packed2)\n| extend EventEndTime = todatetime(ReceiptTime),\n         cat = coalesce(column_ifexists(\"DeviceEventCategory\", \"\"),cat),\n         AlertUrl = column_ifexists(\"AlertUrl\", \"\"),\n         ResolvedAs = column_ifexists(\"ResolvedAs\", \"\"),\n         CategoryAccess = column_ifexists(\"CategoryAccess\", \"\"),\n         site_name = column_ifexists(\"site_name\", \"\")\n| project-rename EventProductVersion=DeviceVersion\n                , EventSubType=cat\n                , EventOriginalType=DeviceEventClassID\n                , EventSeverity=LogSeverity\n                , EventMessage=Message\n                , DstPortNumber=DestinationPort\n                , DstIpAddr=DestinationIP\n                , DstDvcHostname=DestinationHostName\n                , DstUserName=DestinationUserName\n                , DvcIpAddr=DeviceAddress\n                , DvcHostname=DeviceName\n                , DstMacAddr=DestinationMACAddress\n                , NetworkApplicationProtocol=Protocol\n                , SrcPortNumber=SourcePort\n                , SrcIpAddr=SourceIP\n                , SrcMacAddr=SourceMACAddress\n                , EventId=ExternalID\n                , SrcDvcHostname=SourceHostName\n| extend EventType=Activity\n| project-away AdditionalExtensions\n            , Activity\n            , ReceiptTime\n            , DeviceVendor\n            , DeviceProduct\n            , DeviceCustomNumber1\n            , DeviceCustomNumber1Label\n            , DeviceCustomNumber2\n            , DeviceCustomNumber2Label\n            , DeviceCustomNumber3\n            , DeviceCustomNumber3Label\n            , DeviceCustomString1\n            , DeviceCustomString1Label\n            , DeviceCustomString2\n            , DeviceCustomString2Label\n            , DeviceCustomString3\n            , DeviceCustomString3Label\n            , DeviceCustomString4\n            , DeviceCustomString4Label\n            , DeviceCustomString5\n            , DeviceCustomString5Label\n            , DeviceCustomString6\n            , DeviceCustomString6Label\n            , cs7Label\n            , cs7\n            , cs8Label\n            , cs8\n            , cs9Label\n            , cs9\n            , cs10Label\n            , cs10\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -345,10 +388,11 @@
         "contentId": "[variables('parserObject1').parserContentId1]",
         "contentKind": "Parser",
         "displayName": "Parser for ClarotyEvent",
-        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
-        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.1')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.1')))]",
         "version": "[variables('parserObject1').parserVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
@@ -360,7 +404,7 @@
         "displayName": "Parser for ClarotyEvent",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "ClarotyEvent",
-        "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Claroty'\n| extend EventVendor = 'Claroty'\n| extend EventProduct = 'Claroty'\n| extend EventSchemaVersion = 0.2\n| extend EventCount = 1\n| extend DeviceCustomNumber1 = coalesce(column_ifexists(\"FieldDeviceCustomNumber1\", long(null)),DeviceCustomNumber1),\n         DeviceCustomNumber2 = coalesce(column_ifexists(\"FieldDeviceCustomNumber2\", long(null)),DeviceCustomNumber2),\n         DeviceCustomNumber3 = coalesce(column_ifexists(\"FieldDeviceCustomNumber3\", long(null)),DeviceCustomNumber3),\n         ExternalID = coalesce(column_ifexists(\"ExtID\", \"\"),tostring(ExternalID))\n| extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1\n                     , DeviceCustomNumber2Label, DeviceCustomNumber2\n                     , DeviceCustomNumber3Label, DeviceCustomNumber3\n                     , DeviceCustomString1Label, DeviceCustomString1\n                     , DeviceCustomString2Label, DeviceCustomString2\n                     , DeviceCustomString3Label, DeviceCustomString3\n                     , DeviceCustomString4Label, DeviceCustomString4\n                     , DeviceCustomString5Label, DeviceCustomString5\n                     , DeviceCustomString6Label, DeviceCustomString6\n                     , DeviceCustomDate1Label, DeviceCustomDate1\n                     , DeviceCustomDate2Label, DeviceCustomDate2)\n| evaluate bag_unpack(packed)\n| parse-kv AdditionalExtensions as (cs7Label:string, cs7:string, cs8Label:string, cs8:string, cs9Label:string, cs9:string, cs10Label:string, cs10:string, cat:string) with (pair_delimiter=';', kv_delimiter='=')\n| extend packed2 = pack(cs7Label, cs7\n                     , cs8Label, cs8\n                     , cs9Label, cs9\n                     , cs10Label, cs10)\n| evaluate bag_unpack(packed2)\n| extend EventEndTime = todatetime(ReceiptTime),\n         cat = coalesce(column_ifexists(\"DeviceEventCategory\", \"\"),cat)\n| project-rename EventProductVersion=DeviceVersion\n                , EventSubType=cat\n                , EventOriginalType=DeviceEventClassID\n                , EventSeverity=LogSeverity\n                , EventMessage=Message\n                , DstPortNumber=DestinationPort\n                , DstIpAddr=DestinationIP\n                , DstDvcHostname=DestinationHostName\n                , DstUserName=DestinationUserName\n                , DvcIpAddr=DeviceAddress\n                , DvcHostname=DeviceName\n                , DstMacAddr=DestinationMACAddress\n                , NetworkApplicationProtocol=Protocol\n                , SrcPortNumber=SourcePort\n                , SrcIpAddr=SourceIP\n                , SrcMacAddr=SourceMACAddress\n                , EventId=ExternalID\n                , SrcDvcHostname=SourceHostName\n| extend EventType=Activity\n| project-away AdditionalExtensions\n            , Activity\n            , ReceiptTime\n            , DeviceVendor\n            , DeviceProduct\n            , DeviceCustomNumber1\n            , DeviceCustomNumber1Label\n            , DeviceCustomNumber2\n            , DeviceCustomNumber2Label\n            , DeviceCustomNumber3\n            , DeviceCustomNumber3Label\n            , DeviceCustomString1\n            , DeviceCustomString1Label\n            , DeviceCustomString2\n            , DeviceCustomString2Label\n            , DeviceCustomString3\n            , DeviceCustomString3Label\n            , DeviceCustomString4\n            , DeviceCustomString4Label\n            , DeviceCustomString5\n            , DeviceCustomString5Label\n            , DeviceCustomString6\n            , DeviceCustomString6Label\n            , cs7Label\n            , cs7\n            , cs8Label\n            , cs8\n            , cs9Label\n            , cs9\n            , cs10Label\n            , cs10\n",
+        "query": "CommonSecurityLog\n| where DeviceVendor =~ 'Claroty'\n| extend EventVendor = 'Claroty'\n| extend EventProduct = 'Claroty'\n| extend EventSchemaVersion = 0.2\n| extend EventCount = 1\n| extend DeviceCustomNumber1 = coalesce(column_ifexists(\"FieldDeviceCustomNumber1\", long(null)),DeviceCustomNumber1),\n         DeviceCustomNumber2 = coalesce(column_ifexists(\"FieldDeviceCustomNumber2\", long(null)),DeviceCustomNumber2),\n         DeviceCustomNumber3 = coalesce(column_ifexists(\"FieldDeviceCustomNumber3\", long(null)),DeviceCustomNumber3),\n         ExternalID = coalesce(column_ifexists(\"ExtID\", \"\"),tostring(ExternalID))\n| extend packed = pack(DeviceCustomNumber1Label, DeviceCustomNumber1\n                     , DeviceCustomNumber2Label, DeviceCustomNumber2\n                     , DeviceCustomNumber3Label, DeviceCustomNumber3\n                     , DeviceCustomString1Label, DeviceCustomString1\n                     , DeviceCustomString2Label, DeviceCustomString2\n                     , DeviceCustomString3Label, DeviceCustomString3\n                     , DeviceCustomString4Label, DeviceCustomString4\n                     , DeviceCustomString5Label, DeviceCustomString5\n                     , DeviceCustomString6Label, DeviceCustomString6\n                     , DeviceCustomDate1Label, DeviceCustomDate1\n                     , DeviceCustomDate2Label, DeviceCustomDate2)\n| evaluate bag_unpack(packed)\n| parse-kv AdditionalExtensions as (cs7Label:string, cs7:string, cs8Label:string, cs8:string, cs9Label:string, cs9:string, cs10Label:string, cs10:string, cat:string) with (pair_delimiter=';', kv_delimiter='=')\n| extend packed2 = pack(cs7Label, cs7\n                     , cs8Label, cs8\n                     , cs9Label, cs9\n                     , cs10Label, cs10)\n| evaluate bag_unpack(packed2)\n| extend EventEndTime = todatetime(ReceiptTime),\n         cat = coalesce(column_ifexists(\"DeviceEventCategory\", \"\"),cat),\n         AlertUrl = column_ifexists(\"AlertUrl\", \"\"),\n         ResolvedAs = column_ifexists(\"ResolvedAs\", \"\"),\n         CategoryAccess = column_ifexists(\"CategoryAccess\", \"\"),\n         site_name = column_ifexists(\"site_name\", \"\")\n| project-rename EventProductVersion=DeviceVersion\n                , EventSubType=cat\n                , EventOriginalType=DeviceEventClassID\n                , EventSeverity=LogSeverity\n                , EventMessage=Message\n                , DstPortNumber=DestinationPort\n                , DstIpAddr=DestinationIP\n                , DstDvcHostname=DestinationHostName\n                , DstUserName=DestinationUserName\n                , DvcIpAddr=DeviceAddress\n                , DvcHostname=DeviceName\n                , DstMacAddr=DestinationMACAddress\n                , NetworkApplicationProtocol=Protocol\n                , SrcPortNumber=SourcePort\n                , SrcIpAddr=SourceIP\n                , SrcMacAddr=SourceMACAddress\n                , EventId=ExternalID\n                , SrcDvcHostname=SourceHostName\n| extend EventType=Activity\n| project-away AdditionalExtensions\n            , Activity\n            , ReceiptTime\n            , DeviceVendor\n            , DeviceProduct\n            , DeviceCustomNumber1\n            , DeviceCustomNumber1Label\n            , DeviceCustomNumber2\n            , DeviceCustomNumber2Label\n            , DeviceCustomNumber3\n            , DeviceCustomNumber3Label\n            , DeviceCustomString1\n            , DeviceCustomString1Label\n            , DeviceCustomString2\n            , DeviceCustomString2Label\n            , DeviceCustomString3\n            , DeviceCustomString3Label\n            , DeviceCustomString4\n            , DeviceCustomString4Label\n            , DeviceCustomString5\n            , DeviceCustomString5Label\n            , DeviceCustomString6\n            , DeviceCustomString6Label\n            , cs7Label\n            , cs7\n            , cs8Label\n            , cs8\n            , cs9Label\n            , cs9\n            , cs10Label\n            , cs10\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -369,7 +413,8 @@
             "value": ""
           }
         ]
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
@@ -399,7 +444,8 @@
           "tier": "Microsoft",
           "link": "https://support.microsoft.com"
         }
-      }
+      },
+      "condition": "[parameters('DeployParser')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -410,7 +456,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyBaselineDeviation_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyBaselineDeviation_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
@@ -484,7 +530,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -495,7 +542,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyConflictAssets_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyConflictAssets_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject2').huntingQueryVersion2]",
@@ -569,7 +616,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -580,7 +628,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyCriticalEvents_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyCriticalEvents_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject3').huntingQueryVersion3]",
@@ -654,7 +702,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -665,7 +714,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyPLCLogins_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyPLCLogins_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject4').huntingQueryVersion4]",
@@ -739,7 +788,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject4')._huntingQuerycontentId4,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject4')._huntingQuerycontentId4,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -750,7 +800,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotySRAFailedLogins_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotySRAFailedLogins_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject5').huntingQueryVersion5]",
@@ -824,7 +874,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject5')._huntingQuerycontentId5,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject5')._huntingQuerycontentId5,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -835,7 +886,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyScanSources_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyScanSources_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject6').huntingQueryVersion6]",
@@ -909,7 +960,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject6')._huntingQuerycontentId6,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject6')._huntingQuerycontentId6,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -920,7 +972,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyScantargets_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyScantargets_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject7').huntingQueryVersion7]",
@@ -994,7 +1046,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject7')._huntingQuerycontentId7,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject7')._huntingQuerycontentId7,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1005,7 +1058,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyUnapprovedAccess_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyUnapprovedAccess_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject8').huntingQueryVersion8]",
@@ -1079,7 +1132,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject8')._huntingQuerycontentId8,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject8')._huntingQuerycontentId8,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1090,7 +1144,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyUnresolvedAlerts_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyUnresolvedAlerts_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject9').huntingQueryVersion9]",
@@ -1164,7 +1218,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject9')._huntingQuerycontentId9,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject9')._huntingQuerycontentId9,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1175,7 +1230,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyWriteExecuteOperations_HuntingQueries Hunting Query with template version 3.0.5",
+        "description": "ClarotyWriteExecuteOperations_HuntingQueries Hunting Query with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('huntingQueryObject10').huntingQueryVersion10]",
@@ -1249,7 +1304,8 @@
         "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject10')._huntingQuerycontentId10,'-', '1.0.1')))]",
         "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject10')._huntingQuerycontentId10,'-', '1.0.1')))]",
         "version": "1.0.1"
-      }
+      },
+      "condition": "[parameters('DeployHuntingQuery')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1260,7 +1316,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyAssetDown_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotyAssetDown_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
@@ -1302,13 +1358,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1353,7 +1409,8 @@
         "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
         "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1364,7 +1421,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyCriticalBaselineDeviation_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotyCriticalBaselineDeviation_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject2').analyticRuleVersion2]",
@@ -1410,13 +1467,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ],
                 "alertDetailsOverride": {
@@ -1465,7 +1522,8 @@
         "contentProductId": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "id": "[variables('analyticRuleObject2')._analyticRulecontentProductId2]",
         "version": "[variables('analyticRuleObject2').analyticRuleVersion2]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1476,7 +1534,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyLoginToUncommonSite_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotyLoginToUncommonSite_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject3').analyticRuleVersion3]",
@@ -1519,13 +1577,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "SrcIpAddr",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1570,7 +1628,8 @@
         "contentProductId": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "id": "[variables('analyticRuleObject3')._analyticRulecontentProductId3]",
         "version": "[variables('analyticRuleObject3').analyticRuleVersion3]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1581,7 +1640,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyMultipleFailedLogin_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotyMultipleFailedLogin_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject4').analyticRuleVersion4]",
@@ -1626,13 +1685,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "columnName": "AccountCustomEntity",
                         "identifier": "Name"
                       }
-                    ]
+                    ],
+                    "entityType": "Account"
                   }
                 ],
                 "alertDetailsOverride": {
@@ -1681,7 +1740,8 @@
         "contentProductId": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "id": "[variables('analyticRuleObject4')._analyticRulecontentProductId4]",
         "version": "[variables('analyticRuleObject4').analyticRuleVersion4]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1692,7 +1752,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyMultipleFailedLoginsSameDst_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotyMultipleFailedLoginsSameDst_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject5').analyticRuleVersion5]",
@@ -1735,13 +1795,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "SecurityGroup",
                     "fieldMappings": [
                       {
                         "columnName": "SGCustomEntity",
                         "identifier": "DistinguishedName"
                       }
-                    ]
+                    ],
+                    "entityType": "SecurityGroup"
                   }
                 ]
               }
@@ -1786,7 +1846,8 @@
         "contentProductId": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "id": "[variables('analyticRuleObject5')._analyticRulecontentProductId5]",
         "version": "[variables('analyticRuleObject5').analyticRuleVersion5]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1797,7 +1858,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyNewAsset_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotyNewAsset_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject6').analyticRuleVersion6]",
@@ -1842,13 +1903,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1893,7 +1954,8 @@
         "contentProductId": "[variables('analyticRuleObject6')._analyticRulecontentProductId6]",
         "id": "[variables('analyticRuleObject6')._analyticRulecontentProductId6]",
         "version": "[variables('analyticRuleObject6').analyticRuleVersion6]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -1904,7 +1966,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyPolicyViolation_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotyPolicyViolation_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject7').analyticRuleVersion7]",
@@ -1947,18 +2009,18 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ],
                 "customDetails": {
-                  "EventType": "EventType",
                   "DestinationIP": "DstIpAddr",
+                  "EventType": "EventType",
                   "EventOriginalType": "EventOriginalType"
                 },
                 "alertDetailsOverride": {
@@ -2007,7 +2069,8 @@
         "contentProductId": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
         "id": "[variables('analyticRuleObject7')._analyticRulecontentProductId7]",
         "version": "[variables('analyticRuleObject7').analyticRuleVersion7]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -2018,7 +2081,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotySuspiciousActivity_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotySuspiciousActivity_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject8').analyticRuleVersion8]",
@@ -2060,18 +2123,18 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ],
                 "customDetails": {
-                  "EventType": "EventType",
                   "DestinationIP": "DstIpAddr",
+                  "EventType": "EventType",
                   "EventOriginalType": "EventOriginalType"
                 },
                 "alertDetailsOverride": {
@@ -2120,7 +2183,8 @@
         "contentProductId": "[variables('analyticRuleObject8')._analyticRulecontentProductId8]",
         "id": "[variables('analyticRuleObject8')._analyticRulecontentProductId8]",
         "version": "[variables('analyticRuleObject8').analyticRuleVersion8]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -2131,7 +2195,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotySuspiciousFileTransfer_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotySuspiciousFileTransfer_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject9').analyticRuleVersion9]",
@@ -2175,18 +2239,18 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ],
                 "customDetails": {
-                  "EventOriginalType": "EventOriginalType",
-                  "EventType": "EventType"
+                  "EventType": "EventType",
+                  "EventOriginalType": "EventOriginalType"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "Claroty flagged suspicious file transfer activity to {{DstIpAddr}} using event type {{EventType}}",
@@ -2234,7 +2298,8 @@
         "contentProductId": "[variables('analyticRuleObject9')._analyticRulecontentProductId9]",
         "id": "[variables('analyticRuleObject9')._analyticRulecontentProductId9]",
         "version": "[variables('analyticRuleObject9').analyticRuleVersion9]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
@@ -2245,7 +2310,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ClarotyThreat_AnalyticalRules Analytics Rule with template version 3.0.5",
+        "description": "ClarotyThreat_AnalyticalRules Analytics Rule with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('analyticRuleObject10').analyticRuleVersion10]",
@@ -2301,19 +2366,19 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "IPCustomEntity",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ],
                 "customDetails": {
                   "EventType": "EventType",
-                  "TimeGenerated": "TimeGenerated",
-                  "EventOriginalType": "EventOriginalType"
+                  "EventOriginalType": "EventOriginalType",
+                  "TimeGenerated": "TimeGenerated"
                 },
                 "alertDetailsOverride": {
                   "alertDescriptionFormat": "Claroty event type {{EventType}} or original type {{EventOriginalType}} matched Threat on {{IPCustomEntity}}",
@@ -2361,19 +2426,20 @@
         "contentProductId": "[variables('analyticRuleObject10')._analyticRulecontentProductId10]",
         "id": "[variables('analyticRuleObject10')._analyticRulecontentProductId10]",
         "version": "[variables('analyticRuleObject10').analyticRuleVersion10]"
-      }
+      },
+      "condition": "[parameters('DeployAnalyticsRule')]"
     },
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.5",
+        "version": "3.2.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Claroty",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Claroty/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://claroty.com/\">Claroty</a> solution for Microsoft Sentinel enables ingestion of  <a href=\"https://claroty.com/resources/datasheets/continuous-threat-detection\">Continuous Threat Detection</a> and <a href=\"https://claroty.com/industrial-cybersecurity/sra\">Secure Remote Access</a> events into Microsoft Sentinel.</p>\n<p>This solution is dependent on the Common Event Format solution containing the CEF via AMA connector to collect the logs. The CEF solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE:</strong> Microsoft recommends installation of CEF via AMA Connector. The existing connectors were deprecated on <strong>Aug 31, 2024</strong>.</p>\n<p><strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 10, <strong>Hunting Queries:</strong> 10</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Claroty/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://claroty.com/\">Claroty</a> solution for Microsoft Sentinel enables ingestion of  <a href=\"https://claroty.com/resources/datasheets/continuous-threat-detection\">Continuous Threat Detection</a> and <a href=\"https://claroty.com/industrial-cybersecurity/sra\">Secure Remote Access</a> events into Microsoft Sentinel.</p>\n<p>This solution is dependent on the Common Event Format solution containing the CEF via AMA connector to collect the logs. The CEF solution will be installed as part of this solution installation.</p>\n<p><strong>NOTE:</strong> Microsoft recommends installation of CEF via AMA Connector. The existing connectors were deprecated on <strong>Aug 31, 2024</strong>.</p>\n<p><strong>Parsers:</strong> 1, <strong>Workbooks:</strong> 1, <strong>Analytic Rules:</strong> 10, <strong>XDR Detections:</strong> 10, <strong>Hunting Queries:</strong> 10, <strong>XDR Workbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -2510,6 +2576,61 @@
             {
               "kind": "Solution",
               "contentId": "azuresentinel.azure-sentinel-solution-commoneventformat"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-fd6e3416-0421-4166-adb9-186e555a7008",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-9a8b4321-e2be-449b-8227-a78227441b2a",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-6c29b611-ce69-4016-bf99-eca639fee1f5",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-3b22ac47-e02c-4599-a37a-57f965de17be",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "CustomDetection",
+              "contentId": "xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3",
+              "version": "3.2.2"
+            },
+            {
+              "kind": "DefenderWorkbook",
+              "contentId": "36078a11-6f22-5b31-85e8-e652cb2d2e4c",
+              "version": "3.2.2"
             }
           ]
         },
@@ -2525,6 +2646,2731 @@
         }
       },
       "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-fd6e3416-0421-4166-adb9-186e555a7008",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Asset Down' or EventType has 'Asset Down'\n| project TimeGenerated, DstIpAddr\n| extend IPCustomEntity = DstIpAddr"
+                },
+                "displayName": "Claroty - Asset Down",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1529"
+                          }
+                        ],
+                        "tactic": "Impact"
+                      }
+                    ],
+                    "severity": "high",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - Asset Down",
+                    "description": "'Triggers asset is down.'"
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-fd6e3416-0421-4166-adb9-186e555a7008', 'xdr-fd6e3416-0421-4166-adb9-186e555a7008')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-fd6e3416-0421-4166-adb9-186e555a7008",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-fd6e3416-0421-4166-adb9-186e555a7008')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-fd6e3416-0421-4166-adb9-186e555a7008')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'Triggers asset is down.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Asset Down' or EventType has 'Asset Down'\n| project TimeGenerated, DstIpAddr\n| extend IPCustomEntity = DstIpAddr"
+                },
+                "displayName": "Claroty - Asset Down",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1529"
+                          }
+                        ],
+                        "tactic": "Impact"
+                      }
+                    ],
+                    "severity": "high",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - Asset Down",
+                    "description": "'Triggers asset is down.'"
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-fd6e3416-0421-4166-adb9-186e555a7008', 'xdr-fd6e3416-0421-4166-adb9-186e555a7008')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-fd6e3416-0421-4166-adb9-186e555a7008",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-fd6e3416-0421-4166-adb9-186e555a7008",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Asset Down",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-fd6e3416-0421-4166-adb9-186e555a7008','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-fd6e3416-0421-4166-adb9-186e555a7008','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-fd6e3416-0421-4166-adb9-186e555a7008",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-9a8b4321-e2be-449b-8227-a78227441b2a",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Baseline Deviation' or EventType has 'Baseline Deviation'\n| where EventSeverity == '5'\n| project TimeGenerated, DstIpAddr\n| extend IPCustomEntity = DstIpAddr"
+                },
+                "displayName": "Claroty - Critical baseline deviation",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1529"
+                          },
+                          {
+                            "technique": "T1565",
+                            "subTechniques": [
+                              "T1565.001"
+                            ]
+                          }
+                        ],
+                        "tactic": "Impact"
+                      }
+                    ],
+                    "severity": "high",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - Critical baseline deviation",
+                    "description": "Detects Claroty events where EventOriginalType or EventType indicates a Baseline Deviation and EventSeverity is 5, which represents a critical deviation from baseline that may indicate disruptive or unauthorized activity."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-9a8b4321-e2be-449b-8227-a78227441b2a', 'xdr-9a8b4321-e2be-449b-8227-a78227441b2a')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-9a8b4321-e2be-449b-8227-a78227441b2a",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-9a8b4321-e2be-449b-8227-a78227441b2a')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-9a8b4321-e2be-449b-8227-a78227441b2a')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects Claroty events where EventOriginalType or EventType indicates a Baseline Deviation and EventSeverity is 5, which represents a critical deviation from baseline that may indicate disruptive or unauthorized activity.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Baseline Deviation' or EventType has 'Baseline Deviation'\n| where EventSeverity == '5'\n| project TimeGenerated, DstIpAddr\n| extend IPCustomEntity = DstIpAddr"
+                },
+                "displayName": "Claroty - Critical baseline deviation",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1529"
+                          },
+                          {
+                            "technique": "T1565",
+                            "subTechniques": [
+                              "T1565.001"
+                            ]
+                          }
+                        ],
+                        "tactic": "Impact"
+                      }
+                    ],
+                    "severity": "high",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - Critical baseline deviation",
+                    "description": "Detects Claroty events where EventOriginalType or EventType indicates a Baseline Deviation and EventSeverity is 5, which represents a critical deviation from baseline that may indicate disruptive or unauthorized activity."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-9a8b4321-e2be-449b-8227-a78227441b2a', 'xdr-9a8b4321-e2be-449b-8227-a78227441b2a')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-9a8b4321-e2be-449b-8227-a78227441b2a",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-9a8b4321-e2be-449b-8227-a78227441b2a",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Critical baseline deviation",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-9a8b4321-e2be-449b-8227-a78227441b2a','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-9a8b4321-e2be-449b-8227-a78227441b2a','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-9a8b4321-e2be-449b-8227-a78227441b2a",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "let usr_sites = ClarotyEvent\n| where TimeGenerated between (ago(14d) .. ago(1h))\n| where EventType has 'Login to SRA succeeded'\n| extend Site = column_ifexists(\"site_name\",\"\")\n| where isnotempty(Site)\n| extend SrcUsername = extract(@'User\\s(.*?)\\slogged', 1, EventMessage)\n| where isnotempty(SrcUsername)\n| summarize all_loc = make_set(tostring(Site)) by SrcUsername;\nClarotyEvent\n| where TimeGenerated > ago(1h)\n| where EventType has 'Login to SRA succeeded'\n| extend Site = column_ifexists(\"site_name\",\"\")\n| where isnotempty(Site)\n| extend SrcUsername = extract(@'User\\s(.*?)\\slogged', 1, EventMessage)\n| where isnotempty(SrcUsername)\n| join kind=leftouter (usr_sites) on SrcUsername\n| where isempty(all_loc) or not(set_has_element(all_loc, tostring(Site)))\n| summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), EventCount=count(), Sites=make_set(Site, 100), KnownSites=any(all_loc) by SrcUsername, SrcIpAddr, Site, EventType, EventMessage\n| extend UncommonSiteCount = array_length(Sites)\n| project StartTime, EndTime, SrcUsername, SrcIpAddr, Site, EventType, EventMessage, EventCount, UncommonSiteCount, KnownSites"
+                },
+                "displayName": "Claroty - Login to uncommon location",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "severity": "medium",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - Login to uncommon location",
+                    "description": "Detects user login to uncommon location."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1', 'xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects user login to uncommon location.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "let usr_sites = ClarotyEvent\n| where TimeGenerated between (ago(14d) .. ago(1h))\n| where EventType has 'Login to SRA succeeded'\n| extend Site = column_ifexists(\"site_name\",\"\")\n| where isnotempty(Site)\n| extend SrcUsername = extract(@'User\\s(.*?)\\slogged', 1, EventMessage)\n| where isnotempty(SrcUsername)\n| summarize all_loc = make_set(tostring(Site)) by SrcUsername;\nClarotyEvent\n| where TimeGenerated > ago(1h)\n| where EventType has 'Login to SRA succeeded'\n| extend Site = column_ifexists(\"site_name\",\"\")\n| where isnotempty(Site)\n| extend SrcUsername = extract(@'User\\s(.*?)\\slogged', 1, EventMessage)\n| where isnotempty(SrcUsername)\n| join kind=leftouter (usr_sites) on SrcUsername\n| where isempty(all_loc) or not(set_has_element(all_loc, tostring(Site)))\n| summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), EventCount=count(), Sites=make_set(Site, 100), KnownSites=any(all_loc) by SrcUsername, SrcIpAddr, Site, EventType, EventMessage\n| extend UncommonSiteCount = array_length(Sites)\n| project StartTime, EndTime, SrcUsername, SrcIpAddr, Site, EventType, EventMessage, EventCount, UncommonSiteCount, KnownSites"
+                },
+                "displayName": "Claroty - Login to uncommon location",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "severity": "medium",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "SrcIpAddr"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - Login to uncommon location",
+                    "description": "Detects user login to uncommon location."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1', 'xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Login to uncommon location",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-e7dbcbc3-b18f-4635-b27c-718195c369f1",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "let threshold = 5;\nClarotyEvent\n| where EventType has 'Login to SRA'\n| where EventType !has 'succeeded'\n| extend SrcUsername = trim(' ', tostring(extract(@'User\\s(.*?)\\sfailed', 1, EventMessage)))\n| where isnotempty(SrcUsername)\n| summarize FailedLogins = count() by SrcUsername, bin(TimeGenerated, 5m)\n| where FailedLogins > threshold\n| extend AccountCustomEntity = SrcUsername"
+                },
+                "displayName": "Claroty - Multiple failed logins by user",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ],
+                        "tactic": "CredentialAccess"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Multiple failed logins by user",
+                    "customDetails": {
+                      "AccountName": "AccountCustomEntity"
+                    },
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "id": "[if(true(), 'account1', 'account1')]",
+                          "upnColumn": "AccountCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "Detects multiple failed logins by the same user in Claroty SRA event logs. The rule looks for failed Login to SRA events, extracts the source username from the event message, and alerts when a user exceeds 5 failed logins within 5 minutes."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4', 'xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects multiple failed logins by the same user in Claroty SRA event logs. The rule looks for failed Login to SRA events, extracts the source username from the event message, and alerts when a user exceeds 5 failed logins within 5 minutes.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "let threshold = 5;\nClarotyEvent\n| where EventType has 'Login to SRA'\n| where EventType !has 'succeeded'\n| extend SrcUsername = trim(' ', tostring(extract(@'User\\s(.*?)\\sfailed', 1, EventMessage)))\n| where isnotempty(SrcUsername)\n| summarize FailedLogins = count() by SrcUsername, bin(TimeGenerated, 5m)\n| where FailedLogins > threshold\n| extend AccountCustomEntity = SrcUsername"
+                },
+                "displayName": "Claroty - Multiple failed logins by user",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1110"
+                          }
+                        ],
+                        "tactic": "CredentialAccess"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Multiple failed logins by user",
+                    "customDetails": {
+                      "AccountName": "AccountCustomEntity"
+                    },
+                    "entityMappings": {
+                      "accounts": [
+                        {
+                          "id": "[if(true(), 'account1', 'account1')]",
+                          "upnColumn": "AccountCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "Detects multiple failed logins by the same user in Claroty SRA event logs. The rule looks for failed Login to SRA events, extracts the source username from the event message, and alerts when a user exceeds 5 failed logins within 5 minutes."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4', 'xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Multiple failed logins by user",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-4b5bb3fc-c690-4f54-9a74-016213d699b4",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "let threshold = 10;\n  ClarotyEvent\n  | where EventType has 'Login to SRA'\n  | where EventType !has 'succeeded'\n  | extend Site = column_ifexists(\"site_name\",\"\")\n  | where isnotempty(Site)\n  | extend SrcUsername = extract(@'User\\s(.*?)\\sfailed', 1, EventMessage)\n  | summarize FailedLogins = count(), SampleUser = any(SrcUsername), DstIpAddr = any(DstIpAddr) by Site, bin(TimeGenerated, 5m)\n  | where FailedLogins > threshold\n  | extend SGCustomEntity = Site\n  | project TimeGenerated, Site, FailedLogins, Threshold = threshold, SampleUser, SGCustomEntity, DstIpAddr"
+                },
+                "displayName": "Claroty - Multiple failed logins to same destinations",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "severity": "high",
+                    "entityMappings": {
+                      "securityGroups": [
+                        {
+                          "id": "[if(true(), 'securityGroup1', 'securityGroup1')]",
+                          "distinguishedNameColumn": "SGCustomEntity"
+                        }
+                      ],
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "DstIpAddr"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - Multiple failed logins to same destinations",
+                    "description": "Detects multiple failed login attempts to the same Claroty SRA destination site within a 5-minute window. The rule counts failed logins per site and alerts when the number of failures exceeds the threshold value of 10."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5', 'xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects multiple failed login attempts to the same Claroty SRA destination site within a 5-minute window. The rule counts failed logins per site and alerts when the number of failures exceeds the threshold value of 10.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "let threshold = 10;\n  ClarotyEvent\n  | where EventType has 'Login to SRA'\n  | where EventType !has 'succeeded'\n  | extend Site = column_ifexists(\"site_name\",\"\")\n  | where isnotempty(Site)\n  | extend SrcUsername = extract(@'User\\s(.*?)\\sfailed', 1, EventMessage)\n  | summarize FailedLogins = count(), SampleUser = any(SrcUsername), DstIpAddr = any(DstIpAddr) by Site, bin(TimeGenerated, 5m)\n  | where FailedLogins > threshold\n  | extend SGCustomEntity = Site\n  | project TimeGenerated, Site, FailedLogins, Threshold = threshold, SampleUser, SGCustomEntity, DstIpAddr"
+                },
+                "displayName": "Claroty - Multiple failed logins to same destinations",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "severity": "high",
+                    "entityMappings": {
+                      "securityGroups": [
+                        {
+                          "id": "[if(true(), 'securityGroup1', 'securityGroup1')]",
+                          "distinguishedNameColumn": "SGCustomEntity"
+                        }
+                      ],
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "DstIpAddr"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - Multiple failed logins to same destinations",
+                    "description": "Detects multiple failed login attempts to the same Claroty SRA destination site within a 5-minute window. The rule counts failed logins per site and alerts when the number of failures exceeds the threshold value of 10."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5', 'xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Multiple failed logins to same destinations",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-6c29b611-ce69-4016-bf99-eca639fee1f5",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'New Asset' or EventType has 'New Asset'\n| extend IPCustomEntity = SrcIpAddr\n| extend AlertTitle = strcat('Claroty new asset detected from ', coalesce(SrcIpAddr, 'unknown source'))\n| extend AlertDescription = strcat('Claroty reported a new asset event from source IP ', coalesce(SrcIpAddr, 'unknown'), '.')\n| project IPCustomEntity, AlertTitle, AlertDescription"
+                },
+                "displayName": "Claroty - New Asset",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "severity": "high",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - New Asset",
+                    "description": "'Triggers when Claroty reports a new asset event in the environment, indicating that a previously unseen device\nor system has been discovered and should be reviewed for authorization, ownership, and expected network placement.'"
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-6c29b611-ce69-4016-bf99-eca639fee1f5', 'xdr-6c29b611-ce69-4016-bf99-eca639fee1f5')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-6c29b611-ce69-4016-bf99-eca639fee1f5",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-6c29b611-ce69-4016-bf99-eca639fee1f5')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-6c29b611-ce69-4016-bf99-eca639fee1f5')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'Triggers when Claroty reports a new asset event in the environment, indicating that a previously unseen device\nor system has been discovered and should be reviewed for authorization, ownership, and expected network placement.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'New Asset' or EventType has 'New Asset'\n| extend IPCustomEntity = SrcIpAddr\n| extend AlertTitle = strcat('Claroty new asset detected from ', coalesce(SrcIpAddr, 'unknown source'))\n| extend AlertDescription = strcat('Claroty reported a new asset event from source IP ', coalesce(SrcIpAddr, 'unknown'), '.')\n| project IPCustomEntity, AlertTitle, AlertDescription"
+                },
+                "displayName": "Claroty - New Asset",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1190"
+                          },
+                          {
+                            "technique": "T1133"
+                          }
+                        ],
+                        "tactic": "InitialAccess"
+                      }
+                    ],
+                    "severity": "high",
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "title": "Claroty - New Asset",
+                    "description": "'Triggers when Claroty reports a new asset event in the environment, indicating that a previously unseen device\nor system has been discovered and should be reviewed for authorization, ownership, and expected network placement.'"
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-6c29b611-ce69-4016-bf99-eca639fee1f5', 'xdr-6c29b611-ce69-4016-bf99-eca639fee1f5')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-6c29b611-ce69-4016-bf99-eca639fee1f5",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-6c29b611-ce69-4016-bf99-eca639fee1f5",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - New Asset",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-6c29b611-ce69-4016-bf99-eca639fee1f5','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-6c29b611-ce69-4016-bf99-eca639fee1f5','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-6c29b611-ce69-4016-bf99-eca639fee1f5",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-3b22ac47-e02c-4599-a37a-57f965de17be",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n  | where EventOriginalType has 'Policy Violation' or EventType has 'Policy Violation'\n  | project TimeGenerated, DstIpAddr, EventOriginalType, EventType\n  | extend IPCustomEntity = DstIpAddr"
+                },
+                "displayName": "Claroty - Policy violation",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1018"
+                          },
+                          {
+                            "technique": "T1135"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Policy violation",
+                    "customDetails": {
+                      "DestinationIP": "DstIpAddr",
+                      "EventType": "EventType",
+                      "EventOriginalType": "EventOriginalType"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "'Detects Claroty policy violation events from ClarotyEvent when EventOriginalType or EventType contains 'Policy\nViolation'. Use this rule to identify policy enforcement events that may indicate unauthorized discovery or prohibited network\nactivity. This rule expects ClarotyEvent data to be available in the workspace.'"
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-3b22ac47-e02c-4599-a37a-57f965de17be', 'xdr-3b22ac47-e02c-4599-a37a-57f965de17be')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-3b22ac47-e02c-4599-a37a-57f965de17be",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-3b22ac47-e02c-4599-a37a-57f965de17be')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-3b22ac47-e02c-4599-a37a-57f965de17be')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "'Detects Claroty policy violation events from ClarotyEvent when EventOriginalType or EventType contains 'Policy\nViolation'. Use this rule to identify policy enforcement events that may indicate unauthorized discovery or prohibited network\nactivity. This rule expects ClarotyEvent data to be available in the workspace.'",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n  | where EventOriginalType has 'Policy Violation' or EventType has 'Policy Violation'\n  | project TimeGenerated, DstIpAddr, EventOriginalType, EventType\n  | extend IPCustomEntity = DstIpAddr"
+                },
+                "displayName": "Claroty - Policy violation",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1018"
+                          },
+                          {
+                            "technique": "T1135"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Policy violation",
+                    "customDetails": {
+                      "DestinationIP": "DstIpAddr",
+                      "EventType": "EventType",
+                      "EventOriginalType": "EventOriginalType"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "'Detects Claroty policy violation events from ClarotyEvent when EventOriginalType or EventType contains 'Policy\nViolation'. Use this rule to identify policy enforcement events that may indicate unauthorized discovery or prohibited network\nactivity. This rule expects ClarotyEvent data to be available in the workspace.'"
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-3b22ac47-e02c-4599-a37a-57f965de17be', 'xdr-3b22ac47-e02c-4599-a37a-57f965de17be')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-3b22ac47-e02c-4599-a37a-57f965de17be",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-3b22ac47-e02c-4599-a37a-57f965de17be",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Policy violation",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-3b22ac47-e02c-4599-a37a-57f965de17be','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-3b22ac47-e02c-4599-a37a-57f965de17be','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-3b22ac47-e02c-4599-a37a-57f965de17be",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Suspicious Activity' or EventType has 'Suspicious Activity'\n| project TimeGenerated, DstIpAddr, EventOriginalType, EventType\n| extend IPCustomEntity = DstIpAddr"
+                },
+                "displayName": "Claroty - Suspicious activity",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1018"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Suspicious activity",
+                    "customDetails": {
+                      "DestinationIP": "DstIpAddr",
+                      "EventType": "EventType",
+                      "EventOriginalType": "EventOriginalType"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "Detects suspicious behavior that is generally indicative of malware."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218', 'xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects suspicious behavior that is generally indicative of malware.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Suspicious Activity' or EventType has 'Suspicious Activity'\n| project TimeGenerated, DstIpAddr, EventOriginalType, EventType\n| extend IPCustomEntity = DstIpAddr"
+                },
+                "displayName": "Claroty - Suspicious activity",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1018"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Suspicious activity",
+                    "customDetails": {
+                      "DestinationIP": "DstIpAddr",
+                      "EventType": "EventType",
+                      "EventOriginalType": "EventOriginalType"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "Detects suspicious behavior that is generally indicative of malware."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218', 'xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Suspicious activity",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-99ad9f3c-304c-44c5-a61f-3a17f8b58218",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Suspicious File Transfer' or EventType has 'Suspicious File Transfer'\n| project TimeGenerated, DstIpAddr, EventOriginalType, EventType\n| extend IPCustomEntity = DstIpAddr\n| project TimeGenerated, DstIpAddr, EventOriginalType, EventType, IPCustomEntity"
+                },
+                "displayName": "Claroty - Suspicious file transfer",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1018"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Suspicious file transfer",
+                    "customDetails": {
+                      "EventType": "EventType",
+                      "EventOriginalType": "EventOriginalType"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "Detects Claroty events where EventOriginalType or EventType contains Suspicious File Transfer and maps the destination IP as the primary entity for triage."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28', 'xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects Claroty events where EventOriginalType or EventType contains Suspicious File Transfer and maps the destination IP as the primary entity for triage.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Suspicious File Transfer' or EventType has 'Suspicious File Transfer'\n| project TimeGenerated, DstIpAddr, EventOriginalType, EventType\n| extend IPCustomEntity = DstIpAddr\n| project TimeGenerated, DstIpAddr, EventOriginalType, EventType, IPCustomEntity"
+                },
+                "displayName": "Claroty - Suspicious file transfer",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1018"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Suspicious file transfer",
+                    "customDetails": {
+                      "EventType": "EventType",
+                      "EventOriginalType": "EventOriginalType"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "Detects Claroty events where EventOriginalType or EventType contains Suspicious File Transfer and maps the destination IP as the primary entity for triage."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28', 'xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Suspicious file transfer",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-5cf35bad-677f-4c23-8927-1611e7ff6f28",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "Claroty-CD-xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Threat' or EventType has 'Threat'\n| extend IPCustomEntity = DstIpAddr\n| project TimeGenerated, EventProduct, EventSeverity, EventOriginalType, EventType, DstIpAddr, SrcIpAddr, Computer, IPCustomEntity"
+                },
+                "displayName": "Claroty - Threat detected",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1018"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Threat detected",
+                    "customDetails": {
+                      "EventType": "EventType",
+                      "EventOriginalType": "EventOriginalType",
+                      "TimeGenerated": "TimeGenerated"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "Detects Claroty events where EventOriginalType or EventType contains 'Threat', identifying Threat-related activity and surfacing the destination IP address for investigation."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3', 'xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-cd-',uniquestring('xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'Claroty-CD-xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Detects Claroty events where EventOriginalType or EventType contains 'Threat', identifying Threat-related activity and surfacing the destination IP address for investigation.",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "detectionRule": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
+              "properties": {
+                "queryCondition": {
+                  "queryText": "ClarotyEvent\n| where EventOriginalType has 'Threat' or EventType has 'Threat'\n| extend IPCustomEntity = DstIpAddr\n| project TimeGenerated, EventProduct, EventSeverity, EventOriginalType, EventType, DstIpAddr, SrcIpAddr, Computer, IPCustomEntity"
+                },
+                "displayName": "Claroty - Threat detected",
+                "status": "disabled",
+                "detectionAction": {
+                  "alertTemplate": {
+                    "tactics": [
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1018"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      }
+                    ],
+                    "severity": "high",
+                    "title": "Claroty - Threat detected",
+                    "customDetails": {
+                      "EventType": "EventType",
+                      "EventOriginalType": "EventOriginalType",
+                      "TimeGenerated": "TimeGenerated"
+                    },
+                    "entityMappings": {
+                      "ips": [
+                        {
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "IPCustomEntity"
+                        }
+                      ]
+                    },
+                    "description": "Detects Claroty events where EventOriginalType or EventType contains 'Threat', identifying Threat-related activity and surfacing the destination IP address for investigation."
+                  }
+                },
+                "schedule": {
+                  "frequency": "PT1H"
+                },
+                "id": "[if(true(), 'xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3', 'xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3')]",
+                "contentProvenance": {
+                  "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                  "packageVersion": "3.2.2",
+                  "contentId": "xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3",
+                  "contentVersion": "3.2.2"
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3",
+        "contentKind": "CustomDetection",
+        "displayName": "Claroty - Threat detected",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "xdr-731e5ac4-7fe1-4b06-9941-532f2e008bb3",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "ClarotyEvent",
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "dataTypes": [
+                "CommonSecurityLog"
+              ],
+              "connectorId": "CefAma"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployCustomDetection')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "DefenderWorkbook-2d20f9ddb5feb7d56751fa13b04a20d2",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]",
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "workbook": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/workbooks@2026-06-01-preview",
+              "properties": {
+                "id": "55be7cfe-47d0-5b06-9c2e-e9be4a0dbc3c",
+                "name": "Claroty",
+                "content": {
+                  "version": "Notebook/1.0",
+                  "items": [
+                    {
+                      "type": 1,
+                      "content": {
+                        "json": "**NOTE**: This data connector depends on a parser based on Kusto Function **ClarotyEvent** to work as expected. [Follow steps to get this Kusto Function](https://aka.ms/sentinel-claroty-parser)"
+                      },
+                      "name": "text - 8"
+                    },
+                    {
+                      "type": 9,
+                      "content": {
+                        "version": "KqlParameterItem/1.0",
+                        "parameters": [
+                          {
+                            "id": "cd8447d9-b096-4673-92d8-2a1e8291a125",
+                            "version": "KqlParameterItem/1.0",
+                            "name": "TimeRange",
+                            "type": 4,
+                            "description": "Sets the time name for analysis",
+                            "value": {
+                              "durationMs": 7776000000
+                            },
+                            "typeSettings": {
+                              "selectableValues": [
+                                {
+                                  "durationMs": 900000
+                                },
+                                {
+                                  "durationMs": 3600000
+                                },
+                                {
+                                  "durationMs": 86400000
+                                },
+                                {
+                                  "durationMs": 604800000
+                                },
+                                {
+                                  "durationMs": 2592000000
+                                },
+                                {
+                                  "durationMs": 7776000000
+                                }
+                              ]
+                            },
+                            "timeContext": {
+                              "durationMs": 86400000
+                            }
+                          }
+                        ],
+                        "style": "pills"
+                      },
+                      "name": "parameters - 11"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\r\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain};",
+                        "size": 0,
+                        "title": "Events Over Time",
+                        "color": "green",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "timechart",
+                        "graphSettings": {
+                          "type": 0
+                        }
+                      },
+                      "customWidth": "60",
+                      "name": "query - 12",
+                      "styleSettings": {
+                        "maxWidth": "55"
+                      }
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\n| where isnotempty(EventType)\n| summarize TotalEvents=count() by EventType\n| join kind=inner (\n    ClarotyEvent\n    | make-series Trend=count() default=0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by EventType\n) on EventType\n| project-away EventType1, TimeGenerated\n| take 25",
+                        "size": 3,
+                        "title": "Event types",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "tiles",
+                        "tileSettings": {
+                          "titleContent": {
+                            "columnMatch": "EventType",
+                            "formatter": 1
+                          },
+                          "leftContent": {
+                            "columnMatch": "TotalEvents",
+                            "formatter": 12,
+                            "formatOptions": {
+                              "palette": "auto"
+                            },
+                            "numberFormat": {
+                              "unit": 17,
+                              "options": {
+                                "maximumSignificantDigits": 3,
+                                "maximumFractionDigits": 2
+                              }
+                            }
+                          },
+                          "secondaryContent": {
+                            "columnMatch": "Trend",
+                            "formatter": 9,
+                            "formatOptions": {
+                              "palette": "purple"
+                            }
+                          },
+                          "showBorder": false
+                        }
+                      },
+                      "customWidth": "30",
+                      "name": "query - 0",
+                      "styleSettings": {
+                        "maxWidth": "30"
+                      }
+                    },
+                    {
+                      "type": 12,
+                      "content": {
+                        "version": "NotebookGroup/1.0",
+                        "groupType": "editable",
+                        "items": [
+                          {
+                            "type": 12,
+                            "content": {
+                              "version": "NotebookGroup/1.0",
+                              "groupType": "editable",
+                              "items": [
+                                {
+                                  "type": 3,
+                                  "content": {
+                                    "version": "KqlItem/1.0",
+                                    "query": "ClarotyEvent\r\n| where isnotempty(DstIpAddr)\r\n| summarize dcount(DstIpAddr)",
+                                    "size": 3,
+                                    "title": "Total Devices",
+                                    "noDataMessage": "0",
+                                    "timeContextFromParameter": "TimeRange",
+                                    "showExportToExcel": true,
+                                    "queryType": "advancedHunting",
+                                    "visualization": "card",
+                                    "textSettings": {
+                                      "style": "bignumber"
+                                    }
+                                  },
+                                  "name": "query - 0"
+                                }
+                              ]
+                            },
+                            "name": "group - 2"
+                          },
+                          {
+                            "type": 12,
+                            "content": {
+                              "version": "NotebookGroup/1.0",
+                              "groupType": "editable",
+                              "items": [
+                                {
+                                  "type": 3,
+                                  "content": {
+                                    "version": "KqlItem/1.0",
+                                    "query": "ClarotyEvent\r\n| where EventOriginalType =~ 'Alert'\r\n| summarize dcount(AlertUrl)",
+                                    "size": 3,
+                                    "title": "Total Alerts",
+                                    "noDataMessage": "No data returned for the selected time range or filters.",
+                                    "timeContextFromParameter": "TimeRange",
+                                    "showExportToExcel": true,
+                                    "queryType": "advancedHunting",
+                                    "visualization": "card",
+                                    "textSettings": {
+                                      "style": "bignumber"
+                                    }
+                                  },
+                                  "name": "query - 0"
+                                }
+                              ]
+                            },
+                            "name": "group - 1"
+                          },
+                          {
+                            "type": 12,
+                            "content": {
+                              "version": "NotebookGroup/1.0",
+                              "groupType": "editable",
+                              "items": [
+                                {
+                                  "type": 3,
+                                  "content": {
+                                    "version": "KqlItem/1.0",
+                                    "query": "ClarotyEvent\r\n| where EventOriginalType =~ 'Alert'\r\n| where ResolvedAs =~ 'Unresolved'\r\n| project-rename AlertTime=EventEndTime\r\n| join (ClarotyEvent\r\n    | where EventOriginalType =~ 'Alert'\r\n    | where ResolvedAs =~ 'Resolved'\r\n    | project-rename ResolvedTime=EventEndTime) on AlertUrl\r\n| where datetime_diff('day',ResolvedTime,AlertTime) > 0 or datetime_diff('hour',ResolvedTime,AlertTime) > 0 or datetime_diff('minute',ResolvedTime,AlertTime) > 0 or datetime_diff('second',ResolvedTime,AlertTime) > 0\r\n| summarize dcount(AlertUrl)\r\n",
+                                    "size": 3,
+                                    "title": "Resolved Alerts",
+                                    "noDataMessage": "No data returned for the selected time range or filters.",
+                                    "timeContextFromParameter": "TimeRange",
+                                    "showExportToExcel": true,
+                                    "queryType": "advancedHunting",
+                                    "visualization": "card",
+                                    "textSettings": {
+                                      "style": "bignumber"
+                                    }
+                                  },
+                                  "name": "query - 0"
+                                }
+                              ]
+                            },
+                            "name": "group - 2"
+                          }
+                        ]
+                      },
+                      "customWidth": "10",
+                      "name": "group - 9",
+                      "styleSettings": {
+                        "maxWidth": "100",
+                        "showBorder": true
+                      }
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\n| where isnotempty(SrcIpAddr)\n| summarize Count=count() by SrcIpAddr\n| top 10 by Count desc",
+                        "size": 3,
+                        "title": "Top Sources",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "piechart"
+                      },
+                      "customWidth": "33",
+                      "name": "query - 3",
+                      "styleSettings": {
+                        "margin": "10",
+                        "padding": "10"
+                      }
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\n| where isnotempty(DstIpAddr)\n| summarize Count=count() by DstIpAddr\n| top 10 by Count desc",
+                        "size": 3,
+                        "title": "Top Targets",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "piechart",
+                        "gridSettings": {
+                          "sortBy": [
+                            {
+                              "itemKey": "Count",
+                              "sortOrder": 2
+                            }
+                          ]
+                        },
+                        "sortBy": [
+                          {
+                            "itemKey": "Count",
+                            "sortOrder": 2
+                          }
+                        ]
+                      },
+                      "customWidth": "33",
+                      "name": "query - 2"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\r\n| where isnotempty(CategoryAccess)\r\n| where CategoryAccess !in ('None', 'Read')\r\n| project Destination=DstIpAddr, Source=SrcIpAddr, CategoryAccess\r\n",
+                        "size": 3,
+                        "title": "Write and Execute Operations",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "table"
+                      },
+                      "customWidth": "34",
+                      "name": "query - 1"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\r\n| where EventOriginalType =~ 'Alert'\r\n| order by TimeGenerated\r\n| project TimeGenerated, EventType, Target=DstIpAddr, Status=strcat(iff(ResolvedAs =~ 'Resolved', '✅ - Resolved', '❌ - Unresolved')), AlertUrl",
+                        "size": 0,
+                        "title": "Latest Alerts",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "table",
+                        "gridSettings": {
+                          "rowLimit": 50,
+                          "filter": true
+                        }
+                      },
+                      "customWidth": "65",
+                      "name": "query - 8"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\n| where EventType has 'Login'\n| extend User = extract(@\"User\\s(\\S+)\\s\", 1, tostring(EventMessage))\n| sort by TimeGenerated desc\n| project TimeGenerated, User\n| take 25",
+                        "size": 0,
+                        "title": "Latest logins to SRA",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "gridSettings": {
+                          "rowLimit": 50,
+                          "filter": true
+                        }
+                      },
+                      "customWidth": "35",
+                      "name": "query - 12",
+                      "styleSettings": {
+                        "maxWidth": "33"
+                      }
+                    }
+                  ],
+                  "fromTemplateId": "sentinel-ClarotyWorkbook",
+                  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+                  "contentProvenance": {
+                    "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                    "packageVersion": "3.2.2",
+                    "contentId": "36078a11-6f22-5b31-85e8-e652cb2d2e4c",
+                    "contentVersion": "3.2.2"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "condition": "[parameters('DeployDefenderWorkbook')]"
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dwb-',uniqueString('36078a11-6f22-5b31-85e8-e652cb2d2e4c')))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'DefenderWorkbook-2d20f9ddb5feb7d56751fa13b04a20d2')]",
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Defender Workbook: Claroty",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "imports": {
+            "MicrosoftSecurity": {
+              "provider": "MicrosoftSecurity",
+              "version": "1.0.0"
+            }
+          },
+          "resources": {
+            "workbook": {
+              "import": "MicrosoftSecurity",
+              "type": "Microsoft.Security/workbooks@2026-06-01-preview",
+              "properties": {
+                "id": "55be7cfe-47d0-5b06-9c2e-e9be4a0dbc3c",
+                "name": "Claroty",
+                "content": {
+                  "version": "Notebook/1.0",
+                  "items": [
+                    {
+                      "type": 1,
+                      "content": {
+                        "json": "**NOTE**: This data connector depends on a parser based on Kusto Function **ClarotyEvent** to work as expected. [Follow steps to get this Kusto Function](https://aka.ms/sentinel-claroty-parser)"
+                      },
+                      "name": "text - 8"
+                    },
+                    {
+                      "type": 9,
+                      "content": {
+                        "version": "KqlParameterItem/1.0",
+                        "parameters": [
+                          {
+                            "id": "cd8447d9-b096-4673-92d8-2a1e8291a125",
+                            "version": "KqlParameterItem/1.0",
+                            "name": "TimeRange",
+                            "type": 4,
+                            "description": "Sets the time name for analysis",
+                            "value": {
+                              "durationMs": 7776000000
+                            },
+                            "typeSettings": {
+                              "selectableValues": [
+                                {
+                                  "durationMs": 900000
+                                },
+                                {
+                                  "durationMs": 3600000
+                                },
+                                {
+                                  "durationMs": 86400000
+                                },
+                                {
+                                  "durationMs": 604800000
+                                },
+                                {
+                                  "durationMs": 2592000000
+                                },
+                                {
+                                  "durationMs": 7776000000
+                                }
+                              ]
+                            },
+                            "timeContext": {
+                              "durationMs": 86400000
+                            }
+                          }
+                        ],
+                        "style": "pills"
+                      },
+                      "name": "parameters - 11"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\r\n| make-series TotalEvents = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain};",
+                        "size": 0,
+                        "title": "Events Over Time",
+                        "color": "green",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "timechart",
+                        "graphSettings": {
+                          "type": 0
+                        }
+                      },
+                      "customWidth": "60",
+                      "name": "query - 12",
+                      "styleSettings": {
+                        "maxWidth": "55"
+                      }
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\n| where isnotempty(EventType)\n| summarize TotalEvents=count() by EventType\n| join kind=inner (\n    ClarotyEvent\n    | make-series Trend=count() default=0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by EventType\n) on EventType\n| project-away EventType1, TimeGenerated\n| take 25",
+                        "size": 3,
+                        "title": "Event types",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "tiles",
+                        "tileSettings": {
+                          "titleContent": {
+                            "columnMatch": "EventType",
+                            "formatter": 1
+                          },
+                          "leftContent": {
+                            "columnMatch": "TotalEvents",
+                            "formatter": 12,
+                            "formatOptions": {
+                              "palette": "auto"
+                            },
+                            "numberFormat": {
+                              "unit": 17,
+                              "options": {
+                                "maximumSignificantDigits": 3,
+                                "maximumFractionDigits": 2
+                              }
+                            }
+                          },
+                          "secondaryContent": {
+                            "columnMatch": "Trend",
+                            "formatter": 9,
+                            "formatOptions": {
+                              "palette": "purple"
+                            }
+                          },
+                          "showBorder": false
+                        }
+                      },
+                      "customWidth": "30",
+                      "name": "query - 0",
+                      "styleSettings": {
+                        "maxWidth": "30"
+                      }
+                    },
+                    {
+                      "type": 12,
+                      "content": {
+                        "version": "NotebookGroup/1.0",
+                        "groupType": "editable",
+                        "items": [
+                          {
+                            "type": 12,
+                            "content": {
+                              "version": "NotebookGroup/1.0",
+                              "groupType": "editable",
+                              "items": [
+                                {
+                                  "type": 3,
+                                  "content": {
+                                    "version": "KqlItem/1.0",
+                                    "query": "ClarotyEvent\r\n| where isnotempty(DstIpAddr)\r\n| summarize dcount(DstIpAddr)",
+                                    "size": 3,
+                                    "title": "Total Devices",
+                                    "noDataMessage": "0",
+                                    "timeContextFromParameter": "TimeRange",
+                                    "showExportToExcel": true,
+                                    "queryType": "advancedHunting",
+                                    "visualization": "card",
+                                    "textSettings": {
+                                      "style": "bignumber"
+                                    }
+                                  },
+                                  "name": "query - 0"
+                                }
+                              ]
+                            },
+                            "name": "group - 2"
+                          },
+                          {
+                            "type": 12,
+                            "content": {
+                              "version": "NotebookGroup/1.0",
+                              "groupType": "editable",
+                              "items": [
+                                {
+                                  "type": 3,
+                                  "content": {
+                                    "version": "KqlItem/1.0",
+                                    "query": "ClarotyEvent\r\n| where EventOriginalType =~ 'Alert'\r\n| summarize dcount(AlertUrl)",
+                                    "size": 3,
+                                    "title": "Total Alerts",
+                                    "noDataMessage": "No data returned for the selected time range or filters.",
+                                    "timeContextFromParameter": "TimeRange",
+                                    "showExportToExcel": true,
+                                    "queryType": "advancedHunting",
+                                    "visualization": "card",
+                                    "textSettings": {
+                                      "style": "bignumber"
+                                    }
+                                  },
+                                  "name": "query - 0"
+                                }
+                              ]
+                            },
+                            "name": "group - 1"
+                          },
+                          {
+                            "type": 12,
+                            "content": {
+                              "version": "NotebookGroup/1.0",
+                              "groupType": "editable",
+                              "items": [
+                                {
+                                  "type": 3,
+                                  "content": {
+                                    "version": "KqlItem/1.0",
+                                    "query": "ClarotyEvent\r\n| where EventOriginalType =~ 'Alert'\r\n| where ResolvedAs =~ 'Unresolved'\r\n| project-rename AlertTime=EventEndTime\r\n| join (ClarotyEvent\r\n    | where EventOriginalType =~ 'Alert'\r\n    | where ResolvedAs =~ 'Resolved'\r\n    | project-rename ResolvedTime=EventEndTime) on AlertUrl\r\n| where datetime_diff('day',ResolvedTime,AlertTime) > 0 or datetime_diff('hour',ResolvedTime,AlertTime) > 0 or datetime_diff('minute',ResolvedTime,AlertTime) > 0 or datetime_diff('second',ResolvedTime,AlertTime) > 0\r\n| summarize dcount(AlertUrl)\r\n",
+                                    "size": 3,
+                                    "title": "Resolved Alerts",
+                                    "noDataMessage": "No data returned for the selected time range or filters.",
+                                    "timeContextFromParameter": "TimeRange",
+                                    "showExportToExcel": true,
+                                    "queryType": "advancedHunting",
+                                    "visualization": "card",
+                                    "textSettings": {
+                                      "style": "bignumber"
+                                    }
+                                  },
+                                  "name": "query - 0"
+                                }
+                              ]
+                            },
+                            "name": "group - 2"
+                          }
+                        ]
+                      },
+                      "customWidth": "10",
+                      "name": "group - 9",
+                      "styleSettings": {
+                        "maxWidth": "100",
+                        "showBorder": true
+                      }
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\n| where isnotempty(SrcIpAddr)\n| summarize Count=count() by SrcIpAddr\n| top 10 by Count desc",
+                        "size": 3,
+                        "title": "Top Sources",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "piechart"
+                      },
+                      "customWidth": "33",
+                      "name": "query - 3",
+                      "styleSettings": {
+                        "margin": "10",
+                        "padding": "10"
+                      }
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\n| where isnotempty(DstIpAddr)\n| summarize Count=count() by DstIpAddr\n| top 10 by Count desc",
+                        "size": 3,
+                        "title": "Top Targets",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "piechart",
+                        "gridSettings": {
+                          "sortBy": [
+                            {
+                              "itemKey": "Count",
+                              "sortOrder": 2
+                            }
+                          ]
+                        },
+                        "sortBy": [
+                          {
+                            "itemKey": "Count",
+                            "sortOrder": 2
+                          }
+                        ]
+                      },
+                      "customWidth": "33",
+                      "name": "query - 2"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\r\n| where isnotempty(CategoryAccess)\r\n| where CategoryAccess !in ('None', 'Read')\r\n| project Destination=DstIpAddr, Source=SrcIpAddr, CategoryAccess\r\n",
+                        "size": 3,
+                        "title": "Write and Execute Operations",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "table"
+                      },
+                      "customWidth": "34",
+                      "name": "query - 1"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\r\n| where EventOriginalType =~ 'Alert'\r\n| order by TimeGenerated\r\n| project TimeGenerated, EventType, Target=DstIpAddr, Status=strcat(iff(ResolvedAs =~ 'Resolved', '✅ - Resolved', '❌ - Unresolved')), AlertUrl",
+                        "size": 0,
+                        "title": "Latest Alerts",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "visualization": "table",
+                        "gridSettings": {
+                          "rowLimit": 50,
+                          "filter": true
+                        }
+                      },
+                      "customWidth": "65",
+                      "name": "query - 8"
+                    },
+                    {
+                      "type": 3,
+                      "content": {
+                        "version": "KqlItem/1.0",
+                        "query": "ClarotyEvent\n| where EventType has 'Login'\n| extend User = extract(@\"User\\s(\\S+)\\s\", 1, tostring(EventMessage))\n| sort by TimeGenerated desc\n| project TimeGenerated, User\n| take 25",
+                        "size": 0,
+                        "title": "Latest logins to SRA",
+                        "noDataMessage": "No data found for the selected time range and filters. Verify the data connector is enabled and data is flowing.",
+                        "noDataMessageStyle": 3,
+                        "timeContextFromParameter": "TimeRange",
+                        "showExportToExcel": true,
+                        "queryType": "advancedHunting",
+                        "gridSettings": {
+                          "rowLimit": 50,
+                          "filter": true
+                        }
+                      },
+                      "customWidth": "35",
+                      "name": "query - 12",
+                      "styleSettings": {
+                        "maxWidth": "33"
+                      }
+                    }
+                  ],
+                  "fromTemplateId": "sentinel-ClarotyWorkbook",
+                  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+                  "contentProvenance": {
+                    "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+                    "packageVersion": "3.2.2",
+                    "contentId": "36078a11-6f22-5b31-85e8-e652cb2d2e4c",
+                    "contentVersion": "3.2.2"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "3.2.2",
+        "packageName": "Claroty",
+        "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "36078a11-6f22-5b31-85e8-e652cb2d2e4c",
+        "contentKind": "DefenderWorkbook",
+        "displayName": "Claroty",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','dwb','-', uniqueString(concat(variables('_solutionId'),'-','DefenderWorkbook','-','36078a11-6f22-5b31-85e8-e652cb2d2e4c','-','3.2.2')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','dwb','-', uniqueString(concat(variables('_solutionId'),'-','DefenderWorkbook','-','36078a11-6f22-5b31-85e8-e652cb2d2e4c','-','3.2.2')))]",
+        "version": "3.2.2",
+        "contentProvenance": {
+          "packageId": "azuresentinel.azure-sentinel-solution-claroty",
+          "packageVersion": "3.2.2",
+          "contentId": "36078a11-6f22-5b31-85e8-e652cb2d2e4c",
+          "contentVersion": "3.2.2",
+          "requiredWorkloads": [
+            {
+              "workload": "sentinel",
+              "dataTypes": [
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredDataConnectors": [
+            {
+              "connectorId": "CefAma",
+              "dataTypes": [
+                "CommonSecurityLog"
+              ]
+            }
+          ],
+          "requiredWorkspaceFunctions": [
+            {
+              "functionAlias": "ClarotyEvent",
+              "sourcePath": "Parsers/ClarotyEvent.yaml",
+              "sourceSha256": "bf428a5b90ee8e8292cc8cd5146e1c01d78bf14249ab7054c8193ab4e96c4772"
+            }
+          ]
+        }
+      },
+      "condition": "[parameters('DeployDefenderWorkbook')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "pid-1593f7cd-4f30-4ac2-b29f-ba5a8458ba53-partnercenter",
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "resources": []
+        }
+      }
     }
   ],
   "outputs": {}

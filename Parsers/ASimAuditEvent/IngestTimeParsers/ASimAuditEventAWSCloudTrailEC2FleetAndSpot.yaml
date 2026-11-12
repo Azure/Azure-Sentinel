@@ -1,0 +1,206 @@
+Parser:
+  DisplayName: 'Ingestion-time Audit Event ASIM parser for AWS CloudTrail EC2 FleetAndSpot activity'
+  Version: '0.1.0'
+  LastUpdated: '2026-11-06'
+Product:
+  Name: 'AWS CloudTrail'
+Normalization:
+  Schema: 'AuditEvent'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes AWS CloudTrail EC2 FleetAndSpot activity from AWSCloudTrail to ASimAuditEventLogs during ingestion.
+ParserName: 'ASimAuditEventAWSCloudTrailEC2FleetAndSpot'
+DCRType: 'Workspace'
+InputStream: 'Microsoft-AWSCloudTrail'
+SourceRawTable: 'AWSCloudTrail'
+TargetASIMTable: 'ASimAuditEventLogs'
+ParserFilterQuery: |
+  source
+  | where EventSource == "ec2.amazonaws.com"
+  | where EventName in (
+      "CancelSpotFleetRequests",
+      "CancelSpotInstanceRequests",
+      "CreateFleet",
+      "CreateSpotDatafeedSubscription",
+      "DeleteFleets",
+      "DeleteSpotDatafeedSubscription",
+      "DescribeFleetHistory",
+      "DescribeFleetInstances",
+      "DescribeFleets",
+      "DescribeSpotDatafeedSubscription",
+      "DescribeSpotFleetInstances",
+      "DescribeSpotFleetRequestHistory",
+      "DescribeSpotFleetRequests",
+      "DescribeSpotInstanceRequests",
+      "DescribeSpotPriceHistory",
+      "GetSpotPlacementScores",
+      "ModifyFleet",
+      "ModifySpotFleetRequest",
+      "RequestSpotFleet",
+      "RequestSpotInstances"
+  )
+ParserQuery: |
+  source
+  | where EventSource == "ec2.amazonaws.com"
+  | where EventName in (
+      "CancelSpotFleetRequests",
+      "CancelSpotInstanceRequests",
+      "CreateFleet",
+      "CreateSpotDatafeedSubscription",
+      "DeleteFleets",
+      "DeleteSpotDatafeedSubscription",
+      "DescribeFleetHistory",
+      "DescribeFleetInstances",
+      "DescribeFleets",
+      "DescribeSpotDatafeedSubscription",
+      "DescribeSpotFleetInstances",
+      "DescribeSpotFleetRequestHistory",
+      "DescribeSpotFleetRequests",
+      "DescribeSpotInstanceRequests",
+      "DescribeSpotPriceHistory",
+      "GetSpotPlacementScores",
+      "ModifyFleet",
+      "ModifySpotFleetRequest",
+      "RequestSpotFleet",
+      "RequestSpotInstances"
+  )
+  | extend EventType = case(
+      EventName in ("CreateFleet", "CreateSpotDatafeedSubscription", "RequestSpotFleet", "RequestSpotInstances"), "Create",
+      EventName in ("CancelSpotFleetRequests", "CancelSpotInstanceRequests", "DeleteFleets", "DeleteSpotDatafeedSubscription"), "Delete",
+      EventName in ("DescribeFleetHistory", "DescribeFleetInstances", "DescribeFleets", "DescribeSpotDatafeedSubscription", "DescribeSpotFleetInstances", "DescribeSpotFleetRequestHistory", "DescribeSpotFleetRequests", "DescribeSpotInstanceRequests", "DescribeSpotPriceHistory", "GetSpotPlacementScores"), "Read",
+      EventName in ("ModifyFleet", "ModifySpotFleetRequest"), "Set",
+      "")
+  | extend Object = case(
+      EventName in ("CreateFleet", "DescribeFleetHistory", "DescribeFleetInstances", "DescribeFleets", "ModifyFleet"), "EC2 Fleet",
+      EventName in ("DeleteFleets"), "EC2 Fleet Request",
+      EventName in ("CreateSpotDatafeedSubscription", "DeleteSpotDatafeedSubscription", "DescribeSpotDatafeedSubscription"), "Spot Datafeed Subscription",
+      EventName in ("DescribeSpotFleetInstances", "DescribeSpotFleetRequestHistory", "DescribeSpotFleetRequests"), "Spot Fleet",
+      EventName in ("CancelSpotFleetRequests", "ModifySpotFleetRequest", "RequestSpotFleet"), "Spot Fleet Request",
+      EventName in ("DescribeSpotInstanceRequests", "RequestSpotInstances"), "Spot Instance",
+      EventName in ("CancelSpotInstanceRequests"), "Spot Instance Request",
+      EventName in ("GetSpotPlacementScores"), "Spot Placement Score",
+      EventName in ("DescribeSpotPriceHistory"), "Spot Price History",
+      "")
+  | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "CancelSpotFleetRequests", ResponseElements.successfulFleetRequestSet,
+      EventName in ("CancelSpotInstanceRequests", "RequestSpotInstances"),
+        ResponseElements.spotInstanceRequestSet,
+      EventName == "CreateFleet", ResponseElements.fleetInstanceSet,
+      EventName == "CreateSpotDatafeedSubscription", ResponseElements.spotDatafeedSubscription,
+      parse_json('null')
+    ), parse_json('null'))
+  | extend ObjectId = case(
+      EventName in ("CancelSpotFleetRequests", "DescribeSpotFleetInstances", "DescribeSpotFleetRequestHistory",
+        "DescribeSpotFleetRequests", "ModifySpotFleetRequest"), RequestParameters.SpotFleetRequestId,
+      EventName in ("CancelSpotInstanceRequests", "DescribeSpotInstanceRequests"),
+        RequestParameters.SpotInstanceRequestId,
+      EventName in ("CreateFleet", "DescribeFleetHistory", "DescribeFleetInstances"), ResponseElements.fleetId,
+      EventName == "CreateSpotDatafeedSubscription",
+        ResponseElements.spotDatafeedSubscription.spotDatafeedSubscriptionId,
+      EventName in ("DeleteFleets", "DescribeFleets", "ModifyFleet"), RequestParameters.FleetId,
+      EventName == "DescribeSpotDatafeedSubscription", ResponseElements.spotDatafeedSubscription.ownerId,
+      EventName == "RequestSpotFleet", ResponseElements.spotFleetRequestId,
+      parse_json('null')
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service",
+      EventUid = tostring(AwsEventId)
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = parse_json('[]'),
+      ActorUserEntityKey = "",
+      AdditionalEntities = parse_json('[]'),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", RequestParameters,
+      "ResponseElements", ResponseElements
+    )
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  // NOTE(DCR-LOSSY: destination-schema projection) - approved alias removal, UID mapping and dynamic serialization
+  | extend NewValue = tostring(NewValue), ObjectId = tostring(ObjectId)
+  | project-rename EventOriginalUid = EventUid
+  | project
+      TimeGenerated,
+      Type,
+      EventCount,
+      EventStartTime,
+      EventEndTime,
+      EventSeverity,
+      EventSchemaVersion,
+      EventVendor,
+      EventProduct,
+      EventResult,
+      EventMessage,
+      TargetAppName,
+      EventOriginalSubType,
+      EventOriginalType,
+      EventOriginalUid,
+      EventOriginalResultDetails,
+      EventProductVersion,
+      ActorUserId,
+      ActorUsername,
+      ActorOriginalUserType,
+      HttpUserAgent,
+      ActorUserIdType,
+      ActorUsernameType,
+      SrcIpAddr,
+      AdditionalFields,
+      EventType,
+      NewValue,
+      ObjectId,
+      ObjectType,
+      Object,
+      TargetAppType,
+      Operation,
+      ActingApplicationEntityKey,
+      ActorUserAdditionalIds,
+      ActorUserEntityKey,
+      AdditionalEntities,
+      DvcEntityKey,
+      SrcSystemEntityKey,
+      TargetApplicationEntityKey,
+      TargetSystemEntityKey
+Change:
+  Date: '2026-11-06'
+  Description: 'Initial ingestion-time conversion.'
