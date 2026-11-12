@@ -1,0 +1,41 @@
+id: 3b4df6eb-ad70-4896-a82d-07d27b22f6e8
+name: SonicWall CSE - No events ingested
+description: |
+  'No SonicWall Cloud Secure Edge (CSE) events have been ingested for longer than the
+  threshold. It complements the health rule: it does not depend on health monitoring being
+  enabled, and it also fires when the connector is disconnected or ingestion stops for a reason
+  the connector does not report (for example the workspace daily cap).
+  Possible causes: the connector stopped polling or was disconnected, the API key is invalid,
+  the workspace daily cap was reached, or CSE produced no events. Check the connector, then
+  compare with the CSE events API before assuming data was lost.
+  Set QuietThreshold to the longest normal quiet period for the organization; a short threshold
+  also fires during quiet periods, such as nights or weekends with no CSE activity. Outages
+  shorter than the threshold are reported by the connector health rule.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  let QuietThreshold = 2h;
+  // One row is always returned; LastIngested is null when nothing arrived within the query period.
+  CSEEvents_CL
+  | summarize LastIngested = max(ingestion_time()), LastEventTime = max(TimeGenerated)
+  | where isnull(LastIngested) or LastIngested < ago(QuietThreshold)
+  | extend HoursSinceLastIngestion = iff(isnull(LastIngested), real(null), round((now() - LastIngested) / 1h, 1))
+customDetails:
+  LastIngested: LastIngested
+  HoursSinceLast: HoursSinceLastIngestion
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SonicWall CSE: no events ingested since {{LastIngested}}'
+  alertDescriptionFormat: 'No CSE events ingested for more than the threshold. Last ingestion: {{LastIngested}}.'
+version: 1.0.1
+kind: Scheduled

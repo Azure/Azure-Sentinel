@@ -1,0 +1,75 @@
+id: 9bcdb741-9d3d-485d-a6f2-e227c2c1d881
+name: SonicWall CSE - Repeated access denials for one user
+description: |
+  'One user was denied by SonicWall Cloud Secure Edge (CSE) repeatedly within an hour: blocked
+  connections or requests (Access Unauthorized) and refused sign-ins (Identity Deny), for
+  example a revoked certificate, a trust score that is too low, or roles with no access to the
+  service. Repeated denials can indicate a compromised or non-compliant device, an account
+  trying resources it is not entitled to, or a misconfigured policy.
+  Matches on type and action, not severity. Each event counts once. Denials are counted per hour of event time.
+  Evaluates events by when they reached Sentinel, so events that arrive late (connector
+  delay or a backfill) are evaluated once, when they arrive. The query period is 2 days to
+  include backfilled events, which keep their own time for up to 48 hours.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Discovery
+relevantTechniques:
+  - T1078
+  - T1046
+query: |
+  let DenialThreshold = 5;
+  CSEEvents
+  | where IngestedAt > ago(1h)
+  | where (EventType == "Access" and Action == "Unauthorized")
+      or (EventType == "Identity" and Action == "Deny")
+  | where isnotempty(UserEmail)
+  | summarize
+      Denials = count(),
+      FirstDenial = min(EventTime),
+      LastDenial = max(EventTime),
+      Reasons = make_set(Message, 10),
+      Services = make_set_if(ServiceName, isnotempty(ServiceName), 10),
+      Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),
+      DeviceSerialNumber = take_anyif(DeviceSerialNumber, isnotempty(DeviceSerialNumber)),
+      ClientIp = take_anyif(ClientIp, isnotempty(ClientIp))
+      by UserEmail, Hour = bin(EventTime, 1h)
+  | where Denials >= DenialThreshold
+  | extend
+      AccountName = tostring(split(UserEmail, "@")[0]),
+      UPNSuffix = tostring(split(UserEmail, "@")[1]),
+      HostName = coalesce(tostring(Devices[0]), DeviceSerialNumber)
+customDetails:
+  Denials: Denials
+  Reasons: Reasons
+  Services: Services
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SonicWall CSE: {{Denials}} access denials for {{UserEmail}}'
+  alertDescriptionFormat: '{{UserEmail}} was denied {{Denials}} times, starting at {{FirstDenial}}.'
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+version: 1.1.1
+kind: Scheduled

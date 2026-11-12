@@ -1,0 +1,34 @@
+id: 747c46b5-9183-4672-af58-dfddbd7d879c
+name: SonicWall CSE - Top sources of denials
+description: |
+  'This query searches for client IP addresses and locations with the most SonicWall Cloud Secure Edge (CSE) access denials and refused sign-ins, and the users involved.'
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1078
+  - T1110
+query: |
+  CSEEvents
+  | where (EventType == "Access" and Action == "Unauthorized")
+      or (EventType == "Identity" and Action == "Deny")
+      or (EventType == "AdminLogin" and Action == "Deny")
+  | where isnotempty(ClientIp)
+  | summarize
+      Denials = count(),
+      Users = make_set_if(UserEmail, isnotempty(UserEmail), 10),
+      Reasons = make_set(Message, 5),
+      FirstSeen = min(EventTime),
+      LastSeen = max(EventTime)
+      by ClientIp, ClientCountry, ClientCity
+  | order by Denials desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.0.0
