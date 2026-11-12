@@ -83,6 +83,10 @@ API calls: 360 used of 1000, 640 remaining (64% remaining).
 Sandbox detonations: sandbox_request: 5 used of 50, 45 remaining (90% remaining).
 ```
 
+The comment as it appears on an incident:
+
+![A PolySwarm quota check comment on an incident](images/quota-comment.png)
+
 When below threshold, a line such as `WARNING: daily API quota is low (150 of 1000 calls
 remaining).` is appended. The metered and low-quota wording is covered by unit tests
 against recorded response shapes; it has not yet been seen on a live metered account,

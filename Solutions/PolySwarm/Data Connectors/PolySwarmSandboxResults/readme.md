@@ -71,7 +71,7 @@ endpoint.
 None beyond noting the four outputs above; there is nothing to authorize or role-grant
 on this template itself. Each sandbox playbook you deploy afterward needs its own
 **Monitoring Metrics Publisher** role assignment on `dcrResourceId` to write rows (see
-`docs/permissions.md`); each playbook's template can create that assignment for
+[Permissions](../../README.md#permissions)); each playbook's template can create that assignment for
 itself automatically at deployment.
 
 ## What a row looks like going in

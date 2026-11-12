@@ -70,6 +70,14 @@ minutes by default). Error: check the `SentinelHealth` table. The connectivity
 criterion is `HasDataConnectors`, which reports connected once the connector is
 deployed and never raises an error or warning merely because no data has arrived.
 
+The side pane, including the data volume note:
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/feed-side-pane-dark.png"><img alt="The PolySwarm Curated Feed side pane, including the data volume note" src="images/feed-side-pane.png"></picture>
+
+The connector page after connecting:
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/feed-page-connected-dark.png"><img alt="The PolySwarm Curated Feed connector page after connecting" src="images/feed-page-connected.png"></picture>
+
 ## Empty responses (HTTP 204)
 
 PolySwarm answers a lookup with no result as HTTP 204 and an empty body, which is the

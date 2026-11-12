@@ -90,6 +90,24 @@ connectivity criterion is `HasDataConnectors`, which reports connected once the
 connector is deployed and never raises an error or warning merely because no data has
 arrived.
 
+The connector in the data connectors list, filtered to PolySwarm:
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/data-connectors-polyswarm-dark.png"><img alt="The data connectors list filtered to the two PolySwarm connectors" src="images/data-connectors-polyswarm.png"></picture>
+
+The side pane:
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/hunting-side-pane-dark.png"><img alt="The PolySwarm Hunting side pane" src="images/hunting-side-pane.png"></picture>
+
+The connector page after connecting:
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/hunting-page-connected-dark.png"><img alt="The PolySwarm Hunting connector page after connecting" src="images/hunting-page-connected.png"></picture>
+
+The bottom of the page, explaining what to expect:
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="images/hunting-what-to-expect-dark.png"><img alt="The bottom of the connector page, explaining what to expect after you connect" src="images/hunting-what-to-expect.png"></picture>
+
+When both PolySwarm connectors are connected, both show a green bar in the data connectors list, as in the screenshot above.
+
 ## Empty responses (HTTP 204)
 
 An empty hunt window, an unmatched rule name and a lookup with no result are all

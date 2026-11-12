@@ -96,6 +96,14 @@ All polling loops are bounded twice: a count limit and a timeout (TimeoutMinutes
 | `create_role_assignment` | Boolean, default `true`. Whether the template auto-assigns Monitoring Metrics Publisher on the sandbox DCR to its own managed identity. |
 | `SolutionVersion` | Default `3.0.0`. The solution version sent in the User-Agent header on every PolySwarm call. Leave it as it is. |
 
+The first page of the Create playbook wizard, where you pick the resource group and region:
+
+![The first page of the Create playbook wizard](images/create-playbook.png)
+
+The Parameters page, with the workspace, community and Key Vault filled in:
+
+![The Parameters page of the playbook](images/playbook-parameters.png)
+
 ## Post-deployment steps
 
 1. Assign the **Microsoft Sentinel Responder** role on the resource group (or

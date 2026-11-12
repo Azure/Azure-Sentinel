@@ -140,7 +140,7 @@ poll and download-link calls. Microsoft's current API reference for both actuall
 requires `Machine.ReadWrite.All`. Deploying with only `Machine.Read.All` lets live
 response start, but the poll and download-link calls return 403, and the playbook
 hangs silently until its own timeout rather than failing with a clear error. See
-`docs/permissions.md`.
+[Permissions](../../README.md#permissions).
 
 ## Prerequisites
 

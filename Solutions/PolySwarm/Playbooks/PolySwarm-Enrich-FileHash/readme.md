@@ -69,7 +69,14 @@ run history.
    if they show as unauthorized. These are Logic Apps connection resources, managed in
    the Azure portal regardless of which portal you use for Microsoft Sentinel itself.
 4. Attach the playbook to an automation rule triggered on incident creation. See
-   `docs/deployment.md`.
+   [Attach playbooks to automation rules](../../README.md#attach-playbooks-to-automation-rules).
+
+![The automation rule form with this playbook selected](images/automation-rule.png)
+
+To run it by hand on one incident instead, select the incident in the Incidents list,
+choose Run Playbook in the pane on the right, and pick this playbook.
+
+![Running the playbook by hand on an incident](images/run-playbook-on-incident.png)
 
 ## What the comment looks like
 
@@ -98,6 +105,10 @@ A hash PolySwarm has never seen produces a plain "no result" comment instead. If
 Key Vault lookup itself fails, the comment says the API key could not be retrieved and
 names the parameter to check, rather than posting a misleading "no result" for a hash
 that was never actually queried.
+
+The comment as it appears on an incident, under the Activities tab:
+
+![A PolySwarm enrichment comment on an incident](images/incident-comment.png)
 
 ## Troubleshooting
 
