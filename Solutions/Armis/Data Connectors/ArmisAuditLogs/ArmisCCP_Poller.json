@@ -1,0 +1,96 @@
+[
+  {
+    "name": "ArmisAuditLogPoller",
+    "apiVersion": "2023-02-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectors",
+    "location": "{{location}}",
+    "kind": "RestApiPoller",
+    "properties": {
+      "connectorDefinitionName": "ArmisAuditLogCCPConnectorDefinition",
+      "dcrConfig": {
+        "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+        "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+        "streamName": "Custom-ArmisAuditLog_CL"
+      },
+      "dataType": "ArmisAuditLog_CL",
+      "auth": {
+        "type": "APIKey",
+        "apiKey": "[[parameters('armisSecretKey')]",
+        "apiKeyName": "secret_key"
+      },
+      "request": {
+        "apiEndpoint": "[[concat(parameters('armisBaseUrl'), '/api/v1/access_token/')]",
+        "httpMethod": "POST",
+        "rateLimitQPS": 2,
+        "retryCount": 3,
+        "timeoutInSeconds": 120,
+        "queryWindowInMin": 15,
+        "headers": {
+          "Accept": "application/json",
+          "User-Agent": "Sentinel-ArmisAuditLog"
+        },
+        "queryParameters": {
+          "secret_key": "[[parameters('armisSecretKey')]"
+        }
+      },
+      "response": {
+        "eventsJsonPaths": [
+          "$.data"
+        ],
+        "format": "json"
+      },
+      "stepInfo": {
+        "stepType": "Nested",
+        "nextSteps": [
+          {
+            "stepId": "fetchArmisAuditLog",
+            "stepPlaceholdersParsingKql": "source | project res = parse_json(data) | project access_token = tostring(res.access_token)"
+          }
+        ]
+      },
+      "stepCollectorConfigs": {
+        "fetchArmisAuditLog": {
+          "shouldJoinNestedData": false,
+          "auth": {
+            "AuthType": "APIKey",
+            "APIKey": "$access_token$",
+            "APIKeyName": "Authorization"
+          },
+          "request": {
+            "apiEndpoint": "[[concat(parameters('armisBaseUrl'), '/api/v1/search/')]",
+            "httpMethod": "GET",
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ss",
+            "queryParameters": {
+              "aql": "in:auditLog timeFrame:\"16 Minutes\"",
+              "orderBy": "time",
+              "includeTotal": "true"
+            },
+            "headers": {
+              "Accept": "application/json",
+              "User-Agent": "Sentinel-ArmisAuditLog",
+              "Authorization": "$access_token$"
+            },
+            "rateLimitQPS": 2,
+            "paginatedCallsPerSecond": 2,
+            "retryCount": 3,
+            "timeoutInSeconds": 60
+          },
+          "paging": {
+            "pagingType": "NextPageToken",
+            "nextPageTokenJsonPath": "$.data.next",
+            "nextPageParaName": "from",
+            "pageSize": 10000,
+            "pageSizeParaName": "length"
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.data.results"
+            ],
+            "format": "json"
+          }
+        }
+      },
+      "isActive": true
+    }
+  }
+]
