@@ -158,12 +158,20 @@ that excluded items or waived behavior were tested.
 
 ## Known implementation boundaries
 
-The current generic `qualification/orchestrator.py`, `mock_data.py`,
-`parity.py` and `workbook_playwright.py` have paths that can construct successful
-results without real callbacks. Such results cannot satisfy `E2E-G01`.
+The current generic `qualification/orchestrator.py`, `mock_data.py` and
+`parity.py` retain non-workbook paths that can construct successful results
+without real callbacks. Such results cannot satisfy `E2E-G01`.
+Workbook qualification now rejects missing query/browser providers, skipped
+browser verification and incomplete DOM evidence; the legacy Playwright helper
+requires reviewed plan/capture observation proofs rather than boolean claims.
 The stricter `workbook_qualification.py`, `workbook_browser.py` and
 `alert_parity.py` contracts are useful foundations, but do not establish
 universal portal coverage by themselves.
+
+See the [Sentinel workbook browser walkthrough](../workbook-browser-testing.md)
+for Defender-portal-first testing, separate Azure fallback approval and the
+distinction between native Sentinel standalone MCP evidence and accepted
+toolkit Qualification.
 
 Current workbook fixture harnesses can be non-ingestible and are separate from
 `E2E-Q04` live injected-data proof. Current batch alert parity invokes ingestion;

@@ -11,6 +11,13 @@ Use this skill only for optional live qualification. Authoring, packaging, and
 static validation must remain available when Azure access or write permissions
 are unavailable.
 
+For workbook browser QA, use the
+[validate-sentinel-workbook-browser skill](../validate-sentinel-workbook-browser/SKILL.md)
+and its Sentinel/Defender portal walkthrough. Browser reads/interactions need
+their own approved scope; this ingestion workflow does not authorize portal
+navigation, screenshots or workbook saves. Workbook-only testing does not
+require mock ingestion or alert parity.
+
 Before entering this skill, the migration Agent must run the existing toolkit
 startup readiness flow:
 
