@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                      |
 |-------------|--------------------------------|-----------------------------------------------------------------------------------------|
+| 3.2.2       | 04-11-2026                     | Added Defender XDR **Workbook** (`Fortigate.json`) and repackaged solution with V3.1 packaging. |
 | 3.0.10      | 23-10-2026                     | Removed unused "WEBSITE_NODE_DEFAULT_VERSION": "~10" from the FortinetFortigateFunctionApp **Playbook** deployment configuration.|
 | 3.0.9       | 21-05-2026                     |Updated Fortinetfortigate **Playbook** Function app to fix authlevel                     |                         |
 | 3.0.8       | 26-02-2025                     |**Playbook** functionApp code change                                                     |

@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from ..columns import is_platform_managed_column
 from .timestamps import (
     TimestampNamespace,
     build_run_key,
@@ -26,11 +27,6 @@ from .timestamps import (
 ARTIFACT_VERSION = 1
 MAX_FIXTURE_BYTES = 5 * 1024 * 1024
 MAX_SCHEMA_BYTES = 1024 * 1024
-RESERVED_COLUMNS = {
-    "_ItemId", "_ResourceId", "_ResourceId_s", "_SubscriptionId",
-    "id", "MG", "TenantId", "Title", "Type", "UniqueId",
-    "verbose", "verbose_b",
-}
 INTEGER_RE = re.compile(r"^-?(?:0|[1-9]\d*)$")
 REAL_RE = re.compile(
     r"^-?(?:(?:0|[1-9]\d*)\.\d+|(?:0|[1-9]\d*)[eE][+-]?\d+|"
@@ -43,6 +39,7 @@ INT32_MIN = -(2**31)
 INT32_MAX = 2**31 - 1
 INT64_MIN = -(2**63)
 INT64_MAX = 2**63 - 1
+
 
 def _normalized_column_name(column_name: str) -> tuple[str, bool]:
     for suffix in (" [UTC]", " [Local Time]"):
@@ -147,7 +144,7 @@ def load_schema_csv(path: Path) -> list[dict[str, str]]:
         for row in reader:
             name = row["ColumnName"].strip()
             column_type = _normalize_schema_type(row["ColumnType"])
-            if not name or name in RESERVED_COLUMNS:
+            if not name or is_platform_managed_column(name):
                 continue
             schema.append({"name": name, "type": column_type})
     if not schema:
@@ -185,7 +182,7 @@ def load_table_schema_json(path: Path) -> list[dict[str, str]]:
         if (
             not isinstance(name, str)
             or not isinstance(column_type, str)
-            or name in RESERVED_COLUMNS
+            or is_platform_managed_column(name)
         ):
             continue
         schema.append(
@@ -229,7 +226,7 @@ def infer_schema(
 ) -> list[dict[str, str]]:
     schema: list[dict[str, str]] = []
     for column_name in rows[0]:
-        if column_name in RESERVED_COLUMNS:
+        if is_platform_managed_column(column_name):
             continue
         values = _nonempty_values(rows, column_name)
         if column_name in datetime_columns:

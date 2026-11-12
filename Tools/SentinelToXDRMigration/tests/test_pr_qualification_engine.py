@@ -1734,3 +1734,76 @@ class TestPrQualificationEngineUnittest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             test_documents_link_validation_locale_scanning_and_url_normalization(Path(tmp))
 
+    def test_modified_detection_patch_version_bump(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_modified_analytic_rule_and_xdr_detection_patch_version_bump(Path(tmp))
+
+
+def test_modified_analytic_rule_and_xdr_detection_patch_version_bump(tmp_path: Path) -> None:
+    """Verify modified Analytic Rules and XDR Detections bump patch version on reconversion and VAL-AR-01 enforces it."""
+    import subprocess
+    from solution_manager.migration.converter import convert_solution
+
+    repo = tmp_path / "git_repo"
+    sol = repo / "Solutions" / "PatchBumpSol"
+    _build_base_package(
+        sol,
+        version="3.1.0",
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/Rule1.yaml", "Analytic Rules/Rule2.yaml"],
+            "XDR Detections": ["XDR Detections/Rule1.yaml", "XDR Detections/Rule2.yaml"],
+        },
+    )
+    ar1 = sol / "Analytic Rules" / "Rule1.yaml"
+    ar2 = sol / "Analytic Rules" / "Rule2.yaml"
+    _build_valid_analytic_rule(ar1)
+    ar1_doc = yaml.safe_load(ar1.read_text(encoding="utf-8"))
+    ar1_doc["version"] = "1.0.0"
+    _write_yaml(ar1, ar1_doc)
+
+    ar2_doc = dict(ar1_doc)
+    ar2_doc["id"] = "7e76fd9d-8104-41eb-bad3-26054a3ad5f2"
+    ar2_doc["name"] = "Test Rule 2"
+    _write_yaml(ar2, ar2_doc)
+
+    convert_solution(sol)
+
+    subprocess.run(["git", "init"], cwd=str(repo), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=str(repo), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=str(repo), check=True, capture_output=True)
+    subprocess.run(["git", "add", "."], cwd=str(repo), check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=str(repo), check=True, capture_output=True)
+
+    # Modify Rule1 Analytic Rule and XDR Detection without bumping version -> VAL-AR-01 must FAIL
+    ar1_modified = yaml.safe_load(ar1.read_text(encoding="utf-8"))
+    ar1_modified["description"] = "Updated description for Rule 1"
+    _write_yaml(ar1, ar1_modified)
+
+    xdr1 = sol / "XDR Detections" / "Rule1.yaml"
+    xdr2 = sol / "XDR Detections" / "Rule2.yaml"
+    xdr1_modified = yaml.safe_load(xdr1.read_text(encoding="utf-8"))
+    xdr1_modified["properties"]["description"] = "Updated description for Rule 1"
+    _write_yaml(xdr1, xdr1_modified)
+
+    qual_fail = run_pr_qualification_checks(sol, run_qualification=False)
+    assert qual_fail["checksById"]["VAL-AR-01"]["status"] == "FAIL"
+    assert "must bump patch version" in qual_fail["checksById"]["VAL-AR-01"]["whatWeObserved"]
+
+    # Reconverting with overwrite=True automatically bumps Rule1 AR (1.0.0 -> 1.0.1) and XDR (3.1.0 -> 3.1.1)
+    # while leaving unmodified Rule2 at 1.0.0 / 3.1.0
+    convert_solution(sol, overwrite=True)
+    assert yaml.safe_load(ar1.read_text(encoding="utf-8"))["version"] == "1.0.1"
+    assert yaml.safe_load(xdr1.read_text(encoding="utf-8"))["version"] == "3.1.1"
+    assert yaml.safe_load(ar2.read_text(encoding="utf-8"))["version"] == "1.0.0"
+    assert yaml.safe_load(xdr2.read_text(encoding="utf-8"))["version"] == "3.1.0"
+
+    # Re-running convert_solution(overwrite=True) again in the same working tree is idempotent at 1.0.1 / 3.1.1
+    convert_solution(sol, overwrite=True)
+    assert yaml.safe_load(ar1.read_text(encoding="utf-8"))["version"] == "1.0.1"
+    assert yaml.safe_load(xdr1.read_text(encoding="utf-8"))["version"] == "3.1.1"
+
+    qual_pass = run_pr_qualification_checks(sol, run_qualification=False)
+    assert qual_pass["checksById"]["VAL-AR-01"]["status"] == "PASS"
+
+
