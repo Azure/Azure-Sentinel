@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 3.3.21      | 12-11-2026                     | Corrected the **AccountCreatedandDeletedinShortTimeframe** Analytic Rule data dependency from SigninLogs to AuditLogs. |
+| 3.3.21      | DD-MM-YYYY                     | Corrected the required data type of the **Account Created and Deleted in Short Timeframe** **Analytic Rule** and its XDR Detection copy from SigninLogs to AuditLogs. |
 | 3.3.20      | 25-10-2026                     | Added 74 Defender XDR Custom Detections and 2 Defender XDR Workbooks (`AzureActiveDirectoryAuditLogs` and `AzureActiveDirectorySignins`). Updated **Analytic Rules** metadata and **Workbook** (`ConditionalAccessSISM`, `AzureActiveDirectoryAuditLogs`, and `AzureActiveDirectorySignins`) parameters. |
 | 3.3.19      | 05-10-2026                     | Fixed OAuth scope parsing for **Suspicious application consent for offline access** **Analytic Rule**. |
 | 3.3.18      | 28-09-2026                     | Updated the **analytical rule** configuration. |
