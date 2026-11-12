@@ -355,10 +355,8 @@ class FixturePreparationTests(unittest.TestCase):
         schema_names = {
             column["name"] for column in artifact["schema"]
         }
-        self.assertTrue(
-            {"Type", "TenantId", "id", "_ResourceId"}
-            <= schema_names
-        )
+        required_columns = {"Type", "TenantId", "id", "_ResourceId"}
+        self.assertEqual(set(), required_columns - schema_names)
         self.assertEqual(
             {
                 "Type",
