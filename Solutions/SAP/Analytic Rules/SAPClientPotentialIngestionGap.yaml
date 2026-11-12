@@ -1,0 +1,94 @@
+id: 8007937d-5c01-4dd0-a34c-f75cd5a3fcf2
+name: SAP - Potential audit log gaps per client
+description: |
+  Identifies completed hours without audit events for explicitly monitored SAP systems and clients, including intervals older than the documented seven-day automatic recovery limit.
+  Empty hours indicate potential ingestion gaps or impaired logging, not confirmed missing records or malicious activity.
+  Validate the original intervals against SAP source records, expected activity, maintenance and collection logs before approving a backfill.
+  Configure the SAPClientMonitoring watchlist with expected clients and UTC monitoring start times before enabling this rule.
+severity: Medium
+status: InPreview
+requiredDataConnectors:
+  - connectorId: SAP
+    dataTypes:
+      - ABAPAuditLog
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.008
+query: |
+  // Keep Lookback below queryPeriod to allow for bucket alignment and ingestion grace.
+  let Lookback = 13d;
+  let BinSize = 1h;
+  let IngestionGrace = 30m;
+  let AutomaticRecoveryLimit = 7d;
+  let EndUtc = bin(now() - IngestionGrace, BinSize);
+  let StartUtc = EndUtc - Lookback;
+  // Inventory must include silent clients; do not derive it from recent audit events.
+  // Import Analytics/Watchlists/SAP - Client monitoring.csv as SAPClientMonitoring.
+  // Replace disabled samples with exact table identities and set Enabled=true.
+  let ExpectedClients =
+      _GetWatchlist('SAPClientMonitoring')
+      | where Enabled =~ "true"
+      | project SystemId = tostring(SystemId), ClientId = tostring(ClientId),
+                SystemUniqueId = tostring(SystemUniqueId),
+                RfcDestinationName = tostring(RfcDestinationName),
+                MonitoringStartUtc = todatetime(MonitoringStartUtc)
+      | where isnotempty(SystemId) and isnotempty(ClientId)
+          and isnotempty(RfcDestinationName) and isnotnull(MonitoringStartUtc)
+      | distinct SystemId, ClientId, SystemUniqueId, RfcDestinationName, MonitoringStartUtc;
+  let EventCounts =
+      ABAPAuditLog
+      | where TimeGenerated >= StartUtc and TimeGenerated < EndUtc
+      | summarize Events = count()
+          by SystemId, ClientId, SystemUniqueId, StartTimeUTC = bin(TimeGenerated, BinSize);
+  let Windows =
+      range StartTimeUTC from StartUtc to (EndUtc - BinSize) step BinSize
+      | extend JoinKey = 1;
+  ExpectedClients
+  | extend JoinKey = 1
+  | join kind=inner Windows on JoinKey
+  | where StartTimeUTC >= MonitoringStartUtc
+  | project SystemId, ClientId, SystemUniqueId, RfcDestinationName, StartTimeUTC
+  | join kind=leftouter EventCounts on SystemId, ClientId, SystemUniqueId, StartTimeUTC
+  | extend Events = coalesce(Events, tolong(0))
+  | where Events == 0
+  | extend EndTimeUTC = StartTimeUTC + BinSize
+  | extend RecoveryCategory = iff(EndTimeUTC <= now() - AutomaticRecoveryLimit,
+      "Older than seven days", "Within seven days")
+  | summarize PotentialGapHours = count(), FirstGapStartUtc = min(StartTimeUTC),
+              LastGapEndUtc = max(EndTimeUTC)
+      by SystemId, ClientId, SystemUniqueId, RfcDestinationName, RecoveryCategory
+  | extend ClientKey = strcat(SystemUniqueId, ":", SystemId, "/", ClientId),
+           CloudApp = "SAP ERP", TimeGenerated = now()
+  | project TimeGenerated, SystemId, ClientId, SystemUniqueId, RfcDestinationName,
+            ClientKey, RecoveryCategory, PotentialGapHours, FirstGapStartUtc, LastGapEndUtc, CloudApp
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: CloudApp
+      - identifier: InstanceName
+        columnName: ClientKey
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SAP: Potential audit log gaps for {{ClientKey}} - {{RecoveryCategory}}'
+  alertDescriptionFormat: |
+    SAP client {{ClientKey}} has {{PotentialGapHours}} completed hours without audit events ({{RecoveryCategory}}).
+    Validate the original windows against SAP source records and CPI collection logs.
+    FirstGapStartUtc and LastGapEndUtc bound the findings but may include nonempty hours between separate gaps; do not backfill that entire range without checking exact missing windows.
+customDetails:
+  SystemId: SystemId
+  ClientId: ClientId
+  SystemUniqueId: SystemUniqueId
+  RfcDestinationName: RfcDestinationName
+  RecoveryCategory: RecoveryCategory
+  PotentialGapHours: PotentialGapHours
+  FirstGapStartUtc: FirstGapStartUtc
+  LastGapEndUtc: LastGapEndUtc
+version: 1.0.0
+kind: Scheduled
