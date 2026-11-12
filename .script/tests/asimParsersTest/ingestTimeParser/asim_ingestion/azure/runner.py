@@ -19,9 +19,6 @@ from .common import (
     count_rows_by_timestamp,
 )
 
-RAW_REPLAY_EXCLUDED_COLUMNS = frozenset({"TenantId", "Type"})
-
-
 def _error_payload(
     exc: HarnessError,
     *,
@@ -220,6 +217,9 @@ class AsimIngestionHarness(AzureMonitorClient):
                 "rowCount": snapshot["rowCount"],
                 "timestampSetHash": snapshot["timestampSetHash"],
                 "excludedColumns": snapshot["excludedColumns"],
+                "platformManagedColumns": snapshot[
+                    "platformManagedColumns"
+                ],
             }
             if validation_runner is not None:
                 with self._stage("filter-validation"):
@@ -341,12 +341,7 @@ class AsimIngestionHarness(AzureMonitorClient):
                 ):
                     qtp_replay["status"] = "not-applicable"
                 else:
-                    replay_schema = [
-                        column
-                        for column in snapshot["schema"]
-                        if column["name"]
-                        not in RAW_REPLAY_EXCLUDED_COLUMNS
-                    ]
+                    replay_schema = list(snapshot["replaySchema"])
                     replay_names = {
                         column["name"] for column in replay_schema
                     }
