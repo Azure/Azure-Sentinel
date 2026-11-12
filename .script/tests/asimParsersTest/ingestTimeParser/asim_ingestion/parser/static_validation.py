@@ -25,7 +25,7 @@ from .common import (
 from .kusto_analyzer import KustoAnalyzerError, analyze_kql
 from .kql import (
     ALLOWED_FILTER_OPERATORS,
-    DENY_ASIM_HELPER_RULE,
+    DENY_EXTERNAL_ASIM_HELPER_REFERENCE_RULE,
     DENY_KQL_CONSTRUCT_RULES,
     DENY_KQL_FUNCTION_RULES,
     DENY_KQL_OPERATOR_RULES,
@@ -124,7 +124,7 @@ def _scan_kql(
             isinstance(name, str)
             and name.casefold().startswith("_asim_")
         ):
-            add(DENY_ASIM_HELPER_RULE, construct)
+            add(DENY_EXTERNAL_ASIM_HELPER_REFERENCE_RULE, construct)
             continue
         kind = construct["kind"]
         rule = DENY_KQL_CONSTRUCT_RULES.get(kind)

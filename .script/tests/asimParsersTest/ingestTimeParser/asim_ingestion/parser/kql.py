@@ -26,7 +26,7 @@ def _named_rules(rule: KqlRule, *names: str) -> dict[str, KqlRule]:
     return {name: rule for name in names}
 
 
-DENY_ASIM_HELPER_RULE = KqlRule(
+DENY_EXTERNAL_ASIM_HELPER_REFERENCE_RULE = KqlRule(
     "KQL003",
     "ASIM helper",
     "Inline ASIM helper functions.",
