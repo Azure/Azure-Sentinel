@@ -18,7 +18,6 @@ sys.modules[SPEC.name] = HARNESS
 SPEC.loader.exec_module(HARNESS)
 
 from asim_ingestion.azure.common import build_fixture_snapshot
-from asim_ingestion.columns import PLATFORM_MANAGED_COLUMNS
 
 
 class FakeResponse:
@@ -236,44 +235,60 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 ],
             )
 
-    def test_snapshot_excludes_all_platform_managed_columns(self):
+    def test_snapshot_declares_but_does_not_upload_managed_columns(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"
-        schema = [
-            {"name": "TimeGenerated", "type": "datetime"},
-            {"name": "Value", "type": "string"},
-            *[
-                {"name": name, "type": "string"}
-                for name in sorted(PLATFORM_MANAGED_COLUMNS)
-            ],
-        ]
-        fixture_row = {
-            "TimeGenerated": timestamp,
-            "Value": "one",
-            **{
-                name: f"{name}-value"
-                for name in PLATFORM_MANAGED_COLUMNS
-            },
-        }
-
         snapshot = build_fixture_snapshot(
             target_id="parser-a",
             table_name="Contoso_CL",
             timestamps=[timestamp],
-            schema=schema,
-            fixture_rows=[fixture_row],
+            schema=[
+                {"name": "TimeGenerated", "type": "datetime"},
+                {"name": "Value", "type": "string"},
+                {"name": "TenantId", "type": "string"},
+            ],
+            fixture_rows=[
+                {
+                    "TimeGenerated": timestamp,
+                    "Value": "one",
+                    "TenantId": "tenant",
+                    "Type": "Contoso_CL",
+                    "id": "event-1",
+                    "_ResourceId": "/subscriptions/example",
+                }
+            ],
         )
 
+        self.assertEqual(2, snapshot["version"])
+        self.assertEqual(
+            {
+                "TimeGenerated",
+                "Value",
+                "TenantId",
+                "Type",
+                "id",
+                "_ResourceId",
+            },
+            {column["name"] for column in snapshot["schema"]},
+        )
         self.assertEqual(
             ["TimeGenerated", "Value"],
-            [column["name"] for column in snapshot["schema"]],
+            [
+                column["name"]
+                for column in snapshot["replaySchema"]
+            ],
         )
         self.assertEqual(
             {"TimeGenerated": timestamp, "Value": "one"},
             snapshot["rows"][0],
         )
         self.assertEqual(
-            PLATFORM_MANAGED_COLUMNS,
-            frozenset(snapshot["excludedColumns"]),
+            {
+                "TenantId",
+                "Type",
+                "id",
+                "_ResourceId",
+            },
+            set(snapshot["platformManagedColumns"]),
         )
 
     def test_builds_exact_timestamp_query(self):
@@ -829,7 +844,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "TargetASIMTable": "ASimAuthenticationEventLogs",
             "ParserQuery": (
                 "    source // remove this comment\n"
-                "      | project TimeGenerated, Value"
+                "      | project TimeGenerated, Type, Value"
             ),
         }
         with tempfile.TemporaryDirectory() as directory:
@@ -852,8 +867,15 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual("prepared-fixture", snapshot["authority"])
         self.assertEqual(["Type"], snapshot["excludedColumns"])
         self.assertEqual(
-            ["TimeGenerated", "Value"],
+            ["TimeGenerated", "Value", "Type"],
             [column["name"] for column in snapshot["schema"]],
+        )
+        self.assertEqual(
+            ["TimeGenerated", "Value"],
+            [
+                column["name"]
+                for column in snapshot["replaySchema"]
+            ],
         )
         self.assertNotIn("Type", snapshot["rows"][0])
         self.assertIsNone(result["rawDcr"])
@@ -873,7 +895,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual(
             (
                 "    source // remove this comment\n"
-                "      | project TimeGenerated, Value"
+                "      | project TimeGenerated, Type, Value"
             ),
             parser_flow["transformKql"],
         )
@@ -1451,15 +1473,15 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         raw_columns = next(
             iter(dcr_puts[1]["streamDeclarations"].values())
         )["columns"]
-        self.assertNotIn(
+        self.assertIn(
             "Type",
             {column["name"] for column in parser_columns},
         )
-        self.assertNotIn(
+        self.assertIn(
             "TenantId",
             {column["name"] for column in parser_columns},
         )
-        self.assertNotIn(
+        self.assertIn(
             "id",
             {column["name"] for column in parser_columns},
         )
@@ -1505,6 +1527,20 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         self.assertEqual(1, validation_runner.output_calls)
         self.assertEqual(1, validation_runner.parity_calls)
+        upload_calls = [
+            call
+            for call in session.calls
+            if call["method"] == "POST"
+            and "/dataCollectionRules/" in call["url"]
+        ]
+        self.assertEqual(2, len(upload_calls))
+        for call in upload_calls:
+            uploaded_row = json.loads(
+                call["data"].decode("utf-8")
+            )[0]
+            self.assertNotIn("Type", uploaded_row)
+            self.assertNotIn("TenantId", uploaded_row)
+            self.assertNotIn("id", uploaded_row)
 
     def test_workspace_parser_marks_qtp_replay_not_applicable(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"

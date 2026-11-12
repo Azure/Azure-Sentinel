@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 PLATFORM_MANAGED_COLUMNS = frozenset(
     {
         "_BilledSize",

@@ -14,7 +14,6 @@ from asim_ingestion.fixtures.timestamps import (
 )
 from .queries import MAX_MISMATCH_EXAMPLES, _normalize_column_type
 
-
 def _normalize_dynamic(value: Any) -> Any:
     if isinstance(value, str):
         try:

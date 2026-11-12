@@ -59,7 +59,7 @@ discover target
   → verify exact per-timestamp target visibility
   → run ASIM data checks
   → optionally replay the fixture to SourceRawTable using InputStream
-  → execute the mapped QTP and compare parity when replay succeeds
+  → execute both QTP and ITP logic over the raw-table slice for parity
   → clean up DCRs and publish the report
 ```
 
@@ -113,28 +113,24 @@ Parser ingestion is reported as passed only when both upload and target
 visibility pass. Workspace parsers without a replayable `InputStream` report
 raw replay as not applicable rather than warning.
 
-`PLATFORM_MANAGED_COLUMNS` is the single contract for fields whose names and
-values are controlled by the ingestion platform:
-
-```text
-_BilledSize, _IsBillable, _ItemId, _ResourceId, _ResourceId_s,
-_SubscriptionId, _TimeReceived, id, MG, TenantId, Title, Type, UniqueId,
-verbose, verbose_b
-```
-
-Matching is case-insensitive. These fields are excluded from fixture schema
-preparation, the immutable snapshot schema and rows, parser and raw-replay DCR
-input, and QTP/ITP data parity. `TimeGenerated` is intentionally not in this
-set because timestamp rebasing and exact-slice validation depend on it.
+`PLATFORM_MANAGED_COLUMNS` identifies fields that are visible to parsers but
+whose values are owned by Azure Monitor. Fixture preparation retains those
+fields in the input schema so parser-DCR compilation can resolve references
+such as `TenantId`. Snapshot construction removes their fixture-provided
+values from upload rows while keeping their declarations in the parser-DCR
+stream. The raw-replay DCR receives only the writable subset. `TimeGenerated`
+is intentionally fixture-controlled because exact timestamp correlation
+depends on it.
 
 Before creating the optional raw-replay DCR, the harness reads destination
 column types from the workspace Tables management API, including both
 `columns` and `standardColumns`. Unlike Log Analytics query-result metadata,
 this preserves GUID types required for ingestion. It casts fixture columns
 whose input types differ from the destination, including string IDs to `guid`
-with `toguid`. Raw replay uses the immutable snapshot schema and rows so
-fixture fields not declared in the repository schema are preserved unless they
-are platform-managed. Matching columns keep the pass-through transform.
+with `toguid`. Raw replay uses the snapshot's writable schema and rows so
+fixture fields not declared in the repository schema are preserved while all
+platform-managed columns are left for Azure Monitor to populate. Matching
+columns keep the pass-through transform.
 Unavailable or invalid destination metadata follows the existing replay
 setup warning path and blocks QTP/parity. The parser DCR is unaffected.
 Fixture GUID values must be valid GUID strings: `toguid` converts malformed
@@ -187,10 +183,12 @@ does not represent a separate ASimSchemaTester execution. These diagnostics do
 not resolve the underlying canary ingestion timeout.
 
 QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
-`itp_rows` under `outputValidation`. It derives `intersect_schema` from shared
-column names, excluding every `PLATFORM_MANAGED_COLUMNS` field, and records
-both QTP and ITP types. A shared-column type mismatch fails schema parity.
-When shared types are consistent, it filters both row sets into
+`itp_rows` under `outputValidation`. Both parser variants execute over the
+same exact raw-table timestamp slice, so platform-generated source values are
+identical. It derives `intersect_schema` from shared column names, excluding
+all platform-managed output columns, and records both QTP and ITP types. A
+shared-column type mismatch fails schema parity. When shared types are
+consistent, it filters both row sets into
 `qtp_rows_filtered` and `itp_rows_filtered` and runs the typed duplicate-aware
 row comparison across that shared schema.
 

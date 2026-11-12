@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from asim_ingestion.columns import is_platform_managed_column
-
 from .client import AzureMonitorClient
 from .common import (
     HARNESS_RESULT_VERSION,
@@ -20,7 +18,6 @@ from .common import (
     build_resource_names,
     count_rows_by_timestamp,
 )
-
 
 def _error_payload(
     exc: HarnessError,
@@ -220,6 +217,9 @@ class AsimIngestionHarness(AzureMonitorClient):
                 "rowCount": snapshot["rowCount"],
                 "timestampSetHash": snapshot["timestampSetHash"],
                 "excludedColumns": snapshot["excludedColumns"],
+                "platformManagedColumns": snapshot[
+                    "platformManagedColumns"
+                ],
             }
             if validation_runner is not None:
                 with self._stage("filter-validation"):
@@ -341,11 +341,7 @@ class AsimIngestionHarness(AzureMonitorClient):
                 ):
                     qtp_replay["status"] = "not-applicable"
                 else:
-                    replay_schema = [
-                        column
-                        for column in snapshot["schema"]
-                        if not is_platform_managed_column(column["name"])
-                    ]
+                    replay_schema = list(snapshot["replaySchema"])
                     replay_names = {
                         column["name"] for column in replay_schema
                     }

@@ -15,10 +15,7 @@ FIXTURES = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = FIXTURES
 SPEC.loader.exec_module(FIXTURES)
 
-from asim_ingestion.columns import (
-    PLATFORM_MANAGED_COLUMNS,
-    is_platform_managed_column,
-)
+from asim_ingestion.columns import PLATFORM_MANAGED_COLUMNS
 
 
 class TimestampTests(unittest.TestCase):
@@ -327,6 +324,7 @@ class FixturePreparationTests(unittest.TestCase):
 
         artifact = self.prepare(fixture)
 
+        self.assertEqual(2, artifact["version"])
         schema = {
             column["name"]: column["type"]
             for column in artifact["schema"]
@@ -343,6 +341,36 @@ class FixturePreparationTests(unittest.TestCase):
         )
         self.assertEqual("Contoso_CL", artifact["sourceRawTable"])
         self.assertEqual("inferred", artifact["schemaSource"])
+
+    def test_platform_managed_columns_remain_in_input_schema(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,TenantId,id,_ResourceId,Value\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,tenant,event-1,"
+            "/subscriptions/example,one\n"
+        )
+
+        artifact = self.prepare(fixture)
+
+        schema_names = {
+            column["name"] for column in artifact["schema"]
+        }
+        required_columns = {"Type", "TenantId", "id", "_ResourceId"}
+        self.assertEqual(set(), required_columns - schema_names)
+        self.assertEqual(
+            {
+                "Type",
+                "TenantId",
+                "id",
+                "_ResourceId",
+            },
+            set(artifact["platformManagedColumns"]),
+        )
+        for column in artifact["platformManagedColumns"]:
+            self.assertNotIn(column, artifact["rows"][0])
+        self.assertLessEqual(
+            set(artifact["platformManagedColumns"]),
+            PLATFORM_MANAGED_COLUMNS,
+        )
 
     def test_platform_managed_column_contract(self):
         self.assertEqual(
@@ -366,43 +394,6 @@ class FixturePreparationTests(unittest.TestCase):
                 }
             ),
             PLATFORM_MANAGED_COLUMNS,
-        )
-        self.assertTrue(is_platform_managed_column("ID"))
-        self.assertTrue(is_platform_managed_column("tenantid"))
-        self.assertFalse(is_platform_managed_column("TimeGenerated"))
-
-    def test_platform_managed_columns_are_excluded_from_fixture_schema(self):
-        headers = [
-            "TimeGenerated",
-            "Value",
-            *sorted(PLATFORM_MANAGED_COLUMNS),
-        ]
-        values = [
-            "2026-01-01T00:00:00Z",
-            "one",
-            *[
-                (
-                    "Contoso_CL"
-                    if name == "Type"
-                    else f"{name}-value"
-                )
-                for name in sorted(PLATFORM_MANAGED_COLUMNS)
-            ],
-        ]
-        fixture = self.write_fixture(
-            ",".join(headers) + "\n"
-            + ",".join(values) + "\n"
-        )
-
-        artifact = self.prepare(fixture)
-
-        schema_names = {
-            column["name"] for column in artifact["schema"]
-        }
-        self.assertIn("TimeGenerated", schema_names)
-        self.assertIn("Value", schema_names)
-        self.assertFalse(
-            schema_names & PLATFORM_MANAGED_COLUMNS
         )
 
     def test_canonicalizes_fixture_columns_to_schema_casing(self):

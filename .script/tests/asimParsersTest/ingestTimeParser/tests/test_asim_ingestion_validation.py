@@ -233,6 +233,29 @@ class QueryConstructionTests(unittest.TestCase):
         )
         self.assertIn("disabled=false", query)
         self.assertIn("pack=true", query)
+
+    def test_builds_itp_query_over_exact_raw_source_slice(self):
+        query = VALIDATION.build_ingestion_time_parser_query(
+            {
+                "ParserQuery": (
+                    "source\n"
+                    "| project TimeGenerated, EventUid"
+                )
+            },
+            "Contoso_CL",
+            [TIMESTAMP_1],
+        )
+
+        self.assertIn(
+            "let source = materialize("
+            "table('Contoso_CL')"
+            f" | where TimeGenerated in (datetime({TIMESTAMP_1})));",
+            query,
+        )
+        self.assertIn(
+            "source\n| project TimeGenerated, EventUid",
+            query,
+        )
         self.assertIn(f"datetime({TIMESTAMP_1})", query)
 
     def test_qtp_query_omits_unsupported_pack_parameter(self):
@@ -749,6 +772,10 @@ class ParityTests(unittest.TestCase):
             ({"APIVersion": "2016-11-15"}, {}),
             ({"APIVersion": "2016-11-15"}, {"APIVersion": None, "Extra": 1}),
             ({"APIVersion": "2016-11-15"}, {"apiversion": "2016-11-15"}),
+            (
+                {"APIVersion": "2016-11-15", "tenant_id": "tenant"},
+                {"APIVersion": "2016-11-15"},
+            ),
             ({"APIVersion": "2016-11-15"}, ["APIVersion"]),
             ({}, None),
             ({}, []),
@@ -1034,7 +1061,7 @@ class OutputValidationTests(unittest.TestCase):
                     ),
                 ),
                 ("qtp-execution", self.qtp_output_table()),
-                ("target-output", self.itp_output_table()),
+                ("itp-execution", self.itp_output_table()),
             ]
         )
         qtp = {
@@ -1070,6 +1097,10 @@ class OutputValidationTests(unittest.TestCase):
         )
         self.assertEqual("passed", result["dataTest"]["status"])
         self.assertEqual("passed", result["parity"]["status"])
+        self.assertEqual(
+            "raw-source-query",
+            result["ingestTimeExecution"]["authority"],
+        )
         self.assertEqual(
             1,
             sum(
@@ -1143,12 +1174,19 @@ class OutputValidationTests(unittest.TestCase):
         )
         self.assertIn("disabled=false", qtp_query)
         self.assertIn("pack=true", qtp_query)
-        target_query = next(
+        itp_query = next(
             item["query"]
             for item in client.queries
-            if item["stage"] == "target-output"
+            if item["stage"] == "itp-execution"
         )
-        self.assertNotIn("| project", target_query)
+        self.assertIn(
+            "let source = materialize(table('Contoso_CL')",
+            itp_query,
+        )
+        self.assertIn(
+            "source\n| project TimeGenerated, EventUid, EventVendor",
+            itp_query,
+        )
 
     def test_parity_failure_returns_full_and_filtered_artifacts(self):
         client = FakeQueryClient(
@@ -1156,7 +1194,7 @@ class OutputValidationTests(unittest.TestCase):
                 ("asim-data", self.empty_tester_result()),
                 ("qtp-execution", self.qtp_output_table()),
                 (
-                    "target-output",
+                    "itp-execution",
                     self.itp_output_table(event_vendor="Different"),
                 ),
             ]
@@ -1193,7 +1231,7 @@ class OutputValidationTests(unittest.TestCase):
                 ("asim-data", self.empty_tester_result()),
                 ("qtp-execution", self.qtp_output_table()),
                 (
-                    "target-output",
+                    "itp-execution",
                     self.itp_output_table(different_type="long"),
                 ),
             ]

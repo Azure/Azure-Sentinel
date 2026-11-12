@@ -1,0 +1,339 @@
+Parser:
+  Title: Alert Event ASIM filtering parser for Google Cloud Security Command Center (GoogleCloudSCC)
+  Version: '0.1.0'
+  LastUpdated: Nov 11, 2026
+Product:
+  Name: Google Cloud Security Command Center
+Normalization:
+  Schema: AlertEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Alert Event Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Security Command Center Finding reference
+  Link: https://cloud.google.com/security-command-center/docs/reference/rest/v2/organizations.sources.findings#Finding
+- Title: Security Command Center findings in Google Security Operations
+  Link: https://docs.cloud.google.com/chronicle/docs/ingestion/default-parsers/collect-security-command-center-findings
+Description: |
+  This ASIM parser supports filtering and normalizing Google Cloud Security Command Center findings, stored in the GoogleCloudSCC table, to the ASIM Alert Event normalized schema. All finding classes are normalized except `SCC_ERROR`. `EventSubType` is derived from the finding class. AlertVerdict filtering is not supported by this source.
+ParserName: vimAlertEventGoogleCloudSCC
+EquivalentBuiltInParser: _Im_AlertEvent_GoogleCloudSCC
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktactics_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktechniques_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: threatcategory_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: alertverdict_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventseverity_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  // ASIM's Hostname logical type is a single DNS label
+  let HostnameFormatRegex = @'^[a-zA-Z0-9-]{1,61}$';
+  let parser = (
+      starttime: datetime = datetime(null)
+      , endtime: datetime = datetime(null)
+      , ipaddr_has_any_prefix: dynamic = dynamic([])
+      , hostname_has_any: dynamic = dynamic([])
+      , username_has_any: dynamic = dynamic([])
+      , attacktactics_has_any: dynamic = dynamic([])
+      , attacktechniques_has_any: dynamic = dynamic([])
+      , threatcategory_has_any: dynamic = dynamic([])
+      , alertverdict_has_any: dynamic = dynamic([])
+      , eventseverity_has_any: dynamic = dynamic([])
+      , disabled: bool = false
+      , pack: bool = false
+  ) {
+      GoogleCloudSCC
+      | where not(disabled)
+      | where
+          (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+      | where array_length(alertverdict_has_any) == 0 // Source does not support AlertVerdict
+      | extend
+          EventOriginalType = tostring(Findings.findingClass)
+          , EventOriginalSeverity = tostring(Findings.severity)
+      // SCC_ERROR findings report SCC operational errors, not security alerts
+      | where EventOriginalType != "SCC_ERROR"
+      | extend
+          EventSeverity = case(
+              EventOriginalSeverity in ("CRITICAL", "HIGH"), "High"
+              , EventOriginalSeverity == "MEDIUM", "Medium"
+              , EventOriginalSeverity == "LOW", "Low"
+              , "Informational"
+          )
+      | where array_length(eventseverity_has_any) == 0 or EventSeverity in~ (eventseverity_has_any)
+      | extend
+          AlertName = tostring(Findings.category)
+          , _SourceName = coalesce(tostring(Findings.parentDisplayName), tostring(Findings.sourceDisplayName))
+          , _SP = iff(array_length(bag_keys(SourceProperties)) > 0, SourceProperties, Findings.sourceProperties)
+      | extend
+          EventSubType = case(
+              EventOriginalType == "THREAT", "Threat"
+              , EventOriginalType == "OBSERVATION", "Suspicious Activity"
+              , EventOriginalType in ("VULNERABILITY", "SECRET", "EXTERNAL_EXPOSURE", "TOXIC_COMBINATION", "CHOKEPOINT"), "Vulnerability"
+              , EventOriginalType in ("POSTURE_VIOLATION", "SENSITIVE_DATA_RISK"), "Policy Violation"
+              , "Compliance Violation"
+          )
+      | extend
+          ThreatCategory = case(
+              AlertName has "Ransomware", "Ransomware"
+              , AlertName has_any ("Cryptomining", "Cryptocurrency Mining", "Coin Mining"), "Cryptominer"
+              , AlertName has "Phishing", "Phishing"
+              , AlertName has "Rootkit", "Rootkit"
+              , AlertName has "Malicious URL", "MaliciousUrl"
+              , AlertName has "Malware", "Malware"
+              , EventSubType in ("Compliance Violation", "Policy Violation"), "Security Policy Violation"
+              , "Unknown"
+          )
+      | where array_length(threatcategory_has_any) == 0 or ThreatCategory in~ (threatcategory_has_any)
+      | extend
+          // SCC MITRE values are enum names (e.g. COMMAND_AND_CONTROL), not ATT&CK IDs
+          AttackTactics = replace_string(strcat_array(set_difference(
+              array_concat(
+                  pack_array(tostring(Findings.mitreAttack.primaryTactic))
+                  , todynamic(coalesce(tostring(Findings.mitreAttack.additionalTactics), "[]"))
+              )
+              , dynamic(["", "TACTIC_UNSPECIFIED"])
+          ), ", "), "_", " ")
+          , AttackTechniques = replace_string(strcat_array(set_difference(
+              array_concat(
+                  todynamic(coalesce(tostring(Findings.mitreAttack.primaryTechniques), "[]"))
+                  , todynamic(coalesce(tostring(Findings.mitreAttack.additionalTechniques), "[]"))
+              )
+              , dynamic(["", "TECHNIQUE_UNSPECIFIED"])
+          ), ", "), "_", " ")
+      | where array_length(attacktactics_has_any) == 0 or AttackTactics has_any (attacktactics_has_any)
+      | where array_length(attacktechniques_has_any) == 0 or AttackTechniques has_any (attacktechniques_has_any)
+      | extend
+          Username = tostring(Findings.access.principalEmail)
+      | where array_length(username_has_any) == 0 or Username has_any (username_has_any)
+      | extend
+          DvcId = tostring(Findings.resourceName)
+      | extend
+          _InstanceName = iff(
+              tostring(FindingsResource.type) == "google.compute.Instance" or DvcId has "/instances/"
+              , coalesce(tostring(FindingsResource.displayName), tostring(FindingsResource.display_name), extract(@'/instances/([^/]+)$', 1, DvcId))
+              , ""
+          )
+      | extend
+          DvcHostname = iff(_InstanceName matches regex HostnameFormatRegex, _InstanceName, "")
+      | where array_length(hostname_has_any) == 0 or DvcHostname has_any (hostname_has_any)
+      // The resource's own IP is preferred; the caller IP (actor) is the fallback.
+      // Non-IP caller values such as "private" or "gce-internal-ip" are dropped.
+      | extend
+          _IpCandidate = coalesce(tostring(Findings.externalExposure.privateIpAddress), tostring(Findings.access.callerIp))
+      | extend
+          DvcIpAddr = iff(isnotnull(parse_ipv6(_IpCandidate)), _IpCandidate, "")
+      | where array_length(ipaddr_has_any_prefix) == 0
+          or has_any_ipv4_prefix(DvcIpAddr, ipaddr_has_any_prefix)
+          or ipv6_is_in_any_range(DvcIpAddr, ipaddr_has_any_prefix)
+      | extend
+          ThreatLastReportedTime = todatetime(Findings.eventTime)
+          // createTime can be minutes after eventTime on a new finding; the earlier of the two is the first report
+          , ThreatFirstReportedTime = min_of(todatetime(Findings.createTime), todatetime(Findings.eventTime))
+          , AlertOriginalStatus = tostring(Findings.state)
+          , RuleDescription = tostring(_SP.Explanation)
+          , UserId = tostring(Findings.access.principalSubject)
+          , ThreatOriginalRiskLevel = iff(todouble(Findings.attackExposure.score) > 0, tostring(Findings.attackExposure.score), "")
+      | extend
+          EventStartTime = coalesce(ThreatFirstReportedTime, ThreatLastReportedTime, TimeGenerated)
+          , EventEndTime = coalesce(ThreatLastReportedTime, TimeGenerated)
+          , EventCount = toint(1)
+          , EventType = "Alert"
+          , EventResult = "NA"
+          , EventProduct = "Security Command Center"
+          , EventVendor = "Google"
+          , EventSchema = "AlertEvent"
+          , EventSchemaVersion = "1.0.0"
+          , EventUid = tostring(Findings.name)
+          , EventOriginalUid = tostring(Findings.canonicalName)
+          , EventMessage = coalesce(tostring(Findings.description), RuleDescription, AlertName)
+          , EventReportUrl = coalesce(
+              tostring(Findings.externalUri)
+              , tostring(_SP.contextUris.cloudLoggingQueryUri[0].url)
+          )
+          , AlertStatus = case(
+              AlertOriginalStatus == "ACTIVE", "Active"
+              , AlertOriginalStatus == "INACTIVE", "Closed"
+              , ""
+          )
+          , RuleName = coalesce(tostring(_SP.detectionCategory.ruleName), AlertName)
+          , AttackRemediationSteps = coalesce(tostring(Findings.nextSteps), tostring(_SP.Recommendation))
+          , DetectionMethod = case(
+              _SourceName has "Threat Detection" or _SourceName == "Sensitive Actions Service", "Behavioral Analytics"
+              , _SourceName == "Web Security Scanner", "Cloud Application Security"
+              , _SourceName in ("Security Health Analytics", "Security Posture", "Data Security Posture Management", "Risk Engine", "External Exposure"), "Cloud Security Posture Management"
+              // Sources not listed above fall back to the finding class
+              , EventOriginalType in ("THREAT", "OBSERVATION"), "Behavioral Analytics"
+              , EventOriginalType in ("MISCONFIGURATION", "POSTURE_VIOLATION", "SENSITIVE_DATA_RISK", "VULNERABILITY", "SECRET", "EXTERNAL_EXPOSURE", "TOXIC_COMBINATION", "CHOKEPOINT"), "Cloud Security Posture Management"
+              , "Other"
+          )
+          , ThreatIsActive = AlertOriginalStatus == "ACTIVE"
+          // attackExposure.score is usually 0-10 but can exceed it; RiskLevel must be 0-100
+          , ThreatRiskLevel = iff(isnotempty(ThreatOriginalRiskLevel), toint(min_of(round(todouble(ThreatOriginalRiskLevel) * 10), 100)), int(null))
+          , UsernameType = case(
+              isempty(Username), ""
+              , Username has "@", "UPN"
+              , "Simple"
+          )
+          , UserType = case(
+              isempty(Username), ""
+              , Username endswith "gserviceaccount.com", "Service Principal"
+              , "Regular"
+          )
+          , UserIdType = iff(isnotempty(UserId), "Other", "")
+          , OriginalUserType = extract(@'^([^:]+):', 1, UserId)
+          , DvcIdType = iff(isnotempty(DvcId), "Other", "")
+          , DvcScopeId = extract(@'projects/([^/]+)$', 1, coalesce(
+              tostring(FindingsResource.gcpMetadata["project"])
+              , tostring(FindingsResource["project"])
+              , tostring(FindingsResource.project_name)
+          ))
+          , DvcScope = coalesce(
+              tostring(FindingsResource.gcpMetadata.projectDisplayName)
+              , tostring(FindingsResource.projectDisplayName)
+              , tostring(FindingsResource.project_display_name)
+          )
+          , IndicatorType = case(
+              isnotempty(_InstanceName), "Host"
+              , isnotempty(Username), "User"
+              , "Cloud Resource"
+          )
+          , FilePath = tostring(Findings.files[0].path)
+          , ProcessId = tostring(Findings.processes[0].pid)
+          , ProcessName = coalesce(tostring(Findings.processes[0].binary.path), tostring(Findings.processes[0].name))
+      | extend
+          AlertId = EventUid
+          , AlertDescription = EventMessage
+          , Url = EventReportUrl
+          , Rule = RuleName
+          , User = Username
+          , Hostname = DvcHostname
+          , IpAddr = DvcIpAddr
+          , Dvc = coalesce(DvcId, DvcHostname, EventProduct)
+      | extend
+          AdditionalFields = iff(
+              pack
+              , pack(
+                  "SourceDisplayName", _SourceName
+                  , "Compliances", Findings.compliances
+                  , "AttackExposure", Findings.attackExposure
+                  , "Access", Findings.access
+                  , "ExternalExposure", Findings.externalExposure
+                  , "Vulnerability", Findings.vulnerability
+                  , "Processes", Findings.processes
+                  , "Files", Findings.files
+                  , "Indicator", Findings.indicator
+                  , "SecurityMarks", Findings.securityMarks
+                  , "Mute", Findings.mute
+                  , "Resource", FindingsResource
+                  , "SourceProperties", _SP
+              )
+              , dynamic({})
+          )
+      | project
+          TimeGenerated
+          , EventStartTime
+          , EventEndTime
+          , EventCount
+          , EventType
+          , EventSubType
+          , EventResult
+          , EventSeverity
+          , EventOriginalSeverity
+          , EventProduct
+          , EventVendor
+          , EventSchema
+          , EventSchemaVersion
+          , EventUid
+          , EventOriginalUid
+          , EventOriginalType
+          , EventMessage
+          , EventReportUrl
+          , Url
+          , AlertName
+          , AlertId
+          , AlertDescription
+          , AlertOriginalStatus
+          , AlertStatus
+          , AttackTactics
+          , AttackTechniques
+          , AttackRemediationSteps
+          , DetectionMethod
+          , RuleName
+          , RuleDescription
+          , Rule
+          , ThreatCategory
+          , ThreatFirstReportedTime
+          , ThreatLastReportedTime
+          , ThreatIsActive
+          , ThreatOriginalRiskLevel
+          , ThreatRiskLevel
+          , Username
+          , UsernameType
+          , UserId
+          , UserIdType
+          , UserType
+          , OriginalUserType
+          , User
+          , DvcId
+          , DvcIdType
+          , DvcHostname
+          , DvcIpAddr
+          , DvcScopeId
+          , DvcScope
+          , Dvc
+          , Hostname
+          , IpAddr
+          , IndicatorType
+          , ProcessId
+          , ProcessName
+          , FilePath
+          , AdditionalFields
+          , Type
+  };
+  parser(
+      starttime=starttime
+      , endtime=endtime
+      , ipaddr_has_any_prefix=ipaddr_has_any_prefix
+      , hostname_has_any=hostname_has_any
+      , username_has_any=username_has_any
+      , attacktactics_has_any=attacktactics_has_any
+      , attacktechniques_has_any=attacktechniques_has_any
+      , threatcategory_has_any=threatcategory_has_any
+      , alertverdict_has_any=alertverdict_has_any
+      , eventseverity_has_any=eventseverity_has_any
+      , disabled=disabled
+      , pack=pack
+  )
