@@ -16,11 +16,6 @@ FIXTURES = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = FIXTURES
 SPEC.loader.exec_module(FIXTURES)
 
-from asim_ingestion.columns import (
-    PLATFORM_MANAGED_COLUMNS,
-    is_platform_managed_column,
-)
-
 
 class TimestampTests(unittest.TestCase):
     def test_round_trips_exact_kusto_tick(self):
@@ -344,67 +339,6 @@ class FixturePreparationTests(unittest.TestCase):
         )
         self.assertEqual("Contoso_CL", artifact["sourceRawTable"])
         self.assertEqual("inferred", artifact["schemaSource"])
-
-    def test_platform_managed_column_contract(self):
-        self.assertEqual(
-            frozenset(
-                {
-                    "_BilledSize",
-                    "_IsBillable",
-                    "_ItemId",
-                    "_ResourceId",
-                    "_ResourceId_s",
-                    "_SubscriptionId",
-                    "_TimeReceived",
-                    "id",
-                    "MG",
-                    "TenantId",
-                    "Title",
-                    "Type",
-                    "UniqueId",
-                    "verbose",
-                    "verbose_b",
-                }
-            ),
-            PLATFORM_MANAGED_COLUMNS,
-        )
-        self.assertTrue(is_platform_managed_column("ID"))
-        self.assertTrue(is_platform_managed_column("tenantid"))
-        self.assertFalse(is_platform_managed_column("TimeGenerated"))
-
-    def test_platform_managed_columns_are_excluded_from_fixture_schema(self):
-        headers = [
-            "TimeGenerated",
-            "Value",
-            *sorted(PLATFORM_MANAGED_COLUMNS),
-        ]
-        values = [
-            "2026-01-01T00:00:00Z",
-            "one",
-            *[
-                (
-                    "Contoso_CL"
-                    if name == "Type"
-                    else f"{name}-value"
-                )
-                for name in sorted(PLATFORM_MANAGED_COLUMNS)
-            ],
-        ]
-        fixture = self.write_fixture(
-            ",".join(headers) + "\n"
-            + ",".join(values) + "\n"
-        )
-
-        artifact = self.prepare(fixture)
-
-        schema_names = {
-            column["name"] for column in artifact["schema"]
-        }
-        self.assertIn("TimeGenerated", schema_names)
-        self.assertIn("Value", schema_names)
-        self.assertFalse(
-            schema_names & PLATFORM_MANAGED_COLUMNS
-        )
 
     def test_canonicalizes_fixture_columns_to_schema_casing(self):
         fixture = self.write_fixture(

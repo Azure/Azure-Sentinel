@@ -21,7 +21,6 @@ by tests. Business logic lives under `asim_ingestion/`.
 
 ```text
 asim_ingestion/
-├── columns.py                 Shared platform-managed column contract
 ├── parser/
 │   ├── common.py             Safe YAML loading, shared models, repository evidence
 │   ├── kql.py                DCR policy and AST-derived fixture/source checks
@@ -113,28 +112,15 @@ Parser ingestion is reported as passed only when both upload and target
 visibility pass. Workspace parsers without a replayable `InputStream` report
 raw replay as not applicable rather than warning.
 
-`PLATFORM_MANAGED_COLUMNS` is the single contract for fields whose names and
-values are controlled by the ingestion platform:
-
-```text
-_BilledSize, _IsBillable, _ItemId, _ResourceId, _ResourceId_s,
-_SubscriptionId, _TimeReceived, id, MG, TenantId, Title, Type, UniqueId,
-verbose, verbose_b
-```
-
-Matching is case-insensitive. These fields are excluded from fixture schema
-preparation, the immutable snapshot schema and rows, parser and raw-replay DCR
-input, and QTP/ITP data parity. `TimeGenerated` is intentionally not in this
-set because timestamp rebasing and exact-slice validation depend on it.
-
 Before creating the optional raw-replay DCR, the harness reads destination
 column types from the workspace Tables management API, including both
 `columns` and `standardColumns`. Unlike Log Analytics query-result metadata,
 this preserves GUID types required for ingestion. It casts fixture columns
 whose input types differ from the destination, including string IDs to `guid`
 with `toguid`. Raw replay uses the immutable snapshot schema and rows so
-fixture fields not declared in the repository schema are preserved unless they
-are platform-managed. Matching columns keep the pass-through transform.
+fixture fields not declared in the repository schema are preserved. The
+platform-managed `TenantId` and `Type` columns are excluded from the raw DCR;
+matching columns keep the pass-through transform.
 Unavailable or invalid destination metadata follows the existing replay
 setup warning path and blocks QTP/parity. The parser DCR is unaffected.
 Fixture GUID values must be valid GUID strings: `toguid` converts malformed
@@ -188,20 +174,21 @@ not resolve the underlying canary ingestion timeout.
 
 QTP parity stores the complete `qtp_schema`, `qtp_rows`, `itp_schema`, and
 `itp_rows` under `outputValidation`. It derives `intersect_schema` from shared
-column names, excluding every `PLATFORM_MANAGED_COLUMNS` field, and records
-both QTP and ITP types. A shared-column type mismatch fails schema parity.
-When shared types are consistent, it filters both row sets into
+column names, excluding the platform-managed `Type` column, and records both
+QTP and ITP types. A shared-column type mismatch fails schema parity. When
+shared types are consistent, it filters both row sets into
 `qtp_rows_filtered` and `itp_rows_filtered` and runs the typed duplicate-aware
 row comparison across that shared schema.
 
 For the dynamic `AdditionalFields` property bag only, parity compares the
-case-sensitive set of top-level key names per row, not their values. It
-case-insensitively ignores keys in `PLATFORM_MANAGED_COLUMNS`, plus the nested
-`TimeGenerated` metadata key. Nested keys and values are not compared. This
-accommodates ingestion serialization changes such as date-shaped strings
-becoming datetimes and platform metadata unavailable to DCR transformations.
-Row counts, duplicate multiplicity, schema types, and values in every other
-column remain strict. An empty property bag is still distinct from null or a
+case-sensitive set of top-level key names per row, not their values. It ignores
+the exact platform-managed keys `TenantId`, `TimeGenerated`, `Type`, and
+`_ResourceId` when they occur inside `AdditionalFields`; differently cased
+keys remain strict. Nested keys and values are not compared. This accommodates
+ingestion serialization changes such as date-shaped strings becoming
+datetimes and platform metadata unavailable to DCR transformations. Row
+counts, duplicate multiplicity, schema types, and values in every other column
+remain strict. An empty property bag is still distinct from null or a
 non-object value; non-object `AdditionalFields` values retain the existing
 value comparison. Canonical mismatch examples replace retained property-bag
 values with null to represent key presence. The stored QTP/ITP rows and

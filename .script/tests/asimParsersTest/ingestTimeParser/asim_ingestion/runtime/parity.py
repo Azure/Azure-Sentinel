@@ -7,12 +7,20 @@ import math
 from collections import Counter
 from typing import Any, Mapping, Sequence
 
-from asim_ingestion.columns import is_platform_managed_column
 from asim_ingestion.fixtures.timestamps import (
     parse_kusto_datetime_ticks,
     ticks_to_kusto_datetime,
 )
 from .queries import MAX_MISMATCH_EXAMPLES, _normalize_column_type
+
+ADDITIONAL_FIELDS_IGNORED_KEYS = frozenset(
+    {
+        "TenantId",
+        "TimeGenerated",
+        "Type",
+        "_ResourceId",
+    }
+)
 
 
 def _normalize_dynamic(value: Any) -> Any:
@@ -46,8 +54,7 @@ def _canonical_value(
             return {
                 key: None
                 for key in normalized
-                if not is_platform_managed_column(key)
-                and str(key).casefold() != "timegenerated"
+                if key not in ADDITIONAL_FIELDS_IGNORED_KEYS
             }
         return normalized
     if column_type == "real" and isinstance(value, float):
@@ -68,7 +75,6 @@ def _schema_by_name(
             str(column["type"])
         )
         for column in schema
-        if not is_platform_managed_column(column["name"])
     }
 
 

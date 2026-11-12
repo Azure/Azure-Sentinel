@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from asim_ingestion.columns import is_platform_managed_column
-
 from .client import AzureMonitorClient
 from .common import (
     HARNESS_RESULT_VERSION,
@@ -20,6 +18,8 @@ from .common import (
     build_resource_names,
     count_rows_by_timestamp,
 )
+
+RAW_REPLAY_EXCLUDED_COLUMNS = frozenset({"TenantId", "Type"})
 
 
 def _error_payload(
@@ -344,7 +344,8 @@ class AsimIngestionHarness(AzureMonitorClient):
                     replay_schema = [
                         column
                         for column in snapshot["schema"]
-                        if not is_platform_managed_column(column["name"])
+                        if column["name"]
+                        not in RAW_REPLAY_EXCLUDED_COLUMNS
                     ]
                     replay_names = {
                         column["name"] for column in replay_schema
