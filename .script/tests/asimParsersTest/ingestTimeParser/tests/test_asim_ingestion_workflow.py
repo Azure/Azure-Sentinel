@@ -872,6 +872,48 @@ class ReportTests(unittest.TestCase):
         )
         self.assertIn("InvalidStream", output.getvalue())
 
+    def test_workspace_qtp_replay_is_not_applicable(self):
+        validation = self.base_validation()
+        validation["rawDcr"] = None
+        validation["rawUpload"] = []
+        validation["qtpSourceReplay"] = {
+            "status": "not-applicable",
+            "inputStream": "none",
+            "error": None,
+        }
+        detail = "Skipped because this parser has no replayable InputStream."
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": detail,
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": detail,
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["status"])
+        self.assertFalse(report["requiredFailure"])
+        self.assertEqual(
+            "not-applicable",
+            report["stages"]["rawDcr"]["status"],
+        )
+        self.assertEqual(
+            "not-applicable",
+            report["stages"]["rawIngestion"]["status"],
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(detail, report["stages"]["qtpExecution"]["detail"])
+        self.assertEqual("blocked", report["stages"]["parity"]["status"])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            WORKFLOW.emit_annotations(report)
+        self.assertNotIn("ASIM rawDcr warning", output.getvalue())
+
     def test_qtp_raw_ingestion_failure_fails_overall(self):
         validation = self.base_validation()
         validation["status"] = "failed"
@@ -930,6 +972,39 @@ class ReportTests(unittest.TestCase):
                     "qtpSourceReplay"
                 ]["observedRows"]
             ),
+        )
+
+    def test_qtp_execution_error_is_reported_as_failed(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "not-applicable",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "not-applicable",
+        }
+        validation["error"] = {
+            "stage": "qtp-execution",
+            "message": "POST failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "failed",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "POST failed with HTTP 400.",
+            report["stages"]["qtpExecution"]["detail"],
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["parity"]["status"],
+        )
+        self.assertEqual(
+            "Blocked because QTP execution failed.",
+            report["stages"]["parity"]["detail"],
         )
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
@@ -1210,6 +1285,10 @@ class WorkflowTopologyTests(unittest.TestCase):
             self.repo_root
             / ".github/workflows/runAsimIngestionTimeValidation.yaml"
         )
+        self.unit_test_path = (
+            self.repo_root
+            / ".github/workflows/runAsimIngestionTimeValidationTests.yaml"
+        )
 
     def test_security_gate_matches_legacy_except_initial_events(self):
         legacy = self.legacy_path.read_text(encoding="utf-8")
@@ -1299,6 +1378,55 @@ class WorkflowTopologyTests(unittest.TestCase):
             ],
             jobs["report"]["needs"],
         )
+
+    def test_workflows_build_pinned_kusto_analyzer(self):
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+        unit_tests = self.unit_test_path.read_text(encoding="utf-8")
+        job_markers = (
+            ("  discover:\n", "\n  templateValidate:"),
+            ("  templateValidate:\n", "\n  ingestionValidation:"),
+            ("  ingestionValidation:\n", "\n  report:"),
+        )
+        analyzer_jobs = [
+            isolated[
+                isolated.index(start):isolated.index(
+                    end,
+                    isolated.index(start),
+                )
+            ]
+            for start, end in job_markers
+        ]
+        setup_action = (
+            "actions/setup-dotnet@"
+            "67a3573c9a986a3f9c594539f4ab511d57bb3ce9"
+        )
+
+        for workflow in (unit_tests, *analyzer_jobs):
+            self.assertIn(setup_action, workflow)
+            self.assertIn('dotnet-version: "8.0.x"', workflow)
+            self.assertIn(
+                "kusto_analyzer/kusto_analyzer.csproj",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet restore "$analyzer_project" '
+                "--locked-mode --nologo",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet build "$analyzer_project"',
+                workflow,
+            )
+            self.assertIn(
+                "ASIM_KUSTO_ANALYZER_DLL=",
+                workflow,
+            )
+        for workflow in analyzer_jobs:
+            self.assertIn(
+                "Trusted base predates the Kusto analyzer; "
+                "using its legacy validator.",
+                workflow,
+            )
 
     def test_workflow_never_masks_validation_failures(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")

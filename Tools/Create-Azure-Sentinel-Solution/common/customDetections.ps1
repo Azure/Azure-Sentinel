@@ -277,24 +277,13 @@ function Set-V31CustomDetectionTactics {
             }
         }
     }
-    if ($tactics.Count -gt 1) {
-        $omittedTactics = @($tactics | Select-Object -Skip 1 | ForEach-Object { [string]$_.tactic })
-        $alertTemplate.tactics = @($tactics[0])
-    }
-    else {
-        $omittedTactics = @()
-    }
     $projection = [ordered]@{
         detectionId     = $DetectionId
         authoredTactics = @($tactics | ForEach-Object { [string]$_.tactic })
-        packagedTactics = @([string]$tactics[0].tactic)
-        omittedTactics  = $omittedTactics
+        packagedTactics = @($tactics | ForEach-Object { [string]$_.tactic })
+        omittedTactics  = @()
     }
     Write-Host "V3.1 TACTIC PROJECTION: $($projection | ConvertTo-Json -Depth 10 -Compress)"
-    if ($omittedTactics.Count -gt 0) {
-        $dropped = $omittedTactics -join ', '
-        Write-Host "INFORMATION: V3.1 TACTIC SELECTION: Custom Detection '$DetectionId' ARM install and registration package the first authored tactic '$($tactics[0].tactic)' and its techniques; omitted tactics: $dropped. Source order is preserved; this is an API payload restriction, not a recommended classification or full tactic coverage. Authored YAML and provenance are unchanged."
-    }
 }
 
 function Get-AnalyticRuleContentTemplateIndex {
@@ -606,9 +595,6 @@ function Add-XdrCustomDetectionsToSolution {
 
         if ([string]::IsNullOrWhiteSpace([string]$detectionDocument.properties.queryCondition.queryText)) {
             throw "Custom Detection '$detectionId' has no queryCondition.queryText."
-        }
-        if (-not $v31VersionPolicy -and @($detectionDocument.properties.detectionAction.alertTemplate.tactics).Count -gt 1) {
-            throw "Custom Detection '$detectionId' contains more than one tactic; the service supports exactly one."
         }
         if ($null -eq $detectionDocument.properties.detectionAction.alertTemplate.entityMappings) {
             throw "Custom Detection '$detectionId' has no entity mappings."
