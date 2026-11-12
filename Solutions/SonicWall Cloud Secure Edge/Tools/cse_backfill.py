@@ -41,6 +41,7 @@ import getpass
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -49,7 +50,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 CSE_HOSTS = {"us": "https://net.banyanops.com", "eu": "https://eucc.console.banyanops.com"}
 EVENTS_PATH = "/api/v1/events"
 TABLE = "CSEEvents_CL"
@@ -75,6 +76,16 @@ CONNECTOR_API_VERSION = "2024-09-01"
 CONNECTOR_DEFINITION = "SonicWallCSEEvents"
 # Event IDs are inserted into a KQL query, so only canonical UUIDs are accepted.
 EVENT_ID_PATTERN = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+# Resource IDs are inserted into ARM URLs, so only these exact shapes are accepted: a subscription
+# GUID, and resource group and resource names without "/", "?", "#", "&", "%", spaces, or quotes.
+_GUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+_NAME = r"[A-Za-z0-9._()-]{1,90}"
+_SCOPE = rf"/subscriptions/{_GUID}/resourceGroups/{_NAME}/providers/"
+WORKSPACE_ID_PATTERN = re.compile(rf"{_SCOPE}Microsoft\.OperationalInsights/workspaces/{_NAME}", re.IGNORECASE)
+DCR_ID_PATTERN = re.compile(rf"{_SCOPE}Microsoft\.Insights/dataCollectionRules/{_NAME}", re.IGNORECASE)
+DCE_ID_PATTERN = re.compile(rf"{_SCOPE}Microsoft\.Insights/dataCollectionEndpoints/{_NAME}", re.IGNORECASE)
+# The DCR's ingestion endpoint (read from Azure) must be an Azure Monitor ingestion host.
+INGESTION_ENDPOINT_PATTERN = re.compile(r"https://[A-Za-z0-9.-]+\.ingest\.monitor\.azure\.com/?", re.IGNORECASE)
 
 
 # Time helpers
@@ -96,9 +107,40 @@ def iso(epoch_ms):
 
 # Azure CLI helpers
 
+def checked_id(value, pattern, label):
+    """Return value if it is a resource ID of the expected shape; otherwise stop."""
+    if not value or not pattern.fullmatch(value):
+        sys.exit(f"Not a valid {label} resource ID: {value!r}")
+    return value
+
+
+def az_command():
+    """Return the command that starts the Azure CLI, without a shell.
+
+    On Windows, az is a batch file (az.cmd) that runs the CLI's bundled Python with -IBm azure.cli;
+    a batch file can only be run through cmd.exe, which would interpret characters such as "&" in
+    the arguments. So the bundled Python is called directly, as az.cmd does.
+    """
+    path = shutil.which("az")
+    if not path:
+        sys.exit("The Azure CLI (az) was not found. Install it, or run the tool in Azure Cloud Shell.")
+    if path.lower().endswith((".cmd", ".bat")):
+        python = os.path.normpath(os.path.join(os.path.dirname(path), "..", "python.exe"))
+        if not os.path.isfile(python):
+            sys.exit(f"The Azure CLI's Python was not found next to {path}.")
+        return [python, "-IBm", "azure.cli"]
+    return [path]
+
+
+AZ = None
+
+
 def az(*args):
     """Run an Azure CLI command and return its JSON output."""
-    result = subprocess.run(["az", *args, "-o", "json"], capture_output=True, text=True, shell=(os.name == "nt"))
+    global AZ
+    AZ = AZ or az_command()
+    environment = dict(os.environ, AZ_INSTALLER=os.environ.get("AZ_INSTALLER", "MSI")) if len(AZ) > 1 else None
+    result = subprocess.run([*AZ, *args, "-o", "json"], capture_output=True, text=True, env=environment)
     if result.returncode != 0:
         sys.exit(f"Azure CLI failed ({' '.join(args[:2])}): {result.stderr.strip()}")
     return json.loads(result.stdout) if result.stdout.strip() else None
@@ -151,6 +193,7 @@ def find_dcr(workspace_id):
         found = {rule["properties"].get("immutableId"): rule["id"] for rule in rules}
         if all(immutable_id in found for immutable_id in immutable_ids):
             break
+    found = {key: value for key, value in found.items() if value and DCR_ID_PATTERN.fullmatch(value)}
     if len(immutable_ids) > 1:
         print("This workspace has SonicWall CSE connectors that send to different DCRs:")
         for immutable_id, names in sorted(immutable_ids.items(), key=lambda item: str(item[0])):
@@ -183,7 +226,13 @@ def resolve_dcr(dcr_id):
         dce_id = properties.get("dataCollectionEndpointId")
         if not dce_id:
             sys.exit("The DCR has no logs ingestion endpoint and no data collection endpoint.")
+        dce_id = checked_id(dce_id, DCE_ID_PATTERN, "data collection endpoint")
         endpoint = arm_get(dce_id, DCR_API_VERSION)["properties"]["logsIngestion"]["endpoint"]
+    if not INGESTION_ENDPOINT_PATTERN.fullmatch(endpoint or ""):
+        sys.exit(f"The DCR's ingestion endpoint is not an Azure Monitor ingestion URL: {endpoint!r}; nothing was sent.")
+    endpoint = endpoint.rstrip("/")
+    if not re.fullmatch(r"dcr-[0-9a-fA-F]{32}", properties.get("immutableId") or ""):
+        sys.exit("The DCR has no valid immutable ID; nothing was sent.")
     if STREAM not in properties.get("streamDeclarations", {}):
         sys.exit(f"The DCR does not declare the stream {STREAM}; check that it is the CSE connector's DCR.")
     workspaces = (properties.get("destinations") or {}).get("logAnalytics") or []
@@ -191,7 +240,7 @@ def resolve_dcr(dcr_id):
         sys.exit("The DCR has no Log Analytics destination.")
     url = (f"{endpoint}/dataCollectionRules/{properties['immutableId']}/streams/{STREAM}"
            f"?api-version={INGESTION_API_VERSION}")
-    return url, workspaces[0]["workspaceResourceId"]
+    return url, checked_id(workspaces[0].get("workspaceResourceId"), WORKSPACE_ID_PATTERN, "DCR destination workspace")
 
 
 # CSE events API
@@ -326,6 +375,11 @@ def main():
     if not key:
         sys.exit("No CSE API key given.")
 
+    # Check the resource IDs before any Azure call.
+    if args.workspace:
+        checked_id(args.workspace, WORKSPACE_ID_PATTERN, "workspace")
+    else:
+        checked_id(args.dcr_id, DCR_ID_PATTERN, "data collection rule")
     dcr_id = args.dcr_id or find_dcr(args.workspace)
     url, workspace_id = resolve_dcr(dcr_id)
     if args.workspace and workspace_id.lower() != args.workspace.lower():

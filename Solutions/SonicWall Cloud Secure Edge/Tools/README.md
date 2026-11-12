@@ -37,19 +37,26 @@ The tool finds the data collection rule used by the CSE connector in that worksp
 
    Alternatively, download `cse_backfill.py` from this folder and upload it with
    **Manage files > Upload** in the Cloud Shell toolbar.
-3. Enter the CSE API key without it being shown:
+3. Check that the file is the published version 1.2.0. The command prints `cse_backfill.py: OK`;
+   if it prints `FAILED`, delete the file and do not run it.
+
+   ```bash
+   echo "e0fd8bea8e57c6f2c43d26da9b84c6c4c5403d9de0d98e4babdbb12bf2104b52  cse_backfill.py" | sha256sum -c -
+   ```
+
+4. Enter the CSE API key without it being shown:
 
    ```bash
    read -rsp "CSE API key: " CSE_API_TOKEN && export CSE_API_TOKEN && echo
    ```
 
-4. Set the workspace's resource ID:
+5. Set the workspace's resource ID:
 
    ```bash
    WORKSPACE_ID="/subscriptions/<subscription>/resourceGroups/<group>/providers/Microsoft.OperationalInsights/workspaces/<name>"
    ```
 
-5. Do a dry run for the gap, in UTC. It reports how many events are missing and sends nothing.
+6. Do a dry run for the gap, in UTC. It reports how many events are missing and sends nothing.
    Use a window from 15 minutes before the last event prior to the outage, to 15 minutes after the
    outage ended and events were confirmed as being received again in Sentinel.
 
@@ -59,14 +66,14 @@ The tool finds the data collection rule used by the CSE connector in that worksp
 
    The first line of the output shows the data collection rule the tool found.
 
-6. Send the missing events by repeating the command with `--send`:
+7. Send the missing events by repeating the command with `--send`:
 
    ```bash
    python3 cse_backfill.py --workspace "$WORKSPACE_ID" --after 2026-10-28T16:40:00Z --before 2026-10-28T17:10:00Z --send
    ```
 
-7. Wait 10 minutes, then repeat the dry run from step 5. It should report `Missing: 0`.
-8. Remove the key from the session:
+8. Wait 10 minutes, then repeat the dry run from step 6. It should report `Missing: 0`.
+9. Remove the key from the session:
 
    ```bash
    unset CSE_API_TOKEN
@@ -132,6 +139,8 @@ effects:
 | `Warning: the CSE organization of these events ... has no events in this workspace` | Check that the API key and the workspace belong to the same organization; add `--allow-new-org` if expected |
 | `Sending was refused (HTTP 403).` | The account lacks Monitoring Metrics Publisher on the rule; a new role can take a few minutes to apply |
 | `Warning: ... older than 47 hours` | Those events would be recorded at the backfill time; add `--allow-old` to send them anyway |
+| `Not a valid workspace resource ID` / `Not a valid data collection rule resource ID` | The value is not a resource ID of that type; copy it again from the portal (**JSON View**) |
+| `The DCR's ingestion endpoint is not an Azure Monitor ingestion URL` | The rule's endpoint is not `https://...ingest.monitor.azure.com`; nothing was sent. The tool supports the Azure public cloud only |
 
 ## How It Works
 
@@ -140,4 +149,15 @@ effects:
   time out on busy tenants. A window that still fails is split in half and retried.
 - Retries on HTTP 429 and server errors, honoring `Retry-After`.
 - Checks the `CSEEvents_CL` table for each event's ID, and sends only the missing events.
-- Uses only Python 3 and the Azure CLI, both included in Cloud Shell.
+- Uses only Python 3 and the Azure CLI, both included in Cloud Shell. The Azure CLI is started
+  without a shell.
+- Accepts only workspace and data collection rule resource IDs of the expected form, and sends
+  only to an Azure Monitor ingestion endpoint (`https://...ingest.monitor.azure.com`).
+
+## Version History
+
+| Version | Changes |
+|---|---|
+| 1.2.0 | Stricter checks of resource IDs and of the ingestion endpoint; the Azure CLI is started without a shell. No change to what the tool sends |
+| 1.1.0 | Finds the data collection rule from the workspace (`--workspace`); organization check |
+| 1.0.0 | First version |
