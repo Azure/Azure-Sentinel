@@ -24,7 +24,6 @@ from .common import (
 )
 from .kusto_analyzer import KustoAnalyzerError, analyze_kql
 from .kql import (
-    ALLOWED_DCR_OPERATORS,
     ALLOWED_FILTER_OPERATORS,
     ASIM_HELPER_RULE,
     KQL_CONSTRUCT_RULES,
@@ -154,52 +153,16 @@ def _validate_statement_shape(
     field: str,
     findings: list[Finding],
 ) -> dict[str, Any] | None:
-    statements = analysis["statements"]
-    if not statements:
+    if not analysis["sourcePipeline"]["isValid"]:
         findings.append(
-            Finding("KQL039", field, "Query must not be empty.")
+            Finding(
+                "KQL039",
+                field,
+                "Query must contain exactly one expression statement "
+                "rooted at lowercase source.",
+            )
         )
         return None
-    for statement in statements[:-1]:
-        location = statement["location"]
-        line = location.get("line")
-        if statement["type"] != "LetStatement":
-            findings.append(
-                Finding(
-                    "KQL042",
-                    field,
-                    "Only let statements may precede the final source pipeline.",
-                    line=line if isinstance(line, int) else None,
-                )
-            )
-            continue
-        if not statement["hasPipe"]:
-            continue
-        root_type = statement.get("expressionRootType")
-        root_text = statement.get("expressionRootText")
-        allowed_root = (
-            root_type
-            in {
-                "DataTableExpression",
-                "FunctionDeclaration",
-                "ParenthesizedExpression",
-                "PrintOperator",
-            }
-            or (
-                root_type == "NameReference"
-                and isinstance(root_text, str)
-                and root_text.casefold() == "source"
-            )
-        )
-        if not allowed_root:
-            findings.append(
-                Finding(
-                    "KQL043",
-                    field,
-                    "A tabular let binding may only use source, print, or datatable.",
-                    line=line if isinstance(line, int) else None,
-                )
-            )
     return analysis.get("pipeline")
 
 
@@ -215,25 +178,17 @@ def _operator_name(operator: dict[str, Any]) -> str | None:
 def _validate_pipeline_operators(
     analysis: dict[str, Any],
     field: str,
-    allowed_operators: set[str],
+    allowed_operators: set[str] | None,
     findings: list[Finding],
 ) -> None:
     pipeline = _validate_statement_shape(analysis, field, findings)
     if pipeline is None:
-        if analysis["statements"]:
-            findings.append(
-                Finding(
-                    "KQL039",
-                    field,
-                    "Query must be a single source-rooted pipeline.",
-                )
-            )
         return
     root_text = pipeline.get("rootText")
     if (
         pipeline.get("rootType") != "NameReference"
         or not isinstance(root_text, str)
-        or root_text.casefold() != "source"
+        or root_text != "source"
     ):
         findings.append(
             Finding(
@@ -259,7 +214,10 @@ def _validate_pipeline_operators(
                     line=line if isinstance(line, int) else None,
                 )
             )
-        elif operator not in allowed_operators:
+        elif (
+            allowed_operators is not None
+            and operator not in allowed_operators
+        ):
             findings.append(
                 Finding(
                     "KQL041",
@@ -273,7 +231,7 @@ def _validate_pipeline_operators(
 def _validate_kql(
     query: str,
     field: str,
-    allowed_operators: set[str],
+    allowed_operators: set[str] | None,
     findings: list[Finding],
 ) -> dict[str, Any] | None:
     try:
@@ -288,7 +246,11 @@ def _validate_kql(
         )
         return None
 
-    diagnostics = analysis["diagnostics"]
+    diagnostics = [
+        diagnostic
+        for diagnostic in analysis["diagnostics"]
+        if diagnostic["severity"] == "Error"
+    ]
     for diagnostic in diagnostics:
         findings.append(
             Finding(
@@ -318,39 +280,12 @@ def _validate_filter_consistency(
     parser_analysis: dict[str, Any],
     findings: list[Finding],
 ) -> None:
-    filter_statements = filter_analysis["statements"]
-    parser_statements = parser_analysis["statements"]
-    if not filter_statements or not parser_statements:
-        return
-    filter_lets = [
-        statement["location"]["normalizedText"]
-        for statement in filter_statements[:-1]
-    ]
-    parser_lets = [
-        statement["location"]["normalizedText"]
-        for statement in parser_statements[:-1]
-    ]
-    parser_let_index = 0
-    for filter_let in filter_lets:
-        try:
-            parser_let_index = parser_lets.index(
-                filter_let, parser_let_index
-            ) + 1
-        except ValueError:
-            findings.append(
-                Finding(
-                    "FILTER003",
-                    "ParserFilterQuery",
-                    "Every filter let statement must appear in ParserQuery in the same order.",
-                )
-            )
-            return
     filter_pipeline = filter_analysis.get("pipeline")
     parser_pipeline = parser_analysis.get("pipeline")
     if (
         not isinstance(filter_pipeline, dict)
         or filter_pipeline.get("rootType") != "NameReference"
-        or str(filter_pipeline.get("rootText", "")).casefold() != "source"
+        or filter_pipeline.get("rootText") != "source"
         or not isinstance(parser_pipeline, dict)
     ):
         return
@@ -718,14 +653,14 @@ def validate_ingest_time_parser(
             parser_analysis = _validate_kql(
                 parser_query,
                 "ParserQuery",
-                ALLOWED_DCR_OPERATORS,
+                None,
                 findings,
             )
         if (
             filter_analysis is not None
             and parser_analysis is not None
-            and not filter_analysis["diagnostics"]
-            and not parser_analysis["diagnostics"]
+            and filter_analysis["sourcePipeline"]["isValid"]
+            and parser_analysis["sourcePipeline"]["isValid"]
         ):
             _validate_filter_consistency(
                 filter_analysis,

@@ -457,7 +457,7 @@ class ContentDeploymentTests(unittest.TestCase):
                      if r.get("condition") == "[parameters('DeployPlaybook')]"},
                 )
 
-    def test_first_authored_tactic_only_in_both_arm_copies_without_source_mutation(self):
+    def test_all_authored_tactics_preserved_in_both_arm_copies_without_source_mutation(self):
         entry = self.prepare_integration()
         self.write_metadata(attribution.TRACKING_ID)
         path = self.solution / "XDR Detections/Test.yaml"
@@ -484,13 +484,7 @@ class ContentDeploymentTests(unittest.TestCase):
                 with self.subTest(authored=authored, pipeline=pipeline):
                     result = self.package(entry, pipeline)
                     self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-                    if len(authored) > 1:
-                        self.assertIn(f"first authored tactic '{authored[0]['tactic']}'", result.stdout)
-                        self.assertIn("omitted tactics: " + ", ".join(t["tactic"] for t in authored[1:]),
-                                      result.stdout)
-                        self.assertIn("not a recommended classification", result.stdout)
-                    else:
-                        self.assertNotIn("V3.1 TACTIC SELECTION:", result.stdout)
+                    self.assertNotIn("V3.1 TACTIC SELECTION:", result.stdout)
                     template = json.loads((self.solution / "Package/mainTemplate.json").read_text())
                     bodies = []
                     for resource in template["resources"]:
@@ -504,7 +498,7 @@ class ContentDeploymentTests(unittest.TestCase):
                         "xdr-" + document["contentProvenance"]["source"]["id"]
                     )
                     expected["id"] = f"[if(true(), '{expected['id']}', '{expected['id']}')]"
-                    expected["detectionAction"]["alertTemplate"]["tactics"] = [authored[0]]
+                    expected["detectionAction"]["alertTemplate"]["tactics"] = copy.deepcopy(authored)
                     expected["contentProvenance"] = {
                         "packageId": "[if(true(), 'testpublisher.test-sentinel', 'testpublisher.test-sentinel')]",
                         "packageVersion": "3.2.2",

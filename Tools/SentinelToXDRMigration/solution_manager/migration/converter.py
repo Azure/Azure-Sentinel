@@ -32,7 +32,16 @@ from solution_manager.migration.catalog import (
 )
 from solution_manager.authoring.columns import projected_columns
 from solution_manager.authoring.dependencies import dependency_plan, dependency_validation_errors
-from solution_manager.core.content_paths import content_path, yaml_files
+from solution_manager.core.content_paths import (
+    _bump_patch_version,
+    _git_head_tracked_files,
+    _load_git_head_yaml,
+    _version_tuple,
+    _without_version,
+    content_path,
+    scan_solution_urls,
+    yaml_files,
+)
 from solution_manager.migration.parser_bindings import normalize_parser_bindings
 from solution_manager.reporting.report import write_transformation_report
 
@@ -251,7 +260,7 @@ class ConversionResult:
             "errors": list(self.errors),
             "informational": list(self.informational),
             "directGraphDeploymentReady": (
-                self.status == "converted" and not self.review_required and self.tactic_count <= 1
+                self.status == "converted" and not self.review_required
             ),
         }
 
@@ -2146,11 +2155,13 @@ def _extract_raw_yaml_version(raw_text: str, doc: dict[str, Any]) -> str:
     return str(doc.get("version") or "")
 
 
-def _version_tuple(version: str) -> tuple[int, int, int]:
-    parts = str(version).split(".")
-    if len(parts) == 3 and all(part.isdigit() for part in parts):
-        return int(parts[0]), int(parts[1]), int(parts[2])
-    return (0, 0, 0)
+def _replace_raw_yaml_top_level_version(raw_text: str, new_version: str) -> str:
+    pattern = re.compile(
+        r"(?m)^(version[ \t]*:[ \t]*)(['\"]?)[^'\"\r\n#]+?\2([ \t]*(?:#.*)?)$"
+    )
+    if pattern.search(raw_text):
+        return pattern.sub(rf"\g<1>\g<2>{new_version}\g<2>\g<3>", raw_text, count=1)
+    return raw_text
 
 
 def _solution_release_version(solution_root: Path, config: dict[str, Any] | None = None) -> str:
@@ -2460,12 +2471,6 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
     )
     errors.extend(classification_errors)
     warnings.extend(classification_warnings)
-    if len(tactic_payload) > 1:
-        informational.append(
-            "All source MITRE tactics are preserved in source order in authored YAML. "
-            "V3.1 ARM packaging carries only the first tactic and its compatible techniques; "
-            "this classification loss is not validated parity. Direct Graph deployment requires a single tactic."
-        )
     if not mappings:
         errors.append("no supported entity mappings were produced")
     elif not REQUIRED_ASSET_COLLECTIONS.intersection(mappings):
@@ -2865,12 +2870,26 @@ def convert_solution(
         raise ValueError("excludedRuleIds must contain an object of rule IDs and reasons")
 
     source_documents: dict[Path, dict[str, Any]] = {}
+    raw_source_texts: dict[Path, str] = {}
     sources_by_id: dict[str, list[Path]] = {}
+    repo_root, tracked_head_files = _git_head_tracked_files(root)
+    yolo_frozen = False
+    try:
+        from solution_manager.core.artifacts import current_workflow_state
+
+        wf_state = current_workflow_state(root)
+        if isinstance(wf_state, dict) and isinstance(wf_state.get("yolo"), dict):
+            yolo_frozen = bool(wf_state["yolo"].get("inventory"))
+    except Exception:
+        yolo_frozen = False
+
     for source in sources:
         with source.open(encoding="utf-8-sig") as handle:
-            source_document = yaml.safe_load(handle) or {}
+            raw_source_text = handle.read()
+        source_document = yaml.safe_load(raw_source_text) or {}
         if not isinstance(source_document, dict):
             raise ValueError(f"analytic rule must contain a YAML object: {source}")
+        raw_source_texts[source] = raw_source_text
         source_documents[source] = source_document
         source_id = str(source_document.get("id") or "")
         if source_id:
@@ -2989,7 +3008,24 @@ def convert_solution(
                 )
             )
             continue
+        if overwrite and not yolo_frozen and tracked_head_files:
+            head_source_doc = _load_git_head_yaml(source, repo_root, tracked_head_files)
+            if isinstance(head_source_doc, dict) and head_source_doc.get("version") is not None:
+                if _without_version(source_document) != _without_version(head_source_doc):
+                    raw_source_text = raw_source_texts[source]
+                    head_ver_str = str(head_source_doc.get("version")).strip()
+                    cur_ver_str = _extract_raw_yaml_version(raw_source_text, source_document)
+                    if _version_tuple(cur_ver_str) <= _version_tuple(head_ver_str):
+                        bumped_source_ver = _bump_patch_version(head_ver_str)
+                        updated_raw = _replace_raw_yaml_top_level_version(raw_source_text, bumped_source_ver)
+                        if updated_raw != raw_source_text:
+                            with source.open("w", encoding="utf-8", newline="") as handle:
+                                handle.write(updated_raw)
+                            raw_source_texts[source] = updated_raw
+                            source_document = yaml.safe_load(updated_raw) or {}
+                            source_documents[source] = source_document
         document = build_xdr_document(source, root, config)
+        head_target_doc = _load_git_head_yaml(target, repo_root, tracked_head_files) if tracked_head_files else None
         if target.exists():
             previous_provenance = existing_document.get("contentProvenance") or {}
             dependencies_current = (
@@ -3012,8 +3048,6 @@ def convert_solution(
                         )
                     )
                     continue
-                if _version_tuple(existing_document["version"]) >= _version_tuple(document["version"]):
-                    document["version"] = existing_document["version"]
             previous_id = existing_document["properties"]["id"]
             identity_change = (
                 (existing_document.get("contentProvenance") or {}).get("conversion") or {}
@@ -3043,6 +3077,48 @@ def convert_solution(
                     "were updated, deleted, or migrated. Review existing deployed rules "
                     "and reconcile their identities before any separately approved deployment."
                 )
+            if isinstance(existing_document, dict) and "version" in existing_document:
+                existing_ver_str = str(existing_document["version"]).strip()
+                if not overwrite:
+                    document["version"] = existing_ver_str
+                else:
+                    if (
+                        isinstance(head_target_doc, dict)
+                        and "version" in head_target_doc
+                        and not xdr_version_error(head_target_doc["version"])
+                    ):
+                        head_ver_str = str(head_target_doc["version"]).strip()
+                        if _without_version(document) != _without_version(head_target_doc):
+                            bumped_ver = _bump_patch_version(head_ver_str)
+                            document["version"] = (
+                                max((bumped_ver, existing_ver_str), key=_version_tuple)
+                                if not xdr_version_error(bumped_ver)
+                                else existing_ver_str
+                            )
+                        else:
+                            document["version"] = existing_ver_str
+                    elif _without_version(document) != _without_version(existing_document):
+                        bumped_ver = _bump_patch_version(existing_ver_str)
+                        document["version"] = (
+                            bumped_ver if not xdr_version_error(bumped_ver) else existing_ver_str
+                        )
+                    else:
+                        document["version"] = existing_ver_str
+            else:
+                document["version"] = INITIAL_XDR_VERSION
+        elif (
+            isinstance(head_target_doc, dict)
+            and "version" in head_target_doc
+            and not xdr_version_error(head_target_doc["version"])
+        ):
+            head_ver_str = str(head_target_doc["version"]).strip()
+            if _without_version(document) != _without_version(head_target_doc):
+                bumped_ver = _bump_patch_version(head_ver_str)
+                document["version"] = (
+                    bumped_ver if not xdr_version_error(bumped_ver) else head_ver_str
+                )
+            else:
+                document["version"] = head_ver_str
         rendered = yaml.dump(
             document,
             Dumper=XdrYamlDumper,
@@ -3112,7 +3188,7 @@ def convert_solution(
         "needsReview": sum(result.status == "needsReview" for result in results),
         "reviewRequired": sum(result.review_required for result in results),
         "deploymentReady": sum(
-            result.status == "converted" and not result.review_required and result.tactic_count <= 1
+            result.status == "converted" and not result.review_required
             for result in results
         ),
         "conflicts": sum(result.status == "conflict" for result in results),
@@ -3168,8 +3244,6 @@ def validate_solution(solution: str | Path) -> dict[str, Any]:
             for result in duplicates:
                 result["errors"].append(f"duplicate Custom Detection id {detection_id!r}")
                 result["valid"] = False
-    from solution_manager.qualification.pr_check_runner import scan_solution_urls
-
     url_scan = scan_solution_urls(root)
     locale_issues = url_scan["localeIssues"]
     results_by_path = {

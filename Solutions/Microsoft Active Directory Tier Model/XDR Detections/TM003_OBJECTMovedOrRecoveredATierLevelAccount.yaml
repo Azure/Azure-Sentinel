@@ -1,0 +1,164 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityEvent
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1d858e12-777d-4156-b0af-b5ef410739e6
+    path: Analytic Rules/TM003_OBJECTMovedOrRecoveredATierLevelAccount.yaml
+    version: 1.0.0
+    querySha256: 08c9d883b34e598c1d4b38d9e4c7cf52079a86416ae6a56b7e1fb912ab742aca
+    schedule:
+      queryFrequency: 30m
+      queryPeriod: 30m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=30m, lookback=30m; target frequency=PT30M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.ObjectName from
+      query column `ObjectName`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.Account from query
+      column `Account`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1078.002
+    reviewScope:
+      sourceDocumentSha256: 50457dfca225aad7935a0033b484bbb1a79d53f9b2b6a6399adffec198b226dd
+      targetQuerySha256: 4a93ed0fe9905617cf0b15bb035a4eef289f198c3ccb2684e34fce91feeba2b7
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ObjectName
+      column: ObjectName
+      status: available
+      customDetailKey: ObjectName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: Account
+      column: Account
+      status: available
+      customDetailKey: Account
+properties:
+  id: xdr-1d858e12-777d-4156-b0af-b5ef410739e6
+  displayName: PROD (TM003.1) - OBJECT - Moved or Recovered a Tier Level Account
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      | where (EventID == 5138
+          or EventID == 5139)
+          and (EventData matches regex @"(?i)OU=Domain Controllers"
+              or EventData matches regex @"(?i)OU=Tier 0 Accounts"
+              or EventData matches regex @"(?i)OU=Tier 1 Accounts"
+              or EventData matches regex @"(?i)OU=Tier 2 Accounts"
+              or EventData matches regex @"(?i)OU=Tier 0 Service Accounts"
+              or EventData matches regex @"(?i)OU=Tier 1 Service Accounts"
+              or EventData matches regex @"(?i)OU=Tier 2 Service Accounts"
+              or EventData matches regex @"(?i)OU=Tier 0 Groups"
+              or EventData matches regex @"(?i)OU=Tier 1 Groups"
+              or EventData matches regex @"(?i)OU=Tier 2 Groups"
+              or EventData matches regex @"(?i)OU=Tier 0 PAW"
+              or EventData matches regex @"(?i)OU=Tier 1 PAW"
+              or EventData matches regex @"(?i)OU=Tier 2 PAW"
+              or EventData matches regex @"(?i)OU=Tier 0 Member Servers"
+              or EventData matches regex @"(?i)OU=Tier 1 Member Servers")
+      | extend OldObject_e = extract("<Data Name=\"OldObjectDN\">([^<]+)</Data>", 1, EventData)
+      | extend OldObject = extract("(?i)CN=([^,]+)", 1, OldObject_e)
+      | extend OldObjectTier = extract("(?i)OU=(Tier [^ ]+)", 1, OldObject_e)
+      | extend OldObjectTier = iff(isempty(OldObjectTier), "Outside Tier Model", OldObjectTier)
+      | extend NewObject_e = extract("<Data Name=\"NewObjectDN\">([^<]+)</Data>", 1, EventData)
+      | extend NewObject = extract("(?i)CN=([^,]+)", 1, NewObject_e)
+      | extend NewObjectTier = extract("(?i)OU=(Tier [^ ]+)", 1, NewObject_e)
+      | extend SubjectUserName = extract("<Data Name=\"SubjectUserName\">([^<]+)</Data>", 1, EventData)
+      | extend SubjectDomainName = extract("<Data Name=\"SubjectDomainName\">([^<]+)</Data>", 1, EventData)
+      | extend Account = strcat(SubjectDomainName, "\\", SubjectUserName)
+      | extend NewObjectTier = iff(isempty(NewObjectTier),
+          iff(NewObject_e matches regex @"(?i)OU=Domain Controllers", "Tier 0", "Outside Tier Model"),
+          NewObjectTier)
+      | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+      | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+      | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+      | where OldObject != NewObjectTier
+      | project TimeGenerated
+          , ObjectName = OldObject
+          , NewObjectTier
+          , NewObjectOU = NewObject_e
+          , ObjectClass
+          , PreviousTier = OldObjectTier
+          , PreviousOU = OldObject_e
+          , ActivityType
+          , Account
+          , Domain
+          , Computer
+          , Channel
+          , EventID
+          , EventData
+  schedule:
+    frequency: PT30M
+  detectionAction:
+    alertTemplate:
+      title: PROD (TM003.1) - OBJECT - Moved or Recovered a Tier Level Account
+      description: Moving or Recovering of a Tier Model object.
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.002
+      customDetails:
+        ObjectName: ObjectName
+        NewObjectTier: NewObjectTier
+        NewObjectOU: NewObjectOU
+        ObjectClass: ObjectClass
+        PreviousTier: PreviousTier
+        PreviousOU: PreviousOU
+        ActivityType: ActivityType
+        Account: Account
+        Domain: Domain
+        Computer: Computer
+        Channel: Channel
+        EventID: EventID
+        EventData: EventData
