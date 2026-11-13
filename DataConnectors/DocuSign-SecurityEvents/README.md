@@ -1,4 +1,7 @@
-# Ingest DocuSign Security Events
+# [Deprecated] Ingest DocuSign Security Events
+
+> **NOTE:** This data connector has been deprecated.
+
 **Author: Sreedhar Ande**
 
 DocuSign-SecurityEvents Data connector ingests   

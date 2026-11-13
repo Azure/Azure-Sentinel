@@ -1,3 +1,7 @@
+## Unreleased source maintenance
+
+Marked the legacy Azure Function data connector as deprecated. This definition is not included in the current solution package; the CCF connector and package version are unchanged.
+
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
 | 3.0.3       | 06-11-2026                     | Adding multi-instance support                                      |

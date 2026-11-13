@@ -1,4 +1,7 @@
-# Deploy Function App for getting Office 365 Management API data into Azure Sentinel
+# [Deprecated] Deploy Function App for getting Office 365 Management API data into Azure Sentinel
+
+> **NOTE:** This data connector has been deprecated.
+
 This function app will poll O365 Activity Management API every 5 mins for logs.  It is designed to get Audit.General and DLP.All events.
 
 ## How to Ingest Office 365 Audit.General and DLP.All Activity Logs into Azure Sentinel 

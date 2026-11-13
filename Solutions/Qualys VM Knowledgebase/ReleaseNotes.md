@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.1.5 | 09-11-2026 | Marked the legacy Azure Function **Data Connector** as deprecated and added an installation UI notice recommending CCF for new connections. Added a CCF sample query and clarified the legacy API URL help text with platform documentation; ingestion configuration is unchanged. |
 | 3.1.4       | 11-09-2026                     | Updated the CCF Data Connector to use the QualysKnowledgeBase schema, explicit table queries, configurable discovery and patchability filters, current Qualys API documentation links, and simplified migration guidance; restored a meaningful All discovery-method key while omitting that optional API filter. Enhanced the QualysKB Parser to normalize all 22 fields and deduplicate record versions by QID and last modification time. |
 | 3.1.3       | 17-07-2026                     | **CCF connector** - fix incomplete data ingestion. |
 | 3.1.2       | 29-04-2026                     | Moving Connector to GA. |
