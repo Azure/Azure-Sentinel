@@ -131,7 +131,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--manifest", type=Path, required=True)
     matrix.add_argument("--output", type=Path, required=True)
     matrix.add_argument("--repo-root", type=Path, default=Path("."))
-    matrix.add_argument("--max-targets", type=int, default=25)
+    matrix.add_argument("--max-targets", type=int, default=100)
     matrix.add_argument(
         "--max-fixture-bytes", type=int, default=5 * 1024 * 1024
     )
