@@ -1,0 +1,83 @@
+id: f59e08b0-c9c0-4af8-8065-f868f2e8a040
+name: Entra ID authentication strength change
+description: |
+  Identifies when the allowed sign-in method combinations of a custom authentication strength are changed in Microsoft Entra ID.
+  An authentication strength lists the method combinations that satisfy a Conditional Access policy, for example phishing-resistant methods only.
+  An attacker with the Conditional Access Administrator role could add a weaker method to a strength that a policy already uses, so the policy stays in place but accepts weaker sign-ins.
+  Creating or deleting a whole strength is not covered, and neither are the advanced options (AAGUIDs and certificate issuers).
+  The alert shows the combinations before and after the change and the id of the strength.
+  Ref: https://learn.microsoft.com/entra/identity/authentication/concept-authentication-strengths
+severity: Medium
+status: InPreview
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1556.006
+  - T1556.009
+query: |
+  AuditLogs
+  | where TimeGenerated > ago(2h)
+  | where ingestion_time() > ago(1h)
+  | where OperationName =~ "Authentication Strength Policy Update"
+  | where Result !~ "failure"
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIPAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  | mv-apply Target = TargetResources on (
+      mv-expand Property = Target.modifiedProperties
+      | summarize PropertyBag = make_bag(bag_pack(tostring(Property.displayName), bag_pack("old", tostring(Property.oldValue), "new", tostring(Property.newValue))))
+    )
+  | extend CombinationsBefore = trim('"', tostring(PropertyBag.AllowedCombinations.old))
+  | extend CombinationsAfter = trim('"', tostring(PropertyBag.AllowedCombinations.new))
+  | extend StrengthId = trim('"', tostring(PropertyBag.Id.new))
+  | where isnotempty(CombinationsAfter)
+  | where tostring(array_sort_asc(extract_all(@"([A-Za-z0-9]+)", CombinationsBefore))) != tostring(array_sort_asc(extract_all(@"([A-Za-z0-9]+)", CombinationsAfter)))
+  | project-reorder TimeGenerated, OperationName, StrengthId, CombinationsBefore, CombinationsAfter, InitiatingUserPrincipalName, InitiatingAppName, InitiatingIPAddress
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+customDetails:
+  Operation: OperationName
+  InitiatingApp: InitiatingAppName
+  StrengthId: StrengthId
+  CombinationsBefore: CombinationsBefore
+  CombinationsAfter: CombinationsAfter
+version: 1.0.0
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

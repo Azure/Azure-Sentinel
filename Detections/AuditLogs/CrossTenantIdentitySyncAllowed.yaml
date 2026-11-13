@@ -1,0 +1,85 @@
+id: 7ca69a51-4328-4104-8ceb-69d371e362f0
+name: Entra ID cross-tenant identity sync allowed
+description: |
+  Identifies when cross-tenant identity synchronization from a partner tenant is allowed in Microsoft Entra ID, either by creating the setting with inbound sync allowed or by changing an existing one to allowed.
+  When inbound sync is allowed, administrators of the partner tenant can create, update and delete B2B users in this tenant without anyone here creating them.
+  An attacker with at least the Security Administrator role here could allow sync from a tenant they control and use it to push accounts in.
+  Microsoft intends cross-tenant sync for tenants of the same organization, so a partner outside it is worth checking first.
+  Turning sync off or deleting the setting does not alert, and the update record does not carry the partner tenant id, so take it from the create record or from the cross-tenant access settings.
+  Ref: https://learn.microsoft.com/entra/identity/multi-tenant-organizations/cross-tenant-synchronization-overview
+severity: Medium
+status: InPreview
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1199
+  - T1136.003
+  - T1484.002
+query: |
+  AuditLogs
+  | where TimeGenerated > ago(2h)
+  | where ingestion_time() > ago(1h)
+  | where OperationName in~ ("Create a partner cross-tenant identity sync setting", "Update a partner cross-tenant identity sync setting")
+  | where Result !~ "failure"
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIPAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  | mv-apply Target = TargetResources on (
+      mv-expand Property = Target.modifiedProperties
+      | summarize PropertyBag = make_bag(bag_pack(tostring(Property.displayName), bag_pack("old", tostring(Property.oldValue), "new", tostring(Property.newValue))))
+    )
+  | extend PartnerTenantId = tostring(parse_json(tostring(PropertyBag.PartnerIdentifier.new))[0])
+  | extend DetailBefore = parse_json(tostring(parse_json(tostring(PropertyBag.PartnerPolicyDetail.old))[0].Detail))
+  | extend DetailAfter = parse_json(tostring(parse_json(tostring(PropertyBag.PartnerPolicyDetail.new))[0].Detail))
+  | extend SyncAllowedBefore = tostring(DetailBefore.UserSyncInbound.IsSyncAllowed)
+  | extend SyncAllowedAfter = tostring(DetailAfter.UserSyncInbound.IsSyncAllowed)
+  | where (SyncAllowedAfter =~ "true" and SyncAllowedBefore !~ "true") or (isempty(SyncAllowedAfter) and isnotempty(tostring(PropertyBag.PartnerPolicyDetail.new)))
+  | project-reorder TimeGenerated, OperationName, PartnerTenantId, SyncAllowedBefore, SyncAllowedAfter, InitiatingUserPrincipalName, InitiatingAppName, InitiatingIPAddress
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+customDetails:
+  Operation: OperationName
+  InitiatingApp: InitiatingAppName
+  PartnerTenantId: PartnerTenantId
+  SyncAllowedBefore: SyncAllowedBefore
+  SyncAllowedAfter: SyncAllowedAfter
+version: 1.0.0
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
