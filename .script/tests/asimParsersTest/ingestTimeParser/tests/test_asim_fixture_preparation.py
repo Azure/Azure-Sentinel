@@ -16,8 +16,6 @@ FIXTURES = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = FIXTURES
 SPEC.loader.exec_module(FIXTURES)
 
-from asim_ingestion.columns import PLATFORM_MANAGED_COLUMNS
-
 
 class TimestampTests(unittest.TestCase):
     def test_round_trips_exact_kusto_tick(self):
@@ -325,7 +323,6 @@ class FixturePreparationTests(unittest.TestCase):
 
         artifact = self.prepare(fixture)
 
-        self.assertEqual(2, artifact["version"])
         schema = {
             column["name"]: column["type"]
             for column in artifact["schema"]
@@ -343,11 +340,14 @@ class FixturePreparationTests(unittest.TestCase):
         self.assertEqual("Contoso_CL", artifact["sourceRawTable"])
         self.assertEqual("inferred", artifact["schemaSource"])
 
-    def test_platform_managed_columns_remain_in_input_schema(self):
+    def test_inferred_schema_excludes_only_reserved_columns(self):
         fixture = self.write_fixture(
-            "TimeGenerated,Type,TenantId,id,_ResourceId,Value\n"
-            "2026-01-01T00:00:00Z,Contoso_CL,tenant,event-1,"
-            "/subscriptions/example,one\n"
+            "TimeGenerated,Type,TenantId,_TimeReceived,_ItemId,"
+            "_ResourceId,_SubscriptionId,_IsBillable,_BilledSize,"
+            "id,_ResourceId_s,MG,Title,UniqueId,verbose,verbose_b,Value\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,tenant,"
+            "2026-01-01T00:00:01Z,item,resource,subscription,true,1,"
+            "record-id,resource-s,mg,title,unique,verbose,true,value\n"
         )
 
         artifact = self.prepare(fixture)
@@ -355,46 +355,28 @@ class FixturePreparationTests(unittest.TestCase):
         schema_names = {
             column["name"] for column in artifact["schema"]
         }
-        required_columns = {"Type", "TenantId", "id", "_ResourceId"}
-        self.assertEqual(set(), required_columns - schema_names)
-        self.assertEqual(
+        self.assertTrue(
             {
-                "Type",
                 "TenantId",
-                "id",
+                "Type",
+                "_TimeReceived",
+                "_ItemId",
                 "_ResourceId",
-            },
-            set(artifact["platformManagedColumns"]),
+                "_SubscriptionId",
+                "_IsBillable",
+                "_BilledSize",
+            }.isdisjoint(schema_names)
         )
-        for column in artifact["platformManagedColumns"]:
-            self.assertNotIn(column, artifact["rows"][0])
-        self.assertLessEqual(
-            set(artifact["platformManagedColumns"]),
-            PLATFORM_MANAGED_COLUMNS,
-        )
-
-    def test_platform_managed_column_contract(self):
-        self.assertEqual(
-            frozenset(
-                {
-                    "_BilledSize",
-                    "_IsBillable",
-                    "_ItemId",
-                    "_ResourceId",
-                    "_ResourceId_s",
-                    "_SubscriptionId",
-                    "_TimeReceived",
-                    "id",
-                    "MG",
-                    "TenantId",
-                    "Title",
-                    "Type",
-                    "UniqueId",
-                    "verbose",
-                    "verbose_b",
-                }
-            ),
-            PLATFORM_MANAGED_COLUMNS,
+        self.assertTrue(
+            {
+                "id",
+                "_ResourceId_s",
+                "MG",
+                "Title",
+                "UniqueId",
+                "verbose",
+                "verbose_b",
+            }.issubset(schema_names)
         )
 
     def test_canonicalizes_fixture_columns_to_schema_casing(self):

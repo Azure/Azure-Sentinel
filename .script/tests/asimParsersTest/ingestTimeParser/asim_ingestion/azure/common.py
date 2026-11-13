@@ -17,7 +17,6 @@ from typing import Any, Mapping, Protocol, Sequence
 import requests
 import yaml
 
-from asim_ingestion.columns import is_platform_managed_column
 from asim_ingestion.fixtures.data import canonicalize_row_column_names
 from asim_ingestion.fixtures.timestamps import (
     parse_kusto_datetime_ticks,
@@ -25,7 +24,7 @@ from asim_ingestion.fixtures.timestamps import (
 )
 
 HARNESS_RESULT_VERSION = 1
-SNAPSHOT_VERSION = 2
+SNAPSHOT_VERSION = 1
 
 MANAGEMENT_SCOPE = "https://management.azure.com/.default"
 QUERY_SCOPE = "https://api.loganalytics.io/.default"
@@ -48,6 +47,16 @@ DEFAULT_LOCATION = "eastus2euap"
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 RESOURCE_NAME_RE = re.compile(r"[^a-z0-9-]+")
+REPLAY_EXCLUDED_COLUMNS = {
+    "_BilledSize",
+    "_IsBillable",
+    "_ItemId",
+    "_ResourceId",
+    "_SubscriptionId",
+    "_TimeReceived",
+}
+
+
 class HarnessError(RuntimeError):
     def __init__(
         self,
@@ -283,11 +292,15 @@ def build_fixture_snapshot(
     known_names = {
         column["name"] for column in normalized_schema
     }
+    excluded_names = {
+        name.casefold() for name in REPLAY_EXCLUDED_COLUMNS
+    }
     extra_names = [
         str(name)
         for row in normalized_rows
         for name in row
         if str(name) not in known_names
+        and str(name).casefold() not in excluded_names
     ]
     for name in dict.fromkeys(extra_names):
         values = [
@@ -330,19 +343,11 @@ def build_fixture_snapshot(
         column["name"]: column["type"]
         for column in normalized_schema
     }
-    managed_names = {
-        name
-        for name in column_names
-        if is_platform_managed_column(name)
-    }
-    writable_names = [
-        name for name in column_names if name not in managed_names
-    ]
     timestamp_set = {_validate_timestamp(value) for value in timestamps}
     rows = [
         {
             name: _json_safe_value(row.get(name), type_by_name[name])
-            for name in writable_names
+            for name in column_names
         }
         for row in normalized_rows
     ]
@@ -357,6 +362,11 @@ def build_fixture_snapshot(
     timestamp_hash = hashlib.sha256(
         "\n".join(sorted(timestamp_set)).encode("utf-8")
     ).hexdigest()
+    fixture_columns = {
+        str(name)
+        for row in normalized_rows
+        for name in row
+    }
     return {
         "version": SNAPSHOT_VERSION,
         "targetId": target_id,
@@ -365,14 +375,8 @@ def build_fixture_snapshot(
         "rowCount": len(rows),
         "timestampValues": sorted(timestamp_set),
         "timestampSetHash": f"sha256:{timestamp_hash}",
-        "excludedColumns": sorted(managed_names),
-        "platformManagedColumns": sorted(managed_names),
+        "excludedColumns": sorted(fixture_columns - set(column_names)),
         "schema": normalized_schema,
-        "replaySchema": [
-            column
-            for column in normalized_schema
-            if column["name"] in writable_names
-        ],
         "rows": rows,
     }
 

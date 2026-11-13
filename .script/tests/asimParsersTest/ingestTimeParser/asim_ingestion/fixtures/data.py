@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from ..columns import is_platform_managed_column
 from .timestamps import (
     TimestampNamespace,
     build_run_key,
@@ -24,9 +23,19 @@ from .timestamps import (
     timestamp_quantum_for_target_count,
 )
 
-ARTIFACT_VERSION = 2
+ARTIFACT_VERSION = 1
 MAX_FIXTURE_BYTES = 5 * 1024 * 1024
 MAX_SCHEMA_BYTES = 1024 * 1024
+RESERVED_COLUMNS = {
+    "TenantId",
+    "Type",
+    "_TimeReceived",
+    "_ItemId",
+    "_ResourceId",
+    "_SubscriptionId",
+    "_IsBillable",
+    "_BilledSize",
+}
 INTEGER_RE = re.compile(r"^-?(?:0|[1-9]\d*)$")
 REAL_RE = re.compile(
     r"^-?(?:(?:0|[1-9]\d*)\.\d+|(?:0|[1-9]\d*)[eE][+-]?\d+|"
@@ -143,7 +152,7 @@ def load_schema_csv(path: Path) -> list[dict[str, str]]:
         for row in reader:
             name = row["ColumnName"].strip()
             column_type = _normalize_schema_type(row["ColumnType"])
-            if not name:
+            if not name or name in RESERVED_COLUMNS:
                 continue
             schema.append({"name": name, "type": column_type})
     if not schema:
@@ -181,6 +190,7 @@ def load_table_schema_json(path: Path) -> list[dict[str, str]]:
         if (
             not isinstance(name, str)
             or not isinstance(column_type, str)
+            or name in RESERVED_COLUMNS
         ):
             continue
         schema.append(
@@ -224,6 +234,8 @@ def infer_schema(
 ) -> list[dict[str, str]]:
     schema: list[dict[str, str]] = []
     for column_name in rows[0]:
+        if column_name in RESERVED_COLUMNS:
+            continue
         values = _nonempty_values(rows, column_name)
         if column_name in datetime_columns:
             column_type = "datetime"
@@ -260,27 +272,6 @@ def infer_schema(
     if not any(column["name"] == "TimeGenerated" for column in schema):
         schema.append({"name": "TimeGenerated", "type": "datetime"})
     return schema
-
-
-def _include_platform_managed_schema_columns(
-    schema: Sequence[dict[str, str]],
-    rows: Sequence[dict[str, Any]],
-    datetime_columns: set[str],
-) -> list[dict[str, str]]:
-    result = [dict(column) for column in schema]
-    known_names = {
-        column["name"].casefold()
-        for column in result
-    }
-    for column in infer_schema(rows, datetime_columns):
-        name = column["name"]
-        if (
-            is_platform_managed_column(name)
-            and name.casefold() not in known_names
-        ):
-            result.append(column)
-            known_names.add(name.casefold())
-    return result
 
 
 def _adapt_schema_to_rows(
@@ -472,12 +463,6 @@ def prepare_fixture(
         schema_path,
     )
     rows = canonicalize_row_column_names(schema, rows)
-    schema = _include_platform_managed_schema_columns(
-        schema,
-        rows,
-        datetime_columns,
-    )
-    rows = canonicalize_row_column_names(schema, rows)
     schema_names = _schema_names_by_casefold(schema)
     datetime_columns = {
         schema_names.get(name.casefold(), name)
@@ -499,16 +484,8 @@ def prepare_fixture(
     run_key = build_run_key(
         repository, pull_request, run_id, run_attempt
     )
-    fixture_owned_rows = [
-        {
-            name: value
-            for name, value in row.items()
-            if not is_platform_managed_column(name)
-        }
-        for row in rows
-    ]
     rebased_rows, timestamp_metadata = rebase_time_generated(
-        fixture_owned_rows,
+        rows,
         run_key=run_key,
         namespace=namespace,
         now_ticks=now_ticks,
@@ -527,11 +504,6 @@ def prepare_fixture(
         "sourceRawTable": table_name,
         "rowCount": len(converted_rows),
         "schema": list(schema),
-        "platformManagedColumns": sorted(
-            column["name"]
-            for column in schema
-            if is_platform_managed_column(column["name"])
-        ),
         "datetimeColumns": sorted(datetime_columns),
         "namespace": {
             **namespace.to_dict(),
