@@ -17,7 +17,7 @@ export async function IsValidWorkbookMetadata(filePath: string): Promise<ExitCod
   isValidPreviewImageFileNames(workbooksMetadata);
   doDefinedLogoImageFilesExist(workbooksMetadata);
   doDefinedPreviewImageFilesExist(workbooksMetadata);
-  await isVersionIncrementedOnModification(workbooksMetadata);
+  await isVersionIncrementedOnModification();
   
   return ExitCode.SUCCESS;
 } 
