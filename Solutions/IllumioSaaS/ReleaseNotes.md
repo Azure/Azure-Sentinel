@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                     				 |
 |-------------|--------------------------------|---------------------------------------------------------|
+| 3.4.3       | 30-10-2026                     | Upgraded **Playbook Function App** runtime to **Node.js 22** and refreshed dependencies to remediate CVE-2026-111497. |
 | 3.4.2       | 27-10-2026                     | Upgraded **aiobotocore** to 2.26.0 to remediate urllib3 vulnerabilities (CVE-2026-97687, CVE-2026-97689). |
 | 3.4.1       | 13-03-2026                     | Update **function app** to use Managed Identity.        |
 | 3.4.0       | 03-02-2025                     | Added 2 new **Parser**. <br/> Added new connectorid SyslogAma to **Analytic Rules**. <br/> Resolved **Playbook** deployment error.<br/> Made minor visualization changes to **Workbooks**.          |
