@@ -1,5 +1,9 @@
 # Changelog for ASimEmailEventProofpointPODMailLog.yaml
 
+## Version 0.1.5
+
+- (2026-11-11) Generate a replay-stable source event identifier from the Proofpoint queue ID, event time, and event data - [PR #15623](https://github.com/Azure/Azure-Sentinel/pull/15623)
+
 ## Version 0.1.4
 
 - (2026-11-06) Validate relay IP addresses inline without native IP functions or top-level helpers - [PR #15572](https://github.com/Azure/Azure-Sentinel/pull/15572)
