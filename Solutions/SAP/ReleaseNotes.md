@@ -7,7 +7,7 @@ For the current release notes and version history of the agentless package on SA
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 | --- | --- | --- |
-| 3.6.0 | 12-11-2026 | Added a preview scheduled **Analytical Rule** in `Analytics/Alerts/Scheduled.json` for potential empty-hour audit log gaps per SAP system/client over 13 days, including intervals older than seven days, plus expected-client watchlist provisioning from Integration Suite onboarding CSV metadata. Source update only; Content Hub packaging and publication are pending. |
+| 3.6.0 | 12-11-2026 | Added a preview scheduled **Analytical Rule** in `Analytics/Alerts/Scheduled.json` for potential empty-hour audit log gaps per SAP system/client over 13 days, including intervals older than seven days, and an expected-client watchlist CSV template that customers must populate and import using the alias `SAPClientMonitoring`. Source update only; Content Hub packaging and publication are pending. |
 | 3.5.11 | 26-10-2026 | Updated "WEBSITE_NODE_DEFAULT_VERSION" from "~12" to "~22" in the Basic-SAPLockUser-STD and SAPCollectorRemediate-STD **Playbooks** deployment configurations. |
 | 3.5.10 | 30-06-2026 | Removal of Agent-based connector from solution. Zip file link redirected to SAP Business Accelerator Hub (moved from editable to configure-only release). |
 
