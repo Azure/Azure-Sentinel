@@ -1,0 +1,37 @@
+id: ad4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a
+name: High percentage of classical-only clients on PQC Engine
+description: |
+  More than 50% of TLS handshakes on a PQC Engine instance in the last 24 hours were from
+  classical-only clients that did not offer any post-quantum key exchange groups. These
+  connections are not protected against harvest-now-decrypt-later attacks. Consider requiring
+  PQC-capable TLS libraries or upgrading connecting services to OpenSSL 3.5+ or BoringSSL with
+  ML-KEM support.
+severity: Informational
+requiredDataConnectors:
+  - connectorId: QCryptonPQCEngine
+    dataTypes:
+      - PQCEngine_CL
+queryFrequency: P1D
+queryPeriod: P1D
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  PQCEngine_CL
+  | where TimeGenerated > ago(1d)
+  | where EventType == "handshake"
+  | summarize Total = count(), Classical = countif(ClientClass in ("classical", "legacy")) by Hostname, InstanceId
+  | extend ClassicalPct = round(100.0 * Classical / Total, 1)
+  | where ClassicalPct > 50
+  | project Hostname, InstanceId, Total, Classical, ClassicalPct
+  | order by ClassicalPct desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname
+version: 1.0.0
+kind: Scheduled
