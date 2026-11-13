@@ -65,6 +65,8 @@ TOPIC_NAME="UCC-ControlPlane-Topic"
 SINK_NAME="UCC-ControlPlane-Sink"
 LOG_FILTER='logName:"cloudaudit.googleapis.com"'
 LOGGING_SERVICE_AGENT="cloud-logs@system.gserviceaccount.com"
+EXPECTED_TOPIC="projects/$PROJECT_ID/topics/$TOPIC_NAME"
+EXPECTED_SINK_DESTINATION="pubsub.googleapis.com/$EXPECTED_TOPIC"
 
 # -----------------------------------------------------------------------------
 # 4. Derived values
@@ -90,6 +92,44 @@ require_params() {
       exit 1
     fi
   done
+}
+
+validate_subscription() {
+  local topic
+  if ! topic="$(gcloud pubsub subscriptions describe "$SUBSCRIPTION_NAME" \
+      --project="$PROJECT_ID" --format='value(topic)')"; then
+    echo "ERROR: Cannot read Pub/Sub subscription '$SUBSCRIPTION_NAME' in project '$PROJECT_ID'. Check access and API availability, then rerun; do not recreate it based on a failed read." >&2
+    exit 1
+  fi
+  if [[ "$topic" != "$EXPECTED_TOPIC" ]]; then
+    echo "ERROR: Pub/Sub subscription '$SUBSCRIPTION_NAME' uses topic '${topic:-<empty>}'; expected topic '$EXPECTED_TOPIC'." >&2
+    echo "       Choose an unused SUBSCRIPTION_NAME or ask the resource owner to resolve the mismatch. The existing subscription will not be changed." >&2
+    exit 1
+  fi
+}
+
+validate_sink() {
+  local destination filter
+  if ! destination="$(gcloud logging sinks describe "$SINK_NAME" \
+      --project="$PROJECT_ID" --format='value(destination)')"; then
+    echo "ERROR: Cannot read logging sink '$SINK_NAME' in project '$PROJECT_ID'. Check access and API availability, then rerun." >&2
+    exit 1
+  fi
+  if [[ "$destination" != "$EXPECTED_SINK_DESTINATION" ]]; then
+    echo "ERROR: Logging sink '$SINK_NAME' uses destination '${destination:-<empty>}'; expected destination '$EXPECTED_SINK_DESTINATION'." >&2
+    echo "       Ask the resource owner to resolve the mismatch before rerunning. The existing sink will not be changed." >&2
+    exit 1
+  fi
+  if ! filter="$(gcloud logging sinks describe "$SINK_NAME" \
+      --project="$PROJECT_ID" --format='value(filter)')"; then
+    echo "ERROR: Cannot read logging sink '$SINK_NAME' filter in project '$PROJECT_ID'. Check access and API availability, then rerun." >&2
+    exit 1
+  fi
+  if [[ "$filter" != "$LOG_FILTER" ]]; then
+    echo "ERROR: Logging sink '$SINK_NAME' uses filter '${filter:-<empty>}'; expected filter '$LOG_FILTER'." >&2
+    echo "       Ask the resource owner to resolve the mismatch before rerunning. The existing sink will not be changed." >&2
+    exit 1
+  fi
 }
 
 ensure_workload_identity_pool() {
@@ -172,6 +212,31 @@ gcloud services enable \
   storage.googleapis.com \
   --project="$PROJECT_ID"
 
+log "Checking existing Pub/Sub and logging resources before identity or IAM changes"
+# A successful, filtered list distinguishes absence from a failed read without
+# interpreting gcloud's human-readable error messages.
+if ! EXISTING_TOPIC="$(gcloud pubsub topics list --project="$PROJECT_ID" \
+    --filter="name=$EXPECTED_TOPIC" --format='value(name)')"; then
+  echo "ERROR: Cannot inspect Pub/Sub topic '$TOPIC_NAME'. Check pubsub.topics.list access and API availability, then rerun." >&2
+  exit 1
+fi
+if ! EXISTING_SUBSCRIPTION="$(gcloud pubsub subscriptions list --project="$PROJECT_ID" \
+    --filter="name=projects/$PROJECT_ID/subscriptions/$SUBSCRIPTION_NAME" --format='value(name)')"; then
+  echo "ERROR: Cannot inspect Pub/Sub subscription '$SUBSCRIPTION_NAME'. Check pubsub.subscriptions.list access and API availability, then rerun." >&2
+  exit 1
+fi
+if ! EXISTING_SINK="$(gcloud logging sinks list --project="$PROJECT_ID" \
+    --filter="name=$SINK_NAME" --format='value(name)')"; then
+  echo "ERROR: Cannot inspect logging sink '$SINK_NAME'. Check logging.sinks.list access and API availability, then rerun." >&2
+  exit 1
+fi
+if [[ -n "$EXISTING_SUBSCRIPTION" ]]; then
+  validate_subscription
+fi
+if [[ -n "$EXISTING_SINK" ]]; then
+  validate_sink
+fi
+
 log "Configuring Workload Identity Pool '$WORKLOAD_IDENTITY_POOL_ID'"
 ensure_workload_identity_pool
 
@@ -202,14 +267,14 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --role="roles/pubsub.publisher"
 
 log "Creating Pub/Sub topic '$TOPIC_NAME'"
-if gcloud pubsub topics describe "$TOPIC_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then
+if [[ -n "$EXISTING_TOPIC" ]]; then
   echo "    Topic already exists; skipping."
 else
   gcloud pubsub topics create "$TOPIC_NAME" --project="$PROJECT_ID"
 fi
 
 log "Creating Pub/Sub subscription '$SUBSCRIPTION_NAME'"
-if gcloud pubsub subscriptions describe "$SUBSCRIPTION_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then
+if [[ -n "$EXISTING_SUBSCRIPTION" ]]; then
   echo "    Subscription already exists; skipping."
 else
   gcloud pubsub subscriptions create "$SUBSCRIPTION_NAME" \
@@ -217,11 +282,11 @@ else
 fi
 
 log "Creating logging sink '$SINK_NAME'"
-if gcloud logging sinks describe "$SINK_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then
+if [[ -n "$EXISTING_SINK" ]]; then
   echo "    Sink already exists; skipping creation."
 else
   gcloud logging sinks create "$SINK_NAME" \
-    "pubsub.googleapis.com/projects/$PROJECT_ID/topics/$TOPIC_NAME" \
+    "$EXPECTED_SINK_DESTINATION" \
     --log-filter="$LOG_FILTER" \
     --project="$PROJECT_ID"
 fi

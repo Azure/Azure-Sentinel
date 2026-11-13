@@ -170,12 +170,21 @@ gcloud services enable \
   pubsub.googleapis.com \
   --project="$PROJECT_ID"
 
-# Fail fast if the customer-provided subscription does not exist.
-log "Verifying that the existing Pub/Sub subscription '$SUBSCRIPTION_NAME' is present"
-if ! gcloud pubsub subscriptions describe "$SUBSCRIPTION_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then
-  echo "ERROR: Pub/Sub subscription '$SUBSCRIPTION_NAME' was not found in project '$PROJECT_ID'." >&2
-  echo "       This script assumes the topic, subscription and logging sink already exist." >&2
-  echo "       Use provision-pubsub-and-sink.sh to create them." >&2
+# BYO pipelines may use arbitrary topic and sink names; do not impose the
+# provisioning variant's fixed names on an existing customer pipeline.
+log "Verifying the existing Pub/Sub subscription '$SUBSCRIPTION_NAME' and its topic"
+if ! SUBSCRIPTION_TOPIC="$(gcloud pubsub subscriptions describe "$SUBSCRIPTION_NAME" \
+    --project="$PROJECT_ID" --format='value(topic)')"; then
+  echo "ERROR: Cannot read Pub/Sub subscription '$SUBSCRIPTION_NAME' in project '$PROJECT_ID'. Check its name, access and API availability before rerunning." >&2
+  echo "       A failed read does not prove the resource is missing. Do not recreate it based on this error." >&2
+  exit 1
+fi
+if [[ -z "$SUBSCRIPTION_TOPIC" || "$SUBSCRIPTION_TOPIC" == _deleted-topic_ ]]; then
+  echo "ERROR: Pub/Sub subscription '$SUBSCRIPTION_NAME' has no readable topic. Ask its owner to verify the pipeline before rerunning." >&2
+  exit 1
+fi
+if ! gcloud pubsub topics describe "$SUBSCRIPTION_TOPIC" --project="$PROJECT_ID" >/dev/null; then
+  echo "ERROR: Cannot read Pub/Sub topic '$SUBSCRIPTION_TOPIC'. Check its name, access and API availability before rerunning; no topic or subscription will be recreated." >&2
   exit 1
 fi
 

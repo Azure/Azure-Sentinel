@@ -24,7 +24,11 @@ roles. They are not create-only, transactional, or safe dry runs.
   APIs, create/update WIF resources, service accounts and custom roles, and
   read/update the affected project, service-account, and subscription IAM
   policies. The new-resource script also needs topic/subscription creation, topic IAM,
-  `pubsub.topics.attachSubscription`, and `logging.sinks.create`.
+  `pubsub.topics.attachSubscription`, and `logging.sinks.create`. Its reuse
+  preflight requires `pubsub.topics.list`, `pubsub.subscriptions.list`,
+  `logging.sinks.list`, `pubsub.subscriptions.get`, and `logging.sinks.get`.
+  The existing-resource variant requires `pubsub.subscriptions.get` and
+  `pubsub.topics.get` to check the subscription and its topic.
 - Verify the active account and project before execution:
 
 ```bash
@@ -37,7 +41,8 @@ gcloud projects describe '<project-id>' --format='value(projectId,projectNumber)
   log/messaging usage can incur charges.
 - For the existing-resource variant, independently verify topic/subscription
   wiring, sink filter/destination, and writer publish access. The script checks
-  only that it can describe the supplied subscription.
+  that the supplied subscription and its referenced topic are readable. It does
+  not discover or validate the logging sink, whose name is not an input.
 
 ## Parameters
 
@@ -53,7 +58,8 @@ gcloud projects describe '<project-id>' --format='value(projectId,projectNumber)
 The script derives the pool ID by removing hyphens from `TENANT_ID`.
 `WORKLOAD_IDENTITY_POOL_ID` is not an input. All six inputs must be set; the
 scripts check nonempty values, not project-number correspondence, tenant UUID
-format, email ownership, or resource compatibility. Verify those yourself.
+format, or email ownership. Verify those yourself. Resource compatibility checks
+are described below.
 
 ## Configuration steps
 
@@ -119,8 +125,18 @@ Review the trust boundary and any other providers in the pool before granting
 access.
 
 Existing provider trust settings and custom-role permissions are updated in
-place. Existing topics/subscriptions/sinks are skipped without verifying their
-wiring. Review shared resources before running either script.
+place. Before identity or IAM changes, the provisioning variant checks existing
+subscriptions against `projects/PROJECT_ID/topics/UCC-ControlPlane-Topic` and
+existing sinks against that topic's Pub/Sub destination and the exact filter
+`logName:"cloudaudit.googleapis.com"`. A mismatch stops the script with expected
+and actual values; it never repoints, replaces, or deletes these resources.
+Choose an unused subscription name or resolve the conflicting configuration
+with its owner before rerunning. Different but logically equivalent filter
+expressions are not automatically accepted.
+
+The existing-resource variant preserves arbitrary customer topic/sink names.
+It checks the subscription and its referenced topic, but sink destination,
+filter, and writer publish access still require independent verification.
 
 ## Complete connector setup
 
@@ -132,6 +148,13 @@ health and recent source-specific ingestion separately.
 ## Troubleshooting
 
 The scripts stop on a failed command but leave earlier successful cloud changes
-in place. Failed resource reads can be treated as absence, including
-permission-denied reads. Inspect errors and existing resources before rerunning;
-do not delete or overwrite shared resources to recover.
+in place, including API enablement before resource preflight. Pub/Sub and sink
+read failures stop onboarding instead of being treated as proof of absence.
+Other resource helpers retain their existing create/update behavior. Inspect
+errors and partial state before rerunning; do not delete or overwrite shared
+resources to recover.
+
+## Offline regression checks
+
+From this directory, run `bash tests/resource-reuse.test.sh`. The tests use a
+local `gcloud` stub; they do not authenticate, provision, or consume cloud data.
