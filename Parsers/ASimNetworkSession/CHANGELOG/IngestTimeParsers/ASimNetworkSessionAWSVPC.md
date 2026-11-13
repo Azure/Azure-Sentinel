@@ -2,7 +2,7 @@
 
 ## Version 0.3.1
 
-- (2026-11-10) Map AWS service endpoints to the valid ASIM application type Service - [PR #15623](https://github.com/Azure/Azure-Sentinel/pull/15623)
+- (2026-11-10) Map AWS service endpoints to the valid ASIM application type Service - [PR #15651](https://github.com/Azure/Azure-Sentinel/pull/15651)
 
 ## Version 0.3.0
 

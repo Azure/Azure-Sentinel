@@ -2,7 +2,7 @@
 
 ## Version 0.2.3
 
-- (2026-11-10) Align EventSchemaVersion and unknown device operating-system values with the query-time parser - [PR #15623](https://github.com/Azure/Azure-Sentinel/pull/15623)
+- (2026-11-10) Align EventSchemaVersion and unknown device operating-system values with the query-time parser - [PR #15651](https://github.com/Azure/Azure-Sentinel/pull/15651)
 
 ## Version 0.2.2
 

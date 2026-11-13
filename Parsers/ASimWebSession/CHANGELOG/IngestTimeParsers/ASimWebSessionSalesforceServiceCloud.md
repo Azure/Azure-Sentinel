@@ -2,7 +2,7 @@
 
 ## Version 0.2.1
 
-- (2026-11-11) Fall back to ResponseSize when the source DstBytes value is empty - [PR #15623](https://github.com/Azure/Azure-Sentinel/pull/15623)
+- (2026-11-11) Fall back to ResponseSize when the source DstBytes value is empty - [PR #15651](https://github.com/Azure/Azure-Sentinel/pull/15651)
 
 ## Version 0.2.0
 

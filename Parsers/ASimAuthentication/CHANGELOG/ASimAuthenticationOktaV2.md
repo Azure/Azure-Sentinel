@@ -2,7 +2,7 @@
 
 ## Version 0.4.2
 
-- (2026-11-10) Align the emitted EventSchemaVersion with Authentication schema version 0.1.4 - [PR #15623](https://github.com/Azure/Azure-Sentinel/pull/15623)
+- (2026-11-10) Align the emitted EventSchemaVersion with Authentication schema version 0.1.4 - [PR #15651](https://github.com/Azure/Azure-Sentinel/pull/15651)
 
 ## Version 0.4.1
 
