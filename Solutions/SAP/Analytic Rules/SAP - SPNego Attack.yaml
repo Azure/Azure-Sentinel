@@ -1,0 +1,54 @@
+id: d83d4699-7bd5-44f1-826a-3bd3501712a9
+kind: Scheduled
+name: SAP - SPNego Attack
+description: |
+  Identifies SPNego Replay Attack.
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - LateralMovement
+relevantTechniques: []
+query: |
+  // Define variables
+  let AuditClasses = dynamic(['BUI']); // Message of SPNego
+  // Query logic
+  SAPAuditLog
+  | where MessageID in (AuditClasses)
+  | project TimeGenerated, Instance , SystemID, ClientID, User ,  Email, TerminalIPv6, Host
+  | extend AlertRuleUniqueName = 'spnegoattack'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

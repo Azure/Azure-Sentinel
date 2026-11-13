@@ -1,0 +1,87 @@
+id: d940bee2-46ff-4bb5-869a-1a54a967977d
+kind: Scheduled
+name: SAP - Execution of Sensitive Function Module
+description: |
+  Identifies execution of a sensitive ABAP Function Module.
+
+  Source Action: Execute a sensitive function module directly using SE37.
+
+  **Recommended for Production only**
+
+  Sensitive functions should be maintained in "SAP - Sensitive Function Modules" Watchlist.
+
+  *Data Sources: SAPcon -  Table Data Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  // SAP - Execution of Sensitive Function Module
+  // Actual lookback is set by setting AuditTimeAgo
+  let AuditTimeAgo= 75m;
+  let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = materialize(SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole);
+  let SenseModules =  _GetWatchlist('SAP - Sensitive Function Modules');
+  let fixedModules = datatable(FunctionModule:string)['RSAU_CLEAR_AUDIT_LOG','BAPI_USER_CREATE', 'RFC_GET_TABLE_ENTRIES'];
+  let UnitedModules = toscalar(union fixedModules, SenseModules
+  | summarize FunctionModules =  make_set(trim(@"\s+",FunctionModule),1024));
+  // here you can exclude system users which are OK to execute a Sensitive function module
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'ExecuteSensitiveFMOK'
+  // can also specify SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['ExecuteSensitiveFMOK','SAP_ALL']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  SAPAuditLog
+      | where TimeGenerated > (AuditTimeAgo + 1h)// cover possible ingestion latency
+      | where MessageID == "BU4"
+      | where ABAPProgramName == "RS_TESTFRAME_CALL"
+      | where Variable3 endswith_cs "FT" // function test
+      | join kind= inner SelectedSystems on SystemID
+      | where UpdatedOn_t > ago(AuditTimeAgo)
+      | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+      | extend Module= tostring(split(trim_end("FT", Variable3),"=",0)[0])
+      | lookup kind=inner SenseModules on $left.Module == $right.FunctionModule // Module is sensitive
+      // can also allow users which are OK to run specific function modules, by specifying those in the 'SAP - Sensitive Function Modules' watchlist
+      | where parse_csv(column_ifexists("UsersExcluded", ",")) !has User
+      | distinct Instance ,SystemID, User, ClientID, Email, TerminalIPv6, Host, Module, MessageText, SystemRole, UpdatedOn_t
+      | extend PackedDetails= pack_all()
+      | extend AlertName= strcat('Sensitive Function Module ', Module, ' was executed by user ', User, ' in a ', tolower(SystemRole), ' system'), Dummy=' '
+      | extend AlertDescription= strcat(AlertName, ".\n ", MessageText)
+      | extend AlertRuleUniqueName = 'executionofsensitivefunctionmodule'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

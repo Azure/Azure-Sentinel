@@ -1,0 +1,1046 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "SAP - Lock User (Agentless Basic)",
+        "description": "This playbook locks an SAP user when triggered by a Microsoft Sentinel incident. It dynamically finds SAP-specific alert details across all alerts in the incident, supporting complex multi-alert incidents from Defender XDR.",
+        "prerequisites": "1. SAP Integration Suite (CPI) with user lock/unlock iFlow deployed. 2. OAuth client credentials for SAP BTP. 3. Microsoft Teams channel for notifications. 4. Sentinel Responder role for the Logic App managed identity.",
+        "lastUpdateTime": "2026-04-14T00:00:00.000Z",
+        "entities": ["Account"],
+        "tags": ["SAP"],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Martin Pankraz"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SAPLockUserAgentless-Basic",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App resource to be created"
+            }
+        },
+        "DefaultAdminEmail": {
+            "type": "string",
+            "metadata": {
+                "description": "Email (UPN) of the admin to notify on playbook errors via Teams bot chat"
+            }
+        },
+        "SAPOAuthTokenEndpoint": {
+            "type": "string",
+            "metadata": {
+                "description": "OAuth2 token endpoint for SAP Integration Suite (e.g. https://<subdomain>.authentication.<region>.hana.ondemand.com/oauth/token)"
+            }
+        },
+        "SAPOAuthClientId": {
+            "type": "securestring",
+            "metadata": {
+                "description": "OAuth2 client ID for SAP Integration Suite"
+            }
+        },
+        "SAPOAuthClientSecret": {
+            "type": "securestring",
+            "metadata": {
+                "description": "OAuth2 client secret for SAP Integration Suite"
+            }
+        },
+        "SAPClientId": {
+            "type": "string",
+            "defaultValue": "100",
+            "metadata": {
+                "description": "SAP MANDT (client number, 3-digit, e.g. 100)"
+            }
+        },
+        "TeamsTeamId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Microsoft Teams Team ID for incident notifications (configure post-deployment if unknown)"
+            }
+        },
+        "TeamsChannelId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Microsoft Teams Channel ID for incident notifications (configure post-deployment if unknown)"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "teams": "[concat('teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('teams')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('teams'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "DefaultEmail": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "SAPOAuthTokenEndpoint": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "SAPOAuthClientId": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "SAPOAuthClientSecret": {
+                            "defaultValue": "",
+                            "type": "SecureString"
+                        },
+                        "SAPClientId": {
+                            "defaultValue": "100",
+                            "type": "String"
+                        },
+                        "TeamsChannel": {
+                            "defaultValue": {
+                                "channelID": "",
+                                "teamID": ""
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_variables": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SAP_User",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "SidGuid",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "AgentGuid",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "AlertDescription",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "name": "IncidentTitle",
+                                        "type": "string",
+                                        "value": "@{replace(replace(replace(replace(coalesce(triggerBody()?['object']?['properties']?['title'], ''), '\\', '\\\\'), '\"', '\\\"'), decodeUriComponent('%0A'), ' '), decodeUriComponent('%0D'), '')}"
+                                    },
+                                    {
+                                        "name": "TeamsChannel",
+                                        "type": "object",
+                                        "value": "@parameters('TeamsChannel')"
+                                    },
+                                    {
+                                        "name": "DefaultAdminEmail",
+                                        "type": "string",
+                                        "value": "@parameters('DefaultEmail')"
+                                    },
+                                    {
+                                        "name": "Sentinel_Tactics",
+                                        "type": "string",
+                                        "value": "@{replace(replace(replace(string(triggerBody()?['object']?['properties']?['additionalData']?['tactics']), '[', ''), ']', ''), '\"', '')}"
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Scope_Extract_SAP_Details": {
+                            "type": "Scope",
+                            "actions": {
+                                "Filter_SAP_Alerts": {
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@triggerBody()?['object']?['properties']?['alerts']",
+                                        "where": "@and(contains(coalesce(item()?['properties']?['additionalData']?['Custom Details'], ''), 'SAP_User'), contains(coalesce(item()?['properties']?['additionalData']?['Custom Details'], ''), 'AgentGuid'))"
+                                    }
+                                },
+                                "Condition_SAP_Alert_Found": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Filter_SAP_Alerts'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Compose_Custom_Details_String": {
+                                            "type": "Compose",
+                                            "inputs": "@first(body('Filter_SAP_Alerts'))?['properties']?['additionalData']?['Custom Details']"
+                                        },
+                                        "Parse_SAP_Custom_Details": {
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@json(outputs('Compose_Custom_Details_String'))",
+                                                "schema": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "SAP_User": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "SidGuid": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "AgentGuid": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "TransactionCode": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "AlertRuleUniqueName": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Compose_Custom_Details_String": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Set_SAP_User": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "SAP_User",
+                                                "value": "@{body('Parse_SAP_Custom_Details')?['SAP_User']?[0]}"
+                                            },
+                                            "runAfter": {
+                                                "Parse_SAP_Custom_Details": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Set_SidGuid": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "SidGuid",
+                                                "value": "@{coalesce(body('Parse_SAP_Custom_Details')?['SidGuid']?[0], '')}"
+                                            },
+                                            "runAfter": {
+                                                "Parse_SAP_Custom_Details": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Set_AgentGuid": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "AgentGuid",
+                                                "value": "@{coalesce(body('Parse_SAP_Custom_Details')?['AgentGuid']?[0], '')}"
+                                            },
+                                            "runAfter": {
+                                                "Parse_SAP_Custom_Details": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        },
+                                        "Set_AlertDescription": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "AlertDescription",
+                                                "value": "@{replace(replace(replace(replace(coalesce(first(body('Filter_SAP_Alerts'))?['properties']?['description'], triggerBody()?['object']?['properties']?['title']), '\\', '\\\\'), '\"', '\\\"'), decodeUriComponent('%0A'), ' '), decodeUriComponent('%0D'), '')}"
+                                            },
+                                            "runAfter": {
+                                                "Parse_SAP_Custom_Details": [
+                                                    "Succeeded"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_no_SAP_alert": {
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>SAP Lock User playbook: No SAP alert with actionable Custom Details (SAP_User + AgentGuid) was found across all @{length(triggerBody()?['object']?['properties']?['alerts'])} alerts in this incident. Manual review recommended.</p>"
+                                                    },
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            },
+                                            "Terminate_no_SAP_alert": {
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Succeeded"
+                                                },
+                                                "runAfter": {
+                                                    "Add_comment_no_SAP_alert": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Filter_SAP_Alerts": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variables": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Scope_Incident_Response": {
+                            "type": "Scope",
+                            "actions": {
+                                "Post_adaptive_card_and_wait": {
+                                    "type": "ApiConnectionWebhook",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "body": {
+                                            "notificationUrl": "@{listCallbackUrl()}",
+                                            "body": {
+                                                "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"Container\",\n            \"style\": \"emphasis\",\n            \"items\": [\n                {\n                    \"type\": \"ColumnSet\",\n                    \"columns\": [\n                        {\n                            \"type\": \"Column\",\n                            \"items\": [\n                                {\n                                    \"type\": \"TextBlock\",\n                                    \"size\": \"Large\",\n                                    \"weight\": \"Bolder\",\n                                    \"text\": \"SAP Security Incident\"\n                                }\n                            ],\n                            \"width\": \"stretch\"\n                        },\n                        {\n                            \"type\": \"Column\",\n                            \"width\": \"auto\",\n                            \"style\": \"attention\",\n                            \"items\": [\n                                {\n                                    \"type\": \"RichTextBlock\",\n                                    \"inlines\": [\n                                        {\n                                            \"type\": \"TextRun\",\n                                            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n                                        }\n                                    ]\n                                }\n                            ]\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"spacing\": \"Medium\",\n                    \"size\": \"Medium\",\n                    \"weight\": \"Bolder\",\n                    \"color\": \"Accent\",\n                    \"text\": \"@{variables('IncidentTitle')}\",\n                    \"wrap\": true\n                },\n                {\n                    \"type\": \"ActionSet\",\n                    \"actions\": [\n                        {\n                            \"type\": \"Action.OpenUrl\",\n                            \"title\": \"View incident\",\n                            \"url\": \"@{triggerBody()?['object']?['properties']?['incidentUrl']}\",\n                            \"id\": \"openSentinel\"\n                        }\n                    ]\n                }\n            ],\n            \"bleed\": true\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": [\n                {\n                    \"type\": \"FactSet\",\n                    \"spacing\": \"Large\",\n                    \"facts\": [\n                        {\n                            \"title\": \"SAP User\",\n                            \"value\": \"@{variables('SAP_User')}\"\n                        },\n                        {\n                            \"title\": \"System (RFC Dest)\",\n                            \"value\": \"@{variables('SidGuid')}\"\n                        },\n                        {\n                            \"title\": \"Created (UTC)\",\n                            \"value\": \"@{triggerBody()?['object']?['properties']?['createdTimeUtc']}\"\n                        },\n                        {\n                            \"title\": \"Tactics\",\n                            \"value\": \"@{variables('Sentinel_Tactics')}\"\n                        }\n                    ]\n                },\n                {\n                    \"type\": \"TextBlock\",\n                    \"text\": \"@{variables('AlertDescription')}\",\n                    \"wrap\": true\n                }\n            ]\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Block User on...\",\n            \"style\": \"destructive\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.ChoiceSet\",\n                        \"id\": \"WhereToLockUser\",\n                        \"label\": \"On which system?\",\n                        \"style\": \"expanded\",\n                        \"choices\": [\n                            {\n                                \"title\": \"SAP ERP\",\n                                \"value\": \"erp\"\n                            },\n                            {\n                                \"title\": \"SAP Cloud Identity Service (BTP)\",\n                                \"value\": \"btp\"\n                            },\n                            {\n                                \"title\": \"Microsoft Entra ID (globally)\",\n                                \"value\": \"aad\"\n                            }\n                        ],\n                        \"value\": \"erp\",\n                        \"isRequired\": true,\n                        \"errorMessage\": \"Please select a target system\"\n                    },\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"blockComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"block\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        },\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Flag as false positive\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"flagComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"flag\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.4\",\n    \"fallbackText\": \"This card requires Adaptive Cards v1.4 support.\"\n}",
+                                                "updateMessage": "Thanks for keeping SAP on Azure secure!",
+                                                "recipient": {
+                                                    "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                    "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                }
+                                            }
+                                        },
+                                        "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                    },
+                                    "limit": {
+                                        "timeout": "PT30M"
+                                    }
+                                },
+                                "Parse_card_response": {
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Post_adaptive_card_and_wait')",
+                                        "schema": {
+                                            "properties": {
+                                                "data": {
+                                                    "properties": {
+                                                        "WhereToLockUser": {
+                                                            "type": "string"
+                                                        },
+                                                        "blockComment": {
+                                                            "type": "string"
+                                                        },
+                                                        "flagComment": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "messageId": {
+                                                    "type": "string"
+                                                },
+                                                "submitActionId": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Post_adaptive_card_and_wait": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Condition_block_or_flag": {
+                                    "type": "If",
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_card_response')?['submitActionId']",
+                                                    "block"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Switch_lock_target": {
+                                            "type": "Switch",
+                                            "expression": "@body('Parse_card_response')?['data']?['WhereToLockUser']",
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "cases": {
+                                                "Case_ERP": {
+                                                    "actions": {
+                                                        "Get_OAuth_token_for_SAP": {
+                                                            "type": "Http",
+                                                            "inputs": {
+                                                                "uri": "@{parameters('SAPOAuthTokenEndpoint')}",
+                                                                "method": "POST",
+                                                                "headers": {
+                                                                    "Content-Type": "application/x-www-form-urlencoded"
+                                                                },
+                                                                "body": "grant_type=client_credentials",
+                                                                "authentication": {
+                                                                    "type": "Basic",
+                                                                    "username": "@{parameters('SAPOAuthClientId')}",
+                                                                    "password": "@{parameters('SAPOAuthClientSecret')}"
+                                                                }
+                                                            },
+                                                            "runtimeConfiguration": {
+                                                                "contentTransfer": {
+                                                                    "transferMode": "Chunked"
+                                                                },
+                                                                "secureData": {
+                                                                    "properties": [
+                                                                        "outputs"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        },
+                                                        "Block_User_via_SAP": {
+                                                            "type": "Http",
+                                                            "inputs": {
+                                                                "uri": "@{variables('AgentGuid')}/http/community/sentinel/sap-user-block",
+                                                                "method": "POST",
+                                                                "headers": {
+                                                                    "Content-Type": "application/json",
+                                                                    "rfcDestinationName": "@{variables('SidGuid')}"
+                                                                },
+                                                                "body": {
+                                                                    "Action": "block",
+                                                                    "SAPUserName": "@{variables('SAP_User')}",
+                                                                    "IT_R_MANDT": "@{parameters('SAPClientId')}"
+                                                                },
+                                                                "authentication": {
+                                                                    "type": "Raw",
+                                                                    "value": "Bearer @{body('Get_OAuth_token_for_SAP')?['access_token']}"
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Get_OAuth_token_for_SAP": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        },
+                                                        "Condition_SAP_Block_success": {
+                                                            "type": "If",
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "greaterOrEquals": [
+                                                                            "@outputs('Block_User_via_SAP')['statusCode']",
+                                                                            200
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "less": [
+                                                                            "@outputs('Block_User_via_SAP')['statusCode']",
+                                                                            300
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "actions": {
+                                                                "Reply_success_in_channel": {
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "body": {
+                                                                            "parentMessageId": "@body('Parse_card_response')?['messageId']",
+                                                                            "recipient": {
+                                                                                "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                                "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                            },
+                                                                            "messageBody": "<p>✅ SAP User <b>@{variables('SAP_User')}</b> locked on system <b>@{variables('SidGuid')}</b>!</p>"
+                                                                        },
+                                                                        "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                    }
+                                                                },
+                                                                "Close_Sentinel_incident": {
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "put",
+                                                                        "body": {
+                                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                            "status": "Closed",
+                                                                            "classification": {
+                                                                                "ClassificationAndReason": "TruePositive - SuspiciousActivity",
+                                                                                "ClassificationReasonText": "@{coalesce(body('Parse_card_response')?['data']?['blockComment'], 'User locked via SAP Lock User playbook')}"
+                                                                            }
+                                                                        },
+                                                                        "path": "/Incidents"
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Reply_success_in_channel": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "Post_user_unblock_option": {
+                                                                    "type": "ApiConnectionWebhook",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "body": {
+                                                                            "notificationUrl": "@{listCallbackUrl()}",
+                                                                            "body": {
+                                                                                "messageBody": "{\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.4\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Option to unblock SAP ERP user @{variables('SAP_User')} on system @{variables('SidGuid')}\",\n            \"size\": \"Medium\",\n            \"weight\": \"Bolder\",\n            \"wrap\": true\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Unblock user\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                \"body\": [\n                    {\n                        \"type\": \"Input.Text\",\n                        \"id\": \"unlockComment\",\n                        \"placeholder\": \"Add a comment\",\n                        \"isMultiline\": true\n                    }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"id\": \"unlock\",\n                        \"title\": \"Submit\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.4\"\n            }\n        }\n    ]\n}",
+                                                                                "updateMessage": "Unblock window closed. Review the incident manually if the account should be re-enabled.",
+                                                                                "recipient": {
+                                                                                    "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                                    "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Close_Sentinel_incident": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "limit": {
+                                                                        "timeout": "PT30M"
+                                                                    }
+                                                                },
+                                                                "Parse_unblock_response": {
+                                                                    "type": "ParseJson",
+                                                                    "inputs": {
+                                                                        "content": "@body('Post_user_unblock_option')",
+                                                                        "schema": {
+                                                                            "properties": {
+                                                                                "data": {
+                                                                                    "properties": {
+                                                                                        "unlockComment": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "messageId": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "submitActionId": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Post_user_unblock_option": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "Condition_unblock_chosen": {
+                                                                    "type": "If",
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@body('Parse_unblock_response')?['submitActionId']",
+                                                                                    "unlock"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "actions": {
+                                                                        "Get_OAuth_token_for_SAP_unblock": {
+                                                                            "type": "Http",
+                                                                            "inputs": {
+                                                                                "uri": "@{parameters('SAPOAuthTokenEndpoint')}",
+                                                                                "method": "POST",
+                                                                                "headers": {
+                                                                                    "Content-Type": "application/x-www-form-urlencoded"
+                                                                                },
+                                                                                "body": "grant_type=client_credentials",
+                                                                                "authentication": {
+                                                                                    "type": "Basic",
+                                                                                    "username": "@{parameters('SAPOAuthClientId')}",
+                                                                                    "password": "@{parameters('SAPOAuthClientSecret')}"
+                                                                                }
+                                                                            },
+                                                                            "runtimeConfiguration": {
+                                                                                "contentTransfer": {
+                                                                                    "transferMode": "Chunked"
+                                                                                },
+                                                                                "secureData": {
+                                                                                    "properties": [
+                                                                                        "outputs"
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "Unblock_User_via_SAP": {
+                                                                            "type": "Http",
+                                                                            "inputs": {
+                                                                                "uri": "@{variables('AgentGuid')}/http/community/sentinel/sap-user-block",
+                                                                                "method": "POST",
+                                                                                "headers": {
+                                                                                    "Content-Type": "application/json",
+                                                                                    "rfcDestinationName": "@{variables('SidGuid')}"
+                                                                                },
+                                                                                "body": {
+                                                                                    "Action": "unblock",
+                                                                                    "SAPUserName": "@{variables('SAP_User')}",
+                                                                                    "IT_R_MANDT": "@{parameters('SAPClientId')}"
+                                                                                },
+                                                                                "authentication": {
+                                                                                    "type": "Raw",
+                                                                                    "value": "Bearer @{body('Get_OAuth_token_for_SAP_unblock')?['access_token']}"
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "Get_OAuth_token_for_SAP_unblock": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            }
+                                                                        },
+                                                                        "Condition_SAP_Unblock_success": {
+                                                                            "type": "If",
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "greaterOrEquals": [
+                                                                                            "@outputs('Unblock_User_via_SAP')['statusCode']",
+                                                                                            200
+                                                                                        ]
+                                                                                    },
+                                                                                    {
+                                                                                        "less": [
+                                                                                            "@outputs('Unblock_User_via_SAP')['statusCode']",
+                                                                                            300
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "actions": {
+                                                                                "Reply_unblock_success_in_channel": {
+                                                                                    "type": "ApiConnection",
+                                                                                    "inputs": {
+                                                                                        "host": {
+                                                                                            "connection": {
+                                                                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method": "post",
+                                                                                        "body": {
+                                                                                            "parentMessageId": "@body('Parse_unblock_response')?['messageId']",
+                                                                                            "recipient": {
+                                                                                                "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                                                "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                                            },
+                                                                                            "messageBody": "<p>✅ SAP User <b>@{variables('SAP_User')}</b> unblocked on system <b>@{variables('SidGuid')}</b>!</p>"
+                                                                                        },
+                                                                                        "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "else": {
+                                                                                "actions": {
+                                                                                    "Reply_unblock_error_in_channel": {
+                                                                                        "type": "ApiConnection",
+                                                                                        "inputs": {
+                                                                                            "host": {
+                                                                                                "connection": {
+                                                                                                    "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                                                }
+                                                                                            },
+                                                                                            "method": "post",
+                                                                                            "body": {
+                                                                                                "parentMessageId": "@body('Parse_unblock_response')?['messageId']",
+                                                                                                "recipient": {
+                                                                                                    "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                                                    "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                                                },
+                                                                                                "messageBody": "<p>❌ SAP User <b>@{variables('SAP_User')}</b> could not be unblocked. Error (code @{outputs('Unblock_User_via_SAP')['statusCode']}): @{body('Unblock_User_via_SAP')}</p>"
+                                                                                            },
+                                                                                            "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "Unblock_User_via_SAP": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {}
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Parse_unblock_response": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Reply_error_in_channel": {
+                                                                        "type": "ApiConnection",
+                                                                        "inputs": {
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "body": {
+                                                                                "parentMessageId": "@body('Parse_card_response')?['messageId']",
+                                                                                "recipient": {
+                                                                                    "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                                    "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                                },
+                                                                                "messageBody": "<p>❌ SAP User <b>@{variables('SAP_User')}</b> could not be locked. Error (code @{outputs('Block_User_via_SAP')['statusCode']}): @{body('Block_User_via_SAP')}</p>"
+                                                                            },
+                                                                            "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Block_User_via_SAP": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            }
+                                                        }
+                                                    },
+                                                    "case": "erp"
+                                                },
+                                                "Case_AAD": {
+                                                    "actions": {
+                                                        "Reply_AAD_placeholder": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": {
+                                                                    "parentMessageId": "@body('Parse_card_response')?['messageId']",
+                                                                    "recipient": {
+                                                                        "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                        "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                    },
+                                                                    "messageBody": "<p>ℹ️ User <b>@{variables('SAP_User')}</b> would be disabled on Microsoft Entra ID. Add the Entra ID connector \"Disable user\" action to this playbook to enable this feature.</p>"
+                                                                },
+                                                                "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "case": "aad"
+                                                },
+                                                "Case_BTP": {
+                                                    "actions": {
+                                                        "Reply_BTP_placeholder": {
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "body": {
+                                                                    "parentMessageId": "@body('Parse_card_response')?['messageId']",
+                                                                    "recipient": {
+                                                                        "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                                        "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                                                    },
+                                                                    "messageBody": "<p>ℹ️ Implement SAP REST interfaces with SAP Cloud Identity Services or OAuth2 flow to lock users on XSUAA with property \"active:false\". See advanced version of this playbook as a blueprint.</p>"
+                                                                },
+                                                                "path": "/v1.0/teams/conversation/replyWithMessage/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "case": "btp"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Close_incident_false_positive": {
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "put",
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "status": "Closed",
+                                                        "classification": {
+                                                            "ClassificationAndReason": "FalsePositive - IncorrectAlertLogic",
+                                                            "ClassificationReasonText": "@{coalesce(body('Parse_card_response')?['data']?['flagComment'], 'Flagged as false positive via playbook')}"
+                                                        }
+                                                    },
+                                                    "path": "/Incidents"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_card_response": [
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                "Post_timeout_message": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": {
+                                            "recipient": {
+                                                "groupId": "@{variables('TeamsChannel')?['teamID']}",
+                                                "channelId": "@{variables('TeamsChannel')?['channelID']}"
+                                            },
+                                            "messageBody": "<p>⏰ SAP incident notification timed out after 30 minutes! Please review the incident manually in Sentinel/Defender portal.</p>"
+                                        },
+                                        "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                    },
+                                    "runAfter": {
+                                        "Post_adaptive_card_and_wait": [
+                                            "TimedOut",
+                                            "Skipped",
+                                            "Failed"
+                                        ]
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Scope_Extract_SAP_Details": [
+                                    "Succeeded"
+                                ]
+                            }
+                        },
+                        "Notify_admin_on_extraction_error": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "recipient": "@variables('DefaultAdminEmail')",
+                                    "messageBody": "<p>⚠️ SAP Lock User playbook: Failed to extract SAP details from the Sentinel incident. Please review the incident manually.<br><br>Incident: @{triggerBody()?['object']?['properties']?['title']}</p>",
+                                    "isAlert": true
+                                },
+                                "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                            },
+                            "runAfter": {
+                                "Scope_Extract_SAP_Details": [
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            }
+                        },
+                        "Notify_admin_on_processing_error": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "recipient": "@variables('DefaultAdminEmail')",
+                                    "messageBody": "<p>⚠️ SAP Lock User playbook: Incident response processing failed or timed out. Please review the incident and process it manually.<br><br>Incident: @{triggerBody()?['object']?['properties']?['title']}</p>",
+                                    "isAlert": true
+                                },
+                                "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
+                            },
+                            "runAfter": {
+                                "Scope_Incident_Response": [
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            }
+                        },
+                        "Terminate_success": {
+                            "type": "Terminate",
+                            "inputs": {
+                                "runStatus": "Succeeded"
+                            },
+                            "runAfter": {
+                                "Scope_Incident_Response": [
+                                    "Succeeded"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('teams'))]",
+                                "connectionName": "[variables('teams')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                            }
+                        }
+                    },
+                    "DefaultEmail": {
+                        "value": "[parameters('DefaultAdminEmail')]"
+                    },
+                    "SAPOAuthTokenEndpoint": {
+                        "value": "[parameters('SAPOAuthTokenEndpoint')]"
+                    },
+                    "SAPOAuthClientId": {
+                        "value": "[parameters('SAPOAuthClientId')]"
+                    },
+                    "SAPOAuthClientSecret": {
+                        "value": "[parameters('SAPOAuthClientSecret')]"
+                    },
+                    "SAPClientId": {
+                        "value": "[parameters('SAPClientId')]"
+                    },
+                    "TeamsChannel": {
+                        "value": {
+                            "channelID": "[parameters('TeamsChannelId')]",
+                            "teamID": "[parameters('TeamsTeamId')]"
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
