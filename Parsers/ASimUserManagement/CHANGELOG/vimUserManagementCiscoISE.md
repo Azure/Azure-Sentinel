@@ -1,5 +1,9 @@
 # Changelog for vimUserManagementCiscoISE.yaml
 
+## Version 0.1.3
+
+- (2026-11-12) Change regex for extracting EventOriginalType - [PR #15640](https://github.com/Azure/Azure-Sentinel/pull/15640)
+
 ## Version 0.1.2
 
 - (2024-03-06) Updating UserManagement Parsers - [PR #10099](https://github.com/Azure/Azure-Sentinel/pull/10099)
