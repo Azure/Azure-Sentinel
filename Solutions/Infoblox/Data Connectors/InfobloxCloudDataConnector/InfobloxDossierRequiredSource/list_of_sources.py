@@ -6,6 +6,7 @@ from ..SharedCode.infoblox_exception import InfobloxException
 from ..SharedCode import consts
 from ..SharedCode.logger import applogger
 from ..SharedCode.utils import Utils
+from ..SharedCode.input_validation import escape_kql_string
 from azure.monitor.query import LogsQueryClient, LogsQueryStatus
 from azure.identity import ClientSecretCredential
 
@@ -41,6 +42,18 @@ class DossierListSources(Utils):
             tenant_id=consts.AZURE_TENANT_ID,
         )
         client = LogsQueryClient(credential)
+        if ioc_type not in consts.SOURCES:
+            applogger.error(
+                self.log_format.format(
+                    consts.LOGS_STARTS_WITH,
+                    __method_name,
+                    self.azure_function_name,
+                    "Unsupported IOC type.",
+                )
+            )
+            raise InfobloxException()
+        ioc_type = escape_kql_string(ioc_type)
+        ioc_val = escape_kql_string(ioc_val)
         query = """let dummyschema = datatable"""
         query += """(TimeGenerated:datetime, params_type:string, params_target:string, Count:int)[];"""
         for val in consts.SOURCES.get(ioc_type):
