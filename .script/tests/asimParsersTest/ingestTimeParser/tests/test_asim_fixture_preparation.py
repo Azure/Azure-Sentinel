@@ -340,6 +340,45 @@ class FixturePreparationTests(unittest.TestCase):
         self.assertEqual("Contoso_CL", artifact["sourceRawTable"])
         self.assertEqual("inferred", artifact["schemaSource"])
 
+    def test_inferred_schema_excludes_only_reserved_columns(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,TenantId,_TimeReceived,_ItemId,"
+            "_ResourceId,_SubscriptionId,_IsBillable,_BilledSize,"
+            "id,_ResourceId_s,MG,Title,UniqueId,verbose,verbose_b,Value\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,tenant,"
+            "2026-01-01T00:00:01Z,item,resource,subscription,true,1,"
+            "record-id,resource-s,mg,title,unique,verbose,true,value\n"
+        )
+
+        artifact = self.prepare(fixture)
+
+        schema_names = {
+            column["name"] for column in artifact["schema"]
+        }
+        self.assertTrue(
+            {
+                "TenantId",
+                "Type",
+                "_TimeReceived",
+                "_ItemId",
+                "_ResourceId",
+                "_SubscriptionId",
+                "_IsBillable",
+                "_BilledSize",
+            }.isdisjoint(schema_names)
+        )
+        self.assertTrue(
+            {
+                "id",
+                "_ResourceId_s",
+                "MG",
+                "Title",
+                "UniqueId",
+                "verbose",
+                "verbose_b",
+            }.issubset(schema_names)
+        )
+
     def test_canonicalizes_fixture_columns_to_schema_casing(self):
         fixture = self.write_fixture(
             "TimeGenerated,Type,DvcOS,DvcOSName\n"
