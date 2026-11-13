@@ -2,7 +2,7 @@
 
 ## Version 0.1.4
 
-- (2026-11-12) Preserve query-only Login History V2 fields in AdditionalFields.QueryTimeFields and project physical destination columns.
+- (2026-11-12) Preserve query-only Login History V2 fields in AdditionalFields.QueryTimeFields and project physical destination columns - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)
 - Retain the existing parse_ipv4/parse_ipv6 source IP validation and source normalization; runtime validation remains outstanding.
 
 ## Version 0.1.2

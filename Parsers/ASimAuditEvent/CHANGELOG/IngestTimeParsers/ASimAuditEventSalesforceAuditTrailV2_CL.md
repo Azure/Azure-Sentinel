@@ -2,7 +2,7 @@
 
 ## Version 0.1.3
 
-- (2026-11-12) Preserve query-only Audit Trail V2 fields in AdditionalFields.QueryTimeFields and project physical destination columns.
+- (2026-11-12) Preserve query-only Audit Trail V2 fields in AdditionalFields.QueryTimeFields and project physical destination columns - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)
 - Retain the existing grouped Section mappings, localized KQL escapes, source normalization, and filter; runtime validation remains outstanding.
 
 ## Version 0.1.2
