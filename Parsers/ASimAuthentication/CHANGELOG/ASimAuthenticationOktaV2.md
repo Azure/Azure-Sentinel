@@ -1,5 +1,9 @@
 # Changelog for ASimAuthenticationOktaV2.yaml
 
+## Version 0.4.2
+
+- (2026-11-10) Align the emitted EventSchemaVersion with Authentication schema version 0.1.4 - [PR #15651](https://github.com/Azure/Azure-Sentinel/pull/15651)
+
 ## Version 0.4.1
 
 - (2026-08-20) Fixed `TargetUsername` and `TargetUserIdType`, which read the raw `OktaV2_CL` columns instead of the values assigned by sibling clauses of the same `extend`. This also corrects `TargetUsernameType` and the `User` alias - [PR #14957](https://github.com/Azure/Azure-Sentinel/pull/14957)
@@ -33,4 +37,3 @@
 ## Version 0.1.0
 
 - (2021-06-24) First commit - take 2 - [PR #2553](https://github.com/Azure/Azure-Sentinel/pull/2553)
-
