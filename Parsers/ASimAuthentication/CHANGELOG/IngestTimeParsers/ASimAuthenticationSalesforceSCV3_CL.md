@@ -1,5 +1,11 @@
 # Changelog for ASimAuthenticationSalesforceSCV3_CL.yaml
 
+## Version 0.2.2
+
+- (2026-11-13) Align the Authentication schema version and unknown-user-agent OS fallback with the current query-time counterpart - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)
+- Emit EventSchemaVersion 1.0.0 and DvcOs Other for unrecognized user agents; other OS parsing remains deliberately limited.
+- Preserve AdditionalFields.QueryTimeFields and the post-connector input contract; the storage-shape parity discrepancy remains unresolved.
+
 ## Version 0.2.1
 
 - (2026-11-12) Add the Salesforce Service Cloud V3 Authentication ingestion-time definition - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)
