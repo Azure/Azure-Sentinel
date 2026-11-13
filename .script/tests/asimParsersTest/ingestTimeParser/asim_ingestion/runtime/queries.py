@@ -422,31 +422,6 @@ def build_query_time_parser_query(
     )
 
 
-def build_ingestion_time_parser_query(
-    parser_document: Mapping[str, Any],
-    source_table: str,
-    timestamps: Sequence[str],
-) -> str:
-    parser_query = parser_document.get("ParserQuery")
-    if not isinstance(parser_query, str) or not parser_query.strip():
-        raise ValidationError(
-            "itp-execution",
-            "Ingestion-time parser is missing ParserQuery.",
-        )
-    source_table = _require_identifier(
-        source_table, "ingestion-time source table"
-    )
-    timestamp_literals = _timestamp_literals(timestamps)
-    return (
-        "let source = materialize("
-        f"table({_quote_kql_string(source_table)})"
-        f" | where TimeGenerated in ({timestamp_literals}));\n"
-        + parser_query.strip()
-        + "\n"
-        + f"| where TimeGenerated in ({timestamp_literals})"
-    )
-
-
 def _load_tester_query(repo_root: Path, tester_name: str) -> str:
     path = (
         repo_root

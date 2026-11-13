@@ -235,62 +235,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                 ],
             )
 
-    def test_snapshot_declares_but_does_not_upload_managed_columns(self):
-        timestamp = "2026-10-16T19:55:00.1234567Z"
-        snapshot = build_fixture_snapshot(
-            target_id="parser-a",
-            table_name="Contoso_CL",
-            timestamps=[timestamp],
-            schema=[
-                {"name": "TimeGenerated", "type": "datetime"},
-                {"name": "Value", "type": "string"},
-                {"name": "TenantId", "type": "string"},
-            ],
-            fixture_rows=[
-                {
-                    "TimeGenerated": timestamp,
-                    "Value": "one",
-                    "TenantId": "tenant",
-                    "Type": "Contoso_CL",
-                    "id": "event-1",
-                    "_ResourceId": "/subscriptions/example",
-                }
-            ],
-        )
-
-        self.assertEqual(2, snapshot["version"])
-        self.assertEqual(
-            {
-                "TimeGenerated",
-                "Value",
-                "TenantId",
-                "Type",
-                "id",
-                "_ResourceId",
-            },
-            {column["name"] for column in snapshot["schema"]},
-        )
-        self.assertEqual(
-            ["TimeGenerated", "Value"],
-            [
-                column["name"]
-                for column in snapshot["replaySchema"]
-            ],
-        )
-        self.assertEqual(
-            {"TimeGenerated": timestamp, "Value": "one"},
-            snapshot["rows"][0],
-        )
-        self.assertEqual(
-            {
-                "TenantId",
-                "Type",
-                "id",
-                "_ResourceId",
-            },
-            set(snapshot["platformManagedColumns"]),
-        )
-
     def test_builds_exact_timestamp_query(self):
         query = HARNESS.build_exact_timestamp_query(
             "Contoso_CL",
@@ -865,19 +809,12 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             [entry["status"] for entry in result["cleanup"]],
         )
         self.assertEqual("prepared-fixture", snapshot["authority"])
-        self.assertEqual(["Type"], snapshot["excludedColumns"])
+        self.assertEqual([], snapshot["excludedColumns"])
         self.assertEqual(
             ["TimeGenerated", "Value", "Type"],
             [column["name"] for column in snapshot["schema"]],
         )
-        self.assertEqual(
-            ["TimeGenerated", "Value"],
-            [
-                column["name"]
-                for column in snapshot["replaySchema"]
-            ],
-        )
-        self.assertNotIn("Type", snapshot["rows"][0])
+        self.assertEqual("Contoso_CL", snapshot["rows"][0]["Type"])
         self.assertIsNone(result["rawDcr"])
         self.assertEqual(
             "not-applicable",
@@ -1477,14 +1414,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "Type",
             {column["name"] for column in parser_columns},
         )
-        self.assertIn(
-            "TenantId",
-            {column["name"] for column in parser_columns},
-        )
-        self.assertIn(
-            "id",
-            {column["name"] for column in parser_columns},
-        )
         self.assertNotIn(
             "Type",
             {column["name"] for column in raw_columns},
@@ -1493,7 +1422,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "TenantId",
             {column["name"] for column in raw_columns},
         )
-        self.assertNotIn(
+        self.assertIn(
             "id",
             {column["name"] for column in raw_columns},
         )
@@ -1527,20 +1456,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         )
         self.assertEqual(1, validation_runner.output_calls)
         self.assertEqual(1, validation_runner.parity_calls)
-        upload_calls = [
-            call
-            for call in session.calls
-            if call["method"] == "POST"
-            and "/dataCollectionRules/" in call["url"]
-        ]
-        self.assertEqual(2, len(upload_calls))
-        for call in upload_calls:
-            uploaded_row = json.loads(
-                call["data"].decode("utf-8")
-            )[0]
-            self.assertNotIn("Type", uploaded_row)
-            self.assertNotIn("TenantId", uploaded_row)
-            self.assertNotIn("id", uploaded_row)
 
     def test_workspace_parser_marks_qtp_replay_not_applicable(self):
         timestamp = "2026-10-16T19:55:00.1234567Z"

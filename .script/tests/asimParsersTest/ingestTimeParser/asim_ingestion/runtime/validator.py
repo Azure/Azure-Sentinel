@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from asim_ingestion.columns import is_platform_managed_column
-
 from .parity import compare_parser_outputs
 from .queries import (
     QueryClient,
@@ -20,9 +18,11 @@ from .queries import (
     build_asim_tester_query,
     build_exact_slice_expression,
     build_filter_count_query,
-    build_ingestion_time_parser_query,
     build_query_time_parser_query,
 )
+
+PARITY_EXCLUDED_COLUMNS = {"Type"}
+
 
 def _intersect_schemas(
     qtp_schema: Sequence[Mapping[str, str]],
@@ -42,7 +42,7 @@ def _intersect_schemas(
     for column in qtp_schema:
         name = str(column["name"])
         if (
-            is_platform_managed_column(name)
+            name in PARITY_EXCLUDED_COLUMNS
             or name not in itp_types
         ):
             continue
@@ -240,10 +240,12 @@ class AsimIngestionValidator:
         parser_document: Mapping[str, Any],
         query_time_document: Mapping[str, Any],
     ) -> Mapping[str, Any]:
+        target_table = parser_document.get("TargetASIMTable")
         source_table = parser_document.get("SourceRawTable")
         timestamps = source_snapshot.get("timestampValues")
         if (
-            not isinstance(source_table, str)
+            not isinstance(target_table, str)
+            or not isinstance(source_table, str)
             or not isinstance(timestamps, list)
         ):
             raise ValidationError(
@@ -264,14 +266,13 @@ class AsimIngestionValidator:
         )
         itp_schema, itp_rows = _normalize_query_table(
             query_client.query_kql(
-                build_ingestion_time_parser_query(
-                    parser_document,
-                    source_table,
+                build_exact_slice_expression(
+                    target_table,
                     timestamp_values,
                 ),
-                stage="itp-execution",
+                stage="target-output",
             ),
-            "itp-execution",
+            "target-output",
         )
         (
             intersect_schema,
@@ -300,11 +301,6 @@ class AsimIngestionValidator:
             "queryTimeExecution": {
                 "status": "passed",
                 "rowCount": len(qtp_rows),
-            },
-            "ingestTimeExecution": {
-                "status": "passed",
-                "rowCount": len(itp_rows),
-                "authority": "raw-source-query",
             },
             "parity": parity,
             "qtp_schema": qtp_schema,

@@ -740,12 +740,12 @@ class ReportTests(unittest.TestCase):
         )
         self.assertIn("Microsoft-SalesforceAuditTrail", summary)
 
-    def test_itp_execution_error_is_exposed_as_parity_failure(self):
+    def test_target_output_error_is_exposed_as_parity_failure(self):
         validation = self.base_validation()
         validation["status"] = "failed"
         validation["outputValidation"] = None
         validation["error"] = {
-            "stage": "itp-execution",
+            "stage": "target-output",
             "message": "POST failed with HTTP 400.",
             "details": {
                 "error": {

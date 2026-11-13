@@ -16,8 +16,6 @@ VALIDATION = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = VALIDATION
 SPEC.loader.exec_module(VALIDATION)
 
-from asim_ingestion.columns import PLATFORM_MANAGED_COLUMNS
-
 
 TIMESTAMP_1 = "2026-10-19T20:00:00.1234567Z"
 TIMESTAMP_2 = "2026-10-19T20:00:01.1234567Z"
@@ -233,29 +231,6 @@ class QueryConstructionTests(unittest.TestCase):
         )
         self.assertIn("disabled=false", query)
         self.assertIn("pack=true", query)
-
-    def test_builds_itp_query_over_exact_raw_source_slice(self):
-        query = VALIDATION.build_ingestion_time_parser_query(
-            {
-                "ParserQuery": (
-                    "source\n"
-                    "| project TimeGenerated, EventUid"
-                )
-            },
-            "Contoso_CL",
-            [TIMESTAMP_1],
-        )
-
-        self.assertIn(
-            "let source = materialize("
-            "table('Contoso_CL')"
-            f" | where TimeGenerated in (datetime({TIMESTAMP_1})));",
-            query,
-        )
-        self.assertIn(
-            "source\n| project TimeGenerated, EventUid",
-            query,
-        )
         self.assertIn(f"datetime({TIMESTAMP_1})", query)
 
     def test_qtp_query_omits_unsupported_pack_parameter(self):
@@ -700,7 +675,7 @@ class ParityTests(unittest.TestCase):
             "EventUid": "event-1",
             "AdditionalFields": {
                 "APIVersion": "2016-11-15",
-                "tenantid": "tenant",
+                "TenantId": "tenant",
                 "TimeGenerated": TIMESTAMP_1,
                 "Type": "Custom-Table",
                 "_ResourceId": "/subscriptions/example",
@@ -722,47 +697,6 @@ class ParityTests(unittest.TestCase):
 
         self.assertEqual("passed", result["status"])
 
-    def test_parity_ignores_all_platform_managed_columns(self):
-        schema = [
-            *self.schema(),
-            *[
-                {"name": name, "type": "string"}
-                for name in sorted(PLATFORM_MANAGED_COLUMNS)
-            ],
-        ]
-        expected = {
-            "TimeGenerated": TIMESTAMP_1,
-            "EventUid": "event-1",
-            **{
-                name: f"expected-{name}"
-                for name in PLATFORM_MANAGED_COLUMNS
-            },
-        }
-        actual = {
-            "TimeGenerated": TIMESTAMP_1,
-            "EventUid": "event-1",
-            **{
-                name: f"actual-{name}"
-                for name in PLATFORM_MANAGED_COLUMNS
-            },
-        }
-
-        result = VALIDATION.compare_parser_outputs(
-            expected_schema=schema,
-            expected_rows=[expected],
-            actual_schema=schema,
-            actual_rows=[actual],
-        )
-
-        self.assertEqual("passed", result["status"])
-        strict_result = VALIDATION.compare_parser_outputs(
-            expected_schema=schema,
-            expected_rows=[expected],
-            actual_schema=schema,
-            actual_rows=[dict(actual, EventUid="event-2")],
-        )
-        self.assertEqual("failed", strict_result["status"])
-
     def test_parity_rejects_additional_fields_key_or_shape_differences(self):
         schema = [
             *self.schema(),
@@ -773,7 +707,7 @@ class ParityTests(unittest.TestCase):
             ({"APIVersion": "2016-11-15"}, {"APIVersion": None, "Extra": 1}),
             ({"APIVersion": "2016-11-15"}, {"apiversion": "2016-11-15"}),
             (
-                {"APIVersion": "2016-11-15", "tenant_id": "tenant"},
+                {"APIVersion": "2016-11-15", "tenantid": "tenant"},
                 {"APIVersion": "2016-11-15"},
             ),
             ({"APIVersion": "2016-11-15"}, ["APIVersion"]),
@@ -1061,7 +995,7 @@ class OutputValidationTests(unittest.TestCase):
                     ),
                 ),
                 ("qtp-execution", self.qtp_output_table()),
-                ("itp-execution", self.itp_output_table()),
+                ("target-output", self.itp_output_table()),
             ]
         )
         qtp = {
@@ -1097,10 +1031,6 @@ class OutputValidationTests(unittest.TestCase):
         )
         self.assertEqual("passed", result["dataTest"]["status"])
         self.assertEqual("passed", result["parity"]["status"])
-        self.assertEqual(
-            "raw-source-query",
-            result["ingestTimeExecution"]["authority"],
-        )
         self.assertEqual(
             1,
             sum(
@@ -1174,19 +1104,12 @@ class OutputValidationTests(unittest.TestCase):
         )
         self.assertIn("disabled=false", qtp_query)
         self.assertIn("pack=true", qtp_query)
-        itp_query = next(
+        target_query = next(
             item["query"]
             for item in client.queries
-            if item["stage"] == "itp-execution"
+            if item["stage"] == "target-output"
         )
-        self.assertIn(
-            "let source = materialize(table('Contoso_CL')",
-            itp_query,
-        )
-        self.assertIn(
-            "source\n| project TimeGenerated, EventUid, EventVendor",
-            itp_query,
-        )
+        self.assertNotIn("| project", target_query)
 
     def test_parity_failure_returns_full_and_filtered_artifacts(self):
         client = FakeQueryClient(
@@ -1194,7 +1117,7 @@ class OutputValidationTests(unittest.TestCase):
                 ("asim-data", self.empty_tester_result()),
                 ("qtp-execution", self.qtp_output_table()),
                 (
-                    "itp-execution",
+                    "target-output",
                     self.itp_output_table(event_vendor="Different"),
                 ),
             ]
@@ -1231,7 +1154,7 @@ class OutputValidationTests(unittest.TestCase):
                 ("asim-data", self.empty_tester_result()),
                 ("qtp-execution", self.qtp_output_table()),
                 (
-                    "itp-execution",
+                    "target-output",
                     self.itp_output_table(different_type="long"),
                 ),
             ]

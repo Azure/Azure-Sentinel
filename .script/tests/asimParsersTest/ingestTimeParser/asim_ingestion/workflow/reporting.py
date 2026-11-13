@@ -19,9 +19,6 @@ OPTIONAL_STAGES = {
     "qtpExecution",
     "parity",
 }
-ITP_PARITY_EXECUTION_ERROR_STAGES = frozenset(
-    {"itp-execution", "target-output"}
-)
 
 
 def _read_optional_json(path: Path | None) -> Any:
@@ -557,11 +554,7 @@ def build_report(
             if isinstance(data_validation, Mapping)
             else "passed"
             if error_stage
-            in {
-                "qtp-execution",
-                *ITP_PARITY_EXECUTION_ERROR_STAGES,
-                "parity",
-            }
+            in {"qtp-execution", "target-output", "parity"}
             else "failed"
             if error_stage == "asim-data"
             else "not-run"
@@ -597,8 +590,7 @@ def build_report(
                 else str(qtp_execution.get("status"))
                 if isinstance(qtp_execution, Mapping)
                 else "passed"
-                if error_stage
-                in {*ITP_PARITY_EXECUTION_ERROR_STAGES, "parity"}
+                if error_stage in {"target-output", "parity"}
                 else "not-run"
             ),
             (
@@ -617,8 +609,7 @@ def build_report(
                 else str(parity_validation.get("status"))
                 if isinstance(parity_validation, Mapping)
                 else "failed"
-                if error_stage
-                in {*ITP_PARITY_EXECUTION_ERROR_STAGES, "parity"}
+                if error_stage in {"target-output", "parity"}
                 else "not-run"
             ),
             (
@@ -628,7 +619,7 @@ def build_report(
                 )
                 if error_stage == "parity"
                 else error_detail
-                if error_stage in ITP_PARITY_EXECUTION_ERROR_STAGES
+                if error_stage == "target-output"
                 else "Blocked because QTP execution failed."
                 if error_stage == "qtp-execution"
                 else str(parity_validation.get("detail") or "")
@@ -638,8 +629,7 @@ def build_report(
             parity_validation or (
                 error.get("details")
                 if isinstance(error, Mapping)
-                and error_stage
-                in {*ITP_PARITY_EXECUTION_ERROR_STAGES, "parity"}
+                and error_stage in {"target-output", "parity"}
                 else None
             ),
         )
