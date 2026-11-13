@@ -1,0 +1,37 @@
+id: 6f7a8b9c-0d1e-4f2a-3b4c-aabbccddeef6
+name: New peer connected without PQC - quantum protection not available
+description: |
+  A previously unseen peer was discovered and connected to the PQC VPN Overlay without post-quantum
+  key exchange. This peer is using classical WireGuard only and traffic is vulnerable to
+  harvest-now-decrypt-later. New peers should be provisioned with ML-KEM-768 hybrid key exchange
+  support from the start to ensure quantum-safe connectivity.
+severity: Informational
+requiredDataConnectors:
+  - connectorId: QCryptonPQCVPNOverlay
+    dataTypes:
+      - PQCVPNOverlay_CL
+queryFrequency: 1d
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  let knownPeers = PQCVPNOverlay_CL
+  | where TimeGenerated between (ago(2d) .. ago(1d))
+  | distinct PeerID_s;
+  PQCVPNOverlay_CL
+  | where TimeGenerated > ago(1d)
+  | where EventType_s == "peer_discovered"
+  | where PQCUsed_d == 0
+  | where PeerID_s !in (knownPeers)
+  | project TimeGenerated, PeerID_s, PeerAddress_s, KeyExchange_s, PolicyMode_s, HNDLRisk_d
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: PeerID_s
+version: 1.0.0
+kind: Scheduled

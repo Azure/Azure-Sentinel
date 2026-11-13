@@ -30,8 +30,8 @@ LABEL maintainer="Microsoft"
 
 # Install Git
 RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y git
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
 
 # Clone ARM-TTK Repo
 RUN git clone https://github.com/Azure/arm-ttk.git /dist/armttk
