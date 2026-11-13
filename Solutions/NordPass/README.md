@@ -27,11 +27,6 @@ A <strong>Log Analytics Table</strong> named <code>NordPassEventLogs_CL</code> w
 </details>
 
 <details>
-<summary><strong>Workbook</strong></summary>
-A <strong>Workbook</strong> will be created to aggregate NordPass activity data for enhanced visualization and analysis. Dashboards in this workbook give insights into your user’s activity trends, security alerts, and compliance statuses.
-</details>
-
-<details>
 <summary><strong>Analytic Rules</strong></summary>
 Multiple <strong>Analytic Rules</strong> will be created to facilitate incident escalation, allowing security teams to respond to threats proactively. 
 
@@ -65,8 +60,7 @@ You can easily install the NordPass Solution for Microsoft Sentinel in a few min
 Once you’ve deployed the solution, follow these steps to finalize the integration:
 1. **Verify Data Ingestion:** Check that NordPass logs appear in the `NordPassEventLogs_CL` table in Microsoft Sentinel.
 2. **Configure Analytic Rules:** Adjust thresholds and settings for alerts based on your security needs.
-3. **Set Up Dashboard Views:** Use the workbook to create visual reports and enhance monitoring efficiency.
-4. **Test Incident Response:** Trigger test events to ensure the analytic rules are working as expected.
+3. **Test Incident Response:** Trigger test events to ensure the analytic rules are working as expected.
 
 ## Support & Troubleshooting
 If you encounter issues during deployment or need assistance, please use the resources below:
