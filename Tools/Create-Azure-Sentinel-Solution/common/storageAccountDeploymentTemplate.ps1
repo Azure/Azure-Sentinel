@@ -61,10 +61,6 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
 
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
-        if ($isManagedServicePrincipal) {
-            $armResource.properties.connectorDefinitionName = "[[parameters('connectorDefinitionName')]"
-        }
-
         $hasDependsOn = [bool]($armResource.PSobject.Properties.name -match "dependsOn")
         if (!$hasDependsOn) {
             $armResource | Add-Member -NotePropertyName "dependsOn" -NotePropertyValue @( "[[variables('nestedDeploymentId')]")
@@ -90,7 +86,7 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
                 }) -Force
                 $parameterSet | Add-Member -NotePropertyName 'eventGridRbacMode' -NotePropertyValue (Get-EventGridRbacModeParameter -IncludeDefault) -Force
                 $parameterSet | Add-Member -NotePropertyName 'blobFolderName' -NotePropertyValue ([PSCustomObject]@{
-                    type = 'string'
+                    type = 'securestring'
                     defaultValue = ''
                 }) -Force
             }
@@ -241,7 +237,7 @@ function Get-StorageAccountDeploymentTemplate {
                 $storageDeploymentTemplate.properties.parameters[$parameterName] = @{
                     value = "[[parameters('$parameterName')]"
                 }
-                $storageDeploymentTemplate.properties.template.parameters[$parameterName] = @{ type = 'string' }
+                $storageDeploymentTemplate.properties.template.parameters[$parameterName] = @{ type = 'securestring' }
             }
             $storageDeploymentTemplate.properties.template.parameters['blobFolderName']['defaultValue'] = ''
             $storageDeploymentTemplate.properties.template.parameters['eventGridRbacMode'] = Get-EventGridRbacModeParameter
