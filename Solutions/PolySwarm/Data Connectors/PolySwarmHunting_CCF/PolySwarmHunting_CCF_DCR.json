@@ -1,0 +1,129 @@
+[
+    {
+        "name": "polySwarmHuntingDCR1",
+        "apiVersion": "2021-09-01-preview",
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "location": "{{location}}",
+        "properties": {
+            "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
+            "streamDeclarations": {
+                "Custom-PolySwarmHunting": {
+                    "columns": [
+                        {
+                            "name": "id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "instance_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "livescan_id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "community",
+                            "type": "string"
+                        },
+                        {
+                            "name": "rule_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "malware_family",
+                            "type": "string"
+                        },
+                        {
+                            "name": "polyscore",
+                            "type": "real"
+                        },
+                        {
+                            "name": "sha256",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha1",
+                            "type": "string"
+                        },
+                        {
+                            "name": "md5",
+                            "type": "string"
+                        },
+                        {
+                            "name": "tags",
+                            "type": "string"
+                        },
+                        {
+                            "name": "detections",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "matched_strings",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "matched_strings_dropped",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "download_url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "yara",
+                            "type": "string"
+                        },
+                        {
+                            "name": "created",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [
+                    {
+                        "workspaceResourceId": "{{workspaceResourceId}}",
+                        "name": "clv2ws1"
+                    }
+                ]
+            },
+            "dataFlows": [
+                {
+                    "streams": [
+                        "Custom-PolySwarmHunting"
+                    ],
+                    "destinations": [
+                        "clv2ws1"
+                    ],
+                    "outputStream": "Microsoft-ThreatIntelIndicators",
+                    "transformKql": "source\n| where isnotempty(['sha256'])\n| extend TimeGenerated = now()\n| extend Community = tostring(['community'])\n| extend RuleName = tostring(['rule_name'])\n| extend MalwareFamily = tostring(['malware_family'])\n| extend InstanceId = tostring(['instance_id'])\n| extend TagsRaw = tostring(['tags'])\n| extend PolyScoreRaw = todouble(['polyscore'])\n| extend Sha256Lower = tolower(tostring(['sha256']))\n| extend DigestType = 'SHA-256'\n| extend DigestValue = tolower(tostring(['sha256']))\n| extend ObservableKey = strcat(\"file:hashes.'\", DigestType, \"'\")\n| where DigestValue !contains \"'\" and DigestValue !contains @\"\\\"\n| extend EscapedValue = DigestValue\n| extend ObservableValue = DigestValue\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", EscapedValue, \"']\")\n| extend Permalink = iff(isempty(Sha256Lower), '', strcat('https://polyswarm.network/scan/results/file/', Sha256Lower, '/', InstanceId))\n| extend Confidence = iff(isnotnull(PolyScoreRaw), toint(round(PolyScoreRaw * 100, 0)), int(null))\n| extend ValidFrom = now()\n| extend ValidUntil = datetime_add('day', 90, now())\n| extend Created = now()\n| extend Modified = now()\n| extend IsActive = true\n| extend IsDeleted = false\n| extend Revoked = false\n| extend SourceSystem = 'PolySwarm'\n| extend LastUpdateMethod = 'PolySwarm hunting'\n| extend FamilyLabel = iff(isempty(MalwareFamily), 'unclassified', MalwareFamily)\n| extend Description = iff(isempty(RuleName), 'PolySwarm hunt result', strcat('PolySwarm hunt rule: ', RuleName))\n| extend idSeed = strcat(DigestType, '|', DigestValue, '|', Community, '|', RuleName)\n| extend idHex = substring(tostring(hash_sha256(idSeed)), 0, 32)\n| extend Id = strcat('indicator--', substring(idHex,0,8), '-', substring(idHex,8,4), '-', substring(idHex,12,4), '-', substring(idHex,16,4), '-', substring(idHex,20,12))\n| extend AdditionalFields = pack('polyscore', PolyScoreRaw, 'family', FamilyLabel, 'rule_name', RuleName, 'community', Community, 'permalink', Permalink, 'tags', TagsRaw, 'detections', ['detections'], 'digest_type', DigestType, 'stixIdHex', idHex)\n| extend Data = pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', Description, 'description', Description, 'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'confidence', Confidence, 'labels', pack_array(FamilyLabel))\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
+                },
+                {
+                    "streams": [
+                        "Custom-PolySwarmHunting"
+                    ],
+                    "destinations": [
+                        "clv2ws1"
+                    ],
+                    "outputStream": "Microsoft-ThreatIntelIndicators",
+                    "transformKql": "source\n| where isnotempty(['sha1'])\n| extend TimeGenerated = now()\n| extend Community = tostring(['community'])\n| extend RuleName = tostring(['rule_name'])\n| extend MalwareFamily = tostring(['malware_family'])\n| extend InstanceId = tostring(['instance_id'])\n| extend TagsRaw = tostring(['tags'])\n| extend PolyScoreRaw = todouble(['polyscore'])\n| extend Sha256Lower = tolower(tostring(['sha256']))\n| extend DigestType = 'SHA-1'\n| extend DigestValue = tolower(tostring(['sha1']))\n| extend ObservableKey = strcat(\"file:hashes.'\", DigestType, \"'\")\n| where DigestValue !contains \"'\" and DigestValue !contains @\"\\\"\n| extend EscapedValue = DigestValue\n| extend ObservableValue = DigestValue\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", EscapedValue, \"']\")\n| extend Permalink = iff(isempty(Sha256Lower), '', strcat('https://polyswarm.network/scan/results/file/', Sha256Lower, '/', InstanceId))\n| extend Confidence = iff(isnotnull(PolyScoreRaw), toint(round(PolyScoreRaw * 100, 0)), int(null))\n| extend ValidFrom = now()\n| extend ValidUntil = datetime_add('day', 90, now())\n| extend Created = now()\n| extend Modified = now()\n| extend IsActive = true\n| extend IsDeleted = false\n| extend Revoked = false\n| extend SourceSystem = 'PolySwarm'\n| extend LastUpdateMethod = 'PolySwarm hunting'\n| extend FamilyLabel = iff(isempty(MalwareFamily), 'unclassified', MalwareFamily)\n| extend Description = iff(isempty(RuleName), 'PolySwarm hunt result', strcat('PolySwarm hunt rule: ', RuleName))\n| extend idSeed = strcat(DigestType, '|', DigestValue, '|', Community, '|', RuleName)\n| extend idHex = substring(tostring(hash_sha256(idSeed)), 0, 32)\n| extend Id = strcat('indicator--', substring(idHex,0,8), '-', substring(idHex,8,4), '-', substring(idHex,12,4), '-', substring(idHex,16,4), '-', substring(idHex,20,12))\n| extend AdditionalFields = pack('polyscore', PolyScoreRaw, 'family', FamilyLabel, 'rule_name', RuleName, 'community', Community, 'permalink', Permalink, 'tags', TagsRaw, 'detections', ['detections'], 'digest_type', DigestType, 'stixIdHex', idHex)\n| extend Data = pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', Description, 'description', Description, 'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'confidence', Confidence, 'labels', pack_array(FamilyLabel))\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
+                },
+                {
+                    "streams": [
+                        "Custom-PolySwarmHunting"
+                    ],
+                    "destinations": [
+                        "clv2ws1"
+                    ],
+                    "outputStream": "Microsoft-ThreatIntelIndicators",
+                    "transformKql": "source\n| where isnotempty(['md5'])\n| extend TimeGenerated = now()\n| extend Community = tostring(['community'])\n| extend RuleName = tostring(['rule_name'])\n| extend MalwareFamily = tostring(['malware_family'])\n| extend InstanceId = tostring(['instance_id'])\n| extend TagsRaw = tostring(['tags'])\n| extend PolyScoreRaw = todouble(['polyscore'])\n| extend Sha256Lower = tolower(tostring(['sha256']))\n| extend DigestType = 'MD5'\n| extend DigestValue = tolower(tostring(['md5']))\n| extend ObservableKey = strcat(\"file:hashes.'\", DigestType, \"'\")\n| where DigestValue !contains \"'\" and DigestValue !contains @\"\\\"\n| extend EscapedValue = DigestValue\n| extend ObservableValue = DigestValue\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", EscapedValue, \"']\")\n| extend Permalink = iff(isempty(Sha256Lower), '', strcat('https://polyswarm.network/scan/results/file/', Sha256Lower, '/', InstanceId))\n| extend Confidence = iff(isnotnull(PolyScoreRaw), toint(round(PolyScoreRaw * 100, 0)), int(null))\n| extend ValidFrom = now()\n| extend ValidUntil = datetime_add('day', 90, now())\n| extend Created = now()\n| extend Modified = now()\n| extend IsActive = true\n| extend IsDeleted = false\n| extend Revoked = false\n| extend SourceSystem = 'PolySwarm'\n| extend LastUpdateMethod = 'PolySwarm hunting'\n| extend FamilyLabel = iff(isempty(MalwareFamily), 'unclassified', MalwareFamily)\n| extend Description = iff(isempty(RuleName), 'PolySwarm hunt result', strcat('PolySwarm hunt rule: ', RuleName))\n| extend idSeed = strcat(DigestType, '|', DigestValue, '|', Community, '|', RuleName)\n| extend idHex = substring(tostring(hash_sha256(idSeed)), 0, 32)\n| extend Id = strcat('indicator--', substring(idHex,0,8), '-', substring(idHex,8,4), '-', substring(idHex,12,4), '-', substring(idHex,16,4), '-', substring(idHex,20,12))\n| extend AdditionalFields = pack('polyscore', PolyScoreRaw, 'family', FamilyLabel, 'rule_name', RuleName, 'community', Community, 'permalink', Permalink, 'tags', TagsRaw, 'detections', ['detections'], 'digest_type', DigestType, 'stixIdHex', idHex)\n| extend Data = pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', Description, 'description', Description, 'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'confidence', Confidence, 'labels', pack_array(FamilyLabel))\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
+                }
+            ]
+        }
+    }
+]

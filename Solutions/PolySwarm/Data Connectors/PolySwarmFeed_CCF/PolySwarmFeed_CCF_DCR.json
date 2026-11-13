@@ -1,0 +1,141 @@
+[
+    {
+        "name": "polySwarmFeedDCR1",
+        "apiVersion": "2021-09-01-preview",
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "location": "{{location}}",
+        "properties": {
+            "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
+            "streamDeclarations": {
+                "Custom-PolySwarmFeed": {
+                    "columns": [
+                        {
+                            "name": "type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "spec_version",
+                            "type": "string"
+                        },
+                        {
+                            "name": "id",
+                            "type": "string"
+                        },
+                        {
+                            "name": "created",
+                            "type": "string"
+                        },
+                        {
+                            "name": "modified",
+                            "type": "string"
+                        },
+                        {
+                            "name": "pattern",
+                            "type": "string"
+                        },
+                        {
+                            "name": "pattern_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "pattern_version",
+                            "type": "string"
+                        },
+                        {
+                            "name": "valid_from",
+                            "type": "string"
+                        },
+                        {
+                            "name": "confidence",
+                            "type": "int"
+                        },
+                        {
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "is_family",
+                            "type": "boolean"
+                        },
+                        {
+                            "name": "aliases",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "malware_types",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "string"
+                        },
+                        {
+                            "name": "hashes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "size",
+                            "type": "long"
+                        },
+                        {
+                            "name": "mime_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "relationship_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "source_ref",
+                            "type": "string"
+                        },
+                        {
+                            "name": "target_ref",
+                            "type": "string"
+                        },
+                        {
+                            "name": "product",
+                            "type": "string"
+                        },
+                        {
+                            "name": "result_name",
+                            "type": "string"
+                        },
+                        {
+                            "name": "result",
+                            "type": "string"
+                        },
+                        {
+                            "name": "external_references",
+                            "type": "dynamic"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [
+                    {
+                        "workspaceResourceId": "{{workspaceResourceId}}",
+                        "name": "clv2ws1"
+                    }
+                ]
+            },
+            "dataFlows": [
+                {
+                    "streams": [
+                        "Custom-PolySwarmFeed"
+                    ],
+                    "destinations": [
+                        "clv2ws1"
+                    ],
+                    "outputStream": "Microsoft-ThreatIntelIndicators",
+                    "transformKql": "source\n| where type == \"indicator\" and pattern_type == \"stix\" and isnotempty(pattern)\n| extend TimeGenerated = now()\n| extend Pattern = tostring(pattern)\n| extend PatternVersion = tostring(pattern_version)\n| extend SourceStixId = tostring(id)\n| extend idHex = substring(tostring(hash_sha256(strcat(SourceStixId, '|', Pattern))), 0, 32)\n| extend Id = strcat('indicator--', substring(idHex,0,8), '-', substring(idHex,8,4), '-', substring(idHex,12,4), '-', substring(idHex,16,4), '-', substring(idHex,20,12))\n| extend ValidFromRaw = tostring(valid_from)\n| extend ConfidenceRaw = toint(confidence)\n| extend CreatedRaw = tostring(created)\n| extend ModifiedRaw = tostring(modified)\n| extend ParsedKey = extract(@\"^\\[(.*?) = '\", 1, Pattern)\n| extend ParsedValueRaw = extract(@\"= '(.*)'\\]$\", 1, Pattern)\n| extend UnescapeStep1 = replace(@\"\\\\\\\\\", \"@@BKSL@@\", ParsedValueRaw)\n| extend UnescapeStep2 = replace(@\"\\\\'\", \"'\", UnescapeStep1)\n| extend ParsedValue = replace(\"@@BKSL@@\", @\"\\\\\", UnescapeStep2)\n| extend ObservableKey = iff(isempty(ParsedKey), \"stix:pattern\", ParsedKey)\n| extend ObservableValue = iff(isempty(ParsedKey), Pattern, ParsedValue)\n| extend SourceSystem = 'PolySwarm'\n| extend LastUpdateMethod = 'PolySwarm curated feed'\n| extend Confidence = ConfidenceRaw\n| extend IsActive = true\n| extend IsDeleted = false\n| extend Revoked = false\n| extend ValidFrom = todatetime(ValidFromRaw)\n| extend ValidUntil = datetime_add('day', 90, todatetime(ValidFromRaw))\n| extend Created = todatetime(CreatedRaw)\n| extend Modified = todatetime(ModifiedRaw)\n| extend AdditionalFields = pack('source_stix_id', SourceStixId, 'pattern_version', PatternVersion, 'observable_parse_note', iff(isempty(ParsedKey), 'pattern did not match the expected [key = value] STIX comparison shape; Pattern and Data are still authoritative, only ObservableKey and ObservableValue are best effort', ''))\n| extend Data = pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', CreatedRaw, 'modified', ModifiedRaw, 'pattern', Pattern, 'pattern_type', 'stix', 'pattern_version', PatternVersion, 'valid_from', ValidFromRaw, 'confidence', Confidence, 'indicator_types', pack_array('malicious-activity'))\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
+                }
+            ]
+        }
+    }
+]

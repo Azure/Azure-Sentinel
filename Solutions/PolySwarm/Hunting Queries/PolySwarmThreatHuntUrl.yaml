@@ -1,0 +1,50 @@
+id: b0b68076-7765-42f8-9401-c336551abfc2
+name: PolySwarm - Threat Hunting URL
+description: |
+  'PolySwarm URL correlation. Joins active PolySwarm URL indicators against observed web
+  sessions.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: PolySwarmHuntingCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: PolySwarmFeedCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071
+  - T1566
+tags:
+  - PolySwarm
+query: |
+  // Scheme and host are case-insensitive; path and query are not. Only the first part is
+  // lowercased, so two different resources never match and the observed URL is kept as is.
+  let UrlKey = (u:string) {
+      let origin = extract(@"^((?:[A-Za-z][A-Za-z0-9+.\-]*://)?[^/?#]*)", 1, u);
+      strcat(tolower(origin), substring(u, strlen(origin)))
+  };
+  _Im_WebSession
+  | where isnotempty(Url)
+  | extend UrlKey = UrlKey(Url)
+  | join kind=inner (
+  ThreatIntelIndicators
+  | where ObservableKey == "url:value"
+  | where isnotempty(ObservableValue)
+  | where SourceSystem == "PolySwarm"
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())
+  | extend UrlKey = UrlKey(ObservableValue)
+  ) on UrlKey
+  | extend Family = tostring(parse_json(AdditionalFields).family)
+  | extend Permalink = tostring(parse_json(AdditionalFields).permalink)
+  | project Url, Confidence, Family, Permalink
+  | extend URL_0_Url = Url
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.2
