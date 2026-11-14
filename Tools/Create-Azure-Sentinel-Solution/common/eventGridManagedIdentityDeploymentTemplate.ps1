@@ -2,7 +2,9 @@ function Get-EventGridRbacModeParameter {
     param([switch]$IncludeDefault)
 
     $parameter = [PSCustomObject]@{
-        type = 'string'
+        # Connection-template scalar parameters must be securestring. Keep the
+        # same type at each directly forwarded nested-template boundary.
+        type = 'securestring'
         allowedValues = @('CreateRoleAssignment', 'UseExistingRoleAssignment')
     }
     if ($IncludeDefault) {
@@ -36,7 +38,7 @@ function Get-EventGridManagedIdentityDeployments {
                     contentVersion = '1.0.0.0'
                     parameters = [ordered]@{
                         topicName = @{ type = 'string' }
-                        StorageAccountLocation = @{ type = 'string' }
+                        StorageAccountLocation = @{ type = 'securestring' }
                         sourceId = @{ type = 'string' }
                         existingSystemTopic = @{ type = 'object' }
                     }
