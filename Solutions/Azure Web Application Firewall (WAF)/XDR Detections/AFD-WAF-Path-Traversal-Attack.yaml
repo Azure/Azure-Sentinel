@@ -22,8 +22,8 @@ contentProvenance:
     kind: AnalyticsRule
     id: a4d99328-e4e6-493d-b0d5-57e6f9ddae77
     path: Analytic Rules/AFD-WAF-Path-Traversal-Attack.yaml
-    version: 1.0.1
-    querySha256: c0578c33df3f812e3f70ace26d9e77bc17d627d363db0a8d9c2e76ef31f5f210
+    version: 1.0.2
+    querySha256: ab78e5a43f52b00c5fbaad758c376825770ed7bb3ae08a7aef2a1ebf09f1f841
     schedule:
       queryFrequency: 6h
       queryPeriod: 6h
@@ -56,8 +56,8 @@ contentProvenance:
     - T1548
     - T1087
     reviewScope:
-      sourceDocumentSha256: 532eb7fce9d1369821360d8da4f21ae63efb16a6c7894a2197c622eb582d048f
-      targetQuerySha256: f6f77beb707a2691e61e85ed243c9dd9c53c20463f9d81e7d869763a9b2c167b
+      sourceDocumentSha256: 753209f8d12912125359de109ccdab72aa1e48564c15a0f7775b8c698a5729aa
+      targetQuerySha256: a3429ddae10058817f481faaa7c5f60abdc7931e55974efd40aefb20a54561e1
 properties:
   id: xdr-a4d99328-e4e6-493d-b0d5-57e6f9ddae77
   displayName: AFD WAF - Path Traversal Attack
@@ -67,16 +67,18 @@ properties:
       let Threshold = 3;
       AzureDiagnostics
       | where Category =~ "FrontDoorWebApplicationFirewallLog"
-      | extend action_s = column_ifexists("action_s", ""), details_msg_s = column_ifexists("details_msg_s", ""), details_data_s = column_ifexists("details_data_s", ""), details_matches_s = column_ifexists("details_matches_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
+      | extend action_s = column_ifexists("action_s", ""), policy_s = column_ifexists("policy_s", ""), details_msg_s = column_ifexists("details_msg_s", ""), details_data_s = column_ifexists("details_data_s", ""), details_matches_s = column_ifexists("details_matches_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
       | where action_s =~ "AnomalyScoring"
       | where details_msg_s has "Path Traversal Attack"
       | parse details_data_s with MessageText "Matched Data:" MatchedData "AND " * "table_name FROM " TableName " " *
-      | project trackingReference_s, host_s, requestUri_s, TimeGenerated, clientIP_s, details_matches_s, details_msg_s, details_data_s, TableName, MatchedData
+      | project policy_s, trackingReference_s, host_s, requestUri_s, TimeGenerated, clientIP_s, details_matches_s, details_msg_s, details_data_s, TableName, MatchedData
       | join kind = inner(
       AzureDiagnostics
       | where Category =~ "FrontDoorWebApplicationFirewallLog"
-      | extend action_s = column_ifexists("action_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
-      | where action_s =~ "Block") on trackingReference_s
+      | extend action_s = column_ifexists("action_s", ""), policy_s = column_ifexists("policy_s", ""), policyMode_s = column_ifexists("policyMode_s", ""), ruleName_s = column_ifexists("ruleName_s", ""), trackingReference_s = column_ifexists("trackingReference_s", "")
+      | where action_s =~ "Block"
+      | where policyMode_s =~ "Prevention"
+      | where ruleName_s contains "949110") on policy_s, trackingReference_s
       | summarize URI_s = make_set(requestUri_s,100), Table = make_set(TableName,100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TrackingReference = make_set(trackingReference_s,100), Matched_Data = make_set(MatchedData,100), Detail_Data = make_set(details_data_s,100), Detail_Message = make_set(details_msg_s,100), Total_TrackingReference = dcount(trackingReference_s) by clientIP_s, host_s, action_s
       | where Total_TrackingReference >= Threshold
   schedule:
@@ -85,7 +87,7 @@ properties:
     alertTemplate:
       title: AFD WAF - Path Traversal Attack
       description: |-
-        'Identifies a match for a Path Traversal based attack in the AFD WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+        'Identifies a Path Traversal match on a request blocked by the managed anomaly-score threshold rule in Prevention mode. The match contributes to the aggregate anomaly score but does not establish that Path Traversal alone caused the block. The threshold value in the query can be changed as per your infrastructure's requirements.
         References: https://owasp.org/www-community/attacks/Path_Traversal'
       severity: high
       entityMappings:

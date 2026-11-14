@@ -6,15 +6,18 @@ apiVersion: 2026-06-01-preview
 requiredDataConnectors:
 - connectorId: WAF
   dataTypes:
+  - AGWFirewallLogs
   - AzureDiagnostics
 contentProvenance:
   requiredWorkloads:
   - workload: sentinel
     dataTypes:
+    - AGWFirewallLogs
     - AzureDiagnostics
   requiredDataConnectors:
   - connectorId: WAF
     dataTypes:
+    - AGWFirewallLogs
     - AzureDiagnostics
   dependencyReviewRequired: false
   source:
@@ -22,8 +25,8 @@ contentProvenance:
     kind: AnalyticsRule
     id: b6c3a8a6-d22c-4882-9c57-abc01690938b
     path: Analytic Rules/App-GW-WAF-Path-Traversal-Attack.yaml
-    version: 1.0.3
-    querySha256: 7f1e547530f730be71758878b6b3d7e843efc3cc4a1fed3eae5d48ff2d72ef38
+    version: 1.0.4
+    querySha256: 9935084ac9df222dba808d243354f7507b0a02559dff20ce42864ae3d832bcc7
     schedule:
       queryFrequency: 6h
       queryPeriod: 6h
@@ -56,8 +59,8 @@ contentProvenance:
     - T1548
     - T1087
     reviewScope:
-      sourceDocumentSha256: f8e1530c37b00119416e36f93df6f5226808bf8356491d90ade24721a960640d
-      targetQuerySha256: c4efd6b336dee05c613c54808cf6ff1abc0c9ad63f6f1eefd360cb1b39c41a18
+      sourceDocumentSha256: 177ac890632321b7bb8639af0af08a7ceef29db0e03c5a28f4b522244e9ec426
+      targetQuerySha256: d1cc0b25ce15f6a3b6227784735cf48fa20f0f255ad9aef09b72cb03341e960c
 properties:
   id: xdr-b6c3a8a6-d22c-4882-9c57-abc01690938b
   displayName: App GW WAF - Path Traversal Attack
@@ -68,10 +71,11 @@ properties:
       AGWFirewallLogs
       | where Action == "Matched"
       | where Message has "Path Traversal Attack"
-      | project TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message, DetailedMessage, DetailedData
+      | project PolicyId, TransactionId, Hostname, RequestUri, TimeGenerated, ClientIp, Message, DetailedMessage, DetailedData
       | join kind = inner(
       AGWFirewallLogs
-      | where Action == "Blocked") on TransactionId
+      | where Action == "Blocked"
+      | where RuleId == "949110") on PolicyId, TransactionId
       | extend Uri = strcat(Hostname,RequestUri)
       | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(TransactionId,100), Message = make_set(Message,100), Detail_Message = make_set(DetailedMessage,100), Detail_Data = make_set(DetailedData,100), Total_TransactionId = dcount(TransactionId) by ClientIp, Uri, Action
       | where Total_TransactionId >= Threshold
@@ -81,7 +85,7 @@ properties:
     alertTemplate:
       title: App GW WAF - Path Traversal Attack
       description: |-
-        'Identifies a match for a Path Traversal based attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+        'Identifies a Path Traversal match on a request blocked by the managed anomaly-score threshold rule. The match contributes to the aggregate anomaly score but does not establish that Path Traversal alone caused the block. The threshold value in the query can be changed as per your infrastructure's requirements.
         References: https://owasp.org/www-community/attacks/Path_Traversal'
       severity: high
       entityMappings:
