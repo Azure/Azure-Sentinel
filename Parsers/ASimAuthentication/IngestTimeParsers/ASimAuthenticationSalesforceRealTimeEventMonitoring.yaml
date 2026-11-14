@@ -1,7 +1,7 @@
 Parser:
   DisplayName: 'Authentication ASIM ingestion-time parser for Salesforce Real-Time Event Monitoring'
-  Version: '0.1.0'
-  LastUpdated: '2026-11-12'
+  Version: '0.1.1'
+  LastUpdated: '2026-11-13'
 Product:
   Name: 'Salesforce Real-Time Event Monitoring'
 Normalization:
@@ -96,10 +96,14 @@ ParserQuery: |
               ), "Logon violates policy",
               "Other"
           )
+      | extend _MappedIPv4 = tolong(strcat("0x", substring(SourceIp, 24, 8)))
       | extend _SrcIpAddr = case(
           isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp,
           strlen(SourceIp) == 32 and SourceIp startswith "00000000000000000000ffff",
-              format_ipv4(tolong(strcat("0x", substring(SourceIp, 24, 8)))),
+              iff(isnull(_MappedIPv4), "",
+                  strcat(
+                      _MappedIPv4 / 16777216, ".", (_MappedIPv4 / 65536) % 256, ".",
+                      (_MappedIPv4 / 256) % 256, ".", _MappedIPv4 % 256)),
           strlen(SourceIp) == 32,
               strcat(
                   substring(SourceIp, 0, 4), ":", substring(SourceIp, 4, 4), ":"
@@ -339,5 +343,5 @@ ParserQuery: |
   | extend AdditionalFields = bag_merge(AdditionalFields, pack("QueryTimeFields", pack("EventUid", EventUid, "EventSchema", EventSchema, "Dvc", Dvc, "Application", Application, "Dst", Dst, "LogonTarget", LogonTarget, "User", User, "Src", Src, "IpAddr", IpAddr)))
   | project TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventType, EventSubType, EventResult, EventResultDetails, EventOriginalResultDetails, EventOriginalType, EventOriginalSubType, EventOriginalUid, EventSeverity, EventProduct, EventVendor, EventSchemaVersion, DvcFQDN, DvcHostname, DvcDomain, DvcDomainType, DvcAction, DvcOriginalAction, TargetAppName, TargetAppType, TargetFQDN, TargetHostname, TargetDomain, TargetDomainType, TargetUrl, TargetUserId, TargetUserIdType, TargetUsername, TargetUsernameType, TargetUserType, TargetOriginalUserType, TargetSessionId, ActorUsername, ActorUsernameType, ActorScopeId, ActingAppName, ActingAppType, LogonMethod, LogonProtocol, SrcIpAddr, SrcDvcOs, SrcDeviceType, SrcGeoCity, SrcGeoCountry, SrcGeoRegion, SrcGeoLatitude, SrcGeoLongitude, AdditionalFields
 Change:
-  Date: '2026-11-12'
-  Description: 'Initial per-table ingestion-time definition with query-only values preserved in AdditionalFields.QueryTimeFields.'
+  Date: '2026-11-13'
+  Description: 'Replace unsupported format_ipv4 with integer octet formatting while preserving AdditionalFields.QueryTimeFields.'
