@@ -1,5 +1,10 @@
 # Changelog for ASimAuthenticationSalesforceSCV3_CL.yaml
 
+## Version 0.2.3
+
+- (2026-11-13) Preserve original AdditionalFields keys without the added QueryTimeFields bag, matching established ingestion-time parsers - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)
+- Keep physical destination columns and the post-connector input contract unchanged; query-only aliases are not persisted.
+
 ## Version 0.2.2
 
 - (2026-11-13) Align the Authentication schema version and unknown-user-agent OS fallback with the current query-time counterpart - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)

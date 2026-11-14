@@ -1,5 +1,10 @@
 # Changelog for ASimAuthenticationSalesforceLoginHistoryV2_CL.yaml
 
+## Version 0.1.5
+
+- (2026-11-13) Preserve original AdditionalFields keys without the added QueryTimeFields bag, matching established ingestion-time parsers - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)
+- Keep physical destination columns unchanged; query-only aliases are not persisted.
+
 ## Version 0.1.4
 
 - (2026-11-12) Preserve query-only Login History V2 fields in AdditionalFields.QueryTimeFields and project physical destination columns - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)
