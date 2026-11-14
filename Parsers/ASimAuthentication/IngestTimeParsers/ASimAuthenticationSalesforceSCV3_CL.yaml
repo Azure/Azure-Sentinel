@@ -1,0 +1,260 @@
+Parser:
+  DisplayName: 'Authentication ASIM ingestion-time parser for Salesforce Service Cloud (SalesforceServiceCloudV3_CL)'
+  Version: '0.2.3'
+  LastUpdated: '2026-11-13'
+Product:
+  Name: 'Salesforce Service Cloud'
+Normalization:
+  Schema: 'Authentication'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes SalesforceServiceCloudV3_CL into ASimAuthenticationEventLogs during ingestion. Review documented lossy conversions; query-only aliases are not persisted.
+ParserName: 'ASimAuthenticationSalesforceSCV3_CL'
+DCRType: 'Standard'
+InputStream: 'Custom-SalesforceServiceCloudV3_CL'
+SourceRawTable: 'SalesforceServiceCloudV3_CL'
+TargetASIMTable: 'ASimAuthenticationEventLogs'
+ParserFilterQuery: |
+  source
+  | where tolower(EventType) in ("login", "loginas", "logout")
+ParserQuery: |
+  source
+  | extend Type = "SalesforceServiceCloudV3_CL"
+              | where tolower(EventType) in ("login", "loginas", "logout")
+              | project-away DvcAction, EventResult
+  | extend
+  LogonMethodOriginal = case(
+      LoginType == "7", "AppExchange",
+      LoginType == "A", "Application",
+      LoginType == "s", "Certificate-based login",
+      LoginType == "k", "Chatter Communities External User",
+      LoginType == "n", "Chatter Communities External User Third Party SSO",
+      LoginType == "r", "Employee Login to Community",
+      LoginType == "z", "Lightning Login",
+      LoginType == "l", "Networks Portal API Only",
+      LoginType == "6", "Remote Access Client",
+      LoginType == "i", "Remote Access 2.0",
+      LoginType == "I", "Other Apex API",
+      LoginType == "R", "Partner Product",
+      LoginType == "w", "Passwordless Login",
+      LoginType == "3", "Customer Service Portal",
+      LoginType == "q", "Partner Portal Third-Party SSO",
+      LoginType == "9", "Partner Portal",
+      LoginType == "5", "SAML Idp Initiated SSO",
+      LoginType == "m", "SAML Chatter Communities External User SSO",
+      LoginType == "b", "SAML Customer Service Portal SSO",
+      LoginType == "c", "SAML Partner Portal SSO",
+      LoginType == "h", "SAML Site SSO",
+      LoginType == "8", "SAML Sfdc Initiated SSO",
+      LoginType == "E", "SelfService",
+      LoginType == "j", "Third Party SSO",
+      ""),
+  LogonMethod = case(
+      LoginType in ("7", "A", "k", "n", "r", "l", "6", "i", "I", "R", "3", "q", "9", "5", "m", "b", "c", "h", "8", "E", "j"), "Other",
+      LoginType == "s", "PKI",
+      LoginType == "z", "Username & Password",
+      LoginType == "w", "Passwordless",
+      "")
+      | extend
+  LogonProtocolOriginal = case(
+      LoginSubType == "uiup", "UI Username-Password",
+      LoginSubType == "oauthpassword", "OAuth Username-Password",
+      LoginSubType == "oauthtoken", "OAuth User-Agent",
+      LoginSubType == "oauthhybridtoken", "OAuth User-Agent for Hybrid Apps",
+      LoginSubType == "oauthtokenidtoken", "OAuth User-Agent with ID Token",
+      LoginSubType == "oauthclientcredential", "OAuth Client Credential",
+      LoginSubType == "oauthcode", "OAuth Web Server",
+      LoginSubType == "oauthhybridauthcode", "OAuth Web Server for Hybrid Apps",
+      ""),
+  LogonProtocol = case(
+      LoginSubType == "uiup", "Basic Auth",
+      LoginSubType in ("oauthpassword", "oauthtoken", "oauthhybridtoken", "oauthtokenidtoken", "oauthclientcredential", "oauthcode", "oauthhybridauthcode"), "OAuth",
+      "")
+      | extend
+  DvcOs1 = case(
+      PlatformType in ("1000", "1008", "1013", "1015"), "Windows",
+      PlatformType == "2003", "Macintosh/Apple",
+      PlatformType == "4000", "Linux",
+      PlatformType in ("5005", "5200"), "Android",
+      PlatformType == "5006", "iPhone",
+      PlatformType == "5007", "iPad",
+      ""),
+  DvcOsVersion1 = case(
+      PlatformType in ("1000", "4000", "5005", "5006", "5007"), "",
+      PlatformType == "1008", "2003",
+      PlatformType == "1013", "8.1",
+      PlatformType == "1015", "10",
+      PlatformType == "2003", "OSX",
+      PlatformType == "5200", "10.0",
+      "")
+      | extend _EventResultLookupCode = case(
+      LoginStatus in ("LOGIN_CHALLENGE_ISSUED", "LOGIN_CHALLENGE_PENDING", "LOGIN_DATA_DOWNLOAD_ONLY", "LOGIN_ERROR_API_TOO_OLD", "LOGIN_ERROR_ASYNC_USER_CREATE", "LOGIN_ERROR_AVANTGO_DISABLED", "LOGIN_ERROR_AVANTGO_TRIAL_EXP", "LOGIN_ERROR_CLIENT_NO_ACCESS", "LOGIN_ERROR_CLIENT_REQ_UPDATE", "LOGIN_ERROR_CSS_FROZEN", "LOGIN_ERROR_DUPLICATE_USERNAME", "LOGIN_ERROR_EXPORT_RESTRICTED", "LOGIN_ERROR_GLOBAL_BLOCK_DOMAIN", "LOGIN_ERROR_HT_DOWN", "LOGIN_ERROR_HTP_METHD_INVALID", "LOGIN_ERROR_INSECURE_LOGIN", "LOGIN_ERROR_INVALID_GATEWAY", "LOGIN_ERROR_INVALID_ID_FIELD", "LOGIN_ERROR_LOGINS_EXCEEDED", "LOGIN_ERROR_MUST_USE_API_TOKEN", "LOGIN_ERROR_MUTUAL_AUTHENTICATION", "LOGIN_ERROR_NETWORK_INACTIVE", "LOGIN_ERROR_NO_HT_ACCESS", "LOGIN_ERROR_NO_NETWORK_ACCESS", "LOGIN_ERROR_NO_NETWORK_INFO", "LOGIN_ERROR_NO_SET_COOKIES", "LOGIN_ERROR_OFFLINE_DISABLED", "LOGIN_ERROR_OFFLINE_TRIAL_EXP", "LOGIN_ERROR_ORG_CLOSED", "LOGIN_ERROR_ORG_DOMAIN_ONLY", "LOGIN_ERROR_ORG_IN_MAINTENANCE", "LOGIN_ERROR_ORG_INACTIVE", "LOGIN_ERROR_ORG_IS_DOT_ORG", "LOGIN_ERROR_ORG_LOCKOUT", "LOGIN_ERROR_ORG_SIGNING_UP", "LOGIN_ERROR_ORG_SUSPENDED", "LOGIN_ERROR_OUTLOOK_DISABLED", "LOGIN_ERROR_PASSWORD_EMPTY", "LOGIN_ERROR_PORTAL_INACTIVE", "LOGIN_ERROR_RATE_EXCEEDED", "LOGIN_ERROR_RESTRICTED_DOMAIN", "LOGIN_ERROR_RESTRICTED_TIME", "LOGIN_ERROR_SSO_SVC_DOWN", "LOGIN_ERROR_SSO_URL_INVALID", "LOGIN_ERROR_STORE", "LOGIN_ERROR_STORE_DOWN", "LOGIN_ERROR_SWITCH_SFDC_INSTANCE", "LOGIN_ERROR_SWITCH_SFDC_LOGIN", "LOGIN_ERROR_SYNCOFFLINE_DISBLD", "LOGIN_ERROR_SYSTEM_DOWN", "LOGIN_ERROR_USER_API_ONLY", "LOGIN_ERROR_USER_NON_MOBILE", "LOGIN_ERROR_USER_STORE_ACCESS", "LOGIN_ERROR_USERNAME_EMPTY", "LOGIN_ERROR_WIRELESS_DISABLED", "LOGIN_ERROR_WIRELESS_TRIAL_EXP", "LOGIN_LIGHTNING_LOGIN", "LOGIN_OAUTH_API_DISABLED", "LOGIN_OAUTH_CONSUMER_DELETED", "LOGIN_OAUTH_DS_NOT_EXPECTED", "LOGIN_OAUTH_EXCEED_GET_AT_LMT", "LOGIN_OAUTH_INVALID_CODE_CHALLENGE", "LOGIN_OAUTH_INVALID_CODE_VERIFIER", "LOGIN_OAUTH_INVALID_DEVICE", "LOGIN_OAUTH_INVALID_DS", "LOGIN_OAUTH_INVALID_DSIG", "LOGIN_OAUTH_INVALID_IP", "LOGIN_OAUTH_INVALID_NONCE", "LOGIN_OAUTH_INVALID_SIG_METHOD", "LOGIN_OAUTH_INVALID_TIMESTAMP", "LOGIN_OAUTH_INVALID_TOKEN", "LOGIN_OAUTH_INVALID_VERIFIER", "LOGIN_OAUTH_INVALID_VERSION", "LOGIN_OAUTH_MISSING_DS", "LOGIN_OAUTH_NO_CALLBACK_URL", "LOGIN_OAUTH_NO_CONSUMER", "LOGIN_OAUTH_NO_TOKEN", "LOGIN_OAUTH_NONCE_REPLAY", "LOGIN_OAUTH_PACKAGE_MISSING", "LOGIN_OAUTH_PACKAGE_OLD", "LOGIN_OAUTH_UNEXPECTED_PARAM", "LOGIN_ORG_TRIAL_EXP", "LOGIN_READONLY_CANNOT_VALIDATE", "LOGIN_SAML_INVALID_AUDIENCE", "LOGIN_SAML_INVALID_CONFIG", "LOGIN_SAML_INVALID_FORMAT", "LOGIN_SAML_INVALID_IN_RES_TO", "LOGIN_SAML_INVALID_ISSUER", "LOGIN_SAML_INVALID_ORG_ID", "LOGIN_SAML_INVALID_PORTAL_ID", "LOGIN_SAML_INVALID_RECIPIENT", "LOGIN_SAML_INVALID_SESSION_LEVEL", "LOGIN_SAML_INVALID_SIGNATURE", "LOGIN_SAML_INVALID_SITE_URL", "LOGIN_SAML_INVALID_STATUS", "LOGIN_SAML_INVALID_SUB_CONFIRM", "LOGIN_SAML_INVALID_TIMESTAMP", "LOGIN_SAML_INVALID_VERSION", "LOGIN_SAML_MISMATCH_CERT", "LOGIN_SAML_MISSING_ORG_ID", "LOGIN_SAML_MISSING_PORTAL_ID", "LOGIN_SAML_PROVISION_ERROR", "LOGIN_SAML_REPLAY_ATTEMPTED", "LOGIN_SAML_SITE_INACTIVE"), "0",
+      LoginStatus in ("LOGIN_END_SESSION_TXN_SECURITY_POLICY", "LOGIN_TWOFACTOR_REQ", "OAUTH_APP_ACCESS_DENIED"), "1",
+      LoginStatus in ("LOGIN_ERROR_CSS_PW_LOCKOUT", "LOGIN_ERROR_PASSWORD_LOCKOUT", "LOGIN_ERROR_USER_FROZEN"), "2",
+      LoginStatus in ("LOGIN_ERROR_INVALID_PASSWORD", "LOGIN_ERROR_SSO_PWD_INVALID"), "3",
+      LoginStatus in ("LOGIN_ERROR_PAGE_REQUIRES_LOGIN", "LOGIN_ERROR_SESSION_TIMEOUT"), "4",
+      LoginStatus == "LOGIN_ERROR_USER_INACTIVE", "5",
+      LoginStatus in ("LOGIN_NO_ERROR", ""), "6",
+      LoginStatus == "LOGIN_SAML_INVALID_USERNAME", "7",
+      LoginStatus == "OAUTH_TOKEN_IN_PROCESS", "8",
+      "")
+  | extend
+  DvcAction = case(
+      _EventResultLookupCode in ("0", "1", "2", "3", "4", "5", "7"), "Blocked",
+      _EventResultLookupCode in ("6", "8"), "Allowed",
+      ""),
+  EventResultDetails = case(
+      _EventResultLookupCode in ("0", "8"), "Other",
+      _EventResultLookupCode == "1", "Logon violates policy",
+      _EventResultLookupCode == "2", "User locked",
+      _EventResultLookupCode == "3", "Incorrect password",
+      _EventResultLookupCode == "4", "Session expired",
+      _EventResultLookupCode == "5", "User disabled",
+      _EventResultLookupCode == "6", "",
+      _EventResultLookupCode == "7", "No such user",
+      ""),
+  EventResult = case(
+      _EventResultLookupCode in ("0", "1", "2", "3", "4", "5", "7"), "Failure",
+      _EventResultLookupCode in ("6", "8"), "Success",
+      ""),
+  EventSeverity = case(
+      _EventResultLookupCode in ("0", "1", "2", "3", "4", "5", "6", "7", "8"), "Informational",
+      "")
+      | extend
+  TempEventResult = case(
+      RequestStatus in ("S", "R"), "Success",
+      RequestStatus in ("F", "A", "N"), "Failure",
+      RequestStatus == "U", "NA",
+      "")
+      | extend
+  TargetUserType = case(
+      UserType in ("CsnOnly", "CspLitePortal", "CustomerSuccess", "PowerCustomerSuccess", "PowerPartner", "SelfService", "b", "C", "D", "F", "L", "n", "O", "o", "P", "p"), "Other",
+      UserType in ("Guest", "G"), "Anonymous",
+      UserType in ("Standard", "S"), "Regular",
+      UserType == "A", "Application",
+      UserType == "N", "Service",
+      UserType == "X", "Admin",
+      "")
+      | project-rename
+          EventProductVersion = ApiVersion,
+          EventOriginalResultDetails = LoginStatus,
+          TargetUserId = UserId,
+          EventOriginalUid = RequestId,
+          TlsCipher = CipherSuite,
+          TlsVersion = TlsProtocol,
+          TargetUserScopeId = OrganizationId,
+          TargetUrl = Uri,
+          TargetOriginalUserType = UserType,
+          ActorUsername = DelegatedUserName,
+          ActorUserId = DelegatedUserId
+      | extend
+          EventVendor = 'Salesforce',
+          EventProduct = 'Service Cloud',
+          EventCount = int(1),
+          EventSchema = 'Authentication',
+          EventSchemaVersion = '1.0.0',
+          TargetAppName = "Salesforce Dot Com(SFDC)",
+          TargetAppType = "SaaS application",
+          EventUid = EventOriginalUid,
+          EventOriginalType = EventType,
+          SrcIpAddr = iif(isnotempty(columnifexists("SrcIpAddr", "")), columnifexists("SrcIpAddr", ""), iif(isnotempty(SourceIp), SourceIp, ClientIp)),
+          TargetUsername = iif(isnotempty(UserEmail), UserEmail, columnifexists("UserName", "")),
+          HttpUserAgent = iif(isnotempty(BrowserType), BrowserType, columnifexists("HttpUserAgent", ""))
+      | extend
+          EventType = case(
+              EventType == "Login", "Logon",
+              EventType == "LoginAs", "Logon",
+              EventType == "Logout", "Logoff",
+              ""
+          ),
+          TargetSessionId = iif(isnotempty(SessionKey), SessionKey, LoginKey),
+          TargetUserScope = "Salesforce Organization",
+          TargetUserIdType = iff(isnotempty(TargetUserId), "SalesforceId", ""),
+          ActorUserIdType = iff(isnotempty(ActorUserId), "SalesforceId", ""),
+          TargetUsernameType = iff(isnotempty(TargetUsername), "UPN", ""),
+          ActorUsernameType = iff(isnotempty(ActorUsername), "UPN", ""),
+          User = iif(isnotempty(TargetUsername), TargetUsername, TargetUserId),
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          Dvc = EventProduct,
+          EventResult = iif(isnotempty(EventResult), EventResult, TempEventResult),
+          Application = TargetAppName,
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated
+      // NOTE(DCR-LOSSY: 3.36 parse_user_agent) - targeted OS patterns do not reproduce the full user-agent parser
+  | extend
+      _ParsedOsFamily = case(
+          HttpUserAgent contains "Windows NT", "Windows",
+          HttpUserAgent contains "Android", "Android",
+          HttpUserAgent contains "iPhone" or HttpUserAgent contains "iPad", "iOS",
+          HttpUserAgent contains "Mac OS X", "Mac OS X",
+          HttpUserAgent contains "Linux", "Linux",
+          "Other"),
+      _ParsedOsMajor = case(
+          HttpUserAgent contains "Windows NT", extract(@"Windows NT (\d+)", 1, HttpUserAgent),
+          HttpUserAgent contains "Android", extract(@"Android (\d+)", 1, HttpUserAgent),
+          HttpUserAgent contains "iPhone" or HttpUserAgent contains "iPad", extract(@"OS (\d+)", 1, HttpUserAgent),
+          HttpUserAgent contains "Mac OS X", extract(@"Mac OS X (\d+)", 1, HttpUserAgent),
+          "")
+      | extend
+          DvcOs = _ParsedOsFamily
+          , DvcOsVersion = iif(isnotempty(_ParsedOsMajor), _ParsedOsMajor, columnifexists("DvcOsVersion", ""))
+          , AdditionalFields = pack(
+                  "SessionType", columnifexists("SessionType", ""),
+                  "SessionLevel", columnifexists("SessionLevel", ""),
+                  "SessionKey", columnifexists("SessionKey", ""),
+                  "LoginKey", columnifexists("LoginKey", ""),
+                  "TlsVersion", columnifexists("TlsVersion", ""),
+                  "TlsCipher", columnifexists("TlsCipher", "")
+              )
+      | project
+          EventProduct
+          , EventProductVersion
+          , EventVendor
+          , EventCount
+          , EventSchemaVersion
+          , EventSchema
+          , TimeGenerated
+          , EventOriginalUid
+          , EventOriginalType
+          , EventResult
+          , EventResultDetails
+          , EventOriginalResultDetails
+          , EventStartTime
+          , EventEndTime
+          , EventType
+          , EventUid
+          , EventSeverity
+          , TargetSessionId
+          , ActorUserId
+          , ActorUsername
+          , ActorUserIdType
+          , ActorUsernameType
+          , TargetUserId
+          , TargetUsername
+          , TargetUserType
+          , HttpUserAgent
+          , SrcIpAddr
+          , TargetAppName
+          , TargetAppType
+          , TargetUrl
+          , LogonMethod
+          , LogonProtocol
+          , TargetUserIdType
+          , TargetUsernameType
+          , TargetOriginalUserType
+          , User
+          , IpAddr
+          , Dvc
+          , DvcOs
+          , DvcOsVersion
+          , DvcAction
+          , AdditionalFields
+          , Type
+          , Src
+          , Application
+  | project EventProduct, EventProductVersion, EventVendor, EventCount, EventSchemaVersion, TimeGenerated, EventOriginalUid, EventOriginalType, EventResult, EventResultDetails, EventOriginalResultDetails, EventStartTime, EventEndTime, EventType, EventSeverity, TargetSessionId, ActorUserId, ActorUsername, ActorUserIdType, ActorUsernameType, TargetUserId, TargetUsername, TargetUserType, HttpUserAgent, SrcIpAddr, TargetAppName, TargetAppType, TargetUrl, LogonMethod, LogonProtocol, TargetUserIdType, TargetUsernameType, TargetOriginalUserType, DvcOs, DvcOsVersion, DvcAction, AdditionalFields, Type
+Change:
+  Date: '2026-11-13'
+  Description: 'Preserve original AdditionalFields keys without a query-only alias preservation bag, matching established ingestion-time parsers.'
