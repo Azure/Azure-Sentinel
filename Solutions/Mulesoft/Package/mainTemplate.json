@@ -47,7 +47,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Mulesoft",
-    "_solutionVersion": "3.2.1",
+    "_solutionVersion": "3.2.2",
     "solutionId": "azuresentinel.azure-sentinel-solution-mulesoft",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "MuleSoft",
@@ -60,7 +60,7 @@
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.2.1",
+    "dataConnectorCCPVersion": "3.2.2",
     "_dataConnectorContentIdConnectorDefinition2": "MulesoftCloudhubPushConnector",
     "dataConnectorTemplateNameConnectorDefinition2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition2')))]",
     "_dataConnectorContentIdConnections2": "MulesoftCloudhubPushConnectorConnections",
@@ -90,7 +90,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Mulesoft data connector with template version 3.2.1",
+        "description": "Mulesoft data connector with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -478,8 +478,8 @@
                   "id": "MulesoftCloudhubPushConnector",
                   "title": "MuleSoft CloudHub Logs (Push Connector via Codeless Connector Framework)",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "MuleSoft CloudHub Log4j push-based connector for receiving application logs directly from MuleSoft CloudHub via Log4j HTTP appender. This connector allows customers to stream logs in real-time as recommended by MuleSoft, avoiding API rate limiting and duplicate data issues. Configure your MuleSoft applications with the provided Log4j HTTP appender configuration to stream logs to Microsoft Sentinel.",
-                  "graphQueriesTableName": "MuleSoftCloudhubLogs",
+                  "descriptionMarkdown": "Receive MuleSoft CloudHub application logs through the Azure Monitor Logs Ingestion API. Configure each application with a compatible custom asynchronous Log4j appender, or forward through an external collector that supports this API and the connector's schema. This connector deploys the receiving resources; it does not include a sender, discover applications, or call the CloudHub application/log APIs. Use the setup steps below to configure and validate your sender.",
+                  "graphQueriesTableName": "MuleSoftCloudhubLogs_CL",
                   "graphQueries": [
                     {
                       "metricName": "Total logs received",
@@ -526,8 +526,8 @@
                   ],
                   "dataTypes": [
                     {
-                      "name": "MuleSoftCloudhubLogs",
-                      "lastDataReceivedQuery": "MuleSoftCloudhubLogs\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                      "name": "MuleSoftCloudhubLogs_CL",
+                      "lastDataReceivedQuery": "MuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -537,7 +537,7 @@
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "MuleSoftCloudhubLogs | where TimeGenerated > ago(1h) | take 1"
+                        "MuleSoftCloudhubLogs_CL | where TimeGenerated > ago(1h) | take 1"
                       ]
                     }
                   ],
@@ -577,26 +577,26 @@
                   },
                   "instructionSteps": [
                     {
-                      "title": "1. Create ARM Resources and Provide the Required Permissions",
-                      "description": "This connector receives data from external security systems that push logs to Microsoft Sentinel. The external system must be configured to send raw event data to the Microsoft Sentinel Ingestion API. Clicking on **Deploy** will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n[Learn more about the connector setup process](https://review.learn.microsoft.com/azure/sentinel/create-push-codeless-connector)",
+                      "title": "1. Deploy the receiving resources",
+                      "description": "Select Deploy to provision the receiving resources and obtain the configuration values below. Deployment does not configure MuleSoft applications or start forwarding logs. Your sender needs an Entra access token and Monitoring Metrics Publisher access on the DCR. See the [Logs Ingestion API overview](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview).",
                       "instructions": [
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "## Azure Resource Deployment\n\nThe deployment process will create the following resources:\n- Log Analytics custom table(s)\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR)\n- Entra ID Application Registration\n- Role assignments for data ingestion"
+                            "content": "Deploy the Log Analytics table, Data Collection Endpoint (DCE), Data Collection Rule (DCR), and Entra application with ingestion permissions."
                           }
                         },
                         {
                           "type": "DeployPushConnectorButton",
                           "parameters": {
-                            "label": "Deploy MuleSoft CloudHub Log4j connector resources",
+                            "label": "Deploy MuleSoft CloudHub Logs receiving resources",
                             "applicationDisplayName": "MuleSoft CloudHub Logs Push Connector"
                           }
                         },
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "### Configuration Values\n\nAfter deployment, copy the following values to configure your external security system:"
+                            "content": "### Sender configuration\n\nCopy these values into your compatible appender or external collector. The DCR value below is its immutable ID, not its ARM resource ID. Use Entra application credentials, not MuleSoft Connected App credentials."
                           }
                         },
                         {
@@ -653,14 +653,14 @@
                           "type": "CopyableLabel",
                           "parameters": {
                             "fillWith": [],
-                            "label": "Stream Name (MuleSoftCloudhubLogs)",
+                            "label": "Stream Name",
                             "value": "Custom-MuleSoftCloudhubLogs_CL"
                           }
                         },
                         {
                           "type": "InfoMessage",
                           "parameters": {
-                            "text": "Keep these values secure. You will need them to configure your external security system.",
+                            "text": "Store the client secret in protected application or collector configuration. Do not hardcode it in log4j2.xml or include it in logs.",
                             "visible": true,
                             "inline": true
                           }
@@ -668,8 +668,12 @@
                       ]
                     },
                     {
-                      "title": "2. Configure your external system to push logs",
-                      "description": "Use the following parameters to configure your external security system to send logs to the workspace.\n\n### Configuration Steps\n\n1. Access your external security system's configuration interface.\n2. Navigate to the data forwarding, integration, or SIEM settings.\n3. Select **Azure Monitor** or **Microsoft Sentinel** as the destination.\n4. Select **Data Collection Endpoint** as the authentication method.\n5. Configure the required fields using the values from the previous step:\n   - **Tenant ID**: Copy from above\n   - **Application (Client) ID**: Copy from above\n   - **Client Secret**: Copy from above\n   - **Data Collection Endpoint**: Copy from above\n   - **Data Collection Rule Immutable ID**: Copy from above\n   - **Stream Name**: Copy the appropriate stream name from above\n6. Save the configuration and enable/start the forwarder.\n\n### Validation\n\n> **Note**: Data will appear in the **MuleSoftCloudhubLogs** table in your Log Analytics workspace within a few minutes.\n\nTo verify data is being received, run the following query in your Log Analytics workspace:\n\n```kusto\nMuleSoftCloudhubLogs\n| where TimeGenerated > ago(1h)\n| take 10\n```\n\n### Troubleshooting\n\nIf data is not appearing:\n- Verify the configuration values are correct\n- Check that the forwarder/integration is enabled and running\n- Review logs in your external security system for any errors\n- Ensure network connectivity from your system to Azure\n- Verify the Entra application has the correct permissions"
+                      "title": "2. Configure application log forwarding",
+                      "description": "1. Choose a custom asynchronous Log4j appender that supports Azure Monitor Logs Ingestion, or send logs to an external collector that implements it. No ready-made sender is supplied with this connector; a generic HTTP appender alone does not implement Entra token refresh or schema mapping.\n2. Add the appender dependency to your Mule application's `pom.xml` and configure `src/main/resources/log4j2.xml` using that appender's instructions. Repeat for each application, or use your deployment automation. Follow the guide for your platform: [CloudHub 1.0](https://docs.mulesoft.com/cloudhub/custom-log-appender) or [CloudHub 2.0](https://docs.mulesoft.com/cloudhub-2/ch2-integrate-log-system). Do not use the 1.0 file/appender configuration unchanged on 2.0.\n3. Configure the sender with the tenant ID, client ID, protected client secret, DCE URL, DCR immutable ID and stream name from step 1. It must acquire and refresh an Entra token with scope `https://monitor.azure.com/.default`, then POST a JSON array to `{DCE}/dataCollectionRules/{DCR-immutable-ID}/streams/Custom-MuleSoftCloudhubLogs_CL?api-version=2023-01-01` with `Authorization: Bearer <token>` and `Content-Type: application/json`.\n4. Map records to the DCR fields: `EventTime` (UTC timestamp), `Level`, `Logger`, `Message`, `Thread`, `Exception`, `ApplicationDomainName`, `InstanceId`, `WorkerId`, `Environment`, `Region`, and `ApplicationData` (JSON object). Configure batching, retry/backoff and delivery monitoring in the sender. See [Logs Ingestion API examples](https://learn.microsoft.com/azure/azure-monitor/logs/tutorial-logs-ingestion-code).\n5. Deploy a test application and verify forwarding before rolling out to other applications or disabling existing logging."
+                    },
+                    {
+                      "title": "3. Verify ingestion",
+                      "description": "Generate a uniquely identifiable test log and confirm its message and application context in `MuleSoftCloudhubLogs_CL`:\n\n```kusto\nMuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(1h)\n| project TimeGenerated, ApplicationDomainName, Level, Message\n| take 10\n```\n\nIf the record is missing, inspect sender delivery errors: check the Entra token for 401, DCR permissions for 403, and the stream name and JSON field types for 400. Confirm connectivity to the DCE and token endpoint. Receiving-resource deployment alone does not confirm end-to-end ingestion."
                     }
                   ]
                 }
@@ -978,8 +982,8 @@
           "id": "MulesoftCloudhubPushConnector",
           "title": "MuleSoft CloudHub Logs (Push Connector via Codeless Connector Framework)",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "MuleSoft CloudHub Log4j push-based connector for receiving application logs directly from MuleSoft CloudHub via Log4j HTTP appender. This connector allows customers to stream logs in real-time as recommended by MuleSoft, avoiding API rate limiting and duplicate data issues. Configure your MuleSoft applications with the provided Log4j HTTP appender configuration to stream logs to Microsoft Sentinel.",
-          "graphQueriesTableName": "MuleSoftCloudhubLogs",
+          "descriptionMarkdown": "Receive MuleSoft CloudHub application logs through the Azure Monitor Logs Ingestion API. Configure each application with a compatible custom asynchronous Log4j appender, or forward through an external collector that supports this API and the connector's schema. This connector deploys the receiving resources; it does not include a sender, discover applications, or call the CloudHub application/log APIs. Use the setup steps below to configure and validate your sender.",
+          "graphQueriesTableName": "MuleSoftCloudhubLogs_CL",
           "graphQueries": [
             {
               "metricName": "Total logs received",
@@ -1026,8 +1030,8 @@
           ],
           "dataTypes": [
             {
-              "name": "MuleSoftCloudhubLogs",
-              "lastDataReceivedQuery": "MuleSoftCloudhubLogs\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+              "name": "MuleSoftCloudhubLogs_CL",
+              "lastDataReceivedQuery": "MuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
@@ -1037,7 +1041,7 @@
             {
               "type": "IsConnectedQuery",
               "value": [
-                "MuleSoftCloudhubLogs | where TimeGenerated > ago(1h) | take 1"
+                "MuleSoftCloudhubLogs_CL | where TimeGenerated > ago(1h) | take 1"
               ]
             }
           ],
@@ -1077,26 +1081,26 @@
           },
           "instructionSteps": [
             {
-              "title": "1. Create ARM Resources and Provide the Required Permissions",
-              "description": "This connector receives data from external security systems that push logs to Microsoft Sentinel. The external system must be configured to send raw event data to the Microsoft Sentinel Ingestion API. Clicking on **Deploy** will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n[Learn more about the connector setup process](https://review.learn.microsoft.com/azure/sentinel/create-push-codeless-connector)",
+              "title": "1. Deploy the receiving resources",
+              "description": "Select Deploy to provision the receiving resources and obtain the configuration values below. Deployment does not configure MuleSoft applications or start forwarding logs. Your sender needs an Entra access token and Monitoring Metrics Publisher access on the DCR. See the [Logs Ingestion API overview](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview).",
               "instructions": [
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "## Azure Resource Deployment\n\nThe deployment process will create the following resources:\n- Log Analytics custom table(s)\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR)\n- Entra ID Application Registration\n- Role assignments for data ingestion"
+                    "content": "Deploy the Log Analytics table, Data Collection Endpoint (DCE), Data Collection Rule (DCR), and Entra application with ingestion permissions."
                   }
                 },
                 {
                   "type": "DeployPushConnectorButton",
                   "parameters": {
-                    "label": "Deploy MuleSoft CloudHub Log4j connector resources",
+                    "label": "Deploy MuleSoft CloudHub Logs receiving resources",
                     "applicationDisplayName": "MuleSoft CloudHub Logs Push Connector"
                   }
                 },
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "### Configuration Values\n\nAfter deployment, copy the following values to configure your external security system:"
+                    "content": "### Sender configuration\n\nCopy these values into your compatible appender or external collector. The DCR value below is its immutable ID, not its ARM resource ID. Use Entra application credentials, not MuleSoft Connected App credentials."
                   }
                 },
                 {
@@ -1153,14 +1157,14 @@
                   "type": "CopyableLabel",
                   "parameters": {
                     "fillWith": [],
-                    "label": "Stream Name (MuleSoftCloudhubLogs)",
+                    "label": "Stream Name",
                     "value": "Custom-MuleSoftCloudhubLogs_CL"
                   }
                 },
                 {
                   "type": "InfoMessage",
                   "parameters": {
-                    "text": "Keep these values secure. You will need them to configure your external security system.",
+                    "text": "Store the client secret in protected application or collector configuration. Do not hardcode it in log4j2.xml or include it in logs.",
                     "visible": true,
                     "inline": true
                   }
@@ -1168,8 +1172,12 @@
               ]
             },
             {
-              "title": "2. Configure your external system to push logs",
-              "description": "Use the following parameters to configure your external security system to send logs to the workspace.\n\n### Configuration Steps\n\n1. Access your external security system's configuration interface.\n2. Navigate to the data forwarding, integration, or SIEM settings.\n3. Select **Azure Monitor** or **Microsoft Sentinel** as the destination.\n4. Select **Data Collection Endpoint** as the authentication method.\n5. Configure the required fields using the values from the previous step:\n   - **Tenant ID**: Copy from above\n   - **Application (Client) ID**: Copy from above\n   - **Client Secret**: Copy from above\n   - **Data Collection Endpoint**: Copy from above\n   - **Data Collection Rule Immutable ID**: Copy from above\n   - **Stream Name**: Copy the appropriate stream name from above\n6. Save the configuration and enable/start the forwarder.\n\n### Validation\n\n> **Note**: Data will appear in the **MuleSoftCloudhubLogs** table in your Log Analytics workspace within a few minutes.\n\nTo verify data is being received, run the following query in your Log Analytics workspace:\n\n```kusto\nMuleSoftCloudhubLogs\n| where TimeGenerated > ago(1h)\n| take 10\n```\n\n### Troubleshooting\n\nIf data is not appearing:\n- Verify the configuration values are correct\n- Check that the forwarder/integration is enabled and running\n- Review logs in your external security system for any errors\n- Ensure network connectivity from your system to Azure\n- Verify the Entra application has the correct permissions"
+              "title": "2. Configure application log forwarding",
+              "description": "1. Choose a custom asynchronous Log4j appender that supports Azure Monitor Logs Ingestion, or send logs to an external collector that implements it. No ready-made sender is supplied with this connector; a generic HTTP appender alone does not implement Entra token refresh or schema mapping.\n2. Add the appender dependency to your Mule application's `pom.xml` and configure `src/main/resources/log4j2.xml` using that appender's instructions. Repeat for each application, or use your deployment automation. Follow the guide for your platform: [CloudHub 1.0](https://docs.mulesoft.com/cloudhub/custom-log-appender) or [CloudHub 2.0](https://docs.mulesoft.com/cloudhub-2/ch2-integrate-log-system). Do not use the 1.0 file/appender configuration unchanged on 2.0.\n3. Configure the sender with the tenant ID, client ID, protected client secret, DCE URL, DCR immutable ID and stream name from step 1. It must acquire and refresh an Entra token with scope `https://monitor.azure.com/.default`, then POST a JSON array to `{DCE}/dataCollectionRules/{DCR-immutable-ID}/streams/Custom-MuleSoftCloudhubLogs_CL?api-version=2023-01-01` with `Authorization: Bearer <token>` and `Content-Type: application/json`.\n4. Map records to the DCR fields: `EventTime` (UTC timestamp), `Level`, `Logger`, `Message`, `Thread`, `Exception`, `ApplicationDomainName`, `InstanceId`, `WorkerId`, `Environment`, `Region`, and `ApplicationData` (JSON object). Configure batching, retry/backoff and delivery monitoring in the sender. See [Logs Ingestion API examples](https://learn.microsoft.com/azure/azure-monitor/logs/tutorial-logs-ingestion-code).\n5. Deploy a test application and verify forwarding before rolling out to other applications or disabling existing logging."
+            },
+            {
+              "title": "3. Verify ingestion",
+              "description": "Generate a uniquely identifiable test log and confirm its message and application context in `MuleSoftCloudhubLogs_CL`:\n\n```kusto\nMuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(1h)\n| project TimeGenerated, ApplicationDomainName, Level, Message\n| take 10\n```\n\nIf the record is missing, inspect sender delivery errors: check the Entra token for 401, DCR permissions for 403, and the stream name and JSON field types for 400. Confirm connectivity to the DCE and token endpoint. Receiving-resource deployment alone does not confirm end-to-end ingestion."
             }
           ]
         }
@@ -1357,7 +1365,7 @@
                   "id": "MulesoftCloudhubConnector",
                   "title": "Mulesoft CloudHub Alerts Connector (via Codeless Connector Framework)",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "The Mulesoft CloudHub data connector enables you to ingest alerts from Mulesoft CloudHub into Microsoft Sentinel through the CloudHub REST API v2. This connector supports configurable endpoints to accommodate different Mulesoft regions and deployment environments including US Commercial Cloud, EU Cloud, Government Cloud, and on-premises deployments. It uses multi-stream support so you can connect to multiple Mulesoft environments simultaneously. Configure the connector with your Anypoint Platform credentials, environment ID, and optional application name filter to begin collecting data. Use the `MuleSoftCloudhub` parser to query ingested alerts. Refer to [Mulesoft CloudHub API documentation](https://anypoint.mulesoft.com/exchange/portals/anypoint-platform/) for more information about the CloudHub APIs.",
+                  "descriptionMarkdown": "Ingest CloudHub 1.0 alerts into Microsoft Sentinel using the CloudHub REST API v2. CloudHub 1.0 entitlement is required; API v2 does not mean CloudHub 2.0. This connector does not collect CloudHub 2.0 alerts or on-premises Runtime Manager alerts. Use a Connected App with OAuth2 client credentials (recommended), or Basic authentication where supported by your organization. Configure the regional Anypoint Platform URL, environment ID and optional application filter. The alert list is polled every five minutes; previously returned alerts may be ingested again. Use the optional deduplication query when needed. See [CloudHub API documentation](https://docs.mulesoft.com/cloudhub/cloudhub-api) and [Connected Apps documentation](https://docs.mulesoft.com/access-management/creating-connected-apps-dev).",
                   "graphQueriesTableName": "MulesoftCloudhubAlerts_CL",
                   "graphQueries": [
                     {
@@ -1397,6 +1405,10 @@
                     {
                       "description": "Summary by alert name",
                       "query": "MuleSoftCloudhub\n| summarize count() by EventResult"
+                    },
+                    {
+                      "description": "Deduplicate repeated CloudHub alert revisions (last 24 hours)",
+                      "query": "let alerts = MulesoftCloudhubAlerts_CL | where TimeGenerated > ago(24h);\nunion\n(alerts | where isnotempty(Id) and isnotnull(LastModified) | summarize arg_max(TimeGenerated, *) by OrganizationId, EnvironmentId, Id, CreatedAt, LastModified, Name, Severity, ProductName, Enabled, IsSystem, _ConditionKey = tostring(Condition), _ActionsKey = tostring(Actions) | project-away _ConditionKey, _ActionsKey),\n(alerts | where isempty(Id) or isnull(LastModified))"
                     }
                   ],
                   "dataTypes": [
@@ -1438,7 +1450,7 @@
                     "customs": [
                       {
                         "name": "Mulesoft CloudHub API access",
-                        "description": "**Mulesoft CloudHub API** access with read permissions is required."
+                        "description": "CloudHub 1.0 entitlement and read access to alerts in the selected environment are required. For OAuth2, create a Connected App that acts on its own behalf and grant Runtime Manager Read Alerts for that business group and environment. Use the Connected App ID/secret, not the environment client credentials."
                       }
                     ]
                   },
@@ -1450,13 +1462,13 @@
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "## Prerequisites\r\n\r\nBefore configuring this connector, ensure you have:\r\n\r\n1. **Mulesoft Anypoint Platform Account** with appropriate permissions\r\n2. **Environment Access** to the CloudHub environment you want to monitor\r\n3. **API Access Credentials** (username and password)\r\n4. **Environment ID** from your Mulesoft CloudHub console\r\n\r\n### Finding Your Environment ID\r\n\r\n1. Log in to [Anypoint Platform](https://anypoint.mulesoft.com/)\r\n2. Navigate to **Access Management** > **Environments**\r\n3. Select your target environment\r\n4. Copy the Environment ID from the URL or environment details"
+                            "content": "## Prerequisites\r\n\r\n1. Your organization must have **CloudHub 1.0 entitlement**. A 403 response stating that this entitlement is not enabled cannot be fixed by changing credentials. CloudHub 2.0 is not supported by this connector.\r\n2. For **OAuth2 (recommended)**, create a Connected App under **Access Management > Connected Apps** with **App acts on its own behalf (client credentials)**. Grant **Runtime Manager > Read Alerts** for the target business group and environment. Save the app and use its client ID and secret, not the environment's client ID/secret.\r\n3. For **Basic**, use an Anypoint username/password only if Basic API authentication is supported for that account. Do not use Connected App credentials in Basic mode.\r\n4. Find the environment ID under **Access Management > Business Groups > Environments**. The environment must match the Read Alerts scope assignment.\r\n\r\nSee [Connected App setup](https://docs.mulesoft.com/access-management/creating-connected-apps-dev)."
                           }
                         },
                         {
                           "type": "InfoMessage",
                           "parameters": {
-                            "text": "This connector requires read access to the CloudHub API. Contact your Mulesoft administrator if you don't have the necessary permissions.",
+                            "text": "This connector requires CloudHub 1.0 entitlement and Read Alerts access. API version v2 is not CloudHub 2.0. Contact your MuleSoft administrator to confirm product entitlement.",
                             "visible": true,
                             "inline": false
                           }
@@ -1536,7 +1548,7 @@
                                   {
                                     "type": "InfoMessage",
                                     "parameters": {
-                                      "text": "**Regional Endpoints**:\n- **US**: https://anypoint.mulesoft.com\n- **EU**: https://eu1.anypoint.mulesoft.com\n- **Government**: https://gov.anypoint.mulesoft.com",
+                                      "text": "Enter your regional Anypoint Platform HTTPS URL, for example https://anypoint.mulesoft.com, https://eu1.anypoint.mulesoft.com, or https://gov.anypoint.mulesoft.com. The connector resolves /cloudhub/api/v2/alerts and the OAuth token endpoint on this origin. An existing URL ending in /cloudhub/api also works. Do not enter an application URL or a custom proxy path.",
                                       "visible": true,
                                       "inline": true
                                     }
@@ -1545,7 +1557,7 @@
                               },
                               {
                                 "title": "Credentials",
-                                "description": "Provide your Anypoint Platform credentials",
+                                "description": "Select authentication, then provide the matching credentials",
                                 "instructions": [
                                   {
                                     "type": "Markdown",
@@ -1554,10 +1566,30 @@
                                     }
                                   },
                                   {
+                                    "type": "Radio",
+                                    "parameters": {
+                                      "title": "Authentication Type",
+                                      "name": "authenticationType",
+                                      "validations": {
+                                        "required": true
+                                      },
+                                      "options": [
+                                        {
+                                          "label": "OAuth2 - Connected App (recommended)",
+                                          "value": "OAuth2"
+                                        },
+                                        {
+                                          "label": "Basic - Anypoint username/password",
+                                          "value": "Basic"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
                                     "type": "Textbox",
                                     "parameters": {
-                                      "label": "Username",
-                                      "placeholder": "Your Mulesoft Anypoint Platform username",
+                                      "label": "Connected App Client ID / Basic Username",
+                                      "placeholder": "OAuth2: Connected App ID; Basic: Anypoint username",
                                       "type": "text",
                                       "name": "username",
                                       "validations": {
@@ -1568,8 +1600,8 @@
                                   {
                                     "type": "Textbox",
                                     "parameters": {
-                                      "label": "Password",
-                                      "placeholder": "Your Mulesoft Anypoint Platform password",
+                                      "label": "Connected App Client Secret / Basic Password",
+                                      "placeholder": "OAuth2: Connected App secret; Basic: Anypoint password",
                                       "type": "password",
                                       "name": "password",
                                       "validations": {
@@ -1607,7 +1639,10 @@
                                       "label": "Application Name Filter",
                                       "placeholder": "Optional: Filter alerts for a specific application",
                                       "type": "text",
-                                      "name": "applicationName"
+                                      "name": "applicationName",
+                                      "validations": {
+                                        "required": false
+                                      }
                                     }
                                   },
                                   {
@@ -1632,7 +1667,7 @@
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "### Post-Connection Steps\r\n\r\n1. **Monitor Connection Status**: Check the connector status in the Data connectors page\r\n2. **Validate Data Flow**: Use the sample queries provided to verify data is being collected\r\n3. **Review Logs**: Check Azure Monitor logs for any connection or authentication issues\r\n\r\n### Data Collection Schedule\r\n- **Alerts**: Polled every 5 minutes from `/v2/alerts` endpoint\r\n\r\n### Expected Timeline\r\n- **Initial Data**: Allow 10-15 minutes for initial data to appear\r\n- **Alerts Data**: Available in the `MuleSoftCloudhub` table\r\n\r\n### Troubleshooting\r\n- **Authentication errors**: Verify credentials and environment access\r\n- **No data**: Ensure alerts exist in the specified environment\r\n- **Partial data**: Check environment ID and application filter settings"
+                            "content": "### Monitor and Validate\r\n\r\n- Alerts are polled every five minutes from `/cloudhub/api/v2/alerts`, with offset pagination, and stored in `MulesoftCloudhubAlerts_CL`. `MuleSoftCloudhub` is the parser, not the table.\r\n- **401**: Verify the selected authentication method, credentials and API region.\r\n- **403**: Inspect the vendor error. Check CloudHub 1.0 entitlement and Read Alerts permission for the requested environment.\r\n- **Non-JSON response / 404**: Verify the regional Anypoint Platform URL, not a login page or application URL.\r\n\r\n### Repeated Alerts\r\n\r\nThis endpoint returns an alert list. No verified time-window filter is configured. The five-minute polling interval does not limit results to newly created alerts. Previously returned rows may be ingested again.\r\n\r\nUse the optional **Deduplicate repeated CloudHub alert revisions** sample query. It compares organization, environment, alert ID, revision timestamps and payload fields, keeping the latest collected copy; alert updates remain separate. Rows without an ID or last-modified timestamp are retained without deduplication. This is query-time deduplication only: it does not delete rows or reduce ingestion charges. Raw-table queries and existing parser consumers remain unchanged."
                           }
                         },
                         {
@@ -1871,7 +1906,7 @@
           "id": "MulesoftCloudhubConnector",
           "title": "Mulesoft CloudHub Alerts Connector (via Codeless Connector Framework)",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "The Mulesoft CloudHub data connector enables you to ingest alerts from Mulesoft CloudHub into Microsoft Sentinel through the CloudHub REST API v2. This connector supports configurable endpoints to accommodate different Mulesoft regions and deployment environments including US Commercial Cloud, EU Cloud, Government Cloud, and on-premises deployments. It uses multi-stream support so you can connect to multiple Mulesoft environments simultaneously. Configure the connector with your Anypoint Platform credentials, environment ID, and optional application name filter to begin collecting data. Use the `MuleSoftCloudhub` parser to query ingested alerts. Refer to [Mulesoft CloudHub API documentation](https://anypoint.mulesoft.com/exchange/portals/anypoint-platform/) for more information about the CloudHub APIs.",
+          "descriptionMarkdown": "Ingest CloudHub 1.0 alerts into Microsoft Sentinel using the CloudHub REST API v2. CloudHub 1.0 entitlement is required; API v2 does not mean CloudHub 2.0. This connector does not collect CloudHub 2.0 alerts or on-premises Runtime Manager alerts. Use a Connected App with OAuth2 client credentials (recommended), or Basic authentication where supported by your organization. Configure the regional Anypoint Platform URL, environment ID and optional application filter. The alert list is polled every five minutes; previously returned alerts may be ingested again. Use the optional deduplication query when needed. See [CloudHub API documentation](https://docs.mulesoft.com/cloudhub/cloudhub-api) and [Connected Apps documentation](https://docs.mulesoft.com/access-management/creating-connected-apps-dev).",
           "graphQueriesTableName": "MulesoftCloudhubAlerts_CL",
           "graphQueries": [
             {
@@ -1911,6 +1946,10 @@
             {
               "description": "Summary by alert name",
               "query": "MuleSoftCloudhub\n| summarize count() by EventResult"
+            },
+            {
+              "description": "Deduplicate repeated CloudHub alert revisions (last 24 hours)",
+              "query": "let alerts = MulesoftCloudhubAlerts_CL | where TimeGenerated > ago(24h);\nunion\n(alerts | where isnotempty(Id) and isnotnull(LastModified) | summarize arg_max(TimeGenerated, *) by OrganizationId, EnvironmentId, Id, CreatedAt, LastModified, Name, Severity, ProductName, Enabled, IsSystem, _ConditionKey = tostring(Condition), _ActionsKey = tostring(Actions) | project-away _ConditionKey, _ActionsKey),\n(alerts | where isempty(Id) or isnull(LastModified))"
             }
           ],
           "dataTypes": [
@@ -1952,7 +1991,7 @@
             "customs": [
               {
                 "name": "Mulesoft CloudHub API access",
-                "description": "**Mulesoft CloudHub API** access with read permissions is required."
+                "description": "CloudHub 1.0 entitlement and read access to alerts in the selected environment are required. For OAuth2, create a Connected App that acts on its own behalf and grant Runtime Manager Read Alerts for that business group and environment. Use the Connected App ID/secret, not the environment client credentials."
               }
             ]
           },
@@ -1964,13 +2003,13 @@
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "## Prerequisites\r\n\r\nBefore configuring this connector, ensure you have:\r\n\r\n1. **Mulesoft Anypoint Platform Account** with appropriate permissions\r\n2. **Environment Access** to the CloudHub environment you want to monitor\r\n3. **API Access Credentials** (username and password)\r\n4. **Environment ID** from your Mulesoft CloudHub console\r\n\r\n### Finding Your Environment ID\r\n\r\n1. Log in to [Anypoint Platform](https://anypoint.mulesoft.com/)\r\n2. Navigate to **Access Management** > **Environments**\r\n3. Select your target environment\r\n4. Copy the Environment ID from the URL or environment details"
+                    "content": "## Prerequisites\r\n\r\n1. Your organization must have **CloudHub 1.0 entitlement**. A 403 response stating that this entitlement is not enabled cannot be fixed by changing credentials. CloudHub 2.0 is not supported by this connector.\r\n2. For **OAuth2 (recommended)**, create a Connected App under **Access Management > Connected Apps** with **App acts on its own behalf (client credentials)**. Grant **Runtime Manager > Read Alerts** for the target business group and environment. Save the app and use its client ID and secret, not the environment's client ID/secret.\r\n3. For **Basic**, use an Anypoint username/password only if Basic API authentication is supported for that account. Do not use Connected App credentials in Basic mode.\r\n4. Find the environment ID under **Access Management > Business Groups > Environments**. The environment must match the Read Alerts scope assignment.\r\n\r\nSee [Connected App setup](https://docs.mulesoft.com/access-management/creating-connected-apps-dev)."
                   }
                 },
                 {
                   "type": "InfoMessage",
                   "parameters": {
-                    "text": "This connector requires read access to the CloudHub API. Contact your Mulesoft administrator if you don't have the necessary permissions.",
+                    "text": "This connector requires CloudHub 1.0 entitlement and Read Alerts access. API version v2 is not CloudHub 2.0. Contact your MuleSoft administrator to confirm product entitlement.",
                     "visible": true,
                     "inline": false
                   }
@@ -2050,7 +2089,7 @@
                           {
                             "type": "InfoMessage",
                             "parameters": {
-                              "text": "**Regional Endpoints**:\n- **US**: https://anypoint.mulesoft.com\n- **EU**: https://eu1.anypoint.mulesoft.com\n- **Government**: https://gov.anypoint.mulesoft.com",
+                              "text": "Enter your regional Anypoint Platform HTTPS URL, for example https://anypoint.mulesoft.com, https://eu1.anypoint.mulesoft.com, or https://gov.anypoint.mulesoft.com. The connector resolves /cloudhub/api/v2/alerts and the OAuth token endpoint on this origin. An existing URL ending in /cloudhub/api also works. Do not enter an application URL or a custom proxy path.",
                               "visible": true,
                               "inline": true
                             }
@@ -2059,7 +2098,7 @@
                       },
                       {
                         "title": "Credentials",
-                        "description": "Provide your Anypoint Platform credentials",
+                        "description": "Select authentication, then provide the matching credentials",
                         "instructions": [
                           {
                             "type": "Markdown",
@@ -2068,10 +2107,30 @@
                             }
                           },
                           {
+                            "type": "Radio",
+                            "parameters": {
+                              "title": "Authentication Type",
+                              "name": "authenticationType",
+                              "validations": {
+                                "required": true
+                              },
+                              "options": [
+                                {
+                                  "label": "OAuth2 - Connected App (recommended)",
+                                  "value": "OAuth2"
+                                },
+                                {
+                                  "label": "Basic - Anypoint username/password",
+                                  "value": "Basic"
+                                }
+                              ]
+                            }
+                          },
+                          {
                             "type": "Textbox",
                             "parameters": {
-                              "label": "Username",
-                              "placeholder": "Your Mulesoft Anypoint Platform username",
+                              "label": "Connected App Client ID / Basic Username",
+                              "placeholder": "OAuth2: Connected App ID; Basic: Anypoint username",
                               "type": "text",
                               "name": "username",
                               "validations": {
@@ -2082,8 +2141,8 @@
                           {
                             "type": "Textbox",
                             "parameters": {
-                              "label": "Password",
-                              "placeholder": "Your Mulesoft Anypoint Platform password",
+                              "label": "Connected App Client Secret / Basic Password",
+                              "placeholder": "OAuth2: Connected App secret; Basic: Anypoint password",
                               "type": "password",
                               "name": "password",
                               "validations": {
@@ -2121,7 +2180,10 @@
                               "label": "Application Name Filter",
                               "placeholder": "Optional: Filter alerts for a specific application",
                               "type": "text",
-                              "name": "applicationName"
+                              "name": "applicationName",
+                              "validations": {
+                                "required": false
+                              }
                             }
                           },
                           {
@@ -2146,7 +2208,7 @@
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "### Post-Connection Steps\r\n\r\n1. **Monitor Connection Status**: Check the connector status in the Data connectors page\r\n2. **Validate Data Flow**: Use the sample queries provided to verify data is being collected\r\n3. **Review Logs**: Check Azure Monitor logs for any connection or authentication issues\r\n\r\n### Data Collection Schedule\r\n- **Alerts**: Polled every 5 minutes from `/v2/alerts` endpoint\r\n\r\n### Expected Timeline\r\n- **Initial Data**: Allow 10-15 minutes for initial data to appear\r\n- **Alerts Data**: Available in the `MuleSoftCloudhub` table\r\n\r\n### Troubleshooting\r\n- **Authentication errors**: Verify credentials and environment access\r\n- **No data**: Ensure alerts exist in the specified environment\r\n- **Partial data**: Check environment ID and application filter settings"
+                    "content": "### Monitor and Validate\r\n\r\n- Alerts are polled every five minutes from `/cloudhub/api/v2/alerts`, with offset pagination, and stored in `MulesoftCloudhubAlerts_CL`. `MuleSoftCloudhub` is the parser, not the table.\r\n- **401**: Verify the selected authentication method, credentials and API region.\r\n- **403**: Inspect the vendor error. Check CloudHub 1.0 entitlement and Read Alerts permission for the requested environment.\r\n- **Non-JSON response / 404**: Verify the regional Anypoint Platform URL, not a login page or application URL.\r\n\r\n### Repeated Alerts\r\n\r\nThis endpoint returns an alert list. No verified time-window filter is configured. The five-minute polling interval does not limit results to newly created alerts. Previously returned rows may be ingested again.\r\n\r\nUse the optional **Deduplicate repeated CloudHub alert revisions** sample query. It compares organization, environment, alert ID, revision timestamps and payload fields, keeping the latest collected copy; alert updates remain separate. Rows without an ID or last-modified timestamp are retained without deduplication. This is query-time deduplication only: it does not delete rows or reduce ingestion charges. Raw-table queries and existing parser consumers remain unchanged."
                   }
                 },
                 {
@@ -2248,6 +2310,11 @@
               "type": "securestring",
               "minLength": 1
             },
+            "authenticationType": {
+              "defaultValue": "OAuth2",
+              "type": "securestring",
+              "minLength": 1
+            },
             "username": {
               "defaultValue": "username",
               "type": "securestring",
@@ -2264,9 +2331,8 @@
               "minLength": 1
             },
             "applicationName": {
-              "defaultValue": "applicationName",
-              "type": "securestring",
-              "minLength": 1
+              "defaultValue": "",
+              "type": "securestring"
             }
           },
           "variables": {
@@ -2300,7 +2366,7 @@
               }
             },
             {
-              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','MulesoftCloudhubAlerts_CL' , uniqueString(parameters('connectionAlias')) )]",
+              "name": "[[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'MulesoftCloudhubAlerts_CL', uniqueString(parameters('connectionAlias')))]",
               "apiVersion": "2023-02-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
@@ -2312,7 +2378,7 @@
                   "Password": "[[parameters('password')]"
                 },
                 "request": {
-                  "apiEndpoint": "[[concat(parameters('mulesoftBaseUrl'),'/v2/alerts')]",
+                  "apiEndpoint": "[[uri(parameters('mulesoftBaseUrl'), '/cloudhub/api/v2/alerts')]",
                   "httpMethod": "GET",
                   "rateLimitQPS": 15,
                   "queryWindowInMin": 5,
@@ -2350,9 +2416,74 @@
                 "addOnAttributes": {
                   "connectionAlias": "[[parameters('connectionAlias')]",
                   "streamType": "Alerts",
-                  "mulesoftBaseUrl": "[[parameters('mulesoftBaseUrl')]"
+                  "mulesoftBaseUrl": "[[parameters('mulesoftBaseUrl')]",
+                  "authenticationType": "[[parameters('authenticationType')]"
                 }
-              }
+              },
+              "condition": "[[equals(parameters('authenticationType'), 'Basic')]"
+            },
+            {
+              "name": "[[concat(parameters('workspace'), '/Microsoft.SecurityInsights/', 'MulesoftCloudhubAlertsOAuth2_CL', uniqueString(parameters('connectionAlias')))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('username')]",
+                  "ClientSecret": "[[parameters('password')]",
+                  "grantType": "client_credentials",
+                  "TokenEndpoint": "[[uri(parameters('mulesoftBaseUrl'), '/accounts/api/v2/oauth2/token')]",
+                  "tokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
+                },
+                "request": {
+                  "apiEndpoint": "[[uri(parameters('mulesoftBaseUrl'), '/cloudhub/api/v2/alerts')]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 15,
+                  "queryWindowInMin": 5,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "MS-Sentinel-CCP-Mulesoft",
+                    "X-ANYPNT-ENV-ID": "[[parameters('environmentId')]"
+                  },
+                  "queryParameters": {
+                    "offset": "0",
+                    "resource": "[[parameters('applicationName')]"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSize": 1000,
+                  "pageSizeParameterName": "limit"
+                },
+                "connectorDefinitionName": "MulesoftCloudhubConnector",
+                "dataType": "MulesoftCloudhubAlerts_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-MulesoftCloudhubAlerts_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "connectionAlias": "[[parameters('connectionAlias')]",
+                  "streamType": "Alerts",
+                  "mulesoftBaseUrl": "[[parameters('mulesoftBaseUrl')]",
+                  "authenticationType": "[[parameters('authenticationType')]"
+                }
+              },
+              "condition": "[[equals(parameters('authenticationType'), 'OAuth2')]"
             }
           ]
         },
@@ -2374,7 +2505,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "MuleSoftCloudhub Data Parser with template version 3.2.1",
+        "description": "MuleSoftCloudhub Data Parser with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -2502,7 +2633,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.2.1",
+        "version": "3.2.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Mulesoft",
