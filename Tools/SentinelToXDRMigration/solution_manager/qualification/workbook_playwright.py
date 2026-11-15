@@ -113,6 +113,7 @@ def _resolve_az_context() -> tuple[str, str]:
             user_name = str((payload.get("user") or {}).get("name") or "").strip()
             return tenant_id, user_name
     except Exception:
+        # Fallback to empty context when Azure CLI is unavailable or not logged in.
         pass
     return "", ""
 
@@ -155,7 +156,7 @@ def live_playwright_workbook_runner(
     Screenshots are written only to a temporary folder outside the repository for transient inspection
     and are never embedded into git-tracked Evidence or HTML reports.
     """
-    from urllib.parse import urlencode
+    from urllib.parse import urlencode, urlsplit
     from playwright.sync_api import sync_playwright
 
     sol_root = Path(solution_root or ".").expanduser().resolve()
@@ -212,14 +213,15 @@ def live_playwright_workbook_runner(
 
             sso_deadline = time.time() + 60
             while time.time() < sso_deadline:
-                curr_url = page.url.lower()
-                if "login.microsoftonline.com" in curr_url:
+                curr_host = (urlsplit(page.url).hostname or "").lower()
+                if curr_host == "login.microsoftonline.com":
                     time.sleep(2)
                     continue
                 body_text = ""
                 try:
                     body_text = page.locator("body").inner_text(timeout=3000)
                 except Exception:
+                    # Ignore transient DOM read timeouts while the portal page is still mounting.
                     pass
                 if (
                     "save as" in body_text.lower()
@@ -279,6 +281,7 @@ def live_playwright_workbook_runner(
                         _wait_for_canvas_settle(min(15, wait_seconds))
                         text_blocks.extend(_collect_frame_texts())
             except Exception:
+                # Best-effort tab traversal; continue with already collected frame texts if a tab becomes detached.
                 pass
 
             combined_text = "\n".join(text_blocks)

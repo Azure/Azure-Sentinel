@@ -3,16 +3,14 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import unittest.mock as mock
 from pathlib import Path
-from unittest import mock
 
 from sentinel_xdr_migration.workbook_deployment import (
     WORKBOOK_DEPLOYMENT_ENDPOINT,
-    WORKBOOK_DEPLOYMENT_SCOPE,
     _validate_workbook_deployment_token,
     deploy_workbooks,
     graph_workbook_payload,
-    setup_workbook_deployment_authentication,
     xdr_workbook_files,
 )
 from sentinel_xdr_migration.workbook_playwright import (
