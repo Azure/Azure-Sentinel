@@ -211,11 +211,20 @@ Selectors, expected values, request URLs, navigation and timeouts require review
 no guessed production DOM bindings or automatic sign-in. Save/Edit and cleanup
 are prohibited. Browser/network checks are not a browser-wide no-write sandbox.
 
-The optional `browser` extra provides Playwright. UI assertions compare reviewed
-expectations, not automatically fetched API results. Query evidence, browser
-evidence and full ARM/Content Hub acceptance remain separate. Existing
-`workbook-ui-import` accepts explicitly reviewed external captures; it does not
-launch a browser. Live browser execution needs separate exact-scope approval.
+The optional `browser` extra provides Playwright. `doctor` checks whether
+Playwright is installed (`playwright.sync_api`) and warns when missing that
+workbook verification is limited to KQL validation only. When a solution has zero
+workbooks (`workbooksCount == 0`), the XDR Workbooks stage is skipped automatically
+(`status: "not_applicable"`). When workbooks are present (`workbooksCount > 0`),
+ask the user whether they want `"playwright"` verification or `"kql-only"`
+validation (defaulting to `"kql-only"` when `doctor` reports Playwright is not
+installed). In `"playwright"` mode, always run live workbook KQL validation first
+and short-circuit (skip Playwright) if any workbook KQL query fails. UI assertions
+compare reviewed expectations, not automatically fetched API results. Query
+evidence, browser evidence and full ARM/Content Hub acceptance remain separate.
+Existing `workbook-ui-import` accepts explicitly reviewed external captures; it
+does not launch a browser. Live browser execution needs separate exact-scope
+approval.
 
 Public Graph beta metadata exposes `security/workbooks` and the security
 workbook `name`/open `content` model. It does not establish write permissions,

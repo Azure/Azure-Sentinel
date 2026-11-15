@@ -493,6 +493,7 @@ class QualificationOrchestrator:
         workbook_query_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
         playwright_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
         enable_playwright: bool = True,
+        workbook_validation_mode: str | None = None,
     ) -> None:
         self.solution_root = Path(solution_path).expanduser().resolve()
         self._target_override = dict(target) if isinstance(target, Mapping) else None
@@ -515,7 +516,16 @@ class QualificationOrchestrator:
         self.parity_evaluator = parity_evaluator
         self.workbook_query_runner = workbook_query_runner
         self.playwright_runner = playwright_runner
-        self.enable_playwright = enable_playwright
+        if workbook_validation_mode is not None:
+            if workbook_validation_mode not in {"playwright", "kql-only"}:
+                raise ValueError(
+                    f"Unsupported workbook_validation_mode: {workbook_validation_mode!r}; expected 'playwright' or 'kql-only'."
+                )
+            self.workbook_validation_mode = workbook_validation_mode
+            self.enable_playwright = workbook_validation_mode == "playwright"
+        else:
+            self.enable_playwright = bool(enable_playwright)
+            self.workbook_validation_mode = "playwright" if self.enable_playwright else "kql-only"
 
         with using_run(self.solution_root, self.run_id):
             self.plan = plan_qualification_pipeline(
@@ -1259,7 +1269,23 @@ class QualificationOrchestrator:
                 queries_ok = False
             query_results.append(q_res)
 
-        if self.enable_playwright:
+        if not self.enable_playwright:
+            pw_res = {
+                "status": "skipped",
+                "reason": "kql-only-mode-selected",
+                "playwrightVerified": "not_applicable",
+                "workbooks": [],
+            }
+            pw_ok = True
+        elif not queries_ok:
+            pw_res = {
+                "status": "skipped_due_to_kql_failure",
+                "reason": "Skipped Playwright UI verification because one or more workbook KQL queries failed.",
+                "playwrightVerified": False,
+                "workbooks": [],
+            }
+            pw_ok = False
+        else:
             pw_res = verify_workbook_playwright_rendering(
                 self.solution_root,
                 workbooks=wb_paths,
@@ -1267,13 +1293,11 @@ class QualificationOrchestrator:
                 playwright_runner=self.playwright_runner,
             )
             pw_ok = bool(pw_res.get("playwrightVerified") in {True, "not_applicable"})
-        else:
-            pw_res = {"status": "skipped", "playwrightVerified": True, "workbooks": []}
-            pw_ok = True
 
         contract_result = {
             "accepted": bool(queries_ok and pw_ok),
             "status": "passed" if (queries_ok and pw_ok) else "failed",
+            "workbookValidationMode": self.workbook_validation_mode,
             "workbooks": wb_paths,
             "queryValidation": query_results,
             "playwrightVerification": pw_res,
@@ -1286,7 +1310,7 @@ class QualificationOrchestrator:
         reasons: list[str] = []
         if not queries_ok:
             reasons.append("One or more Defender Workbook live KQL queries failed validation.")
-        if not pw_ok:
+        elif not pw_ok:
             reasons.extend(pw_res.get("reasons") or ["Playwright visual/tile rendering verification failed."])
 
         with using_run(self.solution_root, self.run_id):
@@ -1374,6 +1398,7 @@ def run_qualification_pipeline(
     workbook_query_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
     playwright_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
     enable_playwright: bool = True,
+    workbook_validation_mode: str | None = None,
     stages: Iterable[str] | None = None,
     up_to_stage: str | None = None,
     resume: bool = True,
@@ -1396,6 +1421,7 @@ def run_qualification_pipeline(
         workbook_query_runner=workbook_query_runner,
         playwright_runner=playwright_runner,
         enable_playwright=enable_playwright,
+        workbook_validation_mode=workbook_validation_mode,
     )
     return orchestrator.run(stages=stages, up_to_stage=up_to_stage, resume=resume)
 

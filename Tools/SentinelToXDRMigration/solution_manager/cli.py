@@ -456,6 +456,51 @@ def main(argv: list[str] | None = None) -> int:
         help="Create or update generated Custom Detections through Microsoft Graph beta.",
     )
     deployment.add_argument("--solution", required=True)
+    workbook_deployment_setup = subparsers.add_parser(
+        "setup-workbook-deployment",
+        help="Authenticate for Microsoft Graph Defender Workbook deployment.",
+    )
+    workbook_deployment_setup.add_argument("--tenant-id")
+    workbook_deployment_setup.add_argument("--solution", required=True)
+    workbook_deployment_setup.add_argument(
+        "--workbooks-client-id",
+        help="Public delegated Graph client ID for Defender Workbooks; the built-in client remains the default.",
+    )
+    workbook_deployment_setup.add_argument(
+        "--azure-config-dir",
+        help="Explicitly select and persist an isolated Azure CLI profile for this target.",
+    )
+    workbook_deployment_setup.add_argument(
+        "--auth-method",
+        choices=["azure-cli", "device-code", "browser"],
+        default="azure-cli",
+    )
+    workbook_deployment_parser = subparsers.add_parser(
+        "deploy-workbooks",
+        help="Create or replace generated Defender XDR Workbooks through Microsoft Graph beta.",
+    )
+    workbook_deployment_parser.add_argument("--solution", required=True)
+    workbook_playwright_parser = subparsers.add_parser(
+        "verify-workbooks-playwright",
+        help=(
+            "Open deployed Defender XDR Workbooks in Playwright, check for panel/query errors, "
+            "and update Evidence/qualification-evidence.json without storing PNGs in Evidence."
+        ),
+    )
+    workbook_playwright_parser.add_argument("--solution", required=True)
+    workbook_playwright_parser.add_argument(
+        "--workbook",
+        action="append",
+        help="Optional relative workbook path (e.g. 'XDR Workbooks/LinuxMachines.json'); defaults to all XDR Workbooks.",
+    )
+    workbook_playwright_parser.add_argument("--tenant-id")
+    workbook_playwright_parser.add_argument("--headless", action="store_true")
+    workbook_playwright_parser.add_argument("--wait-seconds", type=int, default=25)
+    workbook_playwright_parser.add_argument(
+        "--no-update-evidence",
+        action="store_true",
+        help="Do not update Evidence/qualification-evidence.json.",
+    )
     deployment_preflight = subparsers.add_parser(
         "preflight-deployment",
         help=(
@@ -1281,6 +1326,7 @@ def main(argv: list[str] | None = None) -> int:
             "workbook-dependency-plan",
             "workbook-review",
             "pr-qualify",
+            "verify-workbooks-playwright",
         }
         if getattr(args, "solution", None) and args.command not in isolated_permission_commands:
             selection = select_run(args.solution, args.run_id)
@@ -1529,6 +1575,41 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "deploy":
             result = deploy_solution(args.solution)
+        elif args.command == "setup-workbook-deployment":
+            from solution_manager.qualification.workbook_deployment import (
+                setup_workbook_deployment_authentication,
+            )
+
+            target = require_locked_target(
+                args.solution,
+                tenant_id=args.tenant_id,
+            )
+            result = setup_workbook_deployment_authentication(
+                tenant_id=target["tenantId"],
+                auth_method=args.auth_method,
+                graph_client_id=args.workbooks_client_id,
+                azure_config_dir=args.azure_config_dir,
+            )
+        elif args.command == "deploy-workbooks":
+            from solution_manager.qualification.workbook_deployment import (
+                deploy_workbooks,
+            )
+
+            result = deploy_workbooks(args.solution)
+        elif args.command == "verify-workbooks-playwright":
+            from solution_manager.qualification.workbook_playwright import (
+                verify_deployed_workbooks_playwright,
+            )
+
+            target = {"tenantId": args.tenant_id} if args.tenant_id else None
+            result = verify_deployed_workbooks_playwright(
+                args.solution,
+                workbooks=args.workbook,
+                target=target,
+                headless=bool(args.headless),
+                wait_seconds=int(args.wait_seconds),
+                update_evidence=not bool(args.no_update_evidence),
+            )
         elif args.command == "preflight-deployment":
             result = preflight_deployment(
                 args.solution,

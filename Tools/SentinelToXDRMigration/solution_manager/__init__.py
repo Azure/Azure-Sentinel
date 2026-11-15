@@ -65,6 +65,7 @@ SUBPACKAGE_MODULES: dict[str, tuple[str, ...]] = {
         "runtime",
         "runtime_consent",
         "workbook_browser",
+        "workbook_deployment",
         "workbook_playwright",
         "workbook_preflight",
         "workbook_preflight_workflow",
