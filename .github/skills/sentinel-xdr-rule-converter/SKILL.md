@@ -44,6 +44,13 @@ python -m pip install -e Tools\SentinelToXDRMigration
    ```
 
 7. Do not overwrite conflicting generated files without explicit approval.
+   For maintenance, finalize approved source edits and patch versions before
+   freezing a full-inventory run. Complete deterministic conversion before
+   collecting review decisions against the emitted `reviewScope`; a source
+   version/metadata edit changes `sourceDocumentSha256` even with unchanged KQL.
+   Do not hand-edit hashes or apply a second version bump after review.
+   An approved workbook-maintenance run preserves selected public workbooks
+   without reconverting them during this detection conversion.
 8. Report:
    - converted count;
    - needs-review count;

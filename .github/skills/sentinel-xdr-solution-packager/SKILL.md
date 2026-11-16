@@ -146,6 +146,14 @@ approval before any environment write.
 
 ## Workflow
 
+For an AR/CD maintenance release, use the canonical published-workbook
+maintenance plan/review route on a new run. `package-v3-1` consumes the frozen
+approval automatically: unchanged published workbooks need no other author's
+private receipt, but all current dependencies and package checks still apply.
+Do not set internal maintenance environment variables manually, turn standalone
+reproduction into workflow approval, or exclude workbooks to avoid review.
+Report preserved baseline content separately from new authoring and qualification.
+
 1. Work from the repository root.
 2. Confirm PowerShell 7.1 or newer, Node.js, and the `powershell-yaml` module are
    available. Install missing dependencies only after confirming they are

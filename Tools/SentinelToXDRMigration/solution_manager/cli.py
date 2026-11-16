@@ -105,8 +105,27 @@ SUPPORTED_PYTHON_MIN = (3, 11)
 SUPPORTED_PYTHON_MAX_EXCLUSIVE = (3, 13)
 
 
+def _public_cli_result(value, *, maintenance_review: bool = False):
+    if isinstance(value, dict):
+        redact = maintenance_review or (
+            value.get("format") == "workbook-maintenance-v1"
+            and value.get("decision") == "accept"
+        )
+        return {
+            key: _public_cli_result(item, maintenance_review=key == "maintenanceReview")
+            for key, item in value.items()
+            if not (redact and key in {"actor", "reference"})
+        }
+    if isinstance(value, list):
+        return [
+            _public_cli_result(item, maintenance_review=maintenance_review)
+            for item in value
+        ]
+    return value
+
+
 def _print(value: dict) -> None:
-    print(json.dumps(value, indent=2))
+    print(json.dumps(_public_cli_result(value), indent=2))
 
 
 def _key_values(values: list[str] | None) -> dict[str, str]:
@@ -184,6 +203,13 @@ def main(argv: list[str] | None = None) -> int:
         description="Convert Microsoft Sentinel analytic rules into XDR Custom Detection YAML."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    maintenance = subparsers.add_parser(
+        "workbook-maintenance-plan",
+        help="Plan explicit published-workbook reuse for a new maintenance run; never approve automatically.",
+    )
+    maintenance.add_argument("--solution", required=True)
+    maintenance.add_argument("--published-ref", required=True, help="Full immutable published commit SHA.")
+    maintenance.add_argument("--repository-url", required=True, help="Published repository remote URL to review.")
     for command in ("workbook-publication-plan", "workbook-publication-clean", "workbook-publication-validate"):
         publication = subparsers.add_parser(command, help="Clean public workbook; retain local authoring evidence.")
         publication.add_argument("--solution", required=True)
@@ -869,6 +895,10 @@ def main(argv: list[str] | None = None) -> int:
     workflow_init.add_argument("--workspace-resource-id")
     workflow_init.add_argument("--workspace-customer-id")
     workflow_init.add_argument(
+        "--workbook-maintenance-review",
+        help="Explicitly accepted workbook-maintenance-plan JSON for a new run; never changes an existing baseline.",
+    )
+    workflow_init.add_argument(
         "--arm-validation-method", choices=["lab-deployment", "arm-ttk"],
         help="New runs default to lab-deployment; resumption never changes the selected method.",
     )
@@ -1313,6 +1343,7 @@ def main(argv: list[str] | None = None) -> int:
     selection = None
     try:
         isolated_permission_commands = {
+            "workbook-maintenance-plan",
             "workbook-publication-plan", "workbook-publication-clean", "workbook-publication-validate",
             "workbook-update-plan",
             "workbook-update-review",
@@ -1335,7 +1366,12 @@ def main(argv: list[str] | None = None) -> int:
             args.command == "convert" and args.rule_id
         ):
             configure_logging(getattr(args, "solution", None))
-        if args.command in qualification_commands:
+        if args.command == "workbook-maintenance-plan":
+            from solution_manager.authoring.workbook_maintenance import plan_maintenance
+            result = plan_maintenance(
+                args.solution, public_ref=args.published_ref, repository_url=args.repository_url,
+            )
+        elif args.command in qualification_commands:
             result = dispatch_workbook_qualification(args)
         elif args.command == "coordinator-enroll":
             result = coordinator_enroll(
@@ -2049,6 +2085,10 @@ def main(argv: list[str] | None = None) -> int:
                     or args.arm_validation_method is not None else None
                 ),
                 arm_validation_method=args.arm_validation_method,
+                workbook_maintenance_review=(
+                    _json_object_arg(args.workbook_maintenance_review, flag_name="--workbook-maintenance-review")
+                    if args.workbook_maintenance_review is not None else None
+                ),
             )
         elif args.command == "workflow-budget":
             result = budget_summary(args.solution, args.campaign_id)

@@ -2635,6 +2635,7 @@ def initialize_workflow(
     new_run: bool = False,
     workbook_capability_version: int | None = None,
     arm_validation_method: str | None = None,
+    workbook_maintenance_review: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     root = Path(solution).expanduser().resolve()
     if not root.is_dir():
@@ -2663,6 +2664,11 @@ def initialize_workflow(
         raise ValueError("ARM validation method must be arm-ttk or lab-deployment")
     if arm_validation_method and workbook_capability_version != 1:
         raise ValueError("an explicit ARM method requires workbook capability version 1")
+    if workbook_maintenance_review is not None:
+        if workbook_capability_version != 1:
+            raise ValueError("workbook maintenance requires a new workbook-capable run")
+        from solution_manager.authoring.workbook_maintenance import review_maintenance
+        workbook_maintenance_review = review_maintenance(root, workbook_maintenance_review)
     if workflow_profile == "qualification" and arm_validation_method == "arm-ttk":
         raise ValueError("the workbook-capable Qualification route requires lab-deployment")
     explicit_campaign_id = campaign_id
@@ -2729,6 +2735,7 @@ def initialize_workflow(
                 workflow_profile=workflow_profile, yolo=yolo, campaign_id=campaign_id,
                 workbook_capability_version=workbook_capability_version,
                 arm_validation_method=arm_validation_method,
+                workbook_maintenance_review=workbook_maintenance_review,
             )
     existing_path = existing_artifact_path(root, STATE_FILE_NAME)
     if existing_path.exists():
@@ -2744,6 +2751,11 @@ def initialize_workflow(
                     "--campaign-id to link it conservatively"
                 )
             context = state["context"]
+            if (
+                workbook_maintenance_review is not None
+                and state.get("workbooks", {}).get("maintenanceReview") != workbook_maintenance_review
+            ):
+                raise ValueError("workbook maintenance approval cannot change on resumption; initialize a new run")
             if workbook_capability_version is not None and context.get("workbookCapabilityVersion") != workbook_capability_version:
                 raise ValueError("workbook capability cannot change on resumption; initialize a new run")
             if arm_validation_method is not None and context.get("armValidationMethod") != arm_validation_method:
@@ -2868,6 +2880,7 @@ def initialize_workflow(
                 campaign_id=campaign_id,
                 workbook_capability_version=workbook_capability_version,
                 arm_validation_method=arm_validation_method,
+                workbook_maintenance_review=workbook_maintenance_review,
             )
 
     now = _utc_now()
@@ -2896,7 +2909,9 @@ def initialize_workflow(
     if workbook_capability_version == 1:
         state["context"]["workbookCapabilityVersion"] = 1
         state["context"]["armValidationMethod"] = arm_validation_method or "lab-deployment"
-        state["workbooks"] = workbook_workflow.freeze_inventory(root)
+        state["workbooks"] = workbook_workflow.freeze_inventory(
+            root, maintenance_review=workbook_maintenance_review,
+        )
         if yolo and workbook_only:
             state["context"]["workbookFullInventory"] = True
         if workbook_only and workflow_profile == "qualification":
@@ -5345,6 +5360,9 @@ def package_workflow_v3_1(
                         **({
                             "arm_validation_method": state["context"]["armValidationMethod"],
                         } if workbook_workflow.enabled(state) else {}),
+                        **({
+                            "workbook_maintenance_review": state["workbooks"]["maintenanceReview"],
+                        } if state.get("workbooks", {}).get("maintenanceReview") is not None else {}),
                     )
                 except BaseException:
                     version_after_failure = solution_data_version(root)
