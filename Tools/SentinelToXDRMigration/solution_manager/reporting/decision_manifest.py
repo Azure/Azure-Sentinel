@@ -573,13 +573,14 @@ def build_sanitized_decision_manifest(
         private_identifiers=private_ids,
         solution_root=root,
     )
-    workflow_profile = str(
+    raw_workflow_profile = (
         context.get("workflowProfile")
-        or state.get("workflowProfile")
-        or "authoring"
-    ).strip()
+        if context.get("workflowProfile") is not None
+        else state.get("workflowProfile")
+    )
+    workflow_profile = str(raw_workflow_profile).strip() if raw_workflow_profile is not None and str(raw_workflow_profile).strip() else "qualification"
     if workflow_profile not in {"authoring", "qualification"}:
-        workflow_profile = "authoring"
+        raise ValueError(f"Unsupported workflowProfile '{workflow_profile}'. Expected 'qualification' or 'authoring'.")
 
     arm_validation_method = str(
         context.get("armValidationMethod")

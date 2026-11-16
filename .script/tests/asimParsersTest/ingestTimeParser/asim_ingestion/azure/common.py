@@ -17,6 +17,7 @@ from typing import Any, Mapping, Protocol, Sequence
 import requests
 import yaml
 
+from asim_ingestion.fixtures.data import canonicalize_row_column_names
 from asim_ingestion.fixtures.timestamps import (
     parse_kusto_datetime_ticks,
     ticks_to_kusto_datetime,
@@ -281,20 +282,30 @@ def build_fixture_snapshot(
         }
         for column in schema
     ]
+    try:
+        normalized_rows = canonicalize_row_column_names(
+            normalized_schema,
+            fixture_rows,
+        )
+    except ValueError as exc:
+        raise HarnessError("source-snapshot", str(exc)) from exc
     known_names = {
         column["name"] for column in normalized_schema
     }
+    excluded_names = {
+        name.casefold() for name in REPLAY_EXCLUDED_COLUMNS
+    }
     extra_names = [
         str(name)
-        for row in fixture_rows
+        for row in normalized_rows
         for name in row
         if str(name) not in known_names
-        and str(name) not in REPLAY_EXCLUDED_COLUMNS
+        and str(name).casefold() not in excluded_names
     ]
     for name in dict.fromkeys(extra_names):
         values = [
             row.get(name)
-            for row in fixture_rows
+            for row in normalized_rows
             if row.get(name) is not None
         ]
         if values and all(isinstance(value, bool) for value in values):
@@ -322,10 +333,11 @@ def build_fixture_snapshot(
         )
         known_names.add(name)
     column_names = [column["name"] for column in normalized_schema]
-    if len(column_names) != len(set(column_names)):
+    folded_column_names = [name.casefold() for name in column_names]
+    if len(folded_column_names) != len(set(folded_column_names)):
         raise HarnessError(
             "source-snapshot",
-            "Fixture schema contains duplicate columns.",
+            "Fixture schema contains case-insensitive duplicate columns.",
         )
     type_by_name = {
         column["name"]: column["type"]
@@ -337,7 +349,7 @@ def build_fixture_snapshot(
             name: _json_safe_value(row.get(name), type_by_name[name])
             for name in column_names
         }
-        for row in fixture_rows
+        for row in normalized_rows
     ]
     for row in rows:
         timestamp = row.get("TimeGenerated")
@@ -352,7 +364,7 @@ def build_fixture_snapshot(
     ).hexdigest()
     fixture_columns = {
         str(name)
-        for row in fixture_rows
+        for row in normalized_rows
         for name in row
     }
     return {

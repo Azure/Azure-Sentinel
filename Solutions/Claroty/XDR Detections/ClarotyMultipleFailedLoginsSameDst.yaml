@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ClarotyEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1c2310ef-19bf-4caf-b2b0-a4c983932fa5
+    path: Analytic Rules/ClarotyMultipleFailedLoginsSameDst.yaml
+    version: 1.0.4
+    querySha256: efdc7428402191619cb875fc18e5a1e2f0ac12ce95e9f4ede97bb957ff9f4eda
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 20fbd8d8519e06d605c36c8d2dd99a4c5bf94fb8334fba0c148d4f31da8bb282
+      targetQuerySha256: 24074f1daeaa90c961652ecfcab21851161af82c20b6bf412fd4bbec549100da
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 20fbd8d8519e06d605c36c8d2dd99a4c5bf94fb8334fba0c148d4f31da8bb282
+      targetQuerySha256: 24074f1daeaa90c961652ecfcab21851161af82c20b6bf412fd4bbec549100da
+properties:
+  id: xdr-1c2310ef-19bf-4caf-b2b0-a4c983932fa5
+  displayName: Claroty - Multiple failed logins to same destinations
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 10;
+        ClarotyEvent
+        | where EventType has 'Login to SRA'
+        | where EventType !has 'succeeded'
+        | extend Site = column_ifexists("site_name","")
+        | where isnotempty(Site)
+        | extend SrcUsername = extract(@'User\s(.*?)\sfailed', 1, EventMessage)
+        | summarize FailedLogins = count(), SampleUser = any(SrcUsername), DstIpAddr = any(DstIpAddr) by Site, bin(TimeGenerated, 5m)
+        | where FailedLogins > threshold
+        | extend SGCustomEntity = Site
+        | project TimeGenerated, Site, FailedLogins, Threshold = threshold, SampleUser, SGCustomEntity, DstIpAddr
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Claroty - Multiple failed logins to same destinations
+      description: Detects multiple failed login attempts to the same Claroty SRA destination site within a 5-minute window.
+        The rule counts failed logins per site and alerts when the number of failures exceeds the threshold value of 10.
+      severity: high
+      entityMappings:
+        securityGroups:
+        - id: securityGroup1
+          distinguishedNameColumn: SGCustomEntity
+        ips:
+        - id: ip1
+          addressColumn: DstIpAddr
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133

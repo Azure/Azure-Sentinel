@@ -11,6 +11,7 @@ from uuid import NAMESPACE_URL, uuid5
 from solution_manager.migration._workbook_core import workbook, mapping_catalog, rewrite
 from solution_manager.migration.catalog import query_table_references
 from solution_manager.authoring.dependencies import TABLE_WORKLOADS, workload_records
+from solution_manager.authoring.workbook_dependencies import _connectors
 from solution_manager.migration.workbooks import (
     _root, _path, _document, _sha, _write, _solution_data, _release, _load_json as load_json,
 )
@@ -93,15 +94,17 @@ def _query(surface, *, allowed_tables=(), allowed_functions=(), allow_sentinel=F
     tables -= asim | allowed_functions
     local = workbook._local_tabular_vars(code)
     tables -= local | workbook._BUILTINS | workbook._STATEMENT_PREFIXES
-    opaque = workbook.opaque_functions(raw) - tables - allowed_functions
+    opaque = workbook.opaque_functions(raw, allowed_tables=allowed_tables) - tables - allowed_functions
     explicit = (workbook.opaque_functions(raw, include_bare=False)
                 | (quoted_calls - asim)) - allowed_functions
     if opaque or explicit:
         raise ValueError("Unreviewable native functions/sources: " + ", ".join(sorted(opaque | explicit)))
     if any((table not in TABLE_WORKLOADS or TABLE_WORKLOADS[table] == "sentinel")
-           and not (allow_sentinel and table in allowed_tables) for table in tables):
+           and table not in allowed_tables for table in tables):
         raise ValueError("Unknown or non-native tables: " + ", ".join(sorted(tables)))
-    known_function_input = allowed_functions & (calls | quoted_calls | workbook.opaque_functions(raw))
+    known_function_input = allowed_functions & (
+        calls | quoted_calls | workbook.opaque_functions(raw, allowed_tables=allowed_tables)
+    )
     if not tables and not asim and not known_function_input and not rewrite.is_source_free_literal_query(raw):
         raise ValueError("Empty lineage requires a standard built-in ASIM parser "
                          "or a recognized literal datatable or numeric range query.")
@@ -111,14 +114,18 @@ def _query(surface, *, allowed_tables=(), allowed_functions=(), allow_sentinel=F
     return sorted(tables)
 
 
-def _plan_document(document, source):
+def _plan_document(document, source, *, connector_tables=(), connectors=()):
     queries, all_tables = [], set()
+    connector_set = {t for t in (connector_tables or ()) if isinstance(t, str) and t.strip()}
     for surface in workbook.query_surfaces(document):
         if not isinstance(surface["node"]["query"], str):
             raise ValueError("Every native query must be a string.")
         blockers = []
         try:
-            tables = _query(surface)
+            tables = _query(
+                surface,
+                allowed_tables=connector_set,
+            )
         except ValueError as exc:
             tables = []
             blockers.append(str(exc))
@@ -128,25 +135,68 @@ def _plan_document(document, source):
             "path": surface["path"], "querySha256": workbook.query_hash(raw),
             "tables": tables, "decision": None, "evidence": "", "blockers": blockers,
         })
-    workloads, _ = workload_records(sorted(all_tables))
+    workloads, _ = workload_records(sorted(all_tables), sentinel_tables=connector_set)
+    sentinel_used = {
+        table for record in workloads if record["workload"] == "sentinel" for table in record["dataTypes"]
+    }
+    required_connectors = []
+    for connector in (connectors or ()):
+        if not isinstance(connector, dict) or not isinstance(connector.get("connectorId"), str):
+            continue
+        matched = sorted(
+            table for table in connector.get("dataTypes", [])
+            if isinstance(table, str) and table in sentinel_used
+        )
+        if matched:
+            required_connectors.append({"connectorId": connector["connectorId"], "dataTypes": matched})
     return {
         "origin": ORIGIN, "source": source,
         "canonicalPayloadSha256": _canonical_payload_sha256(document),
         "displayName": PurePosixPath(source["path"]).stem, "actor": "", "reference": "",
-        "requiredWorkloads": workloads, "requiredDataConnectors": [],
+        "requiredWorkloads": workloads, "requiredDataConnectors": required_connectors,
         "queries": queries,
     }
+
+
+def _solution_connectors_and_tables(root) -> tuple[list[dict], set[str]]:
+    try:
+        connectors = _connectors(root, _solution_data(root))
+    except Exception:
+        return [], set()
+    tables = {
+        t
+        for c in connectors
+        if isinstance(c, dict) and isinstance(c.get("dataTypes"), list)
+        for t in c["dataTypes"]
+        if isinstance(t, str) and t.strip()
+    }
+    return connectors, tables
+
+
+def _solution_connector_tables(root) -> set[str]:
+    return _solution_connectors_and_tables(root)[1]
 
 
 def plan_native_workbook(solution, source):
     root = _root(solution)
     path, document = _source(root, source)
-    return _plan_document(document, {"path": source, "sha256": _sha(path.read_bytes())})
+    connectors, connector_tables = _solution_connectors_and_tables(root)
+    return _plan_document(
+        document,
+        {"path": source, "sha256": _sha(path.read_bytes())},
+        connector_tables=connector_tables,
+        connectors=connectors,
+    )
 
 
-def _review_errors_for_document(document, source, review):
+def _review_errors_for_document(document, source, review, *, connector_tables=(), connectors=()):
     errors = []
-    expected = _plan_document(document, source)
+    expected = _plan_document(
+        document,
+        source,
+        connector_tables=set(connector_tables or ()),
+        connectors=connectors,
+    )
     if not isinstance(review, dict) or set(review) != set(expected):
         return ["Native review must have exactly the current plan fields."]
     for field in ("origin", "source", "canonicalPayloadSha256",
@@ -185,7 +235,14 @@ def _review_errors_for_document(document, source, review):
 def _review_errors(root, source, review):
     path, document = _source(root, source)
     source_record = {"path": source, "sha256": _sha(path.read_bytes())}
-    return _review_errors_for_document(document, source_record, review)
+    connectors, connector_tables = _solution_connectors_and_tables(root)
+    return _review_errors_for_document(
+        document,
+        source_record,
+        review,
+        connector_tables=connector_tables,
+        connectors=connectors,
+    )
 
 
 def validate_native_document(solution, document):
@@ -204,7 +261,14 @@ def validate_native_document(solution, document):
         if not _valid_source_identity(source):
             return ["Native historical source identity/hash is malformed."]
         payload = _payload(document)
-        errors = _review_errors_for_document(payload, source, review)
+        connectors, connector_tables = _solution_connectors_and_tables(root)
+        errors = _review_errors_for_document(
+            payload,
+            source,
+            review,
+            connector_tables=connector_tables,
+            connectors=connectors,
+        )
         canonical_hash = _canonical_payload_sha256(document)
         if provenance.get("canonicalPayloadSha256") != canonical_hash:
             errors.append("Native canonical payload hash is stale.")

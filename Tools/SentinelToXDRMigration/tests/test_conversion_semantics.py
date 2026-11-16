@@ -357,12 +357,12 @@ class ScheduleSemanticsTests(unittest.TestCase):
             query, query, "PT1H",
         )
         self.assertIsNone(review)
-        self.assertIn("where Timestamp >= ago(2h)", converted)
-        self.assertIn("bin(Timestamp, 5m)", converted)
+        self.assertIn("where TimeGenerated >= ago(2h)", converted)
+        self.assertIn("bin(TimeGenerated, 5m)", converted)
         self.assertIn('"TimeGenerated"', converted)
         self.assertIn("// TimeGenerated is only a source comment", converted)
         self.assertEqual("TimeGenerated", evidence["sourceTimeColumn"])
-        self.assertEqual("Timestamp", evidence["targetTimeColumn"])
+        self.assertEqual("TimeGenerated", evidence["targetTimeColumn"])
 
     def test_unsafe_native_query_shapes_require_review_without_rewrite(self):
         for query in (
@@ -526,7 +526,7 @@ class InformationContractTests(unittest.TestCase):
         self.assertTrue(converted.startswith("DeviceNetworkEvents"))
         self.assertIn('"CiscoASA_CL"', converted)
         self.assertIn("// CiscoASA_CL is source documentation", converted)
-        self.assertIn("Timestamp > ago(1h)", converted)
+        self.assertIn("TimeGenerated > ago(1h)", converted)
         self.assertFalse(warnings)
         self.assertFalse(errors)
 
