@@ -1,0 +1,69 @@
+{
+  "id": "9c4178cd-223a-47e4-b74d-7c18790bb63d",
+  "Function": {
+    "Title": "Cato AuditEvent ASIM parser",
+    "Version": "3.0.0",
+    "LastUpdated": "2026-11-16"
+  },
+  "Category": "Microsoft Sentinel Parser",
+  "FunctionName": "vimAuditEventCato_CatoNetworksEvents_CL",
+  "FunctionAlias": "vimAuditEventCato_CatoNetworksEvents_CL",
+  "FunctionQuery": "CatoNetworksEvents_CL\n| where not(disabled)\n| where tostring(column_ifexists('event_type', '')) == 'System'\n    and tostring(column_ifexists('event_sub_type', '')) == 'Audit'\n| extend Operation = tostring(column_ifexists('action', '')),\n    Object = tostring(column_ifexists('object_name', ''))\n| where isnotempty(trim(@'\\s+', Operation)) and isnotempty(trim(@'\\s+', Object))\n// Sentinel's DCR maps source epoch-millisecond time into native TimeGenerated.\n// A retained original time takes precedence; time_str is only an alternative source clock.\n| where tostring(column_ifexists(\"event_sub_type\", \"\")) != \"Flow\"\n| where tostring(column_ifexists(\"source\", \"\")) != \"cato:hec:flows\"\n    and tostring(column_ifexists(\"sourcetype\", \"\")) != \"cato:hec:flows\"\n    and tostring(column_ifexists(\"Type\", \"\")) != \"cato:hec:flows\"\n| extend _CatoCommonRawCount = column_ifexists(\"event_count\", dynamic(null)),\n    _CatoCommonEpoch = tostring(column_ifexists(\"time\", dynamic(null))),\n    _CatoCommonTimeStr = tostring(column_ifexists(\"time_str\", \"\")),\n    _CatoCommonMappedTime = todatetime(column_ifexists(\"TimeGenerated\", datetime(null))),\n    _CatoCommonExtra = todynamic(column_ifexists(\"AdditionalFields\", dynamic({})))\n| extend _CatoCommonCountText = tostring(_CatoCommonRawCount),\n    _CatoCommonCount = tolong(_CatoCommonRawCount),\n    _CatoCommonPrimaryTime = iff(isempty(_CatoCommonEpoch), _CatoCommonMappedTime,\n        iff(_CatoCommonEpoch matches regex @\"^-?[0-9]+$\", unixtime_milliseconds_todatetime(tolong(_CatoCommonEpoch)), datetime(null))),\n    _CatoCommonAlternativeTime = iff(_CatoCommonTimeStr matches regex @\"^-?[0-9]+$\",\n        unixtime_milliseconds_todatetime(tolong(_CatoCommonTimeStr)), todatetime(_CatoCommonTimeStr))\n| where isnull(_CatoCommonRawCount)\n    or (_CatoCommonCountText matches regex @\"^[0-9]+$\" and _CatoCommonCount between (1 .. 2147483647))\n| extend _CatoCommonSourceTime = coalesce(_CatoCommonPrimaryTime, _CatoCommonAlternativeTime)\n| where isnotnull(_CatoCommonSourceTime)\n| where (isnull(starttime) or _CatoCommonSourceTime >= starttime)\n    and (isnull(endtime) or _CatoCommonSourceTime <= endtime)\n| extend\n    TimeGenerated = _CatoCommonSourceTime,\n    EventStartTime = _CatoCommonSourceTime,\n    EventEndTime = _CatoCommonSourceTime,\n    EventCount = toint(coalesce(_CatoCommonCount, long(1))),\n    EventVendor = \"Cato Networks\",\n    EventProduct = \"Cato Cloud\",\n    EventSchemaVersion = \"1.0.0\",\n    EventOriginalType = tostring(column_ifexists(\"event_type\", \"\")),\n    EventOriginalSubType = tostring(column_ifexists(\"event_sub_type\", \"\")),\n    EventOriginalUid = tostring(column_ifexists(\"event_id\", \"\")),\n    EventUid = tostring(column_ifexists(\"event_id\", \"\")),\n    EventMessage = tostring(column_ifexists(\"event_message\", \"\")),\n    AdditionalFields = iff(gettype(_CatoCommonExtra) == \"dictionary\", _CatoCommonExtra, dynamic({})),\n    Dvc = \"Cato Cloud\",\n    DvcOriginalAction = tostring(column_ifexists(\"action\", \"\")),\n    DvcScopeId = tostring(column_ifexists(\"account_id\", \"\")),\n    DvcScope = tostring(column_ifexists(\"account_name\", \"\"))\n| extend AdditionalFields = bag_merge(AdditionalFields, iff(isempty(tostring(column_ifexists(\"pop_name\", \"\"))),\n    dynamic({}), bag_pack(\"CatoPopName\", tostring(column_ifexists(\"pop_name\", \"\")))))\n| project-away _CatoCommon*\n| extend EventSchema = 'AuditEvent', EventResult = 'Success',\n    EventType = case(\n        Operation in~ ('Create', 'Created'), 'Create',\n        Operation in~ ('Delete', 'Deleted'), 'Delete',\n        Operation in~ ('Set', 'Modified'), 'Set',\n        Operation =~ 'Read', 'Read', Operation =~ 'Execute', 'Execute',\n        Operation =~ 'Install', 'Install', Operation =~ 'Clear', 'Clear',\n        Operation =~ 'Enable', 'Enable', Operation =~ 'Disable', 'Disable',\n        Operation =~ 'Initialize', 'Initialize', Operation =~ 'Start', 'Start',\n        Operation =~ 'Stop', 'Stop', 'Other'),\n    OriginalObjectType = tostring(column_ifexists('object_type', '')),\n    ActorUsername = tostring(column_ifexists('vpn_user_email', '')),\n    ActorOriginalUserType = iff(gettype(column_ifexists('is_admin', dynamic(null))) == 'bool',\n        tostring(column_ifexists('is_admin', dynamic(null))), ''),\n    DvcDescription = 'Cato Management Application'\n| extend ActorUsernameType = case(isempty(ActorUsername), '',\n        ActorUsername matches regex @'^[^\\s@]+@[^\\s@]+$', 'UPN',\n        ActorUsername matches regex @'^[^\\\\]+\\\\[^\\\\]+$', 'Windows', 'Simple'),\n    ActorUserType = iff(ActorOriginalUserType =~ 'true', 'Admin',\n        iff(ActorOriginalUserType =~ 'false', 'Regular', '')),\n    ObjectType = case(\n        OriginalObjectType =~ 'Cloud Resource', 'Cloud Resource',\n        OriginalObjectType in~ ('Policy Rule', 'PolicyRule'), 'Policy Rule',\n        OriginalObjectType =~ 'Configuration Atom', 'Configuration Atom',\n        OriginalObjectType =~ 'Event Log', 'Event Log',\n        OriginalObjectType =~ 'Scheduled Task', 'Scheduled Task',\n        OriginalObjectType =~ 'Service', 'Service',\n        OriginalObjectType =~ 'Directory Service Object', 'Directory Service Object',\n        'Other'),\n    User = ActorUsername,\n    AdditionalFields = bag_merge(\n        bag_pack('CatoActorName', column_ifexists('user_name', ''),\n            'CatoApiKeyName', column_ifexists('key_name', '')),\n        todynamic(column_ifexists('AdditionalFields', dynamic({}))))\n| where coalesce(array_length(srcipaddr_has_any_prefix), 0) == 0\n| where coalesce(array_length(eventtype_in), 0) == 0 or EventType in (eventtype_in)\n| where isempty(eventresult) or eventresult == '*' or EventResult == eventresult\n| where isempty(tostring(actorusername_has_any)) or array_length(actorusername_has_any) == 0\n    or ActorUsername has_any (actorusername_has_any)\n| where isempty(tostring(operation_has_any)) or array_length(operation_has_any) == 0\n    or Operation has_any (operation_has_any)\n| where isempty(tostring(object_has_any)) or array_length(object_has_any) == 0\n    or Object has_any (object_has_any)\n| where coalesce(array_length(newvalue_has_any), 0) == 0\n| extend AdditionalFields = iff(pack, bag_merge(AdditionalFields, pack_all(true)), AdditionalFields)",
+  "FunctionParams": [
+    {
+      "Name": "starttime",
+      "Type": "datetime",
+      "Default": "datetime(null)"
+    },
+    {
+      "Name": "endtime",
+      "Type": "datetime",
+      "Default": "datetime(null)"
+    },
+    {
+      "Name": "srcipaddr_has_any_prefix",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "eventtype_in",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "eventresult",
+      "Type": "string",
+      "Default": "*"
+    },
+    {
+      "Name": "actorusername_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "operation_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "object_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "newvalue_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "disabled",
+      "Type": "bool",
+      "Default": "false"
+    },
+    {
+      "Name": "pack",
+      "Type": "bool",
+      "Default": "false"
+    }
+  ]
+}

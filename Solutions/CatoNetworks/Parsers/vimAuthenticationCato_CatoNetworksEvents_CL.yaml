@@ -1,0 +1,69 @@
+{
+  "id": "f5a983a7-11e0-4162-b613-d452bf902e1d",
+  "Function": {
+    "Title": "Cato Authentication ASIM parser",
+    "Version": "3.0.0",
+    "LastUpdated": "2026-11-16"
+  },
+  "Category": "Microsoft Sentinel Parser",
+  "FunctionName": "vimAuthenticationCato_CatoNetworksEvents_CL",
+  "FunctionAlias": "vimAuthenticationCato_CatoNetworksEvents_CL",
+  "FunctionQuery": "CatoNetworksEvents_CL\n| where not(disabled)\n| where tostring(column_ifexists('event_type', '')) == 'Connectivity'\n    and tostring(column_ifexists('event_sub_type', '')) == 'Authenticated'\n// Sentinel's DCR maps source epoch-millisecond time into native TimeGenerated.\n// A retained original time takes precedence; time_str is only an alternative source clock.\n| where tostring(column_ifexists(\"event_sub_type\", \"\")) != \"Flow\"\n| where tostring(column_ifexists(\"source\", \"\")) != \"cato:hec:flows\"\n    and tostring(column_ifexists(\"sourcetype\", \"\")) != \"cato:hec:flows\"\n    and tostring(column_ifexists(\"Type\", \"\")) != \"cato:hec:flows\"\n| extend _CatoCommonRawCount = column_ifexists(\"event_count\", dynamic(null)),\n    _CatoCommonEpoch = tostring(column_ifexists(\"time\", dynamic(null))),\n    _CatoCommonTimeStr = tostring(column_ifexists(\"time_str\", \"\")),\n    _CatoCommonMappedTime = todatetime(column_ifexists(\"TimeGenerated\", datetime(null))),\n    _CatoCommonExtra = todynamic(column_ifexists(\"AdditionalFields\", dynamic({})))\n| extend _CatoCommonCountText = tostring(_CatoCommonRawCount),\n    _CatoCommonCount = tolong(_CatoCommonRawCount),\n    _CatoCommonPrimaryTime = iff(isempty(_CatoCommonEpoch), _CatoCommonMappedTime,\n        iff(_CatoCommonEpoch matches regex @\"^-?[0-9]+$\", unixtime_milliseconds_todatetime(tolong(_CatoCommonEpoch)), datetime(null))),\n    _CatoCommonAlternativeTime = iff(_CatoCommonTimeStr matches regex @\"^-?[0-9]+$\",\n        unixtime_milliseconds_todatetime(tolong(_CatoCommonTimeStr)), todatetime(_CatoCommonTimeStr))\n| where isnull(_CatoCommonRawCount)\n    or (_CatoCommonCountText matches regex @\"^[0-9]+$\" and _CatoCommonCount between (1 .. 2147483647))\n| extend _CatoCommonSourceTime = coalesce(_CatoCommonPrimaryTime, _CatoCommonAlternativeTime)\n| where isnotnull(_CatoCommonSourceTime)\n| where (isnull(starttime) or _CatoCommonSourceTime >= starttime)\n    and (isnull(endtime) or _CatoCommonSourceTime <= endtime)\n| extend\n    TimeGenerated = _CatoCommonSourceTime,\n    EventStartTime = _CatoCommonSourceTime,\n    EventEndTime = _CatoCommonSourceTime,\n    EventCount = toint(coalesce(_CatoCommonCount, long(1))),\n    EventVendor = \"Cato Networks\",\n    EventProduct = \"Cato Cloud\",\n    EventSchemaVersion = \"1.0.0\",\n    EventOriginalType = tostring(column_ifexists(\"event_type\", \"\")),\n    EventOriginalSubType = tostring(column_ifexists(\"event_sub_type\", \"\")),\n    EventOriginalUid = tostring(column_ifexists(\"event_id\", \"\")),\n    EventUid = tostring(column_ifexists(\"event_id\", \"\")),\n    EventMessage = tostring(column_ifexists(\"event_message\", \"\")),\n    AdditionalFields = iff(gettype(_CatoCommonExtra) == \"dictionary\", _CatoCommonExtra, dynamic({})),\n    Dvc = \"Cato Cloud\",\n    DvcOriginalAction = tostring(column_ifexists(\"action\", \"\")),\n    DvcScopeId = tostring(column_ifexists(\"account_id\", \"\")),\n    DvcScope = tostring(column_ifexists(\"account_name\", \"\"))\n| extend AdditionalFields = bag_merge(AdditionalFields, iff(isempty(tostring(column_ifexists(\"pop_name\", \"\"))),\n    dynamic({}), bag_pack(\"CatoPopName\", tostring(column_ifexists(\"pop_name\", \"\")))))\n| project-away _CatoCommon*\n| extend EventSchema = 'Authentication', EventType = 'Logon', EventResult = 'Success',\n    EventSubType = '', EventResultDetails = '', TargetAppName = '',\n    TargetUsername = tostring(column_ifexists('user_name', '')),\n    TargetIpAddr = iff(isnotempty(parse_ipv6(tostring(column_ifexists('dest_ip', ''))))\n        and tostring(column_ifexists('dest_ip', '')) !contains '/'\n        and tostring(column_ifexists('dest_ip', '')) !contains ' ',\n        tostring(column_ifexists('dest_ip', '')), ''),\n    SrcIpAddr = iff(isnotempty(parse_ipv6(tostring(column_ifexists('src_ip', ''))))\n        and tostring(column_ifexists('src_ip', '')) !contains '/'\n        and tostring(column_ifexists('src_ip', '')) !contains ' ',\n        tostring(column_ifexists('src_ip', '')), ''),\n    _CatoConfiguredHost = tostring(column_ifexists('configured_host_name', ''))\n| extend _CatoHostParts = split(_CatoConfiguredHost, '.'),\n    _CatoHostValid = isnotempty(_CatoConfiguredHost)\n        and isempty(parse_ipv6(_CatoConfiguredHost))\n        and _CatoConfiguredHost !contains '/'\n        and _CatoConfiguredHost !contains ' '\n        and _CatoConfiguredHost matches regex @'(?i)^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\\.([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?))*$'\n| extend SrcHostname = iff(_CatoHostValid, tostring(_CatoHostParts[0]), ''),\n    SrcDvcId = tostring(column_ifexists('device_id', '')),\n    SrcDvcIdType = iff(isnotempty(tostring(column_ifexists('device_id', ''))), tostring(column_ifexists('device_type', '')), ''),\n    SrcDvcOs = tostring(column_ifexists('device_os_type', '')),\n    SrcIsp = tostring(column_ifexists('isp_name', column_ifexists('ISP_name', ''))),\n    SrcGeoCountry = tostring(column_ifexists('src_country', '')),\n    TargetGeoCountry = tostring(column_ifexists('dest_country', '')),\n    DvcOriginalAction = tostring(column_ifexists('action', '')),\n    LogonProtocol = tostring(column_ifexists('auth_method', ''))\n| extend User = TargetUsername, Src = SrcIpAddr, IpAddr = SrcIpAddr,\n    Dst = TargetIpAddr,\n    AdditionalFields = bag_merge(\n        bag_pack('CatoUserId', column_ifexists('user_id', ''),\n            'CatoUserEmail', column_ifexists('vpn_user_email', ''),\n            'CatoLoginType', column_ifexists('login_type', ''),\n            'CatoAuthenticationType', column_ifexists('authentication_type', ''),\n            'CatoAuthMethod', column_ifexists('auth_method', ''),\n            'CatoDeviceName', column_ifexists('device_name', ''),\n            'CatoUserAgent', column_ifexists('user_agent', ''),\n            'CatoDestinationIp', column_ifexists('dest_ip', '')),\n        todynamic(column_ifexists('AdditionalFields', dynamic({}))))\n| where isempty(tostring(srcipaddr_has_any_prefix)) or tostring(srcipaddr_has_any_prefix) == '[]' or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)\n| where isempty(tostring(srchostname_has_any)) or tostring(srchostname_has_any) == '[]' or SrcHostname has_any (srchostname_has_any)\n| where isempty(tostring(username_has_any)) or tostring(username_has_any) == '[]' or TargetUsername has_any (username_has_any)\n| where isempty(tostring(targetappname_has_any)) or tostring(targetappname_has_any) == '[]' or TargetAppName has_any (targetappname_has_any)\n| where isempty(tostring(eventtype_in)) or tostring(eventtype_in) == '[]' or EventType in (eventtype_in)\n| where isempty(eventresult) or eventresult == '*' or EventResult == eventresult\n| where isempty(tostring(eventresultdetails_in)) or tostring(eventresultdetails_in) == '[]' or EventResultDetails in (eventresultdetails_in)\n| project-away _CatoConfiguredHost, _CatoHostParts, _CatoHostValid\n| extend AdditionalFields = iff(pack, bag_merge(AdditionalFields, pack_all(true)), AdditionalFields)",
+  "FunctionParams": [
+    {
+      "Name": "starttime",
+      "Type": "datetime",
+      "Default": "datetime(null)"
+    },
+    {
+      "Name": "endtime",
+      "Type": "datetime",
+      "Default": "datetime(null)"
+    },
+    {
+      "Name": "srcipaddr_has_any_prefix",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "srchostname_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "username_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "targetappname_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "eventtype_in",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "eventresult",
+      "Type": "string",
+      "Default": "*"
+    },
+    {
+      "Name": "eventresultdetails_in",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "disabled",
+      "Type": "bool",
+      "Default": "false"
+    },
+    {
+      "Name": "pack",
+      "Type": "bool",
+      "Default": "false"
+    }
+  ]
+}
