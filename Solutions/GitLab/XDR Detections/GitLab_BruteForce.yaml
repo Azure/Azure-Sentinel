@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2238d13a-cf05-4973-a83f-d12a25dbb153
+    path: Analytic Rules/GitLab_BruteForce.yaml
+    version: 1.0.2
+    querySha256: 97299d8207df7e6f9b53e33d8ee2941cef10ade2777a4b71856bab9dd60c07ba
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `User`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `User` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 37a077baea06817c8c42c325f81cd5cbf1f66325dd0ff007617da30cd72b0691
+      targetQuerySha256: f660a8652ca9acf5e0b4262b75244764728c7064988b6d3e4c6c1dd908ce4d4c
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: User
+      column: User
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-2238d13a-cf05-4973-a83f-d12a25dbb153
+  displayName: GitLab - Brute-force Attempts
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let LearningPeriod = 7d;
+      let EndLearningTime = now();
+      let BinTime = 1h;
+      let RunTime = 1h;
+      let MinThreshold = 3.0;
+      let GitLabFailedLogins = (GitLabApp
+      | where FailedLogin == 1
+      | parse kind=regex Message with "Failed Login: username=" User "ip=" IpAddress
+      | project TimeGenerated, EventTime, Computer, User, HostName, HostIP, IpAddress);
+      GitLabFailedLogins
+      | where EventTime between (ago(LearningPeriod) .. EndLearningTime)
+      | summarize FailedLoginsCountInBinTime = count() by User, bin(EventTime, BinTime)
+      | summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User
+      | extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning, MinThreshold)
+      | join kind=innerunique ( GitLabFailedLogins
+      | summarize FailedLoginsCountInRunTime = count() by User, IpAddress, EventTime = bin(EventTime, BinTime) ) on User
+      | where FailedLoginsCountInRunTime >= LearningThreshold
+      | project User, IpAddress, EventTime, FailedLoginsCountInRunTime, LearningThreshold
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GitLab - Brute-force Attempts
+      description: '''This query relies on GitLab Application Logs to get failed logins to highlight brute-force attempts
+        from different IP addresses in a short space of time.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        AccountFullName: User

@@ -1,0 +1,240 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for AWS CloudTrail EC2 LaunchAndAccess activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+Description: |
+  Filters and normalizes AWSCloudTrail events from ec2.amazonaws.com for launch templates, key pairs,
+  placement groups, Instance Connect endpoints, console access, Nitro TPM and Enclaves,
+  and Mac modification tasks. This parser is referenced by vimAuditEventAWSCloudTrail.
+ParserName: vimAuditEventAWSCloudTrailEC2LaunchAndAccess
+ParentParser: vimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AWSCloudTrailEC2LaunchAndAccess
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    actorusername_has_any:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool=false,
+    pack:bool=false
+  ) {
+  let Events = datatable(EventName: string, EventType: string, Object: string)
+  [
+    "AssociateEnclaveCertificateIamRole", "Set", "AWS Certificate Manager Certificate",
+    "CreateDelegateMacVolumeOwnershipTask", "Create", "Mac Modification Task",
+    "CreateInstanceConnectEndpoint", "Create", "EC2 Instance Connect Endpoint",
+    "CreateKeyPair", "Create", "Key Pair",
+    "CreateLaunchTemplate", "Create", "Launch Template",
+    "CreateLaunchTemplateVersion", "Create", "Launch Template Version",
+    "CreateMacSystemIntegrityProtectionModificationTask", "Create", "Mac Modification Task",
+    "CreatePlacementGroup", "Create", "Placement Group",
+    "DeleteInstanceConnectEndpoint", "Delete", "EC2 Instance Connect Endpoint",
+    "DeleteKeyPair", "Delete", "Key Pair",
+    "DeleteLaunchTemplate", "Delete", "Launch Template",
+    "DeleteLaunchTemplateVersions", "Delete", "Launch Template",
+    "DeletePlacementGroup", "Delete", "Placement Group",
+    "DescribeInstanceConnectEndpoints", "Read", "Instance Connect Endpoint",
+    "DescribeKeyPairs", "Read", "Key Pair",
+    "DescribeLaunchTemplates", "Read", "Launch Template",
+    "DescribeLaunchTemplateVersions", "Read", "Launch Template",
+    "DescribeMacModificationTasks", "Read", "Mac Modification Task",
+    "DescribePlacementGroups", "Read", "Placement Group",
+    "DisableSerialConsoleAccess", "Disable", "EC2 Serial Console",
+    "DisassociateEnclaveCertificateIamRole", "Delete", "IAM Role",
+    "EnableSerialConsoleAccess", "Enable", "EC2 Serial Console",
+    "GetAssociatedEnclaveCertificateIamRoles", "Read", "IAM Role",
+    "GetConsoleOutput", "Read", "EC2 Instance",
+    "GetConsoleScreenshot", "Read", "EC2 Instance",
+    "GetInstanceTpmEkPub", "Read", "EC2 Instance",
+    "GetLaunchTemplateData", "Read", "EC2 Instance",
+    "GetPasswordData", "Read", "EC2 Instance",
+    "GetSerialConsoleAccessStatus", "Read", "EC2 Serial Console",
+    "ImportKeyPair", "Create", "Key Pair",
+    "ModifyInstanceConnectEndpoint", "Set", "Instance Connect Endpoint",
+    "ModifyLaunchTemplate", "Set", "Launch Template"
+  ]
+  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+  | where array_length(object_has_any) == 0 or Object has_any (object_has_any);
+  AWSCloudTrail
+  | where not(disabled)
+  | where EventSource == "ec2.amazonaws.com"
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+  | where array_length(operation_has_any) == 0 or EventName has_any (operation_has_any)
+  | where array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any)
+  | where array_length(srcipaddr_has_any_prefix) == 0
+      or (ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0")
+          and has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+  | where EventName in (Events | project EventName)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | where eventresult == "*" or EventResult == eventresult
+  | lookup kind=inner Events on EventName
+  | extend Req = todynamic(RequestParameters), Resp = todynamic(ResponseElements)
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AssociateEnclaveCertificateIamRole", Req.RoleArn,
+      EventName in ("CreateDelegateMacVolumeOwnershipTask",
+        "CreateMacSystemIntegrityProtectionModificationTask"), Resp.macModificationTask,
+      EventName == "CreateInstanceConnectEndpoint", Resp.instanceConnectEndpoint,
+      EventName == "CreateLaunchTemplate", Resp.launchTemplate,
+      EventName == "CreateLaunchTemplateVersion", Resp.launchTemplateVersion,
+      EventName == "CreatePlacementGroup", Resp.placementGroup,
+      EventName == "EnableSerialConsoleAccess", Resp.serialConsoleAccessEnabled,
+      EventName == "ImportKeyPair", Resp,
+      EventName == "ModifyInstanceConnectEndpoint", Req.PreserveClientIp,
+      EventName == "ModifyLaunchTemplate", Req.LaunchTemplateName,
+      ""
+    ), "")
+  | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+  | extend ObjectId = case(
+      EventName == "AssociateEnclaveCertificateIamRole", Req.CertificateArn,
+      EventName in ("CreateDelegateMacVolumeOwnershipTask",
+        "CreateMacSystemIntegrityProtectionModificationTask"),
+        Resp.macModificationTask.macModificationTaskId,
+      EventName == "CreateInstanceConnectEndpoint",
+        Resp.instanceConnectEndpoint.instanceConnectEndpointId,
+      EventName in ("CreateKeyPair", "DeleteKeyPair", "ImportKeyPair"), Resp.keyPairId,
+      EventName == "CreateLaunchTemplate", Resp.launchTemplate.launchTemplateId,
+      EventName == "CreateLaunchTemplateVersion", Resp.launchTemplateVersion.imageId,
+      EventName == "CreatePlacementGroup", Resp.placementGroup.placementGroupId,
+      EventName in ("DeleteInstanceConnectEndpoint", "ModifyInstanceConnectEndpoint"),
+        Req.InstanceConnectEndpointId,
+      EventName in ("DeleteLaunchTemplate", "DeleteLaunchTemplateVersions", "DescribeLaunchTemplates",
+        "DescribeLaunchTemplateVersions", "ModifyLaunchTemplate"), Req.LaunchTemplateId,
+      EventName == "DeletePlacementGroup", Req.GroupName,
+      EventName == "DescribeInstanceConnectEndpoints", Req.InstanceConnectEndpointId.N,
+      EventName == "DescribeKeyPairs", Req.KeyPairId,
+      EventName == "DescribeMacModificationTasks", Req.MacModificationTaskId,
+      EventName == "DescribePlacementGroups", Req.GroupId,
+      EventName == "DisassociateEnclaveCertificateIamRole", Req.RoleArn,
+      EventName in ("GetConsoleOutput", "GetConsoleScreenshot", "GetPasswordData"), Resp.instanceId,
+      EventName in ("GetInstanceTpmEkPub", "GetLaunchTemplateData"), Req.InstanceId,
+      ""
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service"
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      ActorUserEntityKey = "",
+      AdditionalEntities = dynamic([]),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", Req,
+      "ResponseElements", Resp
+    ), dynamic({}))
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  | project
+      TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+      EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+      EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+      ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+      SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+      Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+      ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+      AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+      TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(
+    starttime,
+    endtime,
+    srcipaddr_has_any_prefix,
+    actorusername_has_any,
+    operation_has_any,
+    eventtype_in,
+    eventresult,
+    object_has_any,
+    newvalue_has_any,
+    disabled,
+    pack
+  )
