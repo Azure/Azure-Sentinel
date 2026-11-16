@@ -1,0 +1,80 @@
+id: e31cdf89-afae-4fec-ae33-10cfb44cc990
+name: Sign-ins after employee termination date
+description: |
+  Identifies successful interactive or non-interactive sign-ins by accounts on the Terminated Employees watchlist after each user's termination date. A leaver should not sign in, so a hit can mean the account was never disabled.
+description-detailed: |
+  Offboarding often depends on a manual request to disable the account. If that request is delayed or missed, the leaver can keep signing in with the same device, apps and network, so location or risk based detections do not fire.
+  This hunt joins successful sign-ins from SigninLogs and AADNonInteractiveUserSignInLogs to the Terminated Employees watchlist (alias TerminatedEmployees, created from the built-in watchlist template) and keeps sign-ins after each user's termination date. Non-interactive sign-ins are included because a device that is still signed in keeps refreshing tokens without a password prompt.
+  It complements SuccessfulSignInAfterAccountDisabled, which needs a "Disable account" audit event. This query uses HR termination data instead, so it also finds leavers whose accounts were never disabled.
+  StartTime is the earliest sign-in after termination within the lookback. Increase the lookback to cover older termination dates, within your SigninLogs retention.
+  References:
+  - https://learn.microsoft.com/azure/sentinel/watchlist-schemas
+  - https://attack.mitre.org/techniques/T1078/004/
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078.004
+query: |
+  let lookback = 30d;
+  // Users marked Terminated on the Terminated Employees watchlist, with their termination date
+  let Leavers = Watchlist
+    | where WatchlistAlias == "TerminatedEmployees"
+    | summarize arg_max(TimeGenerated, *) by _DTItemId
+    | where _DTItemStatus != "Delete"
+    | where tostring(WatchlistItem["UserState"]) =~ "Terminated"
+    | project UPN = tolower(tostring(SearchKey)),
+              LeaveDate = todatetime(tostring(WatchlistItem["Termination date"]));
+  union SigninLogs, AADNonInteractiveUserSignInLogs
+  | where TimeGenerated >= ago(lookback)
+  | where ResultType == "0"
+  | extend UPN = tolower(UserPrincipalName)
+  | join kind=inner Leavers on UPN
+  | where TimeGenerated > LeaveDate
+  | summarize SignIns = count(),
+              StartTime = min(TimeGenerated),
+              EndTime = max(TimeGenerated),
+              Apps = make_set(AppDisplayName, 20),
+              IPs = make_set(IPAddress, 20),
+              SignInSources = make_set(Type),
+              SampleIPAddress = take_any(IPAddress),
+              UserId = take_any(UserId)
+              by UPN, LeaveDate
+  | extend DaysToFirstReturn = datetime_diff('day', StartTime, LeaveDate)
+  | extend AccountName = tostring(split(UPN, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UPN, "@")[1])
+  | sort by StartTime desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UPN
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: AadUserId
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SampleIPAddress
+customDetails:
+  TerminationDate: LeaveDate
+  DaysToFirstReturn: DaysToFirstReturn
+  SignInCount: SignIns
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: RabiatuMohammed
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
