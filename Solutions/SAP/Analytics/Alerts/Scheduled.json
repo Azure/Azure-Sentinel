@@ -1649,5 +1649,97 @@
         "Type": "Microsoft.SecurityInsights/alertRules",
         "Etag": "\"3a0085ef-0000-0d00-0000-60900c0a0000\"",
         "Kind": "Scheduled"
+    },
+    {
+        "AlertRuleTemplateName": null,
+        "DisplayName": "(Preview) SAP - Medium - Potential audit log gaps per client",
+        "Description": "Identifies completed hours without audit events for explicitly monitored SAP systems and clients, including intervals older than the documented seven-day automatic recovery limit.\nEmpty hours indicate potential ingestion gaps or impaired logging, not confirmed missing records or malicious activity.\nValidate the original intervals against SAP source records, expected activity, maintenance and collection logs before approving a backfill.\nConfigure the SAPClientMonitoring watchlist with expected clients and UTC monitoring start times before enabling this rule.",
+        "Enabled": true,
+        "Query": "// Keep Lookback below queryPeriod to allow for bucket alignment and ingestion grace.\r\nlet Lookback = 13d;\r\nlet BinSize = 1h;\r\nlet IngestionGrace = 30m;\r\nlet AutomaticRecoveryLimit = 7d;\r\nlet EndUtc = bin(now() - IngestionGrace, BinSize);\r\nlet StartUtc = EndUtc - Lookback;\r\n// Inventory must include silent clients; do not derive it from recent audit events.\r\n// Import Analytics/Watchlists/SAP - Client monitoring.csv as SAPClientMonitoring.\r\n// Replace disabled samples with exact table identities and set Enabled=true.\r\nlet ExpectedClients =\r\n    _GetWatchlist('SAPClientMonitoring')\r\n    | where Enabled =~ \"true\"\r\n    | project SystemId = tostring(SystemId), ClientId = tostring(ClientId),\r\n              SystemUniqueId = tostring(SystemUniqueId),\r\n              RfcDestinationName = tostring(RfcDestinationName),\r\n              MonitoringStartUtc = todatetime(MonitoringStartUtc)\r\n    | where isnotempty(SystemId) and isnotempty(ClientId)\r\n        and isnotempty(RfcDestinationName) and isnotnull(MonitoringStartUtc)\r\n    | distinct SystemId, ClientId, SystemUniqueId, RfcDestinationName, MonitoringStartUtc;\r\nlet EventCounts =\r\n    ABAPAuditLog\r\n    | where TimeGenerated >= StartUtc and TimeGenerated < EndUtc\r\n    | summarize Events = count()\r\n        by SystemId, ClientId, SystemUniqueId, StartTimeUTC = bin(TimeGenerated, BinSize);\r\nlet Windows =\r\n    range StartTimeUTC from StartUtc to (EndUtc - BinSize) step BinSize\r\n    | extend JoinKey = 1;\r\nExpectedClients\r\n| extend JoinKey = 1\r\n| join kind=inner Windows on JoinKey\r\n| where StartTimeUTC >= MonitoringStartUtc\r\n| project SystemId, ClientId, SystemUniqueId, RfcDestinationName, StartTimeUTC\r\n| join kind=leftouter EventCounts on SystemId, ClientId, SystemUniqueId, StartTimeUTC\r\n| extend Events = coalesce(Events, tolong(0))\r\n| where Events == 0\r\n| extend EndTimeUTC = StartTimeUTC + BinSize\r\n| extend RecoveryCategory = iff(EndTimeUTC <= now() - AutomaticRecoveryLimit,\r\n    \"Older than seven days\", \"Within seven days\")\r\n| summarize PotentialGapHours = count(), FirstGapStartUtc = min(StartTimeUTC),\r\n            LastGapEndUtc = max(EndTimeUTC)\r\n    by SystemId, ClientId, SystemUniqueId, RfcDestinationName, RecoveryCategory\r\n| extend ClientKey = strcat(SystemUniqueId, \":\", SystemId, \"/\", ClientId),\r\n         CloudApp = \"SAP ERP\", TimeGenerated = now()\r\n| project TimeGenerated, SystemId, ClientId, SystemUniqueId, RfcDestinationName,\r\n          ClientKey, RecoveryCategory, PotentialGapHours, FirstGapStartUtc, LastGapEndUtc, CloudApp",
+        "QueryFrequency": {
+            "Ticks": 864000000000,
+            "Days": 1,
+            "Hours": 0,
+            "Milliseconds": 0,
+            "Minutes": 0,
+            "Seconds": 0,
+            "TotalDays": 1,
+            "TotalHours": 24,
+            "TotalMilliseconds": 86400000,
+            "TotalMinutes": 1440,
+            "TotalSeconds": 86400
+        },
+        "QueryPeriod": {
+            "Ticks": 12096000000000,
+            "Days": 14,
+            "Hours": 0,
+            "Milliseconds": 0,
+            "Minutes": 0,
+            "Seconds": 0,
+            "TotalDays": 14,
+            "TotalHours": 336,
+            "TotalMilliseconds": 1209600000,
+            "TotalMinutes": 20160,
+            "TotalSeconds": 1209600
+        },
+        "Severity": "Medium",
+        "SuppressionDuration": {
+            "Ticks": 36000000000,
+            "Days": 0,
+            "Hours": 1,
+            "Milliseconds": 0,
+            "Minutes": 0,
+            "Seconds": 0,
+            "TotalDays": 0.041666666666666664,
+            "TotalHours": 1,
+            "TotalMilliseconds": 3600000,
+            "TotalMinutes": 60,
+            "TotalSeconds": 3600
+        },
+        "SuppressionEnabled": false,
+        "TriggerOperator": 0,
+        "TriggerThreshold": 0,
+        "Tactics": [
+            "DefenseEvasion"
+        ],
+        "Techniques": [
+            "T1562.008"
+        ],
+        "EventGroupingSettings": {
+            "AggregationKind": "AlertPerResult"
+        },
+        "EntityMappings": [
+            {
+                "EntityType": "CloudApplication",
+                "FieldMappings": [
+                    {
+                        "Identifier": "Name",
+                        "ColumnName": "CloudApp"
+                    },
+                    {
+                        "Identifier": "InstanceName",
+                        "ColumnName": "ClientKey"
+                    }
+                ]
+            }
+        ],
+        "AlertDetailsOverride": {
+            "AlertDisplayNameFormat": "SAP: Potential audit log gaps for {{ClientKey}} - {{RecoveryCategory}}",
+            "AlertDescriptionFormat": "SAP client {{ClientKey}} has {{PotentialGapHours}} completed hours without audit events ({{RecoveryCategory}}).\nValidate the original windows against SAP source records and CPI collection logs.\nFirstGapStartUtc and LastGapEndUtc bound the findings but may include nonempty hours between separate gaps; do not backfill that entire range without checking exact missing windows."
+        },
+        "CustomDetails": {
+            "SystemId": "SystemId",
+            "ClientId": "ClientId",
+            "SystemUniqueId": "SystemUniqueId",
+            "RfcDestinationName": "RfcDestinationName",
+            "RecoveryCategory": "RecoveryCategory",
+            "PotentialGapHours": "PotentialGapHours",
+            "FirstGapStartUtc": "FirstGapStartUtc",
+            "LastGapEndUtc": "LastGapEndUtc"
+        },
+        "TemplateVersion": "1.0.0",
+        "Name": "8007937d-5c01-4dd0-a34c-f75cd5a3fcf2",
+        "Type": "Microsoft.SecurityInsights/alertRules",
+        "Kind": "Scheduled"
     }
 ]
