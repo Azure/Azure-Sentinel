@@ -548,6 +548,8 @@ authoring. `--mode authoring`, `native-workbook-validate`, authoring workflow ga
 and normal Python/PowerShell packaging additionally require a current canonical
 whole-document hash-bound local receipt. A later query/settings/metadata/
 dependency edit needs fresh explicit review; structural success is not a waiver.
+The separately approved maintenance route below can instead reuse unchanged
+published workbook input; it does not grant new authoring or runtime approval.
 The clean/update command creates the receipt that packaging consumes automatically
 by current document hash. Prior receipts remain locally available, including when
 the same payload receives another authorization.
@@ -596,6 +598,57 @@ candidate; it does not establish migration workflow acceptance or lab/runtime
 qualification.
 Keep automatic attribution lookup and its fail-closed guard; do not add a skip
 flag to recover from an attribution failure.
+
+### Packaging maintenance with unchanged published workbooks
+
+Do not copy private review receipts between developers or change `VersionMode`
+to bypass workbook validation. For an AR/CD maintenance release, the agent can
+prepare an explicit published-baseline review before starting a new run:
+
+```powershell
+python -m sentinel_xdr_migration.cli workbook-maintenance-plan `
+  --solution $Solution --published-ref $PublishedCommit `
+  --repository-url $PublishedRepository
+```
+
+`$PublishedCommit` must be a full immutable commit SHA available locally.
+`$PublishedRepository` must match a configured repository remote. The operator
+must explicitly confirm that this repository/commit is an approved publication;
+Git reachability or the remote configuration alone does not establish trust.
+The command does not fetch, initialize a run, clean metadata or modify versions.
+
+After reviewing the exact selection/dependencies, save the plan under local
+`Logs` with nonempty `actor`, `reference`, and `decision: "accept"`. Keep all
+other fields unchanged. The agent handles this file after user approval.
+Initialize the selected profile using the reviewed file:
+
+```powershell
+python -m sentinel_xdr_migration.cli workflow-init `
+  --solution $Solution --new-run --workflow-profile authoring `
+  --arm-validation-method arm-ttk --version-bump none `
+  --workbook-maintenance-review $ReviewedPlan
+```
+
+This example explicitly chooses offline Authoring. Qualification remains the
+default and requires its normal locked target. Supply the normal campaign
+budget options for package execution; no budget or release gate is waived.
+Continue the existing discovery/conversion/validation/`package-v3-1` workflow,
+using its run ID. The reviewed baseline is immutable on resume.
+
+Selected clean workbooks are preserved, not reconverted. The report records
+`published-baseline` for unchanged canonical content and dependencies, or
+`local-review` for current explicitly reviewed content. Changed/new workbooks
+without a valid local review and legacy metadata fail preflight before package
+mutation. Current parser/connector inventories are conservatively compared in
+full; dependency changes can still require review even with unchanged workbook
+JSON. Selection, workbook-byte or dependency drift invalidates the frozen plan.
+Package release increments do not rewrite authored workbook versions.
+
+Baseline reuse is not a fresh conversion, accepted release, or provider/runtime
+qualification. Candidate generation and all remaining acceptance checks retain
+their existing requirements. The source AR whole-document hash includes its
+version and metadata: finalize those edits before collecting detection review
+decisions against the converter's final hashes. Do not hand-edit hashes.
 
 ### Toolkit-owner managed update policy
 

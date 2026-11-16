@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -1223,6 +1224,7 @@ def package_solution_v3_1(
     workflow_run_id: str | None = None,
     selection_plan: dict[str, Any] | None = None,
     arm_validation_method: str = "arm-ttk",
+    workbook_maintenance_review: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if arm_validation_method not in {"arm-ttk", "lab-deployment"}:
         raise ValueError("ARM validation method must be arm-ttk or lab-deployment")
@@ -1236,6 +1238,17 @@ def package_solution_v3_1(
     root = Path(solution).expanduser().resolve()
     if not root.is_dir():
         raise ValueError(f"solution folder does not exist: {root}")
+    if workbook_maintenance_review is not None:
+        if not workflow_run_id:
+            raise ValueError("workbook maintenance packaging requires an explicit workflow run")
+        from solution_manager.core.artifacts import using_run
+        from solution_manager.core.workflow import _load
+        from solution_manager.migration.workbook_workflow import verify_inventory
+        with using_run(root, workflow_run_id):
+            maintenance_state = _load(root)[1]
+            if maintenance_state.get("workbooks", {}).get("maintenanceReview") != workbook_maintenance_review:
+                raise ValueError("workbook maintenance approval differs from the frozen workflow")
+            verify_inventory(root, maintenance_state)
     require_solution_conversion_scope(root)
     applied_selection = None
     if workflow_run_id is not None:
@@ -1282,7 +1295,7 @@ def package_solution_v3_1(
         workbook_publication = importlib.import_module("solution_manager.authoring.workbook_publication")
         for workbook_file in workbook_files:
             workbook_doc = _read_json(workbook_file)
-            if workbook_publication.is_public(workbook_doc):
+            if workbook_publication.is_public(workbook_doc) and workbook_maintenance_review is None:
                 blockers = workbook_publication.publication_errors(root, workbook_doc)
                 if blockers:
                     raise ValueError("; ".join(blockers))
@@ -1338,6 +1351,14 @@ def package_solution_v3_1(
                     existing_artifact.stat().st_mtime_ns,
                     hashlib.sha256(existing_artifact.read_bytes()).hexdigest(),
                 )
+    subprocess_options = {}
+    if workbook_maintenance_review is not None:
+        child_environment = os.environ.copy()
+        child_environment.pop("SENTINEL_XDR_WORKBOOK_PUBLIC_REF", None)
+        child_environment["SENTINEL_XDR_WORKBOOK_MAINTENANCE_RUN_ID"] = workflow_run_id
+        subprocess_options["env"] = child_environment
+        with using_run(root, workflow_run_id):
+            verify_inventory(root, _load(root)[1])
     completed = subprocess.run(
         command,
         cwd=repository,
@@ -1345,6 +1366,7 @@ def package_solution_v3_1(
         capture_output=True,
         text=True,
         encoding="utf-8",
+        **subprocess_options,
     )
     output = "\n".join(
         value.strip() for value in (completed.stdout, completed.stderr) if value.strip()
@@ -1355,6 +1377,9 @@ def package_solution_v3_1(
             f"{output[-4000:]}"
         )
     _detect_swallowed_powershell_errors(completed.stdout, completed.stderr)
+    if workbook_maintenance_review is not None:
+        with using_run(root, workflow_run_id):
+            verify_inventory(root, _load(root)[1])
     if "Starting Package Creation using V3.1 tool" not in output:
         raise RuntimeError("Packaging output did not confirm the V3.1 entry point.")
     warnings = [
@@ -1566,6 +1591,15 @@ def package_solution_v3_1(
         "effectiveTargetVersion": target_version,
         "packageAttemptId": package_attempt_id,
         "workflowRunId": workflow_run_id,
+        **({
+            "workbookMaintenance": {
+                "planSha256": workbook_maintenance_review["planSha256"],
+                "repository": workbook_maintenance_review["repository"],
+                "commit": workbook_maintenance_review["commit"],
+                "workbooks": workbook_maintenance_review["workbooks"],
+                "qualificationEstablished": False,
+            },
+        } if workbook_maintenance_review is not None else {}),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "packageInputs": {
             "before": input_before,
