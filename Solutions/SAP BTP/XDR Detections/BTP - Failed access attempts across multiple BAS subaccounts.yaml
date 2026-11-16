@@ -1,0 +1,115 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 74b243a6-3046-48aa-8b03-e43b3c529cc1
+    path: Analytic Rules/BTP - Failed access attempts across multiple BAS subaccounts.yaml
+    version: 3.0.6
+    querySha256: 7addb3e090f5f123e7c5688c68d1853c4dca3fab27c17fce62535c2c0818d43a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Reconnaissance
+    - Discovery
+    originalTechniques:
+    - T1595
+    - T1526
+    reviewScope:
+      sourceDocumentSha256: 3641e5158bfccb84e51dc940b900e615426800e90efdea5a1b085ba43c104917
+      targetQuerySha256: a5d335298a519d2987e8b6f8c3a18af95e861b4175acb3f58e31f62f7e5280a4
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 3641e5158bfccb84e51dc940b900e615426800e90efdea5a1b085ba43c104917
+      targetQuerySha256: a5d335298a519d2987e8b6f8c3a18af95e861b4175acb3f58e31f62f7e5280a4
+properties:
+  id: xdr-74b243a6-3046-48aa-8b03-e43b3c529cc1
+  displayName: SAP BTP - Failed access attempts across multiple BAS subaccounts
+  status: disabled
+  queryCondition:
+    queryText: 'let subaccount_detection_threshold = 3;
+
+      SAPBTPAuditLog_CL
+
+      | where Category == "audit.security-events" and Message has "Unauthorized access
+      attempt"
+
+      | summarize Start=min(UpdatedOn), End=max(UpdatedOn), Tenants = make_set(Tenant,
+      100) by UserName
+
+      | where array_length(Tenants) > subaccount_detection_threshold
+
+      | project Start, End, UserName, Tenants, CloudApp = "SAP BTP"
+
+      | extend AccountName = split(UserName, "@")[0], UPNSuffix = split(UserName,
+      "@")[1]'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - Failed access attempts across multiple BAS subaccounts
+      description: Identifies failed Business Application Studio access attempts over
+        a predefined number of subaccounts.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+      tactics:
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1595

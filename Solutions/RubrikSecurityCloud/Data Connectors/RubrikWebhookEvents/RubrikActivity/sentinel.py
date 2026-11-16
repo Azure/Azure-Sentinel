@@ -1,119 +1,142 @@
-"""This file contains AzureSentinel class which is used to post data into log analytics workspace."""
-import base64
-import datetime
-import hashlib
-import hmac
-import requests
-from ..shared_code.consts import LOGS_STARTS_WITH, WORKSPACE_ID, WORKSPACE_KEY
+"""This file contains MicrosoftSentinel class which posts data via the Log Ingestion API."""
+import inspect
+import time
+from azure.core.exceptions import HttpResponseError
+from azure.identity import DefaultAzureCredential, AzureAuthorityHosts
+from azure.monitor.ingestion import LogsIngestionClient
+from ..shared_code.consts import (
+    LOGS_STARTS_WITH,
+    LOG_FORMAT,
+    AZURE_DATA_COLLECTION_ENDPOINT,
+    SCOPE,
+    MAX_RETRIES,
+    RETRYABLE_STATUS,
+)
 from ..shared_code.logger import applogger
-from ..shared_code.rubrik_exception import RubrikException
+from ..shared_code.rubrik_exception import (
+    RubrikException,
+    RubrikAuthenticationException,
+)
+
+FUNCTION_NAME = "RubrikActivity"
 
 
 class MicrosoftSentinel:
-    """AzureSentinel class is used to post data into log Analytics workspace."""
+    """Posts data into a Log Analytics custom table via the Log Ingestion API."""
 
     def __init__(self) -> None:
-        """Intialize instance variables for MicrosoftSentinel class."""
-        self.logs_start_with = "{}(MicrosoftSentinel)".format(LOGS_STARTS_WITH)
-        self.customer_id = WORKSPACE_ID
-        self.shared_key = WORKSPACE_KEY
-
-    def build_signature(
-        self,
-        date,
-        content_length,
-        method,
-        content_type,
-        resource,
-    ):
-        """To build signature which is required in header."""
-        x_headers = "x-ms-date:" + date
-        string_to_hash = (
-            method
-            + "\n"
-            + str(content_length)
-            + "\n"
-            + content_type
-            + "\n"
-            + x_headers
-            + "\n"
-            + resource
-        )
-        bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-        decoded_key = base64.b64decode(self.shared_key)
-        encoded_hash = base64.b64encode(
-            hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()
-        ).decode()
-        authorization = "SharedKey {}:{}".format(self.customer_id, encoded_hash)
-        return authorization
-
-    # Build and send a request to the POST API
-    def post_data(self, body, log_type):
-        """Build and send a request to the POST API.
-
-        Args:
-            body (str): Data to post into Sentinel log analytics workspace
-            log_type (str): Custom log table name in which data wil be added.
-
-        Returns:
-            status_code: Returns the response status code got while posting data to sentinel.
-        """
-        method = "POST"
-        content_type = "application/json"
-        resource = "/api/logs"
-        rfc1123date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
-        content_length = len(body)
+        """Initialize the LogsIngestionClient with cloud-aware credentials."""
+        __method_name = inspect.currentframe().f_code.co_name
+        self.endpoint = AZURE_DATA_COLLECTION_ENDPOINT
+        self.scope = SCOPE
+        is_gov = ".us" in (self.scope or "").lower() or ".us" in (self.endpoint or "").lower()
         try:
-            signature = self.build_signature(
-                rfc1123date,
-                content_length,
-                method,
-                content_type,
-                resource,
+            if is_gov:
+                credential = DefaultAzureCredential(
+                    authority=AzureAuthorityHosts.AZURE_GOVERNMENT
+                )
+                credential_scopes = ["https://monitor.azure.us//.default"]
+            else:
+                credential = DefaultAzureCredential()
+                credential_scopes = ["https://monitor.azure.com//.default"]
+            self.client = LogsIngestionClient(
+                endpoint=self.endpoint,
+                credential=credential,
+                credential_scopes=credential_scopes,
             )
         except Exception as err:
-            applogger.error("{} Error occurred: {}".format(self.logs_start_with, err))
-            raise RubrikException(
-                "Error while generating signature for posting data into log analytics."
+            applogger.error(
+                LOG_FORMAT.format(LOGS_STARTS_WITH, FUNCTION_NAME, __method_name, err)
             )
-        uri = (
-            "https://"
-            + self.customer_id
-            + ".ods.opinsights.azure.com"
-            + resource
-            + "?api-version=2016-04-01"
-        )
+            raise RubrikAuthenticationException(
+                "Failed to initialize LogsIngestionClient: {}".format(err)
+            )
 
-        headers = {
-            "content-type": content_type,
-            "Authorization": signature,
-            "Log-Type": log_type,
-            "x-ms-date": rfc1123date,
-        }
-        try:
-            response = requests.post(uri, data=body, headers=headers)
-            if response.status_code >= 200 and response.status_code <= 299:
+    def post_data(self, events, stream_name, rule_id):
+        """Upload events to the given DCR stream with bounded retry.
+
+        Args:
+            events (list): list of event dicts to ingest.
+            stream_name (str): DCR stream name (Custom-{TableName}).
+            rule_id (str): DCR immutable id.
+
+        Raises:
+            RubrikException: on non-retryable errors or after exhausting retries.
+        """
+        __method_name = inspect.currentframe().f_code.co_name
+        applogger.debug(
+            LOG_FORMAT.format(
+                LOGS_STARTS_WITH,
+                FUNCTION_NAME,
+                __method_name,
+                "Uploading batch of {} event(s) to stream {} (rule_id={}).".format(
+                    len(events), stream_name, rule_id
+                ),
+            )
+        )
+        attempt = 0
+        while True:
+            try:
+                self.client.upload(
+                    rule_id=rule_id, stream_name=stream_name, logs=events
+                )
                 applogger.info(
-                    "{} Data posted successfully to {} table in Log Analytics Workspace.".format(
-                        self.logs_start_with, log_type
+                    LOG_FORMAT.format(
+                        LOGS_STARTS_WITH,
+                        FUNCTION_NAME,
+                        __method_name,
+                        "Successfully posted {} event(s) to stream {} on attempt {}.".format(
+                            len(events), stream_name, attempt + 1
+                        ),
                     )
                 )
-            else:
-                applogger.info(
-                    "Response code: {} from posting data to log analytics.\nError: {}".format(
-                        response.status_code, response.content
+                return
+            except HttpResponseError as err:
+                status = getattr(err, "status_code", None)
+                if status in RETRYABLE_STATUS and attempt < MAX_RETRIES:
+                    attempt += 1
+                    backoff = 2 ** attempt
+                    applogger.warning(
+                        LOG_FORMAT.format(
+                            LOGS_STARTS_WITH,
+                            FUNCTION_NAME,
+                            __method_name,
+                            "Retryable status {} on attempt {}; sleeping {}s.".format(
+                                status, attempt, backoff
+                            ),
+                        )
+                    )
+                    time.sleep(backoff)
+                    continue
+                if status == 401 and attempt < MAX_RETRIES:
+                    attempt += 1
+                    backoff = 2 ** attempt
+                    applogger.warning(
+                        LOG_FORMAT.format(
+                            LOGS_STARTS_WITH,
+                            FUNCTION_NAME,
+                            __method_name,
+                            "Unauthorized (401) on attempt {}; sleeping {}s before retry.".format(
+                                attempt, backoff
+                            ),
+                        )
+                    )
+                    time.sleep(backoff)
+                    continue
+                applogger.error(
+                    LOG_FORMAT.format(
+                        LOGS_STARTS_WITH, FUNCTION_NAME, __method_name, err
                     )
                 )
                 raise RubrikException(
-                    "Response code: {} from posting data to log analytics.\nError: {}".format(
-                        response.status_code, response.content
+                    "Log Ingestion API error (status={}): {}".format(status, err)
+                )
+            except Exception as err:
+                applogger.error(
+                    LOG_FORMAT.format(
+                        LOGS_STARTS_WITH, FUNCTION_NAME, __method_name, err
                     )
                 )
-        except RubrikException as error:
-            applogger.error("{} Error:{}".format(self.logs_start_with, error))
-            raise RubrikException(
-                "RubrikException: Error while posting data to sentinel."
-            )
-        except Exception as error:
-            applogger.error("{} Error:{}".format(self.logs_start_with, error))
-            raise RubrikException()
+                raise RubrikException(
+                    "Unexpected error while posting data to Sentinel: {}".format(err)
+                )

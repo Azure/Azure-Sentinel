@@ -249,3 +249,83 @@ def test_clean_cli_preserves_local_authorization(update_case, capsys):
     assert cli.main(["workbook-publication-validate", *args, "--mode", "authoring"]) == 1
     capsys.readouterr()
     assert cli.main(["native-workbook-validate", "--solution", str(root)]) == 1
+
+
+def test_native_connector_backed_sentinel_tables_pass_publication_and_reject_unbacked_prerequisites(native_solution):
+    from copy import deepcopy
+    from test_native_workbooks import SOURCE, candidate, imported, write_source_query
+
+    connector_dir = native_solution / "Data Connectors"
+    connector_dir.mkdir(parents=True, exist_ok=True)
+    (connector_dir / "VendorAudit_connector.json").write_text(
+        json.dumps(
+            {
+                "id": "VendorAuditConnector",
+                "title": "Vendor Audit Connector",
+                "dataTypes": [{"name": "VendorAuditLogs", "lastDataReceivedQuery": "VendorAuditLogs"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    data_path = next((native_solution / "Data").glob("Solution_*.json"))
+    data = json.loads(data_path.read_bytes())
+    data["Data Connectors"] = ["Data Connectors/VendorAudit_connector.json"]
+    data_path.write_text(json.dumps(data), encoding="utf-8")
+
+    write_source_query(native_solution, "VendorAuditLogs | count")
+    import_result = imported(native_solution)
+    assert import_result["validation"]["invalid"] == 0
+
+    path = candidate(native_solution)
+    content = path.relative_to(native_solution).as_posix()
+    data = json.loads(data_path.read_bytes())
+    data["XDR Workbooks"] = [content]
+    data_path.write_text(json.dumps(data), encoding="utf-8")
+
+    plan = public.plan_publication(native_solution, content)
+    assert plan["dependencyErrors"] == []
+    assert plan["dependencies"]["requiredWorkloads"] == [
+        {"workload": "sentinel", "dataTypes": ["VendorAuditLogs"]},
+    ]
+    assert plan["dependencies"]["requiredDataConnectors"] == [
+        {"connectorId": "VendorAuditConnector", "dataTypes": ["VendorAuditLogs"]},
+    ]
+
+    review = deepcopy(plan)
+    review.update(
+        actor="private-reviewer-account",
+        reference="private session authorization",
+        decision="accept",
+    )
+    original_raw = path.read_bytes()
+    clean_result = public.clean_publication(
+        native_solution,
+        content,
+        public._sha(original_raw),
+        review,
+    )
+    assert Path(clean_result["localReceipt"]).exists()
+
+    clean_doc = json.loads(path.read_bytes())
+    assert clean_doc["contentProvenance"]["origin"] == "native-xdr"
+    assert clean_doc["contentProvenance"]["requiredWorkloads"] == [
+        {"workload": "sentinel", "dataTypes": ["VendorAuditLogs"]},
+    ]
+    assert clean_doc["contentProvenance"]["requiredDataConnectors"] == [
+        {"connectorId": "VendorAuditConnector", "dataTypes": ["VendorAuditLogs"]},
+    ]
+    assert public.validate_public_document(native_solution, clean_doc) == []
+    assert public.publication_errors(native_solution, clean_doc) == []
+    assert workbooks.validate_workbooks(native_solution, selected_only=True)["invalid"] == 0
+
+    # Unbacked Sentinel prerequisite or mismatched connector on a native-xdr public workbook must still be rejected.
+    unbacked_doc = deepcopy(clean_doc)
+    unbacked_doc["contentProvenance"]["requiredWorkloads"] = [
+        {"workload": "sentinel", "dataTypes": ["UnbackedCustomLogs"]},
+    ]
+    unbacked_doc["contentProvenance"]["requiredDataConnectors"] = [
+        {"connectorId": "FakeConnector", "dataTypes": ["UnbackedCustomLogs"]},
+    ]
+    unbacked_errors = public.validate_public_document(native_solution, unbacked_doc)
+    assert "Native public workbooks cannot declare Sentinel/function prerequisites." in unbacked_errors
+
