@@ -65,3 +65,42 @@ Since it is run locally you will see "Azure DevOps CI for a Pull Request wasn't 
     * (Draft PR marked as "Work in Progress" and cannot be merged, more info [here](https://help.github.com/en/articles/about-pull-requests#draft-pull-requests)).  
     * Remember to delete the draft PR.  
 
+### Workbook metadata version regression tests
+
+Run from the repository root:
+
+```powershell
+npm run tsc
+$env:REPO_OWNER = "Azure"
+$env:REPO_NAME = "Azure-Sentinel"
+node --import tsx node_modules/mocha/bin/mocha.js --timeout 15000 ".script/tests/workbooksValidatorTest/*.test.ts"
+```
+
+The version tests invoke the public checker in isolated Node processes with controlled
+PR details and Git responses, and also exercise the complete metadata validator and
+real temporary Git commits. The child processes use Node's experimental module-mocking
+flag; no GitHub credentials or network access are needed for these regression tests.
+
+To additionally replay the Cost workbook regression against real PR snapshots, fetch
+the desired exact commits first, set `WORKBOOK_VERSION_REPLAY_BASE_SHA` and
+`WORKBOOK_VERSION_REPLAY_HEAD_SHA` to their full SHAs, and run the same test command.
+This opt-in case uses the actual Git client and metadata at those commits, not the
+current worktree contents.
+
+For modified gallery templates, the checker reads complete metadata arrays at the
+PR's exact base and head commit SHAs, fetching a missing commit from its repository.
+It matches entries by `templateRelativePath` and `workbookKey`. Shared templates are
+supported only when every existing key remains and its own version increases; a new,
+removed, or replaced key for a modified template is rejected rather than matched
+ambiguously. Auxiliary JSON files absent from both metadata snapshots are ignored;
+a mapping missing from only one snapshot remains a validation error. Duplicate keys
+in either snapshot, invalid JSON, and Git failures are validation errors.
+Additions, deletions, and renames remain outside
+the existing modified-file discovery contract. Metadata-only changes do not require
+a template bump, and local validation without PR context retains its existing skip.
+
+Versions use numeric dotted components, including legacy two-part versions such as
+`1.0`. Components compare numerically (`1.10` is greater than `1.9`), with omitted
+trailing components treated as zero (`1.0` and `1.0.0` are equivalent). Prerelease,
+build-metadata, empty, missing, and nonnumeric versions are rejected rather than
+ordered lexicographically.
