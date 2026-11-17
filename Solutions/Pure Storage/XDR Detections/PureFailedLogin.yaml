@@ -1,0 +1,112 @@
+schemaVersion: 1.0.0
+version: 3.1.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: EverpureSyslog
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ed32b115-5001-43a7-a2bb-f53026db4d97
+    path: Analytic Rules/PureFailedLogin.yaml
+    version: 1.0.1
+    querySha256: 5a34dc67e62d15a2f39b58121edd68bc677775cbc745a31bb4cad3e319fcd97c
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - nrt_behavioral_summarize_fallback_pt1h
+    - 'nrt_behavioral_summarize_fallback_pt1h: Source NRT rule uses a behavioral summarize aggregation with threshold/grouping
+      semantics not supported in Continuous (PT0S) mode; automatically fell back schedule frequency to PT1H (queryPeriod:
+      PT4H).'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name output column `PureLogin` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational:
+    - nrt_behavioral_summarize_fallback_pt1h
+    - 'nrt_behavioral_summarize_fallback_pt1h: Source NRT rule uses a behavioral summarize aggregation with threshold/grouping
+      semantics not supported in Continuous (PT0S) mode; automatically fell back schedule frequency to PT1H (queryPeriod:
+      PT4H).'
+    - 'Schedule assessment: source kind=NRT with behavioral summarize; fell back to target frequency=PT1H, queryPeriod=PT4H.
+      See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    notes:
+    - nrt_behavioral_summarize_fallback_pt1h
+    - 'nrt_behavioral_summarize_fallback_pt1h: Source NRT rule uses a behavioral summarize aggregation with threshold/grouping
+      semantics not supported in Continuous (PT0S) mode; automatically fell back schedule frequency to PT1H (queryPeriod:
+      PT4H).'
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1212
+    reviewScope:
+      sourceDocumentSha256: 574bc804f00e0c67984d6dc96643e14db19f41b550811e3b96eab033eec05b78
+      targetQuerySha256: 5a34dc67e62d15a2f39b58121edd68bc677775cbc745a31bb4cad3e319fcd97c
+    eventTimeWindow:
+      status: nrt-behavioral-summarize-fallback
+      appliedDefault: nrt-behavioral-summarize-to-pt1h-pt4h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      xdrServiceWindowSeconds: 14400
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: PureLogin
+      column: PureLogin
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-ed32b115-5001-43a7-a2bb-f53026db4d97
+  displayName: Pure Failed Login
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Syslog
+      | where SyslogMessage has "purity.alert" and SyslogMessage has "invalid username or password"
+      | extend Message = SyslogMessage
+      | extend ParsedLog = extract_all(@"((?P<process>.*?)\[(?P<processid>.*?)\][\s\S]*?Array name:\s*'(?P<arrayname>\S+)'[\s\S]*?Controller:\s*'?(?P<controller>[^']+)'?[\s\S]*Interface:\s*'(?P<interface>\S+)'.*?User:\s'(?P<login>.*?)'\sLocation: '(?P<location>[^']+)'\sSublocation: '(?P<sublocation>[^']+)\s*(?P<part2log>[\s\S]*))", dynamic(['process', 'processid', 'arrayname', 'controller', 'interface','login', 'location', 'sublocation', 'part2log']), Message)
+      | mv-expand ParsedLog
+      | extend ResidueLog = tostring(ParsedLog[8])
+      | extend Rlog = extract_all(@"[\s\S]*Action:\s'(?P<action>[^']+)'[\s\S]*Method:\s'(?P<method>[^']+)'[\s\S]*Result:\s(?P<result>[^']+)[\s\S]*Description:\s'(?P<description>[^']*)'", dynamic(['action', 'method', 'result', 'description']), ResidueLog)
+      | mv-expand Rlog
+      | extend PureLogType = ParsedLog[0], PureProcessID = ParsedLog[1], PureArrayName = ParsedLog[2], PureController = ParsedLog[3], PureInterface = ParsedLog[4], PureLogin = ParsedLog [5], PureLocation = ParsedLog [6], PureSublocation = ParsedLog [7], PureAction = Rlog [0], PureMethod = Rlog [1], PureResult = Rlog [2], PureDescription = Rlog [3]
+      | project-away ResidueLog, Rlog, ParsedLog
+      | summarize count() by tostring(PureLogin), tostring(PureArrayName), HostIP
+      | where count_ >= 10
+  schedule:
+    frequency: PT1H
+    queryPeriod: PT4H
+  detectionAction:
+    alertTemplate:
+      title: Pure Failed Login
+      description: Detect failed login attacks and delete user
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: HostIP
+        hosts:
+        - id: host1
+          nameColumn: PureArrayName
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1212
