@@ -1,0 +1,137 @@
+Parser:
+  DisplayName: 'AlertEvent ingestion-time ASIM parser for Salesforce Real-Time Event Monitoring'
+  Version: '0.1.1'
+  LastUpdated: '2026-11-13'
+Product:
+  Name: 'Salesforce Real-Time Event Monitoring'
+Normalization:
+  Schema: 'AlertEvent'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes SalesForceRealTimeEventMonitoring_CL into ASimAlertEventLogs during ingestion. Review documented lossy conversions; query-only aliases are not persisted.
+ParserName: 'ASimAlertEventSalesforceRealTimeEventMonitoring'
+DCRType: 'Standard'
+InputStream: 'Custom-SalesForceRealTimeEventMonitoring_CL'
+SourceRawTable: 'SalesForceRealTimeEventMonitoring_CL'
+TargetASIMTable: 'ASimAlertEventLogs'
+ParserFilterQuery: |
+  source
+  | where EventType in (
+      "ApiAnomalyEventStore", "CredentialStuffingEventStore",
+      "GuestUserAnomalyEventStore", "LoginAnomalyEventStore",
+      "ReportAnomalyEventStore", "SessionHijackingEventStore",
+      "UniversalAnomalyEventStore")
+ParserQuery: |
+  source
+  | extend Type = "SalesForceRealTimeEventMonitoring_CL"
+  | extend SalesforceDomain = columnifexists("SalesforceDomain", columnifexists("apiUrl", "")),
+      SalesforceObjectId = columnifexists("SalesforceObjectId", columnifexists("Id", "")),
+      UserNameDetail = columnifexists("UserNameDetail", columnifexists("Username", "")),
+      SalesforceResourceId = columnifexists("SalesforceResourceId", columnifexists("ResourceId", "")),
+      TimeGenerated = columnifexists("TimeGenerated", iff(isempty(EventDate), now(), todatetime(EventDate)))
+  | where EventType in (
+      "ApiAnomalyEventStore", "CredentialStuffingEventStore",
+      "GuestUserAnomalyEventStore", "LoginAnomalyEventStore",
+      "ReportAnomalyEventStore", "SessionHijackingEventStore",
+      "UniversalAnomalyEventStore")
+  | extend
+      _SourceType = EventType,
+      _RawIp = iff(EventType == "SessionHijackingEventStore", iif(isnotempty(CurrentIp), CurrentIp, SourceIp), SourceIp),
+      _Org = tostring(SalesforceDomain)
+  | extend
+      // NOTE(DCR-LOSSY: 3.34 parse_url) - regex Host extraction omits URL decoding and bracketed IPv6 handling
+      _OrgHost = tostring(extract(@"^[a-zA-Z][a-zA-Z0-9+.-]*://(?:[^@/]*@)?([^:/?#]*)", 1, iff(_Org contains "://", _Org, strcat("https://", _Org)))),
+      DvcIpAddr = iff(isnotnull(parse_ipv4(_RawIp)) or isnotempty(parse_ipv6(_RawIp)), _RawIp, "")
+  | extend
+      // NOTE(DCR-LOSSY: 3.4 coalesce non-string) - datetime arguments use isnotnull; typed datetime fallback; toolkit requires review
+      EventStartTime = iif(isnotnull(EventDate), EventDate, TimeGenerated),
+      // NOTE(DCR-LOSSY: 3.4 coalesce non-string) - datetime arguments use isnotnull; typed datetime fallback; toolkit requires review
+      EventEndTime = iif(isnotnull(EventDate), EventDate, TimeGenerated),
+      EventCount = toint(1),
+      EventVendor = "Salesforce",
+      EventProduct = "Real-Time Event Monitoring",
+      EventSchema = "AlertEvent",
+      EventSchemaVersion = "1.0.0",
+      EventOriginalType = _SourceType,
+      EventOriginalSubType = AnomalySubType,
+      EventType = "Alert",
+      EventSubType = "Anomaly",
+      EventResult = "NA",
+      EventSeverity = "Informational",
+      EventUid = iif(isnotempty(EventIdentifier), EventIdentifier, iif(isnotempty(SalesforceObjectId), SalesforceObjectId, EventUuid)),
+      EventOriginalUid = SalesforceObjectId,
+      EventMessage = Summary,
+      AlertName = case(
+          _SourceType == "ApiAnomalyEventStore", "Salesforce API anomaly",
+          _SourceType == "CredentialStuffingEventStore", "Salesforce credential stuffing",
+          _SourceType == "GuestUserAnomalyEventStore", "Salesforce guest user anomaly",
+          _SourceType == "LoginAnomalyEventStore", "Salesforce login anomaly",
+          _SourceType == "ReportAnomalyEventStore", "Salesforce report anomaly",
+          _SourceType == "SessionHijackingEventStore", "Salesforce session hijacking",
+          "Salesforce universal anomaly"),
+      AlertVerdict = "Unknown",
+      DetectionMethod = "Behavioral Analytics",
+      ThreatCategory = "Unknown",
+      ThreatOriginalCategory = iif(isnotempty(AnomalySubType), AnomalySubType, _SourceType),
+      Dvc = iif(isnotempty(DvcIpAddr), DvcIpAddr, "Salesforce Real-Time Event Monitoring"),
+      DvcScope = _OrgHost,
+      DvcOriginalAction = PolicyOutcome,
+      DvcAction = case(
+          PolicyOutcome in ("Block", "MeteringBlock"), "Deny",
+          PolicyOutcome == "EndSession", "Terminate",
+          PolicyOutcome in ("NoAction", "ExemptNoAction", "MeteringNoAction", "Notified"), "Allow",
+          ""),
+      Username = UserNameDetail,
+      UsernameType = iff(isempty(UserNameDetail), "", iff(UserNameDetail contains "@", "UPN", "Simple")),
+      OriginalUserType = iff(_SourceType == "GuestUserAnomalyEventStore", UserType, ""),
+      UserIdType = iff(isempty(UserId), "", "SalesforceId"),
+      UserScope = _OrgHost,
+      UserSessionId = SessionKey,
+      RuleName = iif(isnotempty(PolicyId), PolicyId, Policy),
+      AdditionalFields = pack(
+          "Score", Score, "SecurityEventData", SecurityEventData,
+          "SourceIp", SourceIp, "CurrentIp", CurrentIp, "PreviousIp", PreviousIp,
+          "CurrentPlatform", CurrentPlatform, "PreviousPlatform", PreviousPlatform,
+          "CurrentScreen", CurrentScreen, "PreviousScreen", PreviousScreen,
+          "CurrentWindow", CurrentWindow, "PreviousWindow", PreviousWindow,
+          "CurrentUserAgent", CurrentUserAgent, "PreviousUserAgent", PreviousUserAgent,
+          "UserAgent", UserAgent, "LoginKey", LoginKey, "PolicyOutcome", PolicyOutcome,
+          "Operation", Operation, "QueriedEntities", QueriedEntities,
+          "RowsProcessed", RowsProcessed, "RequestIdentifier", RequestIdentifier,
+          "Uri", Uri, "AnomalySubType", AnomalySubType,
+          "LoginType", LoginType, "LoginUrl", LoginUrl, "AcceptLanguage", AcceptLanguage,
+          "ReportId", ReportId, "SoqlCommands", SoqlCommands,
+          "TotalControllerEvents", TotalControllerEvents,
+          "FeatureName", FeatureName, "FeatureValue", FeatureValue,
+          "FeatureContribution", FeatureContribution,
+          "EvaluationTime", EvaluationTime),
+      DvcEntityKey = "",
+      UserEntityKey = "",
+      FileEntityKey = "",
+      ProcessEntityKey = "",
+      UserAdditionalIds = parse_json('[]'),
+      AdditionalEntities = parse_json('[]')
+  | extend
+      AlertId = EventUid,
+      AlertDescription = EventMessage,
+      IpAddr = DvcIpAddr,
+      User = Username,
+      Rule = RuleName,
+      Type = tostring(Type)
+  | project
+      TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+      EventVendor, EventProduct, EventSchema, EventSchemaVersion,
+      EventOriginalType, EventOriginalSubType, EventType, EventSubType,
+      EventResult, EventSeverity, EventUid, EventOriginalUid, EventMessage,
+      AlertId, AlertName, AlertDescription, AlertVerdict, DetectionMethod,
+      ThreatCategory, ThreatOriginalCategory,
+      Dvc, DvcIpAddr, IpAddr, DvcScope, DvcOriginalAction, DvcAction,
+      Username, UsernameType, OriginalUserType, User, UserId, UserIdType, UserScope, UserSessionId,
+      RuleName, Rule, AdditionalFields,
+      DvcEntityKey, UserEntityKey, FileEntityKey, ProcessEntityKey,
+      UserAdditionalIds, AdditionalEntities
+  | project TimeGenerated, Type, EventStartTime, EventEndTime, EventCount, EventVendor, EventProduct, EventSchemaVersion, EventOriginalType, EventOriginalSubType, EventType, EventSubType, EventResult, EventSeverity, EventUid, EventOriginalUid, EventMessage, AlertId, AlertName, AlertDescription, AlertVerdict, DetectionMethod, ThreatCategory, ThreatOriginalCategory, DvcIpAddr, DvcScope, DvcOriginalAction, DvcAction, Username, UsernameType, OriginalUserType, User, UserId, UserIdType, UserScope, UserSessionId, RuleName, Rule, AdditionalFields, DvcEntityKey, UserEntityKey, FileEntityKey, ProcessEntityKey, UserAdditionalIds, AdditionalEntities
+Change:
+  Date: '2026-11-13'
+  Description: 'Preserve original AdditionalFields keys without a query-only alias preservation bag, matching established ingestion-time parsers.'

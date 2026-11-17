@@ -27,9 +27,14 @@ ARTIFACT_VERSION = 1
 MAX_FIXTURE_BYTES = 5 * 1024 * 1024
 MAX_SCHEMA_BYTES = 1024 * 1024
 RESERVED_COLUMNS = {
-    "_ItemId", "_ResourceId", "_ResourceId_s", "_SubscriptionId",
-    "id", "MG", "TenantId", "Title", "Type", "UniqueId",
-    "verbose", "verbose_b",
+    "TenantId",
+    "Type",
+    "_TimeReceived",
+    "_ItemId",
+    "_ResourceId",
+    "_SubscriptionId",
+    "_IsBillable",
+    "_BilledSize",
 }
 INTEGER_RE = re.compile(r"^-?(?:0|[1-9]\d*)$")
 REAL_RE = re.compile(
