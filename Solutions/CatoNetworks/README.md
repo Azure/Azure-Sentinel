@@ -1,6 +1,6 @@
 # Cato Networks for Microsoft Sentinel
 
-Cato Networks solution version **3.1.0** provides one CCF Push data connector and 12 query-time source functions for six Microsoft ASIM schemas: NetworkSession, Dns, WebSession, Authentication, AlertEvent, and AuditEvent. The parsers are version **3.0.0**. This release is a preview; mapping review and certification are pending.
+Cato Networks solution version **3.1.0** provides one CCF Push data connector and 12 query-time source functions for six Microsoft ASIM schemas: NetworkSession, Dns, WebSession, Authentication, AlertEvent, and AuditEvent. The parsers are version **3.0.1**. This release is a preview; mapping review and certification are pending.
 
 The CCF connector uses the existing `CatoNetworksEvents_CL` table, and the parsers query its raw rows without changing them or creating normalized tables. This release does not change the existing connector's ingestion, DCR, or RBAC model. Installing or updating the Content Hub solution does not automatically change an existing DCR schema.
 
