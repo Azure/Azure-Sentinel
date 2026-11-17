@@ -1,0 +1,56 @@
+id: d1a74334-ad63-4b1b-9d92-95440581ad6f
+name: AIBP - Browser agent removed from device
+version: 1.0.3
+kind: Scheduled
+description: |-
+  Fires when the Am I Being Pwned browser agent is removed from a device. Once the agent is gone, the browser extensions on that device are no longer inventoried or rated, so a removal can hide a malicious extension. Confirm the removal was expected (device retired or reimaged) with the device owner.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AmIBeingPwnedEventsConnector
+    dataTypes:
+      - AIBPEvents_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |-
+  AIBPEvents_CL
+  // Arrival time, not event time: events land minutes after they happen.
+  | where ingestion_time() > ago(1h)
+  | where EventType == "device.uninstalled"
+  | summarize arg_max(TimeGenerated, *) by EventId
+  | extend EnrolledDays = toint(Data.enrolledDays), LastSeenAt = todatetime(Data.lastSeenAt)
+  // The computer's name when the agent knew it, else our device id.
+  | extend DeviceLabel = iif(isempty(MachineName), DeviceId, MachineName)
+  | project TimeGenerated, DeviceId, DeviceLabel, MachineName, IdentityEmail, Platform, EnrolledDays, LastSeenAt
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: IdentityEmail
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: MachineName
+customDetails:
+  DeviceId: DeviceId
+  Platform: Platform
+  EnrolledDays: EnrolledDays
+alertDetailsOverride:
+  alertDisplayNameFormat: AIBP browser agent removed from {{DeviceLabel}}
+  alertDescriptionFormat: The Am I Being Pwned agent was removed from the {{Platform}} browser on {{DeviceLabel}}, used by {{IdentityEmail}}.
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

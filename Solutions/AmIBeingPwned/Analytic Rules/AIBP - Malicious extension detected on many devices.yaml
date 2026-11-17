@@ -1,0 +1,90 @@
+id: c5b7c243-690c-410f-93d9-b891aafb72fe
+name: AIBP - Malicious extension detected on many devices
+version: 1.2.1
+kind: Scheduled
+description: |-
+  Fires when Am I Being Pwned reports a malicious or unanalyzable browser extension with at least 10 installs across the fleet, either when it is first detected or when a later alert about it shows the higher count. A widely installed bad extension is a fleet-wide exposure rather than a single-device problem. Adjust InstallThreshold to suit the size of your fleet.
+severity: High
+requiredDataConnectors:
+  - connectorId: AmIBeingPwnedEventsConnector
+    dataTypes:
+      - AIBPEvents_CL
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1176
+  - T1185
+query: |-
+  let InstallThreshold = 10;
+  // Who and where ride on the threat's alert.raised (the same ThreatId).
+  let WhoAndWhere = AIBPEvents_CL
+  | where EventType == "alert.raised"
+  | summarize arg_max(TimeGenerated, Affected, AffectedMachines) by ThreatId;
+  AIBPEvents_CL
+  // Arrival time, not event time: events land minutes after they happen.
+  // The 1d query period lets rows that arrive late after an outage count.
+  | where ingestion_time() > ago(1h)
+  // A detection carries the count when found; a later alert carries it
+  // again, so an extension that spreads after detection still fires.
+  | where EventType == "threat.detected" or (EventType == "alert.raised" and IssueKind == "malicious")
+  | where InstallCount >= InstallThreshold
+  | summarize arg_max(InstallCount, *) by ExtensionId
+  | join kind=leftouter (WhoAndWhere | project ThreatId, Affected1 = Affected, AffectedMachines1 = AffectedMachines) on ThreatId
+  | extend Affected = iif(isnull(Affected) or array_length(Affected) == 0, Affected1, Affected)
+  | extend AffectedMachines = iif(isnull(AffectedMachines), AffectedMachines1, AffectedMachines)
+  | extend MalwareName = iif(isnotempty(ExtensionName), ExtensionName, ExtensionId), FlaggedReason = tostring(Data.threats[0].flaggedReason)
+  // The first two machines and their users, as Host and Account entities
+  // (a rule maps at most five entities; the extension is the fifth).
+  | extend Host1 = tostring(Affected[0].machineName), Host2 = tostring(Affected[1].machineName)
+  | extend User1 = tostring(Affected[0].userEmail), User2 = tostring(Affected[1].userEmail)
+  | project TimeGenerated, EventId, ThreatId, ExtensionId, ExtensionName, MalwareName, Severity, InstallCount, AffectedMachines, FlaggedReason, DashboardUrl, Host1, Host2, User1, User2
+entityMappings:
+  - entityType: Malware
+    fieldMappings:
+      - identifier: Name
+        columnName: MalwareName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Host1
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Host2
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User1
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User2
+customDetails:
+  ExtensionId: ExtensionId
+  RiskRating: Severity
+  InstallCount: InstallCount
+  FlaggedReason: FlaggedReason
+  AffectedMachines: AffectedMachines
+  ThreatId: ThreatId
+alertDetailsOverride:
+  alertDisplayNameFormat: AIBP - {{MalwareName}} detected on {{InstallCount}} installs
+  alertDescriptionFormat: Am I Being Pwned detected the browser extension {{MalwareName}} ({{ExtensionId}}) on {{InstallCount}} installs. The risk rating and flagged reason are in the custom details.
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: DashboardUrl
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

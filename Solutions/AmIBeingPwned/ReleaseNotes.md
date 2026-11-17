@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                                   |
+| ----------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.0.0       | 17-11-2026                     | Initial release: CCF data connector for Am I Being Pwned events (alerts, detections, closed threats, agent removals), 3 analytic rules with Host and Account entities, 4 hunting queries, 1 workbook |
