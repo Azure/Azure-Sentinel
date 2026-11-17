@@ -557,6 +557,144 @@ class AlertParityTests(unittest.TestCase):
             [{"marker": "scenario-1"}, {"marker": "scenario-2"}],
         )
 
+    def test_cd_only_expected_behavior_positive_negative_controls_and_disabled_restoration(
+        self,
+    ) -> None:
+        import yaml
+        from solution_manager.qualification.alert_parity import (
+            _disable_all,
+            _load_pairs,
+            _read_rule_states,
+            _set_pair_enabled,
+            compute_query_sha256,
+            evaluate_cd_only_expected_behavior,
+        )
+
+        query_text = "DeviceProcessEvents | where FileName =~ 'mimikatz.exe'"
+        expected_sha = compute_query_sha256(query_text)
+        native_doc = {
+            "schemaVersion": "1.0.0",
+            "version": "3.1.0",
+            "kind": "CustomDetection",
+            "resourceType": "Microsoft.Security/detectionRules",
+            "apiVersion": "2026-06-01-preview",
+            "contentProvenance": {
+                "requiredWorkloads": [{"workload": "mde", "dataTypes": ["DeviceProcessEvents"]}],
+                "requiredDataConnectors": [],
+            },
+            "properties": {
+                "id": "native-cd-only-01",
+                "displayName": "Native CD Only 01",
+                "status": "disabled",
+                "queryCondition": {"queryText": query_text},
+                "schedule": {"frequency": "PT1H"},
+                "detectionAction": {
+                    "alertTemplate": {
+                        "title": "Native CD Only 01",
+                        "description": "Test",
+                        "severity": "high",
+                        "entityMappings": {
+                            "hosts": [{"id": "host1", "deviceIdColumn": "DeviceId"}]
+                        },
+                    }
+                },
+            },
+        }
+
+        passing = evaluate_cd_only_expected_behavior(
+            native_doc,
+            [alert("pos-control-1")],
+            positive_control_keys=["pos-control-1"],
+            negative_control_keys=["neg-control-1"],
+            initial_disabled=True,
+            returned_to_disabled=True,
+        )
+        self.assertTrue(passing["passed"])
+        self.assertEqual("passed", passing["status"])
+        self.assertEqual(expected_sha, passing["querySha256"])
+        self.assertTrue(passing["positiveControlsPassed"])
+        self.assertTrue(passing["negativeControlsPassed"])
+        self.assertTrue(passing["disabledRestorationPassed"])
+        self.assertTrue(passing["tkQ11Passed"])
+
+        neg_triggered = evaluate_cd_only_expected_behavior(
+            native_doc,
+            [alert("pos-control-1"), alert("neg-control-1")],
+            positive_control_keys=["pos-control-1"],
+            negative_control_keys=["neg-control-1"],
+            initial_disabled=True,
+            returned_to_disabled=True,
+        )
+        self.assertFalse(neg_triggered["passed"])
+        self.assertFalse(neg_triggered["negativeControlsPassed"])
+        self.assertEqual(["neg-control-1"], neg_triggered["matchedNegativeControls"])
+
+        not_restored = evaluate_cd_only_expected_behavior(
+            native_doc,
+            [alert("pos-control-1")],
+            positive_control_keys=["pos-control-1"],
+            negative_control_keys=["neg-control-1"],
+            initial_disabled=True,
+            returned_to_disabled=False,
+        )
+        self.assertFalse(not_restored["passed"])
+        self.assertFalse(not_restored["disabledRestorationPassed"])
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            output = root / "XDR Detections"
+            output.mkdir()
+            (output / "Native.yaml").write_text(yaml.safe_dump(native_doc), encoding="utf-8")
+            _, loaded_pairs = _load_pairs(root)
+            self.assertEqual(1, len(loaded_pairs))
+            self.assertTrue(loaded_pairs[0]["cdOnly"])
+            self.assertIsNone(loaded_pairs[0]["analyticRuleId"])
+            self.assertEqual(expected_sha, loaded_pairs[0]["querySha256"])
+
+            with (
+                mock.patch(
+                    "sentinel_xdr_migration.alert_parity._arm_request"
+                ) as arm_req,
+                mock.patch(
+                    "sentinel_xdr_migration.alert_parity._graph_request",
+                    return_value=(200, {"id": "native-cd-only-01", "status": "disabled", "isEnabled": False}),
+                ) as graph_req,
+            ):
+                states = _read_rule_states(
+                    loaded_pairs,
+                    TARGET["workspaceResourceId"],
+                    "arm-token",
+                    "graph-token",
+                )
+                self.assertEqual(1, len(states))
+                self.assertTrue(states[0]["cdOnly"])
+                self.assertTrue(states[0]["initialDisabled"])
+                arm_req.assert_not_called()
+                graph_req.assert_called_once()
+
+                errs = _set_pair_enabled(
+                    loaded_pairs[0],
+                    TARGET["workspaceResourceId"],
+                    "arm-token",
+                    "graph-token",
+                    True,
+                )
+                self.assertEqual([], errs)
+                arm_req.assert_not_called()
+
+                state_obj = {
+                    "target": TARGET,
+                    "workspaceResourceId": TARGET["workspaceResourceId"],
+                    "rules": loaded_pairs,
+                }
+                cleanup = _disable_all(
+                    state_obj,
+                    arm_token="arm-token",
+                    graph_token="graph-token",
+                )
+                self.assertTrue(cleanup[0]["returnedToDisabled"])
+                self.assertTrue(state_obj["tkQ11Passed"])
+
 
 if __name__ == "__main__":
     unittest.main()

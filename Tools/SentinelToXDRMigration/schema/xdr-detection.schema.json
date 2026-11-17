@@ -14,6 +14,17 @@
       "minLength": 40,
       "maxLength": 40,
       "pattern": "^xdr-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+    },
+    "detectionId": {
+      "type": "string",
+      "anyOf": [
+        {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,99}$"
+        },
+        {
+          "$ref": "#/$defs/sentinelTemplateId"
+        }
+      ]
     }
   },
   "allOf": [
@@ -23,32 +34,101 @@
         "properties": {
           "contentProvenance": {
             "anyOf": [
-              {
-                "required": ["source"],
-                "properties": {
-                  "source": {
-                    "required": ["platform", "kind"],
+              {"required": ["source"]},
+              {"required": ["conversion"]}
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "contentProvenance": {
+            "required": [
+              "source",
+              "conversion",
+              "requiredWorkloads",
+              "requiredDataConnectors"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "anyOf": [
+          {
+            "required": ["contentProvenance"],
+            "properties": {
+              "contentProvenance": {
+                "anyOf": [
+                  {
+                    "required": ["source"],
                     "properties": {
-                      "platform": {"enum": ["Microsoft Sentinel", "Sentinel"]},
-                      "kind": {"const": "AnalyticsRule"}
+                      "source": {
+                        "required": ["platform", "kind"],
+                        "properties": {
+                          "platform": {"enum": ["Microsoft Sentinel", "Sentinel"]},
+                          "kind": {"const": "AnalyticsRule"}
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "required": ["conversion"],
+                    "properties": {
+                      "conversion": {
+                        "required": ["tool"],
+                        "properties": {
+                          "tool": {"const": "sentinel-to-xdr-migration"}
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "allOf": [
+              {
+                "required": ["properties"],
+                "properties": {
+                  "properties": {
+                    "required": ["id"],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[xX][dD][rR]-"
+                      }
                     }
                   }
                 }
               },
               {
-                "required": ["conversion"],
-                "properties": {
-                  "conversion": {
-                    "required": ["tool"],
-                    "properties": {
-                      "tool": {"const": "sentinel-to-xdr-migration"}
+                "not": {
+                  "required": ["contentProvenance"],
+                  "properties": {
+                    "contentProvenance": {
+                      "required": ["source"],
+                      "properties": {
+                        "source": {
+                          "required": ["platform"],
+                          "properties": {
+                            "platform": {
+                              "type": "string",
+                              "minLength": 1,
+                              "not": {"enum": ["Microsoft Sentinel", "Sentinel"]}
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
               }
             ]
           }
-        }
+        ]
       },
       "then": {
         "properties": {
@@ -216,12 +296,84 @@
     "properties": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/detectionId"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "const": "disabled"
+        },
+        "queryCondition": {
+          "type": "object",
+          "required": ["queryText"],
+          "properties": {
+            "queryText": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "schedule": {
+          "type": "object",
+          "required": ["frequency"],
+          "properties": {
+            "frequency": {
+              "type": "string",
+              "minLength": 1
+            },
+            "period": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
         "detectionAction": {
           "type": "object",
+          "required": ["alertTemplate"],
           "properties": {
             "alertTemplate": {
               "type": "object",
+              "required": ["severity", "entityMappings"],
               "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["informational", "low", "medium", "high"]
+                },
+                "entityMappings": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "anyOf": [
+                    {"required": ["hosts"]},
+                    {"required": ["accounts"]},
+                    {"required": ["mailboxes"]},
+                    {"required": ["ips"]}
+                  ],
+                  "properties": {
+                    "hosts": {"type": "array", "minItems": 1},
+                    "accounts": {"type": "array", "minItems": 1},
+                    "mailboxes": {"type": "array", "minItems": 1},
+                    "ips": {"type": "array", "minItems": 1},
+                    "files": {"type": "array"},
+                    "processes": {"type": "array"},
+                    "urls": {"type": "array"},
+                    "registryValues": {"type": "array"},
+                    "cloudResources": {"type": "array"},
+                    "cloudApplications": {"type": "array"},
+                    "securityGroups": {"type": "array"},
+                    "containers": {"type": "array"}
+                  }
+                },
                 "customDetails": {
                   "description": "Open alert detail key-to-query-output-column bindings. At most 20 pairs; runtime values together must fit the documented 4 KB per-alert limit.",
                   "type": "object",

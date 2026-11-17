@@ -32,7 +32,7 @@ from test_logs_query import WORKSPACE, logs_table, success
 
 class DependencyProvenanceTests(unittest.TestCase):
     def setUp(self):
-        self.fixture = tempfile.TemporaryDirectory()
+        self.fixture = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.fixture.cleanup)
         self.root = Path(self.fixture.name)
         self.source = self.root / "Analytic Rules/Rule.yaml"
@@ -332,6 +332,94 @@ class DependencyProvenanceTests(unittest.TestCase):
         evidence = current_runtime_evidence(self.root)
         self.assertFalse(evidence["passed"])
         self.assertTrue(any("dependency provenance" in issue for issue in evidence["issues"]))
+
+    def test_native_detection_dependency_planning_and_validation_without_source_or_analytic_rules(self):
+        from solution_manager.authoring.dependencies import compute_query_sha256
+
+        with tempfile.TemporaryDirectory() as temp:
+            sol_root = Path(temp) / "NativeDepSolution"
+            output = sol_root / "XDR Detections"
+            output.mkdir(parents=True)
+            native_query = "DeviceProcessEvents | join kind=inner (IdentityLogonEvents) on AccountUpn"
+            expected_sha = compute_query_sha256(native_query)
+            native_doc = {
+                "schemaVersion": "1.0.0",
+                "version": "1.0.0",
+                "kind": "CustomDetection",
+                "resourceType": "Microsoft.Security/detectionRules",
+                "contentProvenance": {
+                    "requiredWorkloads": [
+                        {"workload": "mde", "dataTypes": ["DeviceProcessEvents"]},
+                        {"workload": "mdi", "dataTypes": ["IdentityLogonEvents"]},
+                    ],
+                    "requiredDataConnectors": [],
+                },
+                "properties": {
+                    "id": "native-dep-rule",
+                    "displayName": "Native Dependency Rule",
+                    "status": "disabled",
+                    "queryCondition": {"queryText": native_query},
+                    "schedule": {"frequency": "PT1H"},
+                    "detectionAction": {
+                        "alertTemplate": {
+                            "title": "Native Dependency Rule",
+                            "description": "Test",
+                            "severity": "high",
+                            "entityMappings": {
+                                "accounts": [{"id": "acct1", "upnColumn": "AccountUpn"}]
+                            },
+                        }
+                    },
+                },
+            }
+            (output / "NativeRule.yaml").write_text(yaml.safe_dump(native_doc), encoding="utf-8")
+
+            plan_without_results = plan_solution_dependencies(sol_root)
+            self.assertEqual(1, len(plan_without_results["results"]))
+            first = plan_without_results["results"][0]
+            self.assertEqual("NativeRule.yaml", first["detection"])
+            self.assertIsNone(first["sourceRule"])
+            self.assertEqual(expected_sha, first["sentinelQuerySha256"])
+            self.assertEqual(expected_sha, first["querySha256"])
+            self.assertFalse(first["reviewRequired"])
+            self.assertEqual(
+                [
+                    {"workload": "mde", "dataTypes": ["DeviceProcessEvents"]},
+                    {"workload": "mdi", "dataTypes": ["IdentityLogonEvents"]},
+                ],
+                first["requiredWorkloads"],
+            )
+
+            results_file = sol_root / "dep-results.json"
+            results_file.write_text(
+                json.dumps(
+                    {
+                        "results": [
+                            {
+                                "detection": "NativeRule.yaml",
+                                "status": "passed",
+                                "workspaceId": WORKSPACE,
+                                "querySha256": expected_sha,
+                                "dataSources": [
+                                    {"tables": ["DeviceProcessEvents", "IdentityLogonEvents"]}
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            plan_with_results = plan_solution_dependencies(
+                sol_root, results_path=results_file, workspace_id=WORKSPACE
+            )
+            self.assertEqual("passed", plan_with_results["results"][0]["validation"]["status"])
+
+            live_res = live_dependency_check(
+                native_doc,
+                None,
+                [{"tables": ["DeviceProcessEvents", "IdentityLogonEvents"]}],
+            )
+            self.assertEqual("passed", live_res["status"])
 
 
 if __name__ == "__main__":

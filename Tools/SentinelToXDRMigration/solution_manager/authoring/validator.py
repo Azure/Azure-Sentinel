@@ -1023,12 +1023,12 @@ def validate_xdr_detection_kql(
         query_text = doc.get("query")
 
     declared_tables: set[str] = set(known_tables) | _provenance_known_tables(doc)
-    fn_aliases: set[str] = set(known_functions)
+    _ = known_functions
 
     return validate_kql_query_static(
         query_text if isinstance(query_text, str) else "",
         surface="advancedHunting",
-        known_functions=fn_aliases,
+        known_functions=(),
         known_tables=declared_tables,
         allow_workbook_parameters=False,
     )
@@ -1160,7 +1160,7 @@ def validate_xdr_artifacts_kql(solution_path: Path | str) -> dict[str, Any]:
                 all_errors.append(f"{rel}: {err}")
                 continue
 
-            res = validate_xdr_detection_kql(doc, known_functions=parser_aliases, known_tables=connector_tables)
+            res = validate_xdr_detection_kql(doc, known_tables=connector_tables)
             detection_results.append(
                 {
                     "path": rel,

@@ -431,9 +431,7 @@ def validate_solution_xdr_detections(
             parsed_docs[path] = document
             file_errors.extend(validate_document(document))
             file_warnings.extend(custom_detail_binding_warnings(document))
-            static_kql_res = validate_xdr_detection_kql(
-                document, known_functions=parser_aliases
-            )
+            static_kql_res = validate_xdr_detection_kql(document)
             static_kql_valid = bool(static_kql_res.get("valid"))
             for kql_err in static_kql_res.get("errors") or []:
                 file_errors.append(f"Static KQL validation: {kql_err}")

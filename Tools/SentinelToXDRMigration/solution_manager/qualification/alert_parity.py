@@ -13,12 +13,16 @@ import urllib.request
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 import yaml
 
 from solution_manager.core.artifacts import artifact_path, migrate_legacy_artifact, write_json_artifact
-from solution_manager.migration.converter import validate_document, xdr_detection_files
+from solution_manager.migration.converter import (
+    is_sentinel_derived,
+    validate_document,
+    xdr_detection_files,
+)
 from solution_manager.core.content_paths import detection_reference
 from solution_manager.qualification.deployment import DEPLOYMENT_ENDPOINT, _deployment_token, _graph_request
 from solution_manager.qualification.graph_client_config import azure_cli_credential
@@ -34,6 +38,56 @@ MAX_PARITY_LIFECYCLE_WORKERS = 3
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _extract_detection_query_text(document: Any) -> str:
+    if not isinstance(document, Mapping):
+        return ""
+    properties = document.get("properties")
+    if isinstance(properties, Mapping):
+        qc = properties.get("queryCondition")
+        if isinstance(qc, Mapping) and isinstance(qc.get("queryText"), str) and qc["queryText"].strip():
+            return qc["queryText"]
+        if isinstance(properties.get("queryText"), str) and properties["queryText"].strip():
+            return properties["queryText"]
+        qd = properties.get("queryDefinition")
+        if isinstance(qd, Mapping) and isinstance(qd.get("query"), str) and qd["query"].strip():
+            return qd["query"]
+    if isinstance(document.get("queryText"), str) and document["queryText"].strip():
+        return document["queryText"]
+    if isinstance(document.get("query"), str) and document["query"].strip():
+        return document["query"]
+    return ""
+
+
+def compute_query_sha256(query_or_document: Any) -> str:
+    """Compute SHA-256 of a KQL query string or a Custom Detection document's queryText in memory."""
+    if isinstance(query_or_document, Mapping):
+        query_text = _extract_detection_query_text(query_or_document)
+    else:
+        query_text = str(query_or_document or "")
+    return hashlib.sha256(query_text.encode("utf-8")).hexdigest()
+
+
+def resolve_detection_query_sha256(
+    document: Any,
+    fallback_query: str | None = None,
+) -> str:
+    """Return contentProvenance.source.querySha256 if present, otherwise compute sha256(queryText) in memory."""
+    if isinstance(document, Mapping):
+        provenance = document.get("contentProvenance")
+        if isinstance(provenance, Mapping):
+            source = provenance.get("source")
+            if isinstance(source, Mapping):
+                source_sha = str(source.get("querySha256") or "").strip()
+                if source_sha:
+                    return source_sha
+    query_text = (
+        fallback_query
+        if fallback_query is not None
+        else _extract_detection_query_text(document)
+    )
+    return compute_query_sha256(query_text)
 
 
 def _arm_token(state_dir: str | Path | None = None) -> str:
@@ -229,17 +283,28 @@ def _load_pairs(
         if wanted and detection_name not in wanted:
             continue
         document = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
+        provenance = document.get("contentProvenance") if isinstance(document, dict) else None
+        conversion = provenance.get("conversion") if isinstance(provenance, dict) else None
+        has_conversion_block = isinstance(conversion, dict) and bool(conversion)
+        if has_conversion_block and not wanted:
+            conv_status = str(conversion.get("status") or "").strip()
+            if conv_status in {"blocked", "skipped", "notConverted", "unsupported"}:
+                continue
         errors = validate_document(document)
-        conversion = (document.get("contentProvenance") or {}).get("conversion") or {}
-        if conversion.get("status") != "converted" or conversion.get("reviewRequired"):
-            errors.append("detection must be converted with no review required")
+        if is_sentinel_derived(document) or has_conversion_block:
+            conv_dict = conversion if isinstance(conversion, dict) else {}
+            if conv_dict.get("status") != "converted" or conv_dict.get("reviewRequired"):
+                errors.append("detection must be converted with no review required")
         if errors:
             raise ValueError(f"{detection_name}: {'; '.join(errors)}")
         source = (document.get("contentProvenance") or {}).get("source") or {}
-        source_id = str(source.get("id") or "").strip()
+        source_id = str(source.get("id") or "").strip() if isinstance(source, dict) else ""
         detection_id = str((document.get("properties") or {}).get("id") or "").strip()
-        if not source_id or not detection_id:
+        sentinel_derived = is_sentinel_derived(document) or (isinstance(source, dict) and bool(source))
+        if sentinel_derived and (not source_id or not detection_id):
             raise ValueError(f"{detection_name}: source and detection IDs are required")
+        if not detection_id:
+            raise ValueError(f"{detection_name}: detection ID is required")
         alert = (
             ((document.get("properties") or {}).get("detectionAction") or {}).get(
                 "alertTemplate"
@@ -252,8 +317,10 @@ def _load_pairs(
                 "displayName": str(
                     (document.get("properties") or {}).get("displayName") or path.stem
                 ),
-                "analyticRuleId": source_id,
+                "analyticRuleId": source_id or None,
                 "customDetectionId": detection_id,
+                "cdOnly": not bool(source_id),
+                "querySha256": resolve_detection_query_sha256(document),
                 "entityMappings": alert.get("entityMappings") or {},
             }
         )
@@ -359,16 +426,21 @@ def _read_rule_states(
     graph_token: str,
 ) -> list[dict[str, Any]]:
     def _read_one(pair: dict[str, Any]) -> dict[str, Any]:
-        sentinel_status, sentinel = _arm_request(
-            "GET",
-            _sentinel_rule_url(workspace_resource_id, pair["analyticRuleId"]),
-            arm_token,
-        )
-        if sentinel_status != 200:
-            raise RuntimeError(
-                f"{pair['detection']}: cannot read Sentinel analytic rule: "
-                f"{_error_message(sentinel)}"
+        has_sentinel = bool(pair.get("analyticRuleId")) and not bool(pair.get("cdOnly"))
+        sentinel = None
+        sentinel_enabled = False
+        if has_sentinel:
+            sentinel_status, sentinel = _arm_request(
+                "GET",
+                _sentinel_rule_url(workspace_resource_id, pair["analyticRuleId"]),
+                arm_token,
             )
+            if sentinel_status != 200:
+                raise RuntimeError(
+                    f"{pair['detection']}: cannot read Sentinel analytic rule: "
+                    f"{_error_message(sentinel)}"
+                )
+            sentinel_enabled = bool((sentinel.get("properties") or {}).get("enabled"))
         graph_id = urllib.parse.quote(pair["customDetectionId"], safe="")
         graph_status, graph = _graph_request(
             "GET", f"{DEPLOYMENT_ENDPOINT}/{graph_id}", graph_token
@@ -378,20 +450,21 @@ def _read_rule_states(
                 f"{pair['detection']}: cannot read Custom Detection: "
                 f"{_error_message(graph)}"
             )
-        sentinel_enabled = bool((sentinel.get("properties") or {}).get("enabled"))
         graph_enabled, graph_disabled = _is_graph_detection_disabled(graph)
         if sentinel_enabled or graph_enabled or not graph_disabled:
             raise RuntimeError(
                 f"{pair['detection']}: parity validation requires both rules to "
                 "be disabled before start"
             )
-        pair["sentinelResource"] = sentinel
+        if sentinel is not None:
+            pair["sentinelResource"] = sentinel
         pair["initialDisabled"] = True
         return {
             "detection": pair["detection"],
-            "analyticRuleId": pair["analyticRuleId"],
+            "analyticRuleId": pair.get("analyticRuleId"),
             "customDetectionId": pair["customDetectionId"],
-            "sentinelEnabled": False,
+            "cdOnly": not has_sentinel,
+            "sentinelEnabled": False if has_sentinel else None,
             "xdrEnabled": False,
             "initialDisabled": True,
         }
@@ -412,48 +485,50 @@ def _set_pair_enabled(
     enabled: bool,
 ) -> list[str]:
     errors: list[str] = []
-    sentinel = dict(pair.get("sentinelResource") or {})
-    source_properties = dict(sentinel.get("properties") or {})
-    writable_properties = {
-        "displayName",
-        "description",
-        "severity",
-        "query",
-        "queryFrequency",
-        "queryPeriod",
-        "triggerOperator",
-        "triggerThreshold",
-        "suppressionDuration",
-        "suppressionEnabled",
-        "tactics",
-        "techniques",
-        "subTechniques",
-        "entityMappings",
-        "eventGroupingSettings",
-        "alertDetailsOverride",
-        "customDetails",
-        "incidentConfiguration",
-        "alertRuleTemplateName",
-        "templateVersion",
-    }
-    sentinel_properties = {
-        key: value
-        for key, value in source_properties.items()
-        if key in writable_properties
-    }
-    sentinel_properties["enabled"] = enabled
-    sentinel_body = {
-        "kind": sentinel.get("kind"),
-        "properties": sentinel_properties,
-    }
-    status, response = _arm_request(
-        "PUT",
-        _sentinel_rule_url(workspace_resource_id, pair["analyticRuleId"]),
-        arm_token,
-        sentinel_body,
-    )
-    if status not in {200, 201}:
-        errors.append(f"Sentinel: {_error_message(response)}")
+    has_sentinel = bool(pair.get("analyticRuleId")) and not bool(pair.get("cdOnly"))
+    if has_sentinel:
+        sentinel = dict(pair.get("sentinelResource") or {})
+        source_properties = dict(sentinel.get("properties") or {})
+        writable_properties = {
+            "displayName",
+            "description",
+            "severity",
+            "query",
+            "queryFrequency",
+            "queryPeriod",
+            "triggerOperator",
+            "triggerThreshold",
+            "suppressionDuration",
+            "suppressionEnabled",
+            "tactics",
+            "techniques",
+            "subTechniques",
+            "entityMappings",
+            "eventGroupingSettings",
+            "alertDetailsOverride",
+            "customDetails",
+            "incidentConfiguration",
+            "alertRuleTemplateName",
+            "templateVersion",
+        }
+        sentinel_properties = {
+            key: value
+            for key, value in source_properties.items()
+            if key in writable_properties
+        }
+        sentinel_properties["enabled"] = enabled
+        sentinel_body = {
+            "kind": sentinel.get("kind"),
+            "properties": sentinel_properties,
+        }
+        status, response = _arm_request(
+            "PUT",
+            _sentinel_rule_url(workspace_resource_id, pair["analyticRuleId"]),
+            arm_token,
+            sentinel_body,
+        )
+        if status not in {200, 201}:
+            errors.append(f"Sentinel: {_error_message(response)}")
 
     graph_id = urllib.parse.quote(pair["customDetectionId"], safe="")
     status, response = _graph_request(
@@ -530,8 +605,8 @@ def _disable_all(
     for pair, errors in zip(rules, disable_errors_list):
         can_readback = bool(
             not errors
-            and pair.get("analyticRuleId")
             and pair.get("customDetectionId")
+            and (pair.get("analyticRuleId") or pair.get("cdOnly"))
         )
         receipt = {
             "detection": pair["detection"],
@@ -1189,6 +1264,8 @@ def compare_alert_captures(
     *,
     expected_match_keys: set[str] | None = None,
     expected_match_keys_by_detection: dict[str, set[str]] | None = None,
+    negative_control_keys: set[str] | None = None,
+    negative_control_keys_by_detection: dict[str, set[str]] | None = None,
 ) -> list[dict[str, Any]]:
     entries = raw_results.get("results") if isinstance(raw_results, dict) else raw_results
     if not isinstance(entries, list):
@@ -1202,6 +1279,99 @@ def compare_alert_captures(
         if not detection or detection in names:
             raise ValueError("each detection must occur exactly once")
         names.add(detection)
+        is_cd_only = bool(
+            entry.get("cdOnly") is True
+            or (entry.get("analyticRule") is None and "customDetection" in entry)
+            or ("analyticRule" not in entry and "customDetection" in entry)
+        )
+        detection_expected_keys = (
+            (expected_match_keys_by_detection or {}).get(detection)
+            or (
+                {str(k).strip() for k in entry["expectedMatchKeys"] if str(k).strip()}
+                if isinstance(entry.get("expectedMatchKeys"), list)
+                else None
+            )
+            or (
+                {str(k).strip() for k in entry["positiveControlKeys"] if str(k).strip()}
+                if isinstance(entry.get("positiveControlKeys"), list)
+                else None
+            )
+            or expected_match_keys
+        )
+        detection_negative_keys = (
+            (negative_control_keys_by_detection or {}).get(detection)
+            or (
+                {str(k).strip() for k in entry["negativeControlKeys"] if str(k).strip()}
+                if isinstance(entry.get("negativeControlKeys"), list)
+                else None
+            )
+            or negative_control_keys
+            or set()
+        )
+        if is_cd_only:
+            custom_val = entry.get("customDetection") or {}
+            custom_alerts = custom_val.get("alerts") if isinstance(custom_val, dict) else None
+            if not isinstance(custom_alerts, list):
+                raise ValueError(f"{detection}: customDetection.alerts must be a list")
+            normalized_custom = [_normalize_alert(alert) for alert in custom_alerts]
+            keys = [alert["matchKey"] for alert in normalized_custom]
+            if len(keys) != len(set(keys)):
+                raise ValueError(f"{detection}: duplicate customDetection matchKey")
+            custom = sorted(normalized_custom, key=lambda item: item["matchKey"])
+            custom_by_key = {item["matchKey"]: item for item in custom}
+            matched_negative = sorted(set(custom_by_key) & set(detection_negative_keys))
+            negative_ok = len(matched_negative) == 0
+            positive_ok = (
+                set(custom_by_key) == set(detection_expected_keys)
+                if detection_expected_keys is not None
+                else len(custom_by_key) > 0
+            )
+            disabled_restored = (
+                bool(entry.get("initialDisabled", True))
+                and bool(entry.get("returnedToDisabled", True))
+            )
+            dimensions = {
+                "alertCount": (
+                    len(custom) == len(detection_expected_keys)
+                    if detection_expected_keys is not None
+                    else len(custom) > 0
+                ),
+                "matchKeys": positive_ok,
+                "expectedMatches": positive_ok and negative_ok,
+                "positiveControls": positive_ok,
+                "negativeControls": negative_ok,
+                "disabledRestoration": disabled_restored,
+                "severity": True,
+                "tactics": True,
+                "entities": True,
+                "evidence": True,
+            }
+            comparisons.append(
+                {
+                    "detection": detection,
+                    "cdOnly": True,
+                    "mode": "cd-only",
+                    "passed": all(dimensions.values()),
+                    "analyticRuleAlertCount": 0,
+                    "customDetectionAlertCount": len(custom),
+                    "matchedPositiveControls": (
+                        sorted(set(custom_by_key) & set(detection_expected_keys))
+                        if detection_expected_keys is not None
+                        else sorted(custom_by_key)
+                    ),
+                    "missingPositiveControls": (
+                        sorted(set(detection_expected_keys) - set(custom_by_key))
+                        if detection_expected_keys is not None
+                        else []
+                    ),
+                    "matchedNegativeControls": matched_negative,
+                    "dimensions": dimensions,
+                    "analyticRuleOnlyMatchKeys": [],
+                    "customDetectionOnlyMatchKeys": sorted(custom_by_key),
+                }
+            )
+            continue
+
         sides: dict[str, list[dict[str, Any]]] = {}
         for side in ("analyticRule", "customDetection"):
             value = entry.get(side) or {}
@@ -1218,19 +1388,21 @@ def compare_alert_captures(
         custom = sides["customDetection"]
         analytic_by_key = {item["matchKey"]: item for item in analytic}
         custom_by_key = {item["matchKey"]: item for item in custom}
-        detection_expected_keys = (
-            (expected_match_keys_by_detection or {}).get(detection)
-            or expected_match_keys
+        matched_negative = sorted(
+            (set(analytic_by_key) | set(custom_by_key)) & set(detection_negative_keys)
         )
         dimensions = {
             "alertCount": len(analytic) == len(custom),
             "matchKeys": set(analytic_by_key) == set(custom_by_key),
             "expectedMatches": (
-                detection_expected_keys is None
-                or (
-                    set(analytic_by_key) == detection_expected_keys
-                    and set(custom_by_key) == detection_expected_keys
+                (
+                    detection_expected_keys is None
+                    or (
+                        set(analytic_by_key) == detection_expected_keys
+                        and set(custom_by_key) == detection_expected_keys
+                    )
                 )
+                and len(matched_negative) == 0
             ),
             "severity": all(
                 analytic_by_key[key]["severity"] == custom_by_key[key]["severity"]
@@ -1276,6 +1448,88 @@ def compare_alert_captures(
             details.append(f"unknown detections: {', '.join(unknown)}")
         raise ValueError("; ".join(details))
     return comparisons
+
+
+def evaluate_cd_only_expected_behavior(
+    detection_or_document: str | Mapping[str, Any],
+    captured_alerts: list[dict[str, Any]] | Mapping[str, Any],
+    *,
+    positive_control_keys: list[str] | set[str],
+    negative_control_keys: list[str] | set[str] | None = None,
+    initial_disabled: bool = True,
+    returned_to_disabled: bool = True,
+    query_text: str | None = None,
+) -> dict[str, Any]:
+    """Evaluate CD-only expected behavior: positive controls match, negative controls do not match, and disabled state is restored."""
+    if isinstance(detection_or_document, Mapping):
+        props = detection_or_document.get("properties") if isinstance(detection_or_document.get("properties"), Mapping) else {}
+        detection_name = str(
+            detection_or_document.get("detection")
+            or props.get("id")
+            or "Rule.yaml"
+        )
+        query_sha = resolve_detection_query_sha256(detection_or_document, query_text)
+    else:
+        detection_name = str(detection_or_document).strip() or "Rule.yaml"
+        query_sha = compute_query_sha256(query_text if query_text is not None else detection_name)
+
+    if isinstance(captured_alerts, Mapping):
+        cd_block = captured_alerts.get("customDetection")
+        if isinstance(cd_block, Mapping) and isinstance(cd_block.get("alerts"), list):
+            alerts_list = list(cd_block["alerts"])
+        elif isinstance(captured_alerts.get("alerts"), list):
+            alerts_list = list(captured_alerts["alerts"])
+        else:
+            alerts_list = []
+    else:
+        alerts_list = list(captured_alerts or [])
+
+    pos_set = {str(k).strip() for k in positive_control_keys if str(k).strip()}
+    neg_set = {str(k).strip() for k in (negative_control_keys or []) if str(k).strip()}
+    entry = {
+        "detection": detection_name,
+        "cdOnly": True,
+        "customDetection": {"alerts": alerts_list},
+        "expectedMatchKeys": sorted(pos_set),
+        "negativeControlKeys": sorted(neg_set),
+        "initialDisabled": bool(initial_disabled),
+        "returnedToDisabled": bool(returned_to_disabled),
+    }
+    comparison = compare_alert_captures(
+        {detection_name},
+        {"results": [entry]},
+        expected_match_keys=pos_set,
+        negative_control_keys=neg_set,
+    )[0]
+    reasons: list[str] = []
+    if comparison["missingPositiveControls"]:
+        reasons.append(
+            f"Missing expected positive control alerts: {', '.join(comparison['missingPositiveControls'])}"
+        )
+    if comparison["matchedNegativeControls"]:
+        reasons.append(
+            f"Negative control rows unexpectedly triggered alerts: {', '.join(comparison['matchedNegativeControls'])}"
+        )
+    unexpected = sorted(set(comparison["customDetectionOnlyMatchKeys"]) - pos_set - neg_set)
+    if unexpected:
+        reasons.append(f"Unexpected match keys observed: {', '.join(unexpected)}")
+    if not (initial_disabled and returned_to_disabled):
+        reasons.append("Custom Detection was not confirmed initially disabled and restored to disabled state.")
+    passed = bool(comparison["passed"] and initial_disabled and returned_to_disabled and not reasons)
+    return {
+        **comparison,
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "querySha256": query_sha,
+        "positiveControlsPassed": bool(comparison["dimensions"]["positiveControls"]),
+        "negativeControlsPassed": bool(comparison["dimensions"]["negativeControls"]),
+        "disabledRestorationPassed": bool(initial_disabled and returned_to_disabled),
+        "initialDisabled": bool(initial_disabled),
+        "returnedToDisabled": bool(returned_to_disabled),
+        "tkQ11Passed": bool(initial_disabled and returned_to_disabled),
+        "unexpectedMatchKeys": unexpected,
+        "reasons": reasons,
+    }
 
 
 def complete_alert_parity(

@@ -62,11 +62,11 @@ implicitly authorizes environment writes.
 
 This skill:
 
-- validates the solution-data packaging contract;
+- validates the solution-data packaging contract for both Sentinel-derived and native XDR Custom Detections;
 - selects and applies one semantic version increment;
-- runs the supported local packaging entry point;
+- runs the supported local packaging entry point (`package-v3-1`) and `arm-ttk` validation;
 - verifies the generated template, parameter file, and ZIP;
-- checks AR-to-CD matching and hybrid deployment conditions; and
+- checks per-file provenance rules (AR-to-CD matching for Sentinel-derived detections; standalone registration for native detections) and hybrid deployment conditions; and
 - reports validation failures without hiding or weakening them.
 
 It does not convert Analytic Rules, create mock data, deploy the generated
@@ -88,7 +88,7 @@ Other content release versions must be below `4.0.0`; their
 legacy lower versions remain valid. Out-of-range versions are hard errors, not
 automatic promotions. A major bump from `3.x` is therefore rejected.
 XDR requires its own top-level YAML `version` (`major.minor.patch`); new
-conversions initialize it to `3.1.0` independently of the Sentinel source.
+conversions and native detections initialize it to `3.1.0` (or the solution release version in `[3.1.0, 4.0.0)`) independently of any Sentinel source.
 Registration metadata and content product IDs use that value. This check
 applies regardless of deployment selection. Data `XDR Detection Version`, solution
 version, and source provenance are not fallbacks. Older files missing the
@@ -101,7 +101,7 @@ These bounds do not apply to API, schema, or extension-provider versions.
 ## XDR packaging contract
 
 When the solution contains Custom Detections, confirm its solution-data JSON
-contains:
+declares `"XDR Detections"` (with `"Analytic Rules"` optional when a solution packages only native XDR Custom Detections):
 
 ```json
 {
@@ -117,13 +117,16 @@ For every XDR Detection YAML, require:
 - `resourceType: Microsoft.Security/detectionRules`;
 - a supported `apiVersion`;
 - a stable `properties.id`;
-- `contentProvenance.source.id` matching exactly one packaged Analytic Rule;
+- `contentProvenance.requiredWorkloads` and `contentProvenance.requiredDataConnectors` (with `dependencyReviewRequired: false` allowed once dependencies are reviewed and populated);
+- per-file provenance mode:
+  - **Sentinel-derived detections** (migrated from `Analytic Rules/*.yaml`): must include both `contentProvenance.source` (with `id` matching a packaged Analytic Rule and `querySha256`) and `contentProvenance.conversion`; validated with `MIG-V01` and AR↔CD parity checks;
+  - **Native / directly authored detections** (standalone under `Solutions/<Solution>/XDR Detections/*.yaml`): omit `contentProvenance.source` (and `querySha256`) and `contentProvenance.conversion` without requiring a source `Analytic Rules/` YAML; skip `MIG-V01` and AR↔CD parity checks and run target structural, KQL (without Sentinel workspace parser aliases), runtime, dependency, and V3.1 packaging checks;
 - a query, schedule, alert template, and reviewed entity mappings; and
 - `properties.status: disabled`.
 
 For Sentinel-derived detections, `properties.id` is `xdr-<full source GUID>`,
-while `contentProvenance.source.id` remains the original unprefixed GUID. The
-packager normalizes a bare source GUID on its packaging copy, keeps a canonical
+while `contentProvenance.source.id` remains the original unprefixed GUID. For native detections without `contentProvenance.source`, `properties.id` is the detection's own stable `xdr-<uuid>` (or `<uuid>` normalized to `xdr-<uuid>` in the packaged copy). The
+packager normalizes a bare GUID on its packaging copy, keeps a canonical
 `xdr-` ID unchanged, and rejects unrelated custom IDs; it must not rewrite the
 authored detection YAML or provenance. Installation and registration IDs and
 references must use the same normalized identity. Existing deployed identities
@@ -144,6 +147,14 @@ is ignored. V3.1 emits installation and registration together under
 Do not claim otherwise from template generation. Require separate exact-scope
 approval before any environment write.
 
+## Offline ISV `authoring` route (`arm-ttk`)
+
+Partners and authors packaging native or converted XDR Custom Detections without live tenant, MCP, or Graph credentials can use the explicit offline ISV `authoring` workflow profile (`--workflow-profile authoring`), which runs:
+
+1. Target structural and KQL validation (`sentinel-xdr-migration validate`);
+2. V3.1 packaging (`sentinel-xdr-migration package-v3-1`); and
+3. Repository `arm-ttk` template validation on the generated `Package/mainTemplate.json` and `Package/createUiDefinition.json`.
+
 ## Workflow
 
 1. Work from the repository root.
@@ -152,8 +163,7 @@ approval before any environment write.
    required.
 3. Inspect the solution-data JSON and all referenced files. Stop on missing,
    duplicate, conflicting, or review-required content.
-4. Verify every `contentProvenance.source.id` resolves to exactly one Analytic
-   Rule content ID.
+4. For every Sentinel-derived detection (`contentProvenance.source` present), verify `contentProvenance.source.id` resolves to a packaged Analytic Rule content ID. For every native detection (`source` and `conversion` omitted), verify `contentProvenance.requiredWorkloads` and `contentProvenance.requiredDataConnectors` are populated.
 5. Confirm the current solution version and the requested bump. Check that
    `ReleaseNotes.md`, when present, can be synchronized to the resulting
    version.
@@ -194,14 +204,14 @@ approval before any environment write.
    - `Package\testParameters.json`; and
    - `Package\<version>.zip`.
 
-8. For a hybrid package, verify:
+8. For a hybrid or standalone XDR package, verify:
 
    - only emitted families declare `Deploy*` booleans; Sentinel defaults true,
      `DeployCustomDetection` defaults false, and UI/test parameters agree;
    - every AR is gated by `DeployAnalyticsRule`, independently of CDs;
    - every CD installation and registration is gated by `DeployCustomDetection`;
    - existing conditions are AND-composed without changing nested scopes;
-   - every CD resolves to exactly one source AR; CD deployment/registration counts match;
+   - every Sentinel-derived CD resolves to one source AR, while native CDs package and register standalone without a source AR; CD deployment/registration counts match;
    - every CD body has `status: disabled`;
    - deployment names and CD IDs are unique and deterministic;
    - content packages and attribution remain unconditional; dependencies are
@@ -213,7 +223,7 @@ approval before any environment write.
      has its single-tactic guard; and
    - the generated ZIP version matches the solution-data version.
 
-9. Run the repository packaging validations. Do not classify skipped tests as
+9. Run the repository packaging validations (including `arm-ttk` template checks). Do not classify skipped tests as
    passed. Separate genuine template failures from documented validator or
    environment limitations.
 10. Report the generated version, artifact paths, content counts, validation

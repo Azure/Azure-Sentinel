@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import urllib.error
@@ -8,7 +9,7 @@ import urllib.parse
 import urllib.request
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import yaml
 
@@ -50,33 +51,83 @@ DEFAULT_READ_BUDGET = 20
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 15
 
 
+def _extract_detection_query_text(document: Any) -> str:
+    if not isinstance(document, Mapping):
+        return ""
+    properties = document.get("properties")
+    if isinstance(properties, Mapping):
+        qc = properties.get("queryCondition")
+        if isinstance(qc, Mapping) and isinstance(qc.get("queryText"), str) and qc["queryText"].strip():
+            return qc["queryText"]
+        if isinstance(properties.get("queryText"), str) and properties["queryText"].strip():
+            return properties["queryText"]
+        qd = properties.get("queryDefinition")
+        if isinstance(qd, Mapping) and isinstance(qd.get("query"), str) and qd["query"].strip():
+            return qd["query"]
+    if isinstance(document.get("queryText"), str) and document["queryText"].strip():
+        return document["queryText"]
+    if isinstance(document.get("query"), str) and document["query"].strip():
+        return document["query"]
+    return ""
+
+
+def compute_query_sha256(query_or_document: Any) -> str:
+    if isinstance(query_or_document, Mapping):
+        query_text = _extract_detection_query_text(query_or_document)
+    else:
+        query_text = str(query_or_document or "")
+    return hashlib.sha256(query_text.encode("utf-8")).hexdigest()
+
+
+def resolve_detection_query_sha256(
+    document: Any,
+    fallback_query: str | None = None,
+) -> str:
+    if isinstance(document, Mapping):
+        provenance = document.get("contentProvenance")
+        if isinstance(provenance, Mapping):
+            source = provenance.get("source")
+            if isinstance(source, Mapping):
+                source_sha = str(source.get("querySha256") or "").strip()
+                if source_sha:
+                    return source_sha
+    query_text = (
+        fallback_query
+        if fallback_query is not None
+        else _extract_detection_query_text(document)
+    )
+    return compute_query_sha256(query_text)
+
+
 def _detection_id(prepared: dict[str, Any]) -> None:
     properties = prepared.get("properties") or {}
     detection_id = properties.get("id")
     source_id = (
         ((prepared.get("contentProvenance") or {}).get("source") or {}).get("id")
     )
+    sentinel_derived = is_sentinel_derived(prepared)
     if isinstance(detection_id, str) and re.fullmatch(
         SOURCE_ID_PATTERN, detection_id
     ):
-        if is_sentinel_derived(prepared) and (
+        if sentinel_derived and (
             not isinstance(source_id, str)
             or detection_id.casefold() != source_id.casefold()
         ):
             return
-        properties["id"] = (
-            f"xdr-{source_id if is_sentinel_derived(prepared) else detection_id}"
-        )
+        if sentinel_derived:
+            properties["id"] = f"xdr-{source_id}"
+        elif isinstance(source_id, str) and source_id.strip():
+            properties["id"] = f"xdr-{detection_id}"
     elif isinstance(detection_id, str):
         match = re.fullmatch(PREFIXED_SOURCE_ID_PATTERN, detection_id)
         if match:
             guid = detection_id[4:]
-            if is_sentinel_derived(prepared) and (
+            if sentinel_derived and (
                 not isinstance(source_id, str) or guid.casefold() != source_id.casefold()
             ):
                 return
             properties["id"] = (
-                f"xdr-{source_id if is_sentinel_derived(prepared) else guid}"
+                f"xdr-{source_id if sentinel_derived else guid}"
             )
 
 
@@ -155,11 +206,22 @@ def graph_detection_payload_with_projection(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build a disabled Graph payload and return explicit projection diagnostics."""
     prepared = deepcopy(document)
+    properties_in = prepared.get("properties")
+    if isinstance(properties_in, dict):
+        qc = properties_in.get("queryCondition")
+        if not (isinstance(qc, dict) and isinstance(qc.get("queryText"), str) and qc["queryText"].strip()):
+            fallback_q = _extract_detection_query_text(prepared)
+            if fallback_q:
+                properties_in["queryCondition"] = {"queryText": fallback_q}
     _detection_id(prepared)
     errors = validate_document(prepared)
-    conversion = (document.get("contentProvenance") or {}).get("conversion") or {}
-    if conversion.get("status") != "converted" or conversion.get("reviewRequired"):
-        errors.append("detection must be converted with no review required")
+    provenance = document.get("contentProvenance") or {}
+    conversion = provenance.get("conversion") if isinstance(provenance, dict) else None
+    has_conversion_block = isinstance(conversion, dict) and bool(conversion)
+    if is_sentinel_derived(prepared) or has_conversion_block:
+        conv_dict = conversion if isinstance(conversion, dict) else {}
+        if conv_dict.get("status") != "converted" or conv_dict.get("reviewRequired"):
+            errors.append("detection must be converted with no review required")
     if errors:
         raise ValueError("; ".join(errors))
 
@@ -168,6 +230,7 @@ def graph_detection_payload_with_projection(
         (properties.get("detectionAction") or {}).get("alertTemplate") or {}
     )
     projection = project_graph_tactics(alert)
+    projection["querySha256"] = resolve_detection_query_sha256(prepared)
     result = deepcopy(properties)
     if isinstance(result.get("schedule"), dict) and result["schedule"].get("frequency") == "NRT":
         result["schedule"]["frequency"] = "PT0S"
@@ -178,6 +241,51 @@ def graph_detection_payload_with_projection(
 
         result["contentProvenance"] = deployed_provenance(prepared, package_context)
     return result, projection
+
+
+def verify_graph_disabled_restoration(
+    document_or_id: dict[str, Any] | str,
+    response: Mapping[str, Any] | None = None,
+    *,
+    token: str | None = None,
+    timeout_seconds: int = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """Verify that a native or migrated Custom Detection is restored to disabled state in Graph."""
+    if isinstance(document_or_id, dict):
+        payload, projection = graph_detection_payload_with_projection(document_or_id)
+        rule_id = str(payload["id"])
+        query_sha = projection["querySha256"]
+    else:
+        rule_id = str(document_or_id).strip()
+        query_sha = None
+    if not rule_id:
+        raise ValueError("Custom Detection ID is required for disabled restoration check")
+    status_code = 200
+    if response is None:
+        if not token:
+            raise ValueError("response or token is required to verify disabled restoration")
+        encoded_id = urllib.parse.quote(rule_id, safe="")
+        status_code, response = _graph_get(
+            f"{GRAPH_DETECTION_RULES_ENDPOINT}/{encoded_id}",
+            token,
+            timeout_seconds=timeout_seconds,
+        )
+    body = dict(response) if isinstance(response, Mapping) else {}
+    is_enabled_val = body.get("isEnabled") if "isEnabled" in body else None
+    status_val = str(body.get("status") or "").strip().lower()
+    is_enabled = (is_enabled_val is True) or (status_val == "enabled")
+    is_disabled = (not is_enabled) and (
+        (is_enabled_val is False) or (status_val == "disabled")
+    )
+    restored = status_code == 200 and is_disabled
+    return {
+        "id": rule_id,
+        "querySha256": query_sha,
+        "httpStatus": status_code,
+        "disabled": restored,
+        "restoredToDisabled": restored,
+        "status": "passed" if restored else "failed",
+    }
 
 
 def graph_detection_payload(
@@ -569,6 +677,7 @@ def preflight_deployment(
                 {
                     "file": relative,
                     "id": payload["id"],
+                    "querySha256": projection.get("querySha256"),
                     "status": "ready",
                     "graphTacticProjection": projection,
                 }

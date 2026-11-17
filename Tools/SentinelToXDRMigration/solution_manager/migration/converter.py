@@ -2650,12 +2650,21 @@ def xdr_version_error(version: Any) -> str | None:
 
 def is_sentinel_derived(document: dict[str, Any]) -> bool:
     provenance = document.get("contentProvenance") or {}
-    source = provenance.get("source") or {}
-    conversion = provenance.get("conversion") or {}
-    return (
-        source.get("platform") in {"Microsoft Sentinel", "Sentinel"}
-        and source.get("kind") == "AnalyticsRule"
-    ) or conversion.get("tool") == "sentinel-to-xdr-migration"
+    source = provenance.get("source") if isinstance(provenance, dict) else None
+    conversion = provenance.get("conversion") if isinstance(provenance, dict) else None
+    if isinstance(source, dict):
+        platform = source.get("platform")
+        if isinstance(platform, str) and platform.strip():
+            if platform.strip() in {"Microsoft Sentinel", "Sentinel"} and source.get("kind") in (None, "", "AnalyticsRule"):
+                return True
+            return False
+    if isinstance(conversion, dict) and conversion.get("tool") == "sentinel-to-xdr-migration":
+        return True
+    properties = document.get("properties") if isinstance(document, dict) else None
+    det_id = str(properties.get("id") or "").strip() if isinstance(properties, dict) else ""
+    if det_id.lower().startswith("xdr-"):
+        return True
+    return False
 
 
 def _existing_identity_error(
@@ -2757,6 +2766,13 @@ def validate_document(document: dict[str, Any]) -> list[str]:
         if conversion.get("errors"):
             errors.extend(f"conversion: {value}" for value in conversion["errors"])
     else:
+        if is_sentinel_derived(document) or (
+            isinstance(provenance, dict) and ("source" in provenance or "conversion" in provenance)
+        ):
+            if not isinstance(provenance.get("source"), dict):
+                errors.append("contentProvenance.source is required")
+            if not isinstance(provenance.get("conversion"), dict):
+                errors.append("contentProvenance.conversion is required")
         if isinstance(provenance.get("source"), dict):
             for field in ("platform", "kind"):
                 if not source.get(field):
@@ -2772,11 +2788,16 @@ def validate_document(document: dict[str, Any]) -> list[str]:
     if not query:
         errors.append("properties.queryCondition.queryText is required")
     schedule = properties.get("schedule") or {}
+    if not isinstance(schedule, dict) or not str(schedule.get("frequency") or "").strip():
+        errors.append("properties.schedule.frequency is required")
     if isinstance(schedule, dict) and schedule.get("frequency") in {"PT0S", "NRT"}:
         nrt_eligible, nrt_reasons = _assess_nrt_eligibility(query, query)
         if not nrt_eligible and conversion.get("status") != "needsReview":
             errors.extend(f"NRT schedule: {reason}" for reason in nrt_reasons)
     alert = ((properties.get("detectionAction") or {}).get("alertTemplate") or {})
+    severity = alert.get("severity") if isinstance(alert, dict) else None
+    if not isinstance(severity, str) or severity not in SUPPORTED_SEVERITIES:
+        errors.append(f"alertTemplate.severity must be one of {sorted(SUPPORTED_SEVERITIES)}")
     mappings = alert.get("entityMappings") or {}
     if isinstance(mappings, dict):
         for collection_name in ("files", "processes"):
@@ -2845,6 +2866,9 @@ def validate_document(document: dict[str, Any]) -> list[str]:
                         if not isinstance(sub, str) or not re.fullmatch(r"T\d{4}\.\d{3}", sub) or sub.split(".")[0] != base:
                             errors.append(f"MITRE subtechnique {sub!r} must belong to technique {base!r}")
     return errors
+
+
+validate_xdr_detection_document = validate_document
 
 
 def convert_solution(
