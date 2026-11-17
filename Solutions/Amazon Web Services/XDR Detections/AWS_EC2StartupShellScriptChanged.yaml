@@ -1,0 +1,93 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: f8577e4d-8481-437b-a94e-06f615985668
+    path: Analytic Rules/AWS_EC2StartupShellScriptChanged.yaml
+    version: 1.0.1
+    querySha256: 9a57b52e4537f89f8f82859e0919b38d3d615f410bac618c5f173e82f899ecb3
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1059
+    reviewScope:
+      sourceDocumentSha256: 52120d83ef0a304fe43962b5a9a002ea6f9eea00debb984d36e9d5032c212957
+      targetQuerySha256: 4bc9b8c5383110b7be23faced564e4a30684c6b2a2113c957c6da624ad1b2b76
+properties:
+  id: xdr-f8577e4d-8481-437b-a94e-06f615985668
+  displayName: AWSCloudTrail - EC2 Startup Shell Script Changed
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+      | where EventName in~ ("ModifyInstanceAttribute", "CreateLaunchTemplate")
+      | extend RequestParametersJson = parse_json(RequestParameters)
+      | where tostring(RequestParametersJson.userData) != ""
+      | extend userData_ = tostring(RequestParametersJson.userData)
+      | extend instanceId_ = tostring(RequestParametersJson.instanceId)
+      | project-away SourceSystem, Category, Type, TenantId, EventVersion, SessionIssuerAccountId
+      | extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, ":") + 1)
+      | extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]
+      | project TimeGenerated, EventName, UserName, Name, UpnSuffix, instanceId_, AWSRegion, SourceIpAddress, EventSource, UserIdentityArn, EventTypeName
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - EC2 Startup Shell Script Changed
+      description: 'Identifies changes to the EC2 startup script. The shell script will be executed as root/SYSTEM every time
+        the specific instances are booted up. ref : https://github.com/RhinoSecurityLabs/pacu/blob/master/pacu/modules/ec2__startup_shell_script/main.py'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UpnSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1059
+      customDetails:
+        InstanceId: instanceId_
+        AWSRegion: AWSRegion
+        EventName: EventName
+        EventSource: EventSource
+        EventType: EventTypeName

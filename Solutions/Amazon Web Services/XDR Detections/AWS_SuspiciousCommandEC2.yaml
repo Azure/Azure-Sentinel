@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 21702832-aff3-4bd6-a8e1-663b6818503d
+    path: Analytic Rules/AWS_SuspiciousCommandEC2.yaml
+    version: 1.0.2
+    querySha256: 3ee1400869f983963bd1bd750a12a03a587391b723592c16255452c7e0dfecbd
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'S3Bucket' column `s3bucket` requires runtime output-schema binding verification
+    - customDetails 'ExecutionId' column `executionId` requires runtime output-schema binding verification
+    - customDetails 'AWSRegion' column `AWSRegion` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.AccountCloudAppAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountCloudAppAccountId column `RecipientAccountId` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1651
+    reviewScope:
+      sourceDocumentSha256: 5884e5a85ab2b8d78590ab8eb06c65bd98f6c004118fb3424398f1ee31e78e96
+      targetQuerySha256: d41b23e09ce8629c390e5640b97f32db2490d9d055b3a471173a1048412fe427
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: AccountCloudAppAccountId
+properties:
+  id: xdr-21702832-aff3-4bd6-a8e1-663b6818503d
+  displayName: AWSCloudTrail - Suspicious command sent to EC2
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let command_executed = AWSCloudTrail
+      | where EventName in ("SendCommand","CreateAssociation") and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend params = tostring(parse_json(RequestParameters).parameters)
+      | extend s3bucketCommand = tostring(parse_json(RequestParameters).outputS3BucketName)
+      | extend s3bucketAssociation = tostring(parse_json(RequestParameters).outputLocation.s3Location.outputS3BucketName)
+      | where isnotempty(params)
+      | extend commandId = tostring(parse_json(ResponseElements).command.commandId)
+      | extend associationId = tostring(parse_json(ResponseElements).associationDescription.associationId)
+      | extend executionId = iff(isnotempty(commandId), commandId, associationId)
+      | extend s3bucket = iff(isnotempty(s3bucketCommand), s3bucketCommand, s3bucketAssociation)
+      | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]));
+      AWSCloudTrail
+      | where EventName == "PutObject" and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend s3bucket = tostring(parse_json(RequestParameters).bucketName)
+      | mv-expand todynamic(Resources)
+      | extend accountId=tostring(todynamic(Resources.['accountId']))
+      | where Resources contains "accountId" and accountId <> RecipientAccountId
+      | join command_executed on s3bucket
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Suspicious command sent to EC2
+      description: An attacker with the necessary AWS permissions could be executing code remotely on an EC2 instance via
+        SSM and saving the output to their own S3 bucket. Verify this action with the user identity and confirm it was authorized.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1651
+      customDetails:
+        S3Bucket: s3bucket
+        ExecutionId: executionId
+        AWSRegion: AWSRegion
+        AccountCloudAppAccountId: RecipientAccountId

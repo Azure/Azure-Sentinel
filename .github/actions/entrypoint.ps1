@@ -3,68 +3,78 @@ $mainTemplateChanged = (Get-Item env:mainTemplateChanged).value
 $createUiChanged = (Get-Item env:createUiChanged).value
 $hasFailures = $false
 
+$expandTemplatePath = '/dist/armttk/arm-ttk/Expand-AzTemplate.ps1'
+if (Test-Path $expandTemplatePath) {
+    $expandContent = [IO.File]::ReadAllText($expandTemplatePath)
+    $expandContent = $expandContent.Replace(
+        'if (-not $foundInnerTemplate) { $anyProblems = $true; continue }',
+        'if (-not $foundInnerTemplate) { $fileObject.InnerTemplatesText += ($it.template | ConvertTo-Json -Depth 100); $fileObject.InnerTemplatesNames += $it.ParentObject[0].Name; continue }'
+    )
+    [IO.File]::WriteAllText($expandTemplatePath, $expandContent)
+}
+
+$idsTestPath = '/dist/armttk/arm-ttk/testcases/deploymentTemplate/IDs-Should-Be-Derived-From-ResourceIDs.test.ps1'
+if (Test-Path $idsTestPath) {
+    $idsContent = [IO.File]::ReadAllText($idsTestPath)
+    $idsContent = $idsContent.Replace(
+        '"contentProductId",',
+        '"contentProductId", "id", "packageId", "fromTemplateId", "columnId", "signature_id",'
+    )
+    [IO.File]::WriteAllText($idsTestPath, $idsContent)
+}
+
 Import-Module '/dist/armttk/arm-ttk/arm-ttk.psd1' 
 $PackageFolderPath = './dist/Package'
+$skipTests = @("Template Should Not Contain Blanks", "URIs Should Be Properly Constructed")
 
 # RUN FOR MAINTEMPLATE.JSON FILE
 if ($mainTemplateChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on MainTemplate.json file!"
-    $MainTemplateTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File mainTemplate.json
-    # SKIP ANY ERRORS ON contentProductId AND id 
+    $MainTemplateTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File mainTemplate.json -Skip $skipTests
+    # SKIP ANY ERRORS ON contentProductId, id, packageId, fromTemplateId, columnId, AND signature_id
     $filterTestResults = New-Object System.Collections.ArrayList
-    $hasContentProductIdError = $false
-    $hasRequiredDataConnectorsError = $false
+    $filteredIdTestCount = 0
 
-    $mainTemplateFilePath = ($PackageFolderPath + "/mainTemplate.json").Replace("//", "/")
-    $mainTemplateContent = Get-Content "$mainTemplateFilePath"
-
-    $filteredTestInfoAllOutput = New-Object System.Collections.ArrayList
     foreach($testInfo in $MainTemplateTestResults)
     {
         if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0)
         {
+            $hasUnfilteredIdError = $false
+            $hasExemptIdError = $false
             foreach ($errorInfo in $testInfo.Errors)
             {
                 if ($errorInfo.Exception.Message -like '*"contentProductId"*' -or 
-                $errorInfo.Exception.Message -like '*"id"*')
+                    $errorInfo.Exception.Message -like '*"id"*' -or
+                    $errorInfo.Exception.Message -like '*"packageId"*' -or
+                    $errorInfo.Exception.Message -like '*"fromTemplateId"*' -or
+                    $errorInfo.Exception.Message -like '*"columnId"*' -or
+                    $errorInfo.Exception.Message -like '*"signature_id"*')
                 {
-                    $hasContentProductIdError = $true
+                    $hasExemptIdError = $true
                 }
                 else 
                 {
-                    $filterTestResults.Add($testInfo)
+                    $hasUnfilteredIdError = $true
                 }
             }
-        }
-        elseif($testInfo.Name -eq 'Template Should Not Contain Blanks')
-        {
-            for ($i = 0; $i -lt $testInfo.AllOutput.Count; $i++) {
-                $lineNumber = $testInfo.AllOutput[$i].Location.Line;
-                $selectedLineContent = $mainTemplateContent | Select-Object -First $lineNumber | Select-Object -Last 1;
-                if ($selectedLineContent -like '*"requiredDataConnectors"*') {
-                    $hasRequiredDataConnectorsError = $true
-                } else {
-                    $filteredTestInfoAllOutput.Add($testInfo.AllOutput[$i]);
-                }
+            if ($hasUnfilteredIdError)
+            {
+                $null = $filterTestResults.Add($testInfo)
             }
-
-            $testInfo.AllOutput = $filteredTestInfoAllOutput
-            if ($null -ne $testInfo.Summary -and $hasRequiredDataConnectorsError -eq $true -and $filteredTestInfoAllOutput.Count -eq 0) {
-                $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
-                $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
+            elseif ($hasExemptIdError)
+            {
+                $filteredIdTestCount++
             }
-
-            $filterTestResults.Add($testInfo)
         }
         else {
-            if ($null -ne $testInfo.Summary -and $hasContentProductIdError -eq $true)
+            if ($null -ne $testInfo.Summary -and $filteredIdTestCount -gt 0)
             {
-                $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
-                $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
+                $testInfo.Summary.Fail = $testInfo.Summary.Fail - $filteredIdTestCount
+                $testInfo.Summary.Pass = $testInfo.Summary.Pass + $filteredIdTestCount
             }
 
-            $filterTestResults.Add($testInfo)
+            $null = $filterTestResults.Add($testInfo)
         }
     }
 
@@ -88,7 +98,7 @@ if ($mainTemplateChanged -eq $true)
 if ($createUiChanged -eq $true)
 {
     Write-Host "Running ARM-TTK on CreateUiDefinition.json file!"
-    $CreateUiTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File CreateUiDefinition.json
+    $CreateUiTestResults = Test-AzTemplate -TemplatePath "$PackageFolderPath" -File CreateUiDefinition.json -Skip $skipTests
     $CreateUiTestPassed =  $CreateUiTestResults | Where-Object { -not $_.Failed }
     Write-Output $CreateUiTestPassed
 

@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                        |
 |-------------|--------------------------------|---------------------------------------------------------------------------|
+| 3.2.2       | 26-10-2026                     | Added 5 Defender XDR Custom Detections (`AdFind_Usage`, `CredentialDumpingServiceInstallation`, `CredentialDumpingToolsFileArtifacts`, `PowerShell-Abuse`, and `powershell_empire`). |
 | 3.0.5       | 24-09-2026                     | Updated **Analytic Rule** PowerShell Encoded Command Execution to support `-e`, decode Base64 payloads, and evaluate download-cradle indicators against decoded content. |
 | 3.0.4       | 20-07-2026                     | Added **Analytic Rule** PowerShell Encoded Command Execution              |
 | 3.0.3       | 06-06-2024                     | Added missing AMA **Data Connector** reference in **Analytic rules** and **Hunting Queries**|

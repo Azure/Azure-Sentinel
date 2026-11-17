@@ -1,6 +1,6 @@
 # ANY.RUN — Sandbox URL
 
-![ANY.RUN](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/ANYRUN.svg)
+<img src="https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/ANYRUN.svg" width="200"/>
 
 ## Summary
 

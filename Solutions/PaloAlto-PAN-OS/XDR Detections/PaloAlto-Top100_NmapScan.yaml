@@ -1,0 +1,92 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4d61bb9a-7f6d-45b1-ac0e-517e2a92f6fd
+    path: Analytic Rules/PaloAlto-Top100_NmapScan.yaml
+    version: 1.0.0
+    querySha256: 388dfd19b37747b48410ac167a2b35bd62100aa0b7b634ed4b1f234f4049c0f6
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `Computer` is provisionally represented by hosts.nameColumn `Computer`; confirm that this column is the intended host identifier. The original value is also retained in customDetails when the query output binding is available; this assumption does not prove entity parity'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - Host.FullName mismatch is informational because its original value is preserved as customDetails.HostFullName from query column `Computer`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - Reconnaissance
+    originalTechniques:
+    - T1595
+    reviewScope:
+      status: approved
+      actor: user
+      reviewedAt: '2026-11-03T12:00:00Z'
+      reference: approve_batch_7c_fixes_and_qualify=true
+      rationale: Reviewed and approved CommonSecurityLog / CefAma dependencies, entity mappings, customDetails retention, and single primary MITRE tactic for Graph Custom Detection compatibility.
+      sourceDocumentSha256: 8f899fe3657f9e375c7c1b21f3509756c0298a92ed71d6a9b752f2c816c6374a
+      targetQuerySha256: bf1639cf75d83513818488d288331ea0a1e2269ce2a9e25e62bf2cdac86a1766
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: Computer
+      column: Computer
+      status: available
+      customDetailKey: HostFullName
+properties:
+  id: xdr-4d61bb9a-7f6d-45b1-ac0e-517e2a92f6fd
+  displayName: Palo Alto - possible nmap scan on with top 100 option
+  status: disabled
+  queryCondition:
+    queryText: "CommonSecurityLog\n| where ipv4_is_private(SourceIP)\n| where DestinationPort in (7, 9, 13, 21, 22, 23, 25, 26, 37, 79, 81, 88, 106, 110, 111, 119, 135, 139, 143, 144, 179, 199, 389, 427, 444, 445, 465, 513, 514, 515, 543, 544, 548, 554, 587, 631, 646, 873, 990, 993, 995, 1025, 1026, 1027, 1028, 1029, 1110, 1433, 1720, 1723, 1755, 1900, 2000, 2001, 2049, 2121, 2717, 3000, 3128, 3306, 3389, 3986, 4899, 5000, 5009, 5051, 5060, 5101, 5190, 5357, 5432, 5631, 5666, 5800, 5900, 6000, 6001, 6646, 7070, 8000, 8008, 8009, 8080, 8081, 8443, 8888, 9100, 9999, 10000, 32768, 49152, 49153, 49154, 49155, 49156, 49157)\n| summarize\n    dcount(DestinationPort),\n    make_set(DestinationPort),\n    make_set(ApplicationProtocol),\n    make_set(Activity),\n    make_set(SourcePort),\n    StartTime = min(TimeGenerated),\n    EndTime = max(TimeGenerated)\n    by SourceIP, DestinationIP, Computer, bin(TimeGenerated, 2m)\n| where dcount_DestinationPort > 90"
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Palo Alto - possible nmap scan on with top 100 option
+      description: '''Detect possible execution of Nmap top 100 option. This detection will detect scanning of 90% of Top 100 port of NMAP in less than 2 minutes. Unusual port only access through a scan are present in this list which is a good indicator of reconnaissance tactics. Whitelisting of Company scanners is required with implementation of the rule. Ref : https://nmap.org/book/performance-port-selection.html'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: DestinationIP
+        - id: ip2
+          addressColumn: SourceIP
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1595
+      customDetails:
+        HostFullName: Computer

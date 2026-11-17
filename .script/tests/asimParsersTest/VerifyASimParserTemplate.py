@@ -1,6 +1,6 @@
 # VerifyASimParserTemplate.py
 #
-# Validates the YAML template of modified ASIM parsers (both ASim and vim variants).
+# Validates the YAML template of modified ASIM query-time parsers (both ASim and vim variants).
 # For each modified parser, the following checks are performed against the parser
 # YAML and its corresponding union parser YAML:
 #
@@ -16,8 +16,13 @@
 # 10. References - must include schema-specific and ASIM doc reference links with correct titles/URLs
 # 11. ParserName format - must match ^[a-zA-Z][a-zA-Z0-9_]+$ and start with <FileType><Schema>
 # 12. EquivalentBuiltInParser format - must match _<FileType>_<Schema>_... (e.g. _ASim_Dns_MyProduct)
-# 13. Sample data file - "Sample Data/ASIM/{Vendor}_{Product}_{Schema}_IngestedLogs.csv" must exist (ASim only)
-# 14. vim ParserParams - must match the schema union parser parameters (pack is optional)
+# 13. Sample data file - must resolve using the same legacy/source-specific rules as ingestion (ASim only)
+# 14. vim ParserParams - must match the schema union parser parameters
+#     (pack is optional; eventresultdetails_has_any is also optional for WebSession)
+#
+# ParentParser optionally names an immediate parent in the same schema directory.
+# Missing, null, or empty values default to ASim<Schema> or im<Schema>.
+# Every parent chain must reach that schema unifier with both membership checks intact.
 #
 # Parsers listed in ExclusionListForASimTests.csv are allowed to fail without blocking the workflow.
 
@@ -40,6 +45,8 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
+resolve_sample_data_path = parser_file_utils.resolve_sample_data_path
 
 import yaml
 import re
@@ -47,7 +54,6 @@ import subprocess
 import csv
 from datetime import datetime
 from urllib.parse import urlparse
-from tabulate import tabulate
 
 # Constants
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
@@ -92,7 +98,7 @@ def run():
     repo_root = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
     modified_files = get_modified_files(current_directory)
     sample_data_path = os.path.join(repo_root, SAMPLE_DATA_PATH)
-    parser_yaml_files = filter_yaml_files(modified_files)
+    parser_yaml_files = filter_query_time_parser_files(modified_files)
     has_failures = False
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
@@ -116,31 +122,30 @@ def run():
                  # Skip the vim parser file as the corresponding ASim parser file is present and vim files will be tested with ASim files in upcoming steps.
                  continue 
         asim_parser_path = os.path.join(repo_root, parser)
-        print(f'{YELLOW}Parser file path: {asim_parser_path}{RESET}')
-        asim_union_parser_path = os.path.join(repo_root, 'Parsers', f'ASim{schema_name}', 'Parsers', f'ASim{schema_name}.yaml')
-        print(f'{YELLOW}Union parser file path: {asim_union_parser_path}{RESET}')
-        asim_parser = read_local_yaml(asim_parser_path)
-        asim_union_parser = read_local_yaml(asim_union_parser_path)
-        # Both ASim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(asim_parser, asim_parser_path) and check_parser_found(asim_union_parser, asim_union_parser_path)):
-            continue
-        print_test_header(asim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(asim_parser, asim_union_parser, "ASim", sample_data_path)
-        print_results_table(results)
-
-        if check_test_failures(results, asim_parser):
-            has_failures = True
-
-        vim_parser, vim_union_parser = get_vim_parsers(asim_parser_path, asim_union_parser_path)
-        # Both vim and union parser files should be present to proceed with the tests
-        if not (check_parser_found(vim_parser, asim_parser_path) and check_parser_found(vim_union_parser, asim_union_parser_path)):
-            continue
-        print_test_header(vim_parser.get('EquivalentBuiltInParser'))
-        results = extract_and_check_properties(vim_parser, vim_union_parser, "vim", sample_data_path)
-        print_results_table(results)
-
-        if check_test_failures(results, vim_parser):
-            has_failures = True
+        vim_parser_path = os.path.join(
+            os.path.dirname(asim_parser_path),
+            os.path.basename(asim_parser_path).replace('ASim', 'vim', 1)
+        )
+        for file_type, parser_path in (("ASim", asim_parser_path), ("vim", vim_parser_path)):
+            print(f'{YELLOW}Parser file path: {parser_path}{RESET}')
+            parser_document = read_local_yaml(parser_path)
+            check_parser_found(parser_document, parser_path)
+            try:
+                parent, parent_path = get_parent_parser(
+                    parser_document, parser_path, schema_name, file_type
+                )
+            except ValueError as error:
+                print(f"::error::{parser_path}: {error}")
+                has_failures = True
+                continue
+            print(f'{YELLOW}Union parser file path: {parent_path}{RESET}')
+            print_test_header(parser_document.get('EquivalentBuiltInParser'))
+            results = extract_and_check_properties(
+                parser_document, parent, file_type, sample_data_path
+            )
+            print_results_table(results)
+            if check_test_failures(results, parser_document):
+                has_failures = True
 
     if has_failures:
         exit(1)
@@ -161,7 +166,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     - References include correct schema-specific and ASIM doc links
     - ParserName matches ^[a-zA-Z][a-zA-Z0-9_]+$ and starts with <FileType><Schema>
     - EquivalentBuiltInParser follows _<FileType>_<Schema>_... format
-    - Sample data CSV file exists locally (ASim parsers only)
+    - Sample data CSV resolves locally using the ingestion selection rules (ASim parsers only)
     - vim ParserParams match the parameters supported by the schema union parser
 
     Args:
@@ -328,14 +333,18 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, ASIM
     # Check if sample data files exists or not (Only applicable for ASim FileType)
     
     if FileType == "ASim":
-        # construct filename
-        SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
-        SampleDataFilePath = os.path.join(ASIMSampleDataURL, SampleDataFile)
-        # check if file exists locally
-        if os.path.exists(SampleDataFilePath):
-            results.append((SampleDataFile, 'Sample data file exists', 'Pass'))
+        try:
+            sample_path = resolve_sample_data_path(
+                ASIMSampleDataURL, event_vendor, event_product, schema, parser_query
+            )
+        except (FileNotFoundError, ValueError) as error:
+            results.append((
+                f'{RED}Sample data file resolution failed{RESET}',
+                f'{RED}Sample data file resolution failed: {error}{RESET}',
+                f'{RED}Fail{RESET}',
+            ))
         else:
-            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{SampleDataFile}"{RESET}', f'{RED}Fail{RESET}'))
+            results.append((sample_path.name, 'Sample data file exists', 'Pass'))
     return results
 
 def validate_vim_parser_params(parser_file, union_parser_file):
@@ -352,7 +361,13 @@ def validate_vim_parser_params(parser_file, union_parser_file):
     parser_params.discard(None)
     supported_params.discard(None)
 
-    missing_params = supported_params - OPTIONAL_VIM_PARSER_PARAMS - parser_params
+    optional_params = OPTIONAL_VIM_PARSER_PARAMS.copy()
+    # Temporary exception for WebSession.
+    # TODO: Remove eventresultdetails_has_any from the WebSession vim YAML and remove this exception.
+    if parser_file.get('Normalization', {}).get('Schema') == 'WebSession':
+        optional_params.add('eventresultdetails_has_any')
+
+    missing_params = supported_params - optional_params - parser_params
     unsupported_params = parser_params - supported_params - VIM_CONTROL_PARAMS
 
     if not missing_params and not unsupported_params:
@@ -370,13 +385,9 @@ def validate_vim_parser_params(parser_file, union_parser_file):
 
     return (
         f'{RED}{", ".join(differences)}{RESET}',
-        f'{RED}ParserParams must match the schema union parser parameters; "pack" is optional{RESET}',
+        f'{RED}ParserParams must match the schema union parser parameters; optional: {", ".join(sorted(optional_params))}{RESET}',
         f'{RED}Fail{RESET}'
     )
-
-def filter_yaml_files(modified_files):
-    # Take only the YAML files
-    return [line for line in modified_files if line.endswith('.yaml')]
 
 def get_modified_files(current_directory):
 
@@ -421,6 +432,8 @@ def print_test_header(parser_name):
     print("***********************************")
 
 def print_results_table(results):
+    from tabulate import tabulate
+
     table = [[index + 1] + list(result) for index, result in enumerate(results)]
     print(tabulate(table, headers=['S.No', 'Test Value', 'Test Name', 'Result'], tablefmt="grid"))
 
@@ -444,14 +457,55 @@ def check_parser_found(asim_parser, parser_path):
     
     return True
 
-def get_vim_parsers(asim_parser_path, asim_union_parser_path):
-    # Replace 'ASim' with 'vim' in the filename only
-    vim_parser_path = os.path.join(os.path.dirname(asim_parser_path), os.path.basename(asim_parser_path).replace('ASim', 'vim', 1))
-    # Replace 'ASim' with 'im' in the union parser filename only
-    vim_union_parser_path = os.path.join(os.path.dirname(asim_union_parser_path), os.path.basename(asim_union_parser_path).replace('ASim', 'im', 1))
-    vim_parser = read_local_yaml(vim_parser_path)
-    vim_union_parser = read_local_yaml(vim_union_parser_path)
-    return vim_parser, vim_union_parser
+def get_parent_parser(parser, parser_path, schema_name, file_type):
+    root_name = f'{"ASim" if file_type == "ASim" else "im"}{schema_name}'
+    prefix = "ASim" if file_type == "ASim" else "(?:vim|im)"
+    current = parser
+    visited = {parser.get('ParserName')}
+    immediate_parent = None
+
+    while True:
+        parent_name = current.get('ParentParser')
+        if parent_name is None:
+            parent_name = root_name
+        elif not isinstance(parent_name, str):
+            raise ValueError("ParentParser must be a parser name string or null.")
+        else:
+            parent_name = parent_name.strip() or root_name
+        if not re.fullmatch(rf'{prefix}{re.escape(schema_name)}[a-zA-Z0-9_]*', parent_name):
+            raise ValueError(f"Invalid ParentParser '{parent_name}' for {file_type}{schema_name}.")
+        if parent_name in visited:
+            raise ValueError(f"ParentParser cycle detected at '{parent_name}'.")
+        visited.add(parent_name)
+        parent_path = os.path.join(os.path.dirname(parser_path), f'{parent_name}.yaml')
+        parent = read_local_yaml(parent_path)
+        if not isinstance(parent, dict) or parent.get('ParserName') != parent_name:
+            raise ValueError(f"ParentParser '{parent_name}' is missing or has a mismatched ParserName.")
+        if parent.get('Normalization', {}).get('Schema') != schema_name:
+            raise ValueError(f"ParentParser '{parent_name}' must use schema '{schema_name}'.")
+        if immediate_parent is None and not parser.get('ParentParser'):
+            # Leave legacy membership failures to the existing exclusion-aware checks.
+            return parent, parent_path
+        child_name = current.get('ParserName')
+        built_in = current.get('EquivalentBuiltInParser')
+        if (
+            not child_name
+            or not re.search(
+                rf'(?<![a-zA-Z0-9_]){re.escape(child_name)}(?![a-zA-Z0-9_])',
+                parent.get('ParserQuery', '')
+            )
+            or not built_in
+            or built_in not in parent.get('Parsers', [])
+        ):
+            raise ValueError(
+                f"Parser '{child_name}' must be registered in ParentParser "
+                f"'{parent_name}' under both ParserQuery and Parsers."
+            )
+        if immediate_parent is None:
+            immediate_parent = (parent, parent_path)
+        if parent_name == root_name:
+            return immediate_parent
+        current = parent
 
 # Function to read Exclusion list for ASim Parser test from a CSV file
 def read_exclusion_list_from_csv():

@@ -1,0 +1,131 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - Syslog
+    - VMwareESXi
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 48d992ba-d404-4159-a8c6-46f51d1325c7
+    path: Analytic Rules/ESXiLowPatchDiskSpace.yaml
+    version: 1.0.2
+    querySha256: c687a018192e04cf4d66033a020ce04db8dbc565982e73902b9bcfb2b7d1871e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity`
+      is provisionally represented by hosts.nameColumn `HostCustomEntity`; confirm
+      that this column is the intended host identifier. The original value is also
+      retained in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column
+      `HostCustomEntity`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `HostCustomEntity` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1529
+    reviewScope:
+      sourceDocumentSha256: e3de139db48dfecfa316ef370290a58b44eff5506e5ebeb52f20b4d1b55c8331
+      targetQuerySha256: cd1e364b9f35e47352a90c48a73ee9eea53283618a6627073f99396fe7cf6561
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query;
+        native 4-hour XDR lookback relies on Defender XDR alert deduplication across
+        hourly runs.
+      sourceDocumentSha256: e3de139db48dfecfa316ef370290a58b44eff5506e5ebeb52f20b4d1b55c8331
+      targetQuerySha256: cd1e364b9f35e47352a90c48a73ee9eea53283618a6627073f99396fe7cf6561
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: HostCustomEntity
+      column: HostCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+properties:
+  id: xdr-48d992ba-d404-4159-a8c6-46f51d1325c7
+  displayName: VMware ESXi - Low patch disk space
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 100;
+
+      VMwareESXi
+
+      | where SyslogMessage has (''Patch store disk'')
+
+      | extend sp = toreal(extract(@''free space is:\s(\d+)'', 1, SyslogMessage))
+      / 1000000000
+
+      | where sp < threshold
+
+      | extend h = ''Hypervisor''
+
+      | extend HostCustomEntity = h'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: VMware ESXi - Low patch disk space
+      description: '''This rule is triggered when low patch disk store space is detected.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1529
+      customDetails:
+        HostFullName: HostCustomEntity

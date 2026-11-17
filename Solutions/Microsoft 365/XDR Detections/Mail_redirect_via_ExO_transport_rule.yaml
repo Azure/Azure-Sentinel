@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (Exchange)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (Exchange)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 500415fb-bba7-4227-a08a-9857fb61b6a7
+    path: Analytic Rules/Mail_redirect_via_ExO_transport_rule.yaml
+    version: 2.0.4
+    querySha256: 86ddb15a4e883612bc2e7212894896531e86cde3eaa1beb99b2de88829e213d4
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserId`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Collection
+    - Exfiltration
+    originalTechniques:
+    - T1114
+    - T1020
+    reviewScope:
+      sourceDocumentSha256: 6b25980a111142168219b2d7411d6db8db3e6b7f571d2d2c1361cbb9f6e0932a
+      targetQuerySha256: 0167a4f0671da9810b6e7463394c1532dadc6873977b7ddc6824ed71db412853
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 6b25980a111142168219b2d7411d6db8db3e6b7f571d2d2c1361cbb9f6e0932a
+      targetQuerySha256: 0167a4f0671da9810b6e7463394c1532dadc6873977b7ddc6824ed71db412853
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-500415fb-bba7-4227-a08a-9857fb61b6a7
+  displayName: Mail redirect via ExO transport rule
+  status: disabled
+  queryCondition:
+    queryText: |-
+      OfficeActivity
+      | where OfficeWorkload == "Exchange"
+      | where Operation in~ ("New-TransportRule", "Set-TransportRule")
+      | mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))
+      | extend RuleName = case(
+          Operation =~ "Set-TransportRule", OfficeObjectId,
+          Operation =~ "New-TransportRule", ParsedParameters.Name,
+          "Unknown")
+      | mv-expand ExpandedParameters = todynamic(Parameters)
+      | where ExpandedParameters.Name in~ ("BlindCopyTo", "RedirectMessageTo") and isnotempty(ExpandedParameters.Value)
+      | extend RedirectTo = ExpandedParameters.Value
+      | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
+      | extend From = ParsedParameters.From
+      | project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, From, Operation, RuleName, Parameters
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Mail redirect via ExO transport rule
+      description: |-
+        'Identifies when Exchange Online transport rule configured to forward emails.
+        This could be an adversary mailbox configured to collect mail from multiple user accounts.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1114
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020
+      customDetails:
+        AccountFullName: UserId

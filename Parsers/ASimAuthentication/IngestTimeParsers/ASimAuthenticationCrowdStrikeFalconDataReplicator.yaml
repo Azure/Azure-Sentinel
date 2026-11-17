@@ -1,0 +1,129 @@
+Parser:
+  DisplayName: "Ingestion-time Authentication ASIM parser for CrowdStrike Falcon Data Replicator"
+  Version: "0.1.0"
+  LastUpdated: "2026-10-27"
+Product:
+  Name: "CrowdStrike Falcon Data Replicator"
+Normalization:
+  Schema: "Authentication"
+  Version: "1.0.0"
+Author: "Microsoft"
+Description: |
+  Normalizes CrowdStrike Falcon Data Replicator authentication events from
+  CrowdStrike_Auth_Events_CL to ASimAuthenticationEventLogs during ingestion.
+ParserName: "ASimAuthenticationCrowdStrikeFalconDataReplicator"
+DCRType: "Standard"
+InputStream: "Custom-CrowdStrike_Auth_Events_CL"
+SourceRawTable: "CrowdStrike_Auth_Events_CL"
+TargetASIMTable: "ASimAuthenticationEventLogs"
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend Type = "CrowdStrike_Auth_Events_CL"
+  // NOTE(DCR-LOSSY: 3.22 pack_all) - explicit raw-schema packing omits unavailable Log Analytics metadata; user-approved.
+  | extend SourceFields = pack("event_simpleName", event_simpleName, "timestamp", timestamp, "aip", aip,
+      "aid", aid, "UserName", UserName, "event_platform", event_platform, "ContextTimeStamp", ContextTimeStamp,
+      "name", name, "ConfigBuild", ConfigBuild, "CrowdStrikeId", CrowdStrikeId, "ConfigStateHash", ConfigStateHash,
+      "ContextProcessId", ContextProcessId, "ContextThreadId", ContextThreadId, "BoundingLimitCount", BoundingLimitCount, "BoundingLimitDuration", BoundingLimitDuration,
+      "Entitlements", Entitlements, "EffectiveTransmissionClass", EffectiveTransmissionClass, "cid", cid, "OciContainerId", OciContainerId,
+      "TreeId", TreeId, "LogonType", LogonType, "LogonTime", LogonTime, "UserIsAdmin", UserIsAdmin,
+      "LogonDomain", LogonDomain, "RemoteAccount", RemoteAccount, "ClientComputerName", ClientComputerName, "UserPrincipal", UserPrincipal,
+      "RawProcessId", RawProcessId, "UserSid", UserSid, "LogonServer", LogonServer, "AuthenticationPackage", AuthenticationPackage,
+      "AuthenticationId", AuthenticationId, "UserLogonFlags", UserLogonFlags, "RemoteAddressIP4", RemoteAddressIP4, "RemoteAddressIP6", RemoteAddressIP6,
+      "UserLogoffType", UserLogoffType, "LogoffTime", LogoffTime, "SessionId", SessionId, "UserFlags", UserFlags,
+      "PrivilegesBitmask", PrivilegesBitmask, "PasswordLastSet", PasswordLastSet, "EventOrigin", EventOrigin, "TargetProcessId", TargetProcessId,
+      "Status", Status, "EtwRawProcessId", EtwRawProcessId, "EtwRawThreadId", EtwRawThreadId, "SubStatus", SubStatus,
+      "LocalSession", LocalSession, "EnabledPrivilegesBitmask", EnabledPrivilegesBitmask, "UserGroupsBitmask", UserGroupsBitmask, "LinkedAuthenticationId", LinkedAuthenticationId,
+      "UserCanonical", UserCanonical, "LoginSessionId", LoginSessionId, "AuthenticationUuidAsString", AuthenticationUuidAsString, "UID", UID,
+      "AuthenticationUuid", AuthenticationUuid, "AuthenticationIdMac", AuthenticationIdMac, "ResendToCloud", ResendToCloud, "LogonId", LogonId,
+      "ConfigStateHashA1", ConfigStateHashA1, "AdditionalFields", AdditionalFields)
+  | extend
+      EventType = iff(event_simpleName startswith "UserLogoff", "Logoff", "Logon"),
+      EventResult = iff(event_simpleName startswith "UserLogonFailed", "Failure", "Success"),
+      EventOriginalSubType = LogonType,
+      EventOriginalResultDetails = strcat(Status, iff(isnotempty(SubStatus), strcat("/", SubStatus), "")),
+      EventStartTime = iif(isnotnull((datetime(1970-01-01) + (ContextTimeStamp) * 1s)), (datetime(1970-01-01) + (ContextTimeStamp) * 1s), iif(isnotnull((datetime(1970-01-01) + (timestamp) * 1ms)), (datetime(1970-01-01) + (timestamp) * 1ms), iif(isnotnull((datetime(1970-01-01) + (iff(event_simpleName startswith "UserLogoff", LogoffTime, LogonTime)) * 1s)), (datetime(1970-01-01) + (iff(event_simpleName startswith "UserLogoff", LogoffTime, LogonTime)) * 1s), TimeGenerated))),
+      DvcIpAddr = iif(isnotempty(tostring(AdditionalFields.LocalAddressIP4)), tostring(AdditionalFields.LocalAddressIP4), iif(isnotempty(tostring(AdditionalFields.LocalAddressIP6)), tostring(AdditionalFields.LocalAddressIP6), aip)),
+      ComputerName = tostring(AdditionalFields.ComputerName),
+      SrcIpAddr = iif(isnotempty(RemoteAddressIP4), RemoteAddressIP4, RemoteAddressIP6),
+      TargetUsername = iif(isnotempty(UserPrincipal), UserPrincipal, iif(isnotempty(UserCanonical), UserCanonical, iff(isnotempty(LogonDomain) and isnotempty(UserName) and UserName !contains "\\" and UserName !contains "@", strcat(LogonDomain, "\\", UserName), UserName))),
+      TargetUserId = iif(isnotempty(UserSid), UserSid, UID),
+      TargetUserIdType = case(isnotempty(UserSid), "SID", isnotempty(UID), "UID", ""),
+      TargetUserType = case(UserIsAdmin == "1", "Admin", UserIsAdmin == "0", "Regular", ""),
+      TargetSessionId = iif(isnotempty(AuthenticationUuidAsString), AuthenticationUuidAsString, iif(isnotempty(AuthenticationUuid), AuthenticationUuid, iif(isnotempty(AuthenticationId), AuthenticationId, iif(isnotempty(AuthenticationIdMac), AuthenticationIdMac, iif(isnotempty(LogonId), LogonId, iif(isnotempty(LoginSessionId), LoginSessionId, SessionId)))))),
+      DvcOs = case(event_platform =~ "Win", "Windows", event_platform =~ "Mac", "macOS", event_platform =~ "Lin", "Linux", event_platform)
+  | extend
+      EventEndTime = EventStartTime,
+      EventSubType = case(LogonType == "0", "System", LogonType in ("2", "7", "11"), "Interactive", LogonType == "3", "Remote", LogonType == "5", "Service", LogonType == "8", "NetworkCleartext", LogonType == "10", "RemoteInteractive", ""),
+      EventResultDetails = iff(EventResult == "Failure", "Other", ""),
+      TargetUsernameType = case(TargetUsername contains "@", "UPN", TargetUsername contains "\\", "Windows", isnotempty(TargetUsername), "Simple", ""),
+      DvcHostname = iff(tostring(split(ComputerName, ".")[0]) matches regex @"^[a-zA-Z0-9-]{1,61}$", tostring(split(ComputerName, ".")[0]), ""),
+      DvcDomain = iff(ComputerName contains ".", substring(ComputerName, indexof(ComputerName, ".") + 1), ""),
+      DvcFQDN = iff(ComputerName contains ".", ComputerName, ""),
+      SrcHostname = iff(tostring(split(ClientComputerName, ".")[0]) matches regex @"^[a-zA-Z0-9-]{1,61}$", tostring(split(ClientComputerName, ".")[0]), ""),
+      SrcDomain = iff(ClientComputerName contains ".", substring(ClientComputerName, indexof(ClientComputerName, ".") + 1), ""),
+      SrcFQDN = iff(ClientComputerName contains ".", ClientComputerName, "")
+  | project-rename
+      EventOriginalType = event_simpleName,
+      DvcId = aid,
+      DvcScopeId = cid,
+      TargetUserSid = UserSid,
+      TargetUserUid = UID,
+      TargetUserUpn = UserPrincipal,
+      TargetUserScope = LogonDomain,
+      TargetOriginalUserType = UserIsAdmin,
+      LogonProtocol = AuthenticationPackage
+  | extend
+      Dvc = iif(isnotempty(DvcFQDN), DvcFQDN, iif(isnotempty(DvcHostname), DvcHostname, iif(isnotempty(DvcId), DvcId, iif(isnotempty(DvcIpAddr), DvcIpAddr, ComputerName)))),
+      DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+      DvcDomainType = iff(isnotempty(DvcDomain), "FQDN", ""),
+      SrcDomainType = iff(isnotempty(SrcDomain), "FQDN", ""),
+      Src = iif(isnotempty(SrcIpAddr), SrcIpAddr, iif(isnotempty(SrcFQDN), SrcFQDN, SrcHostname)),
+      TargetHostname = DvcHostname,
+      TargetDomain = DvcDomain,
+      TargetDomainType = iff(isnotempty(DvcDomain), "FQDN", ""),
+      TargetFQDN = DvcFQDN,
+      TargetDvcId = DvcId,
+      TargetDvcIdType = iff(isnotempty(DvcId), "Other", ""),
+      TargetIpAddr = DvcIpAddr,
+      TargetDvcOs = DvcOs,
+      TargetDvcScopeId = DvcScopeId,
+      EventCount = int(1),
+      EventVendor = "CrowdStrike",
+      EventProduct = "Falcon Data Replicator",
+      EventSchema = "Authentication",
+      EventSchemaVersion = "1.0.0",
+      EventSeverity = "Informational",
+      DvcEntityKey = "",
+      ActorUserEntityKey = "",
+      ActorUserAdditionalIds = parse_json('[]'),
+      TargetUserEntityKey = "",
+      TargetUserAdditionalIds = parse_json('[]'),
+      SrcSystemEntityKey = "",
+      TargetSystemEntityKey = "",
+      ActingApplicationEntityKey = "",
+      TargetApplicationEntityKey = "",
+      AdditionalEntities = parse_json('[]'),
+      AdditionalFields = SourceFields
+  | extend Dst = Dvc, User = TargetUsername, IpAddr = SrcIpAddr
+  | project
+      TimeGenerated, Type, EventStartTime, EventEndTime, EventCount,
+      EventVendor, EventProduct, EventSchema, EventSchemaVersion, EventSeverity,
+      EventType, EventSubType, EventResult, EventResultDetails,
+      EventOriginalType, EventOriginalSubType, EventOriginalResultDetails,
+      Dvc, DvcId, DvcIdType, DvcIpAddr, DvcHostname, DvcDomain, DvcDomainType,
+      DvcFQDN, DvcOs, DvcScopeId, DvcEntityKey,
+      Src, SrcIpAddr, SrcHostname, SrcDomain, SrcDomainType, SrcFQDN,
+      TargetHostname, TargetDomain, TargetDomainType, TargetFQDN,
+      TargetDvcId, TargetDvcIdType, TargetIpAddr, TargetDvcOs, TargetDvcScopeId,
+      TargetUsername, TargetUsernameType, TargetUserId, TargetUserIdType,
+      TargetUserSid, TargetUserUid, TargetUserUpn, TargetUserScope,
+      TargetUserType, TargetOriginalUserType, TargetSessionId, LogonProtocol,
+      Dst, User, IpAddr, ActorUserEntityKey, ActorUserAdditionalIds,
+      TargetUserEntityKey, TargetUserAdditionalIds, SrcSystemEntityKey,
+      TargetSystemEntityKey, ActingApplicationEntityKey, TargetApplicationEntityKey,
+      AdditionalEntities, AdditionalFields
+Change:
+  Date: "2026-10-27"
+  Description: "Initial ingestion-time conversion of query-time parser 0.1.0; raw-schema packing excludes unavailable Log Analytics metadata."

@@ -1,5 +1,17 @@
 # Changelog for imAlertEvent.yaml
 
+## Version 0.2.5
+
+- (2026-11-09) Add Google Cloud Security Command Center AlertEvent parser. - [PR #15638](https://github.com/Azure/Azure-Sentinel/pull/15638)
+
+## Version 0.2.4
+
+- (2026-11-04) Added the native parser - [PR #15556](https://github.com/Azure/Azure-Sentinel/pull/15556)
+
+## Version 0.2.3
+
+- (2026-10-30) Add Salesforce Real-Time Event Monitoring AlertEvent parser. - [PR #15514](https://github.com/Azure/Azure-Sentinel/pull/15514)
+
 ## Version 0.2.2
 
 - (2026-10-08) Corrected the Bitdefender GravityZone, Microsoft Defender XDR, SentinelOne Singularity, and Google SecOps parser disable watchlist keys - [PR #15291](https://github.com/Azure/Azure-Sentinel/pull/15291)

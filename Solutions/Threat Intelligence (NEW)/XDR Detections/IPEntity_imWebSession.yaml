@@ -1,0 +1,156 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SquidProxy
+  dataTypes:
+  - SquidProxy_CL
+- connectorId: Zscaler
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - SquidProxy_CL
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+    - SquidProxy_CL
+  - connectorId: Zscaler
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0548be6c-135e-4eb6-b9ff-14a09df62c77
+    path: Analytic Rules/IPEntity_imWebSession.yaml
+    version: 1.2.11
+    querySha256: 1ba4faeea860ec3739204fa4e3e60841c3d38ad26fae3ef8e77a90f40227c984
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventTime' column `imNWS_TimeGenerated` requires runtime output-schema binding verification
+    - customDetails 'IoCDescription' column `Description` requires runtime output-schema binding verification
+    - customDetails 'ActivityGroupNames' column `ActivityGroupNames` requires runtime output-schema binding verification
+    - customDetails 'IndicatorId' column `IndicatorId` requires runtime output-schema binding verification
+    - customDetails 'ThreatType' column `ThreatType` requires runtime output-schema binding verification
+    - customDetails 'IoCExpirationTime' column `ValidUntil` requires runtime output-schema binding verification
+    - customDetails 'IoCConfidenceScore' column `Confidence` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: d5fbc79aee9d7891fefe19010a96e1a138e4483c7152c7055114eb02616a1fd1
+      targetQuerySha256: c3c4a4968a457941e0535f2dee8246836c3d5af4a8bc02ec27a403473bee526b
+properties:
+  id: xdr-0548be6c-135e-4eb6-b9ff-14a09df62c77
+  displayName: TI Map IP entity to Web Session Events (ASIM Web Session schema)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let HAS_ANY_MAX = 10000;
+      let dt_lookBack = 1h;
+      let ioc_lookBack = 14d;
+      let IP_TI = ThreatIntelIndicators
+      //extract key part of kv pair
+           | extend IndicatorType = replace(@"\[|\]|\""", "", tostring(split(ObservableKey, ":", 0)))
+           | where IndicatorType in ("ipv4-addr", "ipv6-addr", "network-traffic")
+           | extend NetworkSourceIP = toupper(ObservableValue)
+           | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)
+        | where TimeGenerated >= ago(ioc_lookBack)
+        // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+        // Taking the first non-empty value based on potential IOC match availability
+        | extend TI_ipEntity = NetworkSourceIP
+        // Picking up only IOC's that contain the entities we want
+        | where TI_ipEntity != "NO_IP"
+        // Exclude local addresses, using the ipv4_is_private operator
+        | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+        | extend ThreatType = tostring(Data.indicator_types[0])
+        | extend IndicatorId = tostring(split(Id, "--")[2])
+        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId, ObservableValue
+        | where IsActive and (ValidUntil > now() or isempty(ValidUntil));
+      let IP_TI_list = toscalar(IP_TI
+        | summarize NIoCs = dcount(TI_ipEntity), IoCs = make_set(TI_ipEntity)
+        | project IoCs = iff(NIoCs > HAS_ANY_MAX, dynamic([]), IoCs));
+      IP_TI
+         | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity
+      // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+      | join kind = innerunique (
+          _Im_WebSession (starttime = ago(dt_lookBack), srcipaddr_has_any_prefix = IP_TI_list)
+          | where isnotempty(SrcIpAddr)
+          // renaming time column so it is clear the log this came from
+          | extend imNWS_TimeGenerated = TimeGenerated
+        )
+        on $left.TI_ipEntity == $right.SrcIpAddr
+      | where imNWS_TimeGenerated < ValidUntil
+      | summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated, *) by IndicatorId, DstIpAddr
+      | extend Description = tostring(parse_json(Data).description)
+      | extend ActivityGroupNames = extract(@"ActivityGroup:(\S+)", 1, tostring(parse_json(Data).labels))
+      | project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ValidUntil, Confidence, TI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Url
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP entity to Web Session Events (ASIM Web Session schema)
+      description: This rule identifies Web Sessions for which the source IP address is a known IoC. This rule uses the [Advanced
+        Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with
+        ASIM.
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: DstIpAddr
+        - id: ip2
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        EventTime: imNWS_TimeGenerated
+        IoCDescription: Description
+        ActivityGroupNames: ActivityGroupNames
+        IndicatorId: IndicatorId
+        ThreatType: ThreatType
+        IoCExpirationTime: ValidUntil
+        IoCConfidenceScore: Confidence

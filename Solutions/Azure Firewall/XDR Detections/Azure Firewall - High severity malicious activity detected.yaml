@@ -1,0 +1,119 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureFirewall
+  dataTypes:
+  - AZFWIdpsSignature
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes: []
+  requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes:
+    - AZFWIdpsSignature
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 504257c1-81e2-4609-8d40-b395e62f11c7
+    path: Analytic Rules/Azure Firewall - High severity malicious activity detected.yaml
+    version: 1.0.1
+    querySha256: bc4d4c1ae002c6c3ab64610835cc15d63e00d259bc68bd2a77ae5e7dd9ad0932
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 24h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=24h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Exfiltration
+    - CredentialAccess
+    - CommandAndControl
+    - Execution
+    originalTechniques:
+    - T1190
+    - T1041
+    - T1003
+    - T1204
+    reviewScope:
+      sourceDocumentSha256: 1b144770d403b463178b8c3620ffb4c8e6c6f12752583ee4cdfa0a055c9f3c95
+      targetQuerySha256: afa0a5917d1618891b7a12489149ebd88a673a255ebe7c5f24b1588e209a1f43
+properties:
+  id: xdr-504257c1-81e2-4609-8d40-b395e62f11c7
+  displayName: High severity malicious activity detected
+  status: disabled
+  queryCondition:
+    queryText: "let TimeWindow   = 90d;    // How far back to look\nlet HitThreshold\
+      \ = 10;     // Minimum hits to alert per SourceIp + Category\nlet MinSeverity\
+      \  = 1;      // Set Minimum Severity\nlet EnableCategoryFilter    = true;  \
+      \ // Filter 1: use CategoriesOfInterest\nlet EnableDescriptionFilter = false;\
+      \  // Filter 2: use DescriptionsOfInterest\nlet EnableActionFilter      = false;\
+      \  // Filter 3: use MatchActions\nlet CategoriesOfInterest    = dynamic([\n\
+      \    \"Targeted Malicious Activity was Detected\",\n    \"Exploit Kit Activity\
+      \ Detected\",\n    \"Domain Observed Used for C2 Detected\",\n    \"Successful\
+      \ Credential Theft Detected\",\n    \"Malware Command and Control Activity Detected\"\
+      ,\n    \"Executable code was detected\",\n    \"A Network Trojan was detected\"\
+      \n]);\nlet DescriptionsOfInterest  = dynamic([\n    \"targeted-activity\",\n\
+      \    \"exploit-kit\",\n    \"domain-c2\",\n    \"credential-theft\",\n    \"\
+      command-and-control\",\n    \"shellcode-detect\",\n    \"trojan-activity\"\n\
+      ]);\nlet MatchActions = dynamic([\"Deny\", \"alert\"]);\nAZFWIdpsSignature\n\
+      | where TimeGenerated >= ago(TimeWindow)\n| where Severity >= MinSeverity\n\
+      // Filter 1: Category filter (optional)\n| where (EnableCategoryFilter == false)\
+      \ or (Category has_any (CategoriesOfInterest))\n// Filter 2: Description filter\
+      \ (optional)\n| where (EnableDescriptionFilter == false) or (Description has_any\
+      \ (DescriptionsOfInterest))\n// Filter 3: Action filter (optional)\n| where\
+      \ (EnableActionFilter == false) or (Action in~ (MatchActions))\n| summarize\n\
+      \    StartTime   = min(TimeGenerated),\n    EndTime     = max(TimeGenerated),\n\
+      \    TotalHits   = count(),\n    MaxSeverity = max(Severity),\n    Actions \
+      \    = make_set(Action, 5),\n    Signatures  = make_set(SignatureId, 20),\n\
+      \    Description = make_set(substring(tostring(Description), 0, 120), 3)\n \
+      \   by SourceIp, ThreatCategory = Category\n| where TotalHits >= HitThreshold\n\
+      | project\n    StartTime,\n    EndTime,\n    SourceIp,\n    ThreatCategory,\n\
+      \    TotalHits,\n    MaxSeverity,\n    Actions,\n    Signatures,\n    Description\n\
+      | order by MaxSeverity desc, TotalHits desc"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: High severity malicious activity detected
+      description: Identifies high severity malicious activity in Azure Firewall IDPS
+        logs.
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1041
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1003
+      - tactic: CommandAndControl
+      - tactic: Execution
+        techniques:
+        - technique: T1204

@@ -1,0 +1,139 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 746ddb63-f51b-4563-b449-a8b13cf302ec
+    path: Analytic Rules/UserAssignedNewPrivilegedRole.yaml
+    version: 1.0.2
+    querySha256: 130eaf363328c3d8393f449e857fea209647d96b535a8ba3634e4c888851c958
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 2h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=2h, lookback=2h; target frequency=PT2H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Target`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Target` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName_2 from query column `InitiatingUserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName_2 column `InitiatingUserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1078.004
+    reviewScope:
+      sourceDocumentSha256: cb68484b90d44f51f60392874f94e06845040da16df59b8872fd4fd12100be65
+      targetQuerySha256: d87e8e8d2377778c0ba1b38064a6348612f576726db7b5d62ad626bf356d296a
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Target
+      column: Target
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName_2
+properties:
+  id: xdr-746ddb63-f51b-4563-b449-a8b13cf302ec
+  displayName: User Assigned New Privileged Role
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AuditLogs
+      | where Category =~ "RoleManagement"
+      | where AADOperationType in ("Assign", "AssignEligibleRole", "CreateRequestGrantedRole", "CreateRequestPermanentEligibleRole", "CreateRequestPermanentGrantedRole")
+      | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+      | mv-apply TargetResourceSubject = TargetResources on
+        (
+            where TargetResourceSubject.type in~ ("User", "ServicePrincipal")
+            | extend Target = iff(TargetResourceSubject.type =~ "ServicePrincipal", tostring(TargetResourceSubject.displayName), tostring(TargetResourceSubject.userPrincipalName)),
+                     subjectProps = TargetResourceSubject.modifiedProperties
+        )
+      | mv-apply TargetResourceRole = TargetResources on
+        (
+          // mimic modifiedProperties so we can use the same logic to get the role name regardless of where it comes from
+          where TargetResourceRole.type in~ ("Role")
+          | extend roleProps = pack_array(bag_pack("displayName","Role.DisplayName", "newValue", TargetResourceRole.displayName))
+        )
+      | mv-apply Property = iff(array_length(subjectProps) > 0, subjectProps, roleProps) on
+        (
+          where Property.displayName =~ "Role.DisplayName"
+            | extend RoleName = trim('"',tostring(Property.newValue))
+        )
+      | where RoleName contains "Admin"
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
+      // Comment below to alert for PIM activations
+      | where Initiator != "MS-PIM" and Initiator != "MS-PIM-Fairfax"
+      | summarize by bin(TimeGenerated, 1h), OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result
+      | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: User Assigned New Privileged Role
+      description: |-
+        'Identifies when a new eligible or active privileged role is assigned to a user. Does not alert on PIM activations. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: TargetName
+          upnSuffixColumn: TargetUPNSuffix
+        - id: account2
+          nameColumn: InitiatorName
+          upnSuffixColumn: InitiatorUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        - id: account4
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      customDetails:
+        AccountFullName: Target
+        AccountFullName_2: InitiatingUserPrincipalName

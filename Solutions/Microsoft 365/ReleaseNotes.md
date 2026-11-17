@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.2       | 25-10-2026                     | Added Defender XDR **Custom Detections** and **XDR Workbooks** for Sentinel to Defender XDR migration. |
 | 3.0.5       | 04-02-2025                     | Updated **Analytic Rule** MailItemsAccessedTimeSeries.yaml    |
 | 3.0.4       | 27-08-2024                     | Updated **Analytic Rule**  for Same names     |
 | 3.0.3       | 12-06-2024                     | Updated **Analytic Rule**  for Bug Fixes ExternalUserAddedRemovedInTeams.yaml      |

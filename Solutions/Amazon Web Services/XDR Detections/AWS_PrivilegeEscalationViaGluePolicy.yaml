@@ -1,0 +1,116 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 370f0e5e-da1d-4a14-8ced-d1d7ab66a8d7
+    path: Analytic Rules/AWS_PrivilegeEscalationViaGluePolicy.yaml
+    version: 1.0.2
+    querySha256: dfb88ec1cfeb4272c2b22da2e85a89e2ab21030685a65bca8d37e1a33bc93cc2
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'PolicyName' column `PolicyName` requires runtime output-schema binding verification
+    - customDetails 'EventName' column `EventName` requires runtime output-schema binding verification
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` requires runtime output-schema binding verification
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` requires runtime output-schema binding verification
+    - Account.CloudAppAccountId value is retained as customDetails.RecipientAccountId from query column `RecipientAccountId`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.RecipientAccountId column `RecipientAccountId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1098.003
+    reviewScope:
+      sourceDocumentSha256: 3141e17c0dde4fdf30cf6bd3f2b16d325b0bce31a856ff74404cdcf54d60471b
+      targetQuerySha256: 6bb90ae1420b5ce619a1eda1ce99fa75c7b8f1cce91241b80d1198a982bbb528
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: runtime-binding-pending
+      customDetailKey: RecipientAccountId
+properties:
+  id: xdr-370f0e5e-da1d-4a14-8ced-d1d7ab66a8d7
+  displayName: AWSCloudTrail - Privilege escalation via Glue policy
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSCloudTrail
+        | where EventName in ("PutUserPolicy","PutRolePolicy","PutGroupPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+        | extend PolicyName = tostring(parse_json(RequestParameters).policyName)
+        | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement
+        | mvexpand Statement
+        | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)
+        | extend Action = tostring(Action)
+        | where Effect =~ "Allow" and ((((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "glue:*") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "glue:CreateDevEndpoint" and Action contains "glue:GetDevEndpoints") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "glue:Create*" and Action contains "glue:Get*")) or (Action contains "glue:*") or (Action contains "glue:GetDevEndpoints" and Action contains "glue:UpdateDevEndpoint") or (Action contains "glue:Get*" and Action contains "glue:Update*")) and Resource == "*" and Condition == ""
+        | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+        | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+        | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+        | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+          AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+        | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Privilege escalation via Glue policy
+      description: |-
+        Detects inline IAM policy updates that grant broad AWS Glue permissions or Glue actions paired with IAM
+        privileges such as iam:PassRole. This pattern can enable elevated execution paths and indicates potential
+        privilege escalation through expanded cloud role capabilities.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: PrivilegeEscalation
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+      customDetails:
+        PolicyName: PolicyName
+        EventName: EventName
+        UserIdentityArn: UserIdentityArn
+        RecipientAccountId: RecipientAccountId

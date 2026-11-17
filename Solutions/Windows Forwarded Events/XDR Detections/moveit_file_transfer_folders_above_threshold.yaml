@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: WindowsForwardedEvents
+  dataTypes:
+  - WindowsEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Event
+  requiredDataConnectors:
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+    - WindowsEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 26a993ca-0a96-45a0-8405-05a210fb98f8
+    path: Analytic Rules/moveit_file_transfer_folders_above_threshold.yaml
+    version: 1.0.2
+    querySha256: 614d8207f866ea6f417c2390a474340e6f6a172a7258c2821bf3e72ff1cec202
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - customDetails 'TransferCount' column `count_distinct_folderpath` requires runtime output-schema binding verification
+    - customDetails 'FilesList' column `dirlist` requires runtime output-schema binding verification
+    - Account.Name value is retained as customDetails.AccountName from query column `userdisplayname`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `userdisplayname` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1020
+    reviewScope:
+      sourceDocumentSha256: 012d2c9ced90beaf77e343b957dd74ea2c74939796bb2cfbdcabdb08b323dccb
+      targetQuerySha256: 3e20cbd0ee2601a4546fdaa49dc701c093ddfabc6fe04a5780729277abc1b8bb
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: userdisplayname
+      column: userdisplayname
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-26a993ca-0a96-45a0-8405-05a210fb98f8
+  displayName: Progress MOVEIt File transfer folder count above threshold
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 500;
+      Event
+      | where EventID == 0 and Source == "MOVEit DMZ Audit" and EventLog == "Application"
+      | where RenderedDescription has_any ("Downloaded", "Uploaded")
+      | parse RenderedDescription with * "User '" userdisplayname "' (" *
+      | parse RenderedDescription with * "IPAddress: " ipaddress " FileID:" * " FileName: " filename " FolderID: " folderid " FolderPath: " folderpath " Username: " username " AgentBrand: " *
+      | summarize count_distinct_folderpath=dcount(folderpath), dirlist=make_set(folderpath) by Computer,userdisplayname,username,ipaddress,bin(TimeGenerated, 15m)
+      | where count_distinct_folderpath >= threshold
+      | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField","_", tostring(hash(tostring(dirlist)))))
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: Progress MOVEIt File transfer folder count above threshold
+      description: |-
+        'Identifies Progress MOVEIt File Transfers  with distinct folder count above certain threshold in a 15min time period.
+         Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: ipaddress
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020
+      customDetails:
+        TransferCount: count_distinct_folderpath
+        FilesList: dirlist
+        AccountName: userdisplayname
+        DirSample: DirSample

@@ -1,0 +1,106 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureSecurityCenter
+  dataTypes:
+  - SecurityRegulatoryCompliance
+contentProvenance:
+  requiredWorkloads:
+  - workload: mdc
+    dataTypes:
+    - SecurityRegulatoryCompliance
+  requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+    - SecurityRegulatoryCompliance
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7bfe573b-3069-4e81-98fe-9a4cffbcbc24
+    path: Analytic Rules/CMMC2.0Level2AdvancedPosture.yaml
+    version: 1.0.1
+    querySha256: 045ddfe249fcbfb14fb1b1a950713676c9e7b75c5a410e1b2d6f179db71aa18a
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'ComplianceStandard' column `ComplianceStandard` requires runtime output-schema binding verification
+    - customDetails 'MaturityLevel' column `Level` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1082
+    reviewScope:
+      sourceDocumentSha256: 8a60f97754badb4765d8cb366872d4886e40fd2bed5bbd0d6f0fd3d5aaf20f8f
+      targetQuerySha256: 4f66dfe1d7799a6e9ccebe2470966d66f0ab862fae594ad42b4c28c9c2a4fd57
+properties:
+  id: xdr-7bfe573b-3069-4e81-98fe-9a4cffbcbc24
+  displayName: CMMC 2.0 Level 2 (Advanced) Readiness Posture
+  status: disabled
+  queryCondition:
+    queryText: 'SecurityRegulatoryCompliance
+
+      | where ComplianceStandard == "NIST-SP-800-171-R2"
+
+      | extend Level=iff(ComplianceControl in ("3.1.1","3.1.2","3.1.20","3.1.22","3.4.1","3.5.2","3.5.2","3.8.3","3.13.1","3.13.5","3.14.1","3.14.2","3.14.4","3.14.5"), "Level 1: Foundational","Level 2: Advanced")
+
+      | where Level == "Level 2: Advanced"
+
+      | summarize arg_max(TimeGenerated, *) by RecommendationName, AssessedResourceId, Level
+
+      | extend DeviceName = extract(@"(?i)/providers/[^/]+/(?:virtualmachines|machines)/([^/]+)$", 1, tostring(AssessedResourceId))
+
+      | summarize Failed=countif(State=="Failed"),Passed=countif(State=="Passed"),Total=countif(State=="Passed" or State == "Failed"), AffectedHosts=make_set_if(DeviceName, State=="Failed" and isnotempty(DeviceName)) by Level
+
+      | extend PassedControlsPercentage = (Passed/todouble(Total))*100
+
+      | where PassedControlsPercentage < 70
+
+      //Adjust Either Passed Thresholds within Organizational Needs
+
+      | mv-expand DeviceName = AffectedHosts
+
+      | extend DeviceName = tostring(DeviceName)
+
+      | extend RemediationLink = strcat(''https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22'')
+
+      | project Level, ComplianceStandard="CMMC 2.0", Total, PassedControlsPercentage, Passed, Failed, RemediationLink, DeviceName, LastObserved=now()
+
+      | extend URLCustomEntity = RemediationLink'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: CMMC 2.0 Level 2 (Advanced) Readiness Posture
+      description: '''CMMC 2.0 Level 2 (Advanced) assessments have deviated from configured threshold baselines. This alert is triggered when CMMC2.0 policy compliance is assessed below 70% compliance in 7 days.'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: URLCustomEntity
+        hosts:
+        - id: host1
+          nameColumn: DeviceName
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1082
+      customDetails:
+        ComplianceStandard: ComplianceStandard
+        MaturityLevel: Level

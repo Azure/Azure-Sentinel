@@ -193,7 +193,7 @@ After the TypeScript validators, the script runs 3 additional .NET test projects
 | **Detection Schema** | .NET Core 3.1 | **Solution only** — runs tests matching the solution's Analytic Rules files | Detection/analytics rule schema compliance — required fields, string lengths, entity mappings, connector IDs, no duplicate template IDs |
 | **Non-ASCII** | .NET Core 3.1 | **Solution only** — runs tests matching the solution's content files | Scans scoped solution YAML/JSON files for non-ASCII characters (outside `U+0000`–`U+007F`) |
 | **KQL** | .NET 8.0 | **Solution only** — runs tests matching the solution's Analytic Rules, Hunting Queries, Parsers, and Data Connectors | KQL query syntax validation using the Sentinel KQL analyzer |
-| **ARM-TTK** | PowerShell | **Solution only** — validates Package/mainTemplate.json and Package/createUiDefinition.json | ARM template best-practice testing using the [Azure ARM-TTK](https://github.com/Azure/arm-ttk) module. Runs `Test-AzTemplate` with the same skips and error filters as `.github/actions/entrypoint.ps1`. Module auto-clones from GitHub on first run (to `.arm-ttk/`, gitignored). |
+| **ARM-TTK** | PowerShell | **Solution only** — validates Package/mainTemplate.json and Package/createUiDefinition.json | ARM template best-practice testing using the [Azure ARM-TTK](https://github.com/Azure/arm-ttk) module. Runs `Test-AzTemplate` with the same tests and exemptions as `.github/actions/entrypoint.ps1`; both load `.script/package-automation/arm-ttk-sentinel-filters.ps1`. Module auto-clones from GitHub on first run (to `.arm-ttk/`, gitignored). |
 
 **How solution scoping works:** The .NET test projects may enumerate repository paths during test discovery, but filters restrict which tests execute to the selected solution's files. File discovery is separate from validation scope.
 
@@ -232,7 +232,7 @@ then independently checks the exact target runtimes required by the test project
   ⏭  Detection Schema validation skipped — .NET Core 3.1 runtime not installed.
      Install it from: https://dotnet.microsoft.com/download/dotnet/3.1
   ```
-- **ARM-TTK** uses the ARM-TTK PowerShell module to run `Test-AzTemplate` — the same checks as `.github/actions/entrypoint.ps1` with identical skips and `contentProductId`/`id` error filters. The module auto-clones from GitHub on first run (stored in `.arm-ttk/`, gitignored). If the `Package/` folder exists, ARM-TTK runs automatically.
+- **ARM-TTK** uses the ARM-TTK PowerShell module to run `Test-AzTemplate` — the same checks as `.github/actions/entrypoint.ps1`, sharing `.script/package-automation/arm-ttk-sentinel-filters.ps1`: no tests are skipped, only exact Sentinel content-identifier properties (`id`, `contentProductId`, `packageId`, `fromTemplateId`, `chartId`, `columnId`) and `customDetails` `*Id` column names are exempt from the resource-ID test, and blanks are allowed only inside workbook payloads (classic `serializedData`, Defender workbook `properties.content`). The module auto-clones from GitHub on first run (stored in `.arm-ttk/`, gitignored). If the `Package/` folder exists, ARM-TTK runs automatically.
 - If the solution has **no relevant content files** (e.g., no Analytic Rules) → skips with:
   ```
   ⏭  Detection Schema validation skipped — no Analytic Rules found in <SolutionName>.

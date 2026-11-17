@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            	|
 |-------------|--------------------------------|----------------------------------------------------------------|
+| 3.2.2       | 21-10-2026                     | Added Microsoft Defender XDR Custom Detections migrated from the **Analytic Rules** and a Defender XDR version of the **Workbook**; updated **Analytic Rule** New High Severity Vulnerability Detected Across Multiple Hosts. |
 | 3.1.1       | 22-09-2026                     | Updated the Playbooks to fix the Azure deploy button issue for GOV and corrected the parameter value for Service Endpoint. |
 | 3.1.0       | 14-09-2026                     | Updated the **QualysHostDetection Parser** to reliably parse both single-object and array detection responses from the CCF connector. |
 | 3.0.11       | 10-09-2026                     | Updated the Qualys Host Detection Parser to deduplicate repeated V3 snapshots using stable vulnerability content and lifecycle fields, preserve ingestion TimeGenerated, and expose the source timestamp as DetectionTime. Updated the CCP Data Connector to use explicit table references for Defender portal query compatibility. |

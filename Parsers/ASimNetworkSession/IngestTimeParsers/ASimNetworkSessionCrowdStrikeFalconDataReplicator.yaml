@@ -1,0 +1,218 @@
+Parser:
+  DisplayName: "Ingestion-time Network Session ASIM parser for CrowdStrike Falcon Data Replicator"
+  Version: "0.1.0"
+  LastUpdated: "2026-10-27"
+Product:
+  Name: "CrowdStrike Falcon Data Replicator"
+Normalization:
+  Schema: "NetworkSession"
+  Version: "1.0.0"
+Author: "Microsoft"
+Description: |
+  Normalizes CrowdStrike_Network_Events_CL connection, accept, listen, close, raw-bind, and firewall-match events to ASimNetworkSessionLogs during ingestion.
+ParserName: "ASimNetworkSessionCrowdStrikeFalconDataReplicator"
+DCRType: "Standard"
+InputStream: "Custom-CrowdStrike_Network_Events_CL"
+SourceRawTable: "CrowdStrike_Network_Events_CL"
+TargetASIMTable: "ASimNetworkSessionLogs"
+ParserFilterQuery: |
+  source
+  | where event_simpleName in (
+      "NetworkConnectIP4", "NetworkConnectIP6",
+      "NetworkReceiveAcceptIP4", "NetworkReceiveAcceptIP6",
+      "NetworkListenIP4", "NetworkListenIP6",
+      "NetworkCloseIP4", "NetworkCloseIP6",
+      "RawBindIP4", "RawBindIP6",
+      "FirewallRuleIP4Matched", "FirewallRuleIP6Matched")
+ParserQuery: |
+  source
+  | extend Type = "CrowdStrike_Network_Events_CL"
+  | where event_simpleName in (
+      "NetworkConnectIP4", "NetworkConnectIP6",
+      "NetworkReceiveAcceptIP4", "NetworkReceiveAcceptIP6",
+      "NetworkListenIP4", "NetworkListenIP6",
+      "NetworkCloseIP4", "NetworkCloseIP6",
+      "RawBindIP4", "RawBindIP6",
+      "FirewallRuleIP4Matched", "FirewallRuleIP6Matched")
+  | extend
+      _LocalIp = iff(event_simpleName contains "IP6",
+          iif(isnotempty(LocalAddressIP6), LocalAddressIP6, LocalAddressIP4),
+          iif(isnotempty(LocalAddressIP4), LocalAddressIP4, LocalAddressIP6)),
+      _RemoteIp = iff(event_simpleName contains "IP6",
+          iif(isnotempty(RemoteAddressIP6), RemoteAddressIP6, RemoteAddressIP4),
+          iif(isnotempty(RemoteAddressIP4), RemoteAddressIP4, RemoteAddressIP6)),
+      NetworkDirection = case(
+          event_simpleName startswith "NetworkReceiveAccept", "Inbound",
+          event_simpleName startswith "NetworkConnect", "Outbound",
+          event_simpleName startswith "NetworkListen", "Listen",
+          ConnectionDirection == "0", "Outbound",
+          ConnectionDirection == "1", "Inbound",
+          "Unknown"),
+      _Action = tolower(iif(isnotempty(FirewallAction), FirewallAction, RuleAction)),
+      _Mac = replace("-", ":", tolower(PhysicalAddress)),
+      _UsernameType = case(
+          isempty(UserName), "",
+          UserName contains "\\", "Windows",
+          UserName contains "@", "UPN",
+          "Simple")
+  | extend
+      _IsInbound = NetworkDirection == "Inbound",
+      _IsLocalSource = NetworkDirection in ("Outbound", "Listen"),
+      DvcAction = case(
+          _Action in ("allow", "allowed", "permit", "permitted"), "Allow",
+          _Action in ("block", "blocked", "deny", "denied"), "Deny",
+          _Action in ("drop", "dropped"), "Drop",
+          _Action == "reset", "Reset",
+          ""),
+      DvcMacAddr = iff(strlen(_Mac) == 12,
+          strcat(substring(_Mac, 0, 2), ":", substring(_Mac, 2, 2), ":",
+              substring(_Mac, 4, 2), ":", substring(_Mac, 6, 2), ":",
+              substring(_Mac, 8, 2), ":", substring(_Mac, 10, 2)),
+          _Mac)
+  | project-rename
+      EventOriginalType = event_simpleName,
+      EventOriginalSubType = name,
+      EventOriginalUid = CrowdStrikeId,
+      DvcId = aid,
+      DvcScopeId = cid,
+      DvcInterface = InterfaceAlias,
+      NetworkRuleName = HbfwRuleId
+  | extend
+      EventStartTime = iif(isnotnull((datetime(1970-01-01) + timestamp * 1ms)), (datetime(1970-01-01) + timestamp * 1ms), TimeGenerated),
+      EventCount = int(1),
+      EventType = "EndpointNetworkSession",
+      EventSubType = case(
+          EventOriginalType startswith "NetworkClose", "End",
+          EventOriginalType startswith "NetworkConnect"
+              or EventOriginalType startswith "NetworkReceiveAccept"
+              or EventOriginalType startswith "NetworkListen"
+              or EventOriginalType startswith "RawBind", "Start",
+          ""),
+      EventResult = iff(
+          DvcAction in ("Deny", "Drop", "Reset")
+              or (isnotempty(TcpConnectErrorCode) and tolong(TcpConnectErrorCode) != 0),
+          "Failure", "Success"),
+      EventOriginalResultDetails = TcpConnectErrorCode,
+      EventSchema = "NetworkSession",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "CrowdStrike",
+      EventProduct = "Falcon Data Replicator",
+      EventUid = EventOriginalUid,
+      DvcIpAddr = iif(isnotempty(_LocalIp), _LocalIp, aip),
+      DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+      DvcOs = case(event_platform == "Win", "Windows",
+          event_platform == "Lin", "Linux", event_platform == "Mac", "macOS", event_platform),
+      DvcOriginalAction = iif(isnotempty(FirewallAction), FirewallAction, RuleAction),
+      DvcInboundInterface = iff(_IsInbound, DvcInterface, ""),
+      DvcOutboundInterface = iff(_IsLocalSource, DvcInterface, ""),
+      NetworkProtocol = case(
+          Protocol == "1", "ICMP", Protocol == "6", "TCP",
+          Protocol == "17", "UDP", Protocol == "47", "GRE",
+          Protocol == "50", "ESP", Protocol == "51", "AH",
+          Protocol == "58" or Protocol =~ "IPv6-ICMP", "IPv6-ICMP",
+          Protocol == "132", "SCTP",
+          toupper(Protocol) in ("ICMP", "TCP", "UDP", "GRE", "ESP", "AH", "SCTP"),
+              toupper(Protocol),
+          ""),
+      NetworkProtocolVersion = iff(EventOriginalType contains "IP6", "IPv6", "IPv4"),
+      NetworkIcmpCode = toint(IcmpCode),
+      NetworkIcmpType = IcmpType,
+      SrcIpAddr = case(_IsInbound, _RemoteIp, _IsLocalSource, _LocalIp, ""),
+      DstIpAddr = case(_IsInbound, _LocalIp, _IsLocalSource, _RemoteIp, ""),
+      SrcPortNumber = case(_IsInbound, toint(RemotePort), _IsLocalSource, toint(LocalPort), int(null)),
+      DstPortNumber = case(_IsInbound, toint(LocalPort), _IsLocalSource, toint(RemotePort), int(null)),
+      SrcDvcId = iff(_IsLocalSource, DvcId, ""),
+      DstDvcId = iff(_IsInbound, DvcId, ""),
+      SrcDvcScopeId = iff(_IsLocalSource, DvcScopeId, ""),
+      DstDvcScopeId = iff(_IsInbound, DvcScopeId, ""),
+      SrcInterfaceName = iff(_IsLocalSource, DvcInterface, ""),
+      DstInterfaceName = iff(_IsInbound, DvcInterface, ""),
+      SrcMacAddr = iff(_IsLocalSource, DvcMacAddr, ""),
+      DstMacAddr = iff(_IsInbound, DvcMacAddr, ""),
+      SrcUsername = iff(_IsLocalSource, UserName, ""),
+      DstUsername = iff(_IsInbound, UserName, ""),
+      SrcUsernameType = iff(_IsLocalSource, _UsernameType, ""),
+      DstUsernameType = iff(_IsInbound, _UsernameType, ""),
+      SrcProcessName = iff(_IsLocalSource, ImageFileName, ""),
+      DstProcessName = iff(_IsInbound, ImageFileName, ""),
+      SrcAppId = iff(_IsLocalSource, ContextProcessId, ""),
+      DstAppId = iff(_IsInbound, ContextProcessId, ""),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      DstSystemEntityKey = "",
+      SrcApplicationEntityKey = "",
+      DstApplicationEntityKey = "",
+      SrcUserEntityKey = "",
+      DstUserEntityKey = "",
+      SrcUserAdditionalIds = parse_json('[]'),
+      DstUserAdditionalIds = parse_json('[]'),
+      AdditionalEntities = parse_json('[]'),
+      ASimMatchingIpAddr = "-",
+      ASimMatchingHostname = "-",
+      AdditionalFields = pack(
+              "SourceAdditionalFields", AdditionalFields,
+              "timestamp", timestamp, "aip", aip, "UserName", UserName,
+              "ContextTimeStamp", ContextTimeStamp, "ConfigBuild", ConfigBuild,
+              "ConfigStateHash", ConfigStateHash, "ContextProcessId", ContextProcessId,
+              "ContextThreadId", ContextThreadId, "BoundingLimitCount", BoundingLimitCount,
+              "BoundingLimitDuration", BoundingLimitDuration, "Entitlements", Entitlements,
+              "EffectiveTransmissionClass", EffectiveTransmissionClass,
+              "OciContainerId", OciContainerId, "TreeId", TreeId,
+              "ConnectionDirection", ConnectionDirection, "Protocol", Protocol,
+              "RemoteAddressString", RemoteAddressString, "FirewallAction", FirewallAction,
+              "NegateLocalAddress", NegateLocalAddress, "NegateRemoteAddress", NegateRemoteAddress,
+              "LocalAddressIP4", LocalAddressIP4, "LocalAddressIP6", LocalAddressIP6,
+              "RemoteAddressIP4", RemoteAddressIP4, "RemoteAddressIP6", RemoteAddressIP6,
+              "LocalAddressMaskIP4", LocalAddressMaskIP4, "LocalAddressMaskIP6", LocalAddressMaskIP6,
+              "RemoteAddressMaskIP4", RemoteAddressMaskIP4, "RemoteAddressMaskIP6", RemoteAddressMaskIP6,
+              "LocalPort", LocalPort, "RemotePort", RemotePort,
+              "PhysicalAddress", PhysicalAddress, "ConnectionFlags", ConnectionFlags,
+              "InContext", InContext, "EventOrigin", EventOrigin,
+              "InterfaceIndex", InterfaceIndex, "NetLuidIndex", NetLuidIndex,
+              "NeighborList", NeighborList, "NegateInterface", NegateInterface,
+              "IsUnique", IsUnique, "LocalPortRangeStart", LocalPortRangeStart,
+              "LocalPortRangeOperation", LocalPortRangeOperation,
+              "RemotePortRangeStart", RemotePortRangeStart,
+              "RemotePortRangeOperation", RemotePortRangeOperation,
+              "NetworkProfile", NetworkProfile, "PolicyIdentifier", PolicyIdentifier,
+              "HbfwRuleFlags", HbfwRuleFlags, "ImageFileName", ImageFileName,
+              "CommandLine", CommandLine, "RuleAction", RuleAction,
+              "RuleMatchCount", RuleMatchCount,
+              "RuleMatchCountSinceLastReport", RuleMatchCountSinceLastReport)
+  | extend
+      EventEndTime = EventStartTime,
+      EventSeverity = iff(EventResult == "Failure", "Low", "Informational"),
+      EventResultDetails = iff(EventResult == "Failure", "Unknown", "NA"),
+      Dvc = iif(isnotempty(DvcId), DvcId, iif(isnotempty(DvcIpAddr), DvcIpAddr, "-")),
+      SrcDvcIdType = iff(isnotempty(SrcDvcId), "Other", ""),
+      DstDvcIdType = iff(isnotempty(DstDvcId), "Other", ""),
+      SrcAppType = iff(isnotempty(SrcAppId), "Process", ""),
+      DstAppType = iff(isnotempty(DstAppId), "Process", ""),
+      Src = iif(isnotempty(SrcIpAddr), SrcIpAddr, SrcDvcId),
+      Dst = iif(isnotempty(DstIpAddr), DstIpAddr, DstDvcId),
+      IpAddr = SrcIpAddr,
+      Rule = NetworkRuleName,
+      Process = DstProcessName,
+      User = DstUsername
+  | project
+      TimeGenerated, Type,
+      EventStartTime, EventEndTime, EventCount, EventType, EventSubType,
+      EventResult, EventResultDetails, EventOriginalResultDetails, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, EventUid,
+      EventOriginalUid, EventOriginalType, EventOriginalSubType,
+      Dvc, DvcId, DvcIdType, DvcIpAddr, DvcMacAddr, DvcScopeId, DvcOs,
+      DvcAction, DvcOriginalAction, DvcInterface, DvcInboundInterface, DvcOutboundInterface,
+      NetworkDirection, NetworkProtocol, NetworkProtocolVersion,
+      NetworkIcmpCode, NetworkIcmpType, NetworkRuleName,
+      Src, Dst, SrcIpAddr, DstIpAddr, IpAddr, SrcPortNumber, DstPortNumber,
+      SrcDvcId, DstDvcId, SrcDvcIdType, DstDvcIdType, SrcDvcScopeId, DstDvcScopeId,
+      SrcInterfaceName, DstInterfaceName, SrcMacAddr, DstMacAddr,
+      SrcUsername, DstUsername, SrcUsernameType, DstUsernameType,
+      SrcProcessName, DstProcessName, SrcAppId, DstAppId, SrcAppType, DstAppType,
+      Rule, Process, User, ASimMatchingIpAddr, ASimMatchingHostname,
+      DvcEntityKey, SrcSystemEntityKey, DstSystemEntityKey,
+      SrcApplicationEntityKey, DstApplicationEntityKey, SrcUserEntityKey, DstUserEntityKey,
+      SrcUserAdditionalIds, DstUserAdditionalIds, AdditionalEntities, AdditionalFields
+Change:
+  Date: "2026-10-27"
+  Description: "Initial ingestion-time conversion from the query-time NetworkSession parser, retaining explicit packed fields and endpoint direction precedence."

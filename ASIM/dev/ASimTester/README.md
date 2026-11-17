@@ -20,7 +20,7 @@ This test validates the output values from your parser or ASIM table. To run the
 
 Replace the parser or table name of your choice.
 
-Empty dynamic arrays are valid for array fields because they contain no elements to validate. Non-empty arrays must still contain only elements of the schema's required type; mixed-type arrays and incorrect dynamic types remain errors.
+Empty dynamic arrays are valid for array fields because they contain no elements to validate. When `ArrayValuesType` is specified in `ASimTester.csv`, non-empty arrays must contain only elements of that type. When `ArrayValuesType` is blank, array elements can be of any type, including mixed types. The field must still match its declared `DynamicType`.
 
 Refer to this [link](https://learn.microsoft.com/en-us/azure/sentinel/normalization-about-schemas) for supported schema name values.
 

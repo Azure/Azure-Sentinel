@@ -1,0 +1,144 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWSSecurityHub
+  dataTypes:
+  - AWSSecurityHubFindings
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSSecurityHubFindings
+  requiredDataConnectors:
+  - connectorId: AWSSecurityHub
+    dataTypes:
+    - AWSSecurityHubFindings
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d2b6fa0f-6a4c-4c48-8c64-5e2e1ac4e7b9
+    path: Analytic Rules/EC2SecurityGroupHighRiskOpenPorts.yaml
+    version: 1.0.0
+    querySha256: b9f4bef195319121d42c5bcd4ffc66fe39069d552010eeae4d8641ed333ef27e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - LateralMovement
+    - Discovery
+    originalTechniques:
+    - T1133
+    - T1021
+    - T1046
+    reviewScope:
+      sourceDocumentSha256: d6e976c375500876b909cd9ac3c001cec2745006b8ce16034633e5037cc83ce1
+      targetQuerySha256: ab8450a65a37dc3d577d25379ed57fb7b168321e3c8f7f5de03761778fee346e
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: d6e976c375500876b909cd9ac3c001cec2745006b8ce16034633e5037cc83ce1
+      targetQuerySha256: ab8450a65a37dc3d577d25379ed57fb7b168321e3c8f7f5de03761778fee346e
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-d2b6fa0f-6a4c-4c48-8c64-5e2e1ac4e7b9
+  displayName: AWS Security Hub - Detect EC2 Security groups allowing unrestricted high-risk ports
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);
+      AWSSecurityHubFindings
+      | where RecordState == "ACTIVE" and ComplianceStatus == "FAILED"
+      | where tostring(AwsSecurityFindingGeneratorId) == "security-control/EC2.19"
+            or tostring(ComplianceSecurityControlId) == "EC2.19"
+      | mv-expand Resource = Resources
+      | where tostring(Resource.Type) == "AwsEc2SecurityGroup"
+      | extend SGDetails = Resource.Details.AwsEc2SecurityGroup
+      | extend IpPermissions = SGDetails.IpPermissions
+      | mv-expand Perm = IpPermissions
+      | where toint(Perm.FromPort) in (HighRiskPorts)
+      | mv-expand Range = Perm.IpRanges
+      | where tostring(Range.CidrIp) in ("0.0.0.0/0", "::/0")
+      | summarize TimeGenerated = max(TimeGenerated), OpenHighRiskPorts = make_set(tostring(Perm.FromPort))
+          by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,
+             AwsSecurityFindingId, ComplianceSecurityControlId, SecurityGroupId = tostring(SGDetails.GroupId), SecurityGroupARN = tostring(Resource.Id)
+      | extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, ", ")
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWS Security Hub - Detect EC2 Security groups allowing unrestricted high-risk ports
+      description: |-
+        This query detects EC2 Security Groups that allow unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports using AWS Security Hub control EC2.19 findings.
+        Publicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AwsAccountId
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: SecurityGroupARN
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1133
+      customDetails:
+        ComplianceControlId: ComplianceSecurityControlId
+        Region: AwsRegion
+        FindingId: AwsSecurityFindingId
+        SecurityGroupId: SecurityGroupId
+        OpenHighRiskPorts: OpenHighRiskPorts
+        AccountName: AwsAccountId

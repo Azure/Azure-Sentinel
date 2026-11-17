@@ -1,11 +1,11 @@
 id: 4942992d-a4d3-44b0-9cf4-b5a23811d82d
 name: ZeroTrust(TIC3.0) Control Assessment Posture Change
 description: |
-  'Zero Trust(TIC3.0) Control Assessments have Deviated from Configured Threshold Baselines'
+  Zero Trust(TIC3.0) Control Assessments have Deviated from Configured Threshold Baselines
 severity: Medium
 status: Available
 requiredDataConnectors: []
-queryFrequency: 7d
+queryFrequency: 1d
 queryPeriod: 7d
 triggerOperator: gt
 triggerThreshold: 0
@@ -15,7 +15,9 @@ relevantTechniques:
   - T1082
 query: |
   SecurityRecommendation
+  | where TimeGenerated > ago(7d)
   | where RecommendationDisplayName <> ""
+  | extend DeviceName = tostring(split(AssessedResourceId, "/")[-1])
   | extend ControlFamily=iff(RecommendationDisplayName has_any("email"), "Email",
       iff(RecommendationDisplayName has_any("apps", "teams", "meeting", "call"), "Unified Communications & Collaboration",
       iff(RecommendationDisplayName has_any("dns", "domain"), "DNS",
@@ -31,18 +33,23 @@ query: |
   | summarize
       Failed=countif(RecommendationState == "Unhealthy"),
       Passed=countif(RecommendationState == "Healthy"),
-      Total=countif(RecommendationState == "Unhealthy" or RecommendationState == "Healthy")
+      Total=countif(RecommendationState == "Unhealthy" or RecommendationState == "Healthy"),
+      DeviceName=take_any(DeviceName)
       by ControlFamily
   | extend PassedControlsPercentage = (Passed / todouble(Total)) * 100
   | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/5')
   | extend URLCustomEntity = RemediationLink
-  | project ControlFamily, Total, PassedControlsPercentage, Passed, Failed, RemediationLink, URLCustomEntity
+  | project ControlFamily, Total, PassedControlsPercentage, Passed, Failed, RemediationLink, URLCustomEntity, DeviceName
   | where PassedControlsPercentage < 70 //Adjust PassedRatePercentage Thresholds within Organizational Needs
   | sort by PassedControlsPercentage asc
 entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
   - entityType: URL
     fieldMappings:
       - identifier: Url
         columnName: URLCustomEntity
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled

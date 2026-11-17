@@ -1,0 +1,113 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - Syslog
+    - VMwareESXi
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4f5b5d79-ff4e-4edd-ae3e-9e1187f0b924
+    path: Analytic Rules/ESXiSSHEnableOnHost.yaml
+    version: 1.0.0
+    querySha256: 27bbfc178448f11304ff511493f083a8e661afa619eb00770720dae129d509bc
+    schedule:
+      queryFrequency: 10m
+      queryPeriod: 10m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10m, lookback=10m; target frequency=PT10M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `DstHostname`
+      is provisionally represented by hosts.nameColumn `DstHostname`; confirm that
+      this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Unconfirmed generic Account.Name mapping was omitted because another required
+      Host, Mailbox, or IP asset is available
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Host.FullName mismatch is informational because its original value is preserved
+      as customDetails.HostFullName from query column `DstHostname`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    - Account.Name mismatch is informational because its original value is preserved
+      as customDetails.AccountName from query column `SrcUsername`; supplemental details
+      do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - LateralMovement
+    originalTechniques:
+    - T1021
+    reviewScope:
+      sourceDocumentSha256: d08942268227008264cd4c60a9199f21abea127549b0a83278de70a688d0b0e8
+      targetQuerySha256: da49f691d3cd523809e7b9f87a9a914d41c24c8d217711cb5602830bb3a2d26c
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: DstHostname
+      column: DstHostname
+      status: available
+      customDetailKey: HostFullName
+    - entityType: Account
+      entityIndex: 2
+      identifier: Name
+      sourceColumn: SrcUsername
+      column: SrcUsername
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-4f5b5d79-ff4e-4edd-ae3e-9e1187f0b924
+  displayName: VMware ESXi - SSH Enable on ESXi Host
+  status: disabled
+  queryCondition:
+    queryText: 'VMwareESXi
+
+      | where SyslogMessage has_all ("vim-cmd","hostsvc/enable_ssh")
+
+      | extend SrcUsername = extract(@''\[info\]\s+\[(.*?)\]'', 1, SyslogMessage)
+
+      | extend DstHostname = extract(@''\[\d+\]\s+\[(.*?)\s+on'', 1, SyslogMessage)'
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: VMware ESXi - SSH Enable on ESXi Host
+      description: '''Detects when vim-cmd is used to enable SSH on an ESXi host'''
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: DstHostname
+      tactics:
+      - tactic: LateralMovement
+        techniques:
+        - technique: T1021
+      customDetails:
+        HostFullName: DstHostname
+        AccountName: SrcUsername

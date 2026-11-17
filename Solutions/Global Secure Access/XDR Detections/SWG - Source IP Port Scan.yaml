@@ -1,0 +1,85 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - NetworkAccessTrafficLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - NetworkAccessTraffic
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - NetworkAccessTrafficLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 82cfa6b9-5f7e-4b8b-8b2f-a63f21b7a7d1
+    path: Analytic Rules/SWG - Source IP Port Scan.yaml
+    version: 1.0.2
+    querySha256: 75ab85e7e676d8cf6f0e3211942b76ad617b7c66d88e2c392f7855ee3e2a0d61
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1046
+    reviewScope:
+      sourceDocumentSha256: 866d72880c8ea121de8e2e07ca56da46fbc4aa16cffbeff47556aabe3eb9a140
+      targetQuerySha256: 672bdb3a746a426b6db1979cbd1ef3819d8013cc407d1cdea0ba11fd55801256
+properties:
+  id: xdr-82cfa6b9-5f7e-4b8b-8b2f-a63f21b7a7d1
+  displayName: GSA - Detect Source IP Scanning Multiple Open Ports
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let port_scan_time = 30s;
+      let min_ports_threshold = 100;
+      NetworkAccessTraffic
+      | where TimeGenerated > ago(1d)
+      | where Action == 'Allowed'
+      | summarize PortsScanned = dcount(DestinationPort) by SourceIp, DestinationFqdn, bin(TimeGenerated, port_scan_time)
+      | where PortsScanned > min_ports_threshold
+      | project SourceIp, PortsScanned, TimeGenerated,DestinationFqdn
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: GSA - Detect Source IP Scanning Multiple Open Ports
+      description: |-
+        Identifies a source IP scanning multiple open ports on Global Secure Access Firewall. This can indicate malicious scanning of ports by an attacker, trying to reveal open ports in the organization that can be compromised for initial access.
+          Configurable Parameters:
+          - Port scan time - the time range to look for multiple ports scanned. Default is set to 30 seconds.
+          - Minimum different ports threshold - alert only if more than this number of ports scanned. Default is set to 100.
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIp
+        urls:
+        - id: url1
+          addressColumn: DestinationFqdn
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1046

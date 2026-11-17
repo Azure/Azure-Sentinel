@@ -1,0 +1,124 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 454133a7-5427-4a7c-bdc4-0adfa84dda16
+    path: Analytic Rules/AWS_CreationofEncryptKeysWithoutMFA.yaml
+    version: 1.0.3
+    querySha256: 2e1c879d832ef7f8834f22de503cd3268b641c02039dc1d6d1c2dc286092810f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - IP.Address column `SourceIpAddress` is not produced by the query
+    - customDetails 'AwsEventId' column `AwsEventId` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'EventName' column `EventName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'UserIdentityArn' column `UserIdentityArn` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - Account.CloudAppAccountId output column `RecipientAccountId` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - IP.Address output column `SourceIpAddress` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1485
+    reviewScope:
+      sourceDocumentSha256: a0d518ebfe8608036490733b1ce2bcd5b86f5eac91976f05241844df54a5fd31
+      targetQuerySha256: cef2fe8741c97b6657ecbf13b2d43303da91d5d1e0e62329d4d5efbfeed72298
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: IP
+      entityIndex: 2
+      identifier: Address
+      sourceColumn: SourceIpAddress
+      column: SourceIpAddress
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-454133a7-5427-4a7c-bdc4-0adfa84dda16
+  displayName: AWSCloudTrail - Creating keys with encrypt policy without MFA
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let check_actions = AWSCloudTrail
+      | where EventName in ("CreateKey", "PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend state=parse_json(parse_json(replace_string(tostring(parse_json(RequestParameters)['policy']),'\\"','"')).['Statement'])
+      | mv-expand state
+      | extend Action= tostring(parse_json(state.['Action'][0])), Effect=tostring(parse_json(state.['Effect'])),
+               Principal=tostring(parse_json(state.['Principal']))
+      | where Action in ("kms:Encrypt", "kms:*") and (Effect == 'Allow') and (Principal has "*")
+      | distinct AwsEventId;
+      AWSCloudTrail
+      | where EventName in ("CreateKey", "PutKeyPolicy") and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+      | join kind=inner (check_actions) on AwsEventId
+      | extend timestamp = TimeGenerated
+      | project-away AwsEventId1
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - Creating keys with encrypt policy without MFA
+      description: Identifies AWS KMS key creation or policy changes that allow `kms:Encrypt` or `kms:*` to any principal.
+        This configuration can expose encryption capability outside approved boundaries and should be investigated as overly
+        permissive or malicious.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+      customDetails:
+        AwsEventId: AwsEventId
+        EventName: EventName
+        UserIdentityArn: UserIdentityArn

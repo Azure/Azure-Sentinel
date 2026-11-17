@@ -1,0 +1,89 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2e96fa64-ac4d-4c92-b79e-e9c54b5d8230
+    path: Analytic Rules/Conditional Access - A Conditional Access policy was deleted.yaml
+    version: 1.0.2
+    querySha256: 15c2eb5c1f4438e81218c7d22e98026889d6c5ebaf88edecf3f0e6e1c7c0340e
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.007
+    reviewScope:
+      sourceDocumentSha256: cdd1b3ae12536d3b4084ae5bc5976b27790d87c402b752ef95098c72e08a8a47
+      targetQuerySha256: 33825395f6c2969aa7dd1a88f5d596f079fff654464942cb83d9cd80742a25df
+properties:
+  id: xdr-2e96fa64-ac4d-4c92-b79e-e9c54b5d8230
+  displayName: Conditional Access - A Conditional Access policy was deleted
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // A Conditional Access policy was deleted.
+      AuditLogs
+      | where OperationName in ("Delete conditional access policy")
+      | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+      | extend accountName = tostring(split(modifiedBy, "@")[0])
+      | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+      | project
+          TimeGenerated,
+          OperationName,
+          policy = TargetResources[0].displayName,
+          modifiedBy,
+          accountName,
+          upnSuffix,
+          result = Result,
+          oldPolicy = TargetResources[0].modifiedProperties[0].oldValue
+      | order by TimeGenerated desc
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Conditional Access - A Conditional Access policy was deleted
+      description: A Conditional Access policy was deleted from Entra ID.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: accountName
+          upnSuffixColumn: upnSuffix
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.007

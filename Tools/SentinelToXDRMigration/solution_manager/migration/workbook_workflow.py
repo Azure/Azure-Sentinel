@@ -18,7 +18,7 @@ ARM_VALIDATION_METHODS = ("arm-ttk", "lab-deployment")
 DEFAULT_ARM_VALIDATION_METHOD = "lab-deployment"
 
 
-def default_arm_validation_method(workflow_profile: str = "authoring") -> str:
+def default_arm_validation_method(workflow_profile: str = "qualification") -> str:
     if workflow_profile not in ("authoring", "qualification"):
         raise ValueError(f"unsupported workflow profile: {workflow_profile}")
     return DEFAULT_ARM_VALIDATION_METHOD
@@ -403,9 +403,24 @@ def validate_content(solution: str | Path) -> dict[str, Any]:
     if not state or not enabled(state):
         return validate_solution(root)
     verify_inventory(root, state)
-    result = validate_solution(root) if has_analytic_rules(root) else {
-        "solution": str(root), "total": 0, "valid": 0, "invalid": 0, "results": [],
-    }
+    if has_analytic_rules(root):
+        result = validate_solution(root)
+    else:
+        from solution_manager.core.content_paths import scan_solution_urls
+
+        locale_issues = scan_solution_urls(root)["localeIssues"]
+        result = {
+            "solution": str(root),
+            "total": 0,
+            "valid": 0,
+            "invalid": len(locale_issues),
+            "results": [],
+            "documentsLinkValidation": {
+                "valid": not locale_issues,
+                "issueCount": len(locale_issues),
+                "issues": locale_issues,
+            },
+        }
     workbook_result = validate_evidence(root, state)
     return {**result, "workbooks": workbook_result,
             "workbookExcluded": state["workbooks"]["selection"]["excluded"]}
@@ -696,7 +711,7 @@ def build_lab_deployment_preflight_prompt(
     )
     method = (
         (state or {}).get("context", {}).get("armValidationMethod")
-        or default_arm_validation_method((state or {}).get("context", {}).get("workflowProfile", "authoring"))
+        or default_arm_validation_method((state or {}).get("context", {}).get("workflowProfile", "qualification"))
     )
     return {
         "schemaVersion": 1,

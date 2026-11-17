@@ -1,0 +1,105 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (Exchange)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (Exchange)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 194dd92e-d6e7-4249-85a5-273350a7f5ce
+    path: Analytic Rules/exchange_auditlogdisabled.yaml
+    version: 2.0.6
+    querySha256: abdbca8ecb1eab448be60e6742ed7154546bfdc41b3af6496dcb892ce1be7190
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping was completed with projected column `AccountUPNSuffix`
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.AccountFullName
+      from query column `UserId`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: 2caf366b63da451d954b3b90ed7c3682362774118bc105cd31700edcdb45bef5
+      targetQuerySha256: dd60c5c3a2db92d4dfc5b423a2f9328ff815f78a570ef91fbdf7ee0da9574cb2
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: available
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-194dd92e-d6e7-4249-85a5-273350a7f5ce
+  displayName: Exchange AuditLog Disabled
+  status: disabled
+  queryCondition:
+    queryText: |-
+      OfficeActivity
+      | where OfficeWorkload =~ "Exchange"
+      | where UserType in~ ("Admin","DcAdmin")
+      // Only admin or global-admin can disable audit logging
+      | where Operation =~ "Set-AdminAuditLogConfig"
+      | extend AdminAuditLogEnabledValue = tostring(parse_json(tostring(parse_json(tostring(array_slice(parse_json(Parameters),3,3)))[0])).Value)
+      | where AdminAuditLogEnabledValue =~ "False"
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters, AdminAuditLogEnabledValue
+      | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
+      | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+      | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
+      | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '')
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Exchange AuditLog Disabled
+      description: '''Identifies when the exchange audit logging has been disabled which may be an adversary attempt to evade
+        detection or avoid other defenses.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        - id: account2
+          nameColumn: AccountNTDomain
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+      customDetails:
+        AccountFullName: UserId

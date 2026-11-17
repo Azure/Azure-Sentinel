@@ -1,0 +1,148 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity
+- connectorId: AzureMonitor(IIS)
+  dataTypes:
+  - W3CIISLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+    - OfficeActivity
+    - Operation
+    - W3CIISLog
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+    - W3CIISLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b725d62c-eb77-42ff-96f6-bdc6745fc6e0
+    path: Analytic Rules/NewUserAgentLast24h.yaml
+    version: 1.0.5
+    querySha256: b68c5fbedf369dc8513b74886e077b72e42fa1b92a40fa4cef50184adb8a41d1
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - CommandAndControl
+    - Execution
+    originalTechniques:
+    - T1189
+    - T1071
+    - T1203
+    reviewScope:
+      sourceDocumentSha256: ff751602ee2c5206cec98be9282e33471f2a3cad183a015cd437ba00cf04be35
+      targetQuerySha256: 9eec728d3ea0f4323731ee8d296af813f7607a7ebff97c645f21fa36b58792fd
+properties:
+  id: xdr-b725d62c-eb77-42ff-96f6-bdc6745fc6e0
+  displayName: New UserAgent observed in last 24 hours
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let starttime = 14d;
+      let endtime = 1d;
+      let UserAgentAll =
+      (union isfuzzy=true
+      (OfficeActivity
+      | where TimeGenerated >= ago(starttime)
+      | where isnotempty(UserAgent)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP, Account = UserId, Type, RecordType, Operation
+      ),
+      (
+      W3CIISLog
+      | where TimeGenerated >= ago(starttime)
+      | where isnotempty(csUserAgent)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type, sSiteName, csMethod, csUriStem
+      ),
+      (
+      AWSCloudTrail
+      | where TimeGenerated >= ago(starttime)
+      | where isnotempty(UserAgent)
+      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type, EventSource, EventName
+      ))
+      // remove wordSize blocks of non-numeric hex characters prior to word extraction
+      | extend UserAgentNoHexAlphas = replace("([A-Fa-f]{4,})", "x", UserAgent)
+      // once blocks of hex chars are removed, extract wordSize blocks of a-z
+      | extend Tokens = extract_all("([A-Za-z]{4,})", UserAgentNoHexAlphas)
+      // concatenate extracted words to create a summarized user agent for baseline and comparison
+      | extend NormalizedUserAgent = strcat_array(Tokens, "|")
+      | project-away UserAgentNoHexAlphas, Tokens;
+      UserAgentAll
+      | where StartTime >= ago(endtime)
+      | summarize StartTime = min(StartTime), EndTime = max(EndTime), count() by UserAgent, NormalizedUserAgent, SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem
+      | join kind=leftanti
+      (
+      UserAgentAll
+      | where StartTime < ago(endtime)
+      | summarize by NormalizedUserAgent, SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem
+      )
+      on NormalizedUserAgent
+      | extend timestamp = StartTime
+      | extend Name = tostring(split(Account, '@', 0)[0]), UPNSuffix = tostring(split(Account, '@', 1)[0])
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: New UserAgent observed in last 24 hours
+      description: "'Identifies new UserAgents observed in the last 24 hours versus the previous 14 days. This detection extracts\
+        \ words from user agents to build the baseline and determine rareity rather than perform a direct comparison. This\
+        \ avoids FPs caused by version numbers and other high entropy user agent components.\nThese new UserAgents could be\
+        \ benign. However, in normally stable environments, these new UserAgents could provide a starting point for investigating\
+        \ malicious activity.\nNote: W3CIISLog can be noisy depending on the environment, however OfficeActivity and AWSCloudTrail\
+        \ are usually stable with "
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1189
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      - tactic: Execution
+        techniques:
+        - technique: T1203

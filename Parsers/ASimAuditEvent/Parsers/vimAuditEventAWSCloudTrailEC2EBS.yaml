@@ -1,0 +1,251 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for AWS CloudTrail EC2 EBS activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+Description: |
+  Filters and normalizes AWSCloudTrail events from ec2.amazonaws.com for EBS volumes, attachments,
+  root-volume replacement, snapshots, encryption defaults, snapshot permissions and
+  locking, tiers, fast restore, and storage recovery. This parser is referenced by
+  vimAuditEventAWSCloudTrail.
+ParserName: vimAuditEventAWSCloudTrailEC2EBS
+ParentParser: vimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AWSCloudTrailEC2EBS
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    actorusername_has_any:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool=false,
+    pack:bool=false
+  ) {
+  let Events = datatable(EventName: string, EventType: string, Object: string)
+  [
+    "AttachVolume", "Set", "EC2 Instance",
+    "CopySnapshot", "Execute", "EBS Snapshot",
+    "CopyVolumes", "Execute", "EBS Volume",
+    "CreateReplaceRootVolumeTask", "Create", "Replace Root Volume Task",
+    "CreateSnapshot", "Create", "EBS Volume Snapshot",
+    "CreateSnapshots", "Create", "EBS Volume Snapshot",
+    "CreateVolume", "Create", "EBS Volume",
+    "DeleteSnapshot", "Delete", "EBS Snapshot",
+    "DeleteVolume", "Delete", "EBS Volume",
+    "DescribeFastSnapshotRestores", "Read", "EBS Snapshot",
+    "DescribeLockedSnapshots", "Read", "EBS Snapshot",
+    "DescribeReplaceRootVolumeTasks", "Read", "Replace Root Volume Task",
+    "DescribeSnapshotAttribute", "Read", "Snapshot",
+    "DescribeSnapshots", "Read", "Snapshot",
+    "DescribeSnapshotTierStatus", "Read", "Snapshot",
+    "DescribeVolumeAttribute", "Read", "EBS Volume",
+    "DescribeVolumes", "Read", "EBS Volume",
+    "DescribeVolumesModifications", "Read", "EBS Volume",
+    "DescribeVolumeStatus", "Read", "EBS Volume",
+    "DetachVolume", "Set", "EC2 Instance",
+    "DisableEbsEncryptionByDefault", "Disable", "EBS Encryption",
+    "DisableFastSnapshotRestores", "Disable", "Snapshot",
+    "DisableSnapshotBlockPublicAccess", "Disable", "EBS Snapshot",
+    "EnableEbsEncryptionByDefault", "Enable", "EBS Encryption",
+    "EnableFastSnapshotRestores", "Enable", "Snapshot",
+    "EnableSnapshotBlockPublicAccess", "Enable", "Snapshot",
+    "EnableVolumeIO", "Enable", "EBS Volume",
+    "GetEbsDefaultKmsKeyId", "Read", "AWS KMS Key",
+    "GetEbsEncryptionByDefault", "Read", "EBS Encryption",
+    "GetSnapshotBlockPublicAccessState", "Read", "Snapshot",
+    "ListSnapshotsInRecycleBin", "Read", "EBS Snapshot",
+    "ListVolumesInRecycleBin", "Read", "EBS Volume",
+    "LockSnapshot", "Execute", "EBS Snapshot",
+    "ModifyEbsDefaultKmsKeyId", "Set", "EBS KMS Key",
+    "ModifySnapshotAttribute", "Set", "EBS Snapshot",
+    "ModifySnapshotTier", "Set", "EBS Snapshot",
+    "ModifyVolume", "Set", "EBS Volume",
+    "ModifyVolumeAttribute", "Set", "EBS Volume",
+    "ResetEbsDefaultKmsKeyId", "Execute", "EBS KMS Key",
+    "ResetSnapshotAttribute", "Execute", "Snapshot",
+    "RestoreSnapshotFromRecycleBin", "Set", "EBS Snapshot",
+    "RestoreSnapshotTier", "Set", "EBS Snapshot",
+    "RestoreVolumeFromRecycleBin", "Set", "EBS Volume",
+    "UnlockSnapshot", "Execute", "EBS Snapshot"
+  ]
+  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+  | where array_length(object_has_any) == 0 or Object has_any (object_has_any);
+  AWSCloudTrail
+  | where not(disabled)
+  | where EventSource == "ec2.amazonaws.com"
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+  | where array_length(operation_has_any) == 0 or EventName has_any (operation_has_any)
+  | where array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any)
+  | where array_length(srcipaddr_has_any_prefix) == 0
+      or (ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0")
+          and has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+  | where EventName in (Events | project EventName)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | where eventresult == "*" or EventResult == eventresult
+  | lookup kind=inner Events on EventName
+  | extend Req = todynamic(RequestParameters), Resp = todynamic(ResponseElements)
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AttachVolume", Resp.volumeId,
+      EventName == "CopySnapshot", Resp.snapshotId,
+      EventName == "CopyVolumes", Resp.volumeSet,
+      EventName == "CreateReplaceRootVolumeTask", Resp.replaceRootVolumeTask,
+      EventName in ("CreateSnapshot", "CreateVolume", "LockSnapshot", "RestoreSnapshotFromRecycleBin",
+        "RestoreSnapshotTier"), Resp,
+      EventName == "CreateSnapshots", Resp.snapshotSet,
+      EventName == "EnableEbsEncryptionByDefault", Resp.ebsEncryptionByDefault,
+      EventName == "ModifyEbsDefaultKmsKeyId", Resp.kmsKeyId,
+      EventName == "ModifySnapshotTier", Req.StorageTier,
+      EventName == "ModifyVolume", Resp.volumeModification,
+      EventName == "ModifyVolumeAttribute", Req.AutoEnableIO,
+      ""
+    ), "")
+  | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+  | extend ObjectId = case(
+      EventName in ("AttachVolume", "DetachVolume"), Req.InstanceId,
+      EventName in ("CopySnapshot", "CreateSnapshot", "LockSnapshot"), Resp.snapshotId,
+      EventName == "CopyVolumes", Resp.volumeSet,
+      EventName == "CreateReplaceRootVolumeTask",
+        Resp.replaceRootVolumeTask.replaceRootVolumeTaskId,
+      EventName == "CreateSnapshots", Resp.snapshotSet.snapshotId,
+      EventName == "CreateVolume", Resp.volumeId,
+      EventName in ("DeleteSnapshot", "DescribeLockedSnapshots", "DescribeSnapshotAttribute",
+        "DescribeSnapshots", "ListSnapshotsInRecycleBin", "ModifySnapshotAttribute", "ModifySnapshotTier",
+        "ResetSnapshotAttribute", "RestoreSnapshotFromRecycleBin", "RestoreSnapshotTier", "UnlockSnapshot"),
+        Req.SnapshotId,
+      EventName in ("DeleteVolume", "DescribeVolumeAttribute", "DescribeVolumes",
+        "DescribeVolumesModifications", "DescribeVolumeStatus", "EnableVolumeIO", "ListVolumesInRecycleBin",
+        "ModifyVolumeAttribute", "RestoreVolumeFromRecycleBin"), Req.VolumeId,
+      EventName == "DescribeReplaceRootVolumeTasks", Req.ReplaceRootVolumeTaskId,
+      EventName == "DisableFastSnapshotRestores", Req.SourceSnapshotId,
+      EventName in ("GetEbsDefaultKmsKeyId", "ModifyEbsDefaultKmsKeyId", "ResetEbsDefaultKmsKeyId"),
+        Resp.kmsKeyId,
+      EventName == "ModifyVolume", Resp.volumeModification.volumeId,
+      ""
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service"
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      ActorUserEntityKey = "",
+      AdditionalEntities = dynamic([]),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", Req,
+      "ResponseElements", Resp
+    ), dynamic({}))
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  | project
+      TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+      EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+      EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+      ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+      SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+      Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+      ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+      AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+      TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(
+    starttime,
+    endtime,
+    srcipaddr_has_any_prefix,
+    actorusername_has_any,
+    operation_has_any,
+    eventtype_in,
+    eventresult,
+    object_has_any,
+    newvalue_has_any,
+    disabled,
+    pack
+  )

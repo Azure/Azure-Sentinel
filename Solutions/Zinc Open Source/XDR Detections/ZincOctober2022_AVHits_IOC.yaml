@@ -1,0 +1,109 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - SecurityAlert
+  - DeviceInfo
+contentProvenance:
+  requiredWorkloads:
+  - workload: mde
+    dataTypes:
+    - DeviceInfo
+  - workload: sentinel
+    dataTypes:
+    - SecurityAlert
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - DeviceInfo
+    - SecurityAlert
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3705158d-e008-49c9-92dd-e538e1549090
+    path: Analytic Rules/ZincOctober2022_AVHits_IOC.yaml
+    version: 1.0.2
+    querySha256: cd94be93937df5d4b41fde1954b396ac0e9628def3659be7ea3d12c7e2247622
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1486
+    reviewScope:
+      sourceDocumentSha256: 2b0cf12992d25ed894264a25417a5184b558da6df63db73b02cf94e61d18d4ac
+      targetQuerySha256: 0bf9bd6d36276b42a22730459bc00397abca3931a59bc679b65da8a1c1818408
+    reviewDecisions:
+    - reason: catalog column mappings were not applied because table/alias scope is ambiguous
+      decision: accepted
+      sourceDocumentSha256: 2b0cf12992d25ed894264a25417a5184b558da6df63db73b02cf94e61d18d4ac
+      targetQuerySha256: 0bf9bd6d36276b42a22730459bc00397abca3931a59bc679b65da8a1c1818408
+    - reason: Original Sentinel lookback is shorter than the native XDR service window, but source and target table inputs
+        cannot be proven equivalent
+      decision: accepted
+      sourceDocumentSha256: 2b0cf12992d25ed894264a25417a5184b558da6df63db73b02cf94e61d18d4ac
+      targetQuerySha256: 0bf9bd6d36276b42a22730459bc00397abca3931a59bc679b65da8a1c1818408
+    acceptedReviewReasons:
+    - Original Sentinel lookback is shorter than the native XDR service window, but source and target table inputs cannot
+      be proven equivalent
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+properties:
+  id: xdr-3705158d-e008-49c9-92dd-e538e1549090
+  displayName: AV detections related to Zinc actors
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let Zinc_threats = dynamic(["Trojan:Win32/ZetaNile.A", "Trojan:Win32/EventHorizon.A", "Trojan:Win32/FoggyBrass.A", "Trojan:Win32/FoggyBrass.B", "Trojan:Win32/PhantomStar.A","Trojan:Win32/PhantomStar.C","TrojanDropper:Win32/PhantomStar.A"]);
+      DeviceInfo
+      | extend DeviceName = tolower(DeviceName)
+      | join kind=inner ( SecurityAlert
+      | where ProviderName == "MDATP"
+      | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+      | extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)
+      | where ThreatName in~ (Zinc_threats) or ThreatFamilyName in~ (Zinc_threats)
+      | extend CompromisedEntity = tolower(CompromisedEntity)
+      ) on $left.DeviceName == $right.CompromisedEntity
+      | summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, ProductName, Entities
+      | extend HostName = tostring(split(CompromisedEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(CompromisedEntity, '.'), 1, -1), '.'))
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: AV detections related to Zinc actors
+      description: "'This query looks for Microsoft Defender AV detections related to  Zinc threat actor. In Microsoft Sentinel\
+        \ the SecurityAlerts table includes only the Device Name of the affected device, this query joins the DeviceInfo table\
+        \ to clearly connect other information such as Device group, ip, etc. \n This would allow the Microsoft Sentinel analyst\
+        \ to have more context related to the alert, if available.\n Reference: https://www.microsoft.com/en-us/security/blog/2022/09/29/zinc-weaponizing-open-source-software/'"
+      severity: high
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: DnsDomain
+        ips:
+        - id: ip1
+          addressColumn: PublicIP
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1486

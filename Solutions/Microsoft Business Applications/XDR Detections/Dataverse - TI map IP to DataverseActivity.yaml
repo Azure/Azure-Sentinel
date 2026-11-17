@@ -1,0 +1,206 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelligenceIndicator
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelligenceIndicator
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+    - ThreatIntelligenceIndicator
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelligenceIndicator
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 56d5aa0c-d871-4167-ba13-61c2f0fd17bf
+    path: Analytic Rules/Dataverse - TI map IP to DataverseActivity.yaml
+    version: 3.2.0
+    querySha256: 4af03a6bbbe50093f130691bebd07812cca147f4df145a91363cd1f8ae2d7f0c
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - LateralMovement
+    - Discovery
+    originalTechniques:
+    - T1078
+    - T1199
+    - T1133
+    - T0886
+    - T0859
+    - T1428
+    - T1021
+    - T1210
+    - T1526
+    - T1580
+    reviewScope:
+      sourceDocumentSha256: 3d3a041d750dfcab4241865671f5e1e6f24c8a8c95f9c6ae4bded5b9658a9988
+      targetQuerySha256: 743ac3156d6d5d534dc63a42c452d2ea8a41c840b056af030b523bbf51722b93
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 4
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-56d5aa0c-d871-4167-ba13-61c2f0fd17bf
+  displayName: Dataverse - TI map IP to DataverseActivity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let dt_lookBack = 1h;
+      let ioc_lookBack = 14d;
+      ThreatIntelligenceIndicator
+      | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true
+      // Picking up only IOC's that contain the entities we want
+      | where isnotempty(NetworkIP)
+          or isnotempty(EmailSourceIpAddress)
+          or isnotempty(NetworkDestinationIP)
+          or isnotempty(NetworkSourceIP)
+      // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
+      // Taking the first non-empty value based on potential IOC match availability
+      | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
+      | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
+      | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+      //Exclude local addresses, using the ipv4_is_private operator
+      | where ipv4_is_private(TI_ipEntity) == false
+          and TI_ipEntity !startswith "fe80"
+          and TI_ipEntity !startswith "::"
+          and TI_ipEntity !startswith "127."
+      // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+      | join kind=innerunique (
+          DataverseActivity
+          | where TimeGenerated >= ago(dt_lookBack)
+          | where isnotempty(ClientIp)
+          //Exclude local addresses, using the ipv4_is_private operator
+          | where ipv4_is_private(ClientIp) == false
+              and ClientIp !startswith "fe80"
+              and ClientIp !startswith "::"
+              and ClientIp !startswith "127."
+          // renaming time column so it is clear the log this came from
+          | extend DataverseActivity_TimeGenerated = TimeGenerated
+          )
+          on $left.TI_ipEntity == $right.ClientIp
+      | where DataverseActivity_TimeGenerated < ExpirationDateTime
+      | summarize DataverseActivity_TimeGenerated = arg_max(DataverseActivity_TimeGenerated, *) by IndicatorId, ClientIp
+      | project DataverseActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+          TI_ipEntity, ClientIp, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, InstanceUrl, UserId
+      | extend
+          timestamp = DataverseActivity_TimeGenerated,
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[0]),
+          CloudAppId = int(32780)
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - TI map IP to DataverseActivity
+      description: Identifies a match in DataverseActivity from any IP IOC from Microsoft Sentinel Threat Intelligence.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        urls:
+        - id: url1
+          addressColumn: Url
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+        - technique: T1199
+        - technique: T1133
+        - technique: T0886
+      - tactic: LateralMovement
+        techniques:
+        - technique: T0886
+        - technique: T0859
+        - technique: T1428
+        - technique: T1021
+        - technique: T1210
+      - tactic: Discovery
+        techniques:
+        - technique: T1526
+        - technique: T1580
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

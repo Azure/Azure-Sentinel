@@ -1,0 +1,149 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWSSecurityHub
+  dataTypes:
+  - AWSSecurityHubFindings
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSSecurityHubFindings
+  requiredDataConnectors:
+  - connectorId: AWSSecurityHub
+    dataTypes:
+    - AWSSecurityHubFindings
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: de1f71d2-d127-439d-a8a2-e64d3187298a
+    path: Analytic Rules/IAMPolicyWithFullAdminPriv.yaml
+    version: 1.0.0
+    querySha256: 8588da432fda587dd02e7717dcef7755f05e2ca2fb7a14c796d358a1b52d3480
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.Name mismatch is informational because its original value is preserved as customDetails.AccountName from query
+      column `AwsAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.CloudAppAccountId mismatch is informational because its original value is preserved as customDetails.AccountName
+      from query column `AwsAccountId`; supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - PrivilegeEscalation
+    originalTechniques:
+    - T1098.003
+    - T1078.001
+    reviewScope:
+      sourceDocumentSha256: c0376f747f3c2fe229fda08dc42993731594817367f4e0572e9fd8f5f4c14bfb
+      targetQuerySha256: ab98b17ab29aeea5f463f3c41eac77c2c1c7b226d2a57a62e5ee998fe74d8681
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: c0376f747f3c2fe229fda08dc42993731594817367f4e0572e9fd8f5f4c14bfb
+      targetQuerySha256: ab98b17ab29aeea5f463f3c41eac77c2c1c7b226d2a57a62e5ee998fe74d8681
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: AwsAccountId
+      column: AwsAccountId
+      status: available
+      customDetailKey: AccountName
+properties:
+  id: xdr-de1f71d2-d127-439d-a8a2-e64d3187298a
+  displayName: AWS Security Hub - Detect IAM Policies allowing full administrative privileges
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AWSSecurityHubFindings
+      | where RecordState == "ACTIVE" and ComplianceStatus == "FAILED"
+      // Match Security Hub control IAM.1 by GeneratorId or explicit SecurityControlId/Title
+      | where tostring(AwsSecurityFindingGeneratorId) == "security-control/IAM.1"
+        or tostring(ComplianceSecurityControlId) == "IAM.1"
+      | extend
+        IAMPolicyId = tostring(Resources[0].Details.AwsIamPolicy.PolicyId),
+        IAMPolicyName =  tostring(Resources[0].Details.AwsIamPolicy.PolicyName),
+        IAMPolicyDescription = tostring(Resources[0].Details.AwsIamPolicy.Description)
+      | summarize TimeGenerated = max(TimeGenerated)
+        by
+        AwsAccountId,
+        AwsRegion,
+        AwsSecurityFindingTitle,
+        AwsSecurityFindingDescription,
+        AwsSecurityFindingId,
+        ComplianceSecurityControlId,
+        IAMPolicyId,
+        IAMPolicyName,
+        IAMPolicyDescription
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWS Security Hub - Detect IAM Policies allowing full administrative privileges
+      description: |-
+        This query detects AWS IAM policies that allow full administrative ("*") privileges in violation of AWS Security Hub control IAM.1.
+        Overly permissive policies increase the risk of privilege escalation and unauthorized access.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AwsAccountId
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+          subTechniques:
+          - T1098.003
+        - technique: T1078
+          subTechniques:
+          - T1078.001
+      customDetails:
+        ComplianceControlId: ComplianceSecurityControlId
+        Region: AwsRegion
+        FindingId: AwsSecurityFindingId
+        AccountName: AwsAccountId

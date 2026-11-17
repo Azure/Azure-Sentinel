@@ -1,0 +1,141 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ADOAuditLogs_CL
+  requiredDataConnectors:
+  - connectorId: AzureDevOpsAuditLogs
+    dataTypes:
+    - ADOAuditLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 17f23fbe-bb73-4324-8ecf-a18545a5dc26
+    path: Analytic Rules/AzDOPipelineCreatedDeletedOneDay.yaml
+    version: 1.0.4
+    querySha256: b33b0591576c956afeccfd27dc5384aa973442f1cd0de65a6972492abd4e21f2
+    schedule:
+      queryFrequency: 3d
+      queryPeriod: 3d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=3d, lookback=3d; target frequency=P3D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `CreatingUser` cannot be proven after a destructive projection; no supplemental customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Account.FullName output column `DeletingUser` cannot be proven after a destructive projection; no supplemental customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1072
+    reviewScope:
+      sourceDocumentSha256: 399cc987719210a4df7ba9dcf7d0be7e6dd11f946b666bb8276ce73d71afae9d
+      targetQuerySha256: 894ff36ccd00fe9652f5eb8589fa6c5d2ca86559d3acaf055c92e570128d4895
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: CreatingUser
+      column: CreatingUser
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: DeletingUser
+      column: DeletingUser
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    dependencyReviewRequired: false
+properties:
+  id: xdr-17f23fbe-bb73-4324-8ecf-a18545a5dc26
+  displayName: Azure DevOps Pipeline Created and Deleted on the Same Day
+  status: disabled
+  queryCondition:
+    queryText: 'let timeframe = 3d;
+
+      // Get Release Pipeline Creation Events and group by day
+
+      AzureDevOpsAuditing
+
+      | where TimeGenerated > ago(timeframe)
+
+      | where OperationName =~ "Release.ReleasePipelineCreated"
+
+      // Group by day
+
+      | extend timekey = bin(TimeGenerated, 1d)
+
+      | extend PipelineId = tostring(Data.PipelineId)
+
+      | extend PipelineName = tostring(Data.PipelineName)
+
+      // Rename some columns to make output clearer
+
+      | project-rename TimeCreated = TimeGenerated, CreatingUser = ActorUPN, CreatingUserAgent = UserAgent, CreatingIP = IpAddress
+
+      // Join with Release Pipeline Deletions where Pipeline ID is the same and deletion occurred on same day as creation
+
+      | join (AzureDevOpsAuditing
+
+      | where TimeGenerated > ago(timeframe)
+
+      | where OperationName =~ "Release.ReleasePipelineDeleted"
+
+      // Group by day
+
+      | extend timekey = bin(TimeGenerated, 1d)
+
+      | extend PipelineId = tostring(Data.PipelineId)
+
+      | extend PipelineName = tostring(Data.PipelineName)
+
+      // Rename some things to make the output clearer
+
+      | project-rename TimeDeleted = TimeGenerated,DeletingUser = ActorUPN, DeletingUserAgent = UserAgent, DeletingIP = IpAddress) on PipelineId, timekey
+
+      | project TimeCreated, TimeDeleted, PipelineName, PipelineId, CreatingUser, CreatingIP, CreatingUserAgent, DeletingUser, DeletingIP, DeletingUserAgent, ScopeDisplayName, ProjectName, Data, OperationName, OperationName1
+
+      | extend timestamp = TimeCreated
+
+      | extend CreatingUserAccountName = tostring(split(CreatingUser, "@")[0]), CreatingUserAccountUPNSuffix = tostring(split(CreatingUser, "@")[1])
+
+      | extend DeletingUserAccountName = tostring(split(DeletingUser, "@")[0]), DeletingUserAccountUPNSuffix = tostring(split(DeletingUser, "@")[1])'
+  schedule:
+    frequency: P3D
+  detectionAction:
+    alertTemplate:
+      title: Azure DevOps Pipeline Created and Deleted on the Same Day
+      description: "'An attacker with access to Azure DevOps could create a pipeline to inject artifacts used by other pipelines, or to create a malicious software build that looks legitimate by using a pipeline that incorporates legitimate elements. \nAn attacker would also likely want to cover their tracks once conducting such activity. This query looks for Pipelines created and deleted within the same day, this is unlikely to be legitimate user activity in the majority of cases.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: CreatingUserAccountName
+          upnSuffixColumn: CreatingUserAccountUPNSuffix
+        - id: account2
+          nameColumn: DeletingUserAccountName
+          upnSuffixColumn: DeletingUserAccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CreatingIP
+        - id: ip2
+          addressColumn: DeletingIP
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1072

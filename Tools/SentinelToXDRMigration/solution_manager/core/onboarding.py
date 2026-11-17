@@ -58,6 +58,7 @@ def _command_status(
     command: Sequence[str],
     *,
     runner: CommandRunner,
+    azure_config_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     executable = shutil.which(command[0])
     if executable is None:
@@ -67,7 +68,15 @@ def _command_status(
             "detail": f"{command[0]} is not installed or not on PATH",
         }
     resolved_command = [executable, *command[1:]]
-    result = _run(resolved_command, runner)
+    effective_profile = azure_config_dir
+    if (
+        effective_profile is None
+        and command
+        and Path(command[0]).stem.lower() == "az"
+    ):
+        effective_profile = configured_azure_cli_profile(_state_dir())
+    with azure_cli_profile(effective_profile):
+        result = _run(resolved_command, runner)
     if result.returncode == 0:
         return {"name": name, "status": "passed", "detail": None}
     detail = (result.stderr or result.stdout).strip()
@@ -289,11 +298,13 @@ def doctor(
         "status": "passed" if python_supported else "failed",
         "detail": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
     }
-    azure_cli = _command_status(
-        "azureCli",
-        ("az", "version", "--output", "none"),
-        runner=runner,
-    )
+    with azure_cli_profile(azure_config_dir):
+        azure_cli = _command_status(
+            "azureCli",
+            ("az", "version", "--output", "none"),
+            runner=runner,
+            azure_config_dir=azure_config_dir,
+        )
     sentinel_auth = _sentinel_authentication_status(
         runner=runner,
         probe=probe_authentication,
