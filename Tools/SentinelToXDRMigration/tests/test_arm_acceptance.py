@@ -704,6 +704,32 @@ except SystemExit as exc:
                 with self.assertRaisesRegex(ValueError, "no default"):
                     _acceptance_package_plan(FIXTURE_ROOT, VALIDATION_RECEIPTS[0])
 
+    def test_parameter_values_binds_workspace_customer_id_when_workspace_id_declared(self):
+        from solution_manager.qualification.arm_acceptance_support import _parameter_values
+
+        template = {
+            "parameters": {
+                "workspace": {"type": "string"},
+                "workspaceId": {"type": "string", "defaultValue": ""},
+                "environment": {"type": "string", "defaultValue": "public"},
+                "DeployCustomDetection": {"type": "bool", "defaultValue": False},
+            }
+        }
+        values = _parameter_values(
+            template,
+            "arm-acceptance-fixture-ws",
+            {"DeployCustomDetection": True},
+            workspace_customer_id=TARGET["workspaceCustomerId"],
+        )
+        self.assertEqual(
+            {
+                "workspace": "arm-acceptance-fixture-ws",
+                "workspaceId": TARGET["workspaceCustomerId"],
+                "DeployCustomDetection": True,
+            },
+            values,
+        )
+
     def test_batch_plan_requires_exact_same_workstream_flags_but_allows_zero_flag_members(self):
         package_plan = self._package_plan()
         package_plan["declaredContentFlags"] = FLAGS

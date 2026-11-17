@@ -27,6 +27,7 @@ def _parameter_values(
     template: dict[str, Any],
     workspace_name: str,
     approved_flags: dict[str, bool],
+    workspace_customer_id: str | None = None,
 ) -> dict[str, Any]:
     values: dict[str, Any] = {}
     parameters = template.get("parameters") or {}
@@ -35,6 +36,8 @@ def _parameter_values(
             values[name] = True
         elif name == "workspace":
             values[name] = workspace_name
+        elif name == "workspaceId" and workspace_customer_id:
+            values[name] = workspace_customer_id
         elif "defaultValue" in definition:
             continue
         else:

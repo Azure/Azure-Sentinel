@@ -377,10 +377,15 @@ def _graph_request(
 
 
 def graph_detection_payload(
-    document: dict[str, Any], *, package_context: dict[str, str] | None = None,
+    document: dict[str, Any],
+    *,
+    package_context: dict[str, str] | None = None,
+    workspace_id: str | None = None,
 ) -> dict[str, Any]:
     payload, _projection = graph_detection_payload_with_projection(
-        document, package_context=package_context,
+        document,
+        package_context=package_context,
+        workspace_id=workspace_id,
     )
     return payload
 
@@ -444,7 +449,9 @@ def deploy_solution(
         try:
             document = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
             payload, tactic_projection = graph_detection_payload_with_projection(
-                document, package_context=package_context,
+                document,
+                package_context=package_context,
+                workspace_id=str(target.get("workspaceCustomerId") or "").strip() or None,
             )
             rule_id = urllib.parse.quote(payload["id"], safe="")
             item_url = f"{DEPLOYMENT_ENDPOINT}/{rule_id}"
@@ -510,11 +517,28 @@ def deploy_solution(
                 provenance_verified = _graph_provenance_matches(
                     verified, payload["contentProvenance"]
                 )
+                expected_workspace_id = payload.get("workspaceId")
+                verified_workspace_id = (
+                    verified.get("workspaceId")
+                    if isinstance(verified, dict)
+                    else None
+                )
+                workspace_id_verified = (
+                    verified_workspace_id is None
+                    or (
+                        isinstance(verified_workspace_id, str)
+                        and verified_workspace_id.strip().casefold()
+                        == str(expected_workspace_id).strip().casefold()
+                    )
+                    if expected_workspace_id
+                    else True
+                )
                 if (
                     verify_status != 200
                     or deployed_status != "disabled"
                     or not tactic_projection_verified
                     or not provenance_verified
+                    or not workspace_id_verified
                 ):
                     success = False
                     operation = "failed"
@@ -527,6 +551,7 @@ def deploy_solution(
                         "statusCode": verify_status,
                         "tacticProjectionVerified": tactic_projection_verified,
                         "contentProvenanceVerified": provenance_verified,
+                        "workspaceIdVerified": workspace_id_verified,
                     }
             initial_disabled = bool(success and deployed_status == "disabled")
             return {
@@ -536,6 +561,7 @@ def deploy_solution(
                 "statusCode": response_status,
                 "success": success,
                 "deployedStatus": deployed_status,
+                "workspaceId": payload.get("workspaceId"),
                 "initialDisabled": initial_disabled,
                 "readbackVerified": initial_disabled,
                 "tacticProjection": tactic_projection,
