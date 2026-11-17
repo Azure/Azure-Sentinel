@@ -1,0 +1,252 @@
+Parser:
+  DisplayName: 'Ingestion-time Audit Event ASIM parser for AWS CloudTrail EC2 LaunchAndAccess activity'
+  Version: '0.1.0'
+  LastUpdated: '2026-11-06'
+Product:
+  Name: 'AWS CloudTrail'
+Normalization:
+  Schema: 'AuditEvent'
+  Version: '1.0.0'
+Author: 'Microsoft'
+Description: |
+  Normalizes AWS CloudTrail EC2 LaunchAndAccess activity from AWSCloudTrail to ASimAuditEventLogs during ingestion.
+ParserName: 'ASimAuditEventAWSCloudTrailEC2LaunchAndAccess'
+DCRType: 'Workspace'
+InputStream: 'Microsoft-AWSCloudTrail'
+SourceRawTable: 'AWSCloudTrail'
+TargetASIMTable: 'ASimAuditEventLogs'
+ParserFilterQuery: |
+  source
+  | where EventSource == "ec2.amazonaws.com"
+  | where EventName in (
+      "AssociateEnclaveCertificateIamRole",
+      "CreateDelegateMacVolumeOwnershipTask",
+      "CreateInstanceConnectEndpoint",
+      "CreateKeyPair",
+      "CreateLaunchTemplate",
+      "CreateLaunchTemplateVersion",
+      "CreateMacSystemIntegrityProtectionModificationTask",
+      "CreatePlacementGroup",
+      "DeleteInstanceConnectEndpoint",
+      "DeleteKeyPair",
+      "DeleteLaunchTemplate",
+      "DeleteLaunchTemplateVersions",
+      "DeletePlacementGroup",
+      "DescribeInstanceConnectEndpoints",
+      "DescribeKeyPairs",
+      "DescribeLaunchTemplates",
+      "DescribeLaunchTemplateVersions",
+      "DescribeMacModificationTasks",
+      "DescribePlacementGroups",
+      "DisableSerialConsoleAccess",
+      "DisassociateEnclaveCertificateIamRole",
+      "EnableSerialConsoleAccess",
+      "GetAssociatedEnclaveCertificateIamRoles",
+      "GetConsoleOutput",
+      "GetConsoleScreenshot",
+      "GetInstanceTpmEkPub",
+      "GetLaunchTemplateData",
+      "GetPasswordData",
+      "GetSerialConsoleAccessStatus",
+      "ImportKeyPair",
+      "ModifyInstanceConnectEndpoint",
+      "ModifyLaunchTemplate"
+  )
+ParserQuery: |
+  source
+  | where EventSource == "ec2.amazonaws.com"
+  | where EventName in (
+      "AssociateEnclaveCertificateIamRole",
+      "CreateDelegateMacVolumeOwnershipTask",
+      "CreateInstanceConnectEndpoint",
+      "CreateKeyPair",
+      "CreateLaunchTemplate",
+      "CreateLaunchTemplateVersion",
+      "CreateMacSystemIntegrityProtectionModificationTask",
+      "CreatePlacementGroup",
+      "DeleteInstanceConnectEndpoint",
+      "DeleteKeyPair",
+      "DeleteLaunchTemplate",
+      "DeleteLaunchTemplateVersions",
+      "DeletePlacementGroup",
+      "DescribeInstanceConnectEndpoints",
+      "DescribeKeyPairs",
+      "DescribeLaunchTemplates",
+      "DescribeLaunchTemplateVersions",
+      "DescribeMacModificationTasks",
+      "DescribePlacementGroups",
+      "DisableSerialConsoleAccess",
+      "DisassociateEnclaveCertificateIamRole",
+      "EnableSerialConsoleAccess",
+      "GetAssociatedEnclaveCertificateIamRoles",
+      "GetConsoleOutput",
+      "GetConsoleScreenshot",
+      "GetInstanceTpmEkPub",
+      "GetLaunchTemplateData",
+      "GetPasswordData",
+      "GetSerialConsoleAccessStatus",
+      "ImportKeyPair",
+      "ModifyInstanceConnectEndpoint",
+      "ModifyLaunchTemplate"
+  )
+  | extend EventType = case(
+      EventName in ("CreateDelegateMacVolumeOwnershipTask", "CreateInstanceConnectEndpoint", "CreateKeyPair", "CreateLaunchTemplate", "CreateLaunchTemplateVersion", "CreateMacSystemIntegrityProtectionModificationTask", "CreatePlacementGroup", "ImportKeyPair"), "Create",
+      EventName in ("DeleteInstanceConnectEndpoint", "DeleteKeyPair", "DeleteLaunchTemplate", "DeleteLaunchTemplateVersions", "DeletePlacementGroup", "DisassociateEnclaveCertificateIamRole"), "Delete",
+      EventName in ("DisableSerialConsoleAccess"), "Disable",
+      EventName in ("EnableSerialConsoleAccess"), "Enable",
+      EventName in ("DescribeInstanceConnectEndpoints", "DescribeKeyPairs", "DescribeLaunchTemplates", "DescribeLaunchTemplateVersions", "DescribeMacModificationTasks", "DescribePlacementGroups", "GetAssociatedEnclaveCertificateIamRoles", "GetConsoleOutput", "GetConsoleScreenshot", "GetInstanceTpmEkPub", "GetLaunchTemplateData", "GetPasswordData", "GetSerialConsoleAccessStatus"), "Read",
+      EventName in ("AssociateEnclaveCertificateIamRole", "ModifyInstanceConnectEndpoint", "ModifyLaunchTemplate"), "Set",
+      "")
+  | extend Object = case(
+      EventName in ("AssociateEnclaveCertificateIamRole"), "AWS Certificate Manager Certificate",
+      EventName in ("GetConsoleOutput", "GetConsoleScreenshot", "GetInstanceTpmEkPub", "GetLaunchTemplateData", "GetPasswordData"), "EC2 Instance",
+      EventName in ("CreateInstanceConnectEndpoint", "DeleteInstanceConnectEndpoint"), "EC2 Instance Connect Endpoint",
+      EventName in ("DisableSerialConsoleAccess", "EnableSerialConsoleAccess", "GetSerialConsoleAccessStatus"), "EC2 Serial Console",
+      EventName in ("DisassociateEnclaveCertificateIamRole", "GetAssociatedEnclaveCertificateIamRoles"), "IAM Role",
+      EventName in ("DescribeInstanceConnectEndpoints", "ModifyInstanceConnectEndpoint"), "Instance Connect Endpoint",
+      EventName in ("CreateKeyPair", "DeleteKeyPair", "DescribeKeyPairs", "ImportKeyPair"), "Key Pair",
+      EventName in ("CreateLaunchTemplate", "DeleteLaunchTemplate", "DeleteLaunchTemplateVersions", "DescribeLaunchTemplates", "DescribeLaunchTemplateVersions", "ModifyLaunchTemplate"), "Launch Template",
+      EventName in ("CreateLaunchTemplateVersion"), "Launch Template Version",
+      EventName in ("CreateDelegateMacVolumeOwnershipTask", "CreateMacSystemIntegrityProtectionModificationTask", "DescribeMacModificationTasks"), "Mac Modification Task",
+      EventName in ("CreatePlacementGroup", "DeletePlacementGroup", "DescribePlacementGroups"), "Placement Group",
+      "")
+  | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AssociateEnclaveCertificateIamRole", RequestParameters.RoleArn,
+      EventName in ("CreateDelegateMacVolumeOwnershipTask",
+        "CreateMacSystemIntegrityProtectionModificationTask"), ResponseElements.macModificationTask,
+      EventName == "CreateInstanceConnectEndpoint", ResponseElements.instanceConnectEndpoint,
+      EventName == "CreateLaunchTemplate", ResponseElements.launchTemplate,
+      EventName == "CreateLaunchTemplateVersion", ResponseElements.launchTemplateVersion,
+      EventName == "CreatePlacementGroup", ResponseElements.placementGroup,
+      EventName == "EnableSerialConsoleAccess", ResponseElements.serialConsoleAccessEnabled,
+      EventName == "ImportKeyPair", ResponseElements,
+      EventName == "ModifyInstanceConnectEndpoint", RequestParameters.PreserveClientIp,
+      EventName == "ModifyLaunchTemplate", RequestParameters.LaunchTemplateName,
+      parse_json('null')
+    ), parse_json('null'))
+  | extend ObjectId = case(
+      EventName == "AssociateEnclaveCertificateIamRole", RequestParameters.CertificateArn,
+      EventName in ("CreateDelegateMacVolumeOwnershipTask",
+        "CreateMacSystemIntegrityProtectionModificationTask"),
+        ResponseElements.macModificationTask.macModificationTaskId,
+      EventName == "CreateInstanceConnectEndpoint",
+        ResponseElements.instanceConnectEndpoint.instanceConnectEndpointId,
+      EventName in ("CreateKeyPair", "DeleteKeyPair", "ImportKeyPair"), ResponseElements.keyPairId,
+      EventName == "CreateLaunchTemplate", ResponseElements.launchTemplate.launchTemplateId,
+      EventName == "CreateLaunchTemplateVersion", ResponseElements.launchTemplateVersion.imageId,
+      EventName == "CreatePlacementGroup", ResponseElements.placementGroup.placementGroupId,
+      EventName in ("DeleteInstanceConnectEndpoint", "ModifyInstanceConnectEndpoint"),
+        RequestParameters.InstanceConnectEndpointId,
+      EventName in ("DeleteLaunchTemplate", "DeleteLaunchTemplateVersions", "DescribeLaunchTemplates",
+        "DescribeLaunchTemplateVersions", "ModifyLaunchTemplate"), RequestParameters.LaunchTemplateId,
+      EventName == "DeletePlacementGroup", RequestParameters.GroupName,
+      EventName == "DescribeInstanceConnectEndpoints", RequestParameters.InstanceConnectEndpointId.N,
+      EventName == "DescribeKeyPairs", RequestParameters.KeyPairId,
+      EventName == "DescribeMacModificationTasks", RequestParameters.MacModificationTaskId,
+      EventName == "DescribePlacementGroups", RequestParameters.GroupId,
+      EventName == "DisassociateEnclaveCertificateIamRole", RequestParameters.RoleArn,
+      EventName in ("GetConsoleOutput", "GetConsoleScreenshot", "GetPasswordData"), ResponseElements.instanceId,
+      EventName in ("GetInstanceTpmEkPub", "GetLaunchTemplateData"), RequestParameters.InstanceId,
+      parse_json('null')
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service",
+      EventUid = tostring(AwsEventId)
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = parse_json('[]'),
+      ActorUserEntityKey = "",
+      AdditionalEntities = parse_json('[]'),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", RequestParameters,
+      "ResponseElements", ResponseElements
+    )
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  // NOTE(DCR-LOSSY: destination-schema projection) - approved alias removal, UID mapping and dynamic serialization
+  | extend NewValue = tostring(NewValue), ObjectId = tostring(ObjectId)
+  | project-rename EventOriginalUid = EventUid
+  | project
+      TimeGenerated,
+      Type,
+      EventCount,
+      EventStartTime,
+      EventEndTime,
+      EventSeverity,
+      EventSchemaVersion,
+      EventVendor,
+      EventProduct,
+      EventResult,
+      EventMessage,
+      TargetAppName,
+      EventOriginalSubType,
+      EventOriginalType,
+      EventOriginalUid,
+      EventOriginalResultDetails,
+      EventProductVersion,
+      ActorUserId,
+      ActorUsername,
+      ActorOriginalUserType,
+      HttpUserAgent,
+      ActorUserIdType,
+      ActorUsernameType,
+      SrcIpAddr,
+      AdditionalFields,
+      EventType,
+      NewValue,
+      ObjectId,
+      ObjectType,
+      Object,
+      TargetAppType,
+      Operation,
+      ActingApplicationEntityKey,
+      ActorUserAdditionalIds,
+      ActorUserEntityKey,
+      AdditionalEntities,
+      DvcEntityKey,
+      SrcSystemEntityKey,
+      TargetApplicationEntityKey,
+      TargetSystemEntityKey
+Change:
+  Date: '2026-11-06'
+  Description: 'Initial ingestion-time conversion.'
