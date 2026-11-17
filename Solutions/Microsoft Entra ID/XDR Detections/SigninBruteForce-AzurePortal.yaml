@@ -1,0 +1,152 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 28b42356-45af-40a6-a0b4-a554cdfd5d8a
+    path: Analytic Rules/SigninBruteForce-AzurePortal.yaml
+    version: 2.1.4
+    querySha256: 62e6b55ae19c67f36108e2a671236aeea6899bea59649b74d899c28287356355
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserPrincipalName` cannot be proven after a
+      destructive projection; no supplemental customDetails binding was added and
+      KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: ba86ca92098cfe89bc4381e5582cb4daa52cce5c219d1c17dffe35d875080767
+      targetQuerySha256: 168f6a15fc3ce2f66bfb4873e1f50cdce407402fcba9ce87a0998a359a1cd874
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: ba86ca92098cfe89bc4381e5582cb4daa52cce5c219d1c17dffe35d875080767
+      targetQuerySha256: 168f6a15fc3ce2f66bfb4873e1f50cdce407402fcba9ce87a0998a359a1cd874
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-28b42356-45af-40a6-a0b4-a554cdfd5d8a
+  displayName: Brute force attack against Azure Portal
+  status: disabled
+  queryCondition:
+    queryText: "// Set threshold value for deviation\nlet threshold = 25;\n// Set\
+      \ the time range for the query\nlet timeRange = 24h;\n// Set the authentication\
+      \ window duration\nlet authenticationWindow = 20m;\n// Define a reusable function\
+      \ 'aadFunc' that takes a table name as input\nlet aadFunc = (tableName: string)\
+      \ {\n  // Query the specified table\n  table(tableName)\n  // Filter data within\
+      \ the last 24 hours\n  | where TimeGenerated > ago(1d)\n  // Filter records\
+      \ related to \"Azure Portal\" applications\n  | where AppDisplayName has \"\
+      Azure Portal\"\n  // Extract and transform some fields\n  | extend\n      DeviceDetail\
+      \ = todynamic(DeviceDetail),\n      LocationDetails = todynamic(LocationDetails)\n\
+      \  | extend\n      OS = tostring(DeviceDetail.operatingSystem),\n      Browser\
+      \ = tostring(DeviceDetail.browser),\n      State = tostring(LocationDetails.state),\n\
+      \      City = tostring(LocationDetails.city),\n      Region = tostring(LocationDetails.countryOrRegion)\n\
+      \  // Categorize records as Success or Failure based on ResultType\n  | extend\
+      \ FailureOrSuccess = iff(ResultType in (\"0\", \"50125\", \"50140\", \"70043\"\
+      , \"70044\"), \"Success\", \"Failure\")\n  // Sort and identify sessions\n \
+      \ | sort by UserPrincipalName asc, TimeGenerated asc\n  | extend SessionStartedUtc\
+      \ = row_window_session(TimeGenerated, timeRange, authenticationWindow, UserPrincipalName\
+      \ != prev(UserPrincipalName) or prev(FailureOrSuccess) == \"Success\")\n  //\
+      \ Summarize data\n  | summarize FailureOrSuccessCount = count() by  FailureOrSuccess,\
+      \ UserId, UserDisplayName, AppDisplayName, IPAddress, Browser, OS, State, City,\
+      \ Region, Type, CorrelationId, bin(TimeGenerated, authenticationWindow), ResultType,\
+      \ UserPrincipalName, SessionStartedUtc\n  | summarize FailureCountBeforeSuccess\
+      \ = sumif(FailureOrSuccessCount, FailureOrSuccess == \"Failure\"), StartTime\
+      \ = min(TimeGenerated), EndTime = max(TimeGenerated), makelist(FailureOrSuccess),\
+      \ IPAddress = make_set(IPAddress, 15), make_set(Browser, 15), make_set(City,\
+      \ 15), make_set(State, 15), make_set(Region, 15), make_set(ResultType, 15) by\
+      \ SessionStartedUtc, UserPrincipalName, CorrelationId, AppDisplayName, UserId,\
+      \ Type\n  // Filter records where \"Success\" occurs in the middle of a session\n\
+      \  | where array_index_of(list_FailureOrSuccess, \"Success\") != 0\n  | where\
+      \ array_index_of(list_FailureOrSuccess, \"Success\") == array_length(list_FailureOrSuccess)\
+      \ - 1\n  // Remove unnecessary columns from the output\n  | project-away SessionStartedUtc,\
+      \ list_FailureOrSuccess\n  // Join with another table and calculate deviation\n\
+      \  | join kind=inner (\n      table(tableName)\n      | where TimeGenerated\
+      \ > ago(7d)\n      | where AppDisplayName has \"Azure Portal\"\n      | extend\
+      \ FailureOrSuccess = iff(ResultType in (\"0\", \"50125\", \"50140\", \"70043\"\
+      , \"70044\"), \"Success\", \"Failure\")\n      | summarize avgFailures = avg(todouble(FailureOrSuccess\
+      \ == \"Failure\")) by UserPrincipalName\n  ) on UserPrincipalName\n  | extend\
+      \ Deviation = abs(FailureCountBeforeSuccess - avgFailures) / avgFailures\n \
+      \ // Filter records based on deviation and failure count criteria\n  | where\
+      \ Deviation > threshold and FailureCountBeforeSuccess >= 10\n  // Expand the\
+      \ IPAddress array\n  | mv-expand IPAddress\n  | extend IPAddress = tostring(IPAddress)\n\
+      \  | extend timestamp = StartTime\n};\n// Call 'aadFunc' with different table\
+      \ names and union the results\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet\
+      \ aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true\
+      \ aadSignin, aadNonInt\n// Additional transformation - Split UserPrincipalName\n\
+      | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Brute force attack against Azure Portal
+      description: 'Detects Azure Portal brute force attacks by monitoring for multiple
+        authentication failures and a successful login within a 20-minute window.
+        Default settings: 10 failures, 25 deviations.
+
+        Ref: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: UserId
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110

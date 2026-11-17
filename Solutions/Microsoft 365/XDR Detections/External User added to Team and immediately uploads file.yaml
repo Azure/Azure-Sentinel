@@ -1,0 +1,179 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (Teams)
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (SharePoint)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (Teams)
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (SharePoint)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: bff058b2-500e-4ae5-bb49-a5b1423cbd5b
+    path: Analytic Rules/External User added to Team and immediately uploads file.yaml
+    version: 2.1.1
+    querySha256: 992efde496e69c11f37f625620ec60df75b2ed69de28d1831ef4f195b9544bec
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - IP.Address column `ClientIP` is not produced by the query
+    - Account.FullName output column `MemberAdded` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Account.FullName output column `UserWhoAdded` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Account.FullName output column `UserWhoDeleted` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - IP.Address output column `ClientIP` cannot be proven after a destructive projection; no supplemental customDetails binding
+      was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: f7bfb5f991b080270b3bc1f42a1007f4591575d022eecf673128464723f992bf
+      targetQuerySha256: 0d3f6c68af657736aab516e8863bedaf30931d83fba5cfeceb5bf5b776a9427b
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: f7bfb5f991b080270b3bc1f42a1007f4591575d022eecf673128464723f992bf
+      targetQuerySha256: 0d3f6c68af657736aab516e8863bedaf30931d83fba5cfeceb5bf5b776a9427b
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: MemberAdded
+      column: MemberAdded
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: UserWhoAdded
+      column: UserWhoAdded
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: UserWhoDeleted
+      column: UserWhoDeleted
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: IP
+      entityIndex: 4
+      identifier: Address
+      sourceColumn: ClientIP
+      column: ClientIP
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-bff058b2-500e-4ae5-bb49-a5b1423cbd5b
+  displayName: Accessed files shared by temporary external user
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let fileAccessThrehold = 10;
+      OfficeActivity
+      | where OfficeWorkload =~ "MicrosoftTeams"
+      | where Operation =~ "MemberAdded"
+      | extend MemberAdded = tostring(parse_json(Members)[0].UPN)
+      | where MemberAdded contains ("#EXT#")
+      | project TimeAdded=TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName
+      | join kind = inner (
+        OfficeActivity
+        | where OfficeWorkload =~ "MicrosoftTeams"
+        | where Operation =~ "MemberRemoved"
+        | extend MemberAdded = tostring(parse_json(Members)[0].UPN)
+        | where MemberAdded contains ("#EXT#")
+        | project TimeDeleted=TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName
+        ) on MemberAdded
+      | where TimeDeleted > TimeAdded
+      | join kind=inner (
+        OfficeActivity
+        | where RecordType == "SharePointFileOperation"
+        | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+        | where Operation == "FileUploaded"
+        | extend MemberAdded = UserId
+        | join kind = inner (
+            OfficeActivity
+            | where RecordType == "SharePointFileOperation"
+            | where Operation  == "FileAccessed"
+            | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+            | summarize FileAccessCount = count() by OfficeObjectId
+            | where FileAccessCount > fileAccessThrehold
+            ) on $left.OfficeObjectId == $right.OfficeObjectId
+        )on MemberAdded
+      | project-away MemberAdded1, MemberAdded2, OfficeObjectId1, Operation1, Operation2, TeamName1, TeamName2
+      | extend MemberAddedAccountName = tostring(split(MemberAdded, "@")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded, "@")[1])
+      | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, "@")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, "@")[1])
+      | extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, "@")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, "@")[1])
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Accessed files shared by temporary external user
+      description: '''This detection identifies when an external user is added to a Team or Teams chat and shares a file which
+        is accessed by many users (>10) and the users is removed within short period of time. This might be an indicator of
+        suspicious activity.'''
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: MemberAddedAccountName
+          upnSuffixColumn: MemberAddedAccountUPNSuffix
+        - id: account2
+          nameColumn: UserWhoAddedAccountName
+          upnSuffixColumn: UserWhoAddedAccountUPNSuffix
+        - id: account3
+          nameColumn: UserWhoDeletedAccountName
+          upnSuffixColumn: UserWhoDeletedAccountUPNSuffix
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566

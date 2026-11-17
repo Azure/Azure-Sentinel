@@ -9,8 +9,11 @@ from typing import Any, Mapping, Protocol, Sequence
 
 import yaml
 
-from asim_ingestion.fixtures.timestamps import parse_kusto_datetime_ticks
-from asim_ingestion.parser.kql import split_kql_statements, split_pipeline
+from asim_ingestion.fixtures.timestamps import (
+    parse_kusto_datetime_ticks,
+    ticks_to_kusto_datetime,
+)
+from asim_ingestion.parser.kusto_analyzer import analyze_kql
 
 MAX_MISMATCH_EXAMPLES = 10
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
@@ -74,6 +77,8 @@ def _datatable_type(value: str) -> str:
 def _datatable_value(value: Any, column_type: str) -> str:
     normalized = _normalize_column_type(column_type)
     if value is None:
+        if normalized == "string":
+            return "@''"
         return f"{_datatable_type(normalized)}(null)"
     if normalized == "string":
         return "@'" + str(value).replace("'", "''") + "'"
@@ -165,11 +170,13 @@ def build_exact_slice_expression(
 
 
 def _is_source_passthrough(filter_query: str) -> bool:
-    statements = split_kql_statements(filter_query)
-    if not statements:
-        return False
-    stages = split_pipeline(statements[-1])
-    return len(stages) == 1 and stages[0].casefold() == "source"
+    analysis = analyze_kql(filter_query)
+    pipeline = analysis.get("pipeline")
+    return (
+        analysis["sourcePipeline"]["isValid"]
+        and isinstance(pipeline, dict)
+        and not pipeline["operators"]
+    )
 
 
 def build_filter_count_query(
@@ -251,11 +258,20 @@ def _parse_filter_counts(
     timestamps: Sequence[str],
 ) -> dict[str, int]:
     _, rows = _normalize_query_table(query_table, "filter")
-    expected_timestamps = set(timestamps)
+    expected_timestamps = {
+        ticks_to_kusto_datetime(
+            parse_kusto_datetime_ticks(str(timestamp))
+        )
+        for timestamp in timestamps
+    }
     counts = {timestamp: 0 for timestamp in expected_timestamps}
     for row in rows:
         timestamp = row.get("TimeGenerated")
         count = row.get("_AsimSelectedCount")
+        if isinstance(timestamp, str):
+            timestamp = ticks_to_kusto_datetime(
+                parse_kusto_datetime_ticks(timestamp)
+            )
         if not isinstance(timestamp, str) or timestamp not in counts:
             raise ValidationError(
                 "filter",
@@ -439,6 +455,29 @@ def build_asim_tester_query(
     )
     schema_literal = _quote_kql_string(schema_name)
     if tester_name == "ASimDataTester":
+        if target_table == "ASimDnsActivityLogs":
+            # ASimDnsActivityLogs has a type discrepancy with logical ASIM:
+            # these timestamps are string and the original risk level is int.
+            # Prefer the corrected _d/_s columns before casting legacy values.
+            # https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/asimdnsactivitylogs
+            target_expression += (
+                "\n| extend "
+                "ThreatFirstReportedTime = coalesce("
+                'column_ifexists("ThreatFirstReportedTime_d", datetime(null)), '
+                'todatetime(column_ifexists("ThreatFirstReportedTime", ""))), '
+                "ThreatLastReportedTime = coalesce("
+                'column_ifexists("ThreatLastReportedTime_d", datetime(null)), '
+                'todatetime(column_ifexists("ThreatLastReportedTime", ""))), '
+                "ThreatOriginalRiskLevel = coalesce("
+                'column_ifexists("ThreatOriginalRiskLevel_s", ""), '
+                'tostring(column_ifexists("ThreatOriginalRiskLevel", int(null))))'
+            )
+        elif target_table in {
+            "ASimAlertEventLogs",
+            "ASimWebSessionLogs",
+        }:
+            # Physical table types differ; logical ASIM uses long.
+            target_expression += "\n| extend FileSize = tolong(FileSize)"
         signature = "T:(*), selected_schema:string=''"
         invocation = (
             "_AsimValidationTargetRows\n"

@@ -1,0 +1,203 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2d50d937-d7f2-4c05-b151-9af7f9ec747e
+    path: Analytic Rules/RareUserAgentDetected.yaml
+    version: 1.0.2
+    querySha256: 4feda8cc5e43e9154af3e0523216bd17e329e284e1e34a33ec1c6e9945ec653b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'EventCount' column `EventCount` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'EventStartTime' column `EventStartTime` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'EventEndTime' column `EventEndTime` has an unproven output binding after a destructive projection; the
+      explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'HttpUserAgent' column `HttpUserAgent` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - customDetails 'DstPortNumber' column `DstPortNumber` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 58a17a4780945a4c59695461596974746bfc5162c804f24d54731c8756b487d5
+      targetQuerySha256: c0daae850c384da18e9df187ea1143067b3cda4637a36e477f1be641f03897e9
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: 58a17a4780945a4c59695461596974746bfc5162c804f24d54731c8756b487d5
+      targetQuerySha256: c0daae850c384da18e9df187ea1143067b3cda4637a36e477f1be641f03897e9
+properties:
+  id: xdr-2d50d937-d7f2-4c05-b151-9af7f9ec747e
+  displayName: Detect presence of uncommon user agents in web requests (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let lookBack = 14d;
+      let timeframe = 1h;
+      // calculate avg. eps(events per second)
+      let eps = materialize(_Im_WebSession(starttime=ago(1d))
+          | project TimeGenerated
+          | summarize AvgPerSec = count() / 3600 by bin(TimeGenerated, 1h)
+          | summarize round(avg(AvgPerSec))
+          );
+      let summarizationexist  = (
+          union isfuzzy=true
+              (
+              WebSessionEssentialsCustomParser
+              | where Type in ("WebSession_Summarized_SrcInfo_CL", "WebSession_Summarized_SrcInfoV1_CL")
+              | where EventTime_t > ago(1d)
+              | project v = int(2)
+              ),
+              (
+              print int(1)
+              | project v = print_0
+              )
+          | summarize maxv = max(v)
+          | extend sumexist = (maxv > 1)
+          );
+      let allUserAgents = union isfuzzy=true
+              (
+              (datatable(exists: int, sumexist: bool)[1, false]
+              | where toscalar(eps) > 1000
+              | join (summarizationexist) on sumexist)
+              | join (
+                  _Im_WebSession(starttime=todatetime(ago(2d)), endtime=bin(ago(timeframe), 1h), eventresult='Success')
+                  | where isnotempty(HttpUserAgent)
+                  | summarize UserAgentsSet =  make_set(HttpUserAgent) // This could contain upto 10,48,576 unique values
+                  | extend exists=int(1)
+                  )
+                  on exists
+              | project-away exist*, maxv, sum*
+              ),
+              (
+              (datatable(exists: int, sumexist: bool)[1, false]
+              | where toscalar(eps) between (501 .. 1000)
+              | join (summarizationexist) on sumexist)
+              | join (
+                  _Im_WebSession(starttime=todatetime(ago(3d)), endtime=bin(ago(timeframe), 1h), eventresult='Success')
+                  | where isnotempty(HttpUserAgent)
+                  | summarize UserAgentsSet = make_set(HttpUserAgent) // This could contain upto 10,48,576 unique values
+                  | extend exists=int(1)
+                  )
+                  on exists
+              | project-away exist*, maxv, sum*
+              ),
+              (
+              (datatable(exists: int, sumexist: bool)[1, false]
+              | where toscalar(eps) <= 500
+              | join (summarizationexist) on sumexist)
+              | join (
+                  _Im_WebSession(starttime=todatetime(ago(4d)), endtime=bin(ago(timeframe), 1h), eventresult='Success')
+                  | where isnotempty(HttpUserAgent)
+                  | summarize UserAgentsSet = make_set(HttpUserAgent) // This could contain upto 10,48,576 unique values
+                  | extend exists=int(1)
+                  )
+                  on exists
+              | project-away exist*, maxv, sum*
+              ),
+              (
+              WebSessionEssentialsCustomParser
+              | where Type in ("WebSession_Summarized_SrcInfo_CL", "WebSession_Summarized_SrcInfoV1_CL")
+              | where EventTime_t between (ago(14d) .. ago(timeframe))
+                  and isnotempty(HttpUserAgent_s)
+                  and EventResult_s =~ 'Success'
+              | summarize UserAgentsSet = make_set(HttpUserAgent_s) // This could contain upto 10,48,576 unique values
+              );
+      let allUA = toscalar(allUserAgents | summarize make_set(UserAgentsSet));
+      _Im_WebSession (starttime=bin(ago(timeframe), 1h), eventresult='Success')
+      | project
+          SrcIpAddr,
+          SrcUsername,
+          SrcHostname,
+          DstIpAddr,
+          DstPortNumber,
+          Url,
+          HttpUserAgent,
+          TimeGenerated
+      | where isnotempty(HttpUserAgent) and HttpUserAgent !in~ (allUA)
+      | summarize
+          EventCount=count(),
+          EventStartTime=min(TimeGenerated),
+          EventEndTime=max(TimeGenerated)
+          by
+          SrcIpAddr,
+          SrcUsername,
+          SrcHostname,
+          DstIpAddr,
+          Url,
+          HttpUserAgent,
+          DstPortNumber
+      | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Detect presence of uncommon user agents in web requests (ASIM Web Session)
+      description: '''This rule assists in detecting rare user agents, which may indicate web browsing activity by an unconventional
+        process different from the usual ones. The rule specifically searches for UserAgent strings that have not been seen
+        in the past 14 days. This query will perform better when run over summarized data'''
+      severity: medium
+      entityMappings:
+        urls:
+        - id: url1
+          addressColumn: Url
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        - id: ip2
+          addressColumn: DstIpAddr
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: SrcHostname
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133
+      customDetails:
+        EventCount: EventCount
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime
+        HttpUserAgent: HttpUserAgent
+        DstPortNumber: DstPortNumber

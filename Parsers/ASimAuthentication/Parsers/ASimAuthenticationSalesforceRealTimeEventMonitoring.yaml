@@ -1,0 +1,355 @@
+Parser:
+  Title: Authentication ASIM parser for Salesforce Real-Time Event Monitoring
+  Version: '0.1.0'
+  LastUpdated: Oct 26, 2026
+Product:
+  Name: Salesforce Real-Time Event Monitoring
+Normalization:
+  Schema: Authentication
+  Version: '1.0.0'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Salesforce LoginEvent
+  Link: https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/sforce_api_objects_loginevent.htm
+- Title: Salesforce LoginAsEvent
+  Link: https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/sforce_api_objects_loginasevent.htm
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser normalizes Salesforce Real-Time Event Monitoring authentication events (LoginEvent, LoginAsEvent, LogoutEvent and IdentityVerificationEvent) stored in the SalesForceRealTimeEventMonitoring_CL table to the ASIM Authentication schema.
+ParserName: ASimAuthenticationSalesforceRealTimeEventMonitoring
+EquivalentBuiltInParser: _ASim_Authentication_SalesforceRealTimeEventMonitoring
+Exceptions:
+  - Field: DvcIpAddr
+    Warning: Missing recommended field
+    Exception: Events identify the Salesforce org by domain only, no device IP is logged.
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled: bool = false
+      , pack: bool = false
+  ) {
+      let UserTypeLookup = datatable (UserType: string, TargetUserType: string)[
+          "Standard", "Regular",
+          "Guest", "Guest",
+          "AutomatedProcess", "System",
+          "CsnOnly", "Other",
+          "CspLitePortal", "Other",
+          "CustomerSuccess", "Other",
+          "PowerCustomerSuccess", "Other",
+          "PowerPartner", "Other",
+          "SelfService", "Other"
+      ];
+      SalesForceRealTimeEventMonitoring_CL
+      | where not(disabled)
+      | where EventType in (
+          "LoginEvent"
+          , "LoginAsEvent"
+          , "LogoutEvent"
+          , "IdentityVerificationEvent"
+      )
+      // LoginAccessChange is a login access grant, not an impersonation
+      | where LoginAsCategory != "LoginAccessChange"
+      | project-rename EventOriginalType = EventType
+      | extend
+          EventType = case(
+              EventOriginalType == "LogoutEvent", "Logoff",
+              EventOriginalType == "IdentityVerificationEvent"
+                  and Activity != "Login",
+                  "Elevate",
+              "Logon"
+          )
+          // Transaction security policy outcome overrides the event status
+          , EventResult = case(
+              PolicyOutcome in (
+                  "Block"
+                  , "MeteringBlock"
+                  , "TwoFADenied"
+                  , "TwoFAReportedDenied"
+              )
+                  or PolicyOutcome startswith "Failed",
+                  "Failure",
+              PolicyOutcome in ("TwoFAInitiated", "TwoFAInProgress"), "NA",
+              EventOriginalType in ("LoginAsEvent", "LogoutEvent"), "Success",
+              Status in ("Success", "Succeeded", "AutomatedSuccess"), "Success",
+              isempty(Status) or Status in ("InProgress", "Initiated"), "NA",
+              "Failure"
+          )
+          , EventResultDetails = case(
+              PolicyOutcome in ("Block", "MeteringBlock"), "Logon violates policy",
+              PolicyOutcome in ("TwoFADenied", "TwoFAReportedDenied"),
+                  "MFA not satisfied",
+              PolicyOutcome startswith "Failed", "Other",
+              Status in (
+                  ""
+                  , "Success"
+                  , "Succeeded"
+                  , "AutomatedSuccess"
+                  , "InProgress"
+                  , "Initiated"
+              ), "",
+              Status in ("Invalid Password", "FailedInvalidPassword"), "Incorrect password",
+              Status == "FailedInvalidCode", "Incorrect key",
+              Status in (
+                  "Password Lockout"
+                  , "User is Frozen"
+                  , "FailedPasswordLockout"
+                  , "FailedTooManyAttempts"
+              ), "User locked",
+              Status == "User is Inactive", "User disabled",
+              Status in (
+                  "Lightning Login required"
+                  , "Multi-factor required"
+                  , "Passwordless Login via Passkeys required"
+              ), "MFA not satisfied",
+              Status in (
+                  "Failed: Not approved"
+                  , "Failed: Not approved for access"
+                  , "No community access"
+                  , "Restricted IP"
+                  , "Restricted Time"
+                  , "Username-Password Flow Disabled"
+              ), "Logon violates policy",
+              "Other"
+          )
+      // IdentityVerificationEvent stores SourceIp as 32 hex chars (IPv6 / IPv4-mapped)
+      | extend _SrcIpAddr = case(
+          isnotnull(parse_ipv4(SourceIp)) or isnotempty(parse_ipv6(SourceIp)), SourceIp,
+          strlen(SourceIp) == 32 and SourceIp startswith "00000000000000000000ffff",
+              format_ipv4(tolong(strcat("0x", substring(SourceIp, 24, 8)))),
+          strlen(SourceIp) == 32,
+              strcat(
+                  substring(SourceIp, 0, 4), ":", substring(SourceIp, 4, 4), ":"
+                  , substring(SourceIp, 8, 4), ":", substring(SourceIp, 12, 4), ":"
+                  , substring(SourceIp, 16, 4), ":", substring(SourceIp, 20, 4), ":"
+                  , substring(SourceIp, 24, 4), ":", substring(SourceIp, 28, 4)
+              ),
+          ""
+      )
+      // SalesforceDomain is missing in some workspaces
+      | extend _DomainFQDN = tostring(parse_url(column_ifexists("SalesforceDomain", "")).Host)
+      | extend _DomainHostname = tostring(split(_DomainFQDN, ".")[0])
+      | lookup UserTypeLookup on UserType
+      | extend
+          EventSubType = case(
+              EventOriginalType == "LoginAsEvent", "AssumeRole",
+              LoginSubType in (
+                  "OAuth Client Credentials"
+                  , "OAuth Username-Password"
+                  , "OAuth JWT Bearer Token"
+                  , "SOAP API"
+              )
+                  or LoginType in ("Other Apex API", "Remote Access Client"),
+                  "Service",
+              // Connected app logins without a sub type are API integrations
+              LoginType == "Remote Access 2.0"
+                  and isempty(LoginSubType)
+                  and Application !in ("", "Browser", "N/A"),
+                  "Service",
+              EventOriginalType == "LogoutEvent", "",
+              "Interactive"
+          )
+          , LogonMethod = case(
+              EventOriginalType == "LoginEvent",
+                  case(
+                      LoginSubType == "OAuth Client Credentials", "Service Principal",
+                      AuthMethodReference has "multipleauthn"
+                          or LoginSubType == "OAuth OTP Login",
+                          "Multi factor authentication",
+                      AuthMethodReference has_any ("x509", "smartcard")
+                          or LoginType == "Certificate-based login",
+                          "PKI",
+                      LoginType has "Passwordless" or AuthMethodReference has "fido",
+                          "Passwordless",
+                      LoginSubType in (
+                          "UI Username-Password"
+                          , "UI Password Reset"
+                          , "OAuth Username-Password"
+                          , "SOAP API"
+                      )
+                          or Status == "Invalid Password",
+                          "Username & Password",
+                      "Other"
+                  ),
+              EventOriginalType == "IdentityVerificationEvent",
+                  case(
+                      Policy startswith "Passwordless", "Passwordless",
+                      VerificationMethod == "Password", "Username & Password",
+                      "Multi factor authentication"
+                  ),
+              ""
+          )
+          , LogonProtocol = case(
+              LoginType has "SAML", "SAML",
+              LoginSubType has "OAuth" or LoginType has "Remote Access", "OAuth",
+              LoginSubType has "SOAP" or LoginType == "Other Apex API", "SOAP",
+              ""
+          )
+          , EventOriginalSubType = case(
+              EventOriginalType == "LoginEvent", LoginType,
+              EventOriginalType == "LoginAsEvent", LoginAsCategory,
+              EventOriginalType == "IdentityVerificationEvent", Activity,
+              ""
+          )
+          , ActingAppName = case(
+              Application == "Browser", Browser,
+              Application !in ("", "N/A"), Application,
+              ""
+          )
+          , ActingAppType = case(
+              Application == "Browser" and isnotempty(Browser), "Browser",
+              Application !in ("", "N/A", "Browser"), "Other",
+              ""
+          )
+          , SrcDeviceType = case(
+              Platform startswith "Android"
+                  or Platform in ("iOS/Mac", "iPad", "iPhone"),
+                  "Mobile Device",
+              Platform startswith "Windows"
+                  or Platform in ("Linux", "Mac OSX"),
+                  "Computer",
+              Platform in ("", "Unknown"), "",
+              "Other"
+          )
+          , DvcAction = case(
+              PolicyOutcome in ("Block", "MeteringBlock"), "Blocked",
+              EventOriginalType != "LoginEvent", "",
+              EventResult == "Success", "Allowed",
+              EventResult == "Failure", "Blocked",
+              ""
+          )
+          , TargetUrl = case(
+              EventOriginalType == "LoginEvent"
+                  and (isempty(LoginUrl) or LoginUrl startswith "http"),
+                  LoginUrl,
+              EventOriginalType == "LoginEvent", strcat("https://", LoginUrl),
+              TargetUrl startswith "http", TargetUrl,
+              ""
+          )
+          , AdditionalFields = iff(
+              pack
+              , bag_pack(
+                  "SessionKey", SessionKey
+                  , "SessionLevel", SessionLevel
+                  , "LoginHistoryId", LoginHistoryId
+                  , "LoginType", LoginType
+                  , "LoginSubType", LoginSubType
+                  , "LoginGeoId", LoginGeoId
+                  , "PostalCode", PostalCode
+                  , "AuthMethodReference", AuthMethodReference
+                  , "AuthServiceId", AuthServiceId
+                  , "ApiType", ApiType
+                  , "ApiVersion", ApiVersion
+                  , "ClientVersion", ClientVersion
+                  , "HttpMethod", HttpMethod
+                  , "CipherSuite", CipherSuite
+                  , "TlsProtocol", TlsProtocol
+                  , "ForwardedForIp", ForwardedForIp
+                  , "Policy", Policy
+                  , "PolicyId", PolicyId
+                  , "PolicyOutcome", PolicyOutcome
+                  , "VerificationMethod", VerificationMethod
+                  , "EventGroup", EventGroup
+                  , "RelatedEventIdentifier", RelatedEventIdentifier
+              )
+              , dynamic({})
+          )
+      | project-rename
+          EventOriginalUid = EventIdentifier
+          , EventOriginalResultDetails = Status
+          , TargetUserId = UserId
+          , TargetUsername = UserNameDetail
+          , TargetOriginalUserType = UserType
+          , TargetSessionId = LoginKey
+          , ActorUsername = DelegatedUsername
+          , ActorScopeId = DelegatedOrganizationId
+          , SrcDvcOs = Platform
+          , SrcGeoCity = City
+          , SrcGeoCountry = CountryIso
+          , SrcGeoRegion = Subdivision
+      | extend
+          EventStartTime = coalesce(EventDate, TimeGenerated)
+          , TargetUsernameType = case(
+              isempty(TargetUsername), "",
+              TargetUsername has "@", "UPN",
+              "Simple"
+          )
+          , ActorUsernameType = case(
+              isempty(ActorUsername), "",
+              ActorUsername has "@", "UPN",
+              "Simple"
+          )
+      | project
+          TimeGenerated
+          , Type
+          , EventCount = toint(1)
+          , EventStartTime
+          , EventEndTime = EventStartTime
+          , EventType
+          , EventSubType
+          , EventResult
+          , EventResultDetails
+          , EventOriginalResultDetails
+          , EventOriginalType
+          , EventOriginalSubType
+          , EventOriginalUid
+          , EventUid = _ItemId
+          , EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+          , EventProduct = "Real-Time Event Monitoring"
+          , EventVendor = "Salesforce"
+          , EventSchema = "Authentication"
+          , EventSchemaVersion = "1.0.0"
+          , Dvc = coalesce(_DomainFQDN, "Salesforce")
+          , DvcFQDN = _DomainFQDN
+          , DvcHostname = _DomainHostname
+          , DvcDomain = substring(_DomainFQDN, strlen(_DomainHostname) + 1)
+          , DvcDomainType = iff(isnotempty(_DomainFQDN), "FQDN", "")
+          , DvcAction
+          , DvcOriginalAction = PolicyOutcome
+          , TargetAppName = "Salesforce"
+          , TargetAppType = "SaaS application"
+          , Application = "Salesforce"
+          , TargetFQDN = _DomainFQDN
+          , TargetHostname = _DomainHostname
+          , TargetDomain = substring(_DomainFQDN, strlen(_DomainHostname) + 1)
+          , TargetDomainType = iff(isnotempty(_DomainFQDN), "FQDN", "")
+          , Dst = coalesce(_DomainFQDN, "Salesforce")
+          , LogonTarget = coalesce(TargetUrl, "Salesforce")
+          , TargetUrl
+          , TargetUserId
+          , TargetUserIdType = iff(isnotempty(TargetUserId), "SalesforceId", "")
+          , TargetUsername
+          , TargetUsernameType
+          , TargetUserType
+          , TargetOriginalUserType
+          , TargetSessionId
+          , User = coalesce(TargetUsername, TargetUserId)
+          , ActorUsername
+          , ActorUsernameType
+          , ActorScopeId
+          , ActingAppName
+          , ActingAppType
+          , LogonMethod
+          , LogonProtocol
+          , SrcIpAddr = _SrcIpAddr
+          , Src = _SrcIpAddr
+          , IpAddr = _SrcIpAddr
+          , SrcDvcOs = iff(SrcDvcOs == "Unknown", "", SrcDvcOs)
+          , SrcDeviceType
+          , SrcGeoCity
+          , SrcGeoCountry
+          , SrcGeoRegion
+          , SrcGeoLatitude = coalesce(LoginLatitude, Latitude)
+          , SrcGeoLongitude = coalesce(LoginLongitude, Longitude)
+          , AdditionalFields
+  };
+  parser(disabled = disabled, pack = pack)

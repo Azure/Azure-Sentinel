@@ -1,0 +1,162 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ADOAuditLogs_CL
+  requiredDataConnectors:
+  - connectorId: AzureDevOpsAuditLogs
+    dataTypes:
+    - ADOAuditLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4ce177b3-56b1-4f0e-b83e-27eed4cb0b16
+    path: Analytic Rules/NewAgentAddedToPoolbyNewUserorofNewOS.yaml
+    version: 1.0.6
+    querySha256: 70ea1eb4b295ae5f8e1ba9c921db7ac4d6575d6177befc807d75d9213fa0ad9f
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `ActorUPN`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `ActorUPN` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1053
+    reviewScope:
+      sourceDocumentSha256: 1966f2a2a2132ee521be226f098295e7eb494a295e5cae371976e0c0b1404c85
+      targetQuerySha256: c2c6be0f88b23fb46719a9cbde2ea8dc9ab583146930cb64c76486da93744c35
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorUPN
+      column: ActorUPN
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    dependencyReviewRequired: false
+properties:
+  id: xdr-4ce177b3-56b1-4f0e-b83e-27eed4cb0b16
+  displayName: New Agent Added to Pool by New User or Added to a New OS Type
+  status: disabled
+  queryCondition:
+    queryText: 'let lookback = 14d;
+
+      let timeframe = 1d;
+
+      // exclude allowed users from query such as the ADO service
+
+      let allowed_users = dynamic(["Azure DevOps Service"]);
+
+      union
+
+      // Look for agents being added to a pool of a OS type not seen with that pool before
+
+      (AzureDevOpsAuditing
+
+      | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+
+      | where OperationName =~ "Library.AgentAdded"
+
+      | where ActorUPN !in (allowed_users)
+
+      | extend AgentPoolName = tostring(Data.AgentPoolName)
+
+      | extend OsDescription = tostring(Data.OsDescription)
+
+      | where isnotempty(OsDescription)
+
+      | extend OsDescription = tostring(split(OsDescription, "#", 0)[0])
+
+      | project AgentPoolName, OsDescription
+
+      | join kind=rightanti (AzureDevOpsAuditing
+
+      | where TimeGenerated > ago(timeframe)
+
+      | where OperationName == "Library.AgentAdded"
+
+      | extend AgentPoolName = tostring(Data.AgentPoolName)
+
+      | extend OsDescription = tostring(Data.OsDescription)
+
+      | where isnotempty(OsDescription)
+
+      | extend OsDescription = tostring(split(OsDescription, "#", 0)[0])) on AgentPoolName, OsDescription),
+
+      // Look for users addeing agents to a pool that they have not added agents to before.
+
+      (AzureDevOpsAuditing
+
+      | where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)
+
+      | extend AgentPoolName = tostring(Data.AgentPoolName)
+
+      | where ActorUPN !in (allowed_users)
+
+      | project AgentPoolName, ActorUPN
+
+      | join kind=rightanti (AzureDevOpsAuditing
+
+      | where TimeGenerated > ago(timeframe)
+
+      | where OperationName == "Library.AgentAdded"
+
+      | where ActorUPN !in (allowed_users)
+
+      | extend AgentPoolName = tostring(Data.AgentPoolName)
+
+      ) on AgentPoolName, ActorUPN)
+
+      | extend AgentName = tostring(Data.AgentName)
+
+      | extend OsDescription = tostring(Data.OsDescription)
+
+      | extend SystemDetails = Data.SystemCapabilities
+
+      | project-reorder TimeGenerated, OperationName, ScopeDisplayName, AgentPoolName, AgentName, ActorUPN, IpAddress, UserAgent, OsDescription, SystemDetails, Data
+
+      | extend timestamp = TimeGenerated
+
+      | extend AccountName = tostring(split(ActorUPN, "@")[0]), AccountUPNSuffix = tostring(split(ActorUPN, "@")[1])'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: New Agent Added to Pool by New User or Added to a New OS Type
+      description: "'As seen in attacks such as SolarWinds attackers can look to subvert a build process by controlling build servers. Azure DevOps uses agent pools to execute pipeline tasks. \nAn attacker could insert compromised agents that they control into the pools in order to execute malicious code. This query looks for users adding agents to pools they have not added agents to before, or adding agents to a pool of an OS that has not been added to that pool before. This detection has potential for false positives so has a configurable allow list to allow for certain users to be excluded from the logic.'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1053
+      customDetails:
+        AccountFullName: ActorUPN

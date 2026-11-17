@@ -1,0 +1,96 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ADOAuditLogs_CL
+  requiredDataConnectors:
+  - connectorId: AzureDevOpsAuditLogs
+    dataTypes:
+    - ADOAuditLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4e8238bd-ff4f-4126-a9f6-09b3b6801b3d
+    path: Analytic Rules/ADOAuditStreamDisabled.yaml
+    version: 1.0.5
+    querySha256: c8653d05bc6e814c5922c88f24ba85aba897b79a20cd73ca4a516fa1c93377e0
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `ActorUPN`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `ActorUPN` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562.008
+    reviewScope:
+      sourceDocumentSha256: 1fc78f553dd9af7daa1fe744d07f908451bac9bcea2cdc94437968b514bc13fc
+      targetQuerySha256: f044a01bf2ff3eff20c0fcdfde67be1994f1180fb9f1954cf565a668b5f1da54
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorUPN
+      column: ActorUPN
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    dependencyReviewRequired: false
+properties:
+  id: xdr-4e8238bd-ff4f-4126-a9f6-09b3b6801b3d
+  displayName: Azure DevOps Audit Stream Disabled
+  status: disabled
+  queryCondition:
+    queryText: 'AzureDevOpsAuditing
+
+      | where OperationName =~ "AuditLog.StreamDisabledByUser"
+
+      | extend StreamType = tostring(Data.ConsumerType)
+
+      | project-reorder TimeGenerated, Details, ActorUPN, IpAddress, UserAgent, StreamType
+
+      | extend timestamp = TimeGenerated
+
+      | extend AccountName = tostring(split(ActorUPN, "@")[0]), AccountUPNSuffix = tostring(split(ActorUPN, "@")[1])'
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Azure DevOps Audit Stream Disabled
+      description: '''Azure DevOps allow for audit logs to be streamed to external storage solutions such as SIEM solutions. An attacker looking to hide malicious Azure DevOps activity from defenders may look to disable data streams before conducting activity and then re-enabling the stream after (so as not to raise data threshold-based alarms). Looking for disabled audit streams can identify this activity, and due to the nature of the action its unlikely to have a high false positive rate.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.008
+      customDetails:
+        AccountFullName: ActorUPN

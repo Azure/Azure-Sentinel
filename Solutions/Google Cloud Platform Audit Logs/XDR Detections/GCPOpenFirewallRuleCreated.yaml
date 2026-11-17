@@ -1,0 +1,197 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GCPAuditLogsDefinition
+  dataTypes:
+  - GCPAuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GCPAuditLogs
+  requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+    - GCPAuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8061c611-55f1-4ee5-a8f8-8f19f2c7aab2
+    path: Analytic Rules/GCPOpenFirewallRuleCreated.yaml
+    version: 1.0.0
+    querySha256: f840681361ebf6317ef22281f2fa544a8ff8de106da67b0c7539161940c9f125
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved
+      as customDetails.AccountFullName from query column `PrincipalEmail`; supplemental
+      details do not restore entity identity, correlation, or alert parity
+    - CloudApplication.InstanceName mismatch is informational because its original
+      value is preserved as customDetails.ResourceName from query column `ResourceName`;
+      supplemental details do not restore entity identity, correlation, or alert parity
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    - Persistence
+    - InitialAccess
+    originalTechniques:
+    - T1562.004
+    - T1133
+    - T1562.001
+    reviewScope:
+      sourceDocumentSha256: d0b3f0842d1395e5c17c2e55329184d2d1c67b7ddb29c1127a25d147186ca277
+      targetQuerySha256: a7a93fe135a7172f1662620a72e2a85741ee5e617671e6f8db12c0589c5dad90
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: d0b3f0842d1395e5c17c2e55329184d2d1c67b7ddb29c1127a25d147186ca277
+      targetQuerySha256: a7a93fe135a7172f1662620a72e2a85741ee5e617671e6f8db12c0589c5dad90
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: PrincipalEmail
+      column: PrincipalEmail
+      status: available
+      customDetailKey: AccountFullName
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: ResourceName
+      column: ResourceName
+      status: available
+      customDetailKey: ResourceName
+properties:
+  id: xdr-8061c611-55f1-4ee5-a8f8-8f19f2c7aab2
+  displayName: GCP Audit Logs - Open Firewall Rule Created or Modified
+  status: disabled
+  queryCondition:
+    queryText: "GCPAuditLogs\n| where ServiceName == \"compute.googleapis.com\"\n\
+      | where MethodName has_any (\"firewalls.insert\", \"firewalls.patch\")\n| where\
+      \ GCPResourceType == \"gce_firewall_rule\"\n| where Severity == \"NOTICE\"\n\
+      | extend\n    RequestJson = parse_json(Request),\n    RequestMetadataJson =\
+      \ parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo)\n\
+      | extend\n    SourceRanges = RequestJson.sourceRanges,\n    Alloweds = RequestJson.alloweds,\n\
+      \    Direction = tostring(RequestJson.direction),\n    RuleName = tostring(RequestJson.name),\n\
+      \    Network = tostring(RequestJson.network),\n    Priority = tostring(RequestJson.priority),\n\
+      \    LogConfig = RequestJson.logConfig,\n    Disabled = tobool(RequestJson.disabled)\n\
+      | mv-expand SourceRange = SourceRanges\n| extend SourceRangeStr = tostring(SourceRange)\n\
+      | where SourceRangeStr in (\"0.0.0.0/0\", \"0.0.0.0\")\n| extend\n    FirewallRuleName\
+      \ = extract(@\"firewalls/([^/]+)$\", 1, GCPResourceName),\n    CallerIpAddress\
+      \ = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n\
+      \    AuthEmail = tostring(AuthInfoJson.principalEmail)\n| mv-expand Allowed\
+      \ = Alloweds\n| extend\n    AllowedProtocol = tostring(Allowed.IPProtocol),\n\
+      \    AllowedPorts = tostring(Allowed.ports),\n    OperationType = case(\n  \
+      \      MethodName has \"insert\", \"Created\",\n        MethodName has \"patch\"\
+      , \"Modified\",\n        \"Unknown\")\n| summarize\n    AllowedProtocols = make_set(AllowedProtocol,\
+      \ 30),\n    AllowedPortsList = make_set(AllowedPorts, 100),\n    SourceRangesList\
+      \ = make_set(SourceRangeStr, 100)\n    by TimeGenerated, PrincipalEmail, AuthEmail,\
+      \ ProjectId, FirewallRuleName,\n       GCPResourceName, Direction, Priority,\
+      \ Network, CallerIpAddress, UserAgent,\n       MethodName, ServiceName, Severity,\
+      \ OperationType, LogName, InsertId\n| extend\n    AccountName = tostring(split(PrincipalEmail,\
+      \ \"@\")[0]),\n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n\
+      | project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n\
+      \          ProjectId,\n          FirewallRuleName,\n          ResourceName =\
+      \ GCPResourceName,\n          OperationType,\n          Direction,\n       \
+      \   SourceRangesList,\n          AllowedProtocols,\n          AllowedPortsList,\n\
+      \          Priority,\n          Network,\n          CallerIpAddress,\n     \
+      \     UserAgent,\n          MethodName,\n          ServiceName,\n          Severity,\n\
+      \          LogName,\n          InsertId,\n          AccountName,\n         \
+      \ AccountUPNSuffix"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Audit Logs - Open Firewall Rule Created or Modified
+      description: '''Detects when a Google Cloud Platform firewall rule is created
+        or modified to allow traffic from any source (0.0.0.0/0 or 0.0.0.0).
+
+        Open firewall rules expose resources to the internet and can significantly
+        increase the attack surface of cloud infrastructure.
+
+        This may indicate a misconfiguration, lack of security awareness, or malicious
+        activity to create backdoor access.
+
+        Adversaries may create or modify firewall rules to enable persistent access
+        or facilitate lateral movement.
+
+        This rule monitors firewall insert and patch operations where sourceRanges
+        include unrestricted access patterns.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ProjectId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.001
+          - T1562.004
+      - tactic: Persistence
+        techniques:
+        - technique: T1133
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1133
+      customDetails:
+        ProjectId: ProjectId
+        FirewallRuleName: FirewallRuleName
+        ResourceName: ResourceName
+        OperationType: OperationType
+        Direction: Direction
+        SourceRanges: SourceRangesList
+        AllowedProtocols: AllowedProtocols
+        AllowedPorts: AllowedPortsList
+        Network: Network
+        AccountFullName: PrincipalEmail
+status: Available

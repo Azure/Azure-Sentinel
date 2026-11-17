@@ -1,0 +1,126 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0881b209-62c9-4b15-9f9a-e0c1d1b1eb7b
+    path: Analytic Rules/Dataverse - Export activity from terminated or notified employee.yaml
+    version: 3.2.0
+    querySha256: 7895e952b74519bf6319bf5c3635da58a4af1c38cd268d065c31825f2560b3a7
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+    - T1048
+    reviewScope:
+      sourceDocumentSha256: ae30e744a55e6d483a746f30696fc5ddc52c5ef52c0bd818c8c4debaee9dec29
+      targetQuerySha256: b7cb6a6002d83ab3fd5e92f873d7f2617131c2977305eb2e986c6fc2ead9f7de
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-0881b209-62c9-4b15-9f9a-e0c1d1b1eb7b
+  displayName: Dataverse - Export activity from terminated or notified employee
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Set a time period before employee terminatation date to search for export events
+      let termination_watch_period = 7d;
+      let query_frequency = 1h;
+      let exportEvents = dynamic(['ExportToExcel', 'ExportPdfDocument', 'ExportWordDocument', 'ExecutePowerBISql']);
+      MSBizAppsTerminatedEmployees
+      | where (UserState =~ "Terminated") or (UserState =~ "Notified" and TerminationDate <= startofday(now()) + termination_watch_period)
+      | join kind=inner (DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where Message in (exportEvents))
+          on $left.UserPrincipalName == $right.UserId
+      | summarize
+          FirstEvent = min(TimeGenerated),
+          LastEvent = max(TimeGenerated),
+          Event = make_set(Message, 4)
+          by UserId, InstanceUrl, ClientIp, UserState
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          FirstEvent,
+          LastEvent,
+          UserId,
+          ClientIp,
+          UserState,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Export activity from terminated or notified employee
+      description: This query identifies Dataverse export activity triggered by terminated, or employees about to leave the
+        organization. This analytics rule uses the TerminatedEmployees watchlist template.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+        - technique: T1048
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import json
+import threading
 import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -17,6 +19,7 @@ DEFAULT_REQUEST_TIMEOUT_SECONDS = 90
 DEFAULT_FAMILY_TIMEOUT_SECONDS = 30 * 60
 MAX_TRANSIENT_RETRIES = 2
 MAX_SERVER_TIMEOUT_SECONDS = 600
+DEFAULT_FAMILY_MAX_WORKERS = 4
 
 
 class LogsQueryFailure(RuntimeError):
@@ -390,18 +393,25 @@ def query_family(
     retry_count: int = MAX_TRANSIENT_RETRIES,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    max_workers: int = DEFAULT_FAMILY_MAX_WORKERS,
 ) -> list[dict[str, Any]]:
     if not 1 <= family_timeout_seconds <= 6 * 60 * 60:
         raise ValueError("family timeout must be between 1 and 21600 seconds")
     deadline = monotonic() + family_timeout_seconds
-    results: list[dict[str, Any]] = []
+    results: list[dict[str, Any] | None] = [None] * len(queries)
+    state_lock = threading.Lock()
     stop_family = False
-    for item in queries:
+
+    def _run_index(index: int) -> None:
+        nonlocal stop_family
+        item = queries[index]
         started = monotonic()
         detection = item["detection"]
         query = item["query"]
-        if stop_family:
-            results.append({
+        with state_lock:
+            stopped = stop_family
+        if stopped:
+            results[index] = {
                 "detection": detection,
                 "status": "not-run",
                 "valid": False,
@@ -411,16 +421,18 @@ def query_family(
                 "schema": [],
                 "error": "not executed after an earlier provider-level failure",
                 "errorDetails": None,
-            })
-            continue
+                "durationMs": 0,
+            }
+            return
         remaining = deadline - monotonic()
         if remaining < 1:
             response = LogsQueryFailure(
                 "the complete Sentinel query-family time budget expired",
                 failure_kind="timeout",
             )
-            stop_family = True
-            result = {
+            with state_lock:
+                stop_family = True
+            result: dict[str, Any] = {
                 "status": "not-run",
                 "valid": False,
                 "querySha256": item["querySha256"],
@@ -462,12 +474,29 @@ def query_family(
                     "tables": [],
                 }
                 if exc.failure_kind != "query":
-                    stop_family = True
+                    with state_lock:
+                        stop_family = True
         result.update({
             "detection": detection,
             "querySha256": item["querySha256"],
             "valid": result["status"] == "passed",
             "durationMs": max(0, int((monotonic() - started) * 1000)),
         })
-        results.append(result)
-    return results
+        results[index] = result
+
+    if queries:
+        # Execute the first query as an auth/connectivity canary before fanning out.
+        _run_index(0)
+        remaining_indices = list(range(1, len(queries)))
+        if remaining_indices:
+            if stop_family or (deadline - monotonic()) < 1 or max_workers <= 1:
+                for idx in remaining_indices:
+                    _run_index(idx)
+            else:
+                workers = max(1, min(max_workers, len(remaining_indices)))
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    futures = [executor.submit(_run_index, idx) for idx in remaining_indices]
+                    for future in futures:
+                        future.result()
+
+    return [entry for entry in results if entry is not None]

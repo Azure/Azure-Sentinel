@@ -143,6 +143,45 @@ function ConvertTo-CustomDetectionArmLiteral {
     return "[if(true(), '$escapedValue', '$escapedValue')]"
 }
 
+function Set-CustomDetectionArmIdentifiers {
+    param(
+        [Parameter(Mandatory = $true)]
+        [psobject]$DetectionResource
+    )
+
+    $DetectionResource.properties.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$DetectionResource.properties.id)
+    foreach ($mappingGroup in $DetectionResource.properties.detectionAction.alertTemplate.entityMappings.PSObject.Properties) {
+        foreach ($mapping in @($mappingGroup.Value)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$mapping.id)) {
+                $mapping.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$mapping.id)
+            }
+        }
+    }
+    foreach ($detail in $DetectionResource.properties.detectionAction.alertTemplate.customDetails.PSObject.Properties) {
+        if ($detail.Name -like '*id' -and $detail.Value -is [string]) {
+            $detail.Value = ConvertTo-CustomDetectionArmLiteral -Value $detail.Value
+        }
+    }
+    $DetectionResource.properties.contentProvenance.packageId = ConvertTo-CustomDetectionArmLiteral -Value (
+        [string]$DetectionResource.properties.contentProvenance.packageId
+    )
+}
+
+function ConvertTo-CustomDetectionTemplateJson {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Json
+    )
+
+    # ARM-TTK's Resolve-JSONContent counts '{' and '}' inside JSON strings;
+    # Unicode escapes for braces preserve decoded KQL/ARM strings while keeping
+    # literal '[' and ']' intact for ARM-TTK's raw-text expression regexes.
+    return [regex]::Replace($Json, '"(?:\\.|[^"\\])*"', [System.Text.RegularExpressions.MatchEvaluator]{
+        param($Match)
+        return $Match.Value.Replace('{', '\u007b').Replace('}', '\u007d')
+    })
+}
+
 function ConvertTo-V31CustomDetectionId {
     param(
         [Parameter(Mandatory = $true)]
@@ -238,24 +277,13 @@ function Set-V31CustomDetectionTactics {
             }
         }
     }
-    if ($tactics.Count -gt 1) {
-        $omittedTactics = @($tactics | Select-Object -Skip 1 | ForEach-Object { [string]$_.tactic })
-        $alertTemplate.tactics = @($tactics[0])
-    }
-    else {
-        $omittedTactics = @()
-    }
     $projection = [ordered]@{
         detectionId     = $DetectionId
         authoredTactics = @($tactics | ForEach-Object { [string]$_.tactic })
-        packagedTactics = @([string]$tactics[0].tactic)
-        omittedTactics  = $omittedTactics
+        packagedTactics = @($tactics | ForEach-Object { [string]$_.tactic })
+        omittedTactics  = @()
     }
     Write-Host "V3.1 TACTIC PROJECTION: $($projection | ConvertTo-Json -Depth 10 -Compress)"
-    if ($omittedTactics.Count -gt 0) {
-        $dropped = $omittedTactics -join ', '
-        Write-Host "INFORMATION: V3.1 TACTIC SELECTION: Custom Detection '$DetectionId' ARM install and registration package the first authored tactic '$($tactics[0].tactic)' and its techniques; omitted tactics: $dropped. Source order is preserved; this is an API payload restriction, not a recommended classification or full tactic coverage. Authored YAML and provenance are unchanged."
-    }
 }
 
 function Get-AnalyticRuleContentTemplateIndex {
@@ -334,14 +362,7 @@ function New-CustomDetectionInstallDeployment {
         throw 'Custom Detection installation requires resolved content provenance.'
     }
     $deploymentDetection = Copy-CustomDetectionObject -InputObject $DetectionResource
-    $deploymentDetection.properties.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$deploymentDetection.properties.id)
-    foreach ($mappingGroup in $deploymentDetection.properties.detectionAction.alertTemplate.entityMappings.PSObject.Properties) {
-        foreach ($mapping in @($mappingGroup.Value)) {
-            if (-not [string]::IsNullOrWhiteSpace([string]$mapping.id)) {
-                $mapping.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$mapping.id)
-            }
-        }
-    }
+    Set-CustomDetectionArmIdentifiers -DetectionResource $deploymentDetection
 
     return [pscustomobject]@{
         type       = 'Microsoft.Resources/deployments'
@@ -389,14 +410,7 @@ function New-CustomDetectionRegistration {
     $escapedVersion = $ContentVersion.Replace("'", "''")
     $productId = "[concat(take(variables('_solutionId'),50),'-','cd','-', uniqueString(concat(variables('_solutionId'),'-','CustomDetection','-','$escapedContentId','-','$escapedVersion')))]"
     $registrationDetection = Copy-CustomDetectionObject -InputObject $DetectionResource
-    $registrationDetection.properties.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$registrationDetection.properties.id)
-    foreach ($mappingGroup in $registrationDetection.properties.detectionAction.alertTemplate.entityMappings.PSObject.Properties) {
-        foreach ($mapping in @($mappingGroup.Value)) {
-            if (-not [string]::IsNullOrWhiteSpace([string]$mapping.id)) {
-                $mapping.id = ConvertTo-CustomDetectionArmLiteral -Value ([string]$mapping.id)
-            }
-        }
-    }
+    Set-CustomDetectionArmIdentifiers -DetectionResource $registrationDetection
     $alertTemplate = $DetectionResource.properties.detectionAction.alertTemplate
 
     $properties = [ordered]@{
@@ -429,6 +443,7 @@ function New-CustomDetectionRegistration {
     $fullProvenance = Copy-CustomDetectionObject -InputObject $DetectionResource.properties.contentProvenance
     $fullProvenance | Add-Member -NotePropertyName requiredWorkloads -NotePropertyValue @($DetectionDocument.contentProvenance.requiredWorkloads)
     $fullProvenance | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue @($DetectionDocument.contentProvenance.requiredDataConnectors)
+    $fullProvenance.packageId = ConvertTo-CustomDetectionArmLiteral -Value ([string]$fullProvenance.packageId)
     $properties['contentProvenance'] = $fullProvenance
 
     return [pscustomobject]@{
@@ -580,9 +595,6 @@ function Add-XdrCustomDetectionsToSolution {
 
         if ([string]::IsNullOrWhiteSpace([string]$detectionDocument.properties.queryCondition.queryText)) {
             throw "Custom Detection '$detectionId' has no queryCondition.queryText."
-        }
-        if (-not $v31VersionPolicy -and @($detectionDocument.properties.detectionAction.alertTemplate.tactics).Count -gt 1) {
-            throw "Custom Detection '$detectionId' contains more than one tactic; the service supports exactly one."
         }
         if ($null -eq $detectionDocument.properties.detectionAction.alertTemplate.entityMappings) {
             throw "Custom Detection '$detectionId' has no entity mappings."

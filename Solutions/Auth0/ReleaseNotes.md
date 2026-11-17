@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                     |
 |-------------|--------------------------------|--------------------------------------------------------|
+| 3.2.2       | 20-04-2026                     | Repackaged the **Solution** to V3.1 version 3.2.2 and updated **Data Connector** documentation link. |
 | 3.2.1       | 23-09-2026                     | Added OrganizationId, OrganizationName, and SecurityContext fields to the Auth0 Logs (via Codeless Connector Framework) **Data Connector**. |
 | 3.2.0       | 20-07-2026                     | Auth0 Logs (via Codeless Connector Framework) **Data Connector** now supports collecting from multiple Auth0 hosts (multi-domain) and tags each record with the **Auth0Domain** column |
 | 3.1.5       | 13-04-2026                     | Deprecate Auth0 Logs (using Azure Function) |
@@ -9,4 +10,4 @@
 | 3.1.1       | 22-01-2025                     | Added Preview tag to CCP **Data Connector**                                            |
 | 3.1.0       | 13-12-2024                     | Added new CCP **Data Connector** to the Solution                                       |
 | 3.0.0       | 24-08-2024                     | Updated the **Data Connector** Function app python runtime version to 3.11             |
-|             | 11-12-2023                     | Added new **Parser** (Auth0AM)                                                         | 
+| 2.0.0       | 11-12-2023                     | Added new **Parser** (Auth0AM)                                                         |

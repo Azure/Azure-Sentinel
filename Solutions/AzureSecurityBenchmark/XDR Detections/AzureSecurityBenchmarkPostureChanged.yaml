@@ -1,0 +1,96 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureSecurityCenter
+  dataTypes:
+  - SecurityRecommendation
+  - SecurityRegulatoryCompliance
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityRecommendation
+    - SecurityRegulatoryCompliance
+  requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+    - SecurityRecommendation
+    - SecurityRegulatoryCompliance
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0610e72f-ceaf-42d1-879e-952a1bd8d07a
+    path: Analytic Rules/AzureSecurityBenchmarkPostureChanged.yaml
+    version: 1.0.2
+    querySha256: ebb167d209b5055c665972cffefa2fbed02884d9e4a1679187dc8384754f46c8
+    schedule:
+      queryFrequency: 7d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings: []
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1082
+    reviewScope:
+      sourceDocumentSha256: ba00db97f4b171f304cf225ae3aeda9c454e65d7c1bf3fd0739c40f02f7d27a2
+      targetQuerySha256: e668c5a21365674c0049d2b1490e90261c755bdbaff440b507ded15ef4b77ebd
+properties:
+  id: xdr-0610e72f-ceaf-42d1-879e-952a1bd8d07a
+  displayName: Azure Security Benchmark Posture Changed
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let ComplianceDomainLookup = SecurityRecommendation
+      | join kind=fullouter (SecurityRegulatoryCompliance | where ComplianceStandard == "Azure-Security-Benchmark") on RecommendationName
+      | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationName
+      | extend ComplianceDomain = iff(ComplianceControl contains "NS.", "Network Security", iff(ComplianceControl contains "IM.", "Identity Management", iff(ComplianceControl contains "PA.", "Privileged Access", iff(ComplianceControl contains "DP.", "Data Protection", iff(ComplianceControl contains "AM.", "Asset Management", iff(ComplianceControl contains "LT.", "Logging & Threat Detection", iff(ComplianceControl contains "IR.", "Incident Response", iff(ComplianceControl contains "PV.", "Posture & Vulnerability Management", iff(ComplianceControl contains "ES.", "Endpoint Security", iff(ComplianceControl contains "BR.", "Backup & Recovery", iff(ComplianceControl startswith "DS.", "DevOps Security", iff(ComplianceControl contains "GS.", "Governance & Strategy", "Other"))))))))))));
+      SecurityRecommendation
+      | join kind=fullouter (SecurityRegulatoryCompliance | where ComplianceStandard == "Azure-Security-Benchmark") on RecommendationName
+      | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationName
+      | extend ComplianceDomain = iff(ComplianceControl contains "NS.", "Network Security", iff(ComplianceControl contains "IM.", "Identity Management", iff(ComplianceControl contains "PA.", "Privileged Access", iff(ComplianceControl contains "DP.", "Data Protection", iff(ComplianceControl contains "AM.", "Asset Management", iff(ComplianceControl contains "LT.", "Logging & Threat Detection", iff(ComplianceControl contains "IR.", "Incident Response", iff(ComplianceControl contains "PV.", "Posture & Vulnerability Management", iff(ComplianceControl contains "ES.", "Endpoint Security", iff(ComplianceControl contains "BR.", "Backup & Recovery", iff(ComplianceControl startswith "DS.", "DevOps Security", iff(ComplianceControl contains "GS.", "Governance & Strategy", "Other"))))))))))))
+      | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by ComplianceDomain
+      | extend PassedControlsPercentage = iff(Total > 0, (Passed / todouble(Total)) * 100.0, real(null))
+      | join kind=leftouter (ComplianceDomainLookup) on ComplianceDomain
+      | project ComplianceDomain, Total, PassedControlsPercentage, Passed, Failed, LastEvaluated = TimeGenerated
+      | summarize arg_max(LastEvaluated, *) by ComplianceDomain, Total, PassedControlsPercentage, Passed, Failed
+      | where PassedControlsPercentage < 70
+      | sort by PassedControlsPercentage asc, Passed desc
+      | extend RemediationLink = strcat("https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22")
+  schedule:
+    frequency: P7D
+  detectionAction:
+    alertTemplate:
+      title: Azure Security Benchmark Posture Changed
+      description: This rule monitors Azure policies aligned with the Azure Security Benchmark regulatory compliance initiative
+        and triggers when policy compliance falls below 70% within a 7-day time window.
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: ComplianceDomain
+        urls:
+        - id: url1
+          addressColumn: RemediationLink
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1082
+      customDetails:
+        ComplianceDomain: ComplianceDomain
+        TotalControls: Total
+        PassedControls: Passed
+        FailedControls: Failed

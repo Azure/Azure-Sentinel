@@ -1,0 +1,172 @@
+Parser:
+  Title: Audit Event ASIM parser for AWS CloudTrail EC2 VerifiedAccess activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+Description: |
+  Normalizes AWSCloudTrail events from ec2.amazonaws.com for Verified Access instances,
+  groups, endpoints, policies, logging configuration, and trust providers. This parser is
+  referenced by ASimAuditEventAWSCloudTrail.
+ParserName: ASimAuditEventAWSCloudTrailEC2VerifiedAccess
+ParentParser: ASimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _ASim_AuditEvent_AWSCloudTrailEC2VerifiedAccess
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled: bool = false, pack: bool = false) {
+    let Events = datatable(EventName: string, EventType: string, Object: string)
+    [
+      "AttachVerifiedAccessTrustProvider", "Set", "EC2 Instance",
+      "CreateVerifiedAccessEndpoint", "Create", "Verified Access Endpoint",
+      "CreateVerifiedAccessGroup", "Create", "Verified Access Group",
+      "CreateVerifiedAccessInstance", "Create", "Verified Access Instance",
+      "CreateVerifiedAccessTrustProvider", "Create", "Verified Access Trust Provider",
+      "DeleteVerifiedAccessEndpoint", "Delete", "Verified Access Endpoint",
+      "DeleteVerifiedAccessGroup", "Delete", "Verified Access Group",
+      "DeleteVerifiedAccessInstance", "Delete", "Verified Access Instance",
+      "DeleteVerifiedAccessTrustProvider", "Delete", "Verified Access Trust Provider",
+      "DescribeVerifiedAccessEndpoints", "Read", "Verified Access Endpoint",
+      "DescribeVerifiedAccessGroups", "Read", "Verified Access Group",
+      "DescribeVerifiedAccessInstanceLoggingConfigurations", "Read", "Verified Access Instance Logging Configuration",
+      "DescribeVerifiedAccessInstances", "Read", "Verified Access Instance",
+      "DescribeVerifiedAccessTrustProviders", "Read", "Verified Access Trust Provider",
+      "DetachVerifiedAccessTrustProvider", "Set", "Verified Access Trust Provider",
+      "ExportVerifiedAccessInstanceClientConfiguration", "Execute", "Verfied Access Instance",
+      "GetVerifiedAccessEndpointPolicy", "Read", "Verified Access Endpoint",
+      "GetVerifiedAccessEndpointTargets", "Read", "Verified Access Endpoint",
+      "GetVerifiedAccessGroupPolicy", "Read", "Verified Access Group Policy",
+      "ModifyVerifiedAccessEndpoint", "Set", "Verified Access Endpoint",
+      "ModifyVerifiedAccessEndpointPolicy", "Set", "Verified Access Endpoint Policy",
+      "ModifyVerifiedAccessGroup", "Set", "Verified Access Group",
+      "ModifyVerifiedAccessGroupPolicy", "Set", "Verified Access Group Policy",
+      "ModifyVerifiedAccessInstance", "Set", "Verified Access Instance",
+      "ModifyVerifiedAccessInstanceLoggingConfiguration", "Set", "Verified Access Instance",
+      "ModifyVerifiedAccessTrustProvider", "Set", "Verified Access Trust Provider"
+    ];
+    AWSCloudTrail
+    | where not(disabled)
+    | where EventSource == "ec2.amazonaws.com"
+    | where EventName in (Events | project EventName)
+    | lookup kind=inner Events on EventName
+    | extend RequestParameters = todynamic(RequestParameters), ResponseElements = todynamic(ResponseElements)
+    | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+    | extend NewValue = iff(EventResult == "Success", case(
+        EventName in ("AttachVerifiedAccessTrustProvider", "CreateVerifiedAccessInstance",
+          "ModifyVerifiedAccessInstance"), ResponseElements.verifiedAccessInstance,
+        EventName in ("CreateVerifiedAccessEndpoint", "ModifyVerifiedAccessEndpoint"),
+          ResponseElements.verifiedAccessEndpoint,
+        EventName in ("CreateVerifiedAccessGroup", "ModifyVerifiedAccessGroup"),
+          ResponseElements.verifiedAccessGroup,
+        EventName in ("CreateVerifiedAccessTrustProvider", "ModifyVerifiedAccessTrustProvider"),
+          ResponseElements.verifiedAccessTrustProvider,
+        EventName == "ExportVerifiedAccessInstanceClientConfiguration", ResponseElements.openVpnConfigurationSet,
+        EventName in ("ModifyVerifiedAccessEndpointPolicy", "ModifyVerifiedAccessGroupPolicy"),
+          ResponseElements.sseSpecification,
+        EventName == "ModifyVerifiedAccessInstanceLoggingConfiguration", ResponseElements.loggingConfiguration,
+        ""
+      ), "")
+    | extend ObjectId = case(
+        EventName in ("AttachVerifiedAccessTrustProvider", "DeleteVerifiedAccessInstance",
+          "DescribeVerifiedAccessInstanceLoggingConfigurations", "DescribeVerifiedAccessInstances",
+          "ExportVerifiedAccessInstanceClientConfiguration", "ModifyVerifiedAccessGroup",
+          "ModifyVerifiedAccessInstance", "ModifyVerifiedAccessInstanceLoggingConfiguration"),
+          RequestParameters.VerifiedAccessInstanceId,
+        EventName == "CreateVerifiedAccessEndpoint",
+          ResponseElements.verifiedAccessEndpoint.verifiedAccessEndpointId,
+        EventName == "CreateVerifiedAccessGroup", ResponseElements.verifiedAccessGroup.verifiedAccessGroupId,
+        EventName == "CreateVerifiedAccessInstance",
+          ResponseElements.verifiedAccessInstance.verifiedAccessInstanceId,
+        EventName == "CreateVerifiedAccessTrustProvider",
+          ResponseElements.verifiedAccessTrustProvider.verifiedAccessTrustProviderId,
+        EventName in ("DeleteVerifiedAccessEndpoint", "GetVerifiedAccessEndpointPolicy",
+          "GetVerifiedAccessEndpointTargets", "ModifyVerifiedAccessEndpointPolicy"),
+          RequestParameters.VerifiedAccessEndpointId,
+        EventName in ("DeleteVerifiedAccessGroup", "DescribeVerifiedAccessEndpoints",
+          "DescribeVerifiedAccessGroups", "GetVerifiedAccessGroupPolicy", "ModifyVerifiedAccessEndpoint",
+          "ModifyVerifiedAccessGroupPolicy"), RequestParameters.VerifiedAccessGroupId,
+        EventName in ("DeleteVerifiedAccessTrustProvider", "DescribeVerifiedAccessTrustProviders",
+          "DetachVerifiedAccessTrustProvider", "ModifyVerifiedAccessTrustProvider"),
+          RequestParameters.VerifiedAccessTrustProviderId,
+        ""
+      )
+    | extend
+        Type = "AWSCloudTrail",
+        EventCount = int(1),
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventSeverity = "Informational",
+        EventSchema = "AuditEvent",
+        EventSchemaVersion = "1.0.0",
+        EventVendor = "AWS",
+        EventProduct = "CloudTrail",
+        Dvc = "CloudTrail",
+        EventMessage = ErrorMessage,
+        ObjectType = "Cloud Resource",
+        TargetAppName = "Amazon Elastic Compute Cloud",
+        TargetAppType = "Service"
+    | project-rename
+        EventOriginalSubType = EventTypeName,
+        EventOriginalType = EventName,
+        EventUid = AwsEventId,
+        EventOriginalResultDetails = ErrorMessage,
+        EventProductVersion = EventVersion,
+        ActorUserId = UserIdentityAccountId,
+        ActorUsername = UserIdentityUserName,
+        ActorOriginalUserType = UserIdentityType,
+        HttpUserAgent = UserAgent
+    | extend
+        ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+        ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+        SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+        ActingApplicationEntityKey = "",
+        ActorUserAdditionalIds = dynamic([]),
+        ActorUserEntityKey = "",
+        AdditionalEntities = dynamic([]),
+        DvcEntityKey = "",
+        SrcSystemEntityKey = "",
+        TargetApplicationEntityKey = "",
+        TargetSystemEntityKey = ""
+    | extend AdditionalFields = iff(pack, bag_pack(
+        "ActorAccessKeyId", UserIdentityAccessKeyId,
+        "AWSRegion", AWSRegion,
+        "APIVersion", APIVersion,
+        "ManagementEvent", ManagementEvent,
+        "ReadOnly", ReadOnly,
+        "RequestParameters", RequestParameters,
+        "ResponseElements", ResponseElements
+      ), dynamic({}))
+    | extend
+        Operation = EventOriginalType,
+        User = ActorUsername,
+        IpAddr = SrcIpAddr,
+        Application = TargetAppName,
+        Value = NewValue
+    | project
+        TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+        EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+        EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+        EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+        ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+        SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+        Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+        ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+        AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+        TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(disabled=disabled, pack=pack)

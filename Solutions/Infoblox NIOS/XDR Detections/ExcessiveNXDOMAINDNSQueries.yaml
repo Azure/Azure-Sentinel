@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b8266f81-2715-41a6-9062-42486cbc9c73
+    path: Analytic Rules/ExcessiveNXDOMAINDNSQueries.yaml
+    version: 1.0.6
+    querySha256: 1c701bc50005b0fe559aa02befa6011b75d4f3942aa4c32694e1f81cf3c761be
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1568
+    - T1008
+    reviewScope:
+      sourceDocumentSha256: 7bd1ff1a6fffbf19a8497922e6ddfcac93fe4c48cb08a9c2e557ffadb78dbc1a
+      targetQuerySha256: 0f062908328e504dfd68ed8334a3c2e314644d2c3441e9cf0db41fc66637affe
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 7bd1ff1a6fffbf19a8497922e6ddfcac93fe4c48cb08a9c2e557ffadb78dbc1a
+      targetQuerySha256: 0f062908328e504dfd68ed8334a3c2e314644d2c3441e9cf0db41fc66637affe
+properties:
+  id: xdr-b8266f81-2715-41a6-9062-42486cbc9c73
+  displayName: Excessive NXDOMAIN DNS Queries
+  status: disabled
+  queryCondition:
+    queryText: "// Infoblox_dnsclient parser inlined: Defender XDR cannot resolve Sentinel workspace functions.\nlet xdr_inline_Infoblox_dnsclient\
+      \ = view () {\n    let datasource = (_GetWatchlist('Sources_by_SourceType') | where SearchKey == 'InfobloxNIOS' | extend\
+      \ Source = column_ifexists('Source', column_ifexists('IP', '')) | project Source);\n    // Parse Response Logs\n   \
+      \ let response =\n        Syslog\n        | where CollectorHostName in (datasource) or Computer in (datasource) or HostIP\
+      \ in (datasource)\n        | where SyslogMessage has_all (\"client\", \"query:\", \"response:\")\n        | parse SyslogMessage\
+      \ with *\n            \"client \" SrcIpAddr: string\n            \"#\" SrcPortNumber: string\n            \" \" NetworkProtocol:\
+      \ string\n            \": query: \" DnsQuery: string\n            \" \" DnsQueryClassName: string\n            \" \"\
+      \ DnsQueryType: string\n            \" response: \" DnsResponseCode: string\n            \" \" DnsFlags: string\n  \
+      \      | extend DnsResponseNameIndex= indexof(DnsFlags, \" \")\n        | extend EventMessage =iif(DnsResponseNameIndex\
+      \ != \"-1\", substring(DnsFlags, DnsResponseNameIndex+1), \"\")\n        | extend DnsFlags =iif(DnsResponseNameIndex\
+      \ != \"-1\", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)\n        | extend SrcPortNumber = iif(SrcPortNumber\
+      \ has ':',replace_string(SrcPortNumber,':',''),SrcPortNumber)\n        | extend SrcPortNumber = toint(SrcPortNumber)\n\
+      \        | extend EventSubType = \"response\"\n        | project-away DnsResponseNameIndex,SyslogMessage;\n    //\n\
+      \    // Parse Request Logs\n    //\n    let request =\n        Syslog\n        | where CollectorHostName in (datasource)\
+      \ or Computer in (datasource) or HostIP in (datasource)\n        | where SyslogMessage has_all (\"client\", \"query:\"\
+      )\n            and SyslogMessage !has \"response:\"\n        | extend SyslogMessage = (split(SyslogMessage,\"client\
+      \ \"))[1]\n        | extend SyslogMessage = iif(SyslogMessage startswith \"@\", (substring(SyslogMessage, indexof(SyslogMessage,\
+      \ \" \")+1)), SyslogMessage)\n        | extend SyslogMessage = replace_string(SyslogMessage,\"\\\\ \",\"@@@\")\n   \
+      \     | parse SyslogMessage with \n            SrcIpAddr: string\n            \"#\" SrcPortNumber: int *\n         \
+      \   \"query: \" DnsQuery: string\n            \" \" DnsQueryClassName: string\n            \" \" DnsQueryType: string\n\
+      \            \" \" DnsFlags: string\n        | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')\n        | extend\
+      \ DnsFlags= tostring((split(DnsFlags,\" \"))[0])\n        | extend EventSubType = \"request\",DnsResponseCode = \"NA\"\
+      \n        | project-away SyslogMessage\n        ;\n    //\n    // Union Request and Response Logs\n    //\n    let Infoblox_NIOS_ParsedData\
+      \ =\n        union response, request\n        | extend\n            EventProduct=\"NIOS\",\n            EventVendor=\"\
+      Infoblox\",\n            EventType=\"Query\",\n            EventResult=iff(EventSubType==\"request\" or DnsResponseCode==\"\
+      NOERROR\",\"Success\",\"Failure\"),\n            Log_Type=\"client\",\n            responseTime=EventTime;\n    Infoblox_NIOS_ParsedData\n\
+      };\nlet threshold = 200;\nxdr_inline_Infoblox_dnsclient\n| where isnotempty(DnsResponseCode)\n| where DnsResponseCode\
+      \ =~ \"NXDOMAIN\"\n| summarize count() by SrcIpAddr, bin(TimeGenerated,15m)\n| where count_ > threshold\n| join kind=inner\
+      \ (xdr_inline_Infoblox_dnsclient\n    | where isnotempty(DnsResponseCode)\n    | where DnsResponseCode =~ \"NXDOMAIN\"\
+      \n    ) on SrcIpAddr"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Excessive NXDOMAIN DNS Queries
+      description: '''This creates an incident in the event a client generates excessive amounts of DNS queries for non-existent
+        domains.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1568
+        - technique: T1008

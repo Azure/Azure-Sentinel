@@ -1,0 +1,142 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SyslogAma
+  dataTypes:
+  - Syslog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ConfidentialWatchlist
+    - Syslog
+    - VMwareESXi
+  requiredDataConnectors:
+  - connectorId: SyslogAma
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 0f4a80de-344f-47c0-bc19-cb120c59b6f0
+    path: Analytic Rules/ESXiNewVM.yaml
+    version: 1.0.2
+    querySha256: bb1c606c80b35f4646cd53289987b5e877c88938de4ac7d73fd75884de5e459e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `HostCustomEntity`
+      is provisionally represented by hosts.nameColumn `HostCustomEntity`; confirm
+      that this column is the intended host identifier. The original value is also
+      retained in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Host.FullName value is retained as customDetails.HostFullName from query column
+      `HostCustomEntity`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `HostCustomEntity` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 2764c3f1d3465b93adfd289dfa8eeb0697a04338a44964d7f8493894bd41074a
+      targetQuerySha256: 2e291ec97b900885b56a6db45b7da9b41577650dd8e5b78f21a7152003e52ced
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 2764c3f1d3465b93adfd289dfa8eeb0697a04338a44964d7f8493894bd41074a
+      targetQuerySha256: 2e291ec97b900885b56a6db45b7da9b41577650dd8e5b78f21a7152003e52ced
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: HostCustomEntity
+      column: HostCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+properties:
+  id: xdr-0f4a80de-344f-47c0-bc19-cb120c59b6f0
+  displayName: VMware ESXi - New VM started
+  status: disabled
+  queryCondition:
+    queryText: 'let a_vm =
+
+      VMwareESXi
+
+      | where SyslogMessage has (''VmPoweredOnEvent'')
+
+      | extend DstHostname = extract(@''\[\d+\]\s+\[(.*?)\s+on'', 1, SyslogMessage)
+
+      | summarize vm_l = makeset(DstHostname)
+
+      | extend k=1;
+
+      VMwareESXi
+
+      | where SyslogMessage has (''VmPoweredOnEvent'')
+
+      | extend DstHostname = extract(@''\[\d+\]\s+\[(.*?)\s+on'', 1, SyslogMessage)
+
+      | extend k = 1
+
+      | join (a_vm) on k
+
+      | where vm_l !has DstHostname
+
+      | extend HostCustomEntity = DstHostname'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: VMware ESXi - New VM started
+      description: '''Detects when new VM was started.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: HostCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        HostFullName: HostCustomEntity

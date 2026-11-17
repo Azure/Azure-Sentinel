@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.2       | 22-10-2026                     | Added Defender XDR **Custom Detections** and **XDR Workbook** for VMware vCenter.  |
 | 3.0.5       | 13-06-2025                     | Updating **Parser** to improve data parsing logic and adjusts entity mappings.  |
 | 3.0.4       | 03-12-2024                     | Removed Deprecated **Data Connector**.       |
 | 3.0.3       | 18-11-2024                     | Modified **Parser** vCenter.yaml for better parsing.                 |

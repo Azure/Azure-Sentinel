@@ -346,6 +346,22 @@ def azure_cli_credential(
                         )
                     raise
 
+        def get_token_info(self, *scopes: str, **kwargs: Any):
+            with azure_cli_profile(azure_config_dir):
+                token_info_fn = getattr(
+                    credential, "get_token_info", None
+                ) or getattr(credential, "get_token")
+                try:
+                    return token_info_fn(*scopes, **kwargs)
+                except Exception:
+                    if tenant_id and subscription:
+                        fallback = AzureCliCredential(tenant_id=tenant_id)
+                        fallback_fn = getattr(
+                            fallback, "get_token_info", None
+                        ) or getattr(fallback, "get_token")
+                        return fallback_fn(*scopes, **kwargs)
+                    raise
+
         def __getattr__(self, name: str) -> Any:
             return getattr(credential, name)
 

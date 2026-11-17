@@ -13,8 +13,8 @@ describe("documentsLinkValidator", () => {
         expect(result).to.equal(0 /* ExitCode.SUCCESS */);
     });
     it("should fail when link contains locale", async () => {
-        let result = await IsFileContainsLinkWithLocale(".script/tests/documentsLinkValidatorTest/badlink.md");
-        expect(result).eventually.rejectedWith(Error);
+        await expect(IsFileContainsLinkWithLocale(".script/tests/documentsLinkValidatorTest/badlink.md"))
+            .to.be.rejectedWith(Error);
     });
 });
 //# sourceMappingURL=documentsLinkValidator.Test.js.map

@@ -1,0 +1,137 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: GoogleSCCDefinition
+  dataTypes:
+  - GoogleCloudSCC
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - GoogleCloudSCC
+  requiredDataConnectors:
+  - connectorId: GoogleSCCDefinition
+    dataTypes:
+    - GoogleCloudSCC
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a9c7a4be-b7e7-4045-8028-0d1ffaa049af
+    path: Analytic Rules/GCPDNSSECDisabled.yaml
+    version: 1.0.0
+    querySha256: de27b34c45e311dcbea448efb1245a50d11a0e529002b03fdc486302868db1ac
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Collection
+    - CommandAndControl
+    - DefenseEvasion
+    originalTechniques:
+    - T1557
+    - T1071.004
+    - T1562.001
+    reviewScope:
+      sourceDocumentSha256: 29b84d92ee0319c2809157d3222f47fe4cfc9b82f60587c1c3e9e7cc31ce36d4
+      targetQuerySha256: 026dbd86eb69158aa0347ae68d843ae12f22e03bbe04a066877d3bb6b9f81c27
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 29b84d92ee0319c2809157d3222f47fe4cfc9b82f60587c1c3e9e7cc31ce36d4
+      targetQuerySha256: 026dbd86eb69158aa0347ae68d843ae12f22e03bbe04a066877d3bb6b9f81c27
+properties:
+  id: xdr-a9c7a4be-b7e7-4045-8028-0d1ffaa049af
+  displayName: GCP Security Command Center - Detect DNSSEC disabled for DNS zones
+  status: disabled
+  queryCondition:
+    queryText: |-
+      GoogleCloudSCC
+      | where tostring(Findings.state) == "ACTIVE"
+      | extend FindingsJson = parse_json(Findings)
+      | extend FindingCategory = tostring(FindingsJson.category)
+      | where FindingCategory == "DNSSEC_DISABLED"
+      | extend ResourceName = tostring(FindingsJson.resourceName)
+      | extend
+        ResourceType = tostring(FindingsResource.type),
+        ExternalUri = tostring(FindingsJson.externalUri),
+        SourceProps = parse_json(tostring(FindingsJson.sourceProperties)),
+        GcpResource = parse_json(tostring(FindingsJson.resource))
+      // Extract project and managed zone from resourceName like //dns.googleapis.com/projects/PROJECT/managedZones/ZONE
+      | extend ProjectName = extract(@"projects/([^/]+)", 1, ResourceName)
+      | extend ManagedZone = extract(@"managedZones/([^/]+)", 1, ResourceName)
+      | extend Severity = tostring(FindingsJson.severity)
+      | summarize
+        TimeGenerated = max(TimeGenerated)
+        by ProjectName, ManagedZone, ResourceType, ResourceName, Severity, ExternalUri
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: GCP Security Command Center - Detect DNSSEC disabled for DNS zones
+      description: |-
+        Detects Google Cloud DNS zones where DNSSEC is disabled using Security Command Center findings (DNSSEC_DISABLED).
+        Disabling DNSSEC increases risk of DNS hijacking and man-in-the-middle attacks. This analytic rule alerts on findings where DNSSEC is reported as disabled for a managed zone.
+      severity: medium
+      entityMappings:
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: ResourceName
+        hosts:
+        - id: host1
+          nameColumn: ResourceName
+      tactics:
+      - tactic: Collection
+        techniques:
+        - technique: T1557
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+          subTechniques:
+          - T1071.004
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+          subTechniques:
+          - T1562.001
+      customDetails:
+        ProjectName: ProjectName
+        ManagedZone: ManagedZone
+        ExternalUri: ExternalUri

@@ -131,16 +131,17 @@ review, runtime/schema, packaging, authentication, or write gates.
 
 ## Migration workflow
 
-1. Run `workflow-status` first. If no state exists, default to **Authoring**
-   and ask before optional **Qualification** (or **Cancel**). Explain that
-   Authoring stops after packaging/reporting while Qualification adds
-   deployment, mock ingestion, and alert parity.
-2. Initialize or resume with the selected profile (defaults to `authoring`):
+1. Run `workflow-status` first. If no state exists, default to **Qualification**
+   (or allow explicit **Authoring** as an offline/ISV fallback when no live lab
+   is available, or **Cancel**). Explain that Qualification adds deployment,
+   mock ingestion, and alert parity while Authoring stops after
+   packaging/reporting.
+2. Initialize or resume with the selected profile (defaults to `qualification`):
 
    ```powershell
    sentinel-xdr-migration workflow-init `
      --solution "<solution-path>" `
-     --workflow-profile "<authoring-or-qualification>" `
+     --workflow-profile "<qualification-or-authoring>" `
      --tenant-id "<tenant-guid>" `
      --subscription-id "<subscription-guid>" `
      --workspace-resource-id "<workspace-arm-id>" `

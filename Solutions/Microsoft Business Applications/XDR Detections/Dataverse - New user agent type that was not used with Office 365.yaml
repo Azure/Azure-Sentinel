@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 094b3c0a-1f63-42f7-9535-c8c7b7198328
+    path: Analytic Rules/Dataverse - New user agent type that was not used with Office 365.yaml
+    version: 3.2.0
+    querySha256: 36ff994bf84ccb191bb2e7cfe6987dcf73e9e87dd7391e86c9cad593a75c4acf
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 1b729488f106dd7006540636a95f09f1e9d95a4ef31bc53555bdef7cae104dcd
+      targetQuerySha256: 8a064d7fd92a1a5cb18909b497a3bd5e3f7670ee50f27acef83e22acdcbba336
+properties:
+  id: xdr-094b3c0a-1f63-42f7-9535-c8c7b7198328
+  displayName: Dataverse - New user agent type that was not used with Office 365
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_lookback = 14d;
+      let query_frequency = 1h;
+      let known_useragents = dynamic([
+          // Enter known user agents to exclude.
+          // example:
+          // "Agent1", "Agent2", "Agent3"
+          ]);
+      DataverseActivity
+      | where TimeGenerated > ago(query_frequency)
+      | where not (UserId has_any ("@onmicrosoft.com", "@microsoft.com", "Unknown"))
+      | where isnotempty(UserAgent)
+      | where UserAgent !in~ (known_useragents)
+      | where UserAgent !hasprefix "azure-logic-apps" and UserAgent !hasprefix "PowerApps"
+      | join kind = leftanti (
+          OfficeActivity
+          | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+          | where isnotempty(UserAgent)
+          | summarize by UserAgent)
+          on UserAgent
+      // Exclude user agents with a render agent to reduce noise.
+      | join kind = leftanti(
+          DataverseActivity
+          | where TimeGenerated > ago(query_frequency)
+          | where UserAgent has_any ("Gecko", "WebKit", "Presto", "Trident", "EdgeHTML", "Blink"))
+          on UserAgent
+      | summarize
+          FirstSeen = min(TimeGenerated),
+          LatestIP = arg_max(ClientIp, TimeGenerated)
+          by UserAgent, UserId, InstanceUrl
+      | extend
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1]),
+          CloudAppId = int(32780)
+      | project
+          FirstSeen,
+          UserId,
+          UserAgent,
+          LatestIP,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - New user agent type that was not used with Office 365
+      description: Identifies users accessing Dynamics with a User Agent that has not been seen in any Office 365 workloads
+        in the last 14 days.
+      severity: low
+      entityMappings:
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: LatestIP
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+        - technique: T1133

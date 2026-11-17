@@ -1,0 +1,127 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PaloAltoNetworks
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 32b437c4-dddb-45b3-9aae-5188e80624b0
+    path: Analytic Rules/URLEntity_PaloAlto.yaml
+    version: 1.2.8
+    querySha256: 0cadf2be2b6c63292a63e324d194d424cb3adccbf8a0c0fe03bd46e0de6e5135
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.2.8
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: e3d12fb35b6f57fd2570347a95ad50dafd27d49b6c38aacdf0da0d93b6b13058
+      targetQuerySha256: 0cadf2be2b6c63292a63e324d194d424cb3adccbf8a0c0fe03bd46e0de6e5135
+properties:
+  id: xdr-32b437c4-dddb-45b3-9aae-5188e80624b0
+  displayName: TI Map URL Entity to PaloAlto Data
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n\
+      //extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\
+      \"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType\
+      \ == \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n// Picking up only IOC's\
+      \ that contain the entities we want\n| where TimeGenerated >= ago(ioc_lookBack)\n\
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n   | project-reorder\
+      \ *, Tags, TrafficLightProtocolLevel, Url, Type\n// using innerunique to keep\
+      \ perf fast and result set low, we only need one match to indicate potential\
+      \ malicious activity that needs to be investigated\n| join kind=innerunique\
+      \ (\n  CommonSecurityLog\n  | extend IngestionTime = ingestion_time()\n  | where\
+      \ IngestionTime > ago(dt_lookBack)\n  // Select on Palo Alto logs\n  | where\
+      \ DeviceVendor =~ \"Palo Alto Networks\"\n  | where DeviceEventClassID =~ 'url'\n\
+      \  //Uncomment the line below to only alert on allowed connections\n  //| where\
+      \ DeviceAction !~ \"block-url\"\n  //Select logs where URL data is populated\n\
+      \  | extend PA_Url = column_ifexists(\"RequestURL\", \"None\")\n  | extend PA_Url\
+      \ = iif(isempty(PA_Url), extract(\"([^\\\"]+)\", 1, tolower(AdditionalExtensions)),\
+      \ trim('\"', PA_Url))\n  | extend PA_Url = iif(PA_Url !startswith 'http://'\
+      \ and ApplicationProtocol !~ \"ssl\", strcat('http://', PA_Url), iif(PA_Url\
+      \ !startswith 'https://' and ApplicationProtocol =~ \"ssl\", strcat('https://',\
+      \ PA_Url), PA_Url))\n  | where isnotempty(PA_Url)\n  | extend CommonSecurityLog_TimeGenerated\
+      \ = TimeGenerated\n) on $left.Url == $right.PA_Url\n| where CommonSecurityLog_TimeGenerated\
+      \ < ValidUntil\n| extend Description = tostring(parse_json(Data).description)\n\
+      | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated,\
+      \ *) by Id, PA_Url\n| project timestamp = CommonSecurityLog_TimeGenerated, Description,\
+      \ ActivityGroupNames, Id, Type, ValidUntil, Confidence, DeviceAction, SourceIP,\
+      \ PA_Url, DeviceName"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map URL Entity to PaloAlto Data
+      description: '''This query identifies any URL indicators of compromise (IOCs)
+        from threat intelligence (TI) by searching for matches in PaloAlto Data.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: DeviceName
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+        urls:
+        - id: url1
+          addressColumn: PA_Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

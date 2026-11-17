@@ -1,5 +1,5 @@
 schemaVersion: 1.0.0
-version: 3.2.1
+version: 3.2.2
 kind: CustomDetection
 resourceType: Microsoft.Security/detectionRules
 apiVersion: 2026-06-01-preview
@@ -44,6 +44,9 @@ contentProvenance:
     informational:
     - 'Schedule assessment: source kind=NRT; target frequency=PT0S (Continuous); single-table Continuous (NRT) execution is
       supported in Defender XDR. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - nrt_streaming_constructs_rewritten
+    - 'nrt_streaming_constructs_rewritten: Inlined scalar dynamic([...]) list declarations and rewrote scalar mv-apply filters
+      into streaming-compatible predicates to preserve PT0S Continuous execution.'
     errors: []
     originalTactics:
     - DefenseEvasion
@@ -51,7 +54,7 @@ contentProvenance:
     - T1578
     reviewScope:
       sourceDocumentSha256: 2943b56d297c3eb87c7da79c7801ce1f2bf12481b4576d8031543d3962e1edca
-      targetQuerySha256: 24cdc9b639e3acdee33dde31a3b49ef42d45d16020276ccceb2e47b6cec72785
+      targetQuerySha256: 27d1eba3cf48818e9a43c3a8ce6326b68297329c2f25b30b16a4aa5e124a9bca
     supplementalEntityDetails:
     - entityType: Account
       entityIndex: 1
@@ -66,15 +69,13 @@ properties:
   status: disabled
   queryCondition:
     queryText: |-
-      let tokens = dynamic(["416","208","192","128","120","96","80","72","64","48","44","40","nc12","nc24","nv24"]);
-      let operationList = dynamic(["microsoft.compute/virtualmachines/write", "microsoft.resources/deployments/write"]);
       AzureActivity
-      | where OperationNameValue in~ (operationList)
+      | where OperationNameValue in~ ("microsoft.compute/virtualmachines/write", "microsoft.resources/deployments/write")
       | where ActivityStatusValue startswith "Accept"
       | where Properties has 'vmSize'
       | extend parsed_property= parse_json(tostring((parse_json(Properties).responseBody))).properties
       | extend vmSize = tostring((parsed_property.hardwareProfile).vmSize)
-      | mv-apply token=tokens to typeof(string) on (where vmSize contains token)
+      | where vmSize contains "416" or vmSize contains "208" or vmSize contains "192" or vmSize contains "128" or vmSize contains "120" or vmSize contains "96" or vmSize contains "80" or vmSize contains "72" or vmSize contains "64" or vmSize contains "48" or vmSize contains "44" or vmSize contains "40" or vmSize contains "nc12" or vmSize contains "nc24" or vmSize contains "nv24"
       | extend ComputerName = tostring((parsed_property.osProfile).computerName)
       | project TimeGenerated, OperationNameValue, ActivityStatusValue, Caller, CallerIpAddress, ComputerName, vmSize
       | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])

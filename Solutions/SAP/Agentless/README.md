@@ -9,6 +9,7 @@ This repo serves the editable version of the solution package intended for hot f
 
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History** |
 | --- | --- | --- |
+| 1.1.15| 12-11-2026 | SAP server time zone fix for ChangeDocsLogs |
 | 1.1.14| 11-09-2026 | Add XML sanitization and fix RFC exception propagation |
 | 1.1.13| 11-08-2026 | Fix UserDetails OPTION_NOT_VALID handling. Prevent SAP-screened usernames and empty batches from producing invalid RFC_READ_TABLE clauses while preserving user visibility and adding redacted failure context. |
 | 1.1.12| 22-07-2026 | Audit log performance enhancements and force-sal-filesystem parameter addition |

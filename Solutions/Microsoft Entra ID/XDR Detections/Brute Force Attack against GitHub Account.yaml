@@ -1,0 +1,129 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+    - AADNonInteractiveUserSignInLogs
+    - Anomalies
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 97ad74c4-fdd9-4a3f-b6bf-5e28f4f71e06
+    path: Analytic Rules/Brute Force Attack against GitHub Account.yaml
+    version: 2.0.2
+    querySha256: 58d5f17f8e94e576a50b929067d271fe0aabe04178da7869719cfa1f3815a8c0
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserPrincipalName` cannot be proven after a
+      destructive projection; no supplemental customDetails binding was added and
+      KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: d07bb4734deda1d2306c09de33a34de12ef95266e27dfb5471b021b297737f12
+      targetQuerySha256: 35a7a31bd0f3521836d8a8091e350b27824055481df4c92638949542421a8e3a
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: d07bb4734deda1d2306c09de33a34de12ef95266e27dfb5471b021b297737f12
+      targetQuerySha256: 35a7a31bd0f3521836d8a8091e350b27824055481df4c92638949542421a8e3a
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-97ad74c4-fdd9-4a3f-b6bf-5e28f4f71e06
+  displayName: Brute Force Attack against GitHub Account
+  status: disabled
+  queryCondition:
+    queryText: "let LearningPeriod = 7d;\nlet BinTime = 1h;\nlet RunTime = 1h;\nlet\
+      \ StartTime = 1h;\nlet sensitivity = 2.5;\nlet EndRunTime = StartTime - RunTime;\n\
+      let EndLearningTime = StartTime + LearningPeriod;\nlet aadFunc = (tableName:string){\n\
+      table(tableName)\n| where TimeGenerated between (ago(EndLearningTime) .. ago(EndRunTime))\n\
+      | where AppDisplayName =~ \"GitHub.com\"\n| where ResultType != 0\n| make-series\
+      \ FailedLogins = count() on TimeGenerated from ago(LearningPeriod) to ago(EndRunTime)\
+      \ step BinTime by UserPrincipalName, Type\n| extend (Anomalies, Score, Baseline)\
+      \ = series_decompose_anomalies(FailedLogins, sensitivity, -1, 'linefit')\n|\
+      \ mv-expand FailedLogins to typeof(double), TimeGenerated to typeof(datetime),\
+      \ Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)\n\
+      | where TimeGenerated >= ago(RunTime)\n| where Anomalies > 0 and Baseline >\
+      \ 0\n| join kind=inner (\n          table(tableName)\n          | where TimeGenerated\
+      \ between (ago(StartTime) .. ago(EndRunTime))\n          | where AppDisplayName\
+      \ =~ \"GitHub.com\"\n          | where ResultType != 0\n          | summarize\
+      \ StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddresses\
+      \ = make_set(IPAddress,100), Locations = make_set(LocationDetails,20), Devices\
+      \ = make_set(DeviceDetail,20) by UserPrincipalName, UserId, AppDisplayName\n\
+      \      ) on UserPrincipalName\n| project-away UserPrincipalName1\n| extend Name\
+      \ = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n\
+      | extend IPAddressFirst = tostring(IPAddresses[0])\n};\nlet aadSignin = aadFunc(\"\
+      SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\"\
+      );\nunion isfuzzy=true aadSignin, aadNonInt"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Brute Force Attack against GitHub Account
+      description: '''Attackers who are trying to guess your users'' passwords or
+        use brute-force methods to get in. If your organization is using SSO with
+        Microsoft Entra ID, authentication logs to GitHub.com will be generated. Using
+        the following query can help you identify a sudden increase in failed logon
+        attempt of users.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: UserId
+        ips:
+        - id: ip1
+          addressColumn: IPAddressFirst
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110

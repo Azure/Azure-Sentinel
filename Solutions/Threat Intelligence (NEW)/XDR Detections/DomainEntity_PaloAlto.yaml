@@ -1,0 +1,157 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PaloAltoNetworks
+  dataTypes:
+  - CommonSecurityLog
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+    - CommonSecurityLog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 418192ba-01b8-4be8-89b7-5b5396a9d062
+    path: Analytic Rules/DomainEntity_PaloAlto.yaml
+    version: 1.4.6
+    querySha256: a571614b6e17b0d666c9b9fe62eb23c92f2c1540997c43ae8920ec8469bedbaa
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.4.6
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 361fd409bb16fe00e5b767d482d7817a23419dcfb9b7651166fbaeb4ef38e294
+      targetQuerySha256: 08c5ea1394b9e569c4fe3c639a7b33d4cb5005228d01e82f3fa728de4c2878a1
+properties:
+  id: xdr-418192ba-01b8-4be8-89b7-5b5396a9d062
+  displayName: TI Map Domain entity to PaloAlto
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;  // Duration to look back for recent logs (1\
+      \ hour)\nlet ioc_lookBack = 14d;  // Duration to look back for recent threat\
+      \ intelligence indicators (14 days)\n// Create a list of top-level domains (TLDs)\
+      \ in our threat feed for later validation of extracted domains\nlet list_tlds\
+      \ =\n    ThreatIntelIndicators\n    | extend IndicatorType = replace(@\"\\[|\\\
+      ]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n    | where IndicatorType\
+      \ == \"domain-name\"\n    | extend DomainName = tolower(ObservableValue)\n \
+      \   | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      \    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n    | where IsActive and\
+      \ (ValidUntil > now() or isempty(ValidUntil))\n    | extend DomainName = tolower(DomainName)\n\
+      \    | extend parts = split(DomainName, '.')\n    | extend tld = parts[(array_length(parts)-1)]\n\
+      \    | summarize count() by tostring(tld)\n    | summarize make_list(tld);\n\
+      let Domain_Indicators =\n    ThreatIntelIndicators\n    // Filter to pick up\
+      \ only IOC's that contain the entities we want (in this case, DomainName)\n\
+      \    | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n    | where IndicatorType == \"domain-name\"\n    | extend DomainName\
+      \ = tolower(ObservableValue)\n    | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      \    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n    | where IsActive and\
+      \ (ValidUntil > now() or isempty(ValidUntil))\n    | extend TI_DomainEntity\
+      \ = DomainName\n    | extend IndicatorId = tostring(split(Id, \"--\")[2]);\n\
+      Domain_Indicators\n    | project-reorder *, IsActive, Tags, TrafficLightProtocolLevel,\
+      \ DomainName, Type, TI_DomainEntity\n    // Join with CommonSecurityLog to find\
+      \ potential malicious activity\n    | join kind=innerunique (\n        CommonSecurityLog\n\
+      \        | extend IngestionTime = ingestion_time()\n        | where IngestionTime\
+      \ > ago(dt_lookBack)\n        | where DeviceVendor =~ 'Palo Alto Networks'\n\
+      \        | where DeviceEventClassID =~ 'url'\n        // Uncomment the line\
+      \ below to only alert on allowed connections\n        // | where DeviceAction\
+      \ !~ \"block-url\"\n        // Extract domain from RequestURL, if not present,\
+      \ extract it from AdditionalExtensions\n        | extend PA_Url = coalesce(RequestURL,\
+      \ \"None\")\n        | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions\
+      \ !startswith \"PanOS\", extract(\"([^\\\"]+)\", 1, tolower(AdditionalExtensions)),\
+      \ trim('\"', PA_Url))\n        | extend PA_Url = iif(PA_Url !in~ ('None', strcat('http://',\
+      \ 'None'), 'https://None') and PA_Url !startswith 'http://' and PA_Url !startswith\
+      \ 'https://' and ApplicationProtocol !~ \"ssl\", strcat('http://', PA_Url),\
+      \ PA_Url)\n        | extend PA_Url = iif(PA_Url !in~ ('None', strcat('http://',\
+      \ 'None'), 'https://None') and PA_Url !startswith 'https://' and ApplicationProtocol\
+      \ =~ \"ssl\", strcat('https://', PA_Url), PA_Url)\n        | extend Domain =\
+      \ trim(@\"\"\"\", tostring(parse_url(PA_Url).Host))\n        | where isnotempty(Domain)\n\
+      \        | extend Domain = tolower(Domain)\n        | extend parts = split(Domain,\
+      \ '.')\n        // Split out the top-level domain (TLD) for the purpose of checking\
+      \ if we have any TI indicators with this TLD to match on\n        | extend tld\
+      \ = parts[(array_length(parts)-1)]\n        // Validate parsed domain by checking\
+      \ TLD against TLDs from the threat feed and drop domains where there is no chance\
+      \ of a match\n        | where tld in~ (list_tlds)\n        | extend CommonSecurityLog_TimeGenerated\
+      \ = TimeGenerated\n    ) on $left.TI_DomainEntity == $right.Domain\n    | where\
+      \ CommonSecurityLog_TimeGenerated < ValidUntil\n    // Group the results by\
+      \ IndicatorId and Domain and keep only the latest CommonSecurityLog_TimeGenerated\n\
+      \    | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated,\
+      \ *) by IndicatorId, Domain\n    // Select the desired fields for the final\
+      \ result set\n    | extend Description = tostring(parse_json(Data).description)\n\
+      \    | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      \    | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames,\
+      \ PA_Url, Domain, IndicatorId, ValidUntil, Confidence, DeviceAction, DestinationIP,\
+      \ DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod,\
+      \ Type, TI_DomainEntity\n    // Add a new field 'timestamp' for convenience,\
+      \ using the CommonSecurityLog_TimeGenerated as its value\n    | extend timestamp\
+      \ = CommonSecurityLog_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Domain entity to PaloAlto
+      description: '''Identifies a match in Palo Alto data in CommonSecurityLog table
+        from any Domain IOC from TI'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: DeviceName
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+        urls:
+        - id: url1
+          addressColumn: PA_Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

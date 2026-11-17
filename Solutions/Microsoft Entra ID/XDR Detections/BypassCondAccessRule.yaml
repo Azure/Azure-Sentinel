@@ -1,0 +1,167 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+    - AADNonInteractiveUserSignInLogs
+    - ConfidentialWatchlist
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3af9285d-bb98-4a35-ad29-5ea39ba0c628
+    path: Analytic Rules/BypassCondAccessRule.yaml
+    version: 1.0.8
+    querySha256: 78ed22778b14b4417bf8e8671088e05f270634f5b5440d649be93da43a3fe1d2
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `UserPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserPrincipalName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1
+      ARM packaging carries only the first tactic and its compatible techniques; this
+      classification loss is not validated parity. Direct Graph deployment requires
+      a single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    originalTechniques:
+    - T1078
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: ac9d88c77b3aeb6b5a5d3cf1caef1434313016da416b16bdccd9d42a6ea6f618
+      targetQuerySha256: 822b3b9caf8268d2492fdff400b0234a232debb14b591745e69b5288275db663
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: ac9d88c77b3aeb6b5a5d3cf1caef1434313016da416b16bdccd9d42a6ea6f618
+      targetQuerySha256: 822b3b9caf8268d2492fdff400b0234a232debb14b591745e69b5288275db663
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-3af9285d-bb98-4a35-ad29-5ea39ba0c628
+  displayName: Attempt to bypass conditional access rule in Microsoft Entra ID
+  status: disabled
+  queryCondition:
+    queryText: "let threshold = 1; // Modify this threshold value to reduce false\
+      \ positives based on your environment\nlet aadFunc = (tableName:string){\ntable(tableName)\n\
+      | where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ \"failure\"\
+      \n| mv-apply CAP = parse_json(ConditionalAccessPolicies) on (\n  project ConditionalAccessPoliciesName\
+      \ = CAP.displayName, result = CAP.result\n  | where result =~ \"failure\"\n\
+      )\n| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(Status),\
+      \ LocationDetails = todynamic(LocationDetails)\n| extend OS = DeviceDetail.operatingSystem,\
+      \ Browser = DeviceDetail.browser\n| extend State = tostring(LocationDetails.state),\
+      \ City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n\
+      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n\
+      // Filter out status codes using watchlist\n// uncomment the following line\
+      \ to enable watchlist filtering\n// | join kind=leftanti (_GetWatchlist(\"ConditionalAccessBenignStatusCodes\"\
+      ) | project StatusCode) on StatusCode\n| extend Status = strcat(StatusCode,\
+      \ \": \", ResultDescription)\n| summarize StartTime = min(TimeGenerated), EndTime\
+      \ = max(TimeGenerated), Status = make_list(Status,10), StatusDetails = make_list(StatusDetails,50),\
+      \ IPAddresses = make_list(IPAddress,100), IPAddressCount = dcount(IPAddress),\
+      \ CorrelationIds = make_list(CorrelationId,100), ConditionalAccessPoliciesName\
+      \ = make_list(ConditionalAccessPoliciesName,100)\nby UserPrincipalName, UserId,\
+      \ AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type\n\
+      | where IPAddressCount > threshold and StatusDetails !has \"MFA successfully\
+      \ completed\"\n| mv-expand IPAddresses, Status, StatusDetails, CorrelationIds\n\
+      | extend Status = strcat(Status, \" \", StatusDetails)\n| summarize IPAddresses\
+      \ = make_set(IPAddresses,100), Status = make_set(Status,10), CorrelationIds\
+      \ = make_set(CorrelationIds,100), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName,100)\n\
+      by StartTime, EndTime, UserPrincipalName, UserId, AppDisplayName, tostring(Browser),\
+      \ tostring(OS), City, State, Region, IPAddressCount, Type\n| extend IPAddressFirst\
+      \ = tostring(IPAddresses[0]), Name = tostring(split(UserPrincipalName, \"@\"\
+      )[0]), UPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n};\nlet aadSignin\
+      \ = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\"\
+      );\nunion isfuzzy=true aadSignin, aadNonInt"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Attempt to bypass conditional access rule in Microsoft Entra ID
+      description: '''Identifies an attempt to Bypass conditional access rule(s) in
+        Microsoft Entra ID.
+
+        The ConditionalAccessStatus column value details if there was an attempt to
+        bypass Conditional Access or if the Conditional access rule was not satisfied
+        (ConditionalAccessStatus == 1).
+
+        References:
+
+        https://docs.microsoft.com/azure/active-directory/conditional-access/overview
+
+        https://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins
+
+        https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+
+        ConditionalAccessStatus == 0 // Success
+
+        ConditionalAcce'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: UserId
+        ips:
+        - id: ip1
+          addressColumn: IPAddressFirst
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+        - technique: T1098
+      customDetails:
+        AccountFullName: UserPrincipalName

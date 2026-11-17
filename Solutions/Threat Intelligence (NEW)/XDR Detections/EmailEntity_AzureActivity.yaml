@@ -1,0 +1,141 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureActivity
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+    - AzureActivity
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a9a4d1ee-0f52-4a1f-8def-a2fb4462104c
+    path: Analytic Rules/EmailEntity_AzureActivity.yaml
+    version: 1.2.12
+    querySha256: d37ac06d4564f760fa952ecbaaa185bab5c0ed36b0635915f386aaf1f8e1e238
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.2.12
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `Caller`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Caller` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: 4d75131e4e23fcfe742af8c1384cecc1dcd900b0817a10aa32ee480140702472
+      targetQuerySha256: 18f94402b02f8b8a7a2d0b11305ebcb2ce937b2b07ead8e09df1a0f39aac53ff
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Caller
+      column: Caller
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-a9a4d1ee-0f52-4a1f-8def-a2fb4462104c
+  displayName: TI Map Email entity to AzureActivity
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\\
+      .[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n//Filtering the table for Email related\
+      \ IOCs\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"email-addr\"\n| extend EmailSenderAddress\
+      \ = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress,\
+      \ indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress,\
+      \ \"@\") - 1)\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue,\
+      \ \"\")\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil\
+      \ > now() or isempty(ValidUntil))\n| project-reorder *, IsActive, TrafficLightProtocolLevel,\
+      \ EmailSenderAddress, EmailSourceDomain, Type\n// using innerunique to keep\
+      \ perf fast and result set low, we only need one match to indicate potential\
+      \ malicious activity that needs to be investigated\n| join kind=innerunique\
+      \ (\n    AzureActivity | where TimeGenerated >= ago(dt_lookBack) and isnotempty(Caller)\n\
+      \    | extend Caller = tolower(Caller)\n    | where Caller matches regex emailregex\n\
+      \    | extend AzureActivity_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress\
+      \ == $right.Caller\n| where AzureActivity_TimeGenerated < ValidUntil\n| summarize\
+      \ AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by Id,\
+      \ Caller\n| extend Description = tostring(parse_json(Data).description)\n| extend\
+      \ ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project AzureActivity_TimeGenerated, Description, ActivityGroupNames, Id,\
+      \ ValidUntil, Confidence, EmailSenderAddress, EmailSourceDomain, Caller, CallerIpAddress,\
+      \ Url\n| extend Name = tostring(split(Caller, '@', 0)[0]), UPNSuffix = tostring(split(Caller,\
+      \ '@', 1)[0])\n| extend timestamp = AzureActivity_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map Email entity to AzureActivity
+      description: '''Identifies a match in AzureActivity table from any Email IOC
+        from TI'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566
+      customDetails:
+        AccountFullName: Caller

@@ -356,7 +356,45 @@ class ReportTests(unittest.TestCase):
         )
         summary = WORKFLOW.render_summary(report)
         self.assertIn("ASIM ingestion validation", summary)
-        self.assertIn("| parity |", summary)
+        expected_order = [
+            "discovery",
+            "counterpart",
+            "template",
+            "fixture",
+            "filtering",
+            "parserDcr",
+            "parserIngestion",
+            "schema",
+            "data",
+            "rawDcr",
+            "rawIngestion",
+            "qtpExecution",
+            "parity",
+            "cleanup",
+        ]
+        self.assertEqual(expected_order, list(report["stages"]))
+        summary_labels = [
+            "discovery",
+            "counterpart",
+            "template",
+            "fixture",
+            "filtering",
+            "parserDcr",
+            "parserIngestion",
+            "schema",
+            "data",
+            "*rawDcr",
+            "*rawIngestion",
+            "*qtpExecution",
+            "*parity",
+            "cleanup",
+        ]
+        positions = [
+            summary.index(f"| {label} |")
+            for label in summary_labels
+        ]
+        self.assertEqual(sorted(positions), positions)
+        self.assertIn("\\* Optional QTP replay stage.", summary)
 
     def test_failure_remains_failed_when_not_required(self):
         validation = self.base_validation()
@@ -375,6 +413,132 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(report["enforcementRequired"])
         self.assertEqual(
             "failed", report["stages"]["parity"]["status"]
+        )
+
+    def test_parity_summary_exposes_row_counts_and_columns(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["error"] = {
+            "stage": "parity",
+            "message": (
+                "Query-time and ingestion-time outputs differ."
+            ),
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "failed",
+            "schema": {
+                "status": "passed",
+                "missingInIngestTime": [],
+                "ignoredAdditionalIngestTime": [],
+                "typeMismatches": [],
+            },
+            "rows": {
+                "status": "failed",
+                "queryTimeRowCount": 10,
+                "ingestTimeRowCount": 10,
+                "missingRowCount": 10,
+                "extraRowCount": 10,
+                "duplicateCountDifferences": [],
+                "missingExamples": [],
+                "extraExamples": [],
+                "columnDiagnostics": {
+                    "keyColumns": [
+                        "EventOriginalUid",
+                        "TimeGenerated",
+                    ],
+                    "mismatches": [
+                        {
+                            "key": ["id", "timestamp"],
+                            "differences": [
+                                {
+                                    "column": "Type",
+                                    "expected": "Source",
+                                    "actual": "Target",
+                                }
+                            ],
+                        }
+                    ],
+                },
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            (
+                "10 QTP row(s) missing from ITP output; "
+                "10 extra ITP row(s). Differing column(s): Type."
+            ),
+            report["stages"]["parity"]["detail"],
+        )
+
+    def test_parity_summary_infers_columns_from_row_examples(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["error"] = {
+            "stage": "parity",
+            "message": (
+                "Query-time and ingestion-time outputs differ."
+            ),
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "failed",
+            "schema": {
+                "status": "passed",
+                "missingInIngestTime": [],
+                "ignoredAdditionalIngestTime": [],
+                "typeMismatches": [],
+            },
+            "rows": {
+                "status": "failed",
+                "queryTimeRowCount": 10,
+                "ingestTimeRowCount": 10,
+                "missingRowCount": 10,
+                "extraRowCount": 10,
+                "duplicateCountDifferences": [],
+                "missingExamples": [
+                    {
+                        "count": 1,
+                        "row": [
+                            {
+                                "column": "TimeGenerated",
+                                "type": "datetime",
+                                "value": "timestamp",
+                            },
+                            {
+                                "column": "Type",
+                                "type": "string",
+                                "value": "Source",
+                            },
+                        ],
+                    }
+                ],
+                "extraExamples": [
+                    {
+                        "count": 1,
+                        "row": [
+                            {
+                                "column": "TimeGenerated",
+                                "type": "datetime",
+                                "value": "timestamp",
+                            },
+                            {
+                                "column": "Type",
+                                "type": "string",
+                                "value": "Target",
+                            },
+                        ],
+                    }
+                ],
+                "columnDiagnostics": None,
+            },
+        }
+
+        report = self.build(validation)
+
+        self.assertIn(
+            "Differing column(s): Type.",
+            report["stages"]["parity"]["detail"],
         )
 
     def test_failure_is_blocking_when_required(self):
@@ -653,11 +817,15 @@ class ReportTests(unittest.TestCase):
         }
         validation["outputValidation"]["queryTimeExecution"] = {
             "status": "blocked",
-            "detail": "Skipped because QTP source replay failed.",
+            "detail": (
+                "Skipped because QTP raw DCR creation failed."
+            ),
         }
         validation["outputValidation"]["parity"] = {
             "status": "blocked",
-            "detail": "Skipped because QTP source replay failed.",
+            "detail": (
+                "Skipped because QTP raw DCR creation failed."
+            ),
         }
 
         report = self.build(validation)
@@ -685,14 +853,14 @@ class ReportTests(unittest.TestCase):
             report["stages"]["qtpExecution"]["status"],
         )
         self.assertEqual(
-            "Skipped because QTP source replay failed.",
+            "Skipped because QTP raw DCR creation failed.",
             report["stages"]["qtpExecution"]["detail"],
         )
         self.assertEqual(
             "blocked", report["stages"]["parity"]["status"]
         )
         self.assertEqual(
-            "Skipped because QTP source replay failed.",
+            "Skipped because QTP raw DCR creation failed.",
             report["stages"]["parity"]["detail"],
         )
         output = io.StringIO()
@@ -704,12 +872,154 @@ class ReportTests(unittest.TestCase):
         )
         self.assertIn("InvalidStream", output.getvalue())
 
+    def test_workspace_qtp_replay_is_not_applicable(self):
+        validation = self.base_validation()
+        validation["rawDcr"] = None
+        validation["rawUpload"] = []
+        validation["qtpSourceReplay"] = {
+            "status": "not-applicable",
+            "inputStream": "none",
+            "error": None,
+        }
+        detail = "Skipped because this parser has no replayable InputStream."
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": detail,
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": detail,
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["status"])
+        self.assertFalse(report["requiredFailure"])
+        self.assertEqual(
+            "not-applicable",
+            report["stages"]["rawDcr"]["status"],
+        )
+        self.assertEqual(
+            "not-applicable",
+            report["stages"]["rawIngestion"]["status"],
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(detail, report["stages"]["qtpExecution"]["detail"])
+        self.assertEqual("blocked", report["stages"]["parity"]["status"])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            WORKFLOW.emit_annotations(report)
+        self.assertNotIn("ASIM rawDcr warning", output.getvalue())
+
+    def test_qtp_raw_ingestion_failure_fails_overall(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["rawDcr"] = {"resourceId": "/raw"}
+        validation["rawUpload"] = [{"status": "accepted"}]
+        validation["qtpSourceReplay"] = {
+            "status": "failed",
+            "inputStream": "Custom-Contoso_CL",
+            "error": {
+                "stage": "raw-visibility",
+                "message": "Exact timestamp rows were duplicated.",
+            },
+            "observedSchema": [
+                {"name": "TimeGenerated", "type": "datetime"}
+            ],
+            "observedRows": [
+                {"TimeGenerated": "timestamp"},
+                {"TimeGenerated": "timestamp"},
+            ],
+            "observedCountsByTimestamp": {"timestamp": 2},
+        }
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": "Blocked by QTP raw ingestion failure.",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": "Blocked by QTP raw ingestion failure.",
+        }
+        validation["error"] = {
+            "stage": "raw-visibility",
+            "message": "Exact timestamp rows were duplicated.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("failed", report["status"])
+        self.assertTrue(report["requiredFailure"])
+        self.assertEqual(
+            "passed", report["stages"]["rawDcr"]["status"]
+        )
+        self.assertEqual(
+            "failed", report["stages"]["rawIngestion"]["status"]
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "blocked", report["stages"]["parity"]["status"]
+        )
+        self.assertEqual(
+            2,
+            len(
+                report["stages"]["rawIngestion"]["evidence"][
+                    "qtpSourceReplay"
+                ]["observedRows"]
+            ),
+        )
+
+    def test_qtp_execution_error_is_reported_as_failed(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "not-applicable",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "not-applicable",
+        }
+        validation["error"] = {
+            "stage": "qtp-execution",
+            "message": "POST failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "failed",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "POST failed with HTTP 400.",
+            report["stages"]["qtpExecution"]["detail"],
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["parity"]["status"],
+        )
+        self.assertEqual(
+            "Blocked because QTP execution failed.",
+            report["stages"]["parity"]["detail"],
+        )
+
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()
         validation["status"] = "failed"
         validation["error"] = {
             "stage": "target-visibility",
             "message": "timed out",
+        }
+        validation["targetVisibility"] = {
+            "status": "failed",
+            "error": {
+                "stage": "target-visibility",
+                "message": "timed out",
+            },
         }
         validation["outputValidation"] = None
 
@@ -720,8 +1030,160 @@ class ReportTests(unittest.TestCase):
             report["stages"]["parserIngestion"]["status"],
         )
         self.assertEqual(
-            "passed", report["stages"]["schema"]["status"]
+            "failed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
         )
+        self.assertEqual(
+            "not-run", report["stages"]["schema"]["status"]
+        )
+
+    def test_query_deadline_visibility_failure_overrides_accepted_upload(self):
+        validation = self.base_validation()
+        details = {
+            "expectedCounts": {"timestamp": 1},
+            "observedCounts": {"timestamp": 0},
+            "missingTimestamps": ["timestamp"],
+            "observedQueryTable": {
+                "columns": [{"name": "TimeGenerated", "type": "datetime"}],
+                "rows": [],
+            },
+        }
+        validation["status"] = "failed"
+        validation["targetVisibility"] = {
+            "status": "failed",
+            "error": {
+                "stage": "query",
+                "message": "Validation deadline expired.",
+                "details": details,
+            },
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "Validation deadline expired.",
+            "details": details,
+        }
+        validation["outputValidation"] = None
+
+        report = self.build(validation)
+        ingestion = report["stages"]["parserIngestion"]
+
+        self.assertEqual("failed", ingestion["status"])
+        self.assertEqual("failed", ingestion["targetVisibility"]["status"])
+        self.assertEqual("query", report["error"]["stage"])
+        self.assertEqual(
+            details,
+            ingestion["targetVisibility"]["evidence"]["error"]["details"],
+        )
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+        self.assertEqual("not-run", report["stages"]["rawDcr"]["status"])
+        self.assertEqual(
+            "not-run", report["stages"]["rawIngestion"]["status"]
+        )
+        self.assertEqual("not-run", report["stages"]["data"]["status"])
+        self.assertEqual(
+            "not-run", report["stages"]["qtpExecution"]["status"]
+        )
+        self.assertEqual("not-run", report["stages"]["parity"]["status"])
+
+    def test_legacy_query_deadline_with_visibility_timing_is_failed(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["telemetry"]["stageTimingsSeconds"] = {
+            "target-visibility": 889.465,
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "Validation deadline expired.",
+            "details": None,
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "failed", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "failed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+        self.assertTrue(
+            report["stages"]["parserIngestion"]["targetVisibility"][
+                "evidence"
+            ]["legacy"]
+        )
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+
+    def test_generic_query_error_does_not_infer_visibility_failure(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["telemetry"]["stageTimingsSeconds"] = {
+            "filter-validation": 1.0,
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "POST failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "not-run", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "not-run",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+
+    def test_schema_stage_uses_only_schema_validation_outcome(self):
+        validation = self.base_validation()
+        validation["targetVisibility"] = {
+            "status": "passed",
+            "expectedCounts": {"timestamp": 1},
+            "observedCounts": {"timestamp": 1},
+            "missingTimestamps": [],
+        }
+        validation["outputValidation"]["schemaValidation"] = {
+            "status": "passed",
+            "authority": "parser-dcr-output-stream",
+        }
+
+        report = self.build(validation)
+        self.assertEqual("passed", report["stages"]["schema"]["status"])
+        self.assertEqual(
+            "passed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+        self.assertEqual(
+            "parser-dcr-output-stream",
+            report["stages"]["schema"]["evidence"]["authority"],
+        )
+
+        validation["outputValidation"]["schemaValidation"] = {
+            "status": "failed",
+            "authority": "parser-dcr-output-stream",
+        }
+        report = self.build(validation)
+        self.assertEqual("failed", report["stages"]["schema"]["status"])
+
+        validation["outputValidation"].pop("schemaValidation")
+        report = self.build(validation)
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+
+    def test_schema_remains_not_run_when_data_tester_fails_first(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "asim-data",
+            "message": "ASimDataTester query failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+        self.assertEqual("failed", report["stages"]["data"]["status"])
 
     def test_parity_failure_records_successful_qtp_execution(self):
         validation = self.base_validation()
@@ -823,6 +1285,10 @@ class WorkflowTopologyTests(unittest.TestCase):
             self.repo_root
             / ".github/workflows/runAsimIngestionTimeValidation.yaml"
         )
+        self.unit_test_path = (
+            self.repo_root
+            / ".github/workflows/runAsimIngestionTimeValidationTests.yaml"
+        )
 
     def test_security_gate_matches_legacy_except_initial_events(self):
         legacy = self.legacy_path.read_text(encoding="utf-8")
@@ -912,6 +1378,55 @@ class WorkflowTopologyTests(unittest.TestCase):
             ],
             jobs["report"]["needs"],
         )
+
+    def test_workflows_build_pinned_kusto_analyzer(self):
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+        unit_tests = self.unit_test_path.read_text(encoding="utf-8")
+        job_markers = (
+            ("  discover:\n", "\n  templateValidate:"),
+            ("  templateValidate:\n", "\n  ingestionValidation:"),
+            ("  ingestionValidation:\n", "\n  report:"),
+        )
+        analyzer_jobs = [
+            isolated[
+                isolated.index(start):isolated.index(
+                    end,
+                    isolated.index(start),
+                )
+            ]
+            for start, end in job_markers
+        ]
+        setup_action = (
+            "actions/setup-dotnet@"
+            "67a3573c9a986a3f9c594539f4ab511d57bb3ce9"
+        )
+
+        for workflow in (unit_tests, *analyzer_jobs):
+            self.assertIn(setup_action, workflow)
+            self.assertIn('dotnet-version: "8.0.x"', workflow)
+            self.assertIn(
+                "kusto_analyzer/kusto_analyzer.csproj",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet restore "$analyzer_project" '
+                "--locked-mode --nologo",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet build "$analyzer_project"',
+                workflow,
+            )
+            self.assertIn(
+                "ASIM_KUSTO_ANALYZER_DLL=",
+                workflow,
+            )
+        for workflow in analyzer_jobs:
+            self.assertIn(
+                "Trusted base predates the Kusto analyzer; "
+                "using its legacy validator.",
+                workflow,
+            )
 
     def test_workflow_never_masks_validation_failures(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
@@ -1008,9 +1523,16 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_untrusted_pr_content_is_pinned_to_event_head_sha(self):
+    def test_comparison_refs_are_pinned_to_event_shas(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
+        self.assertEqual(
+            2,
+            workflow.count(
+                "BASE_SHA: "
+                "${{ github.event.pull_request.base.sha }}"
+            ),
+        )
         self.assertEqual(
             2,
             workflow.count(
@@ -1027,23 +1549,69 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertEqual(
             2,
             workflow.count(
-                'if [ "$fetched_sha" != "$PR_HEAD_SHA" ]; then'
+                'if [ "$fetched_base_sha" != "$BASE_SHA" ]; then'
             ),
         )
         self.assertEqual(
             2,
             workflow.count(
-                '"$pr_data_dir" "$PR_HEAD_SHA"'
+                'if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"+$BASE_SHA:$trusted_base_ref"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"+refs/pull/$PR_NUMBER/head:$pr_head_ref"'
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                '"$pr_data_dir" "$pr_head_ref"'
             ),
         )
 
-    def test_trusted_helper_package_is_restored_from_master(self):
+    def test_checkout_fetches_only_targeted_history(self):
+        workflow = self.isolated_path.read_text(encoding="utf-8")
+
+        self.assertEqual(3, workflow.count("fetch-depth: 1"))
+        self.assertNotIn("fetch-depth: 0", workflow)
+        self.assertEqual(
+            2,
+            workflow.count(
+                "for depth in 1 32 128 512 2048 8192; do"
+            ),
+        )
+        self.assertEqual(
+            2,
+            workflow.count("--filter=blob:none"),
+        )
+        self.assertEqual(
+            2,
+            workflow.count(
+                'git merge-base "$trusted_base_ref" "$pr_head_ref"'
+            ),
+        )
+        self.assertNotIn("+refs/heads/*", workflow)
+        self.assertNotIn("+refs/tags/*", workflow)
+
+    def test_trusted_helper_package_is_restored_from_pinned_base(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
         self.assertEqual(
-            3,
-            workflow.count("git archive origin/master"),
+            2,
+            workflow.count(
+                'git archive "$ASIM_TRUSTED_BASE_REF"'
+            ),
         )
+        self.assertEqual(1, workflow.count("git archive HEAD"))
+        self.assertNotIn("git archive origin/master", workflow)
         self.assertGreaterEqual(
             workflow.count(
                 ".script/tests/asimParsersTest/ingestTimeParser"

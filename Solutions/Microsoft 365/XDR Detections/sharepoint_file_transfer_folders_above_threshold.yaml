@@ -1,0 +1,102 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Office365
+  dataTypes:
+  - OfficeActivity (SharePoint)
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - OfficeActivity
+  requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+    - OfficeActivity (SharePoint)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8a547285-801c-4290-aa2e-5e7e20ca157d
+    path: Analytic Rules/sharepoint_file_transfer_folders_above_threshold.yaml
+    version: 1.0.6
+    querySha256: 25f80b17b3e56f3d616127578245a6746dbc70109d871a36ca45c08838d1df0d
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'TransferCount' column `count_distinct_SourceRelativeUrl` requires runtime output-schema binding verification
+    - customDetails 'FilesList' column `dirlist` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserId`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1020
+    reviewScope:
+      sourceDocumentSha256: 5d6a53ddb16fb0cfb2e3e9074f764e1f78ae5ef4a7bf0f38edcfb4e301cade98
+      targetQuerySha256: dda345b7a1fecc61515b85dcc3a317250eef8578c2a2729b38d446e017d98085
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserId
+      column: UserId
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-8a547285-801c-4290-aa2e-5e7e20ca157d
+  displayName: Office365 Sharepoint File transfer Folders above threshold
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 500;
+      OfficeActivity
+      | where EventSource == "SharePoint" and OfficeWorkload has_any("SharePoint", "OneDrive") and Operation has_any ("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
+      | summarize count_distinct_SourceRelativeUrl=dcount(SourceRelativeUrl), dirlist=make_set(SourceRelativeUrl, 10000) by UserId,ClientIP,UserAgent,bin(TimeGenerated, 15m)
+      | where count_distinct_SourceRelativeUrl >= threshold
+      | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField","_", tostring(hash(tostring(dirlist)))))
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: Office365 Sharepoint File transfer Folders above threshold
+      description: |-
+        'Identifies Office365 Sharepoint File Transfers with distinct folder count above certain threshold in a 15min time period.
+         Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIP
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1020
+      customDetails:
+        TransferCount: count_distinct_SourceRelativeUrl
+        FilesList: dirlist
+        AccountFullName: UserId

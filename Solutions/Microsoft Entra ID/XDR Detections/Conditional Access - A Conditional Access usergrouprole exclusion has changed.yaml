@@ -1,0 +1,99 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - Update
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 2ce7f00d-3b3c-41b9-ae9a-b79c19d2394e
+    path: Analytic Rules/Conditional Access - A Conditional Access usergrouprole exclusion has changed.yaml
+    version: 1.0.2
+    querySha256: edbd90be622235de24f914821528b112986545b88059294df096a6905701ea2c
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Persistence
+    - DefenseEvasion
+    - CredentialAccess
+    originalTechniques:
+    - T1098
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 3725dfcd2b1bd7e8c425c78b84eff2fb73a00e886496cfe0c5b0731baa3fd436
+      targetQuerySha256: 9acd71e6f9e1f032623dc1b5e8f7fa0530daa9fb61c01958035bf9663320f9f6
+properties:
+  id: xdr-2ce7f00d-3b3c-41b9-ae9a-b79c19d2394e
+  displayName: Conditional Access - A Conditional Access user/group/role exclusion has changed
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // A Conditional Access user/group/role exclusion has changed.
+      AuditLogs
+      | where OperationName in ("Update conditional access policy")
+      | extend excludeUsersOld = extractjson("$.conditions.users.excludeUsers", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+      | extend excludeGroupsOld = extractjson("$.conditions.users.excludeGroups", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+      | extend excludeRolesOld = extractjson("$.conditions.users.excludeRoles", tostring(TargetResources[0].modifiedProperties[0].oldValue))
+      | extend excludeUsersNew = extractjson("$.conditions.users.excludeUsers", tostring(TargetResources[0].modifiedProperties[0].newValue))
+      | extend excludeGroupsNew = extractjson("$.conditions.users.excludeGroups", tostring(TargetResources[0].modifiedProperties[0].newValue))
+      | extend excludeRolesNew = extractjson("$.conditions.users.excludeRoles", tostring(TargetResources[0].modifiedProperties[0].newValue))
+      | where excludeUsersOld != excludeUsersNew or excludeGroupsOld != excludeGroupsNew or excludeRolesOld != excludeRolesNew
+      | extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)
+      | extend accountName = tostring(split(modifiedBy, "@")[0])
+      | extend upnSuffix = tostring(split(modifiedBy, "@")[1])
+      | project TimeGenerated, OperationName, policy = TargetResources[0].displayName, modifiedBy, accountName, upnSuffix, result = Result,
+                excludeUsersOld, excludeUsersNew, excludeGroupsOld, excludeGroupsNew, excludeRolesOld, excludeRolesNew
+      | order by TimeGenerated desc
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Conditional Access - A Conditional Access user/group/role exclusion has changed
+      description: A Conditional Access user/group/role exclusion has changed in Azure AD.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: accountName
+          upnSuffixColumn: upnSuffix
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+        - technique: T1078
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1078
+      - tactic: CredentialAccess
