@@ -205,6 +205,63 @@ class DetectionIdentityTests(unittest.TestCase):
         self.assertEqual([], validate_document(document))
         schema = json.loads((attribution.ROOT / "Tools/SentinelToXDRMigration/schema/xdr-detection.schema.json").read_text())
         Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema).validate(document)
+
+    def test_standalone_detection_without_source_or_analytic_rules_validates(self):
+        from sentinel_xdr_migration import workflow
+        from sentinel_xdr_migration.converter import inspect_solution, runtime_validation_plan
+        from solution_manager.migration.workbook_workflow import (
+            expected_content_counts,
+            inspect_content,
+            validate_content,
+        )
+
+        convert_solution(self.solution)
+        document = self.read_output()
+        document["properties"]["id"] = "standalone-native-xdr-rule"
+        document["contentProvenance"].pop("source", None)
+        document["contentProvenance"].pop("conversion", None)
+        self.write_output(document)
+        shutil.rmtree(self.solution / "Analytic Rules")
+
+        schema = json.loads((attribution.ROOT / "Tools/SentinelToXDRMigration/schema/xdr-detection.schema.json").read_text())
+        Draft202012Validator(schema).validate(document)
+        self.assertEqual([], validate_document(document))
+
+        validation = validate_solution(self.solution)
+        self.assertEqual(0, validation["invalid"], validation)
+        self.assertEqual(1, validation["valid"])
+
+        inspected = inspect_solution(self.solution)
+        self.assertEqual(0, inspected["analyticRuleCount"])
+        self.assertEqual(1, inspected["existingXdrDetectionCount"])
+
+        plan = runtime_validation_plan(self.solution)
+        self.assertEqual(1, len(plan["rules"]))
+        self.assertIsNone(plan["rules"][0]["sourceRule"])
+
+        workflow.initialize_workflow(
+            self.solution,
+            workflow_profile="authoring",
+            workbook_capability_version=1,
+            version_bump="none",
+        )
+        wb_inspected = inspect_content(self.solution)
+        self.assertEqual(1, wb_inspected["existingXdrDetectionCount"])
+        self.assertEqual(1, expected_content_counts(self.solution)["customDetectionsCount"])
+
+        wb_validated = validate_content(self.solution)
+        self.assertEqual(1, wb_validated["total"])
+        self.assertEqual(1, wb_validated["valid"])
+        self.assertEqual(0, wb_validated["invalid"])
+
+        invalid_doc = copy.deepcopy(document)
+        invalid_doc["properties"]["id"] = ""
+        self.write_output(invalid_doc)
+        wb_invalid = validate_content(self.solution)
+        self.assertEqual(1, wb_invalid["total"])
+        self.assertEqual(0, wb_invalid["valid"])
+        self.assertEqual(1, wb_invalid["invalid"])
 
 
 @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 is required")
@@ -361,11 +418,61 @@ class PackagedIdentityTests(unittest.TestCase):
 
     def test_packaging_keeps_unrelated_custom_detection_id_contract(self):
         entry, path, document = self.fixture()
-        document["contentProvenance"]["source"].update(platform="Other", kind="Other")
+        document["contentProvenance"]["source"].update(
+            platform="Other", kind="Other", id="non-matching-source-id"
+        )
+        document["contentProvenance"].setdefault("conversion", {})["tool"] = "other-tool"
         document["properties"]["id"] = "custom-authored-id"
         path.write_text("---\n" + json.dumps(document))
         result = self.package(entry, False)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        template = json.loads((self.solution / "Package/mainTemplate.json").read_text())
+        registration = next(
+            resource for resource in template["resources"]
+            if resource.get("properties", {}).get("contentKind") == "CustomDetection"
+        )
+        self.assertEqual("custom-authored-id", registration["properties"]["contentId"])
+
+    def test_packaging_succeeds_for_standalone_and_xdr_only_solutions_without_analytic_rules(self):
+        entry, path, document = self.fixture()
+        shutil.rmtree(self.solution / "Analytic Rules")
+        data = json.loads(self.data.read_text())
+        data.pop("Analytic Rules", None)
+        self.data.write_text(json.dumps(data))
+
+        # Case 1: Sentinel-migrated Custom Detection after Analytic Rules/ folder was deleted
+        for platform_name in ("Microsoft Sentinel", "Sentinel"):
+            with self.subTest(case="migrated-without-analytic-rules", platform=platform_name):
+                migrated_doc = copy.deepcopy(document)
+                migrated_doc["contentProvenance"]["source"]["platform"] = platform_name
+                migrated_doc["properties"]["id"] = f"xdr-{SOURCE_ID}"
+                path.write_text("---\n" + json.dumps(migrated_doc))
+                for pipeline in (False, True):
+                    result = self.package(entry, pipeline)
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    template = json.loads((self.solution / "Package/mainTemplate.json").read_text())
+                    registration = next(
+                        resource for resource in template["resources"]
+                        if resource.get("properties", {}).get("contentKind") == "CustomDetection"
+                    )
+                    self.assertEqual(f"xdr-{SOURCE_ID}", registration["properties"]["contentId"])
+
+        # Case 2: Native standalone XDR Custom Detection with no source/conversion in contentProvenance
+        with self.subTest(case="standalone-without-source"):
+            standalone_doc = copy.deepcopy(document)
+            standalone_doc["contentProvenance"].pop("source", None)
+            standalone_doc["contentProvenance"].pop("conversion", None)
+            standalone_doc["properties"]["id"] = "standalone-xdr-rule-001"
+            path.write_text("---\n" + json.dumps(standalone_doc))
+            for pipeline in (False, True):
+                result = self.package(entry, pipeline)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                template = json.loads((self.solution / "Package/mainTemplate.json").read_text())
+                registration = next(
+                    resource for resource in template["resources"]
+                    if resource.get("properties", {}).get("contentKind") == "CustomDetection"
+                )
+                self.assertEqual("standalone-xdr-rule-001", registration["properties"]["contentId"])
 
 
 if __name__ == "__main__":

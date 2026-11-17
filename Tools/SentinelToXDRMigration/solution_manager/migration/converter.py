@@ -318,7 +318,7 @@ def iso_duration(value: Any, default: str = "PT1H") -> tuple[str, str | None]:
     }[unit], None
 
 
-def solution_paths(solution: str | Path) -> tuple[Path, Path, Path]:
+def solution_paths(solution: str | Path, *, require_analytic_rules: bool = True) -> tuple[Path, Path, Path]:
     root = Path(solution).expanduser().resolve()
     analytic = root / "Analytic Rules"
     output = root / "XDR Detections"
@@ -328,7 +328,7 @@ def solution_paths(solution: str | Path) -> tuple[Path, Path, Path]:
         legacy_analytic = root / "Analytics Rules"
         if legacy_analytic.is_dir():
             analytic = legacy_analytic
-        else:
+        elif require_analytic_rules:
             raise ValueError(
                 f"solution has no 'Analytic Rules' or 'Analytics Rules' folder: {root}"
             )
@@ -364,8 +364,11 @@ def xdr_detection_files(output: Path) -> list[Path]:
 
 
 def inspect_solution(solution: str | Path) -> dict[str, Any]:
-    root, analytic, output = solution_paths(solution)
-    files = analytic_rule_files(root)
+    root, analytic, output = solution_paths(
+        solution,
+        require_analytic_rules=not (Path(solution).expanduser().resolve() / "XDR Detections").is_dir(),
+    )
+    files = yaml_files(analytic) if analytic.is_dir() else []
     return {
         "solution": str(root),
         "analyticRulesDirectory": str(analytic),
@@ -2650,7 +2653,7 @@ def is_sentinel_derived(document: dict[str, Any]) -> bool:
     source = provenance.get("source") or {}
     conversion = provenance.get("conversion") or {}
     return (
-        source.get("platform") == "Microsoft Sentinel"
+        source.get("platform") in {"Microsoft Sentinel", "Sentinel"}
         and source.get("kind") == "AnalyticsRule"
     ) or conversion.get("tool") == "sentinel-to-xdr-migration"
 
@@ -2746,13 +2749,23 @@ def validate_document(document: dict[str, Any]) -> list[str]:
                 "contentProvenance.source.id; reconvert with --overwrite to update local "
                 "artifacts only, not deployed rule migration"
             )
-    for field in ("platform", "kind", "id", "path", "querySha256"):
-        if not source.get(field):
-            errors.append(f"contentProvenance.source.{field} is required")
-    if conversion.get("status") not in {"converted", "needsReview"}:
-        errors.append("contentProvenance.conversion.status is invalid")
-    if conversion.get("errors"):
-        errors.extend(f"conversion: {value}" for value in conversion["errors"])
+        for field in ("platform", "kind", "id", "path", "querySha256"):
+            if not source.get(field):
+                errors.append(f"contentProvenance.source.{field} is required")
+        if conversion.get("status") not in {"converted", "needsReview"}:
+            errors.append("contentProvenance.conversion.status is invalid")
+        if conversion.get("errors"):
+            errors.extend(f"conversion: {value}" for value in conversion["errors"])
+    else:
+        if isinstance(provenance.get("source"), dict):
+            for field in ("platform", "kind"):
+                if not source.get(field):
+                    errors.append(f"contentProvenance.source.{field} is required")
+        if isinstance(provenance.get("conversion"), dict):
+            if conversion.get("status") not in {"converted", "needsReview"}:
+                errors.append("contentProvenance.conversion.status is invalid")
+            if conversion.get("errors"):
+                errors.extend(f"conversion: {value}" for value in conversion["errors"])
     if properties.get("status") != "disabled":
         errors.append("properties.status must be disabled")
     query = ((properties.get("queryCondition") or {}).get("queryText") or "")
@@ -3215,7 +3228,7 @@ def convert_solution(
 
 
 def validate_solution(solution: str | Path) -> dict[str, Any]:
-    root, _, output = solution_paths(solution)
+    root, _, output = solution_paths(solution, require_analytic_rules=False)
     files = xdr_detection_files(output) if output.exists() else []
     results = []
     results_by_id: dict[str, list[dict[str, Any]]] = {}
@@ -3274,28 +3287,38 @@ def validate_solution(solution: str | Path) -> dict[str, Any]:
 
 
 def runtime_validation_plan(solution: str | Path) -> dict[str, Any]:
-    root, _, output = solution_paths(solution)
+    root, _, output = solution_paths(solution, require_analytic_rules=False)
     plan = []
     for path in xdr_detection_files(output):
         with path.open(encoding="utf-8-sig") as handle:
             document = yaml.safe_load(handle) or {}
-        source_path = content_path(root, document["contentProvenance"]["source"]["path"])
-        with source_path.open(encoding="utf-8-sig") as handle:
-            source = yaml.safe_load(handle) or {}
+        source_path_value = ((document.get("contentProvenance") or {}).get("source") or {}).get("path")
+        source_path: Path | None = None
+        source: dict[str, Any] = {}
+        if isinstance(source_path_value, str) and source_path_value.strip():
+            candidate = content_path(root, source_path_value)
+            if candidate.is_file():
+                source_path = candidate
+                with source_path.open(encoding="utf-8-sig") as handle:
+                    source = yaml.safe_load(handle) or {}
+        sentinel_query = str(source.get("query") or "")
+        ah_query = str(((document.get("properties") or {}).get("queryCondition") or {}).get("queryText") or "")
         plan.append(
             {
                 "detection": path.relative_to(output).as_posix(),
-                "sourceRule": str(source_path),
-                "sentinelQuery": str(source.get("query") or ""),
-                "advancedHuntingQuery": document["properties"]["queryCondition"]["queryText"],
-                "sentinelQuerySha256": hashlib.sha256(
-                    str(source.get("query") or "").encode("utf-8")
-                ).hexdigest(),
+                "sourceRule": str(source_path) if source_path is not None else None,
+                "sentinelQuery": sentinel_query,
+                "advancedHuntingQuery": ah_query,
+                "sentinelQuerySha256": (
+                    hashlib.sha256(sentinel_query.encode("utf-8")).hexdigest()
+                    if source_path is not None
+                    else str(((document.get("contentProvenance") or {}).get("source") or {}).get("querySha256") or "")
+                ),
                 "advancedHuntingQuerySha256": hashlib.sha256(
-                    document["properties"]["queryCondition"]["queryText"].encode("utf-8")
+                    ah_query.encode("utf-8")
                 ).hexdigest(),
                 "customDetailBindings": deepcopy(
-                    document["properties"]["detectionAction"]["alertTemplate"].get("customDetails") or {}
+                    (((document.get("properties") or {}).get("detectionAction") or {}).get("alertTemplate") or {}).get("customDetails") or {}
                 ),
             }
         )

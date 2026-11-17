@@ -440,12 +440,24 @@ def validate_solution_xdr_detections(
 
             provenance = document.get("contentProvenance")
             if isinstance(provenance, dict):
-                if provenance.get("dependencyReviewRequired") is not False:
+                source = provenance.get("source")
+                conversion = provenance.get("conversion")
+                sentinel_derived = (
+                    (
+                        isinstance(source, dict)
+                        and source.get("platform") in {"Microsoft Sentinel", "Sentinel"}
+                        and source.get("kind") == "AnalyticsRule"
+                    )
+                    or (
+                        isinstance(conversion, dict)
+                        and conversion.get("tool") == "sentinel-to-xdr-migration"
+                    )
+                )
+                if (sentinel_derived or "dependencyReviewRequired" in provenance) and provenance.get("dependencyReviewRequired") is not False:
                     file_errors.append(
                         "contentProvenance.dependencyReviewRequired must be false "
                         "(dependency review is unresolved)"
                     )
-                conversion = provenance.get("conversion")
                 if isinstance(conversion, dict):
                     if conversion.get("status") != "converted":
                         file_errors.append(
@@ -459,7 +471,8 @@ def validate_solution_xdr_detections(
                             f"contentProvenance.conversion.reviewRequired must be false "
                             f"(conversion review is unresolved{detail})"
                         )
-                source = provenance.get("source")
+                elif sentinel_derived:
+                    file_errors.append("contentProvenance.conversion is required for Sentinel-derived detections")
                 if isinstance(source, dict):
                     source_rel = source.get("path")
                     if isinstance(source_rel, str) and source_rel.strip():
@@ -470,9 +483,11 @@ def validate_solution_xdr_detections(
                                 f"contentProvenance.source.path resolves outside solution: {source_rel!r}"
                             )
                         elif not source_candidate.is_file():
-                            file_errors.append(
-                                f"contentProvenance.source.path does not exist in solution: {source_rel!r}"
-                            )
+                            top_folder = Path(normalized_source).parts[0] if Path(normalized_source).parts else ""
+                            if top_folder and (solution_root / top_folder).exists():
+                                file_errors.append(
+                                    f"contentProvenance.source.path does not exist in solution: {source_rel!r}"
+                                )
                         else:
                             try:
                                 src_doc = yaml.safe_load(
