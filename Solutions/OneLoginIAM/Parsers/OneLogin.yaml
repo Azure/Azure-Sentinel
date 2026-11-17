@@ -1,8 +1,8 @@
 id: cd80d5ce-6c89-4d23-9f98-77066a599982
 Function:
   Title: Parser for OneLogin
-  Version: '1.0.1'
-  LastUpdated: '2023-09-25'
+  Version: '1.0.2'
+  LastUpdated: '2026-10-28'
 Category: Microsoft Sentinel Parser
 FunctionName: OneLogin
 FunctionAlias: OneLogin
@@ -27,6 +27,40 @@ FunctionQuery: |
          ActorUserId: real,
          Notes: string,
          EventTypeId: real,
+         PrivilegeId: real,
+         PrivilegeName: string,
+         GroupId: real,
+         GroupName: string,
+         OtpDeviceId: real,
+         OtpDeviceName: string,
+         AssumingActingUserId: real,
+         LoginName: string,
+         LoginId: real,
+         Uuid: string,
+         RiskScore: real,
+         RiskReasons: string,
+         RiskCookieId: string,
+         BrowserFingerprint: string,
+         Resolution: real,
+         DirectoryId: real,
+         DirectorySyncRunId: real,
+         ErrorDescription: string,
+         ProxyIp: string,
+         ClientId: string,
+         ResourceTypeId: real,
+         OperationName: string,
+         Solved: bool,
+         MappingId: real,
+         CertificateId: real,
+         RadiusConfigId: real,
+         TrustedIdpId: real,
+         AdcId: real,
+         Param: string,
+         ObjectId: real,
+         UserFieldId: real,
+         ServiceDirectoryId: real,
+         ResolvedAt: string,
+         AssumedBySuperadminOrReseller: real,
          TimeGenerated: datetime
      )[];
      
@@ -51,8 +85,13 @@ FunctionQuery: |
      let OneLogin_Joined = OneLogin_Events
      | join kind=leftouter (
          OneLogin_Users
+         | where isnotnull(UserAttributesId)
+         // TimeGenerated is account creation time; ingestion time identifies the latest observed snapshot.
+         | extend _UserIngestedTime = ingestion_time()
+         | summarize arg_max(_UserIngestedTime, *) by UserAttributesId
      ) on $left.UserId == $right.UserAttributesId
      | project
+         EventId,
          AppName,
          AppId,
          RoleName,
@@ -70,6 +109,40 @@ FunctionQuery: |
          ActorUserId,
          Notes,
          EventTypeId,
+         PrivilegeId,
+         PrivilegeName,
+         GroupId,
+         GroupName,
+         OtpDeviceId,
+         OtpDeviceName,
+         AssumingActingUserId,
+         LoginName,
+         LoginId,
+         Uuid,
+         RiskScore,
+         RiskReasons,
+         RiskCookieId,
+         BrowserFingerprint,
+         Resolution,
+         DirectoryId,
+         DirectorySyncRunId,
+         ErrorDescription,
+         ProxyIp,
+         ClientId,
+         ResourceTypeId,
+         OperationName,
+         Solved,
+         MappingId,
+         CertificateId,
+         RadiusConfigId,
+         TrustedIdpId,
+         AdcId,
+         Param,
+         ObjectId,
+         UserFieldId,
+         ServiceDirectoryId,
+         ResolvedAt,
+         AssumedBySuperadminOrReseller,
          TimeGenerated,
          UserAttributesUsername,
          UserAttributesFirstname,
@@ -83,13 +156,13 @@ FunctionQuery: |
          TargetAppName = AppName,
          TargetAppId = AppId,
          SrcIpAddr = Ipaddr,
-         Message = Notes,
-         EventStartTime = TimeGenerated
+         Message = Notes
      | extend
+         EventStartTime = TimeGenerated,
          HttpUserAgent = "",
          UserAttributesAccountId = AccountId,
-         EventOriginalUid = "",
-         UUID = "",
+         EventOriginalUid = tostring(EventId),
+         UUID = Uuid,
          EventVendor = "OneLogin",
          EventProduct = "OneLogin IAM",
          EventType = case (
@@ -636,16 +709,16 @@ FunctionQuery: |
      
      let OneLogin_CL_empty = datatable(
              TargetAppName:string,
-             TargetAppId:int,
+             TargetAppId:real,
              RoleName:string,
-             RoleId:int,
+             RoleId:real,
              PolicyName:string,
              PolicyType:string,
-             PolicyId:int,
+             PolicyId:real,
              HttpUserAgent:string,
-             UserId:int,
+             UserId:real,
              UserAttributesUsername:string,
-             UserAttributesAccountId:int,
+             UserAttributesAccountId:real,
              UserAttributesDepartment:string,
              UserAttributesFirstname:string,
              UserAttributesEmail:string,
@@ -657,28 +730,29 @@ FunctionQuery: |
              UUID:string,
              ActorSystem:string,
              CustomMessage:string,
-             AccountId:int,
+             AccountId:real,
              SrcIpAddr:string,
              ActorUserName:string,
-             ActorUserId:int,
+             ActorUserId:real,
              Message:string,
-             EventTypeId:int,
-             EventStartTime:datetime
+             EventTypeId:real,
+             EventStartTime:datetime,
+             TimeGenerated:datetime
          )[];
      
          let OneLogin_CLQuery = union isfuzzy=true OneLogin_CL, OneLogin_CL_empty
      | extend
          TargetAppName = column_ifexists("app_name_s", ''),
-         TargetAppId = column_ifexists("app_id_d", 0),
+         TargetAppId = todouble(column_ifexists("app_id_d", real(null))),
          RoleName = column_ifexists("role_name_s", ''),
-         RoleId = column_ifexists("role_id_d", 0),
+         RoleId = todouble(column_ifexists("role_id_d", real(null))),
          PolicyName = column_ifexists("policy_name_s", ''),
          PolicyType = column_ifexists("policy_type_s", ''),
-         PolicyId = column_ifexists("policy_id_d", 0),
+         PolicyId = todouble(column_ifexists("policy_id_d", real(null))),
          HttpUserAgent = column_ifexists("user_agent_s", ''),
-         UserId = column_ifexists("user_id_d", 0),
+         UserId = todouble(column_ifexists("user_id_d", real(null))),
          UserAttributesUsername = column_ifexists("user_attributes_username_s", ''),
-         UserAttributesAccountId = column_ifexists("user_attributes_account_id_d", 0),
+         UserAttributesAccountId = todouble(column_ifexists("user_attributes_account_id_d", real(null))),
          UserAttributesDepartment = column_ifexists("user_attributes_department_s", ''),
          UserAttributesFirstname = column_ifexists("user_attributes_firstname_s", ''),
          UserAttributesEmail = column_ifexists("user_attributes_email_s", ''),
@@ -686,17 +760,17 @@ FunctionQuery: |
          UserAttributesTitle = column_ifexists("user_attributes_title_s", ''),
          UserAttributesLastname = column_ifexists("user_attributes_lastname_s", ''),
          UserName = column_ifexists("user_name_s", ''),
-         EventOriginalUid = column_ifexists("create__id_g", ''),
-         UUID = column_ifexists("uuid_g", ''),
+         EventOriginalUid = tostring(column_ifexists("create__id_g", '')),
+         UUID = tostring(column_ifexists("uuid_g", '')),
          ActorSystem = column_ifexists("actor_system_s", ''),
          CustomMessage = column_ifexists("custom_message_s", ''),
-         AccountId = column_ifexists("account_id_d", 0),
+         AccountId = todouble(column_ifexists("account_id_d", real(null))),
          SrcIpAddr = column_ifexists("ipaddr_s", ''),
          ActorUserName = column_ifexists("actor_user_name_s", ''),
-         ActorUserId = column_ifexists("actor_user_id_d", 0),
+         ActorUserId = todouble(column_ifexists("actor_user_id_d", real(null))),
          Message = column_ifexists("notes_s", ''),
-         EventTypeId = column_ifexists("event_type_id_d", 0),
-         EventStartTime = column_ifexists("event_timestamp_s", datetime(null))
+         EventTypeId = todouble(column_ifexists("event_type_id_d", real(null))),
+         EventStartTime = coalesce(todatetime(column_ifexists("event_timestamp_s", "")), TimeGenerated)
      | extend
          EventVendor = "OneLogin",
          EventProduct = "OneLogin IAM",
