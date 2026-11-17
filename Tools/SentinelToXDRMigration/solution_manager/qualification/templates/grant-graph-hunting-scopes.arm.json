@@ -1,0 +1,172 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.48.1.52935",
+      "templateHash": "6107738488286982798"
+    }
+  },
+  "parameters": {
+    "appUniqueName": {
+      "type": "string",
+      "defaultValue": "Sentinel-XDR-CustomDetection",
+      "metadata": {
+        "description": "Unique name and display name for the Sentinel-to-XDR delegated public client app registration."
+      }
+    },
+    "delegatedScopes": {
+      "type": "string",
+      "defaultValue": "User.Read ThreatHunting.Read.All CustomDetection.ReadWrite.All",
+      "allowedValues": [
+        "ThreatHunting.Read.All",
+        "CustomDetection.ReadWrite.All",
+        "ThreatHunting.Read.All CustomDetection.ReadWrite.All",
+        "CustomDetection.ReadWrite.All ThreatHunting.Read.All",
+        "User.Read ThreatHunting.Read.All",
+        "User.Read CustomDetection.ReadWrite.All",
+        "User.Read ThreatHunting.Read.All CustomDetection.ReadWrite.All",
+        "User.Read CustomDetection.ReadWrite.All ThreatHunting.Read.All"
+      ],
+      "metadata": {
+        "description": "Space-separated Microsoft Graph delegated scopes to grant admin consent for."
+      }
+    },
+    "consentType": {
+      "type": "string",
+      "defaultValue": "AllPrincipals",
+      "allowedValues": [
+        "Principal",
+        "AllPrincipals"
+      ],
+      "metadata": {
+        "description": "OAuth2 permission grant consent type: Principal (least-privilege single user) or AllPrincipals (tenant-wide)."
+      }
+    },
+    "principalId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Entra ID user objectId when consentType is Principal."
+      }
+    },
+    "grantToAzureCli": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Also instantiate and grant delegated scopes to Microsoft Azure CLI (04b07795-8ddb-461a-bbee-02f9e1bf7b46) so az rest / az account get-access-token can query Graph Hunting API directly."
+      }
+    }
+  },
+  "imports": {
+    "MicrosoftGraph": {
+      "provider": "MicrosoftGraph",
+      "version": "1.0.0"
+    }
+  },
+  "resources": {
+    "msGraphSp": {
+      "existing": true,
+      "import": "MicrosoftGraph",
+      "type": "Microsoft.Graph/servicePrincipals@v1.0",
+      "properties": {
+        "appId": "00000003-0000-0000-c000-000000000000"
+      }
+    },
+    "xdrApp": {
+      "import": "MicrosoftGraph",
+      "type": "Microsoft.Graph/applications@v1.0",
+      "properties": {
+        "uniqueName": "[parameters('appUniqueName')]",
+        "displayName": "[parameters('appUniqueName')]",
+        "signInAudience": "AzureADMyOrg",
+        "isFallbackPublicClient": true,
+        "publicClient": {
+          "redirectUris": [
+            "http://localhost"
+          ]
+        },
+        "requiredResourceAccess": [
+          {
+            "resourceAppId": "00000003-0000-0000-c000-000000000000",
+            "resourceAccess": [
+              {
+                "id": "c34088fb-0649-4714-af0b-bcbfec155897",
+                "type": "Scope"
+              },
+              {
+                "id": "b152eca8-ea73-4a48-8c98-1a6742673d99",
+                "type": "Scope"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "xdrSp": {
+      "import": "MicrosoftGraph",
+      "type": "Microsoft.Graph/servicePrincipals@v1.0",
+      "properties": {
+        "appId": "[reference('xdrApp').appId]"
+      },
+      "dependsOn": [
+        "xdrApp"
+      ]
+    },
+    "xdrGrant": {
+      "import": "MicrosoftGraph",
+      "type": "Microsoft.Graph/oauth2PermissionGrants@v1.0",
+      "properties": {
+        "clientId": "[reference('xdrSp').id]",
+        "consentType": "[parameters('consentType')]",
+        "principalId": "[if(equals(parameters('consentType'), 'Principal'), parameters('principalId'), null())]",
+        "resourceId": "[reference('msGraphSp').id]",
+        "scope": "[parameters('delegatedScopes')]"
+      },
+      "dependsOn": [
+        "msGraphSp",
+        "xdrSp"
+      ]
+    },
+    "azCliSp": {
+      "condition": "[parameters('grantToAzureCli')]",
+      "import": "MicrosoftGraph",
+      "type": "Microsoft.Graph/servicePrincipals@v1.0",
+      "properties": {
+        "appId": "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+      }
+    },
+    "azCliGrant": {
+      "condition": "[parameters('grantToAzureCli')]",
+      "import": "MicrosoftGraph",
+      "type": "Microsoft.Graph/oauth2PermissionGrants@v1.0",
+      "properties": {
+        "clientId": "[reference('azCliSp').id]",
+        "consentType": "[parameters('consentType')]",
+        "principalId": "[if(equals(parameters('consentType'), 'Principal'), parameters('principalId'), null())]",
+        "resourceId": "[reference('msGraphSp').id]",
+        "scope": "[parameters('delegatedScopes')]"
+      },
+      "dependsOn": [
+        "azCliSp",
+        "msGraphSp"
+      ]
+    }
+  },
+  "outputs": {
+    "customAppId": {
+      "type": "string",
+      "value": "[reference('xdrApp').appId]"
+    },
+    "customAppObjectId": {
+      "type": "string",
+      "value": "[reference('xdrApp').id]"
+    },
+    "customServicePrincipalId": {
+      "type": "string",
+      "value": "[reference('xdrSp').id]"
+    }
+  }
+}

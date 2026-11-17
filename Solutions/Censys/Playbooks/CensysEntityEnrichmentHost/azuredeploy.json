@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "metadata": {
         "title": "Censys Entity Enrichment - Host",
-        "description": "This playbook is triggered automatically when an IP entity is detected in a Microsoft Sentinel incident, based on an automation rule. Upon triggering, it extracts the IP address from the entity and queries the Censys API (v3) to retrieve detailed host information including geolocation (continent, country, city, coordinates), autonomous system details (ASN, BGP prefix), WHOIS data (network, organization, contacts), services, and DNS information. The playbook retrieves the Censys API token securely from Azure Key Vault, performs the API call with retry logic (up to 3 attempts) and comprehensive error handling for HTTP status codes (200, 401, 403, 404, 422). Upon successful data retrieval, the host data is ingested into Azure Log Analytics (CensysHost_CL table) for historical analysis and reporting. The playbook then retrieves the associated incident and invokes the CensysIncidentEnrichment sub-playbook to add the enrichment data as a comment to the incident. If no incident is associated, the playbook terminates successfully after data ingestion.",
+        "description": "This playbook is triggered automatically when an IP entity is detected in a Microsoft Sentinel incident, based on an automation rule. Upon triggering, it extracts the IP address from the entity and queries the Censys API (v3) to retrieve detailed host information including geolocation (continent, country, city, coordinates), autonomous system details (ASN, BGP prefix), WHOIS data (network, organization, contacts), services, and DNS information. The playbook retrieves the Censys API token securely from Azure Key Vault, performs the API call with retry logic (up to 3 attempts) and comprehensive error handling for HTTP status codes (200, 401, 403, 404, 422). Upon successful data retrieval, the host data is ingested into Azure Log Analytics (CensysHost_CL table) for historical analysis and reporting. The playbook then retrieves the associated incident and invokes the CensysIncidentEnrichment sub-playbook to add the enrichment data as a comment to the incident. If no incident is associated, the playbook terminates successfully after data ingestion. By default the playbook queries the Censys Host Enrichment API (v3/global/asset/enrichment/host) for the additional GreyNoise, IPinfo and Mallory data, and falls back to the standard host API when the enrichment API is not entitled (403/409) or returns any other non-success status. Set the UseHostEnrichment parameter to false to always use the standard host API.",
         "prerequisites": [
             "1. Deploy the CensysIncidentEnrichment playbook before deploying this playbook.",
             "2. Create an Azure Key Vault and store your Censys API token as a secret named 'Censys-Access-Token'.",
@@ -33,7 +33,7 @@
         "author": {
             "name": "Censys"
         },
-        "lastUpdateTime": "2025-02-18T00:00:00.000Z"
+        "lastUpdateTime": "2026-09-29T00:00:00.000Z"
     },
     "parameters": {
         "PlaybookName": {
@@ -41,6 +41,17 @@
             "type": "string",
             "metadata": {
                 "description": "Name of the Logic App (Playbook) to be deployed. Must be unique within the resource group."
+            }
+        },
+        "UseHostEnrichment": {
+            "type": "string",
+            "defaultValue": "True",
+            "allowedValues": [
+              "True",
+              "False"
+            ],
+            "metadata": {
+                "description": "Use the Censys Host Enrichment API (v3/global/asset/enrichment/host) to retrieve additional GreyNoise, IPinfo and Mallory data. Enter True or False. Any value other than True disables enrichment. If set to False, or if the enrichment API returns 403 (not entitled), the standard host API is used instead."
             }
         },
         "OrganizationID": {
@@ -88,6 +99,10 @@
                         "$connections": {
                             "defaultValue": {},
                             "type": "Object"
+                        },
+                        "UseHostEnrichment": {
+                            "type": "String",
+                            "defaultValue": "True"
                         }
                     },
                     "triggers": {
@@ -132,43 +147,61 @@
                                 }
                             }
                         },
-                        "Until_Host_Data_is_Fetched": {
+                        "Condition_to_Check_Host_Enrichment_is_Enabled": {
+                            "runAfter": {
+                                "Initialize_Break_Loop_Flag_for_Host_as_False": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                          "@toLower(trim(parameters('UseHostEnrichment')))",
+                                          "true"
+                                        ]
+                                    }
+                                ]
+                            },
                             "actions": {
-                                "HTTP_Call_to_Fetch_Host_Data": {
+                                "HTTP_Call_to_Fetch_Host_Enrichment_Data": {
                                     "type": "Http",
                                     "inputs": {
-                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/host/@{variables('EntityData')}",
+                                        "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/enrichment/host/@{encodeURIComponent(variables('EntityData'))}",
                                         "method": "GET",
                                         "headers": {
-                                            "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}",
-                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}"
-                                        },
-                                        "queries": {
-                                            "organization_id": "@{variables('org_id')}"
+                                            "X-Organization-ID": "@{variables('org_id')}",
+                                            "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}",
+                                            "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}"
                                         }
                                     },
                                     "runtimeConfiguration": {
                                         "contentTransfer": {
                                             "transferMode": "Chunked"
                                         }
-                                    }
+                                    },
+                                    "runAfter": {}
                                 },
-                                "Switch_Case_for_API_Status_Codes_for_Host": {
+                                "Switch_Case_for_Enrichment_API_Status_Codes": {
                                     "runAfter": {
-                                        "HTTP_Call_to_Fetch_Host_Data": [
+                                        "HTTP_Call_to_Fetch_Host_Enrichment_Data": [
                                             "Succeeded",
                                             "TimedOut",
                                             "Failed"
                                         ]
                                     },
+                                    "expression": "@outputs('HTTP_Call_to_Fetch_Host_Enrichment_Data')?['statusCode']",
+                                    "type": "Switch",
                                     "cases": {
-                                        "Case_for_200_for_Host": {
+                                        "Case_for_200_for_Enrichment": {
                                             "case": 200,
                                             "actions": {
-                                                "Parse_JSON_for_Host_Response": {
+                                                "Parse_JSON_for_Enrichment_Response": {
+                                                    "runAfter": {},
                                                     "type": "ParseJson",
                                                     "inputs": {
-                                                        "content": "@body('HTTP_Call_to_Fetch_Host_Data')",
+                                                        "content": "@body('HTTP_Call_to_Fetch_Host_Enrichment_Data')",
                                                         "schema": {
                                                             "type": "object",
                                                             "properties": {
@@ -182,184 +215,13 @@
                                                                                     "type": "string"
                                                                                 },
                                                                                 "location": {
-                                                                                    "type": "object",
-                                                                                    "properties": {
-                                                                                        "continent": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "country": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "country_code": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "city": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "postal_code": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "timezone": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "province": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "coordinates": {
-                                                                                            "type": "object",
-                                                                                            "properties": {
-                                                                                                "latitude": {
-                                                                                                    "type": "number"
-                                                                                                },
-                                                                                                "longitude": {
-                                                                                                    "type": "number"
-                                                                                                }
-                                                                                            }
-                                                                                        }
-                                                                                    }
+                                                                                    "type": "object"
                                                                                 },
                                                                                 "autonomous_system": {
-                                                                                    "type": "object",
-                                                                                    "properties": {
-                                                                                        "asn": {
-                                                                                            "type": "integer"
-                                                                                        },
-                                                                                        "description": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "bgp_prefix": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "name": {
-                                                                                            "type": "string"
-                                                                                        },
-                                                                                        "country_code": {
-                                                                                            "type": "string"
-                                                                                        }
-                                                                                    }
+                                                                                    "type": "object"
                                                                                 },
                                                                                 "whois": {
-                                                                                    "type": "object",
-                                                                                    "properties": {
-                                                                                        "network": {
-                                                                                            "type": "object",
-                                                                                            "properties": {
-                                                                                                "handle": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "name": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "cidrs": {
-                                                                                                    "type": "array",
-                                                                                                    "items": {
-                                                                                                        "type": "string"
-                                                                                                    }
-                                                                                                },
-                                                                                                "created": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "updated": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "allocation_type": {
-                                                                                                    "type": "string"
-                                                                                                }
-                                                                                            }
-                                                                                        },
-                                                                                        "organization": {
-                                                                                            "type": "object",
-                                                                                            "properties": {
-                                                                                                "handle": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "name": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "street": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "city": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "state": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "postal_code": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "country": {
-                                                                                                    "type": "string"
-                                                                                                },
-                                                                                                "abuse_contacts": {
-                                                                                                    "type": "array",
-                                                                                                    "items": {
-                                                                                                        "type": "object",
-                                                                                                        "properties": {
-                                                                                                            "handle": {
-                                                                                                                "type": "string"
-                                                                                                            },
-                                                                                                            "name": {
-                                                                                                                "type": "string"
-                                                                                                            },
-                                                                                                            "email": {
-                                                                                                                "type": "string"
-                                                                                                            }
-                                                                                                        },
-                                                                                                        "required": [
-                                                                                                            "handle",
-                                                                                                            "name",
-                                                                                                            "email"
-                                                                                                        ]
-                                                                                                    }
-                                                                                                },
-                                                                                                "admin_contacts": {
-                                                                                                    "type": "array",
-                                                                                                    "items": {
-                                                                                                        "type": "object",
-                                                                                                        "properties": {
-                                                                                                            "handle": {
-                                                                                                                "type": "string"
-                                                                                                            },
-                                                                                                            "name": {
-                                                                                                                "type": "string"
-                                                                                                            },
-                                                                                                            "email": {
-                                                                                                                "type": "string"
-                                                                                                            }
-                                                                                                        },
-                                                                                                        "required": [
-                                                                                                            "handle",
-                                                                                                            "name",
-                                                                                                            "email"
-                                                                                                        ]
-                                                                                                    }
-                                                                                                },
-                                                                                                "tech_contacts": {
-                                                                                                    "type": "array",
-                                                                                                    "items": {
-                                                                                                        "type": "object",
-                                                                                                        "properties": {
-                                                                                                            "handle": {
-                                                                                                                "type": "string"
-                                                                                                            },
-                                                                                                            "name": {
-                                                                                                                "type": "string"
-                                                                                                            },
-                                                                                                            "email": {
-                                                                                                                "type": "string"
-                                                                                                            }
-                                                                                                        },
-                                                                                                        "required": [
-                                                                                                            "handle",
-                                                                                                            "name",
-                                                                                                            "email"
-                                                                                                        ]
-                                                                                                    }
-                                                                                                }
-                                                                                            }
-                                                                                        }
-                                                                                    }
+                                                                                    "type": "object"
                                                                                 },
                                                                                 "services": {
                                                                                     "type": "array"
@@ -369,186 +231,176 @@
                                                                                 },
                                                                                 "dns": {
                                                                                     "type": "object"
+                                                                                },
+                                                                                "labels": {
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "reputation": {
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "greynoise": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "actor": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "classification": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "last_observed_time": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "network": {
+                                                                                    "type": "array",
+                                                                                    "items": {
+                                                                                        "type": "object",
+                                                                                        "properties": {
+                                                                                            "hosting": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "mobile": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "satellite": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "source": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "privacy": {
+                                                                                    "type": "array",
+                                                                                    "items": {
+                                                                                        "type": "object",
+                                                                                        "properties": {
+                                                                                            "anonymous": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "tor": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "proxy": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "relay": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "vpn": {
+                                                                                                "type": "boolean"
+                                                                                            },
+                                                                                            "source": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "third_party": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "mallory": {
+                                                                                            "type": "array",
+                                                                                            "items": {
+                                                                                                "type": "object",
+                                                                                                "properties": {
+                                                                                                    "observable": {
+                                                                                                        "type": "object",
+                                                                                                        "properties": {
+                                                                                                            "name": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "type": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "description": {
+                                                                                                                "type": "string"
+                                                                                                            },
+                                                                                                            "updated_at": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "opinions": {
+                                                                                                        "type": "array",
+                                                                                                        "items": {
+                                                                                                            "type": "object",
+                                                                                                            "properties": {
+                                                                                                                "verdict": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "confidence": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "source": {
+                                                                                                                    "type": "string"
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
                                                                                 }
                                                                             }
                                                                         },
                                                                         "extensions": {
                                                                             "type": "object"
                                                                         }
-                                                                    },
-                                                                    "required": [
-                                                                        "resource"
-                                                                    ]
+                                                                    }
                                                                 }
                                                             }
                                                         }
                                                     }
                                                 },
-                                                "Set_Host_Data_to_be_Send_for_Enrichment": {
+                                                "Set_Host_Data_to_be_Send_for_Enrichment_from_Enrichment_API": {
                                                     "runAfter": {
-                                                        "Parse_JSON_for_Host_Response": [
+                                                        "Parse_JSON_for_Enrichment_Response": [
                                                             "Succeeded"
                                                         ]
                                                     },
                                                     "type": "SetVariable",
                                                     "inputs": {
                                                         "name": "ip_data",
-                                                        "value": "@createArray(body('Parse_JSON_for_Host_Response')?['result'])"
-                                                    }
-                                                },
-                                                "Set_Break_Loop_True_for_Successful_Data_Fetch_for_Host": {
-                                                    "runAfter": {
-                                                        "Set_Host_Data_to_be_Send_for_Enrichment": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "break_ip_loop",
-                                                        "value": true
+                                                        "value": "@createArray(body('Parse_JSON_for_Enrichment_Response')?['result'])"
                                                     }
                                                 }
                                             }
                                         },
-                                        "Case_for_403_for_Host": {
-                                            "case": 403,
-                                            "actions": {
-                                                "Set_Host_Fetch_Error_True_for_403": {
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "host_fetch_error",
-                                                        "value": true
-                                                    }
-                                                },
-                                                "Set_Host_Fetch_Error_Message_for_403": {
-                                                    "runAfter": {
-                                                        "Set_Host_Fetch_Error_True_for_403": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "host_fetch_error_message",
-                                                        "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
-                                                    }
-                                                },
-                                                "Set_Break_Loop_Flag_for_Host_as_True_for_403": {
-                                                    "runAfter": {
-                                                        "Set_Host_Fetch_Error_Message_for_403": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "break_ip_loop",
-                                                        "value": true
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        "Case_for_401_for_Host": {
+                                        "Case_for_401_for_Enrichment": {
                                             "case": 401,
                                             "actions": {
-                                                "Set_Host_Fetch_Error_True_for_401": {
+                                                "Set_Auth_Error_True": {
                                                     "type": "SetVariable",
                                                     "inputs": {
-                                                        "name": "host_fetch_error",
-                                                        "value": true
-                                                    }
-                                                },
-                                                "Set_Host_Fetch_Error_Message_for_401": {
-                                                    "runAfter": {
-                                                        "Set_Host_Fetch_Error_True_for_401": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "host_fetch_error_message",
-                                                        "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
-                                                    }
-                                                },
-                                                "Set_Break_Loop_Flag_for_Host_as_True_for_401": {
-                                                    "runAfter": {
-                                                        "Set_Host_Fetch_Error_Message_for_401": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "break_ip_loop",
+                                                        "name": "auth_error",
                                                         "value": true
                                                     }
                                                 }
                                             }
                                         },
-                                        "Case_for_422_for_Host": {
-                                            "case": 422,
+                                        "Case_for_403_for_Enrichment": {
+                                            "case": 403,
                                             "actions": {
-                                                "Set_Host_Fetch_Error_True_for_422": {
+                                                "Set_Enrichment_Fallback_Required_for_403": {
                                                     "type": "SetVariable",
                                                     "inputs": {
-                                                        "name": "host_fetch_error",
-                                                        "value": true
-                                                    }
-                                                },
-                                                "Set_Host_Fetch_Error_Message_for_422": {
-                                                    "runAfter": {
-                                                        "Set_Host_Fetch_Error_True_for_422": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "host_fetch_error_message",
-                                                        "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
-                                                    }
-                                                },
-                                                "Set_Break_Loop_Flag_for_Host_as_True_for_422": {
-                                                    "runAfter": {
-                                                        "Set_Host_Fetch_Error_Message_for_422": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "break_ip_loop",
+                                                        "name": "enrichment_fallback_required",
                                                         "value": true
                                                     }
                                                 }
                                             }
                                         },
-                                        "Case_for_404_for_Host": {
-                                            "case": 404,
+                                        "Case_for_409_for_Enrichment": {
+                                            "case": 409,
                                             "actions": {
-                                                "Set_Host_Fetch_Error_True_for_404": {
+                                                "Set_Enrichment_Fallback_Required_for_409": {
                                                     "type": "SetVariable",
                                                     "inputs": {
-                                                        "name": "host_fetch_error",
-                                                        "value": true
-                                                    }
-                                                },
-                                                "Set_Host_Fetch_Error_Message_for_404": {
-                                                    "runAfter": {
-                                                        "Set_Host_Fetch_Error_True_for_404": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "host_fetch_error_message",
-                                                        "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
-                                                    }
-                                                },
-                                                "Set_Break_Loop_Flag_for_Host_as_True_for_404": {
-                                                    "runAfter": {
-                                                        "Set_Host_Fetch_Error_Message_for_404": [
-                                                            "Succeeded"
-                                                        ]
-                                                    },
-                                                    "type": "SetVariable",
-                                                    "inputs": {
-                                                        "name": "break_ip_loop",
+                                                        "name": "enrichment_fallback_required",
                                                         "value": true
                                                     }
                                                 }
@@ -556,23 +408,527 @@
                                         }
                                     },
                                     "default": {
-                                        "actions": {}
-                                    },
-                                    "expression": "@outputs('HTTP_Call_to_Fetch_Host_Data')?['statusCode']",
-                                    "type": "Switch"
+                                        "actions": {
+                                            "Set_Enrichment_Fallback_Required_for_Other_Status": {
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "enrichment_fallback_required",
+                                                    "value": true
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             },
+                            "else": {
+                                "actions": {
+                                    "Set_Enrichment_Fallback_Required_When_Enrichment_Disabled": {
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "enrichment_fallback_required",
+                                            "value": true
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Condition_to_Terminate_if_Authentication_Error": {
                             "runAfter": {
-                                "Initialize_Break_Loop_Flag_for_Host_as_False": [
-                                    "Succeeded"
+                                "Condition_to_Check_Host_Enrichment_is_Enabled": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Failed"
                                 ]
                             },
-                            "expression": "@equals(variables('break_ip_loop'), true)",
-                            "limit": {
-                                "count": 3,
-                                "timeout": "PT1H"
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('auth_error')",
+                                            true
+                                        ]
+                                    }
+                                ]
                             },
-                            "type": "Until"
+                            "actions": {
+                                "Terminate_Due_to_Authentication_Error": {
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Failed",
+                                        "runError": {
+                                            "code": "401",
+                                            "message": "Authentication Error: The Censys API returned 401 Unauthorized. Verify that the 'Censys-Access-Token' secret in Key Vault contains a valid API token and that the Organization ID is correct."
+                                        }
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            }
+                        },
+                        "Condition_to_Fetch_Host_Data_from_Standard_API": {
+                            "runAfter": {
+                                "Condition_to_Terminate_if_Authentication_Error": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('enrichment_fallback_required')",
+                                            true
+                                        ]
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "Until_Host_Data_is_Fetched": {
+                                    "actions": {
+                                        "HTTP_Call_to_Fetch_Host_Data": {
+                                            "type": "Http",
+                                            "inputs": {
+                                                "uri": "@{variables('base_url')}/@{variables('api_version')}/global/asset/host/@{variables('EntityData')}",
+                                                "method": "GET",
+                                                "headers": {
+                                                    "Authorization": "Bearer @{body('Get_Censys_API_Token')?['value']}",
+                                                    "User-Agent": "CensysMSSentinel/1.0.0; ts=@{div(sub(ticks(utcNow()), ticks('1970-01-01T00:00:00Z')), 10000000)}"
+                                                },
+                                                "queries": {
+                                                    "organization_id": "@{variables('org_id')}"
+                                                }
+                                            },
+                                            "runtimeConfiguration": {
+                                                "contentTransfer": {
+                                                    "transferMode": "Chunked"
+                                                }
+                                            }
+                                        },
+                                        "Switch_Case_for_API_Status_Codes_for_Host": {
+                                            "runAfter": {
+                                                "HTTP_Call_to_Fetch_Host_Data": [
+                                                    "Succeeded",
+                                                    "TimedOut",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "cases": {
+                                                "Case_for_200_for_Host": {
+                                                    "case": 200,
+                                                    "actions": {
+                                                        "Parse_JSON_for_Host_Response": {
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@body('HTTP_Call_to_Fetch_Host_Data')",
+                                                                "schema": {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                        "result": {
+                                                                            "type": "object",
+                                                                            "properties": {
+                                                                                "resource": {
+                                                                                    "type": "object",
+                                                                                    "properties": {
+                                                                                        "ip": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "location": {
+                                                                                            "type": "object",
+                                                                                            "properties": {
+                                                                                                "continent": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "country": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "country_code": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "city": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "postal_code": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "timezone": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "province": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "coordinates": {
+                                                                                                    "type": "object",
+                                                                                                    "properties": {
+                                                                                                        "latitude": {
+                                                                                                            "type": "number"
+                                                                                                        },
+                                                                                                        "longitude": {
+                                                                                                            "type": "number"
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "autonomous_system": {
+                                                                                            "type": "object",
+                                                                                            "properties": {
+                                                                                                "asn": {
+                                                                                                    "type": "integer"
+                                                                                                },
+                                                                                                "description": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "bgp_prefix": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "name": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "country_code": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "whois": {
+                                                                                            "type": "object",
+                                                                                            "properties": {
+                                                                                                "network": {
+                                                                                                    "type": "object",
+                                                                                                    "properties": {
+                                                                                                        "handle": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "name": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "cidrs": {
+                                                                                                            "type": "array",
+                                                                                                            "items": {
+                                                                                                                "type": "string"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "created": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "updated": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "allocation_type": {
+                                                                                                            "type": "string"
+                                                                                                        }
+                                                                                                    }
+                                                                                                },
+                                                                                                "organization": {
+                                                                                                    "type": "object",
+                                                                                                    "properties": {
+                                                                                                        "handle": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "name": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "street": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "city": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "state": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "postal_code": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "country": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "abuse_contacts": {
+                                                                                                            "type": "array",
+                                                                                                            "items": {
+                                                                                                                "type": "object",
+                                                                                                                "properties": {
+                                                                                                                    "handle": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "name": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "email": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "required": [
+                                                                                                                    "handle",
+                                                                                                                    "name",
+                                                                                                                    "email"
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "admin_contacts": {
+                                                                                                            "type": "array",
+                                                                                                            "items": {
+                                                                                                                "type": "object",
+                                                                                                                "properties": {
+                                                                                                                    "handle": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "name": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "email": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "required": [
+                                                                                                                    "handle",
+                                                                                                                    "name",
+                                                                                                                    "email"
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "tech_contacts": {
+                                                                                                            "type": "array",
+                                                                                                            "items": {
+                                                                                                                "type": "object",
+                                                                                                                "properties": {
+                                                                                                                    "handle": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "name": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "email": {
+                                                                                                                        "type": "string"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "required": [
+                                                                                                                    "handle",
+                                                                                                                    "name",
+                                                                                                                    "email"
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "services": {
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "service_count": {
+                                                                                            "type": "integer"
+                                                                                        },
+                                                                                        "dns": {
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "extensions": {
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "resource"
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "Set_Host_Data_to_be_Send_for_Enrichment": {
+                                                            "runAfter": {
+                                                                "Parse_JSON_for_Host_Response": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "ip_data",
+                                                                "value": "@createArray(body('Parse_JSON_for_Host_Response')?['result'])"
+                                                            }
+                                                        },
+                                                        "Set_Break_Loop_True_for_Successful_Data_Fetch_for_Host": {
+                                                            "runAfter": {
+                                                                "Set_Host_Data_to_be_Send_for_Enrichment": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_ip_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_for_403_for_Host": {
+                                                    "case": 403,
+                                                    "actions": {
+                                                        "Set_Host_Fetch_Error_True_for_403": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "host_fetch_error",
+                                                                "value": true
+                                                            }
+                                                        },
+                                                        "Set_Host_Fetch_Error_Message_for_403": {
+                                                            "runAfter": {
+                                                                "Set_Host_Fetch_Error_True_for_403": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "host_fetch_error_message",
+                                                                "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
+                                                            }
+                                                        },
+                                                        "Set_Break_Loop_Flag_for_Host_as_True_for_403": {
+                                                            "runAfter": {
+                                                                "Set_Host_Fetch_Error_Message_for_403": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_ip_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_for_401_for_Host": {
+                                                    "case": 401,
+                                                    "actions": {
+                                                        "Set_Host_Fetch_Error_True_for_401": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "host_fetch_error",
+                                                                "value": true
+                                                            }
+                                                        },
+                                                        "Set_Host_Fetch_Error_Message_for_401": {
+                                                            "runAfter": {
+                                                                "Set_Host_Fetch_Error_True_for_401": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "host_fetch_error_message",
+                                                                "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
+                                                            }
+                                                        },
+                                                        "Set_Break_Loop_Flag_for_Host_as_True_for_401": {
+                                                            "runAfter": {
+                                                                "Set_Host_Fetch_Error_Message_for_401": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_ip_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_for_422_for_Host": {
+                                                    "case": 422,
+                                                    "actions": {
+                                                        "Set_Host_Fetch_Error_True_for_422": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "host_fetch_error",
+                                                                "value": true
+                                                            }
+                                                        },
+                                                        "Set_Host_Fetch_Error_Message_for_422": {
+                                                            "runAfter": {
+                                                                "Set_Host_Fetch_Error_True_for_422": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "host_fetch_error_message",
+                                                                "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
+                                                            }
+                                                        },
+                                                        "Set_Break_Loop_Flag_for_Host_as_True_for_422": {
+                                                            "runAfter": {
+                                                                "Set_Host_Fetch_Error_Message_for_422": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_ip_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_for_404_for_Host": {
+                                                    "case": 404,
+                                                    "actions": {
+                                                        "Set_Host_Fetch_Error_True_for_404": {
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "host_fetch_error",
+                                                                "value": true
+                                                            }
+                                                        },
+                                                        "Set_Host_Fetch_Error_Message_for_404": {
+                                                            "runAfter": {
+                                                                "Set_Host_Fetch_Error_True_for_404": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "host_fetch_error_message",
+                                                                "value": "@body('HTTP_Call_to_Fetch_Host_Data')"
+                                                            }
+                                                        },
+                                                        "Set_Break_Loop_Flag_for_Host_as_True_for_404": {
+                                                            "runAfter": {
+                                                                "Set_Host_Fetch_Error_Message_for_404": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_ip_loop",
+                                                                "value": true
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "expression": "@outputs('HTTP_Call_to_Fetch_Host_Data')?['statusCode']",
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": "@equals(variables('break_ip_loop'), true)",
+                                    "limit": {
+                                        "count": 3,
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "else": {
+                                "actions": {}
+                            }
                         },
                         "Condition_to_Terminate_if_Any_Error_Occurred_While_Fetching_Data_for_Host": {
                             "actions": {
@@ -587,7 +943,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Until_Host_Data_is_Fetched": [
+                                "Condition_to_Fetch_Host_Data_from_Standard_API": [
                                     "Succeeded",
                                     "Failed",
                                     "TimedOut"
@@ -627,7 +983,7 @@
                                     "enrichment_data": {
                                         "host": "@variables('ip_data')"
                                     },
-                                    "parent_playbook": "@variables('parent_palybook_name')"
+                                    "parent_playbook": "@{workflow()['name']}"
                                 }
                             }
                         },
@@ -720,6 +1076,16 @@
                                         "name": "org_id",
                                         "type": "string",
                                         "value": "[trim(parameters('OrganizationID'))]"
+                                    },
+                                    {
+                                        "name": "enrichment_fallback_required",
+                                        "type": "boolean",
+                                        "value": false
+                                    },
+                                    {
+                                        "name": "auth_error",
+                                        "type": "boolean",
+                                        "value": false
                                     }
                                 ]
                             }
@@ -798,6 +1164,9 @@
                     "outputs": {}
                 },
                 "parameters": {
+                    "UseHostEnrichment": {
+                        "value": "[parameters('UseHostEnrichment')]"
+                    },
                     "$connections": {
                         "value": {
                             "azuresentinel": {

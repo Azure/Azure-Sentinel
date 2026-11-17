@@ -1,0 +1,64 @@
+id: b5c6d7e8-f901-4123-bcde-f1234567e102
+name: Netcraft App - Pending client input
+description: |
+  Identifies App results that are waiting for client input.
+  A result needs client input when any tag on the result (`data.tags`) has category `input_required`.
+  Uses NetcraftAppResult_Latest so one ResultUuid alerts from the latest app result in the window.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: NetcraftIntegrationGatewayDefinition
+    dataTypes:
+      - NetcraftAppResult_CL
+queryFrequency: 15m
+queryPeriod: 4h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+  - InitialAccess
+relevantTechniques:
+  - T1583
+  - T1566
+query: |
+  NetcraftAppResult_Latest
+  | where IngestedAt > ago(15m)
+  | mv-apply Tag = Tags on (
+      where tostring(Tag.category) == "input_required"
+      | summarize InputRequiredTags = make_set(tostring(Tag.display_name))
+    )
+  | where array_length(InputRequiredTags) > 0
+  | extend
+      RiskCategory = tostring(Risk.category),
+      InputRequiredTags = strcat_array(InputRequiredTags, ", ")
+  | project
+      TimeGenerated,
+      EventId,
+      ResultUuid,
+      Subject,
+      Platform,
+      Name,
+      Developer,
+      AppId,
+      Url,
+      RiskCategory,
+      InputRequiredTags,
+      ChangeType,
+      CloudEventType
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+customDetails:
+  ResultUuid: ResultUuid
+  Name: Name
+  Platform: Platform
+  InputRequiredTags: InputRequiredTags
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Netcraft App awaiting client input - {{Name}}"
+  alertDescriptionFormat: "App result {{ResultUuid}} on {{Platform}} needs client input."
+kind: Scheduled
+version: 1.0.0

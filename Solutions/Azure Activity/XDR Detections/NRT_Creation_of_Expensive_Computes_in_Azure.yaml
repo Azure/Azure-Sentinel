@@ -1,0 +1,108 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActivity
+  dataTypes:
+  - AzureActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AzureActivity
+  requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+    - AzureActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 56fe0db0-6779-46fa-b3c5-006082a53064
+    path: Analytic Rules/NRT_Creation_of_Expensive_Computes_in_Azure.yaml
+    version: 2.0.3
+    querySha256: 39de7831463dc9e15ad1a87cec6a78a719907457c53f6b4f667ab01b01fdcec0
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `Caller`, but its target output
+      binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `Caller` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - 'Schedule assessment: source kind=NRT; target frequency=PT0S (Continuous); single-table Continuous (NRT) execution is
+      supported in Defender XDR. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - nrt_streaming_constructs_rewritten
+    - 'nrt_streaming_constructs_rewritten: Inlined scalar dynamic([...]) list declarations and rewrote scalar mv-apply filters
+      into streaming-compatible predicates to preserve PT0S Continuous execution.'
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1578
+    reviewScope:
+      sourceDocumentSha256: 2943b56d297c3eb87c7da79c7801ce1f2bf12481b4576d8031543d3962e1edca
+      targetQuerySha256: 27d1eba3cf48818e9a43c3a8ce6326b68297329c2f25b30b16a4aa5e124a9bca
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: Caller
+      column: Caller
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-56fe0db0-6779-46fa-b3c5-006082a53064
+  displayName: NRT Creation of expensive computes in Azure
+  status: disabled
+  queryCondition:
+    queryText: |-
+      AzureActivity
+      | where OperationNameValue in~ ("microsoft.compute/virtualmachines/write", "microsoft.resources/deployments/write")
+      | where ActivityStatusValue startswith "Accept"
+      | where Properties has 'vmSize'
+      | extend parsed_property= parse_json(tostring((parse_json(Properties).responseBody))).properties
+      | extend vmSize = tostring((parsed_property.hardwareProfile).vmSize)
+      | where vmSize contains "416" or vmSize contains "208" or vmSize contains "192" or vmSize contains "128" or vmSize contains "120" or vmSize contains "96" or vmSize contains "80" or vmSize contains "72" or vmSize contains "64" or vmSize contains "48" or vmSize contains "44" or vmSize contains "40" or vmSize contains "nc12" or vmSize contains "nc24" or vmSize contains "nv24"
+      | extend ComputerName = tostring((parsed_property.osProfile).computerName)
+      | project TimeGenerated, OperationNameValue, ActivityStatusValue, Caller, CallerIpAddress, ComputerName, vmSize
+      | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
+  schedule:
+    frequency: PT0S
+  detectionAction:
+    alertTemplate:
+      title: NRT Creation of expensive computes in Azure
+      description: "'Identifies the creation of large size or expensive VMs (with GPUs or with a large number of virtual CPUs)\
+        \ in Azure.\nAn adversary may create new or update existing virtual machines to evade defenses or use them for cryptomining\
+        \ purposes.\nFor Windows/Linux Vm Sizes, see https://docs.microsoft.com/azure/virtual-machines/windows/sizes \nAzure\
+        \ VM Naming Conventions, see https://docs.microsoft.com/azure/virtual-machines/vm-naming-conventions'"
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: ComputerName
+        ips:
+        - id: ip1
+          addressColumn: CallerIpAddress
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1578
+      customDetails:
+        AccountFullName: Caller

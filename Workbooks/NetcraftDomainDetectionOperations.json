@@ -1,0 +1,189 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Netcraft Domain Detection — Operations\n\nLatest Domain Detection results from the Integration Gateway (`NetcraftDomainDetection_CL`). Use `NetcraftDomainDetection_Latest` so re-delivered `update` events collapse to one row per `DomainResultId`. Tags are an array of objects; expand `Tag.display_name`. `Risk` is the `data.risk` object; charts and filters use `Risk.category`."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timeRange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ],
+              "allowCustom": true
+            }
+          }
+        ]
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Latest\n| where TimeGenerated {TimeRange}\n| extend RiskCategory = tostring(Risk.category)\n| summarize Events = count() by RiskCategory\n| order by Events desc",
+        "size": 0,
+        "title": "Results by risk",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "byRisk",
+      "customWidth": "33",
+      "showPin": true
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Unique\n| where TimeGenerated {TimeRange}\n| summarize Events = count() by ChangeType\n| order by Events desc",
+        "size": 0,
+        "title": "Deliveries by change_type",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "byChangeType",
+      "customWidth": "33"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Latest\n| where TimeGenerated {TimeRange}\n| summarize\n    NewlyRegistered = countif(tostring(Tags) contains \"Newly Registered\"),\n    PreemptiveDisruption = countif(tostring(Tags) contains \"Preemptive Disruption\")\n| project Metrics = pack_array(\n    bag_pack(\"Metric\", \"Newly Registered\", \"Count\", NewlyRegistered),\n    bag_pack(\"Metric\", \"Preemptive Disruption\", \"Count\", PreemptiveDisruption))\n| mv-expand Metrics\n| project Metric = tostring(Metrics.Metric), Count = tolong(Metrics.Count)",
+        "size": 0,
+        "title": "Tag highlights (Newly Registered / Preemptive Disruption)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Metric",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "tagHighlights",
+      "customWidth": "33"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Latest\n| where TimeGenerated {TimeRange}\n| extend TagArray = iff(gettype(Tags) == \"string\", parse_json(tostring(Tags)), Tags)\n| mv-expand Tag = TagArray\n| extend TagName = tostring(Tag.display_name)\n| where TagName startswith \"Newly Registered\" or TagName =~ \"Preemptive Disruption\"\n| summarize Events = count() by TagName\n| order by Events desc",
+        "size": 0,
+        "title": "Count by selected tags",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "unstackedbar"
+      },
+      "name": "selectedTags",
+      "customWidth": "50"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Latest\n| where TimeGenerated {TimeRange}\n| extend TagArray = iff(gettype(Tags) == \"string\", parse_json(tostring(Tags)), Tags)\n| mv-expand Tag = TagArray\n| extend TagName = tostring(Tag.display_name)\n| where isnotempty(TagName)\n| summarize Events = count() by TagName\n| order by Events desc\n| take 20",
+        "size": 0,
+        "title": "Top tags (display_name)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "unstackedbar"
+      },
+      "name": "topTags",
+      "customWidth": "50"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Unique\n| where TimeGenerated {TimeRange}\n| summarize Count = count() by bin(TimeGenerated, 1h), ChangeType\n| render timechart",
+        "size": 0,
+        "title": "Event volume over time",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Latest\n| where TimeGenerated {TimeRange}\n| where tostring(Risk.category) in (\"highest\", \"high\")\n| project TimeGenerated, Hostname, Domain, Risk, Tags, ChangeType, CloudEventType, Registrar, IpAddresses, DomainResultId, AreaId, FirstSeen, LastSeen, DetectedAt\n| sort by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "title": "High / highest risk results",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "highRisk"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Latest\n| where TimeGenerated {TimeRange}\n| where tostring(Tags) contains \"Newly Registered\" or tostring(Tags) contains \"Preemptive Disruption\"\n| project TimeGenerated, Hostname, Domain, Risk, Tags, ChangeType, CloudEventType, DomainResultId, AreaId, FirstSeen, LastSeen, DetectedAt\n| sort by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "title": "Results with Newly Registered or Preemptive Disruption",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "taggedResults"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftDomainDetection_Latest\n| where TimeGenerated {TimeRange}\n| project TimeGenerated, Hostname, Domain, HostnamePunycode, Risk, ChangeType, CloudEventType, Tags, Registrar, HostingProviders, IpAddresses, DomainResultId, AreaId, TrancoRank, ScreenshotId, FirstSeen, LastSeen, DetectedAt, UpdatedAt, DomainRegisteredAt\n| sort by TimeGenerated desc\n| take 200",
+        "size": 0,
+        "title": "Latest results",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "latest"
+    }
+  ],
+  "fromTemplateId": "sentinel-NetcraftDomainDetectionOperations",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

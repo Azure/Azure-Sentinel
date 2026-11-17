@@ -20,6 +20,7 @@ WORKDIR /app/Solutions/$SolutionName
 
 COPY ./Solutions/$SolutionName dist
 COPY ./.github/actions/entrypoint.ps1 dist
+COPY ./.script/package-automation/arm-ttk-sentinel-filters.ps1 dist
 
 LABEL "com.github.actions.name"="ARM TTK"
 LABEL "com.github.actions.description"="Checks template with the ARM TTK"

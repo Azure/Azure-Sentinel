@@ -1,0 +1,115 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - IdentityInfo
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - SecurityAlert
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - IdentityInfo
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - SecurityAlert
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 1f40ed57-f54b-462f-906a-ac3a89cc90d4
+    path: Analytic Rules/BrutforceAttemptOnAzurePortalAndAWSConsolAtSameTime.yaml
+    version: 1.0.1
+    querySha256: 21093148af49518ea50b3a07387b07839f4490a56a62d2d5d43c6d89f0d88d28
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 1d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1d, lookback=1d; target frequency=P1D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AwsUser' column `UserIdentityUserName` requires runtime output-schema binding verification
+    - customDetails 'UserAgent' column `UserAgent` requires runtime output-schema binding verification
+    - customDetails 'AzureUser' column `UserPrincipalName` requires runtime output-schema binding verification
+    - customDetails 'AzureClientAppUsed' column `ClientAppUsed` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AzureUser from query column `UserPrincipalName`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AzureUser column `UserPrincipalName` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: d159dea75c84041fa80cdf948713dfac3a940b0f5cb1c0e6413b46a6b055f49b
+      targetQuerySha256: 94c3d58a821312f891da55dcc9801c8c44754c419952e0357ba6ad312e8e3adf
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AzureUser
+properties:
+  id: xdr-1f40ed57-f54b-462f-906a-ac3a89cc90d4
+  displayName: Cross-Cloud Password Spray detection
+  status: disabled
+  queryCondition:
+    queryText: "// Materialize a table named \"Azure_Bruforce\" containing Azure Portal sign-in logs within the last 1 day\nlet Azure_Bruforce =  materialize (\n    SigninLogs\n// Filter sign-in logs related to the Azure Portal\n      | where AppDisplayName == \"Azure Portal\"\n// Exclude entries with empty OriginalRequestId\n    | where isnotempty(OriginalRequestId)\n// Summarize various counts and sets based on brute force criteria\n    | summarize\n      AzureSuccessfulEvent = countif(ResultType == 0),\n      AzureFailedEvent = countif(ResultType != 0),\n      totalAzureLoginEventId = dcount(OriginalRequestId),\n      AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0),\n      AzureSuccessfuleventsCount = dcountif(OriginalRequestId, ResultType == 0),\n      AzureSetOfFailedevents = makeset(iff(ResultType != 0, OriginalRequestId, \"\"), 5),\n      AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, \"\"), 5)\n      by\n      IPAddress,\n     \
+      \ UserPrincipalName,\n      bin(TimeGenerated, 1min),\n      UserAgent,\n      ConditionalAccessStatus,\n      OperationName,\n      RiskDetail,\n      AuthenticationRequirement,\n      ClientAppUsed\n// Extracting the name and UPN suffix from UserPrincipalName\n    | extend\n        Name = tostring(split(UserPrincipalName, '@')[0]),\n        UPNSuffix = tostring(split(UserPrincipalName, '@')[1]));\n// Materialize a table named \"AWS_Bruforce\" containing AWS CloudTrail events related to ConsoleLogins within the last 1 day\nlet AWS_Bruforce = materialize (\n    AWSCloudTrail\n// Filter CloudTrail events related to ConsoleLogin\n    | where EventName == \"ConsoleLogin\"\n// Extract ActionType from ResponseElements JSON\n    | extend ActionType = tostring(parse_json(ResponseElements).ConsoleLogin)\n// Summarize various counts and sets based on  brute force criteria\n    | summarize\n        AWSSuccessful=countif(ActionType == \"Success\"),\n        AWSFailed = countif(ActionType == \"\
+      Failure\"),\n        totalAwsEventId= dcount(AwsEventId),\n        AWSFailedEventsCount = dcountif(AwsEventId, ActionType == \"Failure\"),\n        AWSSuccessfuleventsCount = dcountif(AwsEventId, ActionType == \"Success\"),\n        AWSFailedevents = makeset(iff(ActionType == \"Failure\", AwsEventId, \"\"), 5),\n        AWSSuccessfulEvents = makeset(iff(ActionType == \"Success\", AwsEventId, \"\"), 5)\n// Grouping by various attributes\n        by\n        SourceIpAddress,\n        UserIdentityUserName,\n        bin(TimeGenerated, 1min),\n        UserAgent );\n// Joining the Azure_Bruforce and AWS_Bruforce tables on matching IP addresses and UserAgents\nAzure_Bruforce\n| join kind=inner AWS_Bruforce on $left.IPAddress == $right.SourceIpAddress and $left.UserAgent == $right.UserAgent\n// Filtering based on conditions for failed and successful events\n| where (AWSFailedEventsCount >= 4 and AzureFailedEventsCount >= 5) and ((AzureSuccessfuleventsCount >= 1 and AzureFailedEvent > AzureSuccessfulEvent)\
+      \ or (AWSSuccessfuleventsCount >= 1 and AWSFailedEventsCount > AWSSuccessfuleventsCount))"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Cross-Cloud Password Spray detection
+      description: '''This detection focuses on identifying potential cross-cloud brute force / Password Spray attempts involving Azure and AWS platforms. It monitors sign-in activities within the Azure Portal and AWS ConsoleLogins where brute force attempts are successful on both platforms in a synchronized manner.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        AwsUser: UserIdentityUserName
+        UserAgent: UserAgent
+        AzureUser: UserPrincipalName
+        AzureClientAppUsed: ClientAppUsed

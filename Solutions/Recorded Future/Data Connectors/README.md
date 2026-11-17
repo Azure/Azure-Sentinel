@@ -35,3 +35,11 @@ The connector UI tile content exists in two forms due to limitations of the pack
 
 If you update one (queries, description, instruction steps, connectivity criteria, etc.), update
 its counterpart.
+
+## Upgrading
+
+`azuredeploy.json` has **no automatic Content Hub "update available" notification** — it's a
+standalone template, not a tracked content item. When it changes (e.g. new DCR/table columns),
+**existing customers must manually redeploy it** (same resource group) to pick up the change.
+Check `metadata.releaseNotes` here and the top-level `ReleaseNotes.md` for what changed.
+

@@ -7,7 +7,8 @@ param (
     $solutionOfferId, 
     $inputBaseFolderPath, 
     $isNewSolution = $false,
-    $isPRMerged = $false
+    $isPRMerged = $false,
+    $allowLegacyV3ForOlderSentinelSolutions = ($env:SENTINEL_ALLOW_LEGACY_V3_PACKAGER -eq '1' -or $env:SENTINEL_ALLOW_LEGACY_V3_PACKAGER -eq 'true')
 )
 
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
@@ -1097,13 +1098,28 @@ try
     Write-Host "Updating data input file $dataFolderFile"
     Set-Content -Path $dataFilePath -Value $jsonDataFile
 
-    Write-Host "Now going to execute createSolutionV4 file"
-
     if ($null -eq $isWatchListInsideOfWorkbooksFolder -or $isWatchListInsideOfWorkbooksFolder -eq '') {
         $isWatchListInsideOfWorkbooksFolder = $false
     }
 
-    ./Tools/Create-Azure-Sentinel-Solution/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
+    $hasXdrSolutionContent = (
+        ($null -ne $dataFileContentObject.PSObject.Properties['XDR Detections'] -and @($dataFileContentObject.'XDR Detections').Count -gt 0) -or
+        ($null -ne $dataFileContentObject.PSObject.Properties['Defender Workbooks'] -and @($dataFileContentObject.'Defender Workbooks').Count -gt 0) -or
+        ($null -ne $dataFileContentObject.PSObject.Properties['XDR Workbooks'] -and @($dataFileContentObject.'XDR Workbooks').Count -gt 0) -or
+        (Test-Path -Path (Join-Path $baseFolderPath "Solutions/$solutionName/XDR Detections")) -or
+        (Test-Path -Path (Join-Path $baseFolderPath "Solutions/$solutionName/XDR Workbooks")) -or
+        (Test-Path -Path (Join-Path $baseFolderPath "Solutions/$solutionName/Defender Workbooks"))
+    )
+    $parsedPackageVersion = $null
+    $isBelowV31Floor = ([version]::TryParse("$packageVersion", [ref]$parsedPackageVersion) -and $parsedPackageVersion -lt [version]"3.2.0")
+
+    if ($allowLegacyV3ForOlderSentinelSolutions -and (-not $hasXdrSolutionContent) -and $isBelowV31Floor) {
+        Write-Host "Now going to execute createSolutionV3 file (legacy Sentinel-only compatibility mode for version $packageVersion)"
+        ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
+    } else {
+        Write-Host "Now going to execute createSolutionV3_1 file"
+        ./Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3_1.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
+    }
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
     Write-Host "packageCreationPath $packageCreationPath"

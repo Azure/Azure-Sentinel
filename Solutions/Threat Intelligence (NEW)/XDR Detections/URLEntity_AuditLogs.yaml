@@ -1,0 +1,165 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 9991c277-e0a1-4079-8c40-fbfca2705615
+    path: Analytic Rules/URLEntity_AuditLogs.yaml
+    version: 1.2.11
+    querySha256: 0922b2d62e8a95188bf2f74c0f91c0a499b2901caf0790f59270db2dc171b3be
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.2.11
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `TargetResourceDisplayName`
+      is provisionally represented by hosts.nameColumn `HostName`; confirm that this
+      column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `userPrincipalName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `userPrincipalName` requires
+      runtime output-schema binding verification
+    - Host.FullName value is retained as customDetails.HostFullName from query column
+      `TargetResourceDisplayName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.HostFullName column `TargetResourceDisplayName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: b59ce1d57a51e9aa3469e7f7fdbbcfaf3f0587e4c9fb01cc45d4992aae15bd47
+      targetQuerySha256: 2c11b137dcb231e410b97e56f1baafb5f43e3727456d5ba2511329f274324d22
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: userPrincipalName
+      column: userPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: TargetResourceDisplayName
+      column: TargetResourceDisplayName
+      status: runtime-binding-pending
+      customDetailKey: HostFullName
+properties:
+  id: xdr-9991c277-e0a1-4079-8c40-fbfca2705615
+  displayName: TI Map URL Entity to AuditLogs
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet AuditEvents =\
+      \ materialize(AuditLogs\n  | where TimeGenerated >= ago(dt_lookBack)\n  // Extract\
+      \ the URL that is contained within the JSON data\n  | extend Url = tolower(extract(\"\
+      (http[s]?://[^\\\\s\\\\\\\"\\\\\\\\]+)\", 1, tostring(TargetResources)))\n \
+      \ | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n\
+      \  | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName));\n\
+      let AuditUrls = AuditEvents | distinct Url = tolower(Url) | summarize make_list(Url);\n\
+      ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n     | where IndicatorType == \"url\"\n     | extend Url = tolower(ObservableValue)\n\
+      \     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | where TimeGenerated >= ago(ioc_lookBack)\n| where tolower(Url) in (AuditUrls)\n\
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description\
+      \ = tostring(parse_json(Data).description)\n| where Description !contains_cs\
+      \ \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n//\
+      \ using innerunique to keep perf fast and result set low, we only need one match\
+      \ to indicate potential malicious activity that needs to be investigated\n|\
+      \ join kind=innerunique (AuditEvents) on Url\n| where TimeGenerated < ValidUntil\n\
+      | summarize TimeGenerated = arg_max(TimeGenerated, *) by Id, Url\n| extend Description\
+      \ = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"\
+      ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project TimeGenerated,\
+      \ Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence,\nOperationName,\
+      \ Identity, userPrincipalName, TargetResourceDisplayName, Url\n| extend AccountName\
+      \ = tostring(split(userPrincipalName, \"@\")[0]), AccountUPNSuffix = tostring(split(userPrincipalName,\
+      \ \"@\")[1])\n| extend HostName = tostring(split(TargetResourceDisplayName,\
+      \ \".\")[0]), DomainIndex = toint(indexof(TargetResourceDisplayName, '.'))\n\
+      | extend HostNameDomain = iff(DomainIndex != -1, substring(TargetResourceDisplayName,\
+      \ DomainIndex + 1), TargetResourceDisplayName)"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map URL Entity to AuditLogs
+      description: '''This query identifies any URL indicators of compromise (IOCs)
+        from threat intelligence (TI) by searching for matches in AuditLogs.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: HostName
+          dnsDomainColumn: HostNameDomain
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountFullName: userPrincipalName
+        HostFullName: TargetResourceDisplayName

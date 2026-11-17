@@ -1,0 +1,61 @@
+id: 59ba5290-028b-5c01-814c-798aed507440
+name: Silverfort - Lateral movement
+description: |
+  Identifies Silverfort incidents involving sequential authentications between different systems. This behavior may indicate an attacker progressing through the network after compromising an account.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SilverfortAma
+    dataTypes:
+      - CommonSecurityLog
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1021
+query: |-
+  CommonSecurityLog
+  | where DeviceVendor has 'Silverfort'
+  | where DeviceProduct has 'Admin Console'
+  | where DeviceEventClassID == "NewIncident"
+  | where Message has "LateralMovement"
+  | extend IncidentData = parse_json(replace('^""|""$', '', Message))
+  | extend IncidentKind = coalesce(tostring(IncidentData.data.kind), tostring(IncidentData.kind))
+  | extend IncidentId = tostring(coalesce(IncidentData.data.id, IncidentData.id))
+  | extend IncidentSummary = tostring(coalesce(IncidentData.data.summary, IncidentData.summary))
+  | extend UserName = coalesce(
+      tostring(IncidentData.data.users[0].samAccountName),
+      tostring(IncidentData.data.users[0].upn),
+      tostring(IncidentData.data.users[0].displayName),
+      tostring(IncidentData.users[0].displayName)
+  )
+  | extend SourceHost = coalesce(
+      tostring(IncidentData.data.sources[0].displayName),
+      tostring(IncidentData.sources[0].displayName)
+  )
+  | extend DestinationHost = coalesce(
+      tostring(IncidentData.data.destinations[0].displayName),
+      tostring(IncidentData.destinations[0].displayName)
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DestinationHost
+customDetails:
+  IncidentReference: IncidentId
+  IncidentKind: IncidentKind
+  IncidentSummary: IncidentSummary
+queryPeriod: 15m
+queryFrequency: 15m
+triggerOperator: gt
+triggerThreshold: 0
+version: 1.0.0
+kind: Scheduled

@@ -2,7 +2,7 @@
 
 ## Summary
 
-TThis playbook interacts with Rubrik Security Cloud to (1) optionally preserve evidence by creating an on-demand snapshot of the object, (2) identify a potential recovery point by scanning backups for specified IOCs, and (3) supporting VM image level recovery.
+This playbook interacts with Rubrik Security Cloud to (1) optionally preserve evidence by creating an on-demand snapshot of the object, (2) identify a potential recovery point by scanning backups for specified IOCs, and (3) supporting VM image level recovery.
 
 ### Prerequisites
 
@@ -25,7 +25,7 @@ TThis playbook interacts with Rubrik Security Cloud to (1) optionally preserve e
     * keyvaultname: Name of keyvault where secrets are stored.
     * tenantId: TenantId where keyvault is located.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikRansomwareDiscoveryAndVMRecovery%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikRansomwareDiscoveryAndVMRecovery%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikRansomwareDiscoveryAndVMRecovery%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikRansomwareDiscoveryAndVMRecovery%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 

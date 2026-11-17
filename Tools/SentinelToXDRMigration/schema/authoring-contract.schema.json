@@ -1,0 +1,473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sentinel to XDR offline authoring contract",
+  "description": "Versioned, offline record of source inventory, rule findings, target artifacts, evidence, and advisory coverage/operation-eligibility records.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "source",
+    "inventory",
+    "results",
+    "environmentErrors",
+    "entityValueParityPolicy",
+    "coverage",
+    "operationEligibility"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "const": "1.1.0"
+          }
+        }
+      },
+      "then": {
+        "required": ["snapshot"],
+        "properties": {
+          "inventory": {
+            "required": ["sha256"],
+            "properties": {
+              "rules": {
+                "items": {
+                  "required": ["path", "querySha256"]
+                }
+              }
+            }
+          },
+          "results": {
+            "items": {
+              "required": ["conversionStatus", "validationStatus"]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schemaVersion": {
+      "enum": ["1.0.0", "1.1.0"]
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "previousSha256"],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "previousSha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "sha256"],
+      "properties": {
+        "identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "rules"],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "complete": {
+          "const": true
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/inventoryRule"
+          }
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/ruleResult"
+      }
+    },
+    "environmentErrors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/environmentError"
+      }
+    },
+    "entityValueParityPolicy": {
+      "const": {
+        "assertion": "value-preserved-in-actual-corresponding-alert",
+        "comparison": "value-only",
+        "entityTypeIdentifierAndCustomFieldMayDiffer": true,
+        "requiredForQualification": true
+      }
+    },
+    "coverage": {
+      "$ref": "#/$defs/coverage"
+    },
+    "operationEligibility": {
+      "$ref": "#/$defs/operationEligibility"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "kind"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "kind": {
+          "enum": [
+            "source",
+            "generatedTarget",
+            "runtimeVerification",
+            "alertParity",
+            "other"
+          ]
+        }
+      }
+    },
+    "inventoryRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ruleId", "sha256", "evidenceReferences"],
+      "properties": {
+        "ruleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "querySha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidenceReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["findingId", "kind", "message", "unresolved", "evidenceReferences"],
+      "properties": {
+        "findingId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": ["error", "warning", "assumption"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unresolved": {
+          "type": "boolean"
+        },
+        "evidenceReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "structurallyValid"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "querySha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "structurallyValid": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ruleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ruleId",
+        "sourceSha256",
+        "status",
+        "deploymentDisposition",
+        "target",
+        "reviewRequired",
+        "mappingAssumptions",
+        "findings",
+        "qualificationStatus",
+        "qualificationEvidenceReferences",
+        "evidenceReferences"
+      ],
+      "properties": {
+        "ruleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "status": {
+          "enum": ["migrated", "blocked", "suppressed", "unprocessed"]
+        },
+        "conversionStatus": {
+          "enum": ["converted", "needsReview", "conflict", "excluded", "unprocessed"]
+        },
+        "validationStatus": {
+          "enum": ["passed", "failed", "notRun"]
+        },
+        "deploymentDisposition": {
+          "enum": ["normal", "deploymentBlocked", "suppressed", "authoringBlocked"]
+        },
+        "target": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reviewRequired": {
+          "type": "boolean"
+        },
+        "mappingAssumptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        },
+        "qualificationStatus": {
+          "enum": ["untested", "qualified", "failed"]
+        },
+        "qualificationEvidenceReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          }
+        },
+        "evidenceReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          }
+        }
+      }
+    },
+    "environmentError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "evidenceReferences"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceReference"
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "runId",
+        "sourceIdentity",
+        "sourceSha256",
+        "N",
+        "M",
+        "E",
+        "qualified",
+        "untested",
+        "qualificationFailed",
+        "migrationThresholdMet",
+        "stopThresholdReached"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "enum": ["1.0.0", "1.1.0"]
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+        },
+        "sourceIdentity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "N": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "M": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "E": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "qualified": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "untested": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "qualificationFailed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "migrationThresholdMet": {
+          "type": "boolean"
+        },
+        "stopThresholdReached": {
+          "type": "boolean"
+        }
+      }
+    },
+    "operationEligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "runId",
+        "sourceIdentity",
+        "sourceSha256",
+        "scope",
+        "migrationThresholdMet",
+        "successAndPrThresholdMet",
+        "stopThresholdReached",
+        "requiresExactScopeAuthorization",
+        "coverageAuthorizesOperations",
+        "deploymentAuthorized",
+        "packagingAuthorized",
+        "ingestionAuthorized",
+        "prCreationAuthorized"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "enum": ["1.0.0", "1.1.0"]
+        },
+        "runId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$"
+        },
+        "sourceIdentity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "scope": {
+          "const": "advisory-only"
+        },
+        "migrationThresholdMet": {
+          "type": "boolean"
+        },
+        "successAndPrThresholdMet": {
+          "type": "boolean"
+        },
+        "stopThresholdReached": {
+          "type": "boolean"
+        },
+        "requiresExactScopeAuthorization": {
+          "const": true
+        },
+        "coverageAuthorizesOperations": {
+          "const": false
+        },
+        "deploymentAuthorized": {
+          "const": false
+        },
+        "packagingAuthorized": {
+          "const": false
+        },
+        "ingestionAuthorized": {
+          "const": false
+        },
+        "prCreationAuthorized": {
+          "const": false
+        }
+      }
+    }
+  }
+}

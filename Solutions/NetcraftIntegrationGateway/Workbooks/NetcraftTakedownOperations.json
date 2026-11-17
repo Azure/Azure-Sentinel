@@ -1,0 +1,305 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Netcraft Takedown \u2014 Operations\n\nTakedown records, important notes, and group tag changes from the Integration Gateway (`NetcraftTakedown_CL`). Latest-state panels use `NetcraftTakedown_Latest` (latest `takedown` event per `Subject`, including `ChangeType` `new` or `update`). `IsAuthorized` and `IsEscalated` are booleans. Note panels include added, updated, and deleted. Select a latest-state row to drill into that `TakedownId` / `GroupId` timeline."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "timeRange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "selectedTakedownId",
+            "version": "KqlParameterItem/1.0",
+            "name": "SelectedTakedownId",
+            "type": 1,
+            "description": "Set by clicking a row in the latest-state table, or type a TakedownId / GroupId manually.",
+            "isRequired": false,
+            "value": ""
+          }
+        ]
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Unique\n| where TimeGenerated {TimeRange}\n| summarize Events = count() by EventType\n| order by Events desc",
+        "size": 0,
+        "title": "Events by type",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "byType",
+      "customWidth": "25",
+      "showPin": true
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Latest\n| where TimeGenerated {TimeRange}\n| where isnotempty(AttackType)\n| summarize Takedowns = count() by AttackType\n| top 15 by Takedowns desc",
+        "size": 0,
+        "title": "Latest takedowns by attack_type (top 15)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "unstackedbar"
+      },
+      "name": "byAttackType",
+      "customWidth": "25"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Latest\n| where TimeGenerated {TimeRange}\n| summarize Takedowns = count() by IsMaliciousDomain = iff(isempty(tostring(IsMaliciousDomain)), \"unknown\", tostring(IsMaliciousDomain))\n| order by Takedowns desc",
+        "size": 0,
+        "title": "Latest takedowns by malicious domain",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "byDomainAttack",
+      "customWidth": "25"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Latest\n| where TimeGenerated {TimeRange}\n| summarize Takedowns = count() by IsMaliciousHostname = iff(isempty(tostring(IsMaliciousHostname)), \"unknown\", tostring(IsMaliciousHostname))\n| order by Takedowns desc",
+        "size": 0,
+        "title": "Latest takedowns by malicious hostname",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "byHostnameAttack",
+      "customWidth": "25"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Latest\n| where TimeGenerated {TimeRange}\n| summarize Takedowns = count() by Status\n| order by Takedowns desc",
+        "size": 0,
+        "title": "Latest takedowns by status",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "name": "byStatus",
+      "customWidth": "50"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Latest\n| where TimeGenerated {TimeRange}\n| summarize\n    ActionRequired = countif(isnotempty(ActionRequired) and ActionRequired != \"no\"),\n    IsEscalated = countif(IsEscalated == true),\n    NotAuthorised = countif(IsAuthorized == false),\n    DomainAttackTrue = countif(IsMaliciousDomain == true),\n    HostnameAttackTrue = countif(IsMaliciousHostname == true)\n| project Metrics = pack_array(\n    bag_pack(\"Metric\", \"Action required\", \"Count\", ActionRequired),\n    bag_pack(\"Metric\", \"Escalated\", \"Count\", IsEscalated),\n    bag_pack(\"Metric\", \"Not authorised\", \"Count\", NotAuthorised),\n    bag_pack(\"Metric\", \"Malicious domain\", \"Count\", DomainAttackTrue),\n    bag_pack(\"Metric\", \"Malicious hostname\", \"Count\", HostnameAttackTrue))\n| mv-expand Metrics\n| project Metric = tostring(Metrics.Metric), Count = tolong(Metrics.Count)",
+        "size": 0,
+        "title": "Highlights (action required / escalated / authorised / malicious domain and hostname)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Metric",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "highlights",
+      "customWidth": "50"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Unique\n| where TimeGenerated {TimeRange}\n| summarize Count = count() by bin(TimeGenerated, 1h), EventType\n| render timechart",
+        "size": 0,
+        "title": "Event volume over time",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "timeline"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Latest\n| where TimeGenerated {TimeRange}\n| project\n    TimeGenerated,\n    ChangeType,\n    Subject,\n    TakedownId,\n    GroupId,\n    AttackType,\n    Threat,\n    Status,\n    IsMaliciousDomain,\n    IsMaliciousHostname,\n    IsAuthorized,\n    IsEscalated,\n    ActionRequired,\n    CustomerLabel\n| sort by TimeGenerated desc\n| take 200",
+        "size": 0,
+        "title": "Latest takedown state (by subject) \u2014 click a row to drill down",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "label": "latest",
+          "formatters": []
+        },
+        "exportedParameters": [
+          {
+            "fieldName": "TakedownId",
+            "parameterName": "SelectedTakedownId",
+            "parameterType": 1
+          }
+        ]
+      },
+      "name": "latestState"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Selected takedown / group drill-down\n\nShowing events for `TakedownId` or `GroupId` = **{SelectedTakedownId}**. Clear the parameter (or pick another latest-state row) to change selection."
+      },
+      "name": "drilldownTitle",
+      "conditionalVisibility": {
+        "parameterName": "SelectedTakedownId",
+        "comparison": "isNotEqualTo",
+        "value": ""
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Latest\n| where isnotempty('{SelectedTakedownId}')\n| where tostring(TakedownId) == '{SelectedTakedownId}' or tostring(GroupId) == '{SelectedTakedownId}'\n| project\n    TimeGenerated,\n    ChangeType,\n    Subject,\n    TakedownId,\n    GroupId,\n    AttackType,\n    Threat,\n    Status,\n    IsMaliciousDomain,\n    IsMaliciousHostname,\n    IsAuthorized,\n    IsEscalated,\n    ActionRequired,\n    CustomerLabel",
+        "size": 0,
+        "title": "Selected \u2014 latest takedown state",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "selectedSummary",
+      "conditionalVisibility": {
+        "parameterName": "SelectedTakedownId",
+        "comparison": "isNotEqualTo",
+        "value": ""
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Unique\n| where TimeGenerated {TimeRange}\n| where isnotempty('{SelectedTakedownId}')\n| where tostring(TakedownId) == '{SelectedTakedownId}' or tostring(GroupId) == '{SelectedTakedownId}'\n| project\n    TimeGenerated,\n    EventType,\n    EventId,\n    Subject,\n    TakedownId,\n    GroupId,\n    AttackType,\n    Threat,\n    Status,\n    IsMaliciousDomain,\n    IsMaliciousHostname,\n    IsAuthorized,\n    IsEscalated,\n    ActionRequired,\n    NoteId,\n    NoteBody,\n    TagValue,\n    TagUpdate\n| sort by TimeGenerated asc",
+        "size": 0,
+        "title": "Selected \u2014 event timeline",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "selectedTimeline",
+      "conditionalVisibility": {
+        "parameterName": "SelectedTakedownId",
+        "comparison": "isNotEqualTo",
+        "value": ""
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Unique\n| where TimeGenerated {TimeRange}\n| where isnotempty('{SelectedTakedownId}')\n| where tostring(TakedownId) == '{SelectedTakedownId}' or tostring(GroupId) == '{SelectedTakedownId}'\n| summarize Count = count() by bin(TimeGenerated, 1h), EventType\n| render timechart",
+        "size": 0,
+        "title": "Selected \u2014 volume by event type",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "name": "selectedChart",
+      "conditionalVisibility": {
+        "parameterName": "SelectedTakedownId",
+        "comparison": "isNotEqualTo",
+        "value": ""
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Latest\n| where TimeGenerated {TimeRange}\n| where isnotempty(ActionRequired) and ActionRequired != \"no\"\n| project TimeGenerated, ChangeType, TakedownId, GroupId, AttackType, Threat, Status, ActionRequired, IsAuthorized, IsEscalated, IsMaliciousDomain, IsMaliciousHostname\n| sort by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "title": "Waiting for customer",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "waiting",
+      "customWidth": "50"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "NetcraftTakedown_Unique\n| where TimeGenerated {TimeRange}\n| where EventType in (\"takedown-important-note\", \"takedown-important-note-updated\", \"takedown-important-note-deleted\", \"group-important-note\", \"group-important-note-updated\", \"group-important-note-deleted\", \"group-tag-change\")\n| project TimeGenerated, EventType, Subject, TakedownId, GroupId, NoteId, NoteBody, TagValue, TagUpdate\n| sort by TimeGenerated desc\n| take 100",
+        "size": 0,
+        "title": "Recent notes and group tag changes",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table"
+      },
+      "name": "notesAndTags",
+      "customWidth": "50"
+    }
+  ],
+  "fromTemplateId": "sentinel-NetcraftTakedownOperations",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

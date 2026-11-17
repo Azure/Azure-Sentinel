@@ -1,161 +1,68 @@
-# **Exchange Security Insight Collector Download**
+# Exchange Security Insights Online Collector package and upgrade guide
 
-## Description
+This README accompanies the Exchange Online collector package. It documents the current version, Azure Monitor configuration changes, runbook update procedure, data model changes, and version availability.
 
-The Exchange Security Insight Collector is a PowerShell script that collects data from Exchange Servers and Exchange Online. The script is designed to be run on a Windows machine and can be scheduled to run at regular intervals. The script collects data from Exchange Servers and Exchange Online and sends it to the Microsoft Exchange Security Insight solution for Microsoft Sentinel.
+For deployment and migration, see [Configure the Exchange Security Insights Online Collector with Azure Monitor](../../Documentations/README_LogIngestionAPI.md). For modules and permissions, see [Collector prerequisites and permissions](../../Documentations/ESICollector.md). For individual settings, see the [configuration parameter reference](./Parameters.md).
 
-You can refer to the Exchange Securitty Insight Collector [here](./../../Documentations/ESICollector.md)
+## Current version
 
-Parameters are described in the Configuration file. Explanation of the parameters is available in the [the Parameters description document](./Parameters.md)
+The current collector version is **8.0.0.0**.
 
-## Versioning
+## Upgrade from 7.6.0.1 to 8.0.0.0
 
-## Actual Version : 7.6.0.1
+> [!IMPORTANT]
+> Version 8.0.0.0 adds native support for the Azure Monitor Log Ingestion API. Existing deployments can upgrade the runbook before switching from the legacy Log Analytics HTTP Data Collector API.
 
-## Upgrade paths
+### Upgrade procedure
 
-### From 7.6.0.0 to 7.6.0.1
+1. Back up the `GlobalConfiguration` variable in the existing Automation account.
+2. Update the **Microsoft Exchange Security for Exchange Online** solution in Microsoft Sentinel Content Hub.
+3. Configure **Exchange Security Insights Online Collector (Azure Monitor)** and select **Deploy Exchange Collector Push connector resources**.
+4. Record the DCE URI and DCR immutable ID displayed by the connector. Retrieve the DCR name by following [Retrieve the DCR name](../../Documentations/README_LogIngestionAPI.md#retrieve-the-dcr-name).
+5. Update the existing `Start-ESICollector` runbook and `GlobalConfiguration` variable by following [Update an existing Azure Automation deployment](../../Documentations/README_LogIngestionAPI.md#update-an-existing-azure-automation-deployment).
+6. Verify that the runbook, modules, configuration variables, and daily schedule were updated.
+7. Verify that the Automation account system-assigned managed identity has **Monitoring Metrics Publisher** on the DCR.
+8. Run `Start-ESICollector` manually and verify ingestion.
 
-#### **Configuration File**
+For the complete procedure, see [Upgrade an existing deployment](../../Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment).
 
-Nothing to change
+## Azure Monitor configuration
 
-#### **ESI Collector Script**
+The Automation deployment generates the `GlobalConfiguration` variable with:
 
-Replace the old script version with the new one. nothing to modifiy in the script.
+| Setting | Required value |
+|---------|----------------|
+| `SentinelLogIngestionAPIActivated` | `true` |
+| `DataCollectionEndpointURI` | DCE URI displayed by the data connector |
+| `DCRImmutableId` | DCR immutable ID displayed by the data connector |
+| `UseManagedIdentity` | `true` |
+| `TargetLogTenantID` | Microsoft Entra tenant ID |
+| `LogTypeName` | `ESIExchangeOnlineConfig` |
 
-### From 7.5.2.2 to 7.6.0.0
+The legacy `WorkspaceId` and `WorkspaceKey` settings are not used when the Log Ingestion API is enabled.
 
-#### **Configuration File**
+For managed identity, Microsoft Graph, Exchange Online, and directory role requirements, see [Collector prerequisites and permissions](../../Documentations/ESICollector.md).
 
-Notning to change
+## Data model changes
 
-#### **ESI Collector Script**
+The Azure Monitor table includes `Identity_*` subproperty columns extracted during ingestion by the DCR transform:
 
-Replace the old script version with the new one. nothing to modifiy in the script.
+- `Identity_Depth_d`
+- `Identity_DistinguishedName_s`
+- `Identity_DomainId_s`
+- `Identity_IsDeleted_b`
+- `Identity_IsRelativeDn_b`
+- `Identity_Name_s`
+- `Identity_ObjectGuid_g`
+- `Identity_Parent_s`
+- `Identity_PartitionFQDN_s`
+- `Identity_PartitionGuid_g`
+- `Identity_Rdn_s`
 
-### From 7.5.2.1 to 7.5.2.2
+The original `Identity_s` string column is preserved. Existing content that uses `Identity_s` remains compatible.
 
-#### **Configuration File**
+## Version availability policy
 
-Update Config File to the new version. Be carefull to keep your custom parameters.
+Only the two most recent collector versions are retained in the public repository.
 
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-### From 7.5.2.1 to 7.5.2.2
-
-#### **Configuration File**
-
-Nothing to change
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-### From 7.5.2.0 to 7.5.2.1
-
-#### **Configuration File**
-
-Parameter "PaginationErrorThreshold": 5 is added in the Advanced part
-
-A new category OnlineMessageTracking could be added. The segment can be added in InstanceConfiguration part : 
-    "ExchangeOnlineMessageTracking":{
-			"All":"true",
-			"Category":"OnlineMessageTracking",
-			"Capabilities":"OL",
-			"OutputName":"ExchangeOnlineMessageTracking"
-		}
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-### From 7.5.1.1 to 7.5.2.0
-
-#### **Configuration File**
-
-Nothing changed
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-### From 7.5.0 to 7.5.1.1
-
-#### **Configuration File**
-
-Parameter "PaginationErrorThreshold": 5 is added in the Advanced part
-
-A new category OnlineMessageTracking could be added. The segment can be added in InstanceConfiguration part : 
-    "ExchangeOnlineMessageTracking":{
-			"All":"true",
-			"Category":"OnlineMessageTracking",
-			"Capabilities":"OL",
-			"OutputName":"ExchangeOnlineMessageTracking"
-		}
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-
-### From 7.4.2 to 7.5.0
-
-#### **Configuration File**
-
-Nothing changed
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-
-### From 7.3.2 to 7.4.2
-
-#### **Configuration File**
-
-Parameters added in Advanced Section
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-Attention, now ManagedIdentity is used for Exchange Online instead of RunAs Account.
-Assign rights to Managed Identity following Standard Procedure : [EXO for ManagedIdentity](https://learn.microsoft.com/en-us/powershell/exchange/connect-exo-powershell-managed-identity?view=exchange-ps#step-4-grant-the-exchangemanageasapp-api-permission-for-the-managed-identity-to-call-exchange-online)
-
-### From 7.3.1 to 7.3.2
-
-#### **Configuration File**
-
-Parameters added in Advanced Section
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-
-### From 7.3.0 to 7.3.1
-
-#### **Configuration File**
-
-No changes in Configuration file
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-### From 7.2.0 to 7.3.0
-
-#### **Configuration File**
-
-The only change on the configuration file is adding a "Beta" Property in "Advanced" part. By default "Beta" is "False". If you decide to use Beta off Add-On files, you can switch this parameter to true. Attention, bugs can be present in Beta mode.
-
-#### **ESI Collector Script**
-
-Replace the old script version with the new one. nothing to modifiy in the script.
-
-## Download availability/Rules
-
-Only 2 major versions are kept on the public repository.
-The zip file without versioning correspond to the latest version of the Collector.
+The unversioned ZIP package always contains the latest available collector version.

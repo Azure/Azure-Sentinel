@@ -71,7 +71,7 @@ This parser takes raw ESI Exchange Configuration Collector to pivot raw informat
 
 ### Linked tables
 
-This parser assumes the raw log from the ESI Exchange Collector are on the ESIExchangeConfig_CL and/or ESIExchangeOnlineConfig_CL tables and are uploaded using the builtin REST API uploader of the Collector.
+This parser reads both legacy and API configuration tables: `ESIExchangeConfig_CL` and `ESIAPIExchangeOnPremisesConfig_CL` for On-Premises, and `ESIExchangeOnlineConfig_CL` and `ESIAPIExchangeOnlineConfig_CL` for Online. It uses a fuzzy union, so either generation or both can be present. The `Target` parameter selects the environment type.
 
 ### Parameters simulation
 
@@ -114,7 +114,7 @@ This parser takes raw ESI Exchange Configuration Collector to list Exchange Envi
 
 ### Linked tables
 
-This parser assumes the raw log from the ESI Exchange Collector are on the ESIExchangeConfig_CL and/or ESIExchangeOnlineConfig_CL tables and are uploaded using the builtin REST API uploader of the Collector.
+This parser lists environments from both legacy and API configuration tables: `ESIExchangeConfig_CL` and `ESIAPIExchangeOnPremisesConfig_CL` for On-Premises, and `ESIExchangeOnlineConfig_CL` and `ESIAPIExchangeOnlineConfig_CL` for Online. It uses a fuzzy union, so either generation or both can be present. The `Target` parameter selects the environment type.
 
 ### Parameters simulation
 
@@ -195,17 +195,22 @@ This parser is linked to "ExchangeVIP" whatchlist
 ### Parser Definition
 
 - Title:           Microsoft Exchange Compare Data MRA Parser for On-Premises
-- Version:         1.0.0
-- Last Updated:    30/08/2024
+- Version:         1.0.1
+- Last Updated:    07/10/2026
 - Description:     This parser compare data from MRA and ESI Exchange Collector to find differences
 
 |**Version**  |**Details**  |
 |---------|-----------------------------------------------------------------------------------------------------------------------|
+|v1.0.1    | <ul><li>Read MRA history from legacy and API configuration tables, respecting the TypeEnv parameter.</li></ul> |
 |v1.0     | <ul><li>Function initilisation for Sentinel Solution</li></ul> |
 
 ### Parser Description
 
 This parser compare data from MRA and ESI Exchange Collector to find differences
+
+The historical data range uses a fuzzy union of both generations of configuration tables. `TypeEnv` selects On-Premises, Online, or All, consistently with the before and after snapshots.
+
+Configuration-date selectors and direct historical queries in the RBAC and Security Review workbooks also read both generations of tables for their environment type. Existing filters, comparison logic, and output columns are unchanged.
 
 ### Parser Setup
 

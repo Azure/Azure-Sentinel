@@ -1,0 +1,160 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+- connectorId: AzureActiveDirectoryIdentityProtection
+  dataTypes:
+  - SecurityAlert
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+    - SecurityAlert
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+    - SecurityAlert
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: d875af10-6bb9-4d6a-a6e4-78439a98bf4b
+    path: Analytic Rules/Dataverse - Suspicious use of TDS endpoint.yaml
+    version: 3.2.0
+    querySha256: a37f8519b402e4e99ed21c6280c469453162f43cc45907f58e0e590f2fe7c86b
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - InitialAccess
+    originalTechniques:
+    - T1048
+    - T1190
+    reviewScope:
+      sourceDocumentSha256: 082d53071c2e556b8b8b3a157b84bef0d022b45dbc4607ce55c9f60c194905c7
+      targetQuerySha256: d0a04d19ad6301227455f5ceed4b3e3e7266975732cf7013f9d4284b10e7dabf
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 2
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-d875af10-6bb9-4d6a-a6e4-78439a98bf4b
+  displayName: Dataverse - Suspicious use of TDS endpoint
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      let query_lookback = 14d;
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == 'ExecutePowerBISql'
+      | summarize FirstEvent = min(TimeGenerated) by UserId, ClientIp, InstanceUrl
+      | join kind=inner(
+          DataverseActivity
+          | where TimeGenerated >= ago(query_lookback)
+          | where Message == 'ExecutePowerBISql'
+          | summarize UniqueUsers = dcount(UserId, 4) by InstanceUrl)
+          on InstanceUrl
+      | where UniqueUsers == 1
+      | join kind=inner (
+          SecurityAlert
+          | where Entities has ('"Type":"ip"')
+          | project AlertName, SystemAlertId, Entities
+          | mv-expand todynamic(Entities)
+          | where Entities.Type == "ip"
+          | extend IPAddress = tostring(Entities.Address)
+          | summarize SystemAlerts = make_set(SystemAlertId, 100), Alerts = make_set(AlertName, 100) by IPAddress)
+          on $left.ClientIp == $right.IPAddress
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | join kind = inner (
+          SecurityAlert
+          | where Entities has ('Type":"account"')
+          | project AlertName, SystemAlertId, Entities
+          | mv-expand todynamic(Entities)
+          | where Entities.Type == "account"
+          | extend
+              UPNSuffix = tostring(Entities.UPNSuffix),
+              AccountName = tostring(Entities.Name)
+          | summarize SystemAlerts = make_set(SystemAlertId, 100), Alerts = make_set(AlertName, 100) by AccountName, UPNSuffix
+          | where isnotempty(AccountName) and isnotempty(UPNSuffix))
+          on AccountName, UPNSuffix
+      | summarize SystemAlerts = make_set(SystemAlerts, 100), Alerts = make_set(Alerts, 100) by FirstEvent, UserId, ClientIp, InstanceUrl, AccountName, UPNSuffix
+      | extend CloudAppId = int(32780)
+      | project
+          FirstEvent,
+          UserId,
+          ClientIp,
+          InstanceUrl,
+          Alerts,
+          SystemAlerts,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Suspicious use of TDS endpoint
+      description: Identifies Dataverse TDS (Tabular Data Stream) protocol based queries where the source user or IP address
+        has recent security alerts and the TDS protocol has not been used previously in the target environment.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1048
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1190
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

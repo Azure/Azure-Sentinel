@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**    |
 |-------------|--------------------------------|-----------------------|
+| 3.2.2       | 22-10-2026                     | Added Defender XDR Custom Detections and Defender Workbook for Maturity Model for Event Log Management (M-21-31) |
 | 3.0.3       | 26-09-2025                     | Updated the broken metrics in the workbook                      |
 | 3.0.2       | 31-01-2024                     | Updated the solution to fix Analytic Rules deployment issue     |
 | 3.0.1       | 09-11-2023                     | Changes for rebranding from Azure Active Directory Identity Protection to Microsoft Entra ID Protection    |

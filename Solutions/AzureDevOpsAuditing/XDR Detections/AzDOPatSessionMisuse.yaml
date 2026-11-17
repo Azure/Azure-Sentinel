@@ -1,0 +1,117 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ADOAuditLogs_CL
+  requiredDataConnectors:
+  - connectorId: AzureDevOpsAuditLogs
+    dataTypes:
+    - ADOAuditLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ac891683-53c3-4f86-86b4-c361708e2b2b
+    path: Analytic Rules/AzDOPatSessionMisuse.yaml
+    version: 1.0.6
+    querySha256: 90d6ab170d2a767e83f7433203a6797e399a1734b2dd4bbddf0813b30230dab3
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `ActorUPN`, but its target output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `ActorUPN` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - Impact
+    originalTechniques:
+    - T1496
+    - T1559
+    reviewScope:
+      sourceDocumentSha256: 8141ed30892c14402f5c6082600e6aff9d4a64dfe92eec69c4a87d9b36033fab
+      targetQuerySha256: abf35a35053958b0f438abcedf6fc643b2eb19bcf6b3eaf17fb079dcfd0d9566
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency, not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 8141ed30892c14402f5c6082600e6aff9d4a64dfe92eec69c4a87d9b36033fab
+      targetQuerySha256: abf35a35053958b0f438abcedf6fc643b2eb19bcf6b3eaf17fb079dcfd0d9566
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ActorUPN
+      column: ActorUPN
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    dependencyReviewRequired: false
+properties:
+  id: xdr-ac891683-53c3-4f86-86b4-c361708e2b2b
+  displayName: Azure DevOps Personal Access Token (PAT) misuse
+  status: disabled
+  queryCondition:
+    queryText: "// Allowlisted UPNs should likely stay empty\nlet AllowlistedUpns = datatable(UPN:string)['foo@bar.com', 'test@foo.com'];\n// Operation Name parts that will alert\nlet HasAnyBlocklist = datatable(OperationNamePart:string)['Security.','Project.','AuditLog.','Extension.'];\n// Distinct Operation Names that will flag\nlet HasExactBlocklist = datatable(OperationName:string)['Group.UpdateGroupMembership.Add','Library.ServiceConnectionExecuted','Pipelines.PipelineModified',\n'Release.ReleasePipelineModified', 'Git.RefUpdatePoliciesBypassed'];\nAzureDevOpsAuditing\n| where AuthenticationMechanism startswith \"PAT\" and (OperationName has_any (HasAnyBlocklist) or OperationName in (HasExactBlocklist))\n  and ActorUPN !in (AllowlistedUpns)\n| project TimeGenerated, AuthenticationMechanism, ProjectName, ActorUPN, ActorDisplayName, IpAddress, UserAgent, OperationName, Details, Data\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix\
+      \ = tostring(split(ActorUPN, \"@\")[1])"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Azure DevOps Personal Access Token (PAT) misuse
+      description: '''This Alert detects whenever a PAT is used in ways that PATs are not normally used. May require an allow list and baselining.
+
+        Reference - https://docs.microsoft.com/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=preview-page
+
+        Use this query for baselining:
+
+        ADOAuditLogs
+
+        | distinct OperationName'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IpAddress
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1559
+      - tactic: Impact
+        techniques:
+        - technique: T1496
+      customDetails:
+        AccountFullName: ActorUPN

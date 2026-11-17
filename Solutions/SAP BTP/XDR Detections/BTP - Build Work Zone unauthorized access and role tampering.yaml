@@ -1,0 +1,108 @@
+schemaVersion: 1.0.0
+version: 3.2.1
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SAPBTPAuditEvents
+  dataTypes:
+  - SAPBTPAuditLog_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  requiredDataConnectors:
+  - connectorId: SAPBTPAuditEvents
+    dataTypes:
+    - SAPBTPAuditLog_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8e5f3a2c-9d1b-4c6e-a7f8-3b2d1e0c9a5f
+    path: Analytic Rules/BTP - Build Work Zone unauthorized access and role tampering.yaml
+    version: 1.0.1
+    querySha256: c3658723493e3c1c903b961ad7212f7c53f6ce39b57890696f25285307bcaac0
+    schedule:
+      queryFrequency: 15m
+      queryPeriod: 15m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=15m, lookback=15m; target frequency=PT15M,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    - DefenseEvasion
+    - Impact
+    originalTechniques:
+    - T1078
+    - T1531
+    - T1070
+    reviewScope:
+      sourceDocumentSha256: 2f63d7224707665f379e409fd9bc94f4b30dbe5452cba922d31a9fc5a97b07c4
+      targetQuerySha256: 6e9dc1a2419648031b3b017706ec895ba778db3b66e3d0b85463efc1c58a9803
+properties:
+  id: xdr-8e5f3a2c-9d1b-4c6e-a7f8-3b2d1e0c9a5f
+  displayName: SAP BTP - Build Work Zone unauthorized access and role tampering
+  status: disabled
+  queryCondition:
+    queryText: "SAPBTPAuditLog_CL\n| extend LogMessage = coalesce(tostring(Message.message),\
+      \ tostring(Message.data), tostring(Message))\n| where LogMessage has_any (\"\
+      Unauthorized access to the oData service\",\n                            \"\
+      All roles for providerId\",\n                            \"All users for providerId\"\
+      ,\n                            \"were deleted successfully\",\n            \
+      \                \"were removed successfully\")\n| extend EventCategory = case(\n\
+      \    LogMessage contains \"Unauthorized access\", \"Unauthorized Access\",\n\
+      \    LogMessage contains \"All roles\" or LogMessage contains \"All users\"\
+      , \"Mass Deletion\",\n    \"Role Tampering\"\n)\n| extend MessageText = case(\n\
+      \    LogMessage contains \"Unauthorized access to the oData service\", \"Unauthorized\
+      \ OData service access attempt\",\n    LogMessage contains \"All roles for providerId\"\
+      \ and LogMessage contains \"deleted\", \"Mass role deletion detected\",\n  \
+      \  LogMessage contains \"All users for providerId\" and LogMessage contains\
+      \ \"deleted\", \"Mass user deletion detected\",\n    LogMessage contains \"\
+      assignments were removed\", \"User/role assignments removed\",\n    \"Suspicious\
+      \ access control modification\"\n)\n| extend ProviderId = extract(@\"providerId\\\
+      s+(\\S+)\", 1, LogMessage)\n| project\n    TimeGenerated,\n    UserName,\n \
+      \   MessageText,\n    EventCategory,\n    ProviderId,\n    Tenant,\n    CloudApp\
+      \ = \"SAP Build Work Zone Standard Edition\"\n| extend AccountName = split(UserName,\
+      \ \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]"
+  schedule:
+    frequency: PT15M
+  detectionAction:
+    alertTemplate:
+      title: SAP BTP - Build Work Zone unauthorized access and role tampering
+      description: "Identifies unauthorized OData access attempts and mass role/user\
+        \ deletions in SAP Build Work Zone \nStandard Edition. These events may indicate\
+        \ an attacker accessing restricted resources or \nremoving access controls\
+        \ to cover their tracks."
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: CloudApp
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        EventCategory: EventCategory
+        ProviderId: ProviderId

@@ -1,0 +1,152 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: AzureMonitor(IIS)
+  dataTypes:
+  - W3CIISLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - ThreatIntelIndicators
+    - W3CIISLog
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+    - W3CIISLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 888c4736-e604-48eb-b2c7-3462356d9510
+    path: Analytic Rules/IPEntity_W3CIISLog.yaml
+    version: 1.4.6
+    querySha256: e9ee6294b20fefaf446015424193fb77e41f2198523a2ff4f6972e93725d12e0
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.4.6
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required
+      Host, Mailbox, or IP asset is available
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `csUserName`, but its target output binding requires runtime-schema verification;
+      custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `csUserName` requires runtime
+      output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 61bf82f9f0ea222492706ea58596a2cc6e0bb27f0272508ff6cbc1dfb05f5142
+      targetQuerySha256: 16067c9bee3706c96c6081ff05ad7e19b6c59d95f57448c300a5f4859a943fbd
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: csUserName
+      column: csUserName
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+properties:
+  id: xdr-888c4736-e604-48eb-b2c7-3462356d9510
+  displayName: TI Map IP Entity to W3CIISLog
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h; // Look back 1 hour for W3CIISLog events\nlet\
+      \ ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n\
+      // Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators\
+      \ = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\"\
+      )\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated\
+      \ >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP),\
+      \ NetworkSourceIP, NetworkSourceIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity)\
+      \ and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend\
+      \ Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n  | where\
+      \ ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith \"fe80\"\
+      \ and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n\
+      \  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      \  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Perform\
+      \ a join between IP indicators and W3CIISLog events\nIP_Indicators\n  | project-reorder\
+      \ *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n \
+      \ // Use innerunique to keep performance fast and result set low, as we only\
+      \ need one match to indicate potential malicious activity that needs investigation\n\
+      \  | join kind=innerunique (\n      W3CIISLog\n      | where TimeGenerated >=\
+      \ ago(dt_lookBack)\n      | where isnotempty(cIP)\n      | where ipv4_is_private(cIP)\
+      \ == false and cIP !startswith \"fe80\" and cIP !startswith \"::\" and cIP !startswith\
+      \ \"127.\"\n      | extend W3CIISLog_TimeGenerated = TimeGenerated\n  )\n  on\
+      \ $left.TI_ipEntity == $right.cIP\n  // Filter out W3CIISLog events that occurred\
+      \ after the expiration of the corresponding indicator\n  | where W3CIISLog_TimeGenerated\
+      \ < ValidUntil\n  // Group the results by IndicatorId and keep the W3CIISLog\
+      \ event with the latest timestamp\n  | summarize W3CIISLog_TimeGenerated = arg_max(W3CIISLog_TimeGenerated,\
+      \ *) by Id, cIP\n  // Select the desired output fields\n  | extend Description\
+      \ = tostring(parse_json(Data).description)\n  | extend ActivityGroupNames =\
+      \ extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      \  | project timestamp = W3CIISLog_TimeGenerated, Description, ActivityGroupNames,\
+      \ Id, ValidUntil, Confidence,\n    TI_ipEntity, Computer, sSiteName, cIP, sIP,\
+      \ sPort, csMethod, csUserName, scStatus, scSubStatus, scWin32Status,\n   NetworkSourceIP,\
+      \ Type, Url"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP Entity to W3CIISLog
+      description: This query maps any IP indicators of compromise (IOCs) from threat
+        intelligence (TI), by searching for matches in W3CIISLog.
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: Computer
+        ips:
+        - id: ip1
+          addressColumn: cIP
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountName: csUserName

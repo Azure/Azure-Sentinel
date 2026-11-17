@@ -1,0 +1,204 @@
+{
+    "name": "ESI-ModernExchangeOnlineCollector",
+    "apiVersion": "2022-09-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "[parameters('workspace-location')]",
+    "kind": "Customizable",
+    "properties": {
+        "connectorUiConfig": {
+            "id": "ESI-ModernExchangeOnlineCollector",
+            "title": "Exchange Security Insights Online Collector (Azure Monitor)",
+            "publisher": "Microsoft",
+            "descriptionMarkdown": "Connector used to push Exchange Online Security configuration for Microsoft Sentinel Analysis using Azure Monitor Ingestion API.",
+            "graphQueries": [
+                {
+                    "metricName": "Total data received",
+                    "legend": "ESIAPIExchangeOnlineConfig_CL",
+                    "baseQuery": "ESIAPIExchangeOnlineConfig_CL"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "View how many Configuration entries exist on the table",
+                    "query": "ESIAPIExchangeOnlineConfig_CL | summarize by GenerationInstanceID_g, EntryDate_s, ESIEnvironment_s"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "ESIAPIExchangeOnlineConfig_CL",
+                    "lastDataReceivedQuery": "ESIAPIExchangeOnlineConfig_CL | summarize Time = max(todatetime(EntryDate_s)) by GenerationInstanceID_g, ESIEnvironment_s  | where isnotempty(Time) |summarize Time = max(Time) | project Time"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "IsConnectedQuery",
+                    "value": [
+                        "ESIAPIExchangeOnlineConfig_CL | summarize LastLogReceived = max(todatetime(EntryDate_s)) by GenerationInstanceID_g, ESIEnvironment_s |take 1  | project IsConnected = true"
+                    ]
+                }
+            ],
+            "availability": {
+                "status": 1,
+                "isPreview": false
+            },
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Microsoft Entra",
+                        "description": "Permission to create an app registration in Microsoft Entra ID. Typically requires Entra ID Application Developer role or higher."
+                    },
+                    {
+                        "name": "Microsoft Azure",
+                        "description": "Permission to assign Monitoring Metrics Publisher role on data collection rule (DCR). Typically requires Azure RBAC Owner or User   Access Administrator role."
+                    },
+                    {
+                        "name": "microsoft.automation/automationaccounts permissions",
+                        "description": "Read and write permissions to create an Azure Automation with a Runbook is required. [See the documentation to learn more about Automation Account](https://learn.microsoft.com/en-us/azure/automation/overview)."
+                    },
+                    {
+                        "name": "Microsoft.Graph permissions",
+                        "description": "Group.Read.All, User.Read.All, and AuditLog.Read.All permissions are required to retrieve user and group information linked to Exchange Online assignments. [See the documentation to learn more](https://aka.ms/sentinel-ESI-OnlineCollectorPermissions)."
+                    },
+                    {
+                        "name": "Exchange Online permissions",
+                        "description": "Exchange.ManageAsApp permission and **Global Reader** or **Security Reader** Role are needed to retrieve the Exchange Online Security Configuration.[See the documentation to learn more](https://aka.ms/sentinel-ESI-OnlineCollectorPermissions)."
+                    },
+                    {
+                        "name": "(Optional) Log Storage permissions",
+                        "description": "Storage Blob Data Contributor to a storage account linked to the Automation Account Managed identity or an Application ID is mandatory to store logs.[See the documentation to learn more](https://aka.ms/sentinel-ESI-OnlineCollectorPermissions)."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "description": ">**NOTE - UPDATE**",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "text": "<H1><b><u>NOTE - UPDATE:</u></b></H1>For an existing deployment, update the collector script to version <b>8.0.0.0</b> or later, before switching to the Azure Monitor Log Ingestion API. <br/>See <a href='https://aka.ms/sentinel-ESI-OnlineCollectorUpdate'>ESI On-Premises Collector Update</a> and <a href='https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment'>Upgrade an existing deployment</a>.</br>For detailed documentation for the following steps, refer to the <a href='https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md'>Official Documentation</a>",
+                                "visible": true,
+                                "inline": false
+                            },
+                            "type": "InfoMessage"
+                        }
+                    ]
+                },
+                {
+                    "title": "STEP 1. Deploy the Azure Monitor connector resources",
+                    "description": "This connector enables the Exchange Online collector to send configuration data to Microsoft Sentinel through the Azure Monitor Log Ingestion API.",
+                    "instructions": [
+                        {
+                            "type": "Markdown",
+                            "parameters": {
+                                "content": "#### Automated Azure Monitor resource deployment\nSelecting **Deploy** creates the Log Analytics table, Data Collection Endpoint (DCE), and Data Collection Rule (DCR). The Azure Automation deployment in the next step creates a system-assigned managed identity and grants it access to the DCR."
+                            }
+                        },
+                        {
+                            "type": "DeployPushConnectorButton",
+                            "parameters": {
+                                "label": "Deploy Exchange Collector Push connector resources",
+                                "applicationDisplayName": "Microsoft Exchange Online Collector Push Connector Application"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "description": "**STEP 2 - Deploy / Updating the Azure Automation collector**\n\n>**IMPORTANT:** Before deploying Azure Automation, record the values below. For new deployment, choose your environment display name (this name will be used in the workbooks - remember the table can contain information from several environments), for example `Contoso`. The deployment adds the `-Cloud` suffix when needed.",
+                    "instructions": [
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Tenant ID (Directory ID)",
+                                "fillWith": [
+                                    "TenantId"
+                                ]
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Data Collection Endpoint Uri",
+                                "fillWith": [
+                                    "DataCollectionEndpoint"
+                                ],
+                                "placeholder": "Deploy push connector to get the Data Collection Endpoint Uri"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Data Collection Rule Immutable ID",
+                                "fillWith": [
+                                    "DataCollectionRuleId"
+                                ],
+                                "placeholder": "Deploy push connector to get the Data Collection Rule Immutable ID"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "Stream Name",
+                                "value": "Custom-ESIExchangeOnlineConfig"
+                            }
+                        },
+                        {
+                            "type": "CopyableLabel",
+                            "parameters": {
+                                "label": "DataCollectionRuleName",
+                                "value": "Retrieve the DCR resource name in the Azure portal by matching the immutable ID shown above."
+                            }
+                        }
+                    ]
+                },
+                {
+                    "description": "**Option 1 : Deploy the Azure Automation template for a new deployment**\n\n1. Select the **Deploy to Azure** button below.\n\n\t[![Deploy To Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-ESI-ExchangeCollector-azuredeploy)\n2. Check the subscription, Select the resource group, Check the location.\n3. Enter the Automation account name, environment name, tenant ID, DCE URI, DCR immutable ID, and DCR name. To retrieve the DCR name, follow [Retrieve the DCR name](https://github.com/nlepagnez/Azure-Sentinel/blob/Update-for-Azure-Monitor-API---Beta/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md#retrieve-the-dcr-name).\n4. Select **Review + create**, and then select **Create**.\n\nThe template creates the Automation account with a system-assigned managed identity, imports the required modules, deploys the runbook and daily schedule, creates the configuration variables, and assigns the managed identity to the DCR."
+                },
+                {
+                    "description": "**Option 2 : Update an existing Deployment of Azure Automation**\n\n Use the following documentation to update an existing Azure Automation deployment. [Click Here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Documentations/README_LogIngestionAPI.md#upgrade-an-existing-deployment)"
+                },
+                {
+                    "description": "**STEP 3 - Assign Microsoft Graph and Exchange Online permissions to the managed identity (only for new deployment)**\n\nThe Automation account managed identity requires application permissions to collect Exchange Online and Microsoft Graph information.",
+                    "instructions": [
+                        {
+                            "parameters": {
+                                "title": "Assign Permissions by Script",
+                                "instructionSteps": [
+                                    {
+                                        "title": "A. Download Permission Script",
+                                        "description": "From a secure machine with the Microsoft Graph modules installed, download the Permission Update script.\n\n(The script is also located in the CollectExchSecIns.zip file, so if the On-Premises solution is already deployed this modification can be done on this server.)\n\n[Permission Update script](https://aka.ms/ESI-ExchangeCollector-Permissions)"
+                                    },
+                                    {
+                                        "title": "B. Retrieve the Azure Automation managed identity object ID",
+                                        "description": "Open the Automation account, select **Identity**, and copy the managed identity object ID."
+                                    },
+                                    {
+                                        "title": "C. Unblock the script and run the script with a Global Administrator account",
+                                        "description": "Run `ExchangeOnlinePermSetup.ps1 -MIIDParam <managed-identity-object-id> -TenantId <tenant-id> -InteractiveAuth`. The script requires Microsoft Graph modules and admin consent. It assigns Exchange.ManageAsApp, User.Read.All, Group.Read.All, and AuditLog.Read.All."
+                                    },
+                                    {
+                                        "title": "D. Exchange Online Role Assignment. Do not forget this step !",
+                                        "description": "1. As a **Global Administrator**, go to **Roles and Administrators**.\n2. Select **Global Reader** role or **Security Reader** and click to 'Add assignments'.\n3. Click on 'No member selected' and search your Managed Identity account Name beginning by **the name of your automation account** like 'ESI-Collector'. Select it and click on 'Select'.\n4. Click **Next** and validate the assignment by clicking **Assign**."
+                                    }
+                                ]
+                            },
+                            "type": "InstructionStepsGroup"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

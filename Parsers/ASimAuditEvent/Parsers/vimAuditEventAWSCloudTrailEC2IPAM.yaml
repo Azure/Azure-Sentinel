@@ -1,0 +1,336 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for AWS CloudTrail EC2 IPAM activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+- Title: Amazon EC2 API actions
+  Link: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_Operations.html
+Description: |
+  Filters and normalizes AWSCloudTrail events from ec2.amazonaws.com for IPAMs, scopes, pools,
+  allocations, policies, prefix-list resolvers, resource discoveries, BYOIP and BYOASN,
+  and public IPv4 pools. Includes pool-allocation listing and description changes; routing
+  and RPKI actions are handled by EC2IPAMRouting. This parser is referenced by
+  vimAuditEventAWSCloudTrail.
+ParserName: vimAuditEventAWSCloudTrailEC2IPAM
+ParentParser: vimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AWSCloudTrailEC2IPAM
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    actorusername_has_any:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool=false,
+    pack:bool=false
+  ) {
+  let Events = datatable(EventName: string, EventType: string, Object: string)
+  [
+    "AdvertiseByoipCidr", "Execute", "BYOIP CIDR",
+    "AllocateIpamPoolCidr", "Create", "IPAM Pool",
+    "AssociateIpamByoasn", "Set", "BYOIP CIDR",
+    "AssociateIpamResourceDiscovery", "Set", "VPC IPAM",
+    "CreateIpam", "Create", "IPAM",
+    "CreateIpamExternalResourceVerificationToken", "Create", "IPAM Verification Token",
+    "CreateIpamPolicy", "Create", "IPAM Policy",
+    "CreateIpamPool", "Create", "IPAM Pool",
+    "CreateIpamPrefixListResolver", "Create", "IPAM Prefix List Resolver",
+    "CreateIpamPrefixListResolverTarget", "Create", "IPAM Prefix List Resolver Target",
+    "CreateIpamResourceDiscovery", "Create", "IPAM Resource Discovery",
+    "CreateIpamScope", "Create", "IPAM Scope",
+    "CreatePublicIpv4Pool", "Create", "Public Ipv4 Pool",
+    "DeleteIpam", "Delete", "IPAM",
+    "DeleteIpamExternalResourceVerificationToken", "Delete", "IPAM Verification Token",
+    "DeleteIpamPolicy", "Delete", "IPAM Policy",
+    "DeleteIpamPool", "Delete", "IPAM Pool",
+    "DeleteIpamPrefixListResolver", "Delete", "IPAM Prefix List Resolver",
+    "DeleteIpamPrefixListResolverTarget", "Delete", "IPAM Prefix List Resolver Target",
+    "DeleteIpamResourceDiscovery", "Delete", "IPAM Resource Discovery",
+    "DeleteIpamScope", "Delete", "IPAM Scope",
+    "DeletePublicIpv4Pool", "Delete", "Public Ipv4 Pool",
+    "DeprovisionByoipCidr", "Execute", "BYOIP CIDR",
+    "DeprovisionIpamByoasn", "Execute", "IPAM",
+    "DeprovisionIpamPoolCidr", "Execute", "IPAM Pool",
+    "DeprovisionPublicIpv4PoolCidr", "Execute", "Public Ipv4 Pool",
+    "DescribeByoipCidrs", "Read", "BYOIP CIDR",
+    "DescribeIpamByoasn", "Read", "ASN",
+    "DescribeIpamExternalResourceVerificationTokens", "Read", "IPAM Verification Token",
+    "DescribeIpamPolicies", "Read", "IPAM Policy",
+    "DescribeIpamPoolAllocations", "Read", "IPAM Pool Allocation",
+    "DescribeIpamPools", "Read", "IPAM Pool",
+    "DescribeIpamPrefixListResolverTargets", "Read", "IPAM Prefix List Resolver Target",
+    "DescribeIpamPrefixListResolvers", "Read", "IPAM Prefix List Resolver",
+    "DescribeIpamResourceDiscoveries", "Read", "IPAM Resource Discovery",
+    "DescribeIpamResourceDiscoveryAssociations", "Read", "IPAM Resource Discovery Association",
+    "DescribeIpamScopes", "Read", "IPAM Scope",
+    "DescribeIpams", "Read", "IPAM",
+    "DescribeIpv6Pools", "Read", "IPV6 Pool CIDR",
+    "DescribePublicIpv4Pools", "Read", "Public Ipv4 Pool",
+    "DisableIpamOrganizationAdminAccount", "Disable", "IPAM Account",
+    "DisableIpamPolicy", "Disable", "IPAM Policy",
+    "DisassociateIpamByoasn", "Set", "ASN",
+    "DisassociateIpamResourceDiscovery", "Delete", "IPAM Resource Discovery Assocation",
+    "EnableIpamOrganizationAdminAccount", "Enable", "VPC",
+    "EnableIpamPolicy", "Enable", "IPAM Policy",
+    "GetAssociatedIpv6PoolCidrs", "Read", "IPV6 Pool CIDR",
+    "GetEnabledIpamPolicy", "Read", "IPAM Policy",
+    "GetIpamAddressHistory", "Read", "IPAM Scope",
+    "GetIpamDiscoveredAccounts", "Read", "IPAM Discovery",
+    "GetIpamDiscoveredPublicAddresses", "Read", "IPAM Discovery",
+    "GetIpamDiscoveredResourceCidrs", "Read", "IPAM Discovery",
+    "GetIpamPolicyAllocationRules", "Read", "IPAM Policy",
+    "GetIpamPolicyOrganizationTargets", "Read", "IPAM Policy",
+    "GetIpamPoolAllocations", "Read", "IPAM Pool",
+    "GetIpamPoolCidrs", "Read", "IPAM Pool",
+    "GetIpamPrefixListResolverRules", "Read", "IPAM Prefix List Resolver",
+    "GetIpamPrefixListResolverVersionEntries", "Read", "IPAM Prefix List Resolver",
+    "GetIpamPrefixListResolverVersions", "Read", "IPAM Prefix List Resolver",
+    "GetIpamResourceCidrs", "Read", "IPAM Pool",
+    "ModifyIpam", "Set", "IPAM",
+    "ModifyIpamPolicyAllocationRules", "Set", "IPAM Policy",
+    "ModifyIpamPool", "Set", "IPAM Pool",
+    "ModifyIpamPoolAllocation", "Set", "IPAM Pool Allocation",
+    "ModifyIpamPrefixListResolver", "Set", "IPAM Prefix List Resolver",
+    "ModifyIpamPrefixListResolverTarget", "Set", "IPAM Prefix List Resolver Target",
+    "ModifyIpamResourceCidr", "Set", "IPAM Resource",
+    "ModifyIpamResourceDiscovery", "Set", "IPAM Resource Discovery",
+    "ModifyIpamScope", "Set", "IPAM Scope",
+    "MoveByoipCidrToIpam", "Execute", "BYOIP CIDR",
+    "ProvisionByoipCidr", "Execute", "Elastic IP address",
+    "ProvisionIpamByoasn", "Execute", "ASN",
+    "ProvisionIpamPoolCidr", "Execute", "IPAM Pool",
+    "ProvisionPublicIpv4PoolCidr", "Execute", "Public Ipv4 Pool",
+    "ReleaseIpamPoolAllocation", "Delete", "IPAM Pool Allocation",
+    "WithdrawByoipCidr", "Delete", "BYOIP CIDR"
+  ]
+  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+  | where array_length(object_has_any) == 0 or Object has_any (object_has_any);
+  AWSCloudTrail
+  | where not(disabled)
+  | where EventSource == "ec2.amazonaws.com"
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+  | where array_length(operation_has_any) == 0 or EventName has_any (operation_has_any)
+  | where array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any)
+  | where array_length(srcipaddr_has_any_prefix) == 0
+      or (ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0")
+          and has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+  | where EventName in (Events | project EventName)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | where eventresult == "*" or EventResult == eventresult
+  | lookup kind=inner Events on EventName
+  | extend Req = todynamic(RequestParameters), Resp = todynamic(ResponseElements)
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName == "AllocateIpamPoolCidr", Req.AllowedCidr,
+      EventName == "AssociateIpamByoasn", Resp.asnAssociation,
+      EventName == "AssociateIpamResourceDiscovery", Resp.ipamResourceDiscoveryAssociation,
+      EventName in ("CreateIpam", "ModifyIpam"), Resp.ipam,
+      EventName == "CreateIpamExternalResourceVerificationToken",
+        Resp.ipamExternalResourceVerificationToken,
+      EventName == "CreateIpamPolicy", Resp.ipamPolicy,
+      EventName == "CreateIpamPool", Resp.ipamPool,
+      EventName in ("CreateIpamPrefixListResolver", "ModifyIpamPrefixListResolver"),
+        Resp.ipamPrefixListResolver,
+      EventName in ("CreateIpamPrefixListResolverTarget", "ModifyIpamPrefixListResolverTarget"),
+        Resp.ipamPrefixListResolverTarget,
+      EventName in ("CreateIpamResourceDiscovery", "ModifyIpamResourceDiscovery"),
+        Resp.ipamResourceDiscovery,
+      EventName in ("CreateIpamScope", "ModifyIpamScope"), Resp.ipamScope,
+      EventName in ("DeprovisionByoipCidr", "MoveByoipCidrToIpam", "ProvisionByoipCidr", "WithdrawByoipCidr"),
+        Resp.byoipCidr,
+      EventName in ("DeprovisionIpamByoasn", "ProvisionIpamByoasn"), Resp.byoasn,
+      EventName in ("DeprovisionIpamPoolCidr", "ProvisionIpamPoolCidr"), Resp.ipamPoolCidr,
+      EventName == "DeprovisionPublicIpv4PoolCidr", Resp.deprovisionedAddressSet,
+      EventName == "EnableIpamOrganizationAdminAccount", Resp.success,
+      EventName == "ModifyIpamPolicyAllocationRules", Resp.ipamPolicyDocument,
+      EventName == "ModifyIpamPool", Resp.ipamPoolId,
+      EventName == "ModifyIpamPoolAllocation", Resp.ipamPoolAllocation,
+      EventName == "ModifyIpamResourceCidr", Resp.ipamResourceCidr,
+      EventName == "ProvisionPublicIpv4PoolCidr", Resp.poolAddressRange,
+      ""
+    ), "")
+  | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+  | extend ObjectId = case(
+      EventName == "AdvertiseByoipCidr", Resp.byoipCidr.cidr,
+      EventName == "AllocateIpamPoolCidr", Resp.ipamPoolAllocation.ipamPoolAllocationId,
+      EventName in ("AssociateIpamByoasn", "DisassociateIpamByoasn", "ProvisionIpamByoasn"),
+        Req.Asn,
+      EventName == "AssociateIpamResourceDiscovery",
+        Resp.ipamResourceDiscoveryAssociation.ipamResourceDiscoveryAssociationId,
+      EventName == "CreateIpam", Resp.ipam.ipamId,
+      EventName == "CreateIpamExternalResourceVerificationToken",
+        Resp.ipamExternalResourceVerificationToken.ipamExternalResourceVerificationTokenId,
+      EventName == "CreateIpamPolicy", Resp.ipamPolicy.ipamPolicyId,
+      EventName == "CreateIpamPool", Resp.ipamPool.ipamPoolId,
+      EventName == "CreateIpamPrefixListResolver",
+        Resp.ipamPrefixListResolver.ipamPrefixListResolverId,
+      EventName == "CreateIpamPrefixListResolverTarget",
+        Resp.ipamPrefixListResolverTarget.ipamPrefixListResolverTargetId,
+      EventName == "CreateIpamResourceDiscovery",
+        Resp.ipamResourceDiscovery.ipamResourceDiscoveryId,
+      EventName == "CreateIpamScope", Resp.ipamScope.ipamScopeId,
+      EventName in ("CreatePublicIpv4Pool", "ProvisionPublicIpv4PoolCidr"), Resp.poolId,
+      EventName in ("DeleteIpam", "DeprovisionIpamByoasn", "DescribeIpams", "ModifyIpam"),
+        Req.IpamId,
+      EventName in ("DeleteIpamExternalResourceVerificationToken",
+        "DescribeIpamExternalResourceVerificationTokens"),
+        Req.IpamExternalResourceVerificationTokenId,
+      EventName in ("DeleteIpamPolicy", "DescribeIpamPolicies", "DisableIpamPolicy", "EnableIpamPolicy",
+        "GetIpamPolicyAllocationRules", "GetIpamPolicyOrganizationTargets", "ModifyIpamPolicyAllocationRules"),
+        Req.IpamPolicyId,
+      EventName in ("DeleteIpamPool", "DeprovisionIpamPoolCidr", "DescribeIpamPools", "GetIpamPoolAllocations",
+        "GetIpamPoolCidrs", "GetIpamResourceCidrs", "ModifyIpamPool", "ProvisionIpamPoolCidr"),
+        Req.IpamPoolId,
+      EventName in ("DeleteIpamPrefixListResolver", "DescribeIpamPrefixListResolvers",
+        "GetIpamPrefixListResolverRules", "GetIpamPrefixListResolverVersionEntries",
+        "GetIpamPrefixListResolverVersions", "ModifyIpamPrefixListResolver"),
+        Req.IpamPrefixListResolverId,
+      EventName in ("DeleteIpamPrefixListResolverTarget", "DescribeIpamPrefixListResolverTargets",
+        "ModifyIpamPrefixListResolverTarget"), Req.IpamPrefixListResolverTargetId,
+      EventName in ("DeleteIpamResourceDiscovery", "DescribeIpamResourceDiscoveries",
+        "GetIpamDiscoveredAccounts", "GetIpamDiscoveredPublicAddresses", "GetIpamDiscoveredResourceCidrs",
+        "ModifyIpamResourceDiscovery"), Req.IpamResourceDiscoveryId,
+      EventName in ("DeleteIpamScope", "DescribeIpamScopes", "GetIpamAddressHistory", "ModifyIpamScope"),
+        Req.IpamScopeId,
+      EventName in ("DeletePublicIpv4Pool", "DeprovisionPublicIpv4PoolCidr", "DescribeIpv6Pools",
+        "DescribePublicIpv4Pools", "GetAssociatedIpv6PoolCidrs"), Req.PoolId,
+      EventName in ("DeprovisionByoipCidr", "MoveByoipCidrToIpam", "ProvisionByoipCidr", "WithdrawByoipCidr"),
+        Req.Cidr,
+      EventName == "DescribeByoipCidrs", Resp.byoipCidrSet,
+      EventName in ("DescribeIpamResourceDiscoveryAssociations", "DisassociateIpamResourceDiscovery"),
+        Req.IpamResourceDiscoveryAssociationId,
+      EventName in ("DisableIpamOrganizationAdminAccount", "EnableIpamOrganizationAdminAccount"),
+        Req.DelegatedAdminAccountId,
+      EventName == "GetEnabledIpamPolicy", Resp.ipamPolicyId,
+      EventName == "ModifyIpamPoolAllocation", coalesce(Req.ipamPoolAllocationId,
+        Req.IpamPoolAllocationId),
+      EventName == "ModifyIpamResourceCidr", Req.ResourceId,
+      EventName == "ReleaseIpamPoolAllocation", Req.IpamPoolAllocationId,
+      ""
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service"
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      ActorUserEntityKey = "",
+      AdditionalEntities = dynamic([]),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", Req,
+      "ResponseElements", Resp
+    ), dynamic({}))
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  | project
+      TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+      EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+      EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+      ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+      SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+      Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+      ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+      AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+      TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(
+    starttime,
+    endtime,
+    srcipaddr_has_any_prefix,
+    actorusername_has_any,
+    operation_has_any,
+    eventtype_in,
+    eventresult,
+    object_has_any,
+    newvalue_has_any,
+    disabled,
+    pack
+  )

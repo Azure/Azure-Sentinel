@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: PowerAutomate
+  dataTypes:
+  - PowerAutomateActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - PowerAutomateActivity
+  requiredDataConnectors:
+  - connectorId: PowerAutomate
+    dataTypes:
+    - PowerAutomateActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b1e11b8c-545a-4dea-a912-0008e160d183
+    path: Analytic Rules/Power Automate - Departing employee flow activity.yaml
+    version: 3.2.0
+    querySha256: efe4bf894c2ff281f03776dd54842eb2673ecaa2c6878d07a342436d9e43139e
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'Environment' column `EnvironmentId` requires runtime output-schema binding verification
+    - customDetails 'FlowDetails' column `FlowId` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Exfiltration
+    - Impact
+    originalTechniques:
+    - T1567
+    - T1485
+    - T1491
+    - T0813
+    - T0879
+    - T0826
+    reviewScope:
+      sourceDocumentSha256: a333156e541ab981bee82079bf5047fd6967b136e3453b9507ce3ad990f3ef11
+      targetQuerySha256: 91a354d9c1a76b8a40c36d19a477383e5d09335b6d655df6730f30e40c5f89d8
+properties:
+  id: xdr-b1e11b8c-545a-4dea-a912-0008e160d183
+  displayName: Power Automate - Departing employee flow activity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      PowerAutomateActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where EventOriginalType in ("CreateFlow", "EditFlow")
+      | join kind=inner (MSBizAppsTerminatedEmployees()) on $left.ActorName == $right.UserPrincipalName
+      | extend path = parse_url(FlowDetailsUrl).Path
+      | extend EnvironmentId = tostring(split(path, "/")[2])
+      | extend FlowId = tostring(split(path, "/")[-2])
+      | extend
+          AccountName = tostring(split(ActorName, "@")[0]),
+          UPNSuffix = tostring(split(ActorName, "@")[1]),
+          PowerAutomateAppId = 27592,
+          CloudAppId = 32780
+      | project
+          TimeGenerated,
+          EventOriginalType,
+          ActorName,
+          EnvironmentId,
+          AccountName,
+          UPNSuffix,
+          PowerAutomateAppId,
+          CloudAppId,
+          FlowId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Power Automate - Departing employee flow activity
+      description: Identifies instances where an employee who has been notified or is already terminated, on the TerminatedEmployees
+        watchlist, creates or modifies a Power Automate flow.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: PowerAutomateAppId
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      - tactic: Impact
+        techniques:
+        - technique: T1485
+        - technique: T1491
+        - technique: T0813
+        - technique: T0879
+        - technique: T0826
+      customDetails:
+        Environment: EnvironmentId
+        FlowDetails: FlowId

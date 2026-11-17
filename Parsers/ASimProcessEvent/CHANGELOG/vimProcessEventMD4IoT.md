@@ -1,5 +1,9 @@
 # Changelog for vimProcessEventMD4IoT.yaml
 
+## Version 0.2.1
+
+- (2026-10-27) Removed unreferenced parser in favor of split ProcessCreate/ProcessTerminate variants - [PR #15445](https://github.com/Azure/Azure-Sentinel/pull/15445)
+
 ## Version 0.2.0
 
 - (2022-05-01) Adding params to D4IoT  - [PR #4748](https://github.com/Azure/Azure-Sentinel/pull/4748)

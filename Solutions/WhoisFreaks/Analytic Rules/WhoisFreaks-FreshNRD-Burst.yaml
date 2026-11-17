@@ -1,0 +1,37 @@
+id: 9d79f28f-5d1d-4ca8-b3d3-4ab5f5513e8d
+name: WhoisFreaks - burst of newly registered domains
+description: |
+  Identifies unusually large NRD ingest volume that may indicate bulk registration campaigns. The NRD feeds are polled once a day, so the rule compares the last 24 hours of distinct domains against the average of the previous seven daily loads and alerts only when the current load is at least 50% above that average and more than three standard deviations from it.
+requiredDataConnectors:
+  - connectorId: WhoisFreaks
+    dataTypes:
+      - WhoisFreaksNRD_CL
+      - WhoisFreaksNRDNoWhois_CL
+severity: Low
+status: Available
+queryFrequency: 1d
+queryPeriod: 8d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+relevantTechniques:
+  - T1583
+query: |
+  let current = union WhoisFreaksNRD_CL, WhoisFreaksNRDNoWhois_CL
+    | where TimeGenerated > ago(1d)
+    | summarize CurrentCount = dcount(domain_name);
+  let baseline = union WhoisFreaksNRD_CL, WhoisFreaksNRDNoWhois_CL
+    | where TimeGenerated between (ago(8d) .. ago(1d))
+    | summarize DailyCount = dcount(domain_name) by bin_at(TimeGenerated, 1d, now())
+    | summarize BaselineAvg = avg(DailyCount), BaselineStdev = stdev(DailyCount), BaselineDays = count();
+  current
+  | extend JoinKey = 1
+  | join kind=inner (baseline | extend JoinKey = 1) on JoinKey
+  | where BaselineDays >= 3
+  | where CurrentCount > BaselineAvg * 1.5 and CurrentCount > BaselineAvg + 3 * BaselineStdev
+  | project TimeGenerated = now(), CurrentCount, BaselineAvg = round(BaselineAvg), BaselineStdev = round(BaselineStdev), BaselineDays
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+version: 1.0.1
+kind: Scheduled

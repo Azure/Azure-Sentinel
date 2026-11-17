@@ -2,9 +2,11 @@
 
 import logging
 import os
+from datetime import datetime, timezone
 
 from azure.identity import ManagedIdentityCredential
 from azure.keyvault.secrets import SecretClient
+from croniter import croniter
 from dotenv import load_dotenv
 
 
@@ -12,6 +14,20 @@ from dotenv import load_dotenv
 # corresponding UPWIND_*_MIN_SEVERITY app setting to an empty value disables
 # filtering for that dataset and ingests every severity.
 DEFAULT_MIN_SEVERITY = "high"
+
+DEFAULT_SCHEDULE = "0 0 * * * *"
+
+# Each run looks back over the gap since the previous scheduled run plus this
+# overlap, so records landing right at a run boundary aren't missed.
+LOOKBACK_OVERLAP_MINUTES = 5
+
+# Used only when the schedule can't be parsed: an hourly run plus the overlap.
+FALLBACK_LOOKBACK_MINUTES = 65
+
+# How far ahead to scan the schedule for its longest gap between runs. A week
+# covers day-of-week patterns such as business-hours-only schedules.
+_SCHEDULE_SCAN_DAYS = 7
+_SCHEDULE_SCAN_MAX_RUNS = 20000
 
 
 class ConfigStore:
@@ -30,10 +46,11 @@ class ConfigStore:
         return f"ConfigStore(keys={list(self._config.keys())})"
 
 
+# Stream names are deliberately not required: clearing a dataset's STREAM_NAME_*
+# app setting is how that dataset is turned off.
 _REQUIRED_CONFIG_KEYS = [
     "azure_dce_endpoint",
     "azure_dcr_immutableid",
-    "azure_stream_name_inventory",
     "upwind_org_id",
     "upwind_client_id",
     "upwind_auth_url",
@@ -46,6 +63,47 @@ def _parse_int_env(name: str, default: str) -> int:
         return int(raw)
     except ValueError:
         raise ValueError(f"Invalid integer for {name}: '{raw}'")
+
+
+def lookback_minutes_for_schedule(schedule: str) -> int:
+    """
+    Derive each run's lookback window from the function's timer schedule.
+
+    The window is the longest gap between consecutive scheduled runs plus
+    LOOKBACK_OVERLAP_MINUTES, so every moment is covered by at least one run
+    even for irregular schedules (e.g. business hours only, where the longest
+    gap spans the weekend).
+
+    :param schedule: The Azure Functions NCRONTAB expression (six fields,
+        seconds first), e.g. "0 0 * * * *" for hourly.
+    :return: Lookback in whole minutes.
+    """
+
+    try:
+        start = datetime(2026, 1, 5, tzinfo=timezone.utc)  # a Monday at 00:00
+        runs = croniter(schedule, start, second_at_beginning=True)
+        previous = runs.get_next(datetime)
+        scan_end = previous.timestamp() + _SCHEDULE_SCAN_DAYS * 24 * 3600
+        longest_gap_seconds = 0.0
+
+        for _ in range(_SCHEDULE_SCAN_MAX_RUNS):
+            current = runs.get_next(datetime)
+            longest_gap_seconds = max(
+                longest_gap_seconds, (current - previous).total_seconds()
+            )
+            if current.timestamp() >= scan_end:
+                break
+            previous = current
+    except Exception as e:
+        logging.warning(
+            "Could not parse schedule %r (%s); using a %d-minute lookback.",
+            schedule,
+            e,
+            FALLBACK_LOOKBACK_MINUTES,
+        )
+        return FALLBACK_LOOKBACK_MINUTES
+
+    return -(-int(longest_gap_seconds) // 60) + LOOKBACK_OVERLAP_MINUTES
 
 
 def _resolve_upwind_secret(azure_client_id, key_vault_uri, secret_name):
@@ -104,10 +162,33 @@ def load_configuration() -> ConfigStore:
         upwind_auth_url=os.getenv("UPWIND_AUTH_URL", "https://auth.upwind.io/oauth/token"),
         upwind_api_base_url=os.getenv("UPWIND_API_BASE_URL", "https://api.upwind.io"),
         upwind_page_size=_parse_int_env("UPWIND_PAGE_SIZE", "100"),
+        # The catalog and configuration findings endpoints accept larger pages
+        # than the shared UPWIND_PAGE_SIZE (capped at 100 by threat stories);
+        # fewer requests per run keep large orgs inside the time budget and
+        # the rate limit.
+        upwind_catalog_page_size=_parse_int_env("UPWIND_CATALOG_PAGE_SIZE", "200"),
+        upwind_config_findings_page_size=_parse_int_env(
+            "UPWIND_CONFIG_FINDINGS_PAGE_SIZE", "1000"
+        ),
         upwind_max_retries=_parse_int_env("UPWIND_MAX_RETRIES", "5"),
         upwind_initial_backoff_seconds=_parse_int_env("UPWIND_INITIAL_BACKOFF_SECONDS", "1"),
         upwind_max_backoff_seconds=_parse_int_env("UPWIND_MAX_BACKOFF_SECONDS", "60"),
-        upwind_threat_lookback_minutes=_parse_int_env("UPWIND_THREAT_LOOKBACK_MINUTES", "90"),
+        # The inventory API allows 600 catalog requests per minute per org,
+        # shared by every API key in the org. Half of that leaves room for the
+        # org's other clients; 0 disables pacing.
+        upwind_max_requests_per_minute=_parse_int_env("UPWIND_MAX_REQUESTS_PER_MINUTE", "300"),
+        upwind_lookback_minutes=lookback_minutes_for_schedule(
+            os.getenv("UPWIND_CATALOG_SCHEDULE", DEFAULT_SCHEDULE)
+        ),
+        # Wall-clock budget for one run, kept under host.json's 10-minute
+        # functionTimeout with room for an in-flight request (60s timeout) and
+        # its upload to finish after the last budget check.
+        upwind_run_time_budget_seconds=_parse_int_env("UPWIND_RUN_TIME_BUDGET_SECONDS", "480"),
+        # Hours between full catalog syncs, which re-ingest assets that haven't
+        # changed so they don't age out of the table; 0 turns them off. Their
+        # progress is kept in the Function App's own storage account.
+        upwind_full_sync_interval_hours=_parse_int_env("UPWIND_FULL_SYNC_INTERVAL_HOURS", "24"),
+        azure_webjobs_storage=os.getenv("AzureWebJobsStorage"),
         upwind_min_severity_vulnerability=os.getenv(
             "UPWIND_VULNERABILITY_MIN_SEVERITY", DEFAULT_MIN_SEVERITY
         ),
@@ -135,12 +216,23 @@ def load_configuration() -> ConfigStore:
     if missing:
         raise ValueError(f"Missing required configuration: {', '.join(missing)}")
 
+    if os.getenv("UPWIND_THREAT_LOOKBACK_MINUTES"):
+        logging.warning(
+            "UPWIND_THREAT_LOOKBACK_MINUTES is no longer used and is ignored; the "
+            "lookback is now derived from UPWIND_CATALOG_SCHEDULE (%d minutes).",
+            config.get("upwind_lookback_minutes"),
+        )
+
     logging.info(
-        "Config loaded: dce_endpoint=%s, org_id=%s, page_size=%s, "
+        "Config loaded: dce_endpoint=%s, org_id=%s, page_size=%s (catalog=%s, "
+        "config_findings=%s), lookback_minutes=%s, "
         "min_severity(vuln=%s, detections=%s, events=%s, stories=%s, config=%s)",
         config.get("azure_dce_endpoint"),
         config.get("upwind_org_id"),
         config.get("upwind_page_size"),
+        config.get("upwind_catalog_page_size"),
+        config.get("upwind_config_findings_page_size"),
+        config.get("upwind_lookback_minutes"),
         config.get("upwind_min_severity_vulnerability") or "all",
         config.get("upwind_min_severity_threat_detections") or "all",
         config.get("upwind_min_severity_threat_events") or "all",

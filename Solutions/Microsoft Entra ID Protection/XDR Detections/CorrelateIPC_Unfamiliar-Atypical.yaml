@@ -1,0 +1,202 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectoryIdentityProtection
+  dataTypes:
+  - SecurityAlert (IPC)
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - IdentityInfo
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - IdentityInfo
+  - workload: sentinel
+    dataTypes:
+    - SecurityAlert
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+    - SecurityAlert (IPC)
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - IdentityInfo
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a3df4a32-4805-4c6d-8699-f3c888af2f67
+    path: Analytic Rules/CorrelateIPC_Unfamiliar-Atypical.yaml
+    version: 1.0.9
+    querySha256: 77b4343a501ceb1d3b9e9e99f344ca005aad354c979d9aeae10174aabc9f8af1
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1d, lookback=14d; target frequency=P1D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'Alert1_Name' column `Alert_UnfamiliarSignInProps_Name` requires runtime output-schema binding verification
+    - customDetails 'Alert1_Time' column `Alert_UnfamiliarSignInProps_Time` requires runtime output-schema binding verification
+    - customDetails 'Alert1_Severity' column `Alert_UnfamiliarSignInProps_Severity` requires runtime output-schema binding
+      verification
+    - customDetails 'Alert2_Name' column `Alert_AtypicalTravels_Name` requires runtime output-schema binding verification
+    - customDetails 'Alert2_Time' column `Alert_AtypicalTravels_Time` requires runtime output-schema binding verification
+    - customDetails 'Alert2_Severity' column `Alert_AtypicalTravels_Severity` requires runtime output-schema binding verification
+    - customDetails 'TimeDelta' column `TimeDelta` requires runtime output-schema binding verification
+    - customDetails 'CurrentLocation' column `CurrentLocation` requires runtime output-schema binding verification
+    - customDetails 'PreviousLocation' column `PreviousLocation` requires runtime output-schema binding verification
+    - customDetails 'CurrentIPAddress' column `CurrentIPAddress` requires runtime output-schema binding verification
+    - customDetails 'PreviousIPAddress' column `PreviousIPAddress` requires runtime output-schema binding verification
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `UserAccount`, but its target
+      output binding requires runtime-schema verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountFullName column `UserAccount` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: b8d00e7369d07f450741fffe9784d6f8f2b8665f2279db13f48201d3c91943e0
+      targetQuerySha256: e015271dfa36fc0458b5739711a125343201845d97d6bb212e6ee62c2e9703ce
+    reviewDecisions:
+    - reason: catalog column mappings were not applied because table/alias scope is ambiguous
+      decision: accepted
+      sourceDocumentSha256: b8d00e7369d07f450741fffe9784d6f8f2b8665f2279db13f48201d3c91943e0
+      targetQuerySha256: e015271dfa36fc0458b5739711a125343201845d97d6bb212e6ee62c2e9703ce
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserAccount
+      column: UserAccount
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    acceptedReviewReasons:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+properties:
+  id: xdr-a3df4a32-4805-4c6d-8699-f3c888af2f67
+  displayName: Correlate Unfamiliar sign-in properties & atypical travel alerts
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // We can use this configuration TimeDeltaInMinutes if you want to chnage the time window that we try to match the alerts
+      let TimeDeltaInMinutes = 10;
+      let Alert_UnfamiliarSignInProps =
+      SecurityAlert
+      | where TimeGenerated > ago(1d)
+      | where ProductName =~ "Azure Active Directory Identity Protection"
+      | where AlertName =~ "Unfamiliar sign-in properties"
+      | mv-expand Entity = todynamic(Entities)
+      | where Entity.Type =~ "account"
+      | extend AadTenantId = tostring(Entity.AadTenantId)
+      | extend AadUserId = tostring(Entity.AadUserId)
+      | join kind=inner (
+      IdentityInfo
+      | distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName
+      | extend UserName = AccountDisplayName
+      | extend UserAccount = AccountUPN
+      | where isnotempty(AccountDisplayName) and isnotempty(UserAccount)
+      | project AccountTenantId, AccountObjectId, UserAccount, UserName
+      )
+      on
+      $left.AadTenantId == $right.AccountTenantId,
+      $left.AadUserId == $right.AccountObjectId
+      | extend CompromisedEntity = iff(CompromisedEntity == "N/A" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)
+      | extend Alert_UnfamiliarSignInProps_Time = TimeGenerated
+      | extend Alert_UnfamiliarSignInProps_Name = AlertName
+      | extend Alert_UnfamiliarSignInProps_Severity = AlertSeverity
+      | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, UserAccount, UserName
+      ;
+      let Alert_AtypicalTravels =
+      SecurityAlert
+      | where TimeGenerated > ago(1d)
+      | where ProductName =~ "Azure Active Directory Identity Protection"
+      | where AlertName =~ "Atypical travel"
+      | mv-expand Entity = todynamic(Entities)
+      | where Entity.Type =~ "account"
+      | extend AadTenantId = tostring(Entity.AadTenantId)
+      | extend AadUserId = tostring(Entity.AadUserId)
+      | join kind=inner (
+      IdentityInfo
+      | distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName
+      | extend UserName = AccountDisplayName
+      | extend UserAccount = AccountUPN
+      | where isnotempty(AccountDisplayName) and isnotempty(UserAccount)
+      | project AccountTenantId, AccountObjectId, UserAccount, UserName
+      )
+      on
+      $left.AadTenantId == $right.AccountTenantId,
+      $left.AadUserId == $right.AccountObjectId
+      | extend CompromisedEntity = iff(CompromisedEntity == "N/A" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)
+      | extend Alert_AtypicalTravels_Time = TimeGenerated
+      | extend Alert_AtypicalTravels_Name = AlertName
+      | extend Alert_AtypicalTravels_Severity = AlertSeverity
+      | extend ExtendedProperties_json= parse_json(ExtendedProperties)
+      | extend CurrentLocation = tostring(ExtendedProperties_json.["Current Location"])
+      | extend PreviousLocation = tostring(ExtendedProperties_json.["Previous Location"])
+      | extend CurrentIPAddress = tostring(ExtendedProperties_json.["Current IP Address"])
+      | extend PreviousIPAddress = tostring(ExtendedProperties_json.["Previous IP Address"])
+      | extend Comments = tostring(ExtendedProperties_json.Comments)
+      | extend RiskDetail = extract(@"(?i)risk detail:\s*(.+)$", 1, Comments)
+      | where isempty(RiskDetail) or RiskDetail !contains "admin"
+      | project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, CurrentIPAddress, PreviousIPAddress, CurrentLocation, Comments, PreviousLocation, UserAccount, UserName, CompromisedEntity
+      ;
+      Alert_UnfamiliarSignInProps
+      | join kind=inner Alert_AtypicalTravels on UserAccount
+      | where abs(datetime_diff('minute', Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Time)) <= TimeDeltaInMinutes
+      | extend TimeDelta = Alert_UnfamiliarSignInProps_Time - Alert_AtypicalTravels_Time
+      | project UserAccount, AadUserId, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress, Comments, UserName
+      | extend UserEmailName = split(UserAccount,'@')[0], UPNSuffix = split(UserAccount,'@')[1]
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Correlate Unfamiliar sign-in properties & atypical travel alerts
+      description: '''The combination of an Unfamiliar sign-in properties alert and an Atypical travel alert about the same
+        user within a +10m or -10m window is considered a high severity incident.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: UserEmailName
+          upnSuffixColumn: UPNSuffix
+        - id: account2
+          aadUserIdColumn: AadUserId
+        ips:
+        - id: ip1
+          addressColumn: CurrentIPAddress
+        - id: ip2
+          addressColumn: PreviousIPAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        Alert1_Name: Alert_UnfamiliarSignInProps_Name
+        Alert1_Time: Alert_UnfamiliarSignInProps_Time
+        Alert1_Severity: Alert_UnfamiliarSignInProps_Severity
+        Alert2_Name: Alert_AtypicalTravels_Name
+        Alert2_Time: Alert_AtypicalTravels_Time
+        Alert2_Severity: Alert_AtypicalTravels_Severity
+        TimeDelta: TimeDelta
+        CurrentLocation: CurrentLocation
+        PreviousLocation: PreviousLocation
+        CurrentIPAddress: CurrentIPAddress
+        PreviousIPAddress: PreviousIPAddress
+        AccountFullName: UserAccount

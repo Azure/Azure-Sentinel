@@ -1,0 +1,121 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftDefenderAdvancedThreatProtection
+  dataTypes:
+  - SecurityAlert (MDATP)
+- connectorId: AzureActiveDirectoryIdentityProtection
+  dataTypes:
+  - SecurityAlert (IPC)
+- connectorId: AzureSecurityCenter
+  dataTypes:
+  - SecurityAlert (ASC)
+- connectorId: IoT
+  dataTypes:
+  - SecurityAlert (ASC for IoT)
+- connectorId: MicrosoftCloudAppSecurity
+  dataTypes:
+  - SecurityAlert (ASC for IoT)
+- connectorId: IoT
+  dataTypes:
+  - SecurityAlert (MCAS)
+- connectorId: OfficeATP
+  dataTypes:
+  - SecurityAlert (Office 365)
+contentProvenance:
+  requiredWorkloads:
+  - workload: mtp
+    dataTypes:
+    - AlertInfo
+    - AlertEvidence
+  requiredDataConnectors:
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+    - SecurityAlert (MDATP)
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+    - SecurityAlert (IPC)
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+    - SecurityAlert (ASC)
+  - connectorId: IoT
+    dataTypes:
+    - SecurityAlert (ASC for IoT)
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+    - SecurityAlert (ASC for IoT)
+  - connectorId: IoT
+    dataTypes:
+    - SecurityAlert (MCAS)
+  - connectorId: OfficeATP
+    dataTypes:
+    - SecurityAlert (Office 365)
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 28a75d10-9b75-4192-9863-e452c3ad24db
+    path: Analytic Rules/InsiderRiskHighUserIncidentsCorrelation.yaml
+    version: 1.1.2
+    querySha256: 1589c43ffdc23a896d9bfff95a3b1de156aec90c2d6c85af2769436521d4b1e1
+    schedule:
+      queryFrequency: 7d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert, SecurityIncident query to AlertInfo/AlertEvidence schema.'
+    - 'Schedule assessment: source frequency=7d, lookback=7d; target frequency=P7D, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UPN` cannot be proven after a destructive projection; no supplemental customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert, SecurityIncident query to AlertInfo/AlertEvidence schema.'
+    notes:
+    - 'security_alert_migrated_to_alert_info_and_evidence: Migrated SecurityAlert, SecurityIncident query to AlertInfo/AlertEvidence schema.'
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T1204
+    reviewScope:
+      sourceDocumentSha256: f192e3d282005f6d12802c5996b7819b46f7e9023dfa858872466a4b9271934e
+      targetQuerySha256: 22eca739e38389a73e4d6325149dfddc64bd800eaf6501c09ab158748e9495b8
+    supplementalEntityDetails:
+      status: preserved
+      details:
+      - sourceColumn: UPN
+        targetKey: AccountFullName
+        status: preserved
+properties:
+  id: xdr-28a75d10-9b75-4192-9863-e452c3ad24db
+  displayName: Insider Risk_High User Security Incidents Correlation
+  status: disabled
+  queryCondition:
+    queryText: "let UserAlerts = AlertInfo\n| where Timestamp > ago(7d)\n| join kind=inner (\n    AlertEvidence\n    | where Timestamp > ago(7d)\n    | where EntityType in~ (\"User\", \"Account\") or isnotempty(AccountUpn) or isnotempty(AccountName)\n    | extend ParsedFields = todynamic(AdditionalFields)\n    | extend Name = iff(isnotempty(AccountName), AccountName, tostring(ParsedFields.Name)),\n             UPNSuffix = iff(isnotempty(AccountDomain), AccountDomain, tostring(ParsedFields.UPNSuffix))\n    | extend UPN = iff(isnotempty(AccountUpn), AccountUpn, iff(isnotempty(Name) and isnotempty(UPNSuffix), strcat(Name, \"@\", UPNSuffix), \"\"))\n    | where isnotempty(UPN)\n    | project AlertId, Name, UPNSuffix, UPN\n) on AlertId;\nUserAlerts\n| where ServiceSource in~ (\"Microsoft 365 Insider Risk Management\", \"Microsoft Purview Insider Risk Management\")\n| join kind=inner (\n    UserAlerts\n    | summarize arg_max(Timestamp, *) by AlertId\n    | where Severity =~ \"High\"\n    | summarize\
+      \ count() by UPN\n    | where count_ >= 2\n) on UPN\n| summarize arg_max(Timestamp, *) by AlertId\n| join kind=inner (\n    UserAlerts\n    | where ServiceSource !in~ (\"Microsoft 365 Insider Risk Management\", \"Microsoft Purview Insider Risk Management\")\n    | summarize arg_max(Timestamp, *) by AlertId\n    | where Severity =~ \"High\"\n    | project\n        UPN,\n        AlertName1 = Title,\n        ServiceSource,\n        AttackTechniques\n) on UPN\n| project\n    Timestamp,\n    AlertId,\n    Name,\n    UPNSuffix,\n    UPN,\n    AlertName1,\n    ServiceSource,\n    AttackTechniques,\n    Category,\n    DetectionSource"
+  schedule:
+    frequency: P7D
+  detectionAction:
+    alertTemplate:
+      title: Insider Risk_High User Security Incidents Correlation
+      description: '''This alert joins SecurityAlerts to SecurityIncidents to associate Security Alerts and Incidents with user accounts. This aligns all Microsoft Alerting Products with Microsoft Incident Generating Products (Microsoft Sentinel, M365 Defender) for a count of user security incidents over time. The default threshold is 5 security incidents, and this is customizable per the organization''s requirements. Results include UserPrincipalName (UPN), SecurityIncident, LastIncident, ProductName, LastObservedTime, and Previous Incidents. There is an option for configuration of correlations against Microsoft S'
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1204
+      customDetails:
+        AccountFullName: UPN

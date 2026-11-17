@@ -20,27 +20,29 @@ export async function IsIdHasChanged(filePath) {
             console.log("Pull Request couldn't be fetched. If issue persists - please open an issue");
             return -1 /* ExitCode.ERROR */;
         }
-        // Fetch the base and head branches before running the diff
+        // Fetch the base and head branches into distinct local refs before running the diff
+        const baseLocalRef = "pr_base_branch";
+        const headLocalRef = "pr_head_branch";
         const branches = await git.branch();
-        if (!branches.all.includes(pr.base.ref)) {
+        if (!branches.all.includes(baseLocalRef)) {
             try {
-                await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.base.repo.clone_url, pr.base.ref + ':' + pr.base.ref]);
+                await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.base.repo.clone_url, pr.base.ref + ':' + baseLocalRef]);
             }
             catch (e) {
                 console.error(`Error fetching branch ${pr.base.ref} from git:`, e);
                 return -1 /* ExitCode.ERROR */;
             }
         }
-        if (!branches.all.includes(pr.head.ref)) {
+        if (!branches.all.includes(headLocalRef)) {
             try {
-                await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.head.repo.clone_url, pr.head.ref + ':' + pr.head.ref]);
+                await git.fetch(['--no-tags', '--prune', '--no-recurse-submodules', '--depth=1', pr.head.repo.clone_url, pr.head.ref + ':' + headLocalRef]);
             }
             catch (e) {
                 console.error(`Error fetching branch ${pr.head.ref} from git:`, e);
                 return -1 /* ExitCode.ERROR */;
             }
         }
-        const options = [pr.base.ref, pr.head.ref, filePath];
+        const options = [baseLocalRef, headLocalRef, filePath];
         const diffSummary = await git.diff(options);
         const idPosition = diffSummary.search(templateIdRegex);
         const idHasChanged = idPosition > 0;

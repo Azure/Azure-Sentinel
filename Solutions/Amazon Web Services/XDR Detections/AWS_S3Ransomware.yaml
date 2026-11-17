@@ -1,0 +1,156 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b442b9e2-5cc4-4129-a85b-a5ef38a9e5f0
+    path: Analytic Rules/AWS_S3Ransomware.yaml
+    version: 1.0.2
+    querySha256: 7a498f210556df9f9b7fdec9b0fb680d9e0460f7056a9c5092af9d8e5bed3f7a
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - IP.Address column `SourceIpAddress` is not produced by the query
+    - customDetails 'bucketName' column `bucketName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'keyName' column `keyName` has an unproven output binding after a destructive projection; the explicit
+      binding is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'kmsId' column `kmsId` has an unproven output binding after a destructive projection; the explicit binding
+      is retained, but static analysis cannot establish its output and runtime output-schema verification is required
+    - customDetails 'RecipientAccountId' column `RecipientAccountId` has an unproven output binding after a destructive projection;
+      the explicit binding is retained, but static analysis cannot establish its output and runtime output-schema verification
+      is required
+    - Account.CloudAppAccountId output column `RecipientAccountId` cannot be proven after a destructive projection; no supplemental
+      customDetails binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - IP.Address output column `SourceIpAddress` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Impact
+    originalTechniques:
+    - T1486
+    reviewScope:
+      sourceDocumentSha256: 9c26f025eea1261f2ca3a20f9a232fa5ece8a136cc465befca32c8784dfba729
+      targetQuerySha256: 9a617ffdba83f45afea0a6b4f2a13b081ead054d6c41ef5257ea22d2f15f8ec3
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: 9c26f025eea1261f2ca3a20f9a232fa5ece8a136cc465befca32c8784dfba729
+      targetQuerySha256: 9a617ffdba83f45afea0a6b4f2a13b081ead054d6c41ef5257ea22d2f15f8ec3
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: CloudAppAccountId
+      sourceColumn: RecipientAccountId
+      column: RecipientAccountId
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: IP
+      entityIndex: 2
+      identifier: Address
+      sourceColumn: SourceIpAddress
+      column: SourceIpAddress
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-b442b9e2-5cc4-4129-a85b-a5ef38a9e5f0
+  displayName: AWSCloudTrail - S3 bucket suspicious ransomware activity
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let timeframe = 1h;
+      let lookback = 2h;
+      // The attacker downloads the object(s) from the compromised bucket
+      let GetObject = AWSCloudTrail
+      | where TimeGenerated >= ago(lookback)
+      | where EventName == "GetObject" and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
+      | project-rename StartTime = TimeGenerated;
+      // Then, the attacker overwrites the same object(s) but encrypted with his own key
+      let PutObject = AWSCloudTrail
+      | where TimeGenerated >= ago(timeframe)
+      | where EventName == "PutObject" and isempty(ErrorCode) and isempty(ErrorMessage)
+      | extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)
+      | extend kmsId = tostring(parse_json(RequestParameters).["x-amz-server-side-encryption-aws-kms-key-id"])
+      | where tostring(kmsId) !has tostring(RecipientAccountId) and kmsId <> "";
+      PutObject
+      | join kind=inner
+      (
+         GetObject
+      )
+      on $left.bucketName == $right.bucketName, $left.keyName == $right.keyName
+      | where TimeGenerated > StartTime
+      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - S3 bucket suspicious ransomware activity
+      description: |-
+        Detects a ransomware-like sequence where objects are read from an S3 bucket and then overwritten using an
+        external KMS key. This pattern can indicate malicious encryption and potential data denial in the bucket.
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: AccountUPNSuffix
+      tactics:
+      - tactic: Impact
+        techniques:
+        - technique: T1486
+      customDetails:
+        bucketName: bucketName
+        keyName: keyName
+        kmsId: kmsId
+        RecipientAccountId: RecipientAccountId

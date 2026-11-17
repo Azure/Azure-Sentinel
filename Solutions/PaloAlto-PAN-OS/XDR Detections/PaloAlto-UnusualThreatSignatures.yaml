@@ -1,0 +1,123 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 89a86f70-615f-4a79-9621-6f68c50f365f
+    path: Analytic Rules/PaloAlto-UnusualThreatSignatures.yaml
+    version: 1.0.3
+    querySha256: 80b12622684e2b772bffdc0e4543337a1ade9951e7c14ebd39f4d724f9bd7096
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=7d; target frequency=PT1H, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a single tactic.
+    errors: []
+    originalTactics:
+    - Discovery
+    - Exfiltration
+    - CommandAndControl
+    originalTechniques:
+    - T1046
+    - T1030
+    - T1071.001
+    reviewScope:
+      status: approved
+      actor: user
+      reviewedAt: '2026-11-03T12:00:00Z'
+      reference: approve_batch_7c_fixes_and_qualify=true
+      rationale: Reviewed and approved CommonSecurityLog / CefAma dependencies, entity mappings, customDetails retention, and single primary MITRE tactic for Graph Custom Detection compatibility.
+      sourceDocumentSha256: d6cb4fcf1d0429f25ffaf0ee8a1ffdccd2f34edc591cffbd296cd13057d795e1
+      targetQuerySha256: 1b3b2c745c8fc766b9d6667be148d88241d03c24cf26e22c79004f27bfbf265e
+properties:
+  id: xdr-89a86f70-615f-4a79-9621-6f68c50f365f
+  displayName: Palo Alto Threat signatures from Unusual IP addresses
+  status: disabled
+  queryCondition:
+    queryText: 'let starttime = 7d;
+
+      let endtime = 1d;
+
+      let timeframe = 1h;
+
+      let HistThreshold = 25;
+
+      let CurrThreshold = 10;
+
+      let HistoricalThreats = CommonSecurityLog
+
+      | where isnotempty(SourceIP)
+
+      | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+
+      | where DeviceVendor =~ "Palo Alto Networks"
+
+      | where Activity =~ "THREAT" and SimplifiedDeviceAction =~ "alert"
+
+      | where DeviceEventClassID in (''spyware'', ''scan'', ''file'', ''vulnerability'', ''flood'', ''packet'', ''virus'',''wildfire'', ''wildfire-virus'')
+
+      | summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), DestinationIpList = make_set(DestinationIP), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by SourceIP, DeviceAction, DeviceVendor;
+
+      let CurrentHourThreats =  CommonSecurityLog
+
+      | where isnotempty(SourceIP)
+
+      | where TimeGenerated > ago(timeframe)
+
+      | where DeviceVendor =~ "Palo Alto Networks"
+
+      | where Activity =~ "THREAT" and SimplifiedDeviceAction =~ "alert"
+
+      | where DeviceEventClassID in (''spyware'', ''scan'', ''file'', ''vulnerability'', ''flood'', ''packet'', ''virus'',''wildfire'', ''wildfire-virus'')
+
+      | summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), DestinationIpList = make_set(DestinationIP), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by SourceIP, DeviceAction, DeviceProduct, DeviceVendor;
+
+      CurrentHourThreats
+
+      | where TotalEvents < CurrThreshold
+
+      | join kind = leftanti (HistoricalThreats
+
+      | where TotalEvents > HistThreshold) on SourceIP'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Palo Alto Threat signatures from Unusual IP addresses
+      description: "'Identifies Palo Alto Threat signatures from unusual IP addresses which are not historically seen. \nThis detection is also leveraged and required for MDE and PAN Fusion scenario\nhttps://docs.microsoft.com/Azure/sentinel/fusion-scenario-reference#network-request-to-tor-anonymization-service-followed-by-anomalous-traffic-flagged-by-palo-alto-networks-firewall'"
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIP
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1046

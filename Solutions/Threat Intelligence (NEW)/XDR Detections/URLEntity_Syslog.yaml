@@ -1,0 +1,118 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Syslog
+  dataTypes:
+  - Syslog
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+    - Syslog
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4de24a28-dcd0-4a0d-bf14-96d8483dc05a
+    path: Analytic Rules/URLEntity_Syslog.yaml
+    version: 1.2.8
+    querySha256: dc3251c317a1530df4667d539067206d3d7f9bee5e916c201659c8a241a86d04
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.2.8
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: 58751606a14622bfba4783ed3282198aca14f92c2477c0ce8588d494f2a8547a
+      targetQuerySha256: aeb385571f11897a32698a39d6001898c6192030c4c2ccd2d991d00f19e29ebe
+properties:
+  id: xdr-4de24a28-dcd0-4a0d-bf14-96d8483dc05a
+  displayName: TI Map URL Entity to Syslog Data
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n\
+      // Picking up only IOC's that contain the entities we want\n//extract key part\
+      \ of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey,\
+      \ \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n\
+      | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      | where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil\
+      \ > now() or isempty(ValidUntil))\n   | project-reorder *, Tags, TrafficLightProtocolLevel,\
+      \ Url, Type\n// using innerunique to keep perf fast and result set low, we only\
+      \ need one match to indicate potential malicious activity that needs to be investigated\n\
+      | join kind=innerunique (\n  Syslog\n  | where TimeGenerated >= ago(dt_lookBack)\n\
+      \  // Extract URL from the Syslog message but only take messages that include\
+      \ URLs\n  | extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\
+      \\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1,SyslogMessage)\n  | extend Syslog_TimeGenerated\
+      \ = TimeGenerated\n) on Url\n| where Syslog_TimeGenerated < ValidUntil\n| summarize\
+      \ Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by Id, Url\n| extend\
+      \ Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames\
+      \ = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project timestamp = Syslog_TimeGenerated, Description, ActivityGroupNames,\
+      \ Id, Type, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, Url,\
+      \ HostIP"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map URL Entity to Syslog Data
+      description: '''This query identifies any URL indicators of compromise (IOCs)
+        from threat intelligence (TI) by searching for matches in Syslog data.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: Computer
+        ips:
+        - id: ip1
+          addressColumn: HostIP
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

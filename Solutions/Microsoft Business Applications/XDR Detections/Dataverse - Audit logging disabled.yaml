@@ -1,0 +1,118 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ea07523b-e6b8-469b-9e25-cdef1ae6fb45
+    path: Analytic Rules/Dataverse - Audit logging disabled.yaml
+    version: 3.2.1
+    querySha256: 773e88a24b3c182369dff725fef292d7c0f3740f38ab8c4e6718bd6a99646922
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - DefenseEvasion
+    originalTechniques:
+    - T1562
+    reviewScope:
+      sourceDocumentSha256: f5dbc3270ac57bb112aa3f4562705fca1c80fb5729e36501dcf8fe27eedc9ca9
+      targetQuerySha256: 959ea1fa7790a2447a0c258931dd302c2235d857e3c2d8007bd86c46725b959d
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-ea07523b-e6b8-469b-9e25-cdef1ae6fb45
+  displayName: Dataverse - Audit logging disabled
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      let audit_properties = dynamic(['isauditenabled', 'isuseraccessauditenabled','isreadauditenabled']);
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message in~ ("Update", "UpdateAuditSettings")
+      | where Fields has_any (audit_properties)
+      | mv-expand Fields
+      | extend AuditValue = Fields.Name, AuditEnabled = tobool(Fields.Value)
+      | where AuditValue in~ (audit_properties) and not (AuditEnabled)
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          TimeGenerated,
+          UserId,
+          ClientIp,
+          OriginalObjectId,
+          AuditValue,
+          AuditEnabled,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Audit logging disabled
+      description: Identifies a change in system audit configuration whereby audit logging is turned off.
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: DefenseEvasion
+        techniques:
+        - technique: T1562
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

@@ -14,47 +14,42 @@ Varonis prioritizes deep data visibility, classification capabilities, and autom
 ## Connector Attributes
 | Connector attribute           | Description                                   |
 | ----------------------------- | --------------------------------------------- |
-| Azure function app code       | https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VaronisSaaS/Data%20Connectors/VaronisSaaSFunction |
-| Log Analytics table(s)        | VaronisAlerts_CL                              |
-| Data collection rules support | Not currently supported                       |
+| Connector type                | Codeless Connector Framework (CCF) Push       |
+| Log Analytics table(s)        | VaronisAlertsV2_CL                            |
+| Data collection rules support | Supported (DCR stream `Custom-VaronisSaaSAlerts`) |
 | Supported by                  | Varonis Corporation                           |
 
 ## Query samples
-#### All Varonis Data Alerts logs
+#### All Varonis alerts
 
 ```kusto
-VaronisAlerts_CL
+VaronisAlertsV2_CL
 | sort by TimeGenerated desc
 ```
 
 ## Prerequisites
-To integrate with Varonis SaaS (using Azure Functions) make sure you have the following:
-- Microsoft.Web/sites permissions: Read and write permissions to Azure Functions to create a Function App is required. See the [documentation](https://learn.microsoft.com/azure/azure-functions/) to learn more about Azure Functions.
-- Varonis API credentials: Varonis API credentials with permission read log is required for Varonis SaaS API. See the documentation to learn more about creating Varonis SaaS API credentials.
+To integrate with Varonis SaaS (Push) make sure you have the following:
+- Workspace: read, write and delete permissions on the Log Analytics workspace.
+- Microsoft Entra: permission to create an app registration (typically the Application Developer role or higher).
+- Microsoft Azure: permission to assign the Monitoring Metrics Publisher role on the data collection rule (typically the Owner or User Access Administrator role).
 
 ## Vendor installation instructions
->This connector uses Azure Functions to connect to the Varonis SaaS Endpoint API to pull logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.
+>This connector uses the Codeless Connector Framework (CCF) Push pattern. Varonis SaaS pushes DatAlert alerts to Microsoft Sentinel through the Azure Monitor Logs Ingestion API.
 
-STEP 1 - Obtain the Varonis DatAlert Endpoint API credentials.
+STEP 1 - Create the Azure resources.
 
-To generate the Client ID and API key:
+1. In Microsoft Sentinel, open **Data connectors** and select **Varonis SaaS (Push)**.
+2. Click **Deploy Varonis SaaS Push connector resources**. This creates the `VaronisAlertsV2_CL` table, a data collection rule, and a Microsoft Entra application with a client secret, and grants the application the Monitoring Metrics Publisher role on the data collection rule.
 
-1. Launch the Varonis Web Interface.
-2. Navigate to Configuration -> API Keys. The API Keys page is displayed.
-3. Click Create API Key. The Add New API Key settings are displayed on the right.
-4. Fill in the name and description.
-5. Click the Generate Key button.
-6. Copy the API key secret and save it in a handy location. You won't be able to copy it again.
+STEP 2 - Configure your Varonis SaaS application.
 
-For additional information, please check: [Varonis Documentation](https://help.varonis.com/s/document-item?bundleId=ami1661784208197&topicId=emp1703144742927.html&_LANG=enus)
-
-STEP 2 - Deploy the connector and the associated Azure Function.
-
-1. Click the Deploy to Azure button.\
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVaronisSaaS%2FData%2520Connectors%2Fazuredeploy.json)
-2. Select the preferred Subscription, Resource Group, Region, Storage Account Type.
-3. Enter Log Analytics Workspace Name, Varonis FQDN, Varonis SaaS API Key.
-4. Click Review + Create, Create.
+Copy the following values from the connector page into your Varonis SaaS application configuration:
+- Tenant ID (Directory ID)
+- Entra App Registration Application ID
+- Entra App Registration Secret
+- Data Collection Endpoint Uri
+- Data Collection Rule Immutable ID
+- Stream Name (`Custom-VaronisSaaSAlerts`)
 
 ## Next
 For more information, go to the related solution in the Azure Marketplace.

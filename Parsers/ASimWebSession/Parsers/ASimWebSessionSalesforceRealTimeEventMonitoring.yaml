@@ -1,0 +1,215 @@
+Parser:
+  Title: Web Session ASIM parser for Salesforce Real-Time Event Monitoring
+  Version: '0.1.0'
+  LastUpdated: Oct 26, 2026
+Product:
+  Name: Salesforce Real-Time Event Monitoring
+Normalization:
+  Schema: WebSession
+  Version: '1.0.0'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Salesforce LightningUriEvent
+  Link: https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/sforce_api_objects_lightningurievent.htm
+- Title: Salesforce UriEvent
+  Link: https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/sforce_api_objects_urievent.htm
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser normalizes Salesforce Real-Time Event Monitoring page view events (LightningUriEvent and UriEvent) stored in the SalesForceRealTimeEventMonitoring_CL table to the ASIM Web Session schema.
+ParserName: ASimWebSessionSalesforceRealTimeEventMonitoring
+EquivalentBuiltInParser: _ASim_WebSession_SalesforceRealTimeEventMonitoring
+Exceptions:
+  - Field: SrcBytes
+    Warning: Missing recommended field
+    Exception: Real-Time Event Monitoring events do not include request or response sizes.
+  - Field: DstBytes
+    Warning: Missing recommended field
+    Exception: Real-Time Event Monitoring events do not include request or response sizes.
+  - Field: DstIpAddr
+    Warning: Missing recommended field
+    Exception: Events identify the Salesforce org by domain only, no destination IP is logged.
+  - Field: DvcIpAddr
+    Warning: Missing recommended field
+    Exception: Events identify the Salesforce org by domain only, no device IP is logged.
+  - Field: SrcHostname
+    Warning: Missing recommended field
+    Exception: Events only include the client IP address, no client hostname.
+  - Field: SrcDomain
+    Warning: Missing recommended field
+    Exception: Events only include the client IP address, no client domain.
+  - Field: HttpRequestMethod
+    Warning: Missing recommended field
+    Exception: LightningUriEvent and UriEvent do not include the HTTP method.
+  - Field: EventResultDetails
+    Warning: Missing recommended field
+    Exception: Events have no HTTP status code, only OperationStatus which is mapped to EventResult and EventOriginalResultDetails.
+  - Field: ASimMatchingIpAddr
+    Warning: Missing recommended field
+    Exception: The parser only filters on the source IP address.
+  - Field: ASimMatchingHostname
+    Warning: Missing recommended field
+    Exception: The schema filtering parameters include no hostname filter for this source.
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled: bool = false
+      , pack: bool = false
+  ) {
+      let UserTypeLookup = datatable (UserType: string, SrcUserType: string)[
+          "Standard", "Regular",
+          "Guest", "Guest",
+          "AutomatedProcess", "System",
+          "CsnOnly", "Other",
+          "CspLitePortal", "Other",
+          "CustomerSuccess", "Other",
+          "PowerCustomerSuccess", "Other",
+          "PowerPartner", "Other",
+          "SelfService", "Other"
+      ];
+      SalesForceRealTimeEventMonitoring_CL
+      | where not(disabled)
+      | where EventType in ("LightningUriEvent", "UriEvent")
+      // UriEvent without RecordId is not a page view, no URL available
+      | where EventType != "UriEvent" or isnotempty(RecordId)
+      | project-rename EventOriginalType = EventType
+      // SalesforceDomain is missing in some workspaces
+      | extend _SalesforceDomain = column_ifexists("SalesforceDomain", "")
+      | extend EventResult = case(
+          PolicyOutcome in ("Block", "MeteringBlock"), "Failure",
+          OperationStatus == "Success", "Success",
+          OperationStatus in ("Failure", "Fail"), "Failure",
+          "NA"
+      )
+      | extend Url = case(
+          EventOriginalType == "LightningUriEvent", PageUrl,
+          // Classic record pages are served at /<RecordId>
+          EventOriginalType == "UriEvent" and isnotempty(RecordId),
+              strcat("/", RecordId),
+          ""
+      )
+      | extend
+          _DomainFQDN = tostring(parse_url(_SalesforceDomain).Host)
+          // SourceIp is "Salesforce.com IP" for requests made inside Salesforce
+          , _IsSrcIp = isnotnull(parse_ipv4(SourceIp))
+              or isnotempty(parse_ipv6(SourceIp))
+      | extend _DomainHostname = tostring(split(_DomainFQDN, ".")[0])
+      | lookup UserTypeLookup on UserType
+      | extend
+          HttpReferrer = iff(
+              PreviousPageUrl startswith "/",
+              strcat(_SalesforceDomain, PreviousPageUrl),
+              PreviousPageUrl
+          )
+          , HttpUserAgent = iff(UserAgent == "N/A", "", UserAgent)
+          , SrcIpAddr = iff(_IsSrcIp, SourceIp, "")
+          , SrcDescription = iff(_IsSrcIp, "", SourceIp)
+          , SrcDeviceType = case(
+              DevicePlatform has_any ("PHONE", "TABLET"), "Mobile Device",
+              DevicePlatform has "DESKTOP", "Computer",
+              isnotempty(DevicePlatform), "Other",
+              ""
+          )
+          , AdditionalFields = iff(
+              pack
+              , bag_pack(
+                  "QueriedEntities", QueriedEntities
+                  , "SessionKey", SessionKey
+                  , "SessionLevel", SessionLevel
+                  , "LoginHistoryId", LoginHistoryId
+                  , "AppName", AppName
+                  , "RecordId", RecordId
+                  , "Name", Name
+                  , "PageStartTime", PageStartTime
+                  // Time since page start, not network duration
+                  , "Duration", Duration
+                  , "EffectivePageTime", EffectivePageTime
+                  , "PreviousPageAppName", PreviousPageAppName
+                  , "PreviousPageEntityType", PreviousPageEntityType
+                  , "PreviousPageEntityId", PreviousPageEntityId
+                  , "DevicePlatform", DevicePlatform
+                  , "DeviceSessionId", DeviceSessionId
+                  , "OsName", OsName
+                  , "OsVersion", OsVersion
+                  , "PolicyOutcome", PolicyOutcome
+              )
+              , dynamic({})
+          )
+      | project-rename
+          EventOriginalUid = EventIdentifier
+          , EventOriginalSubType = Operation
+          , EventOriginalResultDetails = OperationStatus
+          , SrcUserId = UserId
+          , SrcUsername = UserNameDetail
+          , SrcOriginalUserType = UserType
+          , NetworkSessionId = LoginKey
+          , UrlOriginal = PageUrl
+      | extend
+          EventStartTime = coalesce(EventDate, TimeGenerated)
+          , SrcUsernameType = case(
+              isempty(SrcUsername), "",
+              SrcUsername has "@", "UPN",
+              "Simple"
+          )
+      | project
+          TimeGenerated
+          , Type
+          , EventCount = toint(1)
+          , EventStartTime
+          , EventEndTime = EventStartTime
+          , EventType = "WebServerSession"
+          , EventResult
+          , EventOriginalResultDetails
+          , EventOriginalType
+          , EventOriginalSubType
+          , EventOriginalUid
+          , EventUid = _ItemId
+          , EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+          , EventProduct = "Real-Time Event Monitoring"
+          , EventVendor = "Salesforce"
+          , EventSchema = "WebSession"
+          , EventSchemaVersion = "1.0.0"
+          , Dvc = coalesce(_DomainFQDN, "Salesforce")
+          , DvcFQDN = _DomainFQDN
+          , DvcHostname = _DomainHostname
+          , DvcDomain = substring(_DomainFQDN, strlen(_DomainHostname) + 1)
+          , DvcDomainType = iff(isnotempty(_DomainFQDN), "FQDN", "")
+          , Url
+          , UrlOriginal
+          , HttpReferrer
+          , HttpUserAgent
+          , UserAgent = HttpUserAgent
+          , Dst = coalesce(_DomainFQDN, "Salesforce")
+          , DstFQDN = _DomainFQDN
+          , DstHostname = _DomainHostname
+          , Hostname = _DomainHostname
+          , DstDomain = substring(_DomainFQDN, strlen(_DomainHostname) + 1)
+          , DstDomainType = iff(isnotempty(_DomainFQDN), "FQDN", "")
+          , DstAppName = "Salesforce"
+          , DstAppType = "SaaS application"
+          , SrcIpAddr
+          , Src = SrcIpAddr
+          , IpAddr = SrcIpAddr
+          , SrcDescription
+          , SrcDeviceType
+          , SrcUserId
+          , SrcUserIdType = iff(isnotempty(SrcUserId), "SalesforceId", "")
+          , SrcUsername
+          , SrcUsernameType
+          , SrcUserType
+          , SrcOriginalUserType
+          , User = SrcUsername
+          , NetworkSessionId
+          , SessionId = NetworkSessionId
+          , AdditionalFields
+  };
+  parser(disabled = disabled, pack = pack)

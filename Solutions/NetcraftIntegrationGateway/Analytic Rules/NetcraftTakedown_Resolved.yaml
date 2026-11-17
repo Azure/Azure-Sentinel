@@ -1,0 +1,75 @@
+id: 6de7eb0b-693c-4d4a-a263-d047f88f167f
+name: Netcraft Takedown - Resolved
+description: |
+  Identifies Netcraft Takedown records whose status is `resolved`
+  (`EventType == "takedown"`). The gateway status enum is lowercase.
+  Raises an alert only; no incident is created.
+severity: Informational
+status: Available
+requiredDataConnectors:
+  - connectorId: NetcraftIntegrationGatewayDefinition
+    dataTypes:
+      - NetcraftTakedown_CL
+queryFrequency: 15m
+queryPeriod: 4h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - ResourceDevelopment
+relevantTechniques:
+  - T1583
+query: |
+  NetcraftTakedown_Unique
+  | where IngestedAt > ago(15m)
+  | where EventType == "takedown"
+  | where Status == "resolved"
+  | extend
+      ThreatUrl = iff(Threat matches regex @"(?i)^https?://", Threat, ""),
+      ThreatIp = iff(isnotempty(parse_ipv4(Threat)) or isnotempty(parse_ipv6(Threat)), Threat, "")
+  | extend
+      ThreatDomain = iff(isempty(ThreatUrl) and isempty(ThreatIp) and Threat !has "@" and Threat matches regex @"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", Threat, "")
+  | project
+      TimeGenerated,
+      EventId,
+      Subject,
+      TakedownId,
+      GroupId,
+      AttackType,
+      Threat,
+      ThreatUrl,
+      ThreatIp,
+      ThreatDomain,
+      Status,
+      IsMaliciousDomain,
+      IsMaliciousHostname,
+      IsAuthorized,
+      IsEscalated
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ThreatUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ThreatIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: ThreatDomain
+customDetails:
+  GroupId: GroupId
+  AttackType: AttackType
+  IsMaliciousDomain: IsMaliciousDomain
+  IsMaliciousHostname: IsMaliciousHostname
+  IsAuthorized: IsAuthorized
+  IsEscalated: IsEscalated
+incidentConfiguration:
+  createIncident: false
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: "Netcraft Takedown resolved - {{TakedownId}}"
+  alertDescriptionFormat: "Takedown {{TakedownId}} ({{AttackType}}) is resolved. Threat: {{Threat}}."
+kind: Scheduled
+version: 1.0.0

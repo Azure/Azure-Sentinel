@@ -1,0 +1,135 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4c1c9aee-8e44-4bb9-bd53-f3e7d6761282
+    path: Analytic Rules/Dataverse - New sign-in from an unauthorized domain.yaml
+    version: 3.2.0
+    querySha256: b96cb551e977b9a597386a5ed4e926d1a3ec42572c6f171fc69a157bea95f95f
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    - T1190
+    - T1133
+    reviewScope:
+      sourceDocumentSha256: 43105715f18f7f73d77b6fffaeab15f182f3c151d2e272e33c62c540346b4e46
+      targetQuerySha256: 9568b97e43b7ae616b3f2e812fd5957ef1876ab9bb236564eb6b6caa714c8fef
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-4c1c9aee-8e44-4bb9-bd53-f3e7d6761282
+  displayName: Dataverse - New sign-in from an unauthorized domain
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // Allow list of UPN suffixes allowed by the organization.
+      let allowed_domains = dynamic([
+          'onmicrosoft.com',
+          'microsoft.com'
+          ]);
+      // All list of users allowed by the organization
+      let allowed_users = dynamic([
+          'user1@mydomain.com',
+          'user2@mydomain.com'
+          ]);
+      let query_frequency = 1h;
+      let query_lookback = 14d;
+      let historical_users = DataverseActivity
+          | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))
+          | where Message == 'UserSignIn'
+          | summarize by UserId;
+      DataverseActivity
+      | where TimeGenerated >= ago (query_frequency)
+      | where Message == 'UserSignIn'
+      | join kind=leftanti (historical_users) on UserId
+      | summarize FirstEvent = min(TimeGenerated), LastEvent = max(TimeGenerated) by UserId, ClientIp, InstanceUrl
+      | where isnotempty(ClientIp)
+      | extend CloudAppId = int(32780)
+      | extend AccountName = tostring(split(UserId, '@')[0])
+      | extend UPNSuffix = tostring(split(UserId, '@')[1])
+      | where UPNSuffix !in (allowed_domains) and UserId !in (allowed_users)
+      | project
+          FirstEvent,
+          LastEvent,
+          UserId,
+          ClientIp,
+          InstanceUrl,
+          AccountName,
+          UPNSuffix,
+          CloudAppId
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - New sign-in from an unauthorized domain
+      description: Identifies Dataverse sign-in activity originating from users with UPN suffixes that have not been seen
+        previously in the last 14 days and are not present on a predefined list of authorized domains. Common internal Power
+        Platform system users are excluded by default.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+        - technique: T1190
+        - technique: T1133
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

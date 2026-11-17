@@ -15,24 +15,24 @@
 //      v1.1 :
 //          - Watchlist ExchangeVIP is not mandatory anymore
 //      v1.0 : 
-//          - Function initilisation for Sentinel Solution
+//          - Function initialization for the Microsoft Sentinel solution
 //  
 // DESCRIPTION:
-// This parser takes raw Exchange Admin Audit Logs and add elements like ESI Environment, VIP information, sensitive information, etc...
+// This parser enriches raw Exchange administrative audit events with the ESI environment, VIP information, and sensitive-operation indicators.
 //
 // USAGE:
 // 1. Open Log Analytics/Microsoft Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
 // 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name "ExchangeAdminAuditLogs".
-// 3. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+// 3. A saved function can take 10-15 minutes to become available. You can then call the function alias from other queries.
 //
 // DEPENDENCY:
-// This parser is linked to "ExchangeVIP" whatchlist
+// This parser uses the "ExchangeVIP" watchlist when it is available.
 //
 // REFERENCE: 
-// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Using functions in Azure Monitor log queries: https://learn.microsoft.com/azure/azure-monitor/logs/functions
 //
 // LOG SAMPLES:
-// This parser assumes that MS Exchange Management Logs from Exchange Servers Event Logs are collected in Log Analytics.
+// This parser requires MSExchange Management events from Exchange Servers in the Log Analytics Event table.
 //
 //
 let CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h"https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Solutions/Microsoft%20Exchange%20Security%20-%20Exchange%20Online/%23%20-%20General%20Content/Operations/Watchlists/CmdletWatchlist.csv"]with(format="csv",ignoreFirstRecord=true);

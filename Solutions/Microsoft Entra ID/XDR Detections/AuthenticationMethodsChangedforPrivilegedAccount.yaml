@@ -1,0 +1,149 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+- connectorId: BehaviorAnalytics
+  dataTypes:
+  - IdentityInfo
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+  - workload: mtp
+    dataTypes:
+    - IdentityInfo
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+    - IdentityInfo
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 694c91ee-d606-4ba9-928e-405a2dd0ff0f
+    path: Analytic Rules/AuthenticationMethodsChangedforPrivilegedAccount.yaml
+    version: 1.1.1
+    querySha256: dddb3d0dfd2971d1e3a3ad22f60b806298b72e916de01d6c40e5d41b7b10eaba
+    schedule:
+      queryFrequency: 2h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=2h, lookback=14d; target frequency=PT2H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query
+      column `InitiatingUserPrincipalName`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName`
+      requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Persistence
+    originalTechniques:
+    - T1098
+    reviewScope:
+      sourceDocumentSha256: 12fe7de1c7616ca36a909fb7f30a14006b708c495944aa2f5df8cb88275a2c6e
+      targetQuerySha256: f64abe5d11a6fc6cc66b54394b262488069e6ce2b249cd2fb276ecead60494c5
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+    reviewDecisions:
+    - reason: catalog column mappings were not applied because table/alias scope is
+        ambiguous
+      decision: accepted
+      sourceDocumentSha256: 12fe7de1c7616ca36a909fb7f30a14006b708c495944aa2f5df8cb88275a2c6e
+      targetQuerySha256: f64abe5d11a6fc6cc66b54394b262488069e6ce2b249cd2fb276ecead60494c5
+    acceptedReviewReasons:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+properties:
+  id: xdr-694c91ee-d606-4ba9-928e-405a2dd0ff0f
+  displayName: Authentication Methods Changed for Privileged Account
+  status: disabled
+  queryCondition:
+    queryText: "let queryperiod = 14d;\nlet queryfrequency = 2h;\nlet security_info_actions\
+      \ = dynamic([\"User registered security info\", \"User changed default security\
+      \ info\", \"User deleted security info\", \"Admin updated security info\", \"\
+      User reviewed security info\", \"Admin deleted security info\", \"Admin registered\
+      \ security info\"]);\nlet VIPUsers = (\n    IdentityInfo\n    | where TimeGenerated\
+      \ > ago(queryperiod)\n    | mv-expand AssignedRoles\n    | where AssignedRoles\
+      \ contains 'Admin'\n    | summarize by AccountUpn);\nAuditLogs\n| where TimeGenerated\
+      \ > ago(queryfrequency)\n| where Category =~ \"UserManagement\"\n| where ActivityDisplayName\
+      \ in (security_info_actions)\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n\
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n\
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n\
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress\
+      \ = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress,\
+      \ InitiatedBy.app.ipAddress))\n| mv-apply TargetResource = TargetResources on\n\
+      \  (\n      where TargetResource.type =~ \"User\"\n      | extend TargetUserPrincipalName\
+      \ = tostring(TargetResource.userPrincipalName)\n  )\n| where TargetUserPrincipalName\
+      \ in~ (VIPUsers)\n// Uncomment the line below if you are experiencing high volumes\
+      \ of Target entities. If this is uncommented, the Target column will not be\
+      \ mapped to an entity.\n//| summarize Start=min(TimeGenerated), End=max(TimeGenerated),\
+      \ Actions = make_set(ResultReason, MaxSize=8), Targets=make_set(Target, MaxSize=256)\
+      \ by Initiator, IP, Result\n// Comment out this line below, if line above is\
+      \ used.\n| summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions\
+      \ = make_set(ResultReason, MaxSize=8) by InitiatingAppName, InitiatingAppServicePrincipalId,\n\
+      InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIpAddress, TargetUserPrincipalName,\
+      \ Result\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName,\
+      \ \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName,\
+      \ \"@\")[1]),\nTargetName = iff(tostring(TargetUserPrincipalName) has \"[\"\
+      , \"\", tostring(split(TargetUserPrincipalName,'@',0)[0])), TargetUPNSuffix\
+      \ = iff(tostring(TargetUserPrincipalName) has \"[\", \"\", tostring(split(TargetUserPrincipalName,'@',1)[0]))"
+  schedule:
+    frequency: PT2H
+  detectionAction:
+    alertTemplate:
+      title: Authentication Methods Changed for Privileged Account
+      description: '''Identifies authentication methods being changed for a privileged
+        account. This could be an indication of an attacker adding an auth method
+        to the account so they can have continued access.
+
+        Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatingAppName
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        - id: account2
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: Persistence
+        techniques:
+        - technique: T1098
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName

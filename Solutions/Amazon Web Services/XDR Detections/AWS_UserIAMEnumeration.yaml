@@ -1,0 +1,97 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+  requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: cfaaf0bc-16d1-48df-ac8b-9d901bbd516a
+    path: Analytic Rules/AWS_UserIAMEnumeration.yaml
+    version: 1.0.1
+    querySha256: 516d4c9e8418a9b61a56584334bce043714f5954ac32136657009af2afaa2b7f
+    schedule:
+      queryFrequency: 10m
+      queryPeriod: 10m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=10m, lookback=10m; target frequency=PT10M, native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'AWSAccountId' column `UserIdentityAccountId` requires runtime output-schema binding verification
+    - customDetails 'PrincipalId' column `UserIdentityPrincipalid` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Discovery
+    originalTechniques:
+    - T1580
+    reviewScope:
+      sourceDocumentSha256: e8ea2d23053916d3c2a91b004a3c7e4ff8ff9c511d846d69e27a95cd35caf03c
+      targetQuerySha256: fb14c4ff8db469b9e472afc57018a8fe82729013b352e39f1d2bb4eeef23228d
+  dependencyReviewReasons: []
+properties:
+  id: xdr-cfaaf0bc-16d1-48df-ac8b-9d901bbd516a
+  displayName: AWSCloudTrail - User IAM Enumeration
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let threshold = 50;
+      AWSCloudTrail
+      | where EventName in ("ListAttachedRolePolicies","ListRoles","ListGroupsForUser","ListAttachedUserPolicies","ListAccessKeys","ListUsers")
+      | summarize
+          count_ = count(),
+          make_set(AWSRegion),
+          make_set(UserAgent),
+          make_set(SourceIpAddress),
+          make_set(ErrorCode),
+          make_set(ErrorMessage),
+          make_set(EventName)
+          by bin(TimeGenerated, 10m), UserIdentityPrincipalid, UserIdentityArn, UserIdentityAccountId
+      | where count_ > threshold
+      | mv-expand set_SourceIpAddress
+      | extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, ":") + 1)
+      | extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]
+  schedule:
+    frequency: PT10M
+  detectionAction:
+    alertTemplate:
+      title: AWSCloudTrail - User IAM Enumeration
+      description: Detects enumeration of IAM account configuration via repeated API calls to list roles, users, groups, and policies within a short time period. The threshold can be adjusted to reduce false positives from authorized cloud scanners such as Wiz.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UpnSuffix
+        ips:
+        - id: ip1
+          addressColumn: set_SourceIpAddress
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1580
+      customDetails:
+        EventCount: count_
+        AWSAccountId: UserIdentityAccountId
+        PrincipalId: UserIdentityPrincipalid

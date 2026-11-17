@@ -1,0 +1,162 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AADNonInteractiveUserSignInLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SigninLogs
+    - AADNonInteractiveUserSignInLogs
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AADNonInteractiveUserSignInLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 223db5c1-1bf8-47d8-8806-bed401b356a4
+    path: Analytic Rules/FailedLogonToAzurePortal.yaml
+    version: 1.0.7
+    querySha256: 4a5e4850d6163ca00836fe0dcd08b515015afaca9a8d10ace44cdfec2aa33be6
+    schedule:
+      queryFrequency: 1d
+      queryPeriod: 7d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+    - 'Schedule assessment: source frequency=1d, lookback=7d; target frequency=P1D,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName output column `UserPrincipalName` cannot be proven after a
+      destructive projection; no supplemental customDetails binding was added and
+      KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: b042c083ee56e822393a22e34ca8fb67c0bdb7491d5f20b2e88b462ec1d68b20
+      targetQuerySha256: b5e95b8caac768c33d35dce682b03bff208db1960ecb1a695e32cf5670a00b91
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: UserPrincipalName
+      column: UserPrincipalName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    reviewDecisions:
+    - reason: isfuzzy unions can still fail semantic binding in Advanced Hunting
+      decision: accepted
+      sourceDocumentSha256: b042c083ee56e822393a22e34ca8fb67c0bdb7491d5f20b2e88b462ec1d68b20
+      targetQuerySha256: b5e95b8caac768c33d35dce682b03bff208db1960ecb1a695e32cf5670a00b91
+    acceptedReviewReasons:
+    - isfuzzy unions can still fail semantic binding in Advanced Hunting
+properties:
+  id: xdr-223db5c1-1bf8-47d8-8806-bed401b356a4
+  displayName: Failed login attempts to Azure Portal
+  status: disabled
+  queryCondition:
+    queryText: "let timeRange = 1d;\nlet lookBack = 7d;\nlet threshold_Failed = 5;\n\
+      let threshold_FailedwithSingleIP = 20;\nlet threshold_IPAddressCount = 2;\n\
+      let isGUID = \"[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}\"\
+      ;\nlet aadFunc = (tableName:string){\nlet azPortalSignins = materialize(table(tableName)\n\
+      | where TimeGenerated >= ago(lookBack)\n// Azure Portal only\n| where AppDisplayName\
+      \ =~ \"Azure Portal\")\n;\nlet successPortalSignins = azPortalSignins\n| where\
+      \ TimeGenerated >= ago(timeRange)\n// Azure Portal only and exclude non-failure\
+      \ Result Types\n| where ResultType in (\"0\", \"50125\", \"50140\")\n// Tagging\
+      \ identities not resolved to friendly names\n//| extend Unresolved = iff(Identity\
+      \ matches regex isGUID, true, false)\n| distinct TimeGenerated, UserPrincipalName\n\
+      ;\nlet failPortalSignins = azPortalSignins\n| where TimeGenerated >= ago(timeRange)\n\
+      // Azure Portal only and exclude non-failure Result Types\n| where ResultType\
+      \ !in (\"0\", \"50125\", \"50140\", \"70044\", \"70043\")\n// Tagging identities\
+      \ not resolved to friendly names\n| extend Unresolved = iff(Identity matches\
+      \ regex isGUID, true, false)\n;\n// Verify there is no success for the same\
+      \ connection attempt after the fail\nlet failnoSuccess = failPortalSignins |\
+      \ join kind= leftouter (\n   successPortalSignins\n) on UserPrincipalName\n\
+      | where TimeGenerated > TimeGenerated1 or isempty(TimeGenerated1)\n| project-away\
+      \ TimeGenerated1, UserPrincipalName1\n;\n// Lookup up resolved identities from\
+      \ last 7 days\nlet identityLookup = azPortalSignins\n| where TimeGenerated >=\
+      \ ago(lookBack)\n| where not(Identity matches regex isGUID)\n| summarize by\
+      \ UserId, lu_UserDisplayName = UserDisplayName, lu_UserPrincipalName = UserPrincipalName;\n\
+      // Join resolved names to unresolved list from portal signins\nlet unresolvedNames\
+      \ = failnoSuccess | where Unresolved == true | join kind= inner (\n   identityLookup\n\
+      ) on UserId\n| extend UserDisplayName = lu_UserDisplayName, UserPrincipalName\
+      \ = lu_UserPrincipalName\n| project-away lu_UserDisplayName, lu_UserPrincipalName;\n\
+      // Join Signins that had resolved names with list of unresolved that now have\
+      \ a resolved name\nlet u_azPortalSignins = failnoSuccess | where Unresolved\
+      \ == false | union unresolvedNames;\nu_azPortalSignins\n| extend DeviceDetail\
+      \ = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails\
+      \ = todynamic(LocationDetails)\n| extend Status = strcat(ResultType, \": \"\
+      , ResultDescription), OS = tostring(DeviceDetail.operatingSystem), Browser =\
+      \ tostring(DeviceDetail.browser)\n| extend State = tostring(LocationDetails.state),\
+      \ City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n\
+      | extend FullLocation = strcat(Region,'|', State, '|', City)\n| summarize TimeGenerated\
+      \ = make_list(TimeGenerated,100), Status = make_list(Status,100), IPAddresses\
+      \ = make_list(IPAddress,100), IPAddressCount = dcount(IPAddress), FailedLogonCount\
+      \ = count()\nby UserPrincipalName, UserId, UserDisplayName, AppDisplayName,\
+      \ Browser, OS, FullLocation, Type\n| mvexpand TimeGenerated, IPAddresses, Status\n\
+      | extend TimeGenerated = todatetime(tostring(TimeGenerated)), IPAddress = tostring(IPAddresses),\
+      \ Status = tostring(Status)\n| project-away IPAddresses\n| summarize StartTime\
+      \ = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, UserId,\
+      \ UserDisplayName, Status, FailedLogonCount, IPAddress, IPAddressCount, AppDisplayName,\
+      \ Browser, OS, FullLocation, Type\n| where (IPAddressCount >= threshold_IPAddressCount\
+      \ and FailedLogonCount >= threshold_Failed) or FailedLogonCount >= threshold_FailedwithSingleIP\n\
+      | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n\
+      };\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\"\
+      );\nunion isfuzzy=true aadSignin, aadNonInt"
+  schedule:
+    frequency: P1D
+  detectionAction:
+    alertTemplate:
+      title: Failed login attempts to Azure Portal
+      description: '''Identifies failed login attempts in the Microsoft Entra ID SigninLogs
+        to the Azure Portal.  Many failed logon attempts or some failed logon attempts
+        from multiple IPs could indicate a potential brute force attack.
+
+        The following are excluded due to success and non-failure results:
+
+        References: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+
+        0 - successful logon
+
+        50125 - Sign-in was interrupted due to a password reset or password registration
+        entry.
+
+        50140 - This error occurred due to ''Keep me signed in'' interrupt when the
+        user was signing-in.'''
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110

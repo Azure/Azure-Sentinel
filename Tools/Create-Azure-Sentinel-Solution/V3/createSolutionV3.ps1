@@ -92,6 +92,25 @@ $getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solu
 . $commonFunctionsFilePath # load common functions
 . $getccpDetailsFilePath # load ccp functions
 
+$routeToV31 = $false
+foreach ($candidateDataFileName in @($dataFileName)) {
+    $candidateDataFilePath = Join-Path -Path "$solutionFolderBasePath\$dataFolderName" -ChildPath $candidateDataFileName
+    $candidateContent = Get-Content -LiteralPath $candidateDataFilePath -Raw -ErrorAction Stop |
+        ConvertFrom-Json -ErrorAction Stop
+    if (Test-SolutionDataHasXdrContent -Content $candidateContent) {
+        $routeToV31 = $true
+        break
+    }
+}
+if ($routeToV31) {
+    Write-Host 'XDR content detected. Routing package creation through the V3.1 tool.'
+    & (Join-Path $PSScriptRoot 'createSolutionV3_1.ps1') `
+        -SolutionDataFolderPath $path `
+        -VersionMode $VersionMode `
+        -VersionBump $VersionBump
+    return
+}
+
 # Load catalog API functions only if using catalog mode
 if ($VersionMode -eq "catalog") {
     $catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
@@ -360,7 +379,7 @@ try {
                     }
                     catch {
                         Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
-                        break;
+                        throw
                     }
 
                     try {
@@ -384,7 +403,7 @@ try {
                             if ($ccpDict.Count -gt 0) {
                                 $isCCPConnectorFile = $false;
                                 foreach ($item in $ccpDict) {
-                                    if ($item.DCDefinitionFullPath -eq $finalPath) {
+                                    if ($item.DCDefinitionFullPath.Replace('\', '/') -eq $finalPath.Replace('\', '/')) {
                                         $isCCPConnectorFile = $true
                                         break;
                                     }
@@ -452,7 +471,7 @@ try {
                     }
                     catch {
                         Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
-                        break;
+                        throw
                     }
                         
                     try {
@@ -468,11 +487,12 @@ try {
                     }
                     else {
                         Write-Host "Failed to load Metadata file $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
+                        throw "Failed to load Metadata file $file -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))"
                     }
                 }
                 catch {
                     Write-Host "Failed to load Metadata file $file -- Please ensure that the SolutionMetadata file exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
-                    break;
+                    throw
                 }
             }
         }
@@ -501,12 +521,14 @@ try {
         updateDescriptionCount ($global:playbookCounter - $global:customConnectorsList.Count - $global:functionAppList.Count)  "**Playbooks:** "   "{{PlaybookCount}}"       $false
 
         GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $contentToImport.Version;
-        RunArmTtkOnPackage -solutionName $solutionName -isPipelineRun $false;
 
         # check if mainTemplate and createUiDefinition json files are valid or not
         CheckJsonIsValid($solutionFolderBasePath)
+
+        RunArmTtkOnPackage -solutionName $solutionName -isPipelineRun $false;
     }
 }
 catch {
     Write-Host "Error occurred in catch of createSolutionV3 file Error details are $_" -ForegroundColor Red
+    exit 1
 }

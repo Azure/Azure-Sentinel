@@ -75,7 +75,7 @@ Clone the repository [Azure-Sentinel](https://github.com/Azure/Azure-Sentinel) t
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "{Name of Solution Metadata file}",
   "Is1PConnector": false,
-  "createPackage": true  // This is optional property. Default value is true. When set to false, a package will not be generated using V3(local) or V4(pipeline).
+  "createPackage": true  // This is optional property. Default value is true. When set to false, a package will not be generated using V3(local) or V3.1(local/pipeline).
 }
 
 ```
@@ -214,9 +214,9 @@ Create a  file and place it in the base path of solution `https://raw.githubuser
 
 ### Generate Solution Package
 
-- `Package will now be created in an automated way through an automated pipeline and without the need to run any commands locally to generate the solution package. 'createSolutionV4.ps1' file is specifically for pipeline way of generating package for any of the solutions`. 'createSolutionV4.ps1' file is located at `./Tools/Create-Azure-Sentinel-Solution/pipeline` folder path. This file cannot be run locally and is meant for packaging from pipeline using Github workflows.
- > **IMPORTANT:** To generate package locally make use of `createSolutionV3.ps1` which is in './Tools/Create-Azure-Sentinel-Solution/V3' folder.
-- Core business logic for 'createSolutionV3.ps1' and 'createSolutionV4.ps1' files are inside of './Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1' file. 
+- The automated pipeline calls `Tools/Create-Azure-Sentinel-Solution/V3/createSolutionV3_1.ps1`. V3.1 also supports local hybrid Sentinel/XDR packaging; see the [V3.1 guide](../V3/README-V3_1.md), including customer usage attribution in SolutionMetadata.json. Attribution is required for emitted XDR detections or Defender Workbooks: missing-ID lookup cannot be skipped, and lookup failure stops packaging.
+ > **IMPORTANT:** `V3/createSolutionV3.ps1` remains the legacy Sentinel-only local entry point. The older `pipeline/createSolutionV4.ps1` is not the current package automation entry point.
+- Core business logic for V3 and V3.1 is in `Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1`.
 - For any of the WorkbookMetadata change make use of './Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json' file.
 - Make sure you have data input file inside of **Data** folder and added a SolutionMetadata.json file inside in the respetcive solutions folder.
 - (Optional) Set the "createPackage" property in data input file. This property is optional and is set default to true. 

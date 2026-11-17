@@ -1,0 +1,155 @@
+schemaVersion: 1.0.0
+version: 3.2.4
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Dataverse
+  dataTypes:
+  - DataverseActivity
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - SigninLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - DataverseActivity
+    - SigninLogs
+  requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+    - DataverseActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - SigninLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 8a6ecba2-ccfe-4c8c-b086-fa3e6ff7fa86
+    path: Analytic Rules/Dataverse - Suspicious use of Web API.yaml
+    version: 3.2.0
+    querySha256: 838bf4ee3e394f7d83aeed582e4fa52fad055dcbc3106e68c8d6f620da6b41f5
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - CloudApplication.InstanceName value is retained as customDetails.CloudApplicationInstanceName from query column `InstanceUrl`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.CloudApplicationInstanceName column `InstanceUrl` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Execution
+    - Exfiltration
+    - Reconnaissance
+    - Discovery
+    originalTechniques:
+    - T1106
+    - T1567
+    - T1595
+    - T1526
+    - T1580
+    reviewScope:
+      sourceDocumentSha256: 5a2665872ff7200da8c366126265b9c2d72504c5e92c6d2434e7596d37807754
+      targetQuerySha256: 8756acbca11eef678fbd7705b8bbaa67001883cc64f9a55532dae6f9384aa689
+    supplementalEntityDetails:
+    - entityType: CloudApplication
+      entityIndex: 3
+      identifier: InstanceName
+      sourceColumn: InstanceUrl
+      column: InstanceUrl
+      status: runtime-binding-pending
+      customDetailKey: CloudApplicationInstanceName
+properties:
+  id: xdr-8a6ecba2-ccfe-4c8c-b086-fa3e6ff7fa86
+  displayName: Dataverse - Suspicious use of Web API
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let query_frequency = 1h;
+      let query_lookback = 24h;
+      // AppID of the multi-tenant Dynamics 365 Example Client Application
+      let well_known_app_id = "51f81489-12ee-4a9e-aaae-a2591f45987d";
+      let environment_count_threshold = 10;
+      SigninLogs
+      | where TimeGenerated >= ago(query_lookback)
+      // Comment out the line below to monitor activity from all Azure AD apps
+      | where AppId == well_known_app_id
+      | where ResourceIdentity == '00000007-0000-0000-c000-000000000000'
+      | summarize FirstSeen = min(TimeGenerated) by AppId, UserPrincipalName, IPAddress, AppDisplayName
+      | join kind=inner (
+          DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where Message == "UserSignIn")
+          on $left.UserPrincipalName == $right.UserId, $left.IPAddress == $right.ClientIp
+      | where TimeGenerated between (FirstSeen .. (FirstSeen + 2h))
+      | summarize InstanceCount = dcount(InstanceUrl, 4), FirstSeen = min(FirstSeen) by UserId, ClientIp, InstanceUrl, AppDisplayName, AppId
+      | where InstanceCount > environment_count_threshold
+      | extend
+          CloudAppId = int(32780),
+          AccountName = tostring(split(UserId, '@')[0]),
+          UPNSuffix = tostring(split(UserId, '@')[1])
+      | project
+          FirstSeen,
+          UserId,
+          ClientIp,
+          AppDisplayName,
+          AppId,
+          InstanceUrl,
+          CloudAppId,
+          AccountName,
+          UPNSuffix
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Dataverse - Suspicious use of Web API
+      description: Identifies sign-in across multiple Dataverse environments, breaching a predefined threshold, originating
+        from a user with IP address that was used to sign-into the well known Microsoft Entra app registration.
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: AccountName
+          upnSuffixColumn: UPNSuffix
+        ips:
+        - id: ip1
+          addressColumn: ClientIp
+        cloudApplications:
+        - id: cloudApplication1
+          appIdColumn: CloudAppId
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T1106
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      - tactic: Reconnaissance
+        techniques:
+        - technique: T1595
+      - tactic: Discovery
+        techniques:
+        - technique: T1526
+        - technique: T1580
+      customDetails:
+        CloudApplicationInstanceName: InstanceUrl

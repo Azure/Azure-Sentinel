@@ -10,25 +10,25 @@
 //          - Adding fuzzy mode to be able to have only On-Premises or Online tables
 //  
 // DESCRIPTION:
-// This parser takes raw ESI Exchange Configuration Collector to list Exchange Environments that are loaded in the tables. This is the same parser for Exchange On-Premises version and Exchange online version of the solution.
+// This parser lists the Exchange environments found in ESI Collector configuration tables. The same parser supports Exchange On-Premises and Exchange Online.
 //
 // USAGE:
 // 1. Open Log Analytics/Microsoft Sentinel Logs blade. Copy the query below and paste into the Logs query window. 
 // 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name "ExchangeEnvironmentList".
-// Parameters : 1 parameter to add during creation. 
+// Parameters: add this parameter when creating the function.
 //    1. Target, type string, default value "On-Premises"
-// 3. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+// 3. A saved function can take 10-15 minutes to become available. You can then call the function alias from other queries.
 //
 //
 // REFERENCE: 
-// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Using functions in Azure Monitor log queries: https://learn.microsoft.com/azure/azure-monitor/logs/functions
 //
 // LOG SAMPLES:
-// This parser assumes the raw log from the ESI Exchange Collector are on the ESIExchangeConfig_CL and/or ESIExchangeOnlineConfig_CL tables and are uploaded using the builtin REST API uploader of the Collector.
+// This parser reads configuration records from legacy ESIExchange* tables and Azure Monitor ESIAPIExchange* tables.
 //
 //
 // Parameters simulation
-// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.
+// To test the parser without saving it as a function, uncomment the variable below to simulate the parameter value.
 //
 // let Target = 'On-Premises';
 //

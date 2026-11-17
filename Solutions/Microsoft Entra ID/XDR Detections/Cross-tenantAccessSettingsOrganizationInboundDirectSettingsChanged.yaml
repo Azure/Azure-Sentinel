@@ -1,0 +1,144 @@
+schemaVersion: 1.0.0
+version: 3.3.19
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: AzureActiveDirectory
+  dataTypes:
+  - AuditLogs
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AuditLogs
+    - Update
+  requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+    - AuditLogs
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 276d5190-38de-4eb2-9933-b3b72f4a5737
+    path: Analytic Rules/Cross-tenantAccessSettingsOrganizationInboundDirectSettingsChanged.yaml
+    version: 1.1.1
+    querySha256: 5a54e89151764d4f925f856930bf48f3fdcc6928db0a21988d3b1e73c8b65c66
+    schedule:
+      queryFrequency: 2d
+      queryPeriod: 2d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=2d, lookback=2d; target frequency=P2D, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account.FullName value is retained as customDetails.AccountFullName from query column `InitiatingUserPrincipalName`,
+      but its target output binding requires runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountFullName column `InitiatingUserPrincipalName` requires runtime output-schema binding
+      verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - InitialAccess
+    - Persistence
+    - Discovery
+    originalTechniques:
+    - T1078.004
+    - T1136.003
+    - T1087.004
+    reviewScope:
+      sourceDocumentSha256: 99d676f3427187d7b899e9c542b647bf64c386bbe13b68f97b5ce7b8fe1c6813
+      targetQuerySha256: 610c01ef1f004f519522c0572a3c6522cfcb412745ffbcb6e06ebe647b963585
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: InitiatingUserPrincipalName
+      column: InitiatingUserPrincipalName
+      status: runtime-binding-pending
+      customDetailKey: AccountFullName
+properties:
+  id: xdr-276d5190-38de-4eb2-9933-b3b72f4a5737
+  displayName: Cross-tenant Access Settings Organization Inbound Direct Settings Changed
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // In User & Groups and in Applications, the following "AccessType" values in columns PremodifiedInboundSettings and ModifiedInboundSettings are interpreted accordingly
+      // When Access Type in premodified inbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified inbound settings value was 2 that means that the initial access was blocked.
+      // When Access Type in modified inbound settings value is 1 that means that now access is allowed. When Access Type in modified inbound settings value is 2 that means that now access is blocked.
+      AuditLogs
+      | where OperationName has "Update a partner cross-tenant access setting"
+      | mv-apply TargetResource = TargetResources on
+        (
+            where TargetResource.type =~ "Policy"
+            | extend Properties = TargetResource.modifiedProperties
+        )
+      | mv-apply Property = Properties on
+        (
+            where Property.displayName =~ "b2bDirectConnectInbound"
+            | extend PremodifiedInboundSettings = trim('"',tostring(Property.oldValue)),
+                     ModifiedInboundSettings = trim(@'"',tostring(Property.newValue))
+        )
+      | where PremodifiedInboundSettings != ModifiedInboundSettings
+      | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+      | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+      | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+      | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+      | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+      | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  schedule:
+    frequency: P2D
+  detectionAction:
+    alertTemplate:
+      title: Cross-tenant Access Settings Organization Inbound Direct Settings Changed
+      description: '''Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound
+        for users and applications. This detection notifies when Organization Inbound Direct Settings are changed for "Users
+        & Groups" and for "Applications".'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: InitiatingAppName
+          aadUserIdColumn: InitiatingAppServicePrincipalId
+        - id: account2
+          nameColumn: InitiatingAccountName
+          upnSuffixColumn: InitiatingAccountUPNSuffix
+        - id: account3
+          aadUserIdColumn: InitiatingAadUserId
+        ips:
+        - id: ip1
+          addressColumn: InitiatingIpAddress
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+      - tactic: Persistence
+        techniques:
+        - technique: T1078
+          subTechniques:
+          - T1078.004
+        - technique: T1136
+          subTechniques:
+          - T1136.003
+      - tactic: Discovery
+        techniques:
+        - technique: T1087
+          subTechniques:
+          - T1087.004
+      customDetails:
+        AccountFullName: InitiatingUserPrincipalName

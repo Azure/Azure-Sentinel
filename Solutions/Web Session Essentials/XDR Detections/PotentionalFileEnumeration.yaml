@@ -1,0 +1,139 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors: []
+contentProvenance:
+  requiredWorkloads: []
+  requiredDataConnectors: []
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: b3731ce1-1f04-47c4-95c2-9827408c4375
+    path: Analytic Rules/PotentionalFileEnumeration.yaml
+    version: 1.0.0
+    querySha256: 780755f6f2d79d690c0f3f4c463ee4d855776a4835cb46467f11858a4bbb1c19
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'RequestCount' column `RequestCount` requires runtime output-schema binding verification
+    - customDetails 'RequestURLs' column `RequestURLs` requires runtime output-schema binding verification
+    - customDetails 'FileCount' column `FileCount` requires runtime output-schema binding verification
+    - customDetails 'EventStartTime' column `EventStartTime` requires runtime output-schema binding verification
+    - customDetails 'EventEndTime' column `EventEndTime` requires runtime output-schema binding verification
+    - customDetails 'DestinationIPList' column `DestinationIPList` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - All source MITRE tactics are preserved in source order in authored YAML. V3.1 ARM packaging carries only the first tactic
+      and its compatible techniques; this classification loss is not validated parity. Direct Graph deployment requires a
+      single tactic.
+    errors: []
+    originalTactics:
+    - Discovery
+    - CommandAndControl
+    - CredentialAccess
+    originalTechniques:
+    - T1083
+    - T1071
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 87ecbc8b0aec1cbc6ba3dbcc755d127c74944b545f04233de00ee6e53f3e88d0
+      targetQuerySha256: 8e36367af5d5efc46b4afd4ea5d7e31a70e265341ab971972b505e9f719a49b4
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating over the native 4-hour XDR lookback
+        window without an injected 1h event-time filter may aggregate up to 4 hours of events per hourly run instead of 1
+        hour.
+      sourceDocumentSha256: 87ecbc8b0aec1cbc6ba3dbcc755d127c74944b545f04233de00ee6e53f3e88d0
+      targetQuerySha256: 8e36367af5d5efc46b4afd4ea5d7e31a70e265341ab971972b505e9f719a49b4
+properties:
+  id: xdr-b3731ce1-1f04-47c4-95c2-9827408c4375
+  displayName: Detect potential file enumeration activity (ASIM Web Session)
+  status: disabled
+  queryCondition:
+    queryText: |-
+      // HTTP response status codes indicate whether a specific HTTP request has been successfully completed.
+      // Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+      let HTTPErrorCode=dynamic(["404"]);
+      let threshold = 10; // You can update this threshold to the value that suites your environment
+      // let FileNotFoundRequests =
+      _Im_WebSession (starttime=ago(1h))
+      | where EventResultDetails in~ (HTTPErrorCode)
+      // Filter the logs to include only HTTP GET requests with an HTTP status code of 404 and '/' in the URL
+      | where HttpRequestMethod =~ "GET" and Url contains "/"
+      | summarize
+          RequestCount = count(),
+          FileCount=dcount(Url),
+          EventStartTime=min(TimeGenerated),
+          EventEndTime=max(TimeGenerated),
+          RequestURLs = make_set(Url, 100),
+          DestinationIPList=make_set(DstIpAddr, 100)
+          by SrcIpAddr, SrcUsername, SrcHostname, DstHostname
+      | where RequestCount > threshold  // Adjust the threshold as per your requirements
+      | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Detect potential file enumeration activity (ASIM Web Session)
+      description: '''This detection method identifies potential cases of file enumeration activity. The query is designed
+        to identify client sources that generate multiple requests resulting in 404 error codes'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: DstHostname
+        - id: host2
+          nameColumn: SrcHostname
+      tactics:
+      - tactic: Discovery
+        techniques:
+        - technique: T1083
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        RequestCount: RequestCount
+        RequestURLs: RequestURLs
+        FileCount: FileCount
+        EventStartTime: EventStartTime
+        EventEndTime: EventEndTime
+        DestinationIPList: DestinationIPList

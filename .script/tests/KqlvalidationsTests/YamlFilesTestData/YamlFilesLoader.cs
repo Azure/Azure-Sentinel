@@ -55,6 +55,7 @@ namespace Kqlvalidations.Tests
         {
             return GetDirectoryPaths()
                 .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
+                .Where(file => !Utils.IsPrivateSolutionContentPath(file))
                 .ToList();
         }
 
@@ -65,6 +66,7 @@ namespace Kqlvalidations.Tests
 
             var validFiles = GetDirectoryPaths()
                 .SelectMany(directoryPath => Directory.GetFiles(directoryPath, "*.yaml", SearchOption.AllDirectories))
+                .Where(file => !Utils.IsPrivateSolutionContentPath(file))
                 .Where(file => prFilesListModified.Any(prFile => file.Contains(prFile)))
                 .ToList();
 

@@ -53,7 +53,10 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
  * WorkbookDescription: Workbook description(s), generally from Workbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
  * PlaybookDescription: Playbook description(s), generally from Playbooks' Metadata. This field can be a string if 1 description is used across all, and an array if multiple are used.
  * WatchlistDescription: Watchlist description(s), generally from Watchlists' Property data. This field can be a string if 1 description is used across all, and an array if multiple are used. This field is used if the description from the Watchlist resource is not desired in the Create-UI.
- * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo  root, or BasePath if provided.
+ * Workbooks, Analytic Rules, Playbooks, etc.: These fields take arrays of paths relative to the repo root, or BasePath if provided.
+ * XDR Detections: Optional array of converted Custom Detection YAML files. Each file must declare kind CustomDetection, resourceType Microsoft.Security/detectionRules, a stable properties.id, contentProvenance.source.id matching an Analytic Rule in the same solution, a query, and entity mappings. V3.1 requires an independent top-level version in [3.1.0, 4.0.0).
+ * XDR Detection Version: Legacy fallback only; not used by V3.1. Set each XDR YAML's own top-level version instead.
+ * Include XDR Content Registration: Deprecated in V3.1. Any supplied value warns and is ignored; installation and registration are both emitted under DeployCustomDetection. Live provider registration support is unverified.
  * SavedSearches: This input assumes a format of any of the following:
  * -- Direct export via API (see https://docs.microsoft.com/rest/api/loganalytics/saved-searches/list-by-workspace)
  * -- Array of SavedSearch resources
@@ -73,6 +76,7 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "WorkbookDescription": ["{Description of workbook}"],
   "Workbooks": [],
   "Analytic Rules": [],
+  "XDR Detections": [],
   "Playbooks": [],
   "PlaybookDescription": ["{Description of playbook}"],
   "Parsers": [],
@@ -86,8 +90,32 @@ Create an input file and place it in the path `C:\One\Azure-Sentinel\Tools\Creat
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": false
 }
-
 ```
+
+V3.1's `mainTemplate.json` remains a complete solution template. It adds only the
+applicable independent content-family selections, even without XDR content:
+
+- `DeployAnalyticsRule` defaults to `true`; `DeployCustomDetection` defaults to
+  `false`. Both may be selected together. Other emitted Sentinel families default
+  to `true`; unsupported or absent families have no parameter.
+- One isolated nested deployment and one Content Hub registration per CD, both
+  controlled by `DeployCustomDetection`. Registration support remains unverified.
+- Matching UI checkbox outputs and `testParameters.json` declarations.
+
+Old E5 parameter files must be updated. The deprecated Data registration flag
+cannot suppress emission. Content packages and attribution stay unconditional,
+and existing dependencies are not rewritten. See the
+[V3.1 selection contract and limitations](V3/README-V3_1.md#independent-content-selection-v31-default).
+Legacy V3 remains Sentinel-only with no new controls.
+
+Custom Detections are always packaged disabled. The solution `Version` must be incremented
+when adding or changing XDR content so Content Hub recognizes the package update.
+V3.1 requires the solution version in `[3.1.0, 4.0.0)` and independently checks
+every XDR YAML's own `major.minor.patch` version in that range. Newly converted
+detections start at `3.1.0`; source Sentinel
+versions remain unchanged in provenance. Existing YAML without its own version
+must be explicitly reconverted or have that version authored. See the
+[V3.1 version policy](V3/README-V3_1.md#release-version-bounds-v31-only).
 
 #### **Example of Input File: Solution_McAfeePO.json**
 
