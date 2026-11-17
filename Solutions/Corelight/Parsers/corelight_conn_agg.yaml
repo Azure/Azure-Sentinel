@@ -1,8 +1,8 @@
 id: 13f9b742-0060-4920-92fa-37942f2b157f
 Function:
   Title: Corelight Connection Aggregated Events
-  Version: '2.1.0'
-  LastUpdated: '2026-11-05'
+  Version: '2.1.1'
+  LastUpdated: '2026-11-17'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_conn_agg
 FunctionAlias: corelight_conn_agg
@@ -31,8 +31,9 @@ FunctionQuery: |
         union isfuzzy=true
             Corelight_v3_conn_agg_CL,
             dummy_table
-        | summarize arg_max(TimeGenerated, *) by uids_key = tostring(column_ifexists("uids", dynamic(null)))
-        | project-away uids_key
+        | extend uids_str = tostring(column_ifexists("uids", dynamic(null)))
+        | summarize arg_max(TimeGenerated, *) by uids_key = iff(uids_str !in ("", "[]"), uids_str, strcat("nouid|", tostring(TimeGenerated), "|", tostring(column_ifexists("id_orig_h", "")), "|", tostring(column_ifexists("id_resp_h", "")), "|", tostring(column_ifexists("id_resp_p", int(null))), "|", tostring(column_ifexists("proto", ""))))
+        | project-away uids_key, uids_str
         | extend
             uid=tostring(column_ifexists("uids", dynamic(null))),
             community_id=column_ifexists("community_ids", dynamic(null)),
@@ -58,7 +59,7 @@ FunctionQuery: |
             packets_out=column_ifexists("orig_pkts", long(null)),
             bytes_in=column_ifexists("resp_ip_bytes", long(null)),
             packets_in=column_ifexists("resp_pkts", long(null)),
-            session_id=column_ifexists("uid", ""),
+            session_id=uid,
             bytes=column_ifexists("resp_ip_bytes", long(0)) + column_ifexists("orig_ip_bytes", long(0)),
             sensor_name = coalesce(column_ifexists("system_name", ""), "unknown"),
             transport=iff(column_ifexists("proto", "")=='icmp' and column_ifexists("id_orig_h", "") matches regex ".*:.*", "icmp6", column_ifexists("proto", "")),
