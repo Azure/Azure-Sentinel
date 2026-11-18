@@ -50,6 +50,7 @@ jobs:
       issues: write
     outputs:
       approved: ${{ steps.check-approval.outputs.approved }}
+      approved_sha: ${{ steps.check-approval.outputs.approved_sha }}
     steps:
       - name: Verify approver has write access (fork + SafeToRun)
         # SECURITY: the dynamic equivalent of an Environment's "required reviewers".
@@ -91,12 +92,18 @@ jobs:
 
       - name: Check if PR needs approval
         id: check-approval
+        env:
+          APPROVAL_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # Function to log with consistent formatting
           log_info() { echo "ℹ️  $1"; }
           log_success() { echo "✅ $1"; }
 
           log_info "Starting PR approval check..."
+          if ! [[ "$APPROVAL_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
 
           # Check if this is a fork PR
           is_fork="${{ github.event.pull_request.head.repo.fork }}"
@@ -121,6 +128,7 @@ jobs:
               if [ "$label_added" = "SafeToRun" ]; then
                 log_success "SafeToRun label being added on fork PR - approving"
                 echo "approved=true" >> $GITHUB_OUTPUT
+                echo "approved_sha=$APPROVAL_HEAD_SHA" >> $GITHUB_OUTPUT
                 echo "needs_approval=false" >> $GITHUB_OUTPUT
                 echo "comment_needed=false" >> $GITHUB_OUTPUT
               else
@@ -153,9 +161,31 @@ jobs:
           else
             log_success "Internal PR - auto-approved"
             echo "approved=true" >> $GITHUB_OUTPUT
+            echo "approved_sha=$APPROVAL_HEAD_SHA" >> $GITHUB_OUTPUT
             echo "needs_approval=false" >> $GITHUB_OUTPUT
             echo "comment_needed=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Verify approved SHA is still the pull request head
+        if: steps.check-approval.outputs.approved == 'true'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        env:
+          APPROVED_SHA: ${{ steps.check-approval.outputs.approved_sha }}
+        with:
+          script: |
+            const approvedSha = process.env.APPROVED_SHA;
+            if (!/^[0-9a-f]{40}$/.test(approvedSha)) {
+              core.setFailed('Approved pull request SHA is invalid');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.head.sha !== approvedSha) {
+              core.setFailed(`Pull request head moved from approved SHA ${approvedSha} to ${pr.head.sha}`);
+            }
 
       - name: Auto-remove SafeToRun label on synchronize for fork PRs
         if: |
@@ -348,6 +378,7 @@ jobs:
     needs: security-gate
     if: |
       needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
@@ -371,7 +402,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}
         run: |
           if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Invalid pull request base SHA."
@@ -552,6 +583,7 @@ jobs:
       - discover
     if: |
       needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       needs.discover.outputs.has_targets == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
@@ -580,7 +612,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}
         run: |
           if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Invalid pull request base SHA."
@@ -817,6 +849,7 @@ jobs:
     if: |
       always() &&
       needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       needs.discover.outputs.has_targets == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
@@ -1108,7 +1141,8 @@ jobs:
       - ingestionValidation
     if: |
       always() &&
-      needs.security-gate.outputs.approved == 'true'
+      needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha
     runs-on: ubuntu-latest
     permissions:
       contents: read
