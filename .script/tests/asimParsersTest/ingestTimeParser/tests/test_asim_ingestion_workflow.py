@@ -1345,6 +1345,38 @@ class WorkflowTopologyTests(unittest.TestCase):
             normalize(isolated_gate),
         )
 
+    def test_fork_gate_protects_testers_and_workflows(self):
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                self.assertIn(
+                    "const protectedPrefixes = [", workflow
+                )
+                self.assertIn(
+                    "'.script/tests/asimParsersTest/'", workflow
+                )
+                self.assertIn("'ASIM/'", workflow)
+                self.assertIn("'.github/'", workflow)
+                self.assertIn(
+                    "protectedPrefixes.some(prefix => "
+                    "name.startsWith(prefix))",
+                    workflow,
+                )
+
+    def test_legacy_live_runner_restores_trusted_kql_validator(self):
+        workflow = self.legacy_path.read_text(encoding="utf-8")
+
+        self.assertIn(
+            '$filePath_helper = '
+            '".script/tests/asimParsersTest/asim_parser_file_utils.py"',
+            workflow,
+        )
+        self.assertIn(
+            "Invoke-WebRequest -Uri $url_helper "
+            "-OutFile $filePath_helper",
+            workflow,
+        )
+
     def test_isolated_workflow_has_requested_job_topology(self):
         document = yaml.safe_load(
             self.isolated_path.read_text(encoding="utf-8")

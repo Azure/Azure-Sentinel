@@ -214,7 +214,7 @@ jobs:
               console.log(`${icons[level] || 'ℹ️'} ${message}`);
             };
 
-            log('info', 'Checking for modifications to asimParsersTest folder in fork PR...');
+            log('info', 'Checking for modifications to protected ASIM validation paths in fork PR...');
 
             // Paginate through all changed files in the PR
             const files = await github.paginate(github.rest.pulls.listFiles, {
@@ -224,17 +224,22 @@ jobs:
               per_page: 100,
             });
 
+            const protectedPrefixes = [
+              '.script/tests/asimParsersTest/',
+              'ASIM/',
+              '.github/',
+            ];
             const forbiddenFiles = files
               .map(f => f.filename)
-              .filter(name => name.startsWith('.script/tests/asimParsersTest/'));
+              .filter(name => protectedPrefixes.some(prefix => name.startsWith(prefix)));
 
             if (forbiddenFiles.length > 0) {
-              log('error', 'Fork PRs cannot modify the asimParsersTest test infrastructure folder');
-              log('error', 'Modified test files detected:');
+              log('error', 'Fork PRs cannot modify protected ASIM validation or workflow files');
+              log('error', 'Modified protected files detected:');
               forbiddenFiles.forEach(f => console.log(`  - ${f}`));
-              core.setFailed('Fork PR modifies protected test infrastructure files');
+              core.setFailed('Fork PR modifies protected ASIM validation files');
             } else {
-              log('success', 'No modifications to asimParsersTest folder detected');
+              log('success', 'No protected ASIM validation files were modified');
             }
 
       - name: Comment on fork PR for approval guidance
@@ -551,6 +556,14 @@ jobs:
             # Download the convertYamlToObject file
             Write-Host "Downloading script from the master: $url_convert_yaml"
             Invoke-WebRequest -Uri $url_convert_yaml -OutFile $filePath_convert_yaml 
+            # Download the trusted KQL validator helper from master.
+            $filePath_helper = ".script/tests/asimParsersTest/asim_parser_file_utils.py"
+            $url_helper = "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/.script/tests/asimParsersTest/asim_parser_file_utils.py"
+            if (Test-Path $filePath_helper) {
+              Remove-Item $filePath_helper -Force
+            }
+            Write-Host "Downloading script from the master: $url_helper"
+            Invoke-WebRequest -Uri $url_helper -OutFile $filePath_helper
             # Execute the script
             & $filePath
           azPSVersion: "latest"

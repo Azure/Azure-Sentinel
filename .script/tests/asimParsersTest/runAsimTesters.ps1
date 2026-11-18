@@ -122,7 +122,31 @@ function testSchema([string] $ParserFile) {
         Write-Host "${yellow}The parser '$functionName' is a union or empty parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
+        assertSafeParserDocument $parsersAsObject $ParserFile
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema, $parsersAsObject.ParserParams))
+    }
+}
+
+function assertSafeParserDocument(
+    [System.Object] $parserDocument,
+    [string] $parserFile
+) {
+    $temporaryFile = New-TemporaryFile
+    try {
+        $json = $parserDocument | ConvertTo-Json -Depth 100
+        [System.IO.File]::WriteAllText(
+            $temporaryFile.FullName,
+            $json,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        & python "$($PSScriptRoot)/asim_parser_file_utils.py" `
+            validate-query-document $temporaryFile.FullName
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unsafe query-time parser document: $parserFile"
+        }
+    } finally {
+        Remove-Item -LiteralPath $temporaryFile.FullName -Force `
+            -ErrorAction SilentlyContinue
     }
 }
 
@@ -226,7 +250,8 @@ function getParameters([System.Collections.Generic.List`1[System.Object]] $parse
     if ($parserParams) {
         $parserParams | ForEach-Object {
             if ($_.Type -eq "string") {
-                $_.Default = "'$($_.Default)'"
+                $escapedDefault = ([string]$_.Default).Replace("'", "''")
+                $_.Default = "'$escapedDefault'"
             }
             $paramsArray += "$($_.Name):$($_.Type)= $($_.Default)"
         }

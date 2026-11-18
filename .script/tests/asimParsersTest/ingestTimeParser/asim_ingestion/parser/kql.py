@@ -13,6 +13,29 @@ ALLOWED_FILTER_OPERATORS = {
     "project-rename",
     "where",
 }
+QUERY_TIME_PARAMETER_TYPES = {
+    "bool",
+    "boolean",
+    "datetime",
+    "dynamic",
+    "int",
+    "long",
+    "real",
+    "string",
+}
+QUERY_TIME_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_IGNORED_KQL_TOKENS_RE = re.compile(
+    r"//[^\r\n]*|/\*.*?\*/|```.*?```"
+    r"|@'(?:''|[^'])*'"
+    r'|@"(?:""|[^"])*"'
+    r"|'(?:\\.|''|[^'\\])*'"
+    r'|"(?:\\.|""|[^"\\])*"',
+    flags=re.DOTALL,
+)
+_MANAGEMENT_COMMAND_RE = re.compile(
+    r"(?:^|;)\s*(\.[A-Za-z])",
+    flags=re.MULTILINE,
+)
 
 
 @dataclass(frozen=True)
@@ -96,12 +119,188 @@ DENY_KQL_CONSTRUCT_RULES = {
         "wildcard projection",
         "Resolve wildcard projections explicitly.",
     ),
+}
+
+DENY_UNTRUSTED_KQL_OPERATOR_RULES = {
+    "EvaluateOperator": KqlRule(
+        "KQL047",
+        "evaluate",
+        "Plugin execution is not allowed in untrusted parser KQL.",
+    ),
+}
+
+DENY_UNTRUSTED_KQL_FUNCTION_RULES = {
+    **_named_rules(
+        KqlRule(
+            "KQL045",
+            "cross-resource function",
+            "Cross-workspace, cluster, and database access is not allowed.",
+        ),
+        "workspace",
+        "cluster",
+        "database",
+    ),
+    "external_table": KqlRule(
+        "KQL046",
+        "external_table",
+        "External table access is not allowed in untrusted parser KQL.",
+    ),
+}
+
+DENY_UNTRUSTED_KQL_CONSTRUCT_RULES = {
     "ExternalDataExpression": KqlRule(
         "KQL038",
         "externaldata",
-        "External data sources cannot be used in a DCR transformation.",
+        "External data sources are not allowed in untrusted parser KQL.",
     ),
 }
+
+DENY_MANAGEMENT_COMMAND_RULE = KqlRule(
+    "KQL048",
+    "management command",
+    "Kusto management commands are not allowed in parser KQL.",
+)
+
+
+def _mask_kql_non_code(query: str) -> str:
+    return _IGNORED_KQL_TOKENS_RE.sub(
+        lambda match: re.sub(r"[^\r\n]", " ", match.group()),
+        query,
+    )
+
+
+def iter_untrusted_kql_rule_matches(
+    analysis: dict[str, Any],
+    query: str,
+) -> list[tuple[KqlRule, dict[str, Any]]]:
+    matches: list[tuple[KqlRule, dict[str, Any]]] = []
+    for operator in analysis["operators"]:
+        rule = DENY_UNTRUSTED_KQL_OPERATOR_RULES.get(operator["type"])
+        if rule is not None:
+            matches.append((rule, operator))
+    for function in analysis["functions"]:
+        name = function.get("name")
+        rule = (
+            DENY_UNTRUSTED_KQL_FUNCTION_RULES.get(name.casefold())
+            if isinstance(name, str)
+            else None
+        )
+        if rule is not None:
+            matches.append((rule, function))
+    for construct in analysis["constructs"]:
+        rule = DENY_UNTRUSTED_KQL_CONSTRUCT_RULES.get(
+            construct["type"]
+        )
+        if rule is not None:
+            matches.append((rule, construct))
+
+    command = _MANAGEMENT_COMMAND_RE.search(_mask_kql_non_code(query))
+    if command is not None:
+        start = command.start(1)
+        line = query.count("\n", 0, start) + 1
+        column = start - query.rfind("\n", 0, start)
+        matches.append(
+            (
+                DENY_MANAGEMENT_COMMAND_RULE,
+                {
+                    "location": {
+                        "start": start,
+                        "length": 1,
+                        "line": line,
+                        "column": column,
+                        "text": ".",
+                        "normalizedText": ".",
+                    },
+                },
+            )
+        )
+    return matches
+
+
+def query_time_parameter_errors(
+    parser_params: Any,
+) -> list[tuple[str, str]]:
+    if not isinstance(parser_params, list):
+        return [("ParserParams", "ParserParams must be an array.")]
+
+    errors: list[tuple[str, str]] = []
+    seen_names: set[str] = set()
+    for index, parameter in enumerate(parser_params):
+        field = f"ParserParams[{index}]"
+        if not isinstance(parameter, dict):
+            errors.append((field, "Parser parameter must be an object."))
+            continue
+        name = parameter.get("Name")
+        parameter_type = parameter.get("Type")
+        if (
+            not isinstance(name, str)
+            or not QUERY_TIME_IDENTIFIER_RE.fullmatch(name)
+        ):
+            errors.append(
+                (f"{field}.Name", "Parameter name must be a KQL identifier.")
+            )
+        else:
+            normalized_name = name.casefold()
+            if normalized_name in seen_names:
+                errors.append(
+                    (f"{field}.Name", "Parameter names must be unique.")
+                )
+            seen_names.add(normalized_name)
+
+        normalized_type = (
+            parameter_type.strip().casefold()
+            if isinstance(parameter_type, str)
+            else ""
+        )
+        if (
+            parameter_type != normalized_type
+            or normalized_type not in QUERY_TIME_PARAMETER_TYPES
+        ):
+            errors.append(
+                (
+                    f"{field}.Type",
+                    "Parameter type must be one of "
+                    + ", ".join(sorted(QUERY_TIME_PARAMETER_TYPES))
+                    + ".",
+                )
+            )
+            continue
+        if "Default" not in parameter:
+            errors.append(
+                (f"{field}.Default", "Parameter default is required.")
+            )
+            continue
+        default = parameter["Default"]
+        if normalized_type in {"bool", "boolean"}:
+            valid_default = isinstance(default, bool)
+        elif normalized_type == "string":
+            valid_default = isinstance(default, str)
+        elif normalized_type == "dynamic":
+            valid_default = (
+                isinstance(default, (list, dict))
+                or default == "dynamic([])"
+            )
+        elif normalized_type == "datetime":
+            valid_default = (
+                isinstance(default, str)
+                and (
+                    default == "datetime(null)"
+                    or re.fullmatch(r"[0-9T:.+\-Z]+", default) is not None
+                )
+            )
+        else:
+            valid_default = (
+                not isinstance(default, bool)
+                and isinstance(default, (int, float))
+            ) or default == f"{normalized_type}(null)"
+        if not valid_default:
+            errors.append(
+                (
+                    f"{field}.Default",
+                    f"Default is invalid for type {normalized_type}.",
+                )
+            )
+    return errors
 
 
 def query_uses_source_table(

@@ -31,6 +31,8 @@ from .kql import (
     DENY_KQL_OPERATOR_RULES,
     KqlRule,
     _identity_key,
+    iter_untrusted_kql_rule_matches,
+    query_time_parameter_errors,
     query_uses_source_table,
     resolve_source_specific_fixture,
 )
@@ -83,7 +85,7 @@ def _finding_for_kql_fact(
     return Finding(
         rule.code,
         field,
-        f"Unsupported DCR construct '{rule.construct}'. {rule.message}",
+        f"Unsupported KQL construct '{rule.construct}'. {rule.message}",
         line=line if isinstance(line, int) else None,
     )
 
@@ -91,6 +93,7 @@ def _finding_for_kql_fact(
 def _scan_kql(
     analysis: dict[str, Any],
     field: str,
+    query: str = "",
 ) -> list[Finding]:
     matches: list[tuple[str, int, Finding]] = []
 
@@ -105,6 +108,10 @@ def _scan_kql(
             )
         )
 
+    for rule, fact in iter_untrusted_kql_rule_matches(
+        analysis, query
+    ):
+        add(rule, fact)
     for operator in analysis["operators"]:
         rule = DENY_KQL_OPERATOR_RULES.get(operator["type"])
         if rule is not None:
@@ -139,6 +146,31 @@ def _scan_kql(
         ):
             continue
         add(rule, construct)
+    return [
+        finding
+        for _, _, finding in sorted(
+            matches,
+            key=lambda match: (match[0], match[1]),
+        )
+    ]
+
+
+def _scan_untrusted_kql(
+    analysis: dict[str, Any],
+    query: str,
+    field: str,
+) -> list[Finding]:
+    matches = []
+    for rule, fact in iter_untrusted_kql_rule_matches(analysis, query):
+        location = fact.get("location", {})
+        start = location.get("start")
+        matches.append(
+            (
+                rule.code,
+                start if isinstance(start, int) else -1,
+                _finding_for_kql_fact(rule, field, fact),
+            )
+        )
     return [
         finding
         for _, _, finding in sorted(
@@ -271,7 +303,7 @@ def _validate_kql(
         allowed_operators,
         findings,
     )
-    findings.extend(_scan_kql(analysis, field))
+    findings.extend(_scan_kql(analysis, field, query))
     return analysis
 
 
@@ -678,13 +710,17 @@ def validate_ingest_time_parser(
 
         if query_time_path is not None:
             def block_query(
-                code: str, field: str, message: str
+                code: str,
+                field: str,
+                message: str,
+                line: int | None = None,
             ) -> None:
                 query_findings.append(
                     Finding(
                         code,
                         field,
                         message,
+                        line=line,
                         severity="blocked",
                     )
                 )
@@ -724,6 +760,47 @@ def validate_ingest_time_parser(
                             "ParserQuery",
                             "Trusted Kusto.Language analyzer failed: "
                             f"{exc}",
+                        )
+                    else:
+                        for diagnostic in query_analysis["diagnostics"]:
+                            if diagnostic["severity"] == "Error":
+                                block_query(
+                                    "KQL001",
+                                    "ParserQuery",
+                                    "Kusto syntax diagnostic "
+                                    f"{diagnostic['code']} at column "
+                                    f"{diagnostic['column']}: "
+                                    f"{diagnostic['message']}",
+                                    line=diagnostic["line"],
+                                )
+                        for finding in _scan_untrusted_kql(
+                            query_analysis,
+                            query_body,
+                            "ParserQuery",
+                        ):
+                            block_query(
+                                finding.code,
+                                finding.field,
+                                finding.message,
+                                line=finding.line,
+                            )
+                for field, message in query_time_parameter_errors(
+                    query_document.get("ParserParams")
+                ):
+                    block_query("KQL049", field, message)
+                for field, value in (
+                    ("ParserName", query_parser_name),
+                    ("Normalization.Schema", query_schema),
+                ):
+                    if (
+                        isinstance(value, str)
+                        and value.strip()
+                        and not IDENTIFIER_RE.fullmatch(value)
+                    ):
+                        block_query(
+                            "KQL050",
+                            field,
+                            f"{field} must be a KQL identifier.",
                         )
                 if schema != query_schema:
                     block_query(
