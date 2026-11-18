@@ -10,6 +10,29 @@ ADDITIONAL_UNION_PARSERS = {
         "imProcessTerminate.yaml",
     )
 }
+FIXTURE_NAME_COMPONENT_RE = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9 _-]{0,126}[A-Za-z0-9])?$"
+)
+SCHEMA_NAME_COMPONENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,63}$")
+
+
+def _validate_fixture_component(value, label, pattern):
+    if not isinstance(value, str) or not pattern.fullmatch(value):
+        raise ValueError(f"{label} is not safe for sample fixture lookup")
+    return value
+
+
+def _resolve_contained_path(root, filename):
+    candidate = root / filename
+    resolved_root = root.resolve()
+    resolved_candidate = candidate.resolve()
+    try:
+        resolved_candidate.relative_to(resolved_root)
+    except ValueError as error:
+        raise ValueError(
+            "Resolved sample fixture path is outside the ASIM sample directory"
+        ) from error
+    return candidate
 
 def extract_schema_name(parser_path):
     match = re.search(r'ASim(\w+)[/\\]', parser_path)
@@ -36,6 +59,15 @@ def filter_query_time_parser_files(modified_files):
 
 def resolve_sample_data_path(sample_data_dir, event_vendor, event_product, schema, parser_query):
     """Keep matching legacy data; use source-specific data for target collisions."""
+    event_vendor = _validate_fixture_component(
+        event_vendor, "EventVendor", FIXTURE_NAME_COMPONENT_RE
+    )
+    event_product = _validate_fixture_component(
+        event_product, "EventProduct", FIXTURE_NAME_COMPONENT_RE
+    )
+    schema = _validate_fixture_component(
+        schema, "Normalization.Schema", SCHEMA_NAME_COMPONENT_RE
+    )
     ignored_tokens = (
         r"//[^\r\n]*|/\*.*?\*/|```.*?```"
         r"|@'(?:''|[^'])*'"
@@ -67,12 +99,17 @@ def resolve_sample_data_path(sample_data_dir, event_vendor, event_product, schem
 
     sample_data_dir = Path(sample_data_dir)
     prefix = f"{event_vendor}_{event_product}_{schema}"
-    legacy_path = sample_data_dir / f"{prefix}_IngestedLogs.csv"
-    candidates = [
-        (sample_data_dir / f"{prefix}_{table}_IngestedLogs.csv", table)
-        for table in sorted(source_tables)
-        if (sample_data_dir / f"{prefix}_{table}_IngestedLogs.csv").is_file()
-    ]
+    legacy_path = _resolve_contained_path(
+        sample_data_dir, f"{prefix}_IngestedLogs.csv"
+    )
+    candidates = []
+    for table in sorted(source_tables):
+        source_path = _resolve_contained_path(
+            sample_data_dir,
+            f"{prefix}_{table}_IngestedLogs.csv",
+        )
+        if source_path.is_file():
+            candidates.append((source_path, table))
     # A matching legacy fixture remains authoritative for version-aware unions.
     if candidates and legacy_path.is_file():
         with legacy_path.open(newline="", encoding="utf-8-sig") as legacy_file:
