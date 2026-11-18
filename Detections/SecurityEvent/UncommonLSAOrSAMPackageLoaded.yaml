@@ -1,0 +1,99 @@
+id: 2d920e74-687d-4639-952a-8021297a5e66
+name: Uncommon package loaded by LSA or SAM
+description: |
+  Identifies a package that is not shipped with Windows being loaded by the Local Security Authority (LSA) or the Security Account Manager (SAM): an authentication package (event 4610), a security package (event 4622) or a notification package such as a password filter (event 4614).
+  These DLLs run inside lsass.exe with access to credentials, and password filters receive every new password in clear text, so adversaries register malicious ones, such as mimilib, for persistence and credential theft.
+  The events are logged whenever a package is loaded, no matter how it was registered, and require auditing of the Security System Extension subcategory.
+  Add legitimate third-party packages, such as security products, Cygwin (cyglsa), Lithnet Password Protection or the Microsoft Identity Manager password change notification service, to the lists at the top of the query.
+  Reference: https://learn.microsoft.com/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/audit-security-system-extension
+severity: Medium
+status: InPreview
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1547.002
+  - T1547.005
+  - T1556.002
+query: |
+  // Packages shipped with Windows. Add packages that are expected in your environment.
+  // 4610 and 4622: a DLL is allowed only if it is directly in %SystemRoot%\System32 and its file name is on the list.
+  let AllowedAuthenticationPackages = dynamic(["msv1_0.dll"]);
+  // clusauthmgr.dll is loaded on failover cluster nodes
+  let AllowedSecurityPackages = dynamic([
+      "cloudap.dll", "kerberos.dll", "lsasrv.dll", "msv1_0.dll", "negoexts.dll", "pku2u.dll",
+      "schannel.dll", "sfapm.dll", "tspkg.dll", "wdigest.dll", "clusauthmgr.dll"
+  ]);
+  // 4614: this event has no path, only the name the package was registered with.
+  // clusauthmgr is loaded on failover cluster nodes, azureadpasswordprotectionpfd.dll is the Microsoft Entra Password Protection DC agent.
+  let AllowedNotificationPackages = dynamic([
+      "kdcpw", "kdcsvc", "rassfm", "scecli", "wdigest", "clusauthmgr", "azureadpasswordprotectionpfd.dll"
+  ]);
+  SecurityEvent
+  | where EventID in (4610, 4614, 4622)
+  // 4610 can use the AuthenticationPackageName column, the values of 4614 and 4622 are only in EventData
+  | extend LoadedPackage = case(
+      EventID == 4610, coalesce(AuthenticationPackageName, extract(@'<Data Name="AuthenticationPackageName">([^<]*)</Data>', 1, EventData)),
+      EventID == 4614, extract(@'<Data Name="NotificationPackageName">([^<]*)</Data>', 1, EventData),
+      extract(@'<Data Name="SecurityPackageName">([^<]*)</Data>', 1, EventData))
+  // For 4610 and 4622 the value is "<DLL path> : <package name>". The package name is chosen by the package itself, so only the DLL path is checked.
+  | extend DllPath = iff(EventID == 4614, "", extract(@'^(.*?)\s*:\s', 1, LoadedPackage))
+  // File name of a DLL that is directly in System32, empty for any other location
+  | extend System32DllName = tolower(extract(@'(?i)^[a-z]:\\windows\\system32\\([^\\]+)$', 1, DllPath))
+  | where not(
+      (EventID == 4610 and System32DllName in (AllowedAuthenticationPackages))
+      or (EventID == 4622 and System32DllName in (AllowedSecurityPackages))
+      or (EventID == 4614 and tolower(LoadedPackage) in (AllowedNotificationPackages)))
+  | extend PackageType = case(
+      EventID == 4610, "authentication package",
+      EventID == 4614, "password filter",
+      "security package")
+  | extend FileName = iff(EventID == 4614, LoadedPackage, extract(@'([^\\]+)$', 1, DllPath)),
+           FileDirectory = iff(EventID == 4614, "", extract(@'^(.*)\\[^\\]+$', 1, DllPath))
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), EventCount = count()
+      by Computer, EventID, PackageType, LoadedPackage, FileName, FileDirectory
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+      - identifier: Directory
+        columnName: FileDirectory
+customDetails:
+  PackageType: PackageType
+  LoadedPackage: LoadedPackage
+  EventID: EventID
+alertDetailsOverride:
+  alertDisplayNameFormat: Uncommon {{PackageType}} loaded on {{Computer}}
+  alertDescriptionFormat: |-
+    {{Computer}} loaded {{LoadedPackage}} into LSA or SAM. The package is not on the list of packages shipped with Windows. Check which software installed the DLL, when it was registered and whether it is expected on this host.
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Bartosz Siedlikowski
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection" ]
