@@ -1,0 +1,78 @@
+id: 978e1cc8-f891-41c7-83b8-b21762a2ebb7
+kind: Scheduled
+name: SAP - Login from unexpected network
+description: |
+  Identifies logons from an unexpected network.
+
+  Source Action: Logon to the backend system from an IP address which is not assigned to one of the networks.
+
+  Networks can be maintained in the "SAP - Networks" watchlist .
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques: []
+query: |
+  let SelectedSystemRoles = dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles);
+  let AuditClasses = dynamic(['AU1','AU5']); // Audit Log Classes - Dialog Logon Successful, RFC Logon Successful
+  // Dialog / CPIC / RFC Int / RFC Ext / SRFC / User Switch / HTTP / Restore Session / API Call
+  let DialogLogonTypes = dynamic(['A', 'C', 'F', 'R', 'S', 'U', 'H', 'u', ' ']);
+  let Networks = _GetWatchlist('SAP - Networks');
+  // here you can exclude system users which are OK to execute this action
+  // by adding those users in the SAP_User_Config watchlist with a tag of "LoginUnExpectedOK"
+  let excludeUsersTags= dynamic(["LoginUnExpectedOK"]);// dynamic(["LoginUnExpectedOK","SAP_ALL"]);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  SAPAuditLog
+  // Add audit classes
+  | join kind= inner SelectedSystems on SystemID
+  | where MessageID in (AuditClasses)
+  | where Variable1 in (DialogLogonTypes) // Is a dialog logon type from the list
+  | where isnotempty(TerminalIPv6) // There is a Ipv6 address
+  // if you wish to allow all private adreesses
+  | where not (ipv4_is_private(TerminalIPv6 ))
+  | evaluate ipv4_lookup(Networks, TerminalIPv6, Network, return_unmatched = true)
+  // Similar to regular lookup, by ipv4 address, unmatched is like left join
+  | where isempty(Network) // Network is not familiar
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  // Details
+  | project TimeGenerated, SystemID, ClientID, User, TransactionCode, MessageText, Email , TerminalIPv6, Host
+  | extend GeoLocation= iff(ipv4_is_private( TerminalIPv6), dynamic({"IsPrivate": true}), geo_info_from_ip_address(TerminalIPv6))
+  | extend AlertRuleUniqueName = 'loginfromunexpectednetwork'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

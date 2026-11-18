@@ -1,0 +1,54 @@
+Contentkind: Function
+Description: SAPUsersGetSensitive
+Function:
+  Title: SAPUsersGetSensitive
+  Version: 3.0.0
+  LastUpdated: '2023-11-17'
+Category: SAPFunctions
+FunctionName: SAPUsersGetSensitive
+FunctionQuery: |
+  // this function returns privilileged and sensitive users
+  // privileged users are users which are directly named as such
+  let PrivelegedUsers = _GetWatchlist('SAP - Privileged Users');
+  let FixedUsers = datatable(User: string, Client: string, SystemID: string) ["DDIC", "XXX","001"];
+  // privileged users can also be such that carry a privileged role
+  let fixedRoles = datatable(Role: string) ['SAP_BC_BASIS_ADMIN', 'SAP_BC_AUTH_PROFILE_ADMIN'];
+  // privileged users can also be such that carry a privileged profile
+  let fixedProfiles = datatable(Profile: string) ["SAP_ALL", "SAP_NEW"];
+  // sensitive users are such that hold a sensitive role:
+  let SensRoles = _GetWatchlist('SAP - Sensitive Roles') | summarize by SearchKey;
+  // or a sensitive profile:
+  let SensProfiles = _GetWatchlist('SAP - Sensitive Profiles') | summarize by SearchKey;
+  // get SAP systems which are relevant
+  let AuditTimeAgo = totimespan(toscalar(SAPGetParameters('UserMDLookBack')| project-keep ValueLow));
+  let availableSystems= SAPAuditLog
+  | where TimeGenerated > ago(AuditTimeAgo)
+  | summarize by SystemID, Client= ClientID
+  | extend dummy ='';
+  // get the user assignments to roles and profiles
+  let UserAssignments= materialize(SAPUsersAssignments() | project User, ChildRoles, DirectRoles, Profiles, Client, SystemID);
+  // privileged users
+  let PrivUsersByMD = UserAssignments
+  | mv-expand ChildRoles, DirectRoles, Profiles
+  | where DirectRoles in (fixedRoles) or ChildRoles in (fixedRoles) or Profiles in (fixedProfiles)
+  | summarize by User, Client, SystemID
+  | extend IsPrivileged= true;
+  // sensitive users
+  let SensitiveUsersByMD = UserAssignments
+  | project User, ChildRoles, DirectRoles, Profiles, Client, SystemID
+  | mv-expand ChildRoles, DirectRoles, Profiles
+  | where DirectRoles in (SensRoles) or ChildRoles in (SensRoles) or Profiles in (SensProfiles)
+  | summarize by User, Client, SystemID
+  | extend IsPrivileged= false;
+  // cross join watchlist users with available systems and clients
+  let FixedUPriv = ((PrivelegedUsers
+      | union isfuzzy=true  FixedUsers
+      | summarize by User
+      | extend dummy = '')
+      | join kind= fullouter availableSystems
+          on $left.dummy == $right.dummy)
+      | extend IsPrivileged= true;
+  FixedUPriv
+  | union isfuzzy=true PrivUsersByMD, SensitiveUsersByMD, FixedUsers
+  | where Client != "XXX"
+  | summarize IsPrivileged= max(IsPrivileged) by User, Client, SystemID

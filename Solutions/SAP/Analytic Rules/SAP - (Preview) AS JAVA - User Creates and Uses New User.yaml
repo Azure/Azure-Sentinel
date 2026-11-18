@@ -1,0 +1,117 @@
+id: 0713fb84-1ddb-4441-bdc9-127fd979e37e
+kind: Scheduled
+name: SAP - (Preview) AS JAVA - User Creates and Uses New User
+description: |
+  This rule identifies the creation or manipulation of users by admins within the SAP AS Java environment.
+  Source Action: Sign in to the backend system using users that you have created or manipulated.
+  Data Sources: SAPJAVAFilesLog
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPGetSourceIdentifier
+      - SAPJAVAFilesLogs
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+  - T1078
+  - T0859
+query: |
+  // SAP Java - User created and then used
+  let excludeUsersTags= dynamic(['CreateUsersAndUseOK']);// dynamic(['CreateUsersAndUseOK','SAP_ALL']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)
+      | summarize by User=SAPUser;
+  let SelectedSystemRoles = dynamic(["Production", "UAT"]); //can also do// let SelectedSystemRoles =  dynamic(["Production"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole;
+  let CreationLookBack= 1h;// lookback for user creations to be alerted on
+  let LogonsLookback= 1d; // further lookback for creator's logons
+  let Logs= SAPJAVAFilesLogs
+      | where TimeGenerated > ago(CreationLookBack + LogonsLookback)
+      | where SystemID in (SelectedSystems)
+      | where SourceName == "/System/Security/Audit/PrincipalModification" or SourceName == "/System/Security/Authentication"
+      | join kind=leftantisemi excludedUsers on User;
+  // gather a list of IPs that are shared across more than half of the observed users
+  let UserIPInteractios= Logs
+  | extend IP= column_ifexists("_IP_Address", "")
+  | where SourceName == "/System/Security/Authentication"
+  | where isnotempty(IP)
+  | summarize DistinctUsersPerIP=dcount(User) by IP;
+  let DistinctUsersCount= toscalar(Logs
+  | where SourceName == "/System/Security/Authentication"|summarize DistinctUsers= dcount(User));
+  let IPsThatEveryoneUses= UserIPInteractios | where DistinctUsersPerIP > max_of(4, (DistinctUsersCount / 2)) | distinct IP;
+  // get suspected activities
+  let UserModifications=Logs
+      | where SourceName == "/System/Security/Audit/PrincipalModification"
+      | where TimeGenerated > ago(CreationLookBack)
+      | extend UserCreator= User
+      | distinct SystemID, SidGuid, Text= tostring(Text[0]), UserCreator, Time, Instance
+      | extend Text= split(Text, "~| ")
+      | parse kind=regex Text[-1] with * @"SET_ATTRIBUTE: uniquename=\[" UserCreated @"\]" *
+      | parse kind=regex Text[-1] with * @"ADD_VALUES: PRINCIPAL_RELATION_MEMBER_ATTRIBUTE=\[USER.PRIVATE_DATASOURCE.un:" UserModified  @"\]" *
+      | extend Action= Text[0]
+      | extend UserModifiedCreated= coalesce(UserCreated, UserModified)
+      | where isnotempty(UserModifiedCreated);
+  let KnownIPsPerUser= Logs | where SourceName == "/System/Security/Authentication"
+  | where User in(UserModifications | distinct UserCreator) or User in (UserModifications | distinct UserModifiedCreated)
+  | extend IP= column_ifexists("_IP_Address", "")
+  | where isnotempty(IP) and IP !in (IPsThatEveryoneUses)
+  | summarize KnownIPs=make_set(IP, 100) by SystemID, SidGuid, User;
+  UserModifications
+  // get logon details for UserCreator
+  | extend User= UserCreator
+  | lookup KnownIPsPerUser on User
+  | project-rename KnownIPsCreatorUser= KnownIPs
+  // get logon details for UserCreated
+  | extend User= UserModifiedCreated
+  | lookup KnownIPsPerUser on User
+  | project-rename KnownIPsCreatedUser= KnownIPs
+  | extend IPsIntersected= set_intersect(KnownIPsCreatorUser, KnownIPsCreatedUser)
+  | where array_length(IPsIntersected) > 0
+  | project
+      UserCreator,
+      UserModifiedCreated,
+      TimeCreated=Time,
+      TextAction=  strcat_array(Text, " "),
+      Instance,
+      SystemID,
+      IPsIntersected,
+      Action
+  | extend Action= case(Action== "User created", strcat(UserCreator, " created user ", UserModifiedCreated)
+  , Action== "Group modified", strcat(UserCreator, " added user ", UserModifiedCreated, " to a group")
+  , Action== "Role modified", strcat(UserCreator, " assigned user ", UserModifiedCreated, " with a role"), "N/A")
+  | where Action!= "N/A"
+  | mv-expand IPIntersected= IPsIntersected to typeof(string)
+  | extend AlertName= strcat("SAP- User ", Action, " and then used it")
+  | extend ExtendedDetails= bag_pack_columns(TimeCreated)
+  | extend AlertDescription= strcat(AlertName, ".\n ", TextAction)
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPIntersected
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}} '
+  alertDescriptionFormat: |
+    This rule identifies the creation or manipulation of users by admins within the SAP AS Java environment.
+    {{AlertDescription}}
+    Source Action: Logon to the backend system using users that you have created or manipulated.
+customDetails:
+  SAP_User: UserCreator
+  SAP_User2: UserModifiedCreated
+version: 3.5.09

@@ -1,0 +1,90 @@
+id: 797db008-0a53-4510-9883-b32673f9c3f5
+kind: Scheduled
+name: SAP - Execution of a Sensitive Transaction Code
+description: |
+  Identifies execution of a sensitive Transaction Code.
+
+  Source Action: Execute a sensitive Transaction Code.
+
+  **Recommended for Production only**
+
+  Transaction Codes should be maintained in watchlist ""SAP - Sensitive Transaction Codes""
+
+  *Data Sources: SAPcon -  Audit Log*
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - Execution
+relevantTechniques: []
+query: |
+  // SAP - Execution of a Sensitive Transaction Code
+  // Define Variables
+  // the actual lookback period is 1h. The alert looks back further to allow for user master data to be built slowly
+  let TimeAgo= 75m;
+  // let AuditClasses = dynamic(['AU3']); // Audit Log Classes - Transaction Started
+  let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles) | project SystemID= SearchKey, SystemRole;
+  // Get Relevant Transaction Codes
+  let SensitiveTcode = _GetWatchlist('SAP - Sensitive Transactions') | summarize by TransactionCode;
+  // here you can exclude system users which are OK to execute a Sensitive Transaction Code
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'ExecuteSensitiveOK'
+  // can also specify SAP Roles or Profiles to exclude
+  let excludeUsersTags= dynamic(['ExecuteSensitiveOK','SAP_ALL']);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  // Query logic
+  SAPAuditLog
+  | where ingestion_time() > ago(TimeAgo)
+  | where MessageID == 'AU3'
+  | join kind=inner SelectedSystems on SystemID
+  | where TransactionCode in (SensitiveTcode) or Variable1 in (SensitiveTcode)
+  | extend TransactionCode = coalesce(Variable1, TransactionCode)
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  | order by TimeGenerated asc
+  | project TimeGenerated,Instance ,SystemID, ClientID, User, TransactionCode, MessageText, MessageID, Email, TerminalIPv6, Host, TCODE=Variable1, SystemRole
+  | extend AlertName= strcat("SAP - ", replace_string(MessageText, ".",""), " by user ", User," in a ", tolower(SystemRole), " system")
+  | extend AlertDescription= strcat(iff(TCODE in (SensitiveTcode), "Sensitive transaction code ", "Transaction code "), TCODE,
+  " was started from ", iff(TransactionCode in (SensitiveTcode), " the sensitive context of ", " from the context of "),TransactionCode, ". Sensitive transactions are being maintained in the 'SAP - Sensitive Transactions' watchlist.")
+  | extend Dummy= ""
+  | extend AlertRuleUniqueName = 'executionofasensitivetransactioncode'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: '{{AlertDescription}}'
+  alertTacticsColumnName: Dummy
+  alertSeverityColumnName: Dummy
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+  TransactionCode: TransactionCode
+version: 3.5.09
