@@ -1,0 +1,27 @@
+id: 32f6f758-e8a2-459f-82e4-2d75d1a08eb9
+name: AIBP - Browser agent removed soon after enrollment
+description: |
+  'Finds users whose Am I Being Pwned browser agent was removed within 7 days of enrolling, or removed more than once. A user who keeps removing the agent may be avoiding extension monitoring.'
+requiredDataConnectors:
+  - connectorId: AmIBeingPwnedEventsConnector
+    dataTypes:
+      - AIBPEvents_CL
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |-
+  AIBPEvents_CL
+  | where TimeGenerated > ago(30d)
+  | where EventType == "device.uninstalled"
+  | extend EnrolledDays = toint(Data.enrolledDays)
+  | summarize Removals = dcount(EventId), MinEnrolledDays = min(EnrolledDays), Devices = make_set(DeviceId), Platforms = make_set(Platform), LastRemoval = max(TimeGenerated) by IdentityEmail
+  | where Removals > 1 or MinEnrolledDays < 7
+  | extend AccountCustomEntity = IdentityEmail
+  | sort by Removals desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0

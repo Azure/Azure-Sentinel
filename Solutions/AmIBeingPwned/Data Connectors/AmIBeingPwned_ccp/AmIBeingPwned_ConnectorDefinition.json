@@ -1,0 +1,119 @@
+{
+  "name": "AmIBeingPwnedEventsConnector",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "AmIBeingPwnedEventsConnector",
+      "title": "Am I Being Pwned (via Codeless Connector Framework)",
+      "publisher": "Bay Area Labs Inc",
+      "descriptionMarkdown": "The [Am I Being Pwned](https://amibeingpwned.com/) connector ingests browser extension security events from your Am I Being Pwned organization into Microsoft Sentinel. Am I Being Pwned inventories the browser extensions installed across your company's devices, rates their risk and raises alerts.\n\nThe connector polls the Am I Being Pwned events API every five minutes and writes to the `AIBPEvents_CL` table. It collects four event types:\n\n- **alert.raised**: an issue alert about a risky extension (tier `urgent`, `action` or `blocked`).\n- **threat.detected**: a malicious or unanalyzable extension was found in your fleet, with how many installs it has.\n- **threat.resolved**: a threat was closed (resolved, a false positive, or cleared on its own).\n- **device.uninstalled**: the Am I Being Pwned browser agent was removed from a device.\n\n**Prerequisites:**\n1. An Am I Being Pwned organization.\n2. An organization API key with the `events:read` scope.",
+      "graphQueriesTableName": "AIBPEvents_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total events received",
+          "legend": "Am I Being Pwned events",
+          "baseQuery": "{{graphQueriesTableName}}"
+        },
+        {
+          "metricName": "Alerts received",
+          "legend": "alert.raised",
+          "baseQuery": "{{graphQueriesTableName}}\n| where EventType == \"alert.raised\""
+        },
+        {
+          "metricName": "Detections received",
+          "legend": "threat.detected",
+          "baseQuery": "{{graphQueriesTableName}}\n| where EventType == \"threat.detected\""
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Latest Am I Being Pwned events",
+          "query": "{{graphQueriesTableName}}\n| project TimeGenerated, EventType, AlertTier, ExtensionName, ExtensionId, Severity, InstallCount, IdentityEmail\n| sort by TimeGenerated desc\n| take 100"
+        },
+        {
+          "description": "Urgent extension alerts",
+          "query": "{{graphQueriesTableName}}\n| where EventType == \"alert.raised\" and AlertTier == \"urgent\"\n| project TimeGenerated, AlertReason, ExtensionName, ExtensionId, IssueKind, Severity, IssueState, StealsLogins, RemoteCode, InstallCount\n| sort by TimeGenerated desc"
+        },
+        {
+          "description": "Extensions with the most alerts",
+          "query": "{{graphQueriesTableName}}\n| where EventType == \"alert.raised\"\n| summarize Alerts = dcount(AlertId), MaxInstalls = max(InstallCount) by ExtensionId, ExtensionName\n| sort by Alerts desc"
+        },
+        {
+          "description": "Browser agent removals",
+          "query": "{{graphQueriesTableName}}\n| where EventType == \"device.uninstalled\"\n| project TimeGenerated, DeviceId, IdentityEmail, Platform\n| sort by TimeGenerated desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "{{graphQueriesTableName}}",
+          "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "status": 1,
+        "isPreview": false
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "read": true,
+              "write": true,
+              "delete": true
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "Am I Being Pwned API key",
+            "description": "An organization API key (it starts with `aibp_org_`) with the `events:read` scope. An organization admin creates one under **Integrations > Microsoft Sentinel** in the Am I Being Pwned dashboard."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Create an Am I Being Pwned API key",
+          "description": "1. Sign in to the [Am I Being Pwned dashboard](https://app.amibeingpwned.com/dashboard/integrations/microsoft-sentinel) as an organization admin.\n2. Under **Integrations > Microsoft Sentinel**, select **Create key**. The key can only read events.\n3. Copy the key (it starts with `aibp_org_`). It is shown only once."
+        },
+        {
+          "title": "2. Connect",
+          "description": "Paste the API key below and select **Connect**. Microsoft Sentinel then polls the Am I Being Pwned events API every five minutes. Events appear in the `AIBPEvents_CL` table.",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "API key",
+                "placeholder": "aibp_org_...",
+                "type": "password",
+                "name": "apiKey",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "disconnectLabel": "Disconnect",
+                "name": "toggle"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

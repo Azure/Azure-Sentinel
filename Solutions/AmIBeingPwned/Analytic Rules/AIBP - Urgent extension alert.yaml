@@ -1,0 +1,82 @@
+id: e87b27ca-aa44-4c85-8cd7-7903b509710e
+name: AIBP - Urgent extension alert
+version: 1.1.1
+kind: Scheduled
+description: |-
+  Raises an incident for every urgent issue alert from Am I Being Pwned. An urgent alert means a risky browser extension needs attention now, for example an extension that can steal logins is still running in the fleet, or a block that was sent is not taking effect. Each alert id produces one Microsoft Sentinel alert.
+severity: High
+requiredDataConnectors:
+  - connectorId: AmIBeingPwnedEventsConnector
+    dataTypes:
+      - AIBPEvents_CL
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Persistence
+relevantTechniques:
+  - T1176
+  - T1555
+query: |-
+  AIBPEvents_CL
+  // Arrival time, not event time: events land minutes after they happen.
+  | where ingestion_time() > ago(15m)
+  | where EventType == "alert.raised" and AlertTier == "urgent"
+  | summarize arg_max(TimeGenerated, *) by AlertId
+  | extend MalwareName = iif(isnotempty(ExtensionName), ExtensionName, ExtensionId)
+  // The first two machines and their users, as Host and Account entities
+  // (a rule maps at most five entities; the extension is the fifth).
+  | extend Host1 = tostring(Affected[0].machineName), Host2 = tostring(Affected[1].machineName)
+  | extend User1 = tostring(Affected[0].userEmail), User2 = tostring(Affected[1].userEmail)
+  | project TimeGenerated, AlertId, AlertReason, ThreatId, ExtensionId, ExtensionName, MalwareName, IssueKind, Severity, IssueState, StealsLogins, RemoteCode, InstallCount, AffectedMachines, DashboardUrl, Host1, Host2, User1, User2
+entityMappings:
+  - entityType: Malware
+    fieldMappings:
+      - identifier: Name
+        columnName: MalwareName
+      - identifier: Category
+        columnName: IssueKind
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Host1
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Host2
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User1
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User2
+customDetails:
+  ExtensionId: ExtensionId
+  AlertReason: AlertReason
+  IssueState: IssueState
+  InstallCount: InstallCount
+  StealsLogins: StealsLogins
+  RemoteCode: RemoteCode
+  AffectedMachines: AffectedMachines
+  ThreatId: ThreatId
+alertDetailsOverride:
+  alertDisplayNameFormat: AIBP urgent alert - {{MalwareName}} ({{AlertReason}})
+  alertDescriptionFormat: Am I Being Pwned raised an urgent alert for the browser extension {{MalwareName}} ({{ExtensionId}}) on {{InstallCount}} installs. The reason and state are in the custom details.
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: DashboardUrl
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1d
+    matchingMethod: AllEntities
+suppressionDuration: 5h
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
