@@ -146,10 +146,15 @@ def build_cd_only_mock_fixture(
         query_sha = compute_query_sha256(detection_name)
 
     marker = (scenario_marker or f"cd-only-{detection_id}").strip()
-    pos_rows = (
-        list(positive_controls)
-        if positive_controls is not None
-        else [
+    pos_rows: list[dict[str, Any]] = []
+    if positive_controls is not None:
+        for idx, row in enumerate(positive_controls, start=1):
+            if isinstance(row, Mapping):
+                item = dict(row)
+                item.setdefault("MatchKey", str(item.get("MatchKey") or item.get("matchKey") or f"{marker}-pos-{idx}"))
+                pos_rows.append(item)
+    else:
+        pos_rows = [
             {
                 "TimeGenerated": now_iso,
                 "Table": table,
@@ -162,11 +167,16 @@ def build_cd_only_mock_fixture(
                 "Severity": "High",
             }
         ]
-    )
-    neg_rows = (
-        list(negative_controls)
-        if negative_controls is not None
-        else [
+
+    neg_rows: list[dict[str, Any]] = []
+    if negative_controls is not None:
+        for idx, row in enumerate(negative_controls, start=1):
+            if isinstance(row, Mapping):
+                item = dict(row)
+                item.setdefault("MatchKey", str(item.get("MatchKey") or item.get("matchKey") or f"{marker}-neg-{idx}"))
+                neg_rows.append(item)
+    else:
+        neg_rows = [
             {
                 "TimeGenerated": now_iso,
                 "Table": table,
@@ -179,7 +189,6 @@ def build_cd_only_mock_fixture(
                 "Severity": "Informational",
             }
         ]
-    )
     expected_match_keys = [
         str(row.get("MatchKey") or row.get("matchKey") or f"{marker}-pos-{idx}")
         for idx, row in enumerate(pos_rows, start=1)
@@ -282,32 +291,88 @@ def generate_mock_data(
                 try:
                     raw = json.loads(candidate.read_text(encoding="utf-8-sig"))
                     records_by_table: dict[str, list[dict[str, Any]]] = {}
+                    pos_by_table: dict[str, list[dict[str, Any]]] = {}
+                    neg_by_table: dict[str, list[dict[str, Any]]] = {}
                     if isinstance(raw, dict) and isinstance(raw.get("tables"), dict):
                         for tbl, rows in raw["tables"].items():
                             if isinstance(rows, list):
-                                records_by_table[str(tbl)] = list(rows)
+                                tbl_str = str(tbl)
+                                dict_rows = [dict(r) for r in rows if isinstance(r, Mapping)]
+                                records_by_table[tbl_str] = dict_rows
+                                pos_rows = [
+                                    r
+                                    for r in dict_rows
+                                    if str(r.get("ControlType") or "").strip().lower() == "positive"
+                                    or r.get("ExpectedMatch") is True
+                                ]
+                                neg_rows = [
+                                    r
+                                    for r in dict_rows
+                                    if str(r.get("ControlType") or "").strip().lower() == "negative"
+                                    or r.get("ExpectedMatch") is False
+                                ]
+                                if pos_rows:
+                                    pos_by_table[tbl_str] = pos_rows
+                                if neg_rows:
+                                    neg_by_table[tbl_str] = neg_rows
                     elif isinstance(raw, list):
                         primary_table = tables[0] if tables else "Syslog"
-                        records_by_table[primary_table] = list(raw)
+                        dict_rows = [dict(r) for r in raw if isinstance(r, Mapping)]
+                        records_by_table[primary_table] = dict_rows
+                        pos_rows = [
+                            r
+                            for r in dict_rows
+                            if str(r.get("ControlType") or "").strip().lower() == "positive"
+                            or r.get("ExpectedMatch") is True
+                        ]
+                        neg_rows = [
+                            r
+                            for r in dict_rows
+                            if str(r.get("ControlType") or "").strip().lower() == "negative"
+                            or r.get("ExpectedMatch") is False
+                        ]
+                        if pos_rows:
+                            pos_by_table[primary_table] = pos_rows
+                        if neg_rows:
+                            neg_by_table[primary_table] = neg_rows
                     elif isinstance(raw, dict) and (
                         isinstance(raw.get("maliciousRecords"), list)
                         or isinstance(raw.get("positiveControls"), list)
                     ):
                         primary_table = str(raw.get("table") or (tables[0] if tables else "Syslog"))
-                        pos_list = list(raw.get("positiveControls") or raw.get("maliciousRecords") or [])
-                        neg_list = list(raw.get("negativeControls") or raw.get("benignRecords") or [])
+                        pos_list = [
+                            dict(r)
+                            for r in (raw.get("positiveControls") or raw.get("maliciousRecords") or [])
+                            if isinstance(r, Mapping)
+                        ]
+                        neg_list = [
+                            dict(r)
+                            for r in (raw.get("negativeControls") or raw.get("benignRecords") or [])
+                            if isinstance(r, Mapping)
+                        ]
+                        pos_by_table[primary_table] = pos_list
+                        neg_by_table[primary_table] = neg_list
                         records_by_table[primary_table] = [*pos_list, *neg_list]
                     if records_by_table:
-                        total_records = sum(len(v) for v in records_by_table.values())
-                        cd_only_fixtures = [
-                            build_cd_only_mock_fixture(
+                        cd_only_fixtures = []
+                        for d in descriptors:
+                            if not d.get("cdOnly"):
+                                continue
+                            tbl = d["tables"][0] if d["tables"] else (tables[0] if tables else "Syslog")
+                            fixture = build_cd_only_mock_fixture(
                                 d,
-                                table=(d["tables"][0] if d["tables"] else (tables[0] if tables else "Syslog")),
+                                table=tbl,
+                                positive_controls=pos_by_table.get(tbl),
+                                negative_controls=neg_by_table.get(tbl),
                                 timestamp=now_iso,
                             )
-                            for d in descriptors
-                            if d.get("cdOnly")
-                        ]
+                            if tbl in pos_by_table or tbl in neg_by_table:
+                                records_by_table[tbl] = [
+                                    *fixture["positiveControls"],
+                                    *fixture["negativeControls"],
+                                ]
+                            cd_only_fixtures.append(fixture)
+                        total_records = sum(len(v) for v in records_by_table.values())
                         return {
                             "status": "reused",
                             "reusedReviewedMock": True,

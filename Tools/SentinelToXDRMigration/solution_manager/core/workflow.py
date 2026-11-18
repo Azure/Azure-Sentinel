@@ -42,6 +42,7 @@ from solution_manager.authoring.authoring_contract import (
 from solution_manager.core.content_paths import content_path
 from solution_manager.migration.converter import (
     BEST_EFFORT_ENTITY_REVIEW_PREFIX,
+    PREFIXED_SOURCE_ID_PATTERN,
     SOURCE_ID_PATTERN,
     analytic_rule_files,
     inspect_solution,
@@ -373,13 +374,17 @@ def _source_inventory(solution: str | Path) -> list[dict[str, Any]]:
                     ((props.get("queryCondition") or {}).get("queryText") if isinstance(props.get("queryCondition"), dict) else None)
                     or document.get("query")
                 )
-                if not isinstance(rule_id, str) or not re.fullmatch(SOURCE_ID_PATTERN, rule_id):
+                if not isinstance(rule_id, str) or not (
+                    re.fullmatch(SOURCE_ID_PATTERN, rule_id)
+                    or re.fullmatch(PREFIXED_SOURCE_ID_PATTERN, rule_id)
+                ):
                     raise ValueError(f"native detection has no valid full GUID identity: {path}")
-                if rule_id.casefold() in seen_ids:
+                canonical_id = rule_id[4:] if rule_id.lower().startswith("xdr-") else rule_id
+                if canonical_id.casefold() in seen_ids:
                     raise ValueError(f"duplicate native detection identity in complete inventory: {rule_id}")
                 if not isinstance(query, str) or not query.strip():
                     raise ValueError(f"native detection has no non-empty query: {path}")
-                seen_ids.add(rule_id.casefold())
+                seen_ids.add(canonical_id.casefold())
                 inventory.append({
                     "ruleId": rule_id,
                     "path": path.relative_to(root).as_posix(),
@@ -465,6 +470,28 @@ def _budget_source_inventory(
             and re.fullmatch(SOURCE_ID_PATTERN, document["id"])
         ):
             rule_ids.add(document["id"])
+    output = root / "XDR Detections"
+    if not files and output.is_dir():
+        for path in xdr_detection_files(output):
+            content = path.read_bytes()
+            try:
+                document = yaml.safe_load(content.decode("utf-8-sig")) or {}
+            except (UnicodeError, yaml.YAMLError):
+                continue
+            if not _is_native_detection(document):
+                continue
+            props = document.get("properties") if isinstance(document.get("properties"), dict) else {}
+            det_id = props.get("id") or document.get("id")
+            if not isinstance(det_id, str) or not (
+                re.fullmatch(SOURCE_ID_PATTERN, det_id)
+                or re.fullmatch(PREFIXED_SOURCE_ID_PATTERN, det_id)
+            ):
+                continue
+            rows.append({
+                "path": path.relative_to(root).as_posix(),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            })
+            rule_ids.add(det_id)
     digest = hashlib.sha256(
         json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()

@@ -1127,19 +1127,20 @@ class DeploymentTests(unittest.TestCase):
 
         native_doc = document()
         native_doc["contentProvenance"].pop("source", None)
+        native_id = f"xdr-{RULE_ID}"
         native_doc["contentProvenance"].pop("conversion", None)
-        native_doc["properties"]["id"] = "native-standalone-rule-01"
+        native_doc["properties"]["id"] = native_id
         query_text = native_doc["properties"]["queryCondition"]["queryText"]
         expected_sha = compute_query_sha256(query_text)
 
         payload, projection = graph_detection_payload_with_projection(native_doc)
-        self.assertEqual("native-standalone-rule-01", payload["id"])
+        self.assertEqual(native_id, payload["id"])
         self.assertEqual("disabled", payload["status"])
         self.assertEqual(expected_sha, projection["querySha256"])
 
         restored = verify_graph_disabled_restoration(
             native_doc,
-            {"id": "native-standalone-rule-01", "status": "disabled", "isEnabled": False},
+            {"id": native_id, "status": "disabled", "isEnabled": False},
         )
         self.assertEqual("passed", restored["status"])
         self.assertTrue(restored["restoredToDisabled"])
@@ -1147,7 +1148,7 @@ class DeploymentTests(unittest.TestCase):
 
         not_restored = verify_graph_disabled_restoration(
             native_doc,
-            {"id": "native-standalone-rule-01", "status": "enabled", "isEnabled": True},
+            {"id": native_id, "status": "enabled", "isEnabled": True},
         )
         self.assertEqual("failed", not_restored["status"])
         self.assertFalse(not_restored["restoredToDisabled"])
@@ -1166,7 +1167,7 @@ class DeploymentTests(unittest.TestCase):
                 report = preflight_deployment(root)
 
         self.assertEqual("ready", report["payloadReadiness"][0]["status"])
-        self.assertEqual("native-standalone-rule-01", report["payloadReadiness"][0]["id"])
+        self.assertEqual(native_id, report["payloadReadiness"][0]["id"])
         self.assertEqual(expected_sha, report["payloadReadiness"][0]["querySha256"])
 
 

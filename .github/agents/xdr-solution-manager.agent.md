@@ -135,6 +135,7 @@ The workflow supports both Sentinel-derived and directly authored (native) XDR C
 
 - **Native / directly authored XDR Custom Detections**:
   - Authored directly under `Solutions/<Solution>/XDR Detections/*.yaml` and listed in `Solutions/<Solution>/Data/Solution_*.json` under `"XDR Detections"` without a source Sentinel `Analytic Rules/` YAML, without `contentProvenance.source` (or `querySha256`), and without `contentProvenance.conversion`.
+  - Must use `properties.id: xdr-<uuid>` with a newly generated GUID (`^xdr-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$`).
   - Only `contentProvenance.requiredWorkloads` and `contentProvenance.requiredDataConnectors` are required (with `dependencyReviewRequired: false` allowed once dependencies are reviewed/populated).
   - Per-file provenance behavior: native detections skip `MIG-V01` (source Analytic Rule and `querySha256` drift checks) and AR↔CD parity checks, and run target structural validation, KQL validation (without Sentinel workspace parser aliases), runtime validation, dependency validation, and V3.1 packaging checks.
 - **Sentinel-derived XDR Custom Detections**:

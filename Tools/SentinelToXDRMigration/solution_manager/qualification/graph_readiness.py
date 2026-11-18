@@ -116,7 +116,7 @@ def _detection_id(prepared: dict[str, Any]) -> None:
             return
         if sentinel_derived:
             properties["id"] = f"xdr-{source_id}"
-        elif isinstance(source_id, str) and source_id.strip():
+        else:
             properties["id"] = f"xdr-{detection_id}"
     elif isinstance(detection_id, str):
         match = re.fullmatch(PREFIXED_SOURCE_ID_PATTERN, detection_id)

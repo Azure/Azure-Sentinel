@@ -27,6 +27,7 @@ python -m pip install -e Tools\SentinelToXDRMigration
    - Enforces `MIG-V01` (source Analytic Rule lookup and `querySha256` drift check) and AR↔CD parity checks.
 2. **Native / directly authored XDR Custom Detections (standalone)**:
    - Authored directly under `Solutions/<Solution>/XDR Detections/*.yaml` and registered in `Solutions/<Solution>/Data/Solution_*.json` under `"XDR Detections"` without a source Sentinel `Analytic Rules/` YAML.
+   - Use `properties.id: xdr-<uuid>` with a newly generated lowercase/canonical GUID (matching `^xdr-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$`).
    - Omit `contentProvenance.source` (and `querySha256`) and `contentProvenance.conversion` (`source` and `conversion` must be provided together only for Sentinel-derived detections).
    - Only `contentProvenance.requiredWorkloads` and `contentProvenance.requiredDataConnectors` are required (with `dependencyReviewRequired: false` allowed once dependencies are reviewed and populated).
    - Per-file validation skips `MIG-V01` and AR↔CD parity and runs target structural validation, KQL validation (without Sentinel workspace parser aliases), runtime validation (when live), dependency validation, and V3.1 packaging checks.

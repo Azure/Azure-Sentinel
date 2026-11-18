@@ -125,8 +125,8 @@ For every XDR Detection YAML, require:
 - `properties.status: disabled`.
 
 For Sentinel-derived detections, `properties.id` is `xdr-<full source GUID>`,
-while `contentProvenance.source.id` remains the original unprefixed GUID. For native detections without `contentProvenance.source`, `properties.id` is the detection's own stable `xdr-<uuid>` (or `<uuid>` normalized to `xdr-<uuid>` in the packaged copy). The
-packager normalizes a bare GUID on its packaging copy, keeps a canonical
+while `contentProvenance.source.id` remains the original unprefixed GUID. For native detections without `contentProvenance.source`, `properties.id` in the authored YAML is the detection's own stable `xdr-<uuid>`. The
+packager normalizes a bare GUID on its packaging copy if encountered, keeps a canonical
 `xdr-` ID unchanged, and rejects unrelated custom IDs; it must not rewrite the
 authored detection YAML or provenance. Installation and registration IDs and
 references must use the same normalized identity. Existing deployed identities

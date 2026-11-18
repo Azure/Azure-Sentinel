@@ -350,9 +350,13 @@ def load_config(output_dir: Path, explicit: str | Path | None = None) -> dict[st
     return value
 
 
-def analytic_rule_files(solution: str | Path) -> list[Path]:
-    _, analytic, _ = solution_paths(solution)
-    return yaml_files(analytic)
+def analytic_rule_files(
+    solution: str | Path,
+    *,
+    require_analytic_rules: bool = True,
+) -> list[Path]:
+    _, analytic, _ = solution_paths(solution, require_analytic_rules=require_analytic_rules)
+    return yaml_files(analytic) if analytic.is_dir() else []
 
 
 def xdr_detection_files(output: Path) -> list[Path]:
@@ -2660,10 +2664,6 @@ def is_sentinel_derived(document: dict[str, Any]) -> bool:
             return False
     if isinstance(conversion, dict) and conversion.get("tool") == "sentinel-to-xdr-migration":
         return True
-    properties = document.get("properties") if isinstance(document, dict) else None
-    det_id = str(properties.get("id") or "").strip() if isinstance(properties, dict) else ""
-    if det_id.lower().startswith("xdr-"):
-        return True
     return False
 
 
@@ -2737,16 +2737,12 @@ def validate_document(document: dict[str, Any]) -> list[str]:
     conversion = provenance.get("conversion") or {}
     properties = document.get("properties") or {}
     detection_id = properties.get("id")
-    id_is_guid = isinstance(detection_id, str) and re.fullmatch(SOURCE_ID_PATTERN, detection_id)
     id_is_prefixed_guid = isinstance(detection_id, str) and re.fullmatch(
         PREFIXED_SOURCE_ID_PATTERN, detection_id,
     )
-    if not id_is_guid and not id_is_prefixed_guid and not (
-        isinstance(detection_id, str) and re.fullmatch(GRAPH_DETECTION_ID_PATTERN, detection_id)
-    ):
+    if not id_is_prefixed_guid:
         errors.append(
-            "properties.id must be a Graph-compatible identifier beginning with a letter "
-            "and containing at most 100 letters, digits, dashes, or underscores"
+            "properties.id must use the canonical xdr- prefix plus a full hyphenated GUID (for example, xdr-11111111-2222-3333-4444-555555555555)"
         )
     if is_sentinel_derived(document):
         if not isinstance(source.get("id"), str) or not re.fullmatch(SOURCE_ID_PATTERN, source["id"]):
@@ -2766,9 +2762,7 @@ def validate_document(document: dict[str, Any]) -> list[str]:
         if conversion.get("errors"):
             errors.extend(f"conversion: {value}" for value in conversion["errors"])
     else:
-        if is_sentinel_derived(document) or (
-            isinstance(provenance, dict) and ("source" in provenance or "conversion" in provenance)
-        ):
+        if isinstance(provenance, dict) and ("source" in provenance or "conversion" in provenance):
             if not isinstance(provenance.get("source"), dict):
                 errors.append("contentProvenance.source is required")
             if not isinstance(provenance.get("conversion"), dict):
@@ -2878,8 +2872,9 @@ def convert_solution(
     config_path: str | Path | None = None,
     rule_id: str | None = None,
 ) -> dict[str, Any]:
-    root, analytic, output = solution_paths(solution)
-    sources = analytic_rule_files(root)
+    has_xdr_detections = (Path(solution).expanduser().resolve() / "XDR Detections").is_dir()
+    root, analytic, output = solution_paths(solution, require_analytic_rules=not has_xdr_detections)
+    sources = analytic_rule_files(root, require_analytic_rules=not has_xdr_detections)
     existing_outputs = xdr_detection_files(output)
     existing_by_source: dict[str, list[Path]] = {}
     existing_by_id: dict[str, list[Path]] = {}
@@ -3204,6 +3199,12 @@ def convert_solution(
     reports = report_directory(root, create=True)
     transformation_report = reports / "transformation-report.html"
     manifest_path = reports / "manifest.json"
+    standalone_custom_detections = [
+        path.relative_to(root).as_posix()
+        for path in sorted(xdr_detection_files(output))
+        if isinstance(existing_documents.get(path), dict)
+        and not is_sentinel_derived(existing_documents[path])
+    ]
     summary = {
         "solution": str(root),
         "scope": {
@@ -3229,6 +3230,7 @@ def convert_solution(
             for result in results
         ),
         "conflicts": sum(result.status == "conflict" for result in results),
+        "standaloneCustomDetections": standalone_custom_detections,
         "results": [
             {
                 **result.as_dict(),

@@ -1116,7 +1116,7 @@ class QualificationOrchestratorTestCase(unittest.TestCase):
                     "requiredDataConnectors": [],
                 },
                 "properties": {
-                    "id": "cd-native-ps",
+                    "id": "xdr-11111111-2222-3333-4444-555555555555",
                     "displayName": "Native PowerShell Detection",
                     "status": "disabled",
                     "queryCondition": {"queryText": query_text},
@@ -1152,6 +1152,48 @@ class QualificationOrchestratorTestCase(unittest.TestCase):
             assert mock_payload["detections"][0]["querySha256"] == expected_sha
             assert len(mock_payload["cdOnlyFixtures"]) == 1
             assert mock_payload["cdOnlyFixtures"][0]["querySha256"] == expected_sha
+
+            # Verify reuse_reviewed=True keeps expectedMatchKeys/negativeControlKeys aligned with reviewed table rows
+            reviewed_rows = {
+                "tables": {
+                    "DeviceProcessEvents": [
+                        {
+                            "ControlType": "positive",
+                            "MatchKey": "reviewed-pos-key-1",
+                            "ProcessCommandLine": "powershell -enc AAA",
+                            "DeviceId": "dev-reviewed-1",
+                        },
+                        {
+                            "ControlType": "negative",
+                            "MatchKey": "reviewed-neg-key-1",
+                            "ProcessCommandLine": "cmd.exe /c dir",
+                            "DeviceId": "dev-reviewed-2",
+                        },
+                    ]
+                }
+            }
+            reviewed_path = sol_root / "mock.json"
+            reviewed_path.write_text(json.dumps(reviewed_rows), encoding="utf-8")
+            reused_payload = generate_mock_data(
+                sol_root, reuse_reviewed=True, reviewed_mock_path=reviewed_path
+            )
+            assert reused_payload["cdOnlyFixtures"][0]["expectedMatchKeys"] == ["reviewed-pos-key-1"]
+            assert reused_payload["cdOnlyFixtures"][0]["negativeControlKeys"] == ["reviewed-neg-key-1"]
+            table_match_keys = [
+                row.get("MatchKey")
+                for row in reused_payload["tables"]["DeviceProcessEvents"]
+            ]
+            assert "reviewed-pos-key-1" in table_match_keys
+            assert "reviewed-neg-key-1" in table_match_keys
+            from copy import deepcopy
+            from solution_manager.qualification.graph_readiness import _detection_id
+
+            _detection_id(native_doc)
+            assert native_doc["properties"]["id"] == "xdr-11111111-2222-3333-4444-555555555555"
+            bare_native_doc = deepcopy(native_doc)
+            bare_native_doc["properties"]["id"] = "11111111-2222-3333-4444-555555555555"
+            _detection_id(bare_native_doc)
+            assert bare_native_doc["properties"]["id"] == "xdr-11111111-2222-3333-4444-555555555555"
         finally:
             shutil.rmtree(scratch)
 

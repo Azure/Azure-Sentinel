@@ -224,8 +224,8 @@ function ConvertTo-V31CustomDetectionId {
     elseif ($DetectionId -match $prefixedPattern) {
         $normalized = "xdr-$($Matches[1])"
     }
-    elseif ($DetectionId -cnotmatch '\A[A-Za-z][A-Za-z0-9_-]{0,99}\z') {
-        throw "Custom Detection '$ContentPath' ID '$DetectionId' is invalid for Microsoft Graph; use a letter followed by at most 99 letters, digits, dashes, or underscores."
+    else {
+        throw "Custom Detection '$ContentPath' ID '$DetectionId' must be a GUID or its canonical xdr-<GUID> form; arbitrary custom IDs are not supported."
     }
 
     if ($normalized -cnotmatch '\A[A-Za-z][A-Za-z0-9_-]{0,99}\z') {

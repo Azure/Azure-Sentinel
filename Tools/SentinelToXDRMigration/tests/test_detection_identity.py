@@ -202,6 +202,8 @@ class DetectionIdentityTests(unittest.TestCase):
         document["contentProvenance"]["source"]["kind"] = "Other"
         document["contentProvenance"]["source"]["id"] = "other-source"
         document["contentProvenance"]["conversion"]["tool"] = "other-tool"
+        self.assertTrue(any("canonical xdr- prefix" in error for error in validate_document(document)))
+        document["properties"]["id"] = f"xdr-{OTHER_ID}"
         self.assertEqual([], validate_document(document))
         schema = json.loads((attribution.ROOT / "Tools/SentinelToXDRMigration/schema/xdr-detection.schema.json").read_text())
         Draft202012Validator.check_schema(schema)
@@ -218,7 +220,7 @@ class DetectionIdentityTests(unittest.TestCase):
 
         convert_solution(self.solution)
         document = self.read_output()
-        document["properties"]["id"] = "standalone-native-xdr-rule"
+        document["properties"]["id"] = f"xdr-{OTHER_ID}"
         document["contentProvenance"].pop("source", None)
         document["contentProvenance"].pop("conversion", None)
         self.write_output(document)
@@ -227,6 +229,22 @@ class DetectionIdentityTests(unittest.TestCase):
         schema = json.loads((attribution.ROOT / "Tools/SentinelToXDRMigration/schema/xdr-detection.schema.json").read_text())
         Draft202012Validator(schema).validate(document)
         self.assertEqual([], validate_document(document))
+
+        non_guid_doc = copy.deepcopy(document)
+        non_guid_doc["properties"]["id"] = "standalone-native-xdr-rule"
+        self.assertTrue(any("canonical xdr- prefix" in error for error in validate_document(non_guid_doc)))
+        with self.assertRaises(Exception):
+            Draft202012Validator(schema).validate(non_guid_doc)
+
+        converted_standalone = convert_solution(self.solution)
+        self.assertEqual(0, converted_standalone["total"])
+        self.assertEqual(0, converted_standalone["scope"]["sourceTotal"])
+        self.assertEqual(0, converted_standalone["converted"])
+        self.assertEqual(["XDR Detections/Rule.yaml"], converted_standalone["standaloneCustomDetections"])
+
+        source_inv = workflow._source_inventory(self.solution)
+        self.assertEqual(1, len(source_inv))
+        self.assertEqual(f"xdr-{OTHER_ID}", source_inv[0]["ruleId"])
 
         validation = validate_solution(self.solution)
         self.assertEqual(0, validation["invalid"], validation)
@@ -424,6 +442,12 @@ class PackagedIdentityTests(unittest.TestCase):
         document["contentProvenance"].setdefault("conversion", {})["tool"] = "other-tool"
         document["properties"]["id"] = "custom-authored-id"
         path.write_text("---\n" + json.dumps(document))
+        invalid_result = self.package(entry, False)
+        self.assertNotEqual(0, invalid_result.returncode)
+        self.assertIn("must be a GUID or its canonical xdr-<GUID> form", invalid_result.stdout + invalid_result.stderr)
+
+        document["properties"]["id"] = f"xdr-{OTHER_ID}"
+        path.write_text("---\n" + json.dumps(document))
         result = self.package(entry, False)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         template = json.loads((self.solution / "Package/mainTemplate.json").read_text())
@@ -431,7 +455,7 @@ class PackagedIdentityTests(unittest.TestCase):
             resource for resource in template["resources"]
             if resource.get("properties", {}).get("contentKind") == "CustomDetection"
         )
-        self.assertEqual("custom-authored-id", registration["properties"]["contentId"])
+        self.assertEqual(f"xdr-{OTHER_ID}", registration["properties"]["contentId"])
 
     def test_packaging_succeeds_for_standalone_and_xdr_only_solutions_without_analytic_rules(self):
         entry, path, document = self.fixture()
@@ -462,7 +486,7 @@ class PackagedIdentityTests(unittest.TestCase):
             standalone_doc = copy.deepcopy(document)
             standalone_doc["contentProvenance"].pop("source", None)
             standalone_doc["contentProvenance"].pop("conversion", None)
-            standalone_doc["properties"]["id"] = "standalone-xdr-rule-001"
+            standalone_doc["properties"]["id"] = f"xdr-{OTHER_ID}"
             path.write_text("---\n" + json.dumps(standalone_doc))
             for pipeline in (False, True):
                 result = self.package(entry, pipeline)
@@ -472,7 +496,43 @@ class PackagedIdentityTests(unittest.TestCase):
                     resource for resource in template["resources"]
                     if resource.get("properties", {}).get("contentKind") == "CustomDetection"
                 )
-                self.assertEqual("standalone-xdr-rule-001", registration["properties"]["contentId"])
+                self.assertEqual(f"xdr-{OTHER_ID}", registration["properties"]["contentId"])
+
+    def test_adding_net_new_standalone_custom_detection_to_existing_solution_packages_both(self):
+        entry, path, _ = self.fixture()
+        path.unlink()
+        (self.solution / "Analytic Rules/Test.yaml").write_text(RULE)
+        convert_solution(self.solution, overwrite=True)
+        converted_files = list((self.solution / "XDR Detections").glob("*.yaml"))
+        self.assertEqual(1, len(converted_files))
+        converted_files[0].replace(path)
+        document = yaml.safe_load(path.read_text())
+
+        standalone_doc = copy.deepcopy(document)
+        standalone_doc["contentProvenance"].pop("source", None)
+        standalone_doc["contentProvenance"].pop("conversion", None)
+        standalone_doc["properties"]["id"] = f"xdr-{OTHER_ID}"
+        standalone_doc["properties"]["displayName"] = "Net New Standalone XDR Detection"
+        standalone_path = self.solution / "XDR Detections/StandaloneNew.yaml"
+        standalone_path.write_text("---\n" + json.dumps(standalone_doc))
+
+        data = json.loads(self.data.read_text())
+        data["XDR Detections"].append("XDR Detections/StandaloneNew.yaml")
+        self.data.write_text(json.dumps(data))
+
+        validation = validate_solution(self.solution)
+        self.assertEqual(0, validation["invalid"], validation)
+        self.assertEqual(2, validation["valid"])
+
+        result = self.package(entry, False)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        template = json.loads((self.solution / "Package/mainTemplate.json").read_text())
+        registrations = [
+            resource["properties"]["contentId"]
+            for resource in template["resources"]
+            if resource.get("properties", {}).get("contentKind") == "CustomDetection"
+        ]
+        self.assertEqual({f"xdr-{SOURCE_ID}", f"xdr-{OTHER_ID}"}, set(registrations))
 
 
 if __name__ == "__main__":
