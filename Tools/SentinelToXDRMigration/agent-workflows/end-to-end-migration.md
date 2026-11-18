@@ -266,7 +266,13 @@ workbooks (`workbooksCount == 0`), the XDR Workbooks stage is skipped automatica
 ask the user whether they want `"playwright"` verification or `"kql-only"`
 validation (defaulting to `"kql-only"` when `doctor` reports Playwright is not
 installed). In `"playwright"` mode, always run live workbook KQL validation first
-and short-circuit (skip Playwright) if any workbook KQL query fails. UI assertions
+and short-circuit (skip Playwright) if any workbook KQL query fails. When a
+Defender XDR workbook query fails Advanced Hunting validation or
+`verify-workbooks-playwright` UI verification, never modify the Sentinel source
+workbook under `Workbooks/`. Apply fixes exclusively to the converted Defender
+XDR workbook under `XDR Workbooks/` using `workbook-update-plan`,
+`workbook-update-review`, and `workbook-update-apply`, then re-run
+`deploy-workbooks` and `verify-workbooks-playwright`. UI assertions
 compare reviewed expectations, not automatically fetched API results. Query
 evidence, browser evidence and full ARM/Content Hub acceptance remain separate.
 Existing `workbook-ui-import` accepts explicitly reviewed external captures; it

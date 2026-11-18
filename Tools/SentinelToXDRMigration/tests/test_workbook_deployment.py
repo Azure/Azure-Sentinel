@@ -390,6 +390,7 @@ class WorkbookDeploymentTests(unittest.TestCase):
             )
             self.assertEqual(fail_res["status"], "failed")
             self.assertFalse(fail_res["playwrightVerified"])
+            self.assertIn("Do not modify Sentinel source workbooks under Workbooks/", fail_res["remediation"])
             ev_doc_fail = json.loads(ev_path.read_text(encoding="utf-8"))
             self.assertFalse(ev_doc_fail["uiTraversal"]["domVerified"])
             self.assertEqual(ev_doc_fail["uiTraversal"]["status"], "failed")
@@ -400,6 +401,37 @@ class WorkbookDeploymentTests(unittest.TestCase):
                     for err in ev_doc_fail["workbookQualification"]["unresolvableErrors"]
                 )
             )
+
+    def test_blocks_when_sentinel_source_workbook_is_modified(self) -> None:
+        import hashlib
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "Solutions" / "AtlassianJiraAudit"
+            (root / "Workbooks").mkdir(parents=True, exist_ok=True)
+            (root / "XDR Workbooks").mkdir(parents=True, exist_ok=True)
+            source_file = root / "Workbooks" / "AtlassianJiraAudit.json"
+            original_bytes = b'{"version": "Notebook/1.0", "items": []}\n'
+            source_file.write_bytes(original_bytes)
+            original_sha = hashlib.sha256(original_bytes).hexdigest()
+
+            doc = workbook_document()
+            doc["contentProvenance"]["source"]["sha256"] = original_sha
+            (root / "XDR Workbooks" / "AtlassianJiraAudit.json").write_text(
+                json.dumps(doc), encoding="utf-8"
+            )
+
+            # Mutate the Sentinel source workbook
+            source_file.write_bytes(b'{"version": "Notebook/1.0", "items": [{"modified": true}]}\n')
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "Never modify Sentinel source workbooks under Workbooks/",
+            ):
+                verify_deployed_workbooks_playwright(
+                    root,
+                    target=TARGET,
+                    playwright_runner=lambda wb, _tgt: {"status": "passed", "tilesRendered": True},
+                )
 
 
 if __name__ == "__main__":

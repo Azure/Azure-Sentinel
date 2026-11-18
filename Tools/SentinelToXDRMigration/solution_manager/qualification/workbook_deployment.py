@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -387,6 +389,107 @@ def _verify_workbook_readback(
     return True, provenance_verified
 
 
+def ensure_source_workbooks_unchanged(
+    solution: str | Path,
+    *,
+    files: list[Path] | None = None,
+) -> None:
+    """Verify Sentinel source workbooks under Workbooks/ have not been modified after conversion."""
+    root = Path(solution).expanduser().resolve()
+    wb_files = (
+        list(files)
+        if files is not None
+        else xdr_workbook_files(root / "XDR Workbooks")
+    )
+    checked_sources: dict[str, str] = {}
+    for path in wb_files:
+        if not path.is_file():
+            continue
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8-sig"))
+        except Exception:
+            continue
+        if not isinstance(doc, Mapping):
+            continue
+        prov = doc.get("contentProvenance")
+        if not isinstance(prov, Mapping):
+            continue
+        source = prov.get("source")
+        if not isinstance(source, Mapping) and prov.get("format") == "public-workbook-v1":
+            try:
+                from solution_manager.authoring.workbook_publication import _receipt_path
+
+                receipt_file = _receipt_path(root, dict(doc))
+                if receipt_file.is_file():
+                    receipt = json.loads(receipt_file.read_text(encoding="utf-8-sig"))
+                    evidence = (receipt.get("evidence") or {}) if isinstance(receipt, Mapping) else {}
+                    baseline_text = evidence.get("baselineArtifact") or evidence.get("inputArtifact")
+                    if isinstance(baseline_text, str) and baseline_text.strip():
+                        baseline_doc = json.loads(baseline_text)
+                        if isinstance(baseline_doc, Mapping):
+                            b_prov = baseline_doc.get("contentProvenance")
+                            if isinstance(b_prov, Mapping):
+                                source = b_prov.get("source")
+                    if not isinstance(source, Mapping):
+                        source_artifacts = evidence.get("sourceArtifacts")
+                        if isinstance(source_artifacts, Mapping):
+                            for s_rel, s_text in source_artifacts.items():
+                                if isinstance(s_rel, str) and s_rel.strip() and isinstance(s_text, str):
+                                    checked_sources[s_rel.strip().replace("\\", "/")] = (
+                                        hashlib.sha256(s_text.encode("utf-8")).hexdigest().lower()
+                                    )
+            except Exception:
+                source = None
+        if isinstance(source, Mapping):
+            src_rel = source.get("path")
+            expected_sha = source.get("sha256")
+            if (
+                isinstance(src_rel, str)
+                and src_rel.strip()
+                and isinstance(expected_sha, str)
+                and len(expected_sha.strip()) == 64
+            ):
+                checked_sources[src_rel.strip().replace("\\", "/")] = expected_sha.strip().lower()
+
+    logs_root = root / "Logs" / "sentinel-xdr-migration"
+    if logs_root.is_dir():
+        for state_file in sorted(logs_root.glob("*/workflow-state.json")):
+            try:
+                state_doc = json.loads(state_file.read_text(encoding="utf-8-sig"))
+            except Exception:
+                continue
+            wb_section = state_doc.get("workbooks") if isinstance(state_doc, Mapping) else None
+            inventory = wb_section.get("inventory") if isinstance(wb_section, Mapping) else None
+            if isinstance(inventory, list):
+                for item in inventory:
+                    if not isinstance(item, Mapping):
+                        continue
+                    src_rel = item.get("path") or item.get("sourcePath")
+                    expected_sha = item.get("sha256") or item.get("sourceSha256")
+                    if (
+                        isinstance(src_rel, str)
+                        and src_rel.strip()
+                        and isinstance(expected_sha, str)
+                        and len(expected_sha.strip()) == 64
+                    ):
+                        checked_sources[src_rel.strip().replace("\\", "/")] = (
+                            expected_sha.strip().lower()
+                        )
+
+    for src_rel, expected_sha in sorted(checked_sources.items()):
+        src_path = (root / src_rel).resolve()
+        if not src_path.is_relative_to(root) or not src_path.is_file():
+            continue
+        actual_sha = hashlib.sha256(src_path.read_bytes()).hexdigest().lower()
+        if actual_sha != expected_sha:
+            raise ValueError(
+                f"Sentinel source workbook '{src_rel}' was modified after conversion. "
+                f"Never modify Sentinel source workbooks under Workbooks/ to fix Defender XDR issues; "
+                f"revert '{src_rel}' and apply fixes only to 'XDR Workbooks/' via "
+                f"workbook-update-plan, workbook-update-review, and workbook-update-apply."
+            )
+
+
 def deploy_workbooks(
     solution: str | Path,
     *,
@@ -400,6 +503,7 @@ def deploy_workbooks(
     target = require_locked_target(root)
     output = root / "XDR Workbooks"
     files = xdr_workbook_files(output)
+    ensure_source_workbooks_unchanged(root, files=files)
     from solution_manager.packaging.packaging_selection import (
         current_applied_package_selection,
     )

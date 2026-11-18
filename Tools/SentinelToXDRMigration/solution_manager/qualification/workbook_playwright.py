@@ -142,6 +142,41 @@ def _resolve_workbook_instance_id(wb_path: Path) -> tuple[str, str]:
     return instance_id, display_name
 
 
+def _count_visible_query_panels(wb_path: Path, rendered_text: str) -> int:
+    """Return the count of workbook query panels (type == 3) visible in rendered_text."""
+    try:
+        doc = json.loads(wb_path.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+
+    titles: list[str] = []
+    total_queries = 0
+
+    def _walk(items: Any) -> None:
+        nonlocal total_queries
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if not isinstance(item, Mapping):
+                continue
+            content = item.get("content") if isinstance(item.get("content"), Mapping) else {}
+            if item.get("type") == 3:
+                total_queries += 1
+                title = " ".join(str(content.get("title") or content.get("chartTitle") or "").split()).strip()
+                if title:
+                    titles.append(title.lower())
+            if isinstance(content.get("items"), list):
+                _walk(content.get("items"))
+
+    _walk(doc.get("items"))
+    normalized_text = " ".join(str(rendered_text or "").split()).lower()
+    if titles and normalized_text:
+        visible_titled = sum(1 for title in titles if title in normalized_text)
+        if visible_titled > 0:
+            return visible_titled
+    return total_queries
+
+
 def live_playwright_workbook_runner(
     workbook_rel_path: str,
     target: Mapping[str, Any] | None = None,
@@ -299,10 +334,12 @@ def live_playwright_workbook_runner(
     # Check if every panel on the initial view returned no results and no data rows rendered
     initial_text = text_blocks[0] if text_blocks else ""
     initial_no_data = count_no_data_panels([initial_text])
+    visible_query_panels = _count_visible_query_panels(wb_file, initial_text)
     has_data = True
     if initial_no_data > 0 and not query_errors:
-        # Check if there is any non-boilerplate data or if all panels are empty
-        if initial_no_data >= 1 and " item" not in initial_text.lower() and " rows" not in initial_text.lower():
+        # Check if there is any non-boilerplate data or if all visible panels are empty
+        all_visible_panels_empty = initial_no_data >= max(1, visible_query_panels)
+        if all_visible_panels_empty and " item" not in initial_text.lower() and " rows" not in initial_text.lower():
             # Flag when panels only show "The query returned no results."
             query_errors.append(
                 f"No data rendered: {initial_no_data} panel(s) returned 'The query returned no results.' (table has no rows in selected TimeRange)."
@@ -397,18 +434,28 @@ def verify_workbook_playwright_rendering(
         results.append(entry)
 
     reasons: list[str] = []
+    remediation: str | None = None
     if not all_passed:
         reasons.append("One or more Defender Workbooks failed Playwright visual/tile rendering verification.")
         for item in results:
             for err in item.get("queryErrors") or []:
                 reasons.append(f"{item['workbook']}: {err}")
+        remediation = (
+            "Do not modify Sentinel source workbooks under Workbooks/. "
+            "Apply fixes only to converted Defender XDR workbooks under XDR Workbooks/ "
+            "using workbook-update-plan, workbook-update-review, and workbook-update-apply, "
+            "then re-run deploy-workbooks and verify-workbooks-playwright."
+        )
 
-    return {
+    out: dict[str, Any] = {
         "status": "passed" if all_passed else "failed",
         "playwrightVerified": all_passed,
         "workbooks": results,
         "reasons": reasons,
     }
+    if remediation is not None:
+        out["remediation"] = remediation
+    return out
 
 
 def update_qualification_evidence_from_playwright(
@@ -497,7 +544,12 @@ def verify_deployed_workbooks_playwright(
     playwright_runner: Callable[[str, Mapping[str, Any] | None], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify deployed XDR workbooks via Playwright and optionally update qualification-evidence.json."""
+    from solution_manager.qualification.workbook_deployment import (
+        ensure_source_workbooks_unchanged,
+    )
+
     sol_root = Path(solution_path).expanduser().resolve()
+    ensure_source_workbooks_unchanged(sol_root)
     wb_list = list(workbooks or [])
     if not wb_list:
         wb_list = [
