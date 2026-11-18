@@ -1,0 +1,30 @@
+id: 4d5e6f7a-8b9c-4d0e-1f2a-aabbccddeef4
+name: High harvest-now-decrypt-later risk rate across VPN tunnels
+description: |
+  More than 30% of active PQC VPN tunnels in the last 24 hours were established without quantum
+  protection (HNDLRisk_d=1). Traffic through these tunnels is vulnerable to harvest-now-decrypt-later
+  attacks. This is an adoption tracking signal -- review which peers lack PQC support and prioritize
+  their upgrade to ML-KEM-768 hybrid key exchange.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: QCryptonPQCVPNOverlay
+    dataTypes:
+      - PQCVPNOverlay_CL
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1040
+query: |
+  PQCVPNOverlay_CL
+  | where TimeGenerated > ago(1d)
+  | where EventType_s == "tunnel_up"
+  | summarize Total = count(), AtRisk = countif(HNDLRisk_d == 1) by bin(TimeGenerated, 1d)
+  | extend HNDLPct = round(100.0 * AtRisk / Total, 1)
+  | where HNDLPct > 30
+  | project TimeGenerated, Total, AtRisk, HNDLPct
+version: 1.0.0
+kind: Scheduled
