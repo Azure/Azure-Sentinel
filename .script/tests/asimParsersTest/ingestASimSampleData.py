@@ -644,7 +644,7 @@ for file in parser_yaml_files:
                         print(f"Provided column Type other than GUID TYPE is not matching with Output Stream : {item}")
                 if guid_flag == 1:
                     print("Please provide Same Type of columns in stream declaration that matches with output stream of DCR")
-                    exit(1)
+                    sys.exit(1)
                 cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
                 guid_columns = cleaned_guid_columns
                 print("Re trying DCR creation after removing GUID columns")
