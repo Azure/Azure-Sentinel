@@ -1,0 +1,327 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "BigID DSPM - Fetch Full Case Catalog Objects (Workbook On-Demand)",
+    "description": "On-demand Microsoft Sentinel Playbook invoked from the BigID DSPM Workbook via ARM Action. Queries BigID (/api/v1/data-catalog/ with SIMPLE_PROJECT up to 1,000 objects) for the selected case and ingests the results into BigIDDSPMEvidence_CL via the Azure Monitor Logs Ingestion API.",
+    "prerequisites": [
+      "1. A BigID API refresh token with access to Data Catalog APIs.",
+      "2. The BigID DSPM CCF Data Connector deployed (provides the Data Collection Endpoint and BigIDDSPMCasesDCR)."
+    ],
+    "lastUpdateTime": "2026-11-23T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "Enrichment",
+      "Workbook"
+    ],
+    "support": {
+      "tier": "Partner",
+      "name": "BigID",
+      "email": "support@bigid.com",
+      "link": "https://support.bigid.com"
+    },
+    "author": {
+      "name": "BigID"
+    },
+    "source": {
+      "type": "solution",
+      "name": "BigID"
+    },
+    "postDeployment": [
+      "1. Open the BigID DSPM Posture & Case Triage Workbook, select any case in the Case & Objects Triage tab, switch to 'Pull up to 1,000 Objects from BigID (Playbook)', and click 'Fetch up to 1,000 Objects from BigID'."
+    ],
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "BigID DSPM - Fetch Full Case Catalog Objects (Workbook On-Demand)",
+        "notes": [
+          "Initial version supporting native ARM Action execution from the BigID DSPM Workbook with ingestion into BigIDDSPMEvidence_CL."
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "BigID-GetCaseAssetEvidence",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    },
+    "BigIDToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "BigID API refresh token (stored securely and masked in run history)"
+      }
+    }
+  },
+  "variables": {
+    "MonitoringMetricsPublisherRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+    "MonitoringReaderRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '43d0d8ad-25c7-4714-9337-8ba259a9fe05')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "BigID-GetCaseAssetEvidence",
+        "hidden-SentinelTemplateVersion": "1.0.0",
+        "LogicAppsCategory": "security"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "BigIDToken": {
+              "type": "SecureString"
+            },
+            "ArmEndpoint": {
+              "defaultValue": "[if(endsWith(environment().resourceManager, '/'), substring(environment().resourceManager, 0, sub(length(environment().resourceManager), 1)), environment().resourceManager)]",
+              "type": "String"
+            },
+            "SubscriptionId": {
+              "defaultValue": "[subscription().subscriptionId]",
+              "type": "String"
+            },
+            "ResourceGroupName": {
+              "defaultValue": "[resourceGroup().name]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "method": "POST",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "caseId": {
+                      "type": "string"
+                    },
+                    "dataSourceName": {
+                      "type": "string"
+                    },
+                    "policyName": {
+                      "type": "string"
+                    },
+                    "bigidFqdn": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "actions": {
+            "List_Data_Collection_Rules": {
+              "runAfter": {},
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "@{parameters('ArmEndpoint')}/subscriptions/@{parameters('SubscriptionId')}/resourceGroups/@{parameters('ResourceGroupName')}/providers/Microsoft.Insights/dataCollectionRules?api-version=2023-03-11",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "@{parameters('ArmEndpoint')}/"
+                }
+              }
+            },
+            "Filter_BigID_DCR": {
+              "runAfter": {
+                "List_Data_Collection_Rules": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@coalesce(body('List_Data_Collection_Rules')?['value'], json('[]'))",
+                "where": "@contains(toLower(coalesce(item()?['name'], '')), 'bigiddspmcasesdcr')"
+              }
+            },
+            "Get_Data_Collection_Endpoint": {
+              "runAfter": {
+                "Filter_BigID_DCR": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "@{parameters('ArmEndpoint')}@{first(body('Filter_BigID_DCR'))?['properties']?['dataCollectionEndpointId']}?api-version=2023-03-11",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "@{parameters('ArmEndpoint')}/"
+                }
+              }
+            },
+            "Exchange_BigID_Refresh_Token": {
+              "runAfter": {
+                "Get_Data_Collection_Endpoint": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs",
+                    "outputs"
+                  ]
+                }
+              },
+              "inputs": {
+                "method": "GET",
+                "uri": "https://@{triggerBody()?['bigidFqdn']}/api/v1/refresh-access-token",
+                "headers": {
+                  "Accept": "application/json",
+                  "Authorization": "@{parameters('BigIDToken')}"
+                }
+              }
+            },
+            "Fetch_Catalog_Objects_SimpleProject": {
+              "runAfter": {
+                "Exchange_BigID_Refresh_Token": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs"
+                  ]
+                }
+              },
+              "inputs": {
+                "method": "GET",
+                "uri": "https://@{triggerBody()?['bigidFqdn']}/api/v1/data-catalog/",
+                "queries": {
+                  "limit": "1000",
+                  "queryType": "SIMPLE_PROJECT",
+                  "fieldsToProject": "fullyQualifiedName,objectName,fullObjectName,containerName,objectType,detailedObjectType,sizeInBytes,total_pii_count,attribute,owner,sharedWith,last_scanned",
+                  "filter": "system IN (\"@{triggerBody()?['dataSourceName']}\") AND policy IN (\"@{triggerBody()?['policyName']}\")"
+                },
+                "headers": {
+                  "Accept": "application/json",
+                  "Authorization": "@{body('Exchange_BigID_Refresh_Token')?['systemToken']}",
+                  "User-Agent": "BigID-MSFT-Sentinel-Playbook (workbook-data-catalog)"
+                }
+              }
+            },
+            "Project_Evidence_Records": {
+              "runAfter": {
+                "Fetch_Catalog_Objects_SimpleProject": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@coalesce(body('Fetch_Catalog_Objects_SimpleProject')?['results'], json('[]'))",
+                "select": {
+                  "TimeGenerated": "@{utcNow()}",
+                  "CaseId": "@{triggerBody()?['caseId']}",
+                  "DataSourceName": "@{triggerBody()?['dataSourceName']}",
+                  "PolicyName": "@{triggerBody()?['policyName']}",
+                  "ObjectName": "@{coalesce(item()?['objectName'], '')}",
+                  "FullyQualifiedName": "@{coalesce(item()?['fullyQualifiedName'], '')}",
+                  "ContainerName": "@{coalesce(item()?['containerName'], '')}",
+                  "ObjectType": "@{coalesce(item()?['detailedObjectType'], item()?['objectType'], '')}",
+                  "TotalPiiCount": "@coalesce(item()?['total_pii_count'], 0)",
+                  "ObjectSizeInBytes": "@coalesce(item()?['sizeInBytes'], 0)",
+                  "Classifications": "@coalesce(item()?['attribute'], json('[]'))",
+                  "ObjectOwner": "@coalesce(item()?['owner'], json('[]'))",
+                  "SharedWith": "@coalesce(item()?['sharedWith'], json('[]'))",
+                  "LastScanned": "@{coalesce(item()?['last_scanned'], '')}"
+                }
+              }
+            },
+            "Check_Has_Records": {
+              "runAfter": {
+                "Project_Evidence_Records": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Project_Evidence_Records'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "For_each_Batch": {
+                  "type": "Foreach",
+                  "foreach": "@chunk(body('Project_Evidence_Records'), 200)",
+                  "runAfter": {},
+                  "actions": {
+                    "Ingest_To_Log_Analytics": {
+                      "runAfter": {},
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{body('Get_Data_Collection_Endpoint')?['properties']?['logsIngestion']?['endpoint']}/dataCollectionRules/@{first(body('Filter_BigID_DCR'))?['properties']?['immutableId']}/streams/Custom-BigIDDSPMEvidence_CL?api-version=2023-01-01",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": "@items('For_each_Batch')",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://monitor.azure.com/"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "BigIDToken": {
+            "value": "[parameters('BigIDToken')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, parameters('PlaybookName'), '3913510d-42f4-4e42-8a64-420c390055eb')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('MonitoringMetricsPublisherRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, parameters('PlaybookName'), '43d0d8ad-25c7-4714-9337-8ba259a9fe05')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('MonitoringReaderRoleId')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      }
+    }
+  ]
+}

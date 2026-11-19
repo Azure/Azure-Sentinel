@@ -1,0 +1,175 @@
+id: 9b4e2f1a-8c3d-4e5f-a1b2-3c4d5e6f7a8b
+Function:
+  Title: Parser for BigID DSPM Cases
+  Version: '1.0.0'
+  LastUpdated: '2026-11-23'
+Category: Microsoft Sentinel Parser
+FunctionName: BigIDDSPMCases
+FunctionAlias: BigIDDSPMCases
+FunctionQuery: |
+    let _caseClassifiers =
+        union isfuzzy=true BigIDDSPMCaseClassifiers_CL
+        | extend _clsCaseId = column_ifexists('CaseId', ''),
+            _clsData = column_ifexists('classifiers', dynamic([]))
+        | where isnotempty(_clsCaseId)
+        | summarize arg_max(TimeGenerated, _clsData) by CaseId = _clsCaseId
+        | project CaseId, _joinedClassifiers = parse_json(tostring(_clsData));
+    BigIDDSPMCases_CL
+    | extend _case = parse_json(dspmCase)
+    | extend CaseId = tostring(_case.caseId)
+    | where isnotempty(CaseId)
+    | extend BigIDFqdn = column_ifexists('bigidFqdn', ''),
+        _classifiersRaw = column_ifexists('classifiers', dynamic([]))
+    | summarize arg_max(TimeGenerated, dspmCase, datasource, expand, _classifiersRaw, BigIDFqdn) by CaseId
+    | join kind=leftouter _caseClassifiers on CaseId
+    | project-away CaseId1
+    | extend
+        _case = parse_json(dspmCase),
+        _ds = parse_json(datasource),
+        _exp = parse_json(expand),
+        CaseClassifiers = coalesce(
+            iff(array_length(_joinedClassifiers) > 0, _joinedClassifiers, dynamic(null)),
+            iff(array_length(parse_json(tostring(_classifiersRaw))) > 0, parse_json(tostring(_classifiersRaw)), dynamic(null)),
+            dynamic([])
+        )
+    | extend
+        _obj = iif(gettype(_exp) == 'array', _exp[0], _exp),
+        SampleEvidence = iif(gettype(_exp) == 'array', _exp, pack_array(_exp))
+    | extend
+        CaseInternalId = tostring(_case.id),
+        CaseLabel = tostring(_case.caseLabel),
+        PolicyName = tostring(_case.policyName),
+        PolicyFqdn = tostring(_case.policyFqdn),
+        PolicyType = tostring(_case.policyType),
+        PolicyDescription = tostring(_case.policyDescription),
+        Compliance = tostring(_case.compliance),
+        Severity = tolower(tostring(_case.severityLevel)),
+        SentinelSeverity = case(
+            tostring(_case.severityLevel) in~ ('critical', 'high'), 'High',
+            tostring(_case.severityLevel) =~ 'medium', 'Medium',
+            tostring(_case.severityLevel) =~ 'low', 'Low',
+            'Informational'
+        ),
+        Status = tolower(tostring(_case.caseStatus)),
+        CaseType = tostring(_case.caseType),
+        Assignee = tostring(_case.assignee),
+        PolicyOwner = tostring(_case.policyOwner),
+        AffectedObjectsCount = toint(_case.numberOfAffectedObjects),
+        RemediatedObjectsCount = toint(_case.numberOfRemediatedObjects),
+        IsRemediated = tobool(_case.isRemediated),
+        PolicyLastTriggered = todatetime(_case.policyLastTriggered),
+        CaseCreatedAt = todatetime(_case.created_at),
+        CaseUpdatedAt = todatetime(_case.updated_at),
+        DataSourceName = tostring(_case.dataSourceName),
+        DataSourceType = tostring(_case.dataSourceType),
+        DataSourceDisplayName = tostring(_case.dataSourceDisplayName),
+        Vendor = tostring(_ds.vendor),
+        Environment = tostring(_ds.environments[0]),
+        SystemId = tostring(_ds.systemId),
+        CloudIdentifier = iif(tostring(_ds.cloudIdentifier) == 'arn:bigid:s3:::all_buckets', '', tostring(_ds.cloudIdentifier)),
+        CloudAccount = tostring(_ds.cloudAccount),
+        CloudRegion = case(
+            isnotempty(tostring(_ds.cloudRegion)), tostring(_ds.cloudRegion),
+            isnotempty(tostring(_ds.location)), tostring(_ds.location),
+            ''
+        ),
+        CloudPlatform = case(
+            tostring(_ds.cloudIdentifier) startswith 'arn:', 'AWS',
+            tostring(_ds.cloudIdentifier) startswith '/subscriptions/', 'AZURE',
+            tostring(_ds.cloudIdentifier) matches regex @"^//[a-z0-9-]+\.googleapis\.com/", 'GCP',
+            tostring(_ds.environments[0])
+        ),
+        CloudResourceInstance = case(
+            isnotempty(tostring(_ds.cloudIdentifier)) and tostring(_ds.cloudIdentifier) != 'arn:bigid:s3:::all_buckets', tostring(_ds.cloudIdentifier),
+            isnotempty(tostring(_ds.systemId)), tostring(_ds.systemId),
+            tostring(_case.dataSourceName)
+        ),
+        AzureResourceId = iif(tostring(_ds.cloudIdentifier) startswith '/subscriptions/', tolower(tostring(_ds.cloudIdentifier)), ''),
+        SecurityTier = tostring(_ds.security_tier),
+        ObjectId = tostring(_obj.id),
+        ObjectName = tostring(_obj.objectName),
+        ObjectPath = tostring(_obj.fullObjectName),
+        _dir = extract('^(.+)[/\\\\][^/\\\\]+$', 1, tostring(_obj.fullObjectName)),
+        ObjectDirectory = iif(isnotempty(extract('^(.+)[/\\\\][^/\\\\]+$', 1, tostring(_obj.fullObjectName))), extract('^(.+)[/\\\\][^/\\\\]+$', 1, tostring(_obj.fullObjectName)), tostring(_obj.containerName)),
+        FullyQualifiedName = tostring(_obj.fullyQualifiedName),
+        ContainerName = tostring(_obj.containerName),
+        ObjectType = tostring(_obj.objectType),
+        DetailedObjectType = tostring(_obj.detailedObjectType),
+        ObjectSizeInBytes = tolong(_obj.sizeInBytes),
+        TotalPiiCount = toint(_obj.total_pii_count),
+        Classifications = _obj.attribute,
+        ObjectTags = _obj.tags,
+        SharedWith = _obj.sharedWith,
+        SharedWithGroup = _obj.sharedWithGroup,
+        LastScanned = todatetime(_obj.last_scanned),
+        ObjectOwner = case(
+            isnotempty(tostring(_obj.owner)) and tostring(_obj.owner) != '[]', tostring(_obj.owner),
+            isnotempty(tostring(_case.dataSourceOwner)) and tostring(_case.dataSourceOwner) != '[]', tostring(_case.dataSourceOwner),
+            ''
+        ),
+        ProviderName = 'BigID',
+        ProductName = 'BigID DSPM',
+        ProductComponentName = 'Data Risk Management',
+        BigIDCasePath = strcat('/#/data-risk-management?caseId=', tostring(_case.id)),
+        BigIDCaseUrl = iif(isnotempty(BigIDFqdn), strcat('https://', BigIDFqdn, '/#/data-risk-management?caseId=', tostring(_case.id)), ''),
+        BigIDScanAnalysisPath = '/#/scan-analysis'
+    | project
+        TimeGenerated,
+        CaseId,
+        CaseInternalId,
+        CaseLabel,
+        PolicyName,
+        PolicyFqdn,
+        PolicyType,
+        PolicyDescription,
+        Compliance,
+        Severity,
+        SentinelSeverity,
+        Status,
+        CaseType,
+        Assignee,
+        PolicyOwner,
+        AffectedObjectsCount,
+        RemediatedObjectsCount,
+        IsRemediated,
+        PolicyLastTriggered,
+        CaseCreatedAt,
+        CaseUpdatedAt,
+        DataSourceName,
+        DataSourceType,
+        DataSourceDisplayName,
+        Vendor,
+        Environment,
+        SystemId,
+        CloudPlatform,
+        CloudAccount,
+        CloudRegion,
+        CloudIdentifier,
+        CloudResourceInstance,
+        AzureResourceId,
+        SecurityTier,
+        ObjectId,
+        ObjectName,
+        ObjectPath,
+        ObjectDirectory,
+        FullyQualifiedName,
+        ContainerName,
+        ObjectType,
+        DetailedObjectType,
+        ObjectSizeInBytes,
+        TotalPiiCount,
+        Classifications,
+        CaseClassifiers,
+        ObjectTags,
+        SharedWith,
+        SharedWithGroup,
+        LastScanned,
+        ObjectOwner,
+        SampleEvidence,
+        ProviderName,
+        ProductName,
+        ProductComponentName,
+        BigIDFqdn,
+        BigIDCasePath,
+        BigIDCaseUrl,
+        BigIDScanAnalysisPath
