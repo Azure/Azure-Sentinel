@@ -17,7 +17,6 @@ from typing import Any, Mapping, Protocol, Sequence
 import requests
 import yaml
 
-from asim_ingestion.columns import is_platform_managed_column
 from asim_ingestion.fixtures.data import canonicalize_row_column_names
 from asim_ingestion.fixtures.timestamps import (
     parse_kusto_datetime_ticks,
@@ -48,6 +47,14 @@ DEFAULT_LOCATION = "eastus2euap"
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 RESOURCE_NAME_RE = re.compile(r"[^a-z0-9-]+")
+REPLAY_EXCLUDED_COLUMNS = {
+    "_BilledSize",
+    "_IsBillable",
+    "_ItemId",
+    "_ResourceId",
+    "_SubscriptionId",
+    "_TimeReceived",
+}
 
 
 class HarnessError(RuntimeError):
@@ -274,7 +281,6 @@ def build_fixture_snapshot(
             "type": _normalize_dcr_type(str(column["type"])),
         }
         for column in schema
-        if not is_platform_managed_column(column["name"])
     ]
     try:
         normalized_rows = canonicalize_row_column_names(
@@ -286,12 +292,15 @@ def build_fixture_snapshot(
     known_names = {
         column["name"] for column in normalized_schema
     }
+    excluded_names = {
+        name.casefold() for name in REPLAY_EXCLUDED_COLUMNS
+    }
     extra_names = [
         str(name)
         for row in normalized_rows
         for name in row
         if str(name) not in known_names
-        and not is_platform_managed_column(name)
+        and str(name).casefold() not in excluded_names
     ]
     for name in dict.fromkeys(extra_names):
         values = [

@@ -18,7 +18,6 @@ sys.modules[SPEC.name] = HARNESS
 SPEC.loader.exec_module(HARNESS)
 
 from asim_ingestion.azure.common import build_fixture_snapshot
-from asim_ingestion.columns import PLATFORM_MANAGED_COLUMNS
 
 
 class FakeResponse:
@@ -235,46 +234,6 @@ class IngestionHarnessUnitTests(unittest.TestCase):
                     }
                 ],
             )
-
-    def test_snapshot_excludes_all_platform_managed_columns(self):
-        timestamp = "2026-10-16T19:55:00.1234567Z"
-        schema = [
-            {"name": "TimeGenerated", "type": "datetime"},
-            {"name": "Value", "type": "string"},
-            *[
-                {"name": name, "type": "string"}
-                for name in sorted(PLATFORM_MANAGED_COLUMNS)
-            ],
-        ]
-        fixture_row = {
-            "TimeGenerated": timestamp,
-            "Value": "one",
-            **{
-                name: f"{name}-value"
-                for name in PLATFORM_MANAGED_COLUMNS
-            },
-        }
-
-        snapshot = build_fixture_snapshot(
-            target_id="parser-a",
-            table_name="Contoso_CL",
-            timestamps=[timestamp],
-            schema=schema,
-            fixture_rows=[fixture_row],
-        )
-
-        self.assertEqual(
-            ["TimeGenerated", "Value"],
-            [column["name"] for column in snapshot["schema"]],
-        )
-        self.assertEqual(
-            {"TimeGenerated": timestamp, "Value": "one"},
-            snapshot["rows"][0],
-        )
-        self.assertEqual(
-            PLATFORM_MANAGED_COLUMNS,
-            frozenset(snapshot["excludedColumns"]),
-        )
 
     def test_builds_exact_timestamp_query(self):
         query = HARNESS.build_exact_timestamp_query(
@@ -829,7 +788,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "TargetASIMTable": "ASimAuthenticationEventLogs",
             "ParserQuery": (
                 "    source // remove this comment\n"
-                "      | project TimeGenerated, Value"
+                "      | project TimeGenerated, Type, Value"
             ),
         }
         with tempfile.TemporaryDirectory() as directory:
@@ -850,12 +809,12 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             [entry["status"] for entry in result["cleanup"]],
         )
         self.assertEqual("prepared-fixture", snapshot["authority"])
-        self.assertEqual(["Type"], snapshot["excludedColumns"])
+        self.assertEqual([], snapshot["excludedColumns"])
         self.assertEqual(
-            ["TimeGenerated", "Value"],
+            ["TimeGenerated", "Value", "Type"],
             [column["name"] for column in snapshot["schema"]],
         )
-        self.assertNotIn("Type", snapshot["rows"][0])
+        self.assertEqual("Contoso_CL", snapshot["rows"][0]["Type"])
         self.assertIsNone(result["rawDcr"])
         self.assertEqual(
             "not-applicable",
@@ -873,7 +832,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         self.assertEqual(
             (
                 "    source // remove this comment\n"
-                "      | project TimeGenerated, Value"
+                "      | project TimeGenerated, Type, Value"
             ),
             parser_flow["transformKql"],
         )
@@ -1451,16 +1410,8 @@ class IngestionHarnessUnitTests(unittest.TestCase):
         raw_columns = next(
             iter(dcr_puts[1]["streamDeclarations"].values())
         )["columns"]
-        self.assertNotIn(
+        self.assertIn(
             "Type",
-            {column["name"] for column in parser_columns},
-        )
-        self.assertNotIn(
-            "TenantId",
-            {column["name"] for column in parser_columns},
-        )
-        self.assertNotIn(
-            "id",
             {column["name"] for column in parser_columns},
         )
         self.assertNotIn(
@@ -1471,7 +1422,7 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             "TenantId",
             {column["name"] for column in raw_columns},
         )
-        self.assertNotIn(
+        self.assertIn(
             "id",
             {column["name"] for column in raw_columns},
         )
