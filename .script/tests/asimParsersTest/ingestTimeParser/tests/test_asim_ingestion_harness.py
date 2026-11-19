@@ -197,6 +197,20 @@ class IngestionHarnessUnitTests(unittest.TestCase):
             location="eastus2euap",
         )
 
+    def test_canary_config_rejects_missing_values(self):
+        with self.assertRaisesRegex(ValueError, "subscription_id"):
+            HARNESS.CanaryConfig(
+                subscription_id="",
+                resource_group="resource-group",
+                workspace_name="workspace",
+                workspace_id="workspace-id",
+                dce_name="dce",
+                ingestion_endpoint=(
+                    "https://example.ingest.monitor.azure.com"
+                ),
+                location="eastus2euap",
+            )
+
     def harness(self, responses, deadline=900):
         session = FakeSession(responses)
         clock = FakeClock()
