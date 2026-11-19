@@ -114,7 +114,7 @@ function Remove-CollectorRbac($Deployment) {
             Where-Object { $_.type -notin $collectorRoleTypes }
     )
     foreach ($name in @(
-        'principalId', 'storageBlobReaderRoleId', 'storageQueueContributorRoleId',
+        'principalId', 'storageBlobReaderRoleId', 'storageBlobContributorRoleId', 'storageQueueContributorRoleId',
         'blobRaGuid', 'notificationQueueRaGuid', 'dlqRaGuid', 'dlqResourceId'
     )) {
         $copy.properties.parameters.Remove($name)
@@ -256,7 +256,9 @@ $tests = [ordered]@{
         }
         foreach ($name in @('StorageAccountLocation', 'blobFolderName', 'eventGridRbacMode')) {
             Assert-Equal $managed.properties.parameters[$name].value "[[parameters('$name')]"
+            Assert-Equal $inner.parameters[$name].type 'securestring'
         }
+        Assert-Equal $topicTemplate.parameters.StorageAccountLocation.type 'securestring'
         foreach ($name in @('storageAccountName', 'storageAccountId', 'blobContainerName', 'queueName', 'dlqName', 'EGSystemTopicName', 'EGTopicResourceId', 'EgSubscriptionName')) {
             Assert-Equal $managed.properties.parameters[$name].value "[[variables('$name')]"
             Assert-Equal $inner.variables[$name] "[[parameters('$name')]"
@@ -308,6 +310,7 @@ $tests = [ordered]@{
     }
     'RBAC mode allows both choices and defaults only at the outer boundary' = {
         $outerParameter = Get-EventGridRbacModeParameter -IncludeDefault
+        Assert-Equal $outerParameter.type 'securestring'
         Assert-Equal $outerParameter.allowedValues @('CreateRoleAssignment', 'UseExistingRoleAssignment')
         Assert-Equal $outerParameter.defaultValue 'CreateRoleAssignment'
         Assert-Equal $inner.parameters.eventGridRbacMode.allowedValues $outerParameter.allowedValues
@@ -330,16 +333,23 @@ $tests = [ordered]@{
         Assert-Equal $inner.parameters.blobFolderName.defaultValue ''
         Assert-Equal $subscription.properties.filter.subjectBeginsWith "[[format('{0}/{1}/blobs/{2}', '/blobServices/default/containers', variables('blobContainerName'), if(empty(parameters('blobFolderName')), '', concat(parameters('blobFolderName'),'/')))]"
     }
-    'Both collector modes receive least-privilege grants with compatible assignment names' = {
+    'Managed collectors use Reader; legacy collectors retain Contributor and assignment GUIDs' = {
         foreach ($enabled in @($false, $true)) {
             $managedCollector = Get-TestFixture $enabled $null $true
             $servicePrincipalCollector = Get-TestFixture $enabled
-            foreach ($fixture in @($managedCollector, $servicePrincipalCollector)) {
+            foreach ($managedAuth in @($true, $false)) {
+                $fixture = if ($managedAuth) { $managedCollector } else { $servicePrincipalCollector }
                 $assignments = @($fixture.properties.template.resources | Where-Object type -like '*/providers/roleAssignments')
                 Assert-Equal $assignments.Count 3
                 $blobAssignment = @($assignments | Where-Object type -like '*/blobServices/containers/providers/roleAssignments')[0]
-                Assert-Equal $blobAssignment.properties.roleDefinitionId "[[variables('storageBlobReaderRoleId')]"
+                $blobRole = if ($managedAuth) { 'storageBlobReaderRoleId' } else { 'storageBlobContributorRoleId' }
+                Assert-Equal $blobAssignment.properties.roleDefinitionId "[[variables('$blobRole')]"
                 Assert-Equal $blobAssignment.properties.principalId "[[parameters('principalId')]"
+                Assert-Equal $blobAssignment.ContainsKey('condition') $false
+                foreach ($queueAssignment in @($assignments | Where-Object type -like '*/queueServices/queues/providers/roleAssignments')) {
+                    Assert-Equal $queueAssignment.properties.roleDefinitionId "[[variables('storageQueueContributorRoleId')]"
+                    Assert-Equal $queueAssignment.ContainsKey('condition') $false
+                }
             }
             if ($enabled) {
                 foreach ($fixture in @($managedCollector, $servicePrincipalCollector)) {
@@ -369,6 +379,9 @@ $tests = [ordered]@{
             properties = [pscustomobject]@{ mainTemplate = [pscustomobject]@{ variables = $variables } }
         }
         Set-ResourceVariables -eventGridUseManagedIdentity $true
+        Assert-Equal $variables.storageBlobContributorRoleId `
+            "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+        Assert-Equal $variables.Contains('storageBlobReaderRoleId') $false
         Assert-Equal $variables.blobRaGuid `
             "[[guid(variables('storageAccountName'), variables('blobContainerName'))]"
         Assert-Equal $variables.notificationQueueRaGuid `
@@ -475,6 +488,7 @@ $tests['CCF packaging preserves source content, optional parameters and both col
         }
         $pollingPath = Join-Path $fixtureConnector 'PollingConfig.json'
         $polling = Get-Content -LiteralPath $pollingPath -Raw | ConvertFrom-Json -Depth 100
+        $sourceDefinitionId = $polling.properties.connectorDefinitionName
         foreach ($authType in @('ManagedServicePrincipal', 'ServicePrincipal')) {
             $polling.properties.auth.type = $authType
             $polling | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $pollingPath
@@ -498,13 +512,17 @@ $tests['CCF packaging preserves source content, optional parameters and both col
             $connectionTemplate = $connections[0].properties.mainTemplate
             $connector = Get-OnlyResource $connectionTemplate 'Microsoft.OperationalInsights/workspaces/providers/dataConnectors'
             Assert-Equal $connector.properties.auth.type $authType
-            if ($authType -eq 'ManagedServicePrincipal') {
-                Assert-Equal $connector.properties.connectorDefinitionName "[[parameters('connectorDefinitionName')]"
-            }
+            Assert-Equal $connector.properties.connectorDefinitionName $sourceDefinitionId
             Assert-Equal $connector.ContainsKey('eventGridUseManagedIdentity') $false
             Assert-Equal $connector.ContainsKey('eventGridAdvancedFilters') $false
             Assert-Equal $connector.properties.response.isGzipCompressed $true
             Assert-Equal $connectionTemplate.parameters.blobFolderName.defaultValue ''
+            foreach ($name in @('StorageAccountLocation', 'blobFolderName', 'eventGridRbacMode')) {
+                Assert-Equal $connectionTemplate.parameters[$name].type 'securestring'
+            }
+            foreach ($parameter in $connectionTemplate.parameters.Values) {
+                Assert-Equal ($parameter.type -in @('securestring', 'object', 'array')) $true
+            }
             Assert-Equal $connectionTemplate.parameters.blobFolderName.ContainsKey('minLength') $false
             Assert-Equal $connectionTemplate.parameters.eventGridRbacMode.allowedValues @('CreateRoleAssignment', 'UseExistingRoleAssignment')
             Assert-Equal $connectionTemplate.parameters.eventGridRbacMode.defaultValue 'CreateRoleAssignment'

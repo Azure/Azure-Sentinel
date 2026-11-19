@@ -62,7 +62,14 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
         ProcessPropertyPlaceholders -armResource $armResource -templateContentConnections $templateContentConnections -isOnlyObjectCheck $true -propertyObject $armResource.properties -propertyName 'dcrConfig' -isInnerObject $false -innerObjectName $null -kindType $kindType -isSecret $true -isRequired $true -fileType $fileType -minLength 3 -isCreateArray $false
 
         if ($isManagedServicePrincipal) {
-            $armResource.properties.connectorDefinitionName = "[[parameters('connectorDefinitionName')]"
+            # The backend requires the definition ID, not its localized UI title.
+            # Preserve a source literal; only parameterize an authored placeholder.
+            if ([string]::IsNullOrWhiteSpace($armResource.properties.connectorDefinitionName)) {
+                $armResource.properties | Add-Member -NotePropertyName 'connectorDefinitionName' -NotePropertyValue "[[parameters('connectorDefinitionName')]" -Force
+            }
+            else {
+                $armResource.properties.connectorDefinitionName = Convert-ToParameterFormat $armResource.properties.connectorDefinitionName
+            }
         }
 
         $hasDependsOn = [bool]($armResource.PSobject.Properties.name -match "dependsOn")
@@ -85,12 +92,13 @@ function CreateStorageAccountBlobContainerResourceProperties($armResource, $temp
             foreach ($parameterSet in @($templateContentConnections.properties.mainTemplate.parameters, $instructionParameters)) {
                 if ($null -eq $parameterSet) { continue }
                 $parameterSet | Add-Member -NotePropertyName 'StorageAccountLocation' -NotePropertyValue ([PSCustomObject]@{
-                    type = 'string'
+                    type = 'securestring'
                     defaultValue = 'StorageAccountLocation'
+                    minLength = 1
                 }) -Force
                 $parameterSet | Add-Member -NotePropertyName 'eventGridRbacMode' -NotePropertyValue (Get-EventGridRbacModeParameter -IncludeDefault) -Force
                 $parameterSet | Add-Member -NotePropertyName 'blobFolderName' -NotePropertyValue ([PSCustomObject]@{
-                    type = 'string'
+                    type = 'securestring'
                     defaultValue = ''
                 }) -Force
             }
@@ -111,6 +119,9 @@ function Get-StorageAccountDeploymentTemplate {
         [bool]$isManagedServicePrincipal = $false
     )
 
+        # Azure role assignments are immutable. Legacy collectors must keep BOTH
+        # the Contributor role and their original GUIDs when a package is upgraded.
+        $blobRoleVariable = if ($isManagedServicePrincipal) { 'storageBlobReaderRoleId' } else { 'storageBlobContributorRoleId' }
         $storageDeploymentTemplate = [ordered]@{
             type           = "Microsoft.Resources/deployments"
             apiVersion     = "2021-04-01"
@@ -172,7 +183,7 @@ function Get-StorageAccountDeploymentTemplate {
                             apiVersion = "2018-01-01-preview"
                             name       = "[[concat(variables('storageAccountName'), '/default/', variables('blobContainerName'), '/Microsoft.Authorization/', variables('blobRaGuid'))]"
                             properties = [ordered]@{
-                                roleDefinitionId = "[[variables('storageBlobReaderRoleId')]"
+                                roleDefinitionId = "[[variables('$blobRoleVariable')]"
                                 principalId      = "[[parameters('principalId')]"
                             }
                         },
@@ -241,7 +252,7 @@ function Get-StorageAccountDeploymentTemplate {
                 $storageDeploymentTemplate.properties.parameters[$parameterName] = @{
                     value = "[[parameters('$parameterName')]"
                 }
-                $storageDeploymentTemplate.properties.template.parameters[$parameterName] = @{ type = 'string' }
+                $storageDeploymentTemplate.properties.template.parameters[$parameterName] = @{ type = 'securestring' }
             }
             $storageDeploymentTemplate.properties.template.parameters['blobFolderName']['defaultValue'] = ''
             $storageDeploymentTemplate.properties.template.parameters['eventGridRbacMode'] = Get-EventGridRbacModeParameter
@@ -264,7 +275,7 @@ function Get-StorageAccountDeploymentTemplate {
             $storageVariableNames = @(
                 'storageAccountName', 'storageAccountId', 'blobContainerName',
                 'queueName', 'dlqName', 'EGSystemTopicName', 'EGTopicResourceId', 'EgSubscriptionName',
-                'storageBlobReaderRoleId', 'storageQueueContributorRoleId',
+                $blobRoleVariable, 'storageQueueContributorRoleId',
                 'blobRaGuid', 'notificationQueueRaGuid', 'dlqRaGuid', 'dlqResourceId'
             )
             $storageDeploymentTemplate.properties.parameters['principalId'] = @{ value = "[[parameters('principalId')]" }
@@ -344,15 +355,16 @@ function Set-ResourceVariables {
         $variables["EGTopicResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics', variables('EGSystemTopicName'))]"
         $variables["EgSubscriptionName"] = "[[format('{0}-{1}', variables('connectorName'), 'blobcreatedevents')]"
         $variables["EgSubscriptionResourceId"] = "[[resourceId(parameters('StorageAccountResourceGroupName'), 'Microsoft.EventGrid/systemTopics/eventSubscriptions', variables('EGSystemTopicName'), variables('EgSubscriptionName'))]"
-        $variables["storageBlobReaderRoleId"] = "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')]"
         $variables["storageQueueContributorRoleId"] = "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88')]"
         if ($isManagedServicePrincipal) {
+            $variables["storageBlobReaderRoleId"] = "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')]"
             $variables["blobRaGuid"] = "[[guid(toLower(variables('storageAccountId')), toLower(variables('blobContainerName')), toLower(parameters('principalId')), toLower(variables('storageBlobReaderRoleId')))]"
             $variables["notificationQueueRaGuid"] = "[[guid(toLower(variables('notificationQueueResourceId')), toLower(parameters('principalId')), toLower(variables('storageQueueContributorRoleId')))]"
             $variables["dlqRaGuid"] = "[[guid(toLower(variables('dlqResourceId')), toLower(parameters('principalId')), toLower(variables('storageQueueContributorRoleId')))]"
         }
         else {
-            # Preserve existing assignment IDs for ServicePrincipal connectors.
+            # Preserve the role as well as the assignment IDs for ServicePrincipal connectors.
+            $variables["storageBlobContributorRoleId"] = "[[subscriptionResourceId(parameters('StorageAccountSubscription'), 'Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
             $variables["blobRaGuid"] = "[[guid(variables('storageAccountName'), variables('blobContainerName'))]"
             $variables["notificationQueueRaGuid"] = "[[guid(variables('storageAccountName'), variables('queueName'))]"
             $variables["dlqRaGuid"] = "[[guid(variables('storageAccountName'), variables('dlqName'))]"
