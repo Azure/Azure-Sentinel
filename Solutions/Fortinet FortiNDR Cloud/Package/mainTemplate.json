@@ -760,12 +760,12 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "FortinetFortiNdrCloudDataConnector",
                     "dataTypes": [
                       "FncEventsSuricata_CL",
                       "FncEventsObservation_CL",
                       "FncEventsDetections_CL"
-                    ]
+                    ],
+                    "connectorId": "FortinetFortiNdrCloudDataConnector"
                   }
                 ],
                 "tactics": [
@@ -773,7 +773,9 @@
                   "Execution",
                   "LateralMovement",
                   "CommandAndControl",
-                  "Exfiltration"
+                  "Exfiltration",
+                  "Discovery",
+                  "Impact"
                 ],
                 "techniques": [
                   "T1190",
@@ -781,27 +783,29 @@
                   "T1021",
                   "T1071",
                   "T1568",
-                  "T1041"
+                  "T1041",
+                  "T1046",
+                  "T1486"
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "columnName": "IncidentDevice",
-                        "identifier": "Address"
+                        "identifier": "Address",
+                        "columnName": "IncidentDevice"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ],
                 "customDetails": {
-                  "EventDescriptions": "Descriptions",
                   "EventTypes": "EventTypes",
+                  "EventDescriptions": "Descriptions",
                   "EventCount": "EventCount"
                 },
                 "alertDetailsOverride": {
-                  "alertSeverityColumnName": "AlertSeverity",
-                  "alertDisplayNameFormat": "FortiNDR \u007b\u007bAlertSeverity\u007d\u007d Alert on \u007b\u007bIncidentDevice\u007d\u007d (\u007b\u007bEventCount\u007d\u007d events)"
+                  "alertDisplayNameFormat": "FortiNDR \u007b\u007bAlertSeverity\u007d\u007d Alert on \u007b\u007bIncidentDevice\u007d\u007d (\u007b\u007bEventCount\u007d\u007d events)",
+                  "alertSeverityColumnName": "AlertSeverity"
                 }
               }
             },
@@ -954,6 +958,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
+                "status": "disabled",
+                "id": "[if(true(), 'xdr-1e6a8802-9129-44d4-a4f9-c6010b5725e8', 'xdr-1e6a8802-9129-44d4-a4f9-c6010b5725e8')]",
+                "queryCondition": {
+                  "queryText": "Fortinet_FortiNDR_Cloud\n| extend AlertSeverity = case(Type == 'FncEventsDetections_CL' and de_severity in~ ('high', 'critical'), 'High', Type == 'FncEventsSuricata_CL' and su_sig_severity <= 2, 'High', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('high', 'critical'), 'High', Type == 'FncEventsDetections_CL' and de_severity in~ ('medium', 'moderate'), 'Medium', Type == 'FncEventsSuricata_CL' and su_sig_severity == 3, 'Medium', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('medium', 'moderate'), 'Medium', 'Low')\n| extend IncidentDevice = coalesce(de_device_ip, su_src_ip, ob_src_ip)\n| extend Description = coalesce(de_rule_name, su_sig_name, ob_observation_title)\n| summarize EventCount = count(), Descriptions = strcat_array(make_set(Description), '; '), EventTypes = strcat_array(make_set(Type), ', '), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by IncidentDevice, AlertSeverity"
+                },
+                "displayName": "FortiNDR Cloud - Security Event Detected",
                 "detectionAction": {
                   "alertTemplate": {
                     "tactics": [
@@ -999,10 +1009,24 @@
                           }
                         ],
                         "tactic": "Exfiltration"
+                      },
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1046"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      },
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1486"
+                          }
+                        ],
+                        "tactic": "Impact"
                       }
                     ],
-                    "title": "FortiNDR Cloud - Security Event Detected",
-                    "severity": "high",
                     "description": "'Triggers an alert for High, Medium, or Low severity FortiNDR events grouped by target device and alert severity.'",
                     "entityMappings": {
                       "ips": [
@@ -1012,22 +1036,18 @@
                         }
                       ]
                     },
+                    "severity": "high",
                     "customDetails": {
-                      "EventDescriptions": "Descriptions",
                       "EventTypes": "EventTypes",
+                      "EventDescriptions": "Descriptions",
                       "EventCount": "EventCount"
-                    }
+                    },
+                    "title": "FortiNDR Cloud - Security Event Detected"
                   }
                 },
-                "status": "disabled",
                 "schedule": {
                   "frequency": "PT5M"
                 },
-                "displayName": "FortiNDR Cloud - Security Event Detected",
-                "queryCondition": {
-                  "queryText": "Fortinet_FortiNDR_Cloud\n| extend AlertSeverity = case(Type == 'FncEventsDetections_CL' and de_severity in~ ('high', 'critical'), 'High', Type == 'FncEventsSuricata_CL' and su_sig_severity <= 2, 'High', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('high', 'critical'), 'High', Type == 'FncEventsDetections_CL' and de_severity in~ ('medium', 'moderate'), 'Medium', Type == 'FncEventsSuricata_CL' and su_sig_severity == 3, 'Medium', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('medium', 'moderate'), 'Medium', 'Low')\n| extend IncidentDevice = coalesce(de_device_ip, su_src_ip, ob_src_ip)\n| extend Description = coalesce(de_rule_name, su_sig_name, ob_observation_title)\n| summarize EventCount = count(), Descriptions = strcat_array(make_set(Description), '; '), EventTypes = strcat_array(make_set(Type), ', '), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by IncidentDevice, AlertSeverity"
-                },
-                "id": "[if(true(), 'xdr-1e6a8802-9129-44d4-a4f9-c6010b5725e8', 'xdr-1e6a8802-9129-44d4-a4f9-c6010b5725e8')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'fortinet.fortindrcloud-sentinel', 'fortinet.fortindrcloud-sentinel')]",
                   "packageVersion": "3.2.2",
@@ -1067,6 +1087,12 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
+                "status": "disabled",
+                "id": "[if(true(), 'xdr-1e6a8802-9129-44d4-a4f9-c6010b5725e8', 'xdr-1e6a8802-9129-44d4-a4f9-c6010b5725e8')]",
+                "queryCondition": {
+                  "queryText": "Fortinet_FortiNDR_Cloud\n| extend AlertSeverity = case(Type == 'FncEventsDetections_CL' and de_severity in~ ('high', 'critical'), 'High', Type == 'FncEventsSuricata_CL' and su_sig_severity <= 2, 'High', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('high', 'critical'), 'High', Type == 'FncEventsDetections_CL' and de_severity in~ ('medium', 'moderate'), 'Medium', Type == 'FncEventsSuricata_CL' and su_sig_severity == 3, 'Medium', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('medium', 'moderate'), 'Medium', 'Low')\n| extend IncidentDevice = coalesce(de_device_ip, su_src_ip, ob_src_ip)\n| extend Description = coalesce(de_rule_name, su_sig_name, ob_observation_title)\n| summarize EventCount = count(), Descriptions = strcat_array(make_set(Description), '; '), EventTypes = strcat_array(make_set(Type), ', '), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by IncidentDevice, AlertSeverity"
+                },
+                "displayName": "FortiNDR Cloud - Security Event Detected",
                 "detectionAction": {
                   "alertTemplate": {
                     "tactics": [
@@ -1112,10 +1138,24 @@
                           }
                         ],
                         "tactic": "Exfiltration"
+                      },
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1046"
+                          }
+                        ],
+                        "tactic": "Discovery"
+                      },
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1486"
+                          }
+                        ],
+                        "tactic": "Impact"
                       }
                     ],
-                    "title": "FortiNDR Cloud - Security Event Detected",
-                    "severity": "high",
                     "description": "'Triggers an alert for High, Medium, or Low severity FortiNDR events grouped by target device and alert severity.'",
                     "entityMappings": {
                       "ips": [
@@ -1125,22 +1165,18 @@
                         }
                       ]
                     },
+                    "severity": "high",
                     "customDetails": {
-                      "EventDescriptions": "Descriptions",
                       "EventTypes": "EventTypes",
+                      "EventDescriptions": "Descriptions",
                       "EventCount": "EventCount"
-                    }
+                    },
+                    "title": "FortiNDR Cloud - Security Event Detected"
                   }
                 },
-                "status": "disabled",
                 "schedule": {
                   "frequency": "PT5M"
                 },
-                "displayName": "FortiNDR Cloud - Security Event Detected",
-                "queryCondition": {
-                  "queryText": "Fortinet_FortiNDR_Cloud\n| extend AlertSeverity = case(Type == 'FncEventsDetections_CL' and de_severity in~ ('high', 'critical'), 'High', Type == 'FncEventsSuricata_CL' and su_sig_severity <= 2, 'High', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('high', 'critical'), 'High', Type == 'FncEventsDetections_CL' and de_severity in~ ('medium', 'moderate'), 'Medium', Type == 'FncEventsSuricata_CL' and su_sig_severity == 3, 'Medium', Type == 'FncEventsObservation_CL' and ob_confidence in~ ('medium', 'moderate'), 'Medium', 'Low')\n| extend IncidentDevice = coalesce(de_device_ip, su_src_ip, ob_src_ip)\n| extend Description = coalesce(de_rule_name, su_sig_name, ob_observation_title)\n| summarize EventCount = count(), Descriptions = strcat_array(make_set(Description), '; '), EventTypes = strcat_array(make_set(Type), ', '), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by IncidentDevice, AlertSeverity"
-                },
-                "id": "[if(true(), 'xdr-1e6a8802-9129-44d4-a4f9-c6010b5725e8', 'xdr-1e6a8802-9129-44d4-a4f9-c6010b5725e8')]",
                 "contentProvenance": {
                   "packageId": "[if(true(), 'fortinet.fortindrcloud-sentinel', 'fortinet.fortindrcloud-sentinel')]",
                   "packageVersion": "3.2.2",
@@ -1169,24 +1205,24 @@
           "contentVersion": "3.1.0",
           "requiredWorkloads": [
             {
-              "workload": "sentinel",
               "dataTypes": [
                 "FncEventsDetections_CL",
                 "FncEventsObservation_CL",
                 "FncEventsSuricata_CL",
                 "FortinetFortiNdrCloudRaw_CL",
                 "Fortinet_FortiNDR_Cloud"
-              ]
+              ],
+              "workload": "sentinel"
             }
           ],
           "requiredDataConnectors": [
             {
-              "connectorId": "FortinetFortiNdrCloudDataConnector",
               "dataTypes": [
                 "FncEventsDetections_CL",
                 "FncEventsObservation_CL",
                 "FncEventsSuricata_CL"
-              ]
+              ],
+              "connectorId": "FortinetFortiNdrCloudDataConnector"
             }
           ]
         }
