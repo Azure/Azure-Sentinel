@@ -1,0 +1,103 @@
+id: 7938ebca-773c-449d-97ff-6dfb307544e6
+name: Windows OpenSSH indirect command execution
+description: |
+  Identifies indirect command execution (MITRE ATT&CK T1202) via Windows OpenSSH (ssh.exe) using KnownHostsCommand, PermitLocalCommand, LocalCommand, or ProxyCommand options, or unexpected child shells spawned by ssh.exe.
+description-detailed: |
+  The native Windows OpenSSH client (ssh.exe) supports configuration directives that execute local commands either during SSH key exchange prior to authentication (KnownHostsCommand, ProxyCommand) or immediately after session establishment (PermitLocalCommand=yes combined with LocalCommand).
+  Microsoft Threat Intelligence documented active abuse of PermitLocalCommand and LocalCommand by Star Blizzard in the RedFlick malware-delivery campaign, and LOLBAS documents both pre-authentication and post-authentication execution vectors for ssh.exe.
+  Because attackers can load these directives from a custom SSH configuration file (-F) or the user's default %USERPROFILE%\.ssh\config so that the flags never appear on the ssh.exe command line, this query combines two complementary detection signals in process creation telemetry:
+  1. Direct command-line invocation of KnownHostsCommand, LocalCommand, PermitLocalCommand=yes/true, or ProxyCommand with an interpreter or LOLBin (excluding explicit =none/=no disabling values).
+  2. Unexpected child processes (cmd.exe, powershell.exe, pwsh.exe, mshta.exe, wscript.exe, cscript.exe, rundll32.exe, regsvr32.exe, msiexec.exe, certutil.exe, bitsadmin.exe, bash.exe, wsl.exe) spawned directly by ssh.exe.
+  False positives may arise from legitimate administrative jump-host configurations or developer workflows that invoke shells via LocalCommand or ProxyCommand; tune by filtering known jump-host automation accounts or expected InitiatingProcessCommandLine patterns.
+  References:
+  - https://lolbas-project.github.io/lolbas/Binaries/Ssh/
+  - https://attack.mitre.org/techniques/T1202/
+  - https://www.microsoft.com/en-us/security/blog/2026/09/29/star-blizzard-refines-phishing-and-malware-delivery-with-the-redflick-technique/
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - Execution
+  - DefenseEvasion
+relevantTechniques:
+  - T1202
+  - T1059
+query: |
+  let lookback = 7d;
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(lookback)
+  | where ActionType == "ProcessCreated" or isempty(ActionType)
+  | extend
+      IsSshProcess = (FileName =~ "ssh.exe" or ProcessVersionInfoOriginalFileName =~ "ssh.exe"),
+      IsSshParent = (InitiatingProcessFileName =~ "ssh.exe" or InitiatingProcessVersionInfoOriginalFileName =~ "ssh.exe")
+  | where IsSshProcess or IsSshParent
+  | extend
+      HasKnownHostsCli = IsSshProcess
+          and ProcessCommandLine matches regex @"(?i)(?:^|\s)-o\s{0,}[""']{0,1}KnownHostsCommand(?:\s{0,}=\s{0,}|\s+)[""']{0,1}(?:[^n=\s""']|n(?:[^o\s""']|[""'\s]|$)|no(?:[^n\s""']|[""'\s]|$)|non(?:[^e\s""']|[""'\s]|$)|none[^\s""'])",
+      HasLocalCommandCli = IsSshProcess
+          and ProcessCommandLine matches regex @"(?i)(?:^|\s)-o\s{0,}[""']{0,1}LocalCommand(?:\s{0,}=\s{0,}|\s+)[""']{0,1}(?:[^n=\s""']|n(?:[^o\s""']|[""'\s]|$)|no(?:[^n\s""']|[""'\s]|$)|non(?:[^e\s""']|[""'\s]|$)|none[^\s""'])",
+      HasPermitLocalCli = IsSshProcess
+          and ProcessCommandLine matches regex @"(?i)(?:^|\s)-o\s{0,}[""']{0,1}PermitLocalCommand(?:\s{0,}=\s{0,}|\s+)[""']{0,1}(?:yes|true)(?:[""'\s]|$)",
+      HasSuspiciousProxyCli = IsSshProcess
+          and ProcessCommandLine matches regex @"(?i)(?:^|\s)-o\s{0,}[""']{0,1}ProxyCommand(?:\s{0,}=\s{0,}|\s+)[""']{0,1}(?:[^n=\s""']|n(?:[^o\s""']|[""'\s]|$)|no(?:[^n\s""']|[""'\s]|$)|non(?:[^e\s""']|[""'\s]|$)|none[^\s""'])"
+          and ProcessCommandLine has_any ("cmd", "powershell", "pwsh", "mshta", "wscript", "cscript", "rundll32", "regsvr32", "msiexec", "certutil", "bitsadmin"),
+      HasSuspiciousChild = IsSshParent
+          and (FileName in~ ("cmd.exe", "powershell.exe", "pwsh.exe", "mshta.exe", "wscript.exe", "cscript.exe", "rundll32.exe", "regsvr32.exe", "msiexec.exe", "certutil.exe", "bitsadmin.exe", "bash.exe", "wsl.exe")
+               or ProcessVersionInfoOriginalFileName in~ ("cmd.exe", "powershell.exe", "pwsh.exe", "mshta.exe", "wscript.exe", "cscript.exe", "rundll32.exe", "regsvr32.exe", "msiexec.exe", "certutil.exe", "bitsadmin.exe", "bash.exe", "wsl.exe"))
+  | where HasKnownHostsCli or HasLocalCommandCli or HasPermitLocalCli or HasSuspiciousProxyCli or HasSuspiciousChild
+  | extend DetectionSignal = strcat_array(pack_array(
+      iff(HasKnownHostsCli, "CLI:KnownHostsCommand", ""),
+      iff(HasLocalCommandCli, "CLI:LocalCommand", ""),
+      iff(HasPermitLocalCli, "CLI:PermitLocalCommand=yes", ""),
+      iff(HasSuspiciousProxyCli, "CLI:ProxyCommand", ""),
+      iff(HasSuspiciousChild, "ChildProcess:SpawnedBySsh", "")
+  ), ";")
+  | extend DetectionSignal = trim(@";+", replace_regex(DetectionSignal, @";{2,}", ";"))
+  | extend ProcessIdStr = tostring(ProcessId)
+  | project
+      TimeGenerated,
+      DeviceName,
+      AccountDomain,
+      AccountName,
+      AccountSid,
+      FileName,
+      ProcessIdStr,
+      ProcessCommandLine,
+      InitiatingProcessFileName,
+      InitiatingProcessCommandLine,
+      DetectionSignal
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+      - identifier: Sid
+        columnName: AccountSid
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessIdStr
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+customDetails:
+  DetectionSignal: DetectionSignal
+  InitiatingProcess: InitiatingProcessFileName
+  InitiatingCommandLine: InitiatingProcessCommandLine
+version: 1.0.0
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Yared Henriquez (DevCop95)
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Threat Protection" ]
