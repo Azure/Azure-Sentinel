@@ -1,0 +1,161 @@
+{
+  "name": "XposedOrNot",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "XposedOrNot",
+      "title": "XposedOrNot Breach Intelligence (via Codeless Connector Framework)",
+      "publisher": "XposedOrNot",
+      "logo": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/XposedOrNot.svg",
+      "descriptionMarkdown": "The [XposedOrNot](https://xposedornot.com) data connector ingests breach exposure data for your verified domains into Microsoft Sentinel using the Codeless Connector Framework. It polls the XposedOrNot API on the schedule you choose and stores exposed email addresses in `XposedOrNotExposures_CL` and breach details in `XposedOrNotBreachCatalog_CL`. Any domain you verify in XposedOrNot is picked up automatically on the next poll.",
+      "graphQueriesTableName": "XposedOrNotExposures_CL",
+      "graphQueries": [
+        {
+          "metricName": "Total exposure records received",
+          "legend": "XposedOrNot exposures",
+          "baseQuery": "XposedOrNotExposures_CL"
+        },
+        {
+          "metricName": "Total breach catalog records received",
+          "legend": "XposedOrNot breach catalog",
+          "baseQuery": "XposedOrNotBreachCatalog_CL"
+        }
+      ],
+      "sampleQueries": [
+        {
+          "description": "Current exposures with breach details",
+          "query": "XposedOrNotBreachExposures\n| project FirstSeen, Email, Domain, BreachName, BreachedDate, PasswordRisk\n| order by FirstSeen desc\n| take 100"
+        },
+        {
+          "description": "Exposures with plaintext or easy to crack passwords",
+          "query": "XposedOrNotBreachExposures\n| where PasswordRisk in ('plaintext', 'easytocrack')\n| summarize Breaches = make_set(BreachName) by Email, Domain"
+        },
+        {
+          "description": "Exposed email addresses per monitored domain",
+          "query": "XposedOrNotBreachExposures\n| summarize ExposedEmails = dcount(Email), Breaches = dcount(BreachName) by Domain\n| order by ExposedEmails desc"
+        }
+      ],
+      "dataTypes": [
+        {
+          "name": "XposedOrNotExposures_CL",
+          "lastDataReceivedQuery": "XposedOrNotExposures_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        },
+        {
+          "name": "XposedOrNotBreachCatalog_CL",
+          "lastDataReceivedQuery": "XposedOrNotBreachCatalog_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+        }
+      ],
+      "connectivityCriteria": [
+        {
+          "type": "HasDataConnectors"
+        }
+      ],
+      "availability": {
+        "isPreview": false,
+        "status": 1
+      },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and Write permissions are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": {
+              "write": true,
+              "read": true,
+              "delete": true,
+              "action": false
+            }
+          }
+        ],
+        "customs": [
+          {
+            "name": "XposedOrNot API key",
+            "description": "An XposedOrNot API key is required. Get one from [xposedornot.com](https://xposedornot.com) (Community) or [plus.xposedornot.com](https://plus.xposedornot.com) (Enterprise)."
+          },
+          {
+            "name": "Verified domain",
+            "description": "At least one domain must be verified in your XposedOrNot account. The API returns data only for verified domains."
+          }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "1. Get your XposedOrNot API key",
+          "description": "Sign in to the [XposedOrNot dashboard](https://xposedornot.com/dashboard) (Community) or [XposedOrNot Plus](https://plus.xposedornot.com) (Enterprise), verify the domains you want to monitor, and copy your API key. For help, see [how to get an API key for domain breach data](https://xposedornot.com/faq#collapse102)."
+        },
+        {
+          "title": "2. Connect XposedOrNot to Microsoft Sentinel",
+          "description": "Enter your API key, choose how often Microsoft Sentinel checks for new exposures, and select Connect. The first data can take up to 30 minutes to appear.",
+          "instructions": [
+            {
+              "type": "Textbox",
+              "parameters": {
+                "label": "XposedOrNot API key",
+                "placeholder": "Enter your XposedOrNot API key",
+                "type": "password",
+                "name": "apikey",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Refresh schedule",
+                "name": "pollingFrequency",
+                "options": [
+                  {
+                    "key": "60",
+                    "text": "Every hour"
+                  },
+                  {
+                    "key": "360",
+                    "text": "Every 6 hours"
+                  },
+                  {
+                    "key": "720",
+                    "text": "Every 12 hours"
+                  },
+                  {
+                    "key": "1440",
+                    "text": "Every day"
+                  }
+                ],
+                "placeholder": "Select refresh schedule",
+                "isMultiSelect": false,
+                "defaultAllSelected": false,
+                "required": true,
+                "defaultValue": "1440",
+                "validations": {
+                  "required": true
+                }
+              }
+            },
+            {
+              "type": "InfoMessage",
+              "parameters": {
+                "text": "Each refresh stores a full snapshot of your exposures, so a shorter schedule ingests more data. The XposedOrNot API allows 50 domain breach requests per day and every schedule offered here stays within that limit. To change the API key or schedule later, disconnect and connect again.",
+                "visible": true,
+                "inline": true
+              }
+            },
+            {
+              "type": "ConnectionToggleButton",
+              "parameters": {
+                "connectLabel": "Connect",
+                "disconnectLabel": "Disconnect",
+                "name": "toggle"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
