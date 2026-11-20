@@ -115,22 +115,30 @@ class ConverterTests(unittest.TestCase):
         convert_solution(self.solution)
         output = self.solution / "XDR Detections/SampleRule.yaml"
         original = yaml.safe_load(output.read_text())
-        for version in ("3.1.1", "3.9.0"):
+        for version, expected_bumped, source_ver in (
+            ("3.1.1", "3.1.2", "1.0.3"),
+            ("3.9.0", "3.9.1", "1.0.4"),
+        ):
             with self.subTest(version=version):
                 output.write_text(output.read_text().replace(f"version: {original['version']}\n", f"version: {version}\n", 1))
                 before = output.read_bytes()
                 result = convert_solution(self.solution)
                 self.assertEqual(0, result["conflicts"])
                 self.assertEqual(before, output.read_bytes())
+                # Reconverting with overwrite=True when nothing changed preserves version
+                result_unchanged = convert_solution(self.solution, overwrite=True)
+                self.assertEqual(0, result_unchanged["conflicts"])
+                self.assertEqual(version, yaml.safe_load(output.read_text())["version"])
+                # Modifying the rule and reconverting with overwrite=True bumps the patch version
                 source = self.solution / "Analytic Rules/SampleRule.yaml"
-                source.write_text(RULE.replace("version: 1.0.0", "version: 1.0.3"))
+                source.write_text(RULE.replace("version: 1.0.0", f"version: {source_ver}"))
                 result = convert_solution(self.solution, overwrite=True)
                 self.assertEqual(0, result["conflicts"])
                 updated = yaml.safe_load(output.read_text())
-                self.assertEqual(version, updated["version"])
-                self.assertEqual("1.0.3", updated["contentProvenance"]["source"]["version"])
+                self.assertEqual(expected_bumped, updated["version"])
+                self.assertEqual(source_ver, updated["contentProvenance"]["source"]["version"])
                 self.assertEqual(original["properties"]["id"], updated["properties"]["id"])
-                self.assertEqual(RULE.replace("version: 1.0.0", "version: 1.0.3"), source.read_text())
+                self.assertEqual(RULE.replace("version: 1.0.0", f"version: {source_ver}"), source.read_text())
                 original = updated
 
     def test_conversion_information_round_trips_yaml_and_manifest(self) -> None:
@@ -504,7 +512,7 @@ AzureActivity
         )
 
         self.assertEqual(result["needsReview"], 0)
-        self.assertEqual(result["deploymentReady"], 0)
+        self.assertEqual(result["deploymentReady"], 1)
         self.assertEqual(output["properties"]["detectionAction"]["alertTemplate"]["tactics"], [
             {"tactic": "Persistence", "techniques": [{"technique": "T1505"}]},
             {"tactic": "CommandAndControl", "techniques": [{"technique": "T1071"}]},

@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEvent.yaml
 
+## Version 0.2.4
+
+- (2026-11-09) Add Google Cloud Security Command Center AlertEvent parser. - [PR #15638](https://github.com/Azure/Azure-Sentinel/pull/15638)
+
 ## Version 0.2.3
 
 - (2026-11-04) Added the native parser - [PR #15556](https://github.com/Azure/Azure-Sentinel/pull/15556)

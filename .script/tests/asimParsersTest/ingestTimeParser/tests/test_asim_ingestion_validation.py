@@ -53,31 +53,43 @@ class FakeQueryClient:
 
 
 class QueryConstructionTests(unittest.TestCase):
-    def test_alert_data_tester_normalizes_physical_file_size(self):
-        query = VALIDATION.build_asim_tester_query(
-            tester_name="ASimDataTester",
-            tester_query="T | project Result = 'test'",
-            target_table="ASimAlertEventLogs",
-            timestamps=[TIMESTAMP_1],
-            schema_name="AlertEvent",
-        )
+    def test_data_tester_normalizes_physical_file_size(self):
+        for target_table, schema_name in (
+            ("ASimAlertEventLogs", "AlertEvent"),
+            ("ASimWebSessionLogs", "WebSession"),
+        ):
+            with self.subTest(target_table=target_table):
+                query = VALIDATION.build_asim_tester_query(
+                    tester_name="ASimDataTester",
+                    tester_query="T | project Result = 'test'",
+                    target_table=target_table,
+                    timestamps=[TIMESTAMP_1],
+                    schema_name=schema_name,
+                )
 
-        target_query, tester_query = query.split(
-            "let _AsimValidationTester", 1
-        )
-        self.assertIn(
-            "ASimAlertEventLogs\n| where TimeGenerated in "
-            f"(datetime({TIMESTAMP_1}))"
-            "\n| extend FileSize = tolong(FileSize));",
-            target_query,
-        )
-        self.assertNotIn("ThreatFirstReportedTime", target_query)
-        self.assertNotIn("ThreatLastReportedTime", target_query)
-        self.assertNotIn("ThreatOriginalRiskLevel", target_query)
-        self.assertIn(
-            "| invoke _AsimValidationTester('AlertEvent')", tester_query
-        )
-        self.assertNotIn("tolong(FileSize)", tester_query)
+                target_query, tester_query = query.split(
+                    "let _AsimValidationTester", 1
+                )
+                self.assertIn(
+                    f"{target_table}\n| where TimeGenerated in "
+                    f"(datetime({TIMESTAMP_1}))"
+                    "\n| extend FileSize = tolong(FileSize));",
+                    target_query,
+                )
+                self.assertNotIn(
+                    "ThreatFirstReportedTime", target_query
+                )
+                self.assertNotIn(
+                    "ThreatLastReportedTime", target_query
+                )
+                self.assertNotIn(
+                    "ThreatOriginalRiskLevel", target_query
+                )
+                self.assertIn(
+                    f"| invoke _AsimValidationTester('{schema_name}')",
+                    tester_query,
+                )
+                self.assertNotIn("tolong(FileSize)", tester_query)
 
     def test_dns_data_tester_normalizes_physical_threat_columns(self):
         query = VALIDATION.build_asim_tester_query(
@@ -487,7 +499,7 @@ class FilterValidationTests(unittest.TestCase):
         self.assertEqual("pass-through", result["mode"])
         self.assertEqual(0, result["rejectedRowCount"])
 
-    def test_source_passthrough_allows_scalar_let_prerequisite(self):
+    def test_source_passthrough_rejects_scalar_let_prerequisite(self):
         client = FakeQueryClient(
             [
                 (
@@ -512,18 +524,20 @@ class FilterValidationTests(unittest.TestCase):
             ]
         )
 
-        result = self.validator().evaluate_filter(
-            client,
-            self.snapshot(),
-            {
-                "SourceRawTable": "Contoso_CL",
-                "ParserFilterQuery": (
-                    "let accepted = true;\nsource"
-                ),
-            },
-        )
-
-        self.assertEqual("pass-through", result["mode"])
+        with self.assertRaisesRegex(
+            VALIDATION.ValidationError,
+            "at least one rejected row",
+        ):
+            self.validator().evaluate_filter(
+                client,
+                self.snapshot(),
+                {
+                    "SourceRawTable": "Contoso_CL",
+                    "ParserFilterQuery": (
+                        "let accepted = true;\nsource"
+                    ),
+                },
+            )
 
 
 class ParityTests(unittest.TestCase):
@@ -614,6 +628,155 @@ class ParityTests(unittest.TestCase):
         self.assertEqual(
             1, len(result["rows"]["duplicateCountDifferences"])
         )
+
+    def test_parity_compares_additional_fields_top_level_keys_only(self):
+        schema = [
+            *self.schema(),
+            {"name": "AdditionalFields", "type": "dynamic"},
+        ]
+        expected = {
+            "TimeGenerated": TIMESTAMP_1,
+            "EventUid": "event-1",
+            "AdditionalFields": (
+                '{"APIVersion":"2016-11-15","Nested":{"old":1}}'
+            ),
+        }
+        actual = dict(expected, AdditionalFields={
+            "Nested": [{"new": 2}],
+            "APIVersion": "2016-11-15T00:00:00.0000000Z",
+        })
+
+        result = VALIDATION.compare_parser_outputs(
+            expected_schema=schema,
+            expected_rows=[expected],
+            actual_schema=schema,
+            actual_rows=[actual],
+        )
+
+        self.assertEqual("passed", result["status"])
+        self.assertEqual(
+            [], result["rows"]["columnDiagnostics"]["mismatches"]
+        )
+        self.assertEqual(
+            '{"APIVersion":"2016-11-15","Nested":{"old":1}}',
+            expected["AdditionalFields"],
+        )
+        self.assertEqual(
+            [{"new": 2}], actual["AdditionalFields"]["Nested"]
+        )
+
+    def test_parity_ignores_platform_additional_fields_keys(self):
+        schema = [
+            *self.schema(),
+            {"name": "AdditionalFields", "type": "dynamic"},
+        ]
+        expected = {
+            "TimeGenerated": TIMESTAMP_1,
+            "EventUid": "event-1",
+            "AdditionalFields": {
+                "APIVersion": "2016-11-15",
+                "TenantId": "tenant",
+                "TimeGenerated": TIMESTAMP_1,
+                "Type": "Custom-Table",
+                "_ResourceId": "/subscriptions/example",
+            },
+        }
+        actual = {
+            **expected,
+            "AdditionalFields": {
+                "APIVersion": "different-value",
+            },
+        }
+
+        result = VALIDATION.compare_parser_outputs(
+            expected_schema=schema,
+            expected_rows=[expected],
+            actual_schema=schema,
+            actual_rows=[actual],
+        )
+
+        self.assertEqual("passed", result["status"])
+
+    def test_parity_rejects_additional_fields_key_or_shape_differences(self):
+        schema = [
+            *self.schema(),
+            {"name": "AdditionalFields", "type": "dynamic"},
+        ]
+        for expected_bag, actual_bag in (
+            ({"APIVersion": "2016-11-15"}, {}),
+            ({"APIVersion": "2016-11-15"}, {"APIVersion": None, "Extra": 1}),
+            ({"APIVersion": "2016-11-15"}, {"apiversion": "2016-11-15"}),
+            (
+                {"APIVersion": "2016-11-15", "tenantid": "tenant"},
+                {"APIVersion": "2016-11-15"},
+            ),
+            ({"APIVersion": "2016-11-15"}, ["APIVersion"]),
+            ({}, None),
+            ({}, []),
+        ):
+            with self.subTest(expected=expected_bag, actual=actual_bag):
+                expected = {
+                    "TimeGenerated": TIMESTAMP_1,
+                    "EventUid": "event-1",
+                    "AdditionalFields": expected_bag,
+                }
+                result = VALIDATION.compare_parser_outputs(
+                    expected_schema=schema,
+                    expected_rows=[expected],
+                    actual_schema=schema,
+                    actual_rows=[dict(expected, AdditionalFields=actual_bag)],
+                )
+
+                self.assertEqual("failed", result["status"])
+                differences = result["rows"]["columnDiagnostics"][
+                    "mismatches"
+                ][0]["differences"]
+                self.assertEqual(
+                    ["AdditionalFields"],
+                    [difference["column"] for difference in differences],
+                )
+
+    def test_additional_fields_key_only_parity_keeps_other_checks_strict(self):
+        schema = [
+            *self.schema(),
+            {"name": "AdditionalFields", "type": "dynamic"},
+        ]
+        expected = {
+            "TimeGenerated": TIMESTAMP_1,
+            "EventUid": "event-1",
+            "Payload": {"nested": 1},
+            "Message": "one",
+            "AdditionalFields": {"APIVersion": "2016-11-15"},
+        }
+        actual = dict(expected, AdditionalFields={
+            "APIVersion": "2016-11-15T00:00:00.0000000Z",
+        })
+        for changes, count in (
+            ({"Message": "two"}, 1),
+            ({"Payload": {"nested": 2}}, 1),
+            ({}, 2),
+        ):
+            with self.subTest(changes=changes, count=count):
+                result = VALIDATION.compare_parser_outputs(
+                    expected_schema=schema,
+                    expected_rows=[expected],
+                    actual_schema=schema,
+                    actual_rows=[dict(actual, **changes)] * count,
+                )
+
+                self.assertEqual("failed", result["status"])
+                if count > 1:
+                    self.assertEqual(1, result["rows"]["extraRowCount"])
+                    self.assertEqual(
+                        1, len(result["rows"]["duplicateCountDifferences"])
+                    )
+                else:
+                    diagnostics = result["rows"]["columnDiagnostics"]
+                    for mismatch in diagnostics["mismatches"]:
+                        self.assertNotIn(
+                            "AdditionalFields",
+                            [item["column"] for item in mismatch["differences"]],
+                        )
 
     def test_parity_distinguishes_null_and_empty_string(self):
         expected = {

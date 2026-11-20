@@ -1,0 +1,104 @@
+id: 1d7a3b9c-5e2f-4a8b-b6c4-0e1f2a3b4c93
+name: Cyble IOC - URL
+description: |
+  'Creates an incident when Cyble Vision publishes a new malicious URL indicator to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+- connectorId: CybleVisionIOC
+  dataTypes:
+  - ThreatIntelIndicators
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+suppressionDuration: PT5H
+suppressionEnabled: false
+tactics:
+- InitialAccess
+relevantTechniques:
+- T1566
+- T1189
+subTechniques:
+- T1566.002
+query: |
+  let lookback = 1h;
+  let iocFilter = dynamic(["url:value"]);
+  let known = ThreatIntelIndicators
+      | where TimeGenerated between (ago(14d) .. ago(lookback))
+      | where SourceSystem == "CybleVisionIOC"
+      | distinct Id;
+  ThreatIntelIndicators
+  | where TimeGenerated > ago(lookback)
+  | where SourceSystem == "CybleVisionIOC"
+  | where ObservableKey in (iocFilter)
+  | summarize arg_max(TimeGenerated, *) by Id
+  | where IsActive == true and ValidUntil > now()
+  | join kind=leftanti known on Id
+  | extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)
+  | extend AlertSeverity = case(ConfidenceRating =~ "high", "High", ConfidenceRating =~ "medium", "Medium", ConfidenceRating =~ "low", "Low", "Informational")
+  | extend UrlHost = tostring(parse_url(iff(ObservableValue contains "://", ObservableValue, strcat("http://", ObservableValue))).Host)
+  | extend IndicatorId      = Id,
+           IocType          = tostring(AdditionalFields.iocType),
+           RiskScore        = Confidence,
+           Sources          = strcat_array(AdditionalFields.sources, ", "),
+           BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, ", "),
+           RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, ", "),
+           ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, ", "),
+           TargetCountries  = strcat_array(AdditionalFields.targetCountries, ", "),
+           TargetIndustries = strcat_array(AdditionalFields.targetIndustries, ", "),
+           TargetRegions    = strcat_array(AdditionalFields.targetRegions, ", "),
+           FirstSeen        = todatetime(AdditionalFields.firstSeen),
+           LastSeen         = todatetime(AdditionalFields.lastSeen),
+           MalwareName      = tostring(AdditionalFields.relatedMalware[0])
+  | project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, UrlHost, IocType, RiskScore, ConfidenceRating, AlertSeverity,
+            Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,
+            FirstSeen, LastSeen, ValidUntil
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P7D
+    matchingMethod: Selected
+    groupByEntities:
+    - URL
+    groupByCustomDetails:
+    - IndicatorID
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Cyble IOC - URL: {{UrlHost}}'
+  alertDescriptionFormat: 'Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}'
+  alertSeverityColumnName: AlertSeverity
+  alertDynamicProperties: []
+customDetails:
+  IndicatorID: IndicatorId
+  IocType: IocType
+  RiskScore: RiskScore
+  ConfidenceRating: ConfidenceRating
+  Sources: Sources
+  BehaviourTags: BehaviourTags
+  RelatedMalwares: RelatedMalware
+  ThreatActors: ThreatActors
+  TargetedCountries: TargetCountries
+  TargetedIndustries: TargetIndustries
+  TargetedRegions: TargetRegions
+  FirstSeen: FirstSeen
+  LastSeen: LastSeen
+  ValidUntil: ValidUntil
+entityMappings:
+- entityType: URL
+  fieldMappings:
+  - identifier: Url
+    columnName: ObservableValue
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: UrlHost
+- entityType: Malware
+  fieldMappings:
+  - identifier: Name
+    columnName: MalwareName
+version: 1.0.0
+kind: Scheduled

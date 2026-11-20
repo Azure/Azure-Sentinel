@@ -1,12 +1,12 @@
 ---
-applyTo: "Parsers/ASim*/CHANGELOG/*.md"
+applyTo: "Parsers/ASim*/CHANGELOG/*.md,Parsers/ASim*/CHANGELOG/IngestTimeParsers/*.md"
 ---
 
 # ASIM Changelog Review Instructions
 
 ## Overview
 
-Use these instructions when reviewing changelog files under `Parsers/ASim*/CHANGELOG/`. Each changelog records the version history of one ASIM parser. Validate the changelog against the corresponding parser YAML and the pull request changes.
+Use these instructions when reviewing query-time parser changelogs under `Parsers/ASim*/CHANGELOG/` and ingestion-time parser changelogs under `Parsers/ASim*/CHANGELOG/IngestTimeParsers/`. Each changelog records the version history of one ASIM parser. Validate the changelog against the corresponding parser YAML and the pull request changes.
 
 Review only issues introduced or exposed by the current change. Do not report unrelated historical formatting or ordering issues unless the pull request modifies the affected entry or relies on it for a new entry.
 
@@ -15,10 +15,14 @@ Review only issues introduced or exposed by the current change. Do not report un
 1. Derive the expected parser filename from the changelog filename:
    - `CHANGELOG/ASimAuthenticationAADManagedIdentity.md` corresponds to `ASimAuthenticationAADManagedIdentity.yaml`.
    - `CHANGELOG/vimAuthenticationAADManagedIdentity.md` corresponds to `vimAuthenticationAADManagedIdentity.yaml`.
-2. Locate the corresponding YAML in the schema's `Parsers/` directory.
+   - `CHANGELOG/IngestTimeParsers/<ParserFileName>.md` corresponds to `IngestTimeParsers/<ParserFileName>.yaml`.
+2. Locate the corresponding YAML in the same schema directory:
+   - Query-time parser changelogs in `CHANGELOG/` map to YAML files in `Parsers/`.
+   - Ingestion-time parser changelogs in `CHANGELOG/IngestTimeParsers/` map to YAML files in `IngestTimeParsers/`, not `Parsers/`.
 3. Flag a new changelog that has no corresponding parser YAML.
 4. When a parser version changes, verify that its corresponding changelog is updated in the same pull request.
 5. Parameterless, parameterized, unifying, and ingestion-time parsers must each use their own changelog. Do not use one parser's changelog as a substitute for another parser's history.
+6. Every YAML parser in `IngestTimeParsers/`, regardless of filename prefix, must have its own filename-matched changelog at `CHANGELOG/IngestTimeParsers/<ParserFileName>.md`. For a new or modified ingestion-time parser in the pull request, flag a missing changelog or one placed directly in `CHANGELOG/`. Query-time and ingestion-time parsers with the same filename must retain separate changelogs.
 
 ## Required Document Structure
 
