@@ -2,7 +2,9 @@
 ## Table Of Contents
 - [Introduction](#intro)
 - [Steps to obtain the Snowflake Account Identifier](#accountId)
-- [Steps to obtain Programmatic Access Token in Snowflake](#pat)
+- [Authentication requirements](#authentication)
+- [Configure Snowflake OAuth](#snowflake-oauth)
+- [Update or troubleshoot an OAuth connection](#oauth-maintenance)
 - [Understand V3 row-level ingestion](#v3-ingestion)
 
 <a name = "intro">
@@ -19,45 +21,70 @@ The Snowflake Codeless Connector for Microsoft Sentinel enables seamless integra
 - Click on **View account details**.
 - Locate and copy the **Account Identifier** for future reference or configuration needs.
 
-<a name = "pat">
-  
-## Steps to obtain Programmatic Access Token in Snowflake
-To enable permanent access via a Programmatic Access Token, configuring a **Network Policy** is a mandatory prerequisite. Follow the steps below to configure the network policy and generate the token.
-### Configure Network Policy
+<a name = "authentication">
 
---------------------------------------------------------------------------------------------------------------------
+## Authentication requirements
 
-- Log in to your Snowflake account and navigate to a **SQL Worksheet**.
-- Execute **only one** of the following configurations based on your specific scenario:
-  #### Scenario 1: No Existing IP Restrictions
-  - If there are no prior IP restrictions, create and apply a permissive network policy that allows access from all IP addresses:
-    ```
-    CREATE OR REPLACE NETWORK POLICY allow_all_ips
-      ALLOWED_IP_LIST = ('0.0.0.0/0');
-    ```
-    ```
-    ALTER ACCOUNT SET NETWORK_POLICY = allow_all_ips;
-    ```
-  #### Scenario 2: Existing IP Restrictions
-  - If your account already has IP restrictions in place, you can create a more flexible policy that allows all IPs but explicitly blocks specific addresses:
-    ```
-    CREATE OR REPLACE NETWORK POLICY allow_all_with_blocks
-      ALLOWED_IP_LIST = ('0.0.0.0/0')
-      BLOCKED_IP_LIST = ('<IP_ADDRESS1>', '<IP_ADDRESS2>');
-    ```
-    ```
-    ALTER ACCOUNT SET NETWORK_POLICY = allow_all_with_blocks;
-    ```
-    > **Note:** If you have multiple blocked IP addresses, provide all IP addresses separated by commas as shown in above query.
+The Snowflake 3.2.3 Codeless Connector Framework (CCF) connector uses Snowflake OAuth with a confidential custom-client integration for all ten V3 log types. PAT and External OAuth authentication are not offered by this release. These settings do not change the legacy Azure Function connector.
 
-Once these commands are successfully executed, the network policy configuration is complete.
-### Generate Programmatic Access Token
---------------------------------------------------------------------------------------------
+Use the account hostname prefix as the **Snowflake Account Identifier**, for example `exampleorg-prod` for `https://exampleorg-prod.snowflakecomputing.com`. Do not include `https://`, `.snowflakecomputing.com`, or a URL path in this field.
 
-- In the left context pane, click on your **Profile**.
-- Click on **Settings**.
-- Under the **Programmatic access tokens** section, click **Generate new token**.
-- Copy and securely store the generated token, as it will only be displayed once.
+Before connecting:
+
+- Configure a least-privilege Snowflake role that can read the selected `SNOWFLAKE.ACCOUNT_USAGE` views. Some views require different Snowflake database roles; confirm access to every selected view.
+- Ensure that the mapped user has an accessible default warehouse and the necessary warehouse usage privileges. The connector does not set a role or warehouse in its SQL requests.
+- Allow the connector's outbound traffic through your existing Snowflake network policy. OAuth does not require opening the account to all IP addresses.
+- Enter secrets only in the connector's password fields. Never put secrets, authorization codes, or tokens in source files or support requests.
+
+<a name = "snowflake-oauth">
+
+## Configure Snowflake OAuth
+
+This option uses Snowflake as the authorization server, with the `authorization_code` grant and `refresh_token` scope. It is not the External OAuth client credentials flow.
+
+1. Have an authorized Snowflake administrator create a confidential custom OAuth integration. For example:
+
+   ```sql
+   CREATE SECURITY INTEGRATION SENTINEL_OAUTH
+     TYPE = OAUTH
+     ENABLED = TRUE
+     OAUTH_CLIENT = CUSTOM
+     OAUTH_CLIENT_TYPE = 'CONFIDENTIAL'
+     OAUTH_REDIRECT_URI = 'https://ms.portal.azure.com/TokenAuthorize/ExtensionName/Microsoft_Azure_Security_Insights'
+     OAUTH_ISSUE_REFRESH_TOKENS = TRUE;
+   ```
+
+   For an existing integration, register the same callback using `OAUTH_REDIRECT_URI` or `OAUTH_ALTERNATE_REDIRECT_URIS`. The callback must match exactly, including its hostname and path. This connector is configured only for the `ms.portal.azure.com` callback; callbacks for other Azure or Defender portal hosts are not interchangeable.
+
+2. Obtain the integration's client ID and client secret securely:
+
+   ```sql
+   SELECT SYSTEM$SHOW_OAUTH_CLIENT_SECRETS('SENTINEL_OAUTH');
+   ```
+
+3. Configure the consenting user's default role and warehouse to meet the prerequisites above. The requested scope does not specify a role, so Snowflake uses the user's default role. Do not use `ACCOUNTADMIN` or `SECURITYADMIN` as the connector's runtime role.
+4. In Microsoft Sentinel, open the Snowflake CCF connector and select **Add Account**. Enter a unique connection alias, select the log types, and enter the account identifier.
+5. Enter the full authorization URL for that same account, for example `https://<account-identifier>.snowflakecomputing.com/oauth/authorize`. Enter a literal HTTPS URL, not an ARM expression or a `{{accountId}}` placeholder.
+6. Enter the integration's client ID and client secret, then connect and complete the Snowflake sign-in and consent flow.
+
+The token endpoint is derived from the account identifier as `https://<accountId>.snowflakecomputing.com/oauth/token-request`. Token requests use form encoding and HTTP Basic client authentication. SQL API requests use a bearer token with `X-Snowflake-Authorization-Token-Type: OAUTH`.
+
+Refresh tokens have a finite lifetime; enabling them does not create permanent access. Monitor token expiry, revoked consent, and secret rotation. Integrations that require additional grant mechanisms such as PKCE or private-key JWT are not configured by this client-secret connector.
+
+See [Configure Snowflake OAuth for custom clients](https://docs.snowflake.com/en/user-guide/oauth-custom) for integration settings, refresh-token policies, and role restrictions.
+
+<a name = "oauth-maintenance">
+
+## Update or troubleshoot an OAuth connection
+
+- To update an OAuth connection, use the same connection alias and reauthorize with the integration's current credentials.
+- When migrating from PAT, record the existing connection alias and selected log types, delete the existing connection rows for that alias, then reconnect using Snowflake OAuth. Verify the replacement connection before leaving it unattended; avoid running duplicate connections for the same log types.
+- For a redirect mismatch, compare the integration's registered URI with the exact callback above and confirm that the authorization URL and account identifier refer to the same Snowflake account.
+- For Snowflake OAuth refresh failures, check refresh-token lifetime, revoked consent, client-secret validity, and integration policy, then reauthorize.
+ 
+- If authentication succeeds but queries fail, check warehouse access and privileges for every selected `ACCOUNT_USAGE` view. Do not broaden network or role permissions just to suppress an error.
+- The connector retains the existing 120-minute query delay for `ACCOUNT_USAGE` latency. A successful connection does not imply immediate log arrival.
+
 <a name = "v3-ingestion">
 
 ## Understand V3 row-level ingestion
