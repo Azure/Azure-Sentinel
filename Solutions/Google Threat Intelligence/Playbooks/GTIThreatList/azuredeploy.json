@@ -5,13 +5,17 @@
         "title": "Google Threat Intelligence - Threat List",
         "description": "This playbook will ingest Google Threat Intelligence into Threat Intelligence Sentinel.",
         "prerequisites": [
-            "You will need to register to Google Threat Intelligence for an API key"
+            "You will need to register to Google Threat Intelligence for an API key",
+            "The Google Threat Intelligence custom connector must be deployed in the same resource group",
+            "The Microsoft Sentinel workspace must be in the same resource group as this playbook"
         ],
         "postDeployment": [
-            "After deployment, attach this playbook to an **automation rule** so it runs when the incident is created."
+            "Grant the playbook Managed Identity the 'Microsoft Sentinel Contributor' role on the Microsoft Sentinel workspace so it can upload threat intelligence",
+            "Open the Google Threat Intelligence API connection and enter the GTI API key",
+            "The playbook runs on an hourly recurrence and does not require an automation rule"
         ],
         "prerequisitesDeployTemplateFile": "",
-        "lastUpdateTime": "2024-12-19T00:00:00Z",
+        "lastUpdateTime": "2026-10-29T00:00:00Z",
         "tags": [ "Enrichment" ],
         "support": {
             "tier": "Partner"
@@ -26,6 +30,14 @@
                 "notes": [
                     "Initial version"
                 ]
+            },
+            {
+                "version": "1.1.0",
+                "title": "GTI Threat List - Threat List API 2 hour delay and workspace parameter",
+                "notes": [
+                    "Updated the hourly threat list request to use the threat list generated 2 hours before the current UTC time (T-2h), as required by the Threat List API",
+                    "Added the WorkspaceName parameter and passed the resolved workspace ID to the Upload STIX Objects action"
+                ]
             }
         ]
     },
@@ -37,6 +49,12 @@
         "ConnectorName": {
             "defaultValue": "GoogleThreatIntelligence-CustomConnector",
             "type": "string"
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics workspace (with Microsoft Sentinel enabled) to which the threat intelligence is uploaded. The workspace must be in the same resource group as this playbook."
+            }
         }
     },
     "variables": {
@@ -47,11 +65,13 @@
     "resources": [
         {
             "type": "Microsoft.Logic/workflows",
-            "apiVersion": "2017-07-01",
+            "apiVersion": "2019-05-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "tags": {
-                "hidden-SentinelTemplateVersion": "2.8"
+                "hidden-SentinelTemplateName": "GTI-ThreatList",
+                "hidden-SentinelTemplateVersion": "2.9",
+                "LogicAppsCategory": "security"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -89,7 +109,7 @@
                                 "headers": {
                                     "x-tool": "ms-sentinel-gti"
                                 },
-                                "path": "/threat_lists/@{encodeURIComponent('ransomware')}/@{encodeURIComponent(convertTimeZone(utcNow(), 'UTC', 'Mid-Atlantic Standard Time','yyyyMMddHH'))}",
+                                "path": "/threat_lists/@{encodeURIComponent('ransomware')}/@{encodeURIComponent(formatDateTime(addHours(utcNow(), -2), 'yyyyMMddHH'))}",
                                 "queries": {
                                     "format": "stix-sentinel-api"
                                 }
@@ -113,7 +133,7 @@
                                             "sourcesystem": "Google Threat Intelligence",
                                             "stixobjects": "@items('For_each')"
                                         },
-                                        "path": "/ThreatIntelligence/@{encodeURIComponent('')}/UploadStixObjects/"
+                                        "path": "/ThreatIntelligence/@{encodeURIComponent(parameters('WorkspaceID'))}/UploadStixObjects/"
                                     }
                                 }
                             },
@@ -129,6 +149,10 @@
                         "$connections": {
                             "type": "Object",
                             "defaultValue": {}
+                        },
+                        "WorkspaceID": {
+                            "type": "String",
+                            "defaultValue": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName')), '2025-07-01').customerId]"
                         }
                     }
                 },
