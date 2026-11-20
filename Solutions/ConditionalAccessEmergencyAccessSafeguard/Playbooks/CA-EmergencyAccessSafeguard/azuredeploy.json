@@ -1,0 +1,432 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Conditional Access Emergency Access Safeguard",
+    "description": "Runs daily and checks every Microsoft Entra Conditional Access policy. If either of the two designated emergency access (break-glass) accounts is not excluded from a policy, the playbook adds the missing exclusion through Microsoft Graph, re-reads the policy to verify the change, and emails a verified or failed result to the designated recipient.",
+    "prerequisites": [
+      "Two emergency access (break-glass) accounts in Microsoft Entra ID. You need the object ID of each account.",
+      "A mailbox to receive verification notifications."
+    ],
+    "postDeployment": [
+      "1. Grant the playbook's system-assigned managed identity the Microsoft Graph application permissions Policy.Read.All and Policy.ReadWrite.ConditionalAccess (admin consent required).",
+      "2. Authorize the Office 365 API connection: open the connection resource, select Edit API connection, select Authorize, sign in, and save.",
+      "3. Test the playbook against a Report-only or disabled test policy before relying on it in production."
+    ],
+    "lastUpdateTime": "2026-11-19T00:00:00.000Z",
+    "entities": [],
+    "tags": [
+      "Remediation",
+      "Conditional Access",
+      "Identity"
+    ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Araam Mamali"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "Initial release",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "CA-EmergencyAccessSafeguard",
+      "metadata": {
+        "description": "Name of the Logic App."
+      }
+    },
+    "BreakGlassAccountId1": {
+      "type": "string",
+      "metadata": {
+        "description": "Object ID of the first emergency access (break-glass) account."
+      }
+    },
+    "BreakGlassAccountId2": {
+      "type": "string",
+      "metadata": {
+        "description": "Object ID of the second emergency access (break-glass) account."
+      }
+    },
+    "NotificationEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Email address that receives remediation verification results."
+      }
+    },
+    "GraphEndpoint": {
+      "type": "string",
+      "defaultValue": "https://graph.microsoft.com",
+      "allowedValues": [
+        "https://graph.microsoft.com",
+        "https://graph.microsoft.us",
+        "https://dod-graph.microsoft.us"
+      ],
+      "metadata": {
+        "description": "Microsoft Graph endpoint for your cloud: Commercial/GCC, GCC High, or DoD."
+      }
+    }
+  },
+  "variables": {
+    "Office365ConnectionName": "[concat('Office365-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('Office365ConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('Office365ConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "CA-EmergencyAccessSafeguard",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "metadata": {},
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "triggers": {
+            "Recurrence": {
+              "recurrence": {
+                "interval": 1,
+                "frequency": "Day"
+              },
+              "type": "Recurrence"
+            }
+          },
+          "actions": {
+            "HTTP": {
+              "runAfter": {},
+              "type": "Http",
+              "inputs": {
+                "uri": "@{parameters('GraphEndpoint')}/v1.0/identity/conditionalAccess/policies",
+                "method": "GET",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "@parameters('GraphEndpoint')"
+                }
+              },
+              "runtimeConfiguration": {
+                "contentTransfer": {
+                  "transferMode": "Chunked"
+                }
+              }
+            },
+            "Parse_JSON": {
+              "runAfter": {
+                "HTTP": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('HTTP')",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "conditions": {
+                            "type": "object",
+                            "properties": {
+                              "users": {
+                                "type": "object",
+                                "properties": {
+                                  "includeUsers": {
+                                    "type": [
+                                      "array",
+                                      "null"
+                                    ],
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "excludeUsers": {
+                                    "type": [
+                                      "array",
+                                      "null"
+                                    ],
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "displayName",
+                          "state",
+                          "conditions"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "value"
+                  ]
+                }
+              }
+            },
+            "For_each": {
+              "foreach": "@body('Parse_JSON')['value']",
+              "actions": {
+                "Condition": {
+                  "actions": {
+                    "Compose": {
+                      "type": "Compose",
+                      "inputs": "@concat(\n  'NONCOMPLIANT CA POLICY | Name: ',\n  item()?['displayName'],\n  ' | Policy ID: ',\n  item()?['id'],\n  ' | Missing one or more break-glass exclusions'\n)"
+                    },
+                    "HTTP_1": {
+                      "runAfter": {
+                        "Compose": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "@concat(parameters('GraphEndpoint'),'/v1.0/identity/conditionalAccess/policies/',items('For_each')?['id'])",
+                        "method": "PATCH",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": "@setProperty(\n  json('{}'),\n  'conditions',\n  setProperty(\n    items('For_each')?['conditions'],\n    'users',\n    setProperty(\n      items('For_each')?['conditions']?['users'],\n      'excludeUsers',\n      union(\n        coalesce(\n          items('For_each')?['conditions']?['users']?['excludeUsers'],\n          json('[]')\n        ),\n        createArray(\n          parameters('BreakGlassAccountId1'),\n          parameters('BreakGlassAccountId2')\n        )\n      )\n    )\n  )\n)",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "@parameters('GraphEndpoint')"
+                        }
+                      },
+                      "runtimeConfiguration": {
+                        "contentTransfer": {
+                          "transferMode": "Chunked"
+                        }
+                      }
+                    },
+                    "HTTP_2": {
+                      "runAfter": {
+                        "Delay": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "@concat(parameters('GraphEndpoint'),'/v1.0/identity/conditionalAccess/policies/',items('For_each')?['id'])",
+                        "method": "GET",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "@parameters('GraphEndpoint')"
+                        }
+                      },
+                      "runtimeConfiguration": {
+                        "contentTransfer": {
+                          "transferMode": "Chunked"
+                        }
+                      }
+                    },
+                    "Condition_1": {
+                      "actions": {
+                        "Compose_1": {
+                          "type": "Compose",
+                          "inputs": "@concat(\n  'REMEDIATION VERIFIED | Name: ',\n  body('HTTP_2')?['displayName'],\n  ' | Policy ID: ',\n  body('HTTP_2')?['id'],\n  ' | Both break-glass accounts are excluded'\n)"
+                        },
+                        "Send_an_email_(V2)": {
+                          "runAfter": {
+                            "Compose_1": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['office365']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "To": "@parameters('NotificationEmail')",
+                              "Subject": "Conditional Access break-glass remediation verified",
+                              "Body": "<p class=\"editor-paragraph\">@{outputs('Compose_1')}</p>",
+                              "Importance": "High"
+                            },
+                            "path": "/v2/Mail"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "HTTP_2": [
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Compose_2": {
+                            "type": "Compose",
+                            "inputs": "@concat(\n  'REMEDIATION VERIFICATION FAILED | Name: ',\n  body('HTTP_2')?['displayName'],\n  ' | Policy ID: ',\n  body('HTTP_2')?['id'],\n  ' | One or both break-glass accounts are still missing'\n)"
+                          },
+                          "Send_an_email_(V2)_1": {
+                            "runAfter": {
+                              "Compose_2": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['office365']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "body": {
+                                "To": "@parameters('NotificationEmail')",
+                                "Subject": "Conditional Access break-glass remediation verification failed",
+                                "Body": "<p class=\"editor-paragraph\">@{outputs('Compose_2')}</p>",
+                                "Importance": "High"
+                              },
+                              "path": "/v2/Mail"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@and(\n  contains(\n    coalesce(\n      body('HTTP_2')?['conditions']?['users']?['excludeUsers'],\n      json('[]')\n    ),\n    parameters('BreakGlassAccountId1')\n  ),\n  contains(\n    coalesce(\n      body('HTTP_2')?['conditions']?['users']?['excludeUsers'],\n      json('[]')\n    ),\n    parameters('BreakGlassAccountId2')\n  )\n)",
+                              "@true"
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "Delay": {
+                      "runAfter": {
+                        "HTTP_1": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Wait",
+                      "inputs": {
+                        "interval": {
+                          "count": 15,
+                          "unit": "Second"
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@not(\n  and(\n    contains(\n      coalesce(\n        items('For_each')?['conditions']?['users']?['excludeUsers'],\n        json('[]')\n      ),\n      parameters('BreakGlassAccountId1')\n    ),\n    contains(\n      coalesce(\n        items('For_each')?['conditions']?['users']?['excludeUsers'],\n        json('[]')\n      ),\n      parameters('BreakGlassAccountId2')\n    )\n  )\n)",
+                          "@true"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "Parse_JSON": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            }
+          },
+          "outputs": {},
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "BreakGlassAccountId1": {
+              "type": "String"
+            },
+            "BreakGlassAccountId2": {
+              "type": "String"
+            },
+            "NotificationEmail": {
+              "type": "String"
+            },
+            "GraphEndpoint": {
+              "type": "String"
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                "connectionName": "[variables('Office365ConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+              }
+            }
+          },
+          "BreakGlassAccountId1": {
+            "value": "[parameters('BreakGlassAccountId1')]"
+          },
+          "BreakGlassAccountId2": {
+            "value": "[parameters('BreakGlassAccountId2')]"
+          },
+          "NotificationEmail": {
+            "value": "[parameters('NotificationEmail')]"
+          },
+          "GraphEndpoint": {
+            "value": "[parameters('GraphEndpoint')]"
+          }
+        }
+      }
+    }
+  ]
+}
