@@ -6,7 +6,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import parse_qsl, urlsplit
 
 from solution_manager.core.artifacts import report_directory, write_json_artifact
 from solution_manager.core.content_paths import content_path
@@ -397,30 +396,29 @@ def plan_workbook_ui(
     path = content_path(root, workbook)
     if path not in selected_workbook_references(root):
         raise ValueError("UI qualification requires an explicitly selected Defender workbook")
-    parsed = urlsplit(url)
+    from solution_manager.qualification.workbook_browser import (
+        OPTIONAL_CHECK_KINDS, REQUIRED_CHECK_KINDS, validate_portal_url,
+    )
+
+    portal = validate_portal_url(url)
     if (
-        parsed.scheme != "https" or parsed.hostname != "security.microsoft.com"
-        or parsed.username or parsed.password or parsed.port not in (None, 443)
-        or not parsed.path.strip("/")
-        or any(key.casefold() in {
-            "access_token", "token", "code", "sig", "signature", "client_secret",
-        } for key, _ in parse_qsl(parsed.query))
-    ):
-        raise ValueError("workbook UI requires an exact reviewed Defender portal HTTPS URL")
-    if (
-        set(readiness_selectors) != {"tenant", "workbook", "ready"}
+        not {"tenant", "workbook", "ready"} <= readiness_selectors.keys()
+        or readiness_selectors.keys() - {"tenant", "workbook", "ready", "workspace"}
         or any(not value.strip() for value in readiness_selectors.values())
         or not background_activity_review.strip()
     ):
         raise ValueError("UI readiness selectors and background/service-worker review are required")
-    required = {"pickers", "dependent-refresh", "filters", "drill-down", "reload", "layout", "conditional-visibility"}
+    required = REQUIRED_CHECK_KINDS
+    kinds = {step.get("kind") for step in steps}
     if (
-        {step.get("kind") for step in steps} != required
+        not required <= kinds or kinds - required - OPTIONAL_CHECK_KINDS
         or any(not str(step.get("id") or "").strip() for step in steps)
         or len({step["id"] for step in steps}) != len(steps)
-        or any(step.get("action") not in {"observe", "select", "reload", "drill-down"} for step in steps)
+        or any(step.get("action") not in {"observe", "select", "reload", "drill-down", "click"} for step in steps)
     ):
         raise ValueError("UI plan must include every reviewed check and only permitted non-edit actions")
+    if (portal == "portal.azure.com" or kinds & OPTIONAL_CHECK_KINDS) and browser_config is None:
+        raise ValueError("Azure fallback and extended UI checks require a reviewed versioned browser configuration")
     document = json.loads(path.read_text(encoding="utf-8-sig"))
     plan = {
         "schemaVersion": "1.0.0",
@@ -524,6 +522,11 @@ def _execute_workbook_ui(
             "error": "incomplete-or-failed-ui-capture",
             **diagnostics,
         })
+        if plan.get("browserConfig") is not None:
+            from solution_manager.qualification.workbook_browser import BrowserQualificationError
+
+            if not isinstance(exc, BrowserQualificationError):
+                raise BrowserQualificationError("browser provider or capture validation failed; no raw exception was retained") from None
         raise
     receipt = {
         "schemaVersion": "1.0.0",
@@ -562,6 +565,10 @@ def _validate_ui_capture(plan: dict[str, Any], capture: dict[str, Any]) -> None:
         or not isinstance(results, list) or len(results) != len(plan["steps"])
     ):
         raise ValueError("workbook UI capture has incomplete readiness, errors, or prohibited actions")
+    if plan.get("browserConfig") is not None:
+        for key in ("workspaceResourceId", "workspaceCustomerId"):
+            if key in plan["browserConfig"]["readiness"] and readiness.get(key) != plan["target"][key]:
+                raise ValueError("workbook UI capture has missing or mismatched observed workspace identity")
     for expected, actual in zip(plan["steps"], results, strict=True):
         if (
             not isinstance(actual, dict)

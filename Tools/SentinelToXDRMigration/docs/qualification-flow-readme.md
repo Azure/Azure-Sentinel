@@ -240,14 +240,30 @@ sentinel-xdr-migration complete-alert-parity `
 
 When the solution includes Workbooks (`Workbooks/` or `XDR Workbooks/`):
 
+Use the [Sentinel workbook browser skill](../../../.github/skills/validate-sentinel-workbook-browser/SKILL.md)
+and [Defender-portal testing walkthrough](workbook-browser-testing.md).
+Prefer `security.microsoft.com` for Microsoft Sentinel; select current DOM
+controls rather than reuse Azure-only selectors. Require separate browser
+approval and positive verification of the locked tenant/workspace and
+installed workbook identity. An unsupported Defender visualization may use
+**Open in Azure** only with separate approval and separately reported
+coverage. Native Sentinel testing requires no invented conversion or AR/CD pair.
+
+The commands below summarize the existing lifecycle; inspect `--help` and
+supply the complete reviewed plan/configuration and real-provider inputs.
+Not every source/workflow is eligible for every command. Standalone MCP
+observations do not automatically become accepted toolkit evidence.
+
 ```powershell
-# 1. Execute every workbook panel/parameter query against live lab telemetry
+# 1. Execute the supported, reviewed query fixture family against the locked target.
+#    Its coverage is not automatically every workbook panel or live injected-data proof.
 sentinel-xdr-migration workbook-query-plan --solution "Solutions/<SolutionName>" --run-id "<run-id>"
 sentinel-xdr-migration workbook-query-review --solution "Solutions/<SolutionName>" --run-id "<run-id>"
 sentinel-xdr-migration workbook-query-execute --solution "Solutions/<SolutionName>" --run-id "<run-id>"
 
 # 2. Run Playwright browser UI verification (7 interaction kinds: pickers, dependent refresh,
-#    filters, drill-down, reload, layout, conditional visibility) and capture screenshots
+#    filters, drill-down, reload, layout, conditional visibility).
+#    Screenshots are separate, optional, approved local evidence, disabled by default.
 sentinel-xdr-migration workbook-ui-plan --solution "Solutions/<SolutionName>" --run-id "<run-id>"
 sentinel-xdr-migration workbook-ui-review --solution "Solutions/<SolutionName>" --run-id "<run-id>"
 sentinel-xdr-migration workbook-ui-execute --solution "Solutions/<SolutionName>" --run-id "<run-id>"

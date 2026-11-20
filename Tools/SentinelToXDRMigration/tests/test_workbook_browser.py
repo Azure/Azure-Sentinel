@@ -69,6 +69,11 @@ def reviewed_browser(plan):
         "timeoutMs": 100, "familyTimeoutSeconds": 30, "settleMs": 100,
         "viewport": {"width": 1024, "height": 768},
     }
+    if plan["target"].get("workspaceResourceId"):
+        plan["readinessSelectors"]["workspace"] = "#workspace"
+        config["readiness"]["workspaceResourceId"] = attr(
+            "#workspace", "data-workspace", plan["target"]["workspaceResourceId"],
+        )
     return steps, config
 
 
@@ -144,6 +149,8 @@ class Page:
             "#dependent": {"text": "before"}, "#details": {"text": "Details"},
             "#drill": {"text": "closed"}, "#conditional": {"visible": False},
         }
+        if plan["target"].get("workspaceResourceId"):
+            self.nodes["#workspace"] = {"data-workspace": plan["target"]["workspaceResourceId"]}
 
     def locator(self, selector):
         return Locator(self, selector)
