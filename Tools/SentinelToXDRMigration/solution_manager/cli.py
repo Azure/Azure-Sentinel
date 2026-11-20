@@ -105,8 +105,27 @@ SUPPORTED_PYTHON_MIN = (3, 11)
 SUPPORTED_PYTHON_MAX_EXCLUSIVE = (3, 13)
 
 
+def _public_cli_result(value, *, maintenance_review: bool = False):
+    if isinstance(value, dict):
+        redact = maintenance_review or (
+            value.get("format") == "workbook-maintenance-v1"
+            and value.get("decision") == "accept"
+        )
+        return {
+            key: _public_cli_result(item, maintenance_review=key == "maintenanceReview")
+            for key, item in value.items()
+            if not (redact and key in {"actor", "reference"})
+        }
+    if isinstance(value, list):
+        return [
+            _public_cli_result(item, maintenance_review=maintenance_review)
+            for item in value
+        ]
+    return value
+
+
 def _print(value: dict) -> None:
-    print(json.dumps(value, indent=2))
+    print(json.dumps(_public_cli_result(value), indent=2))
 
 
 def _key_values(values: list[str] | None) -> dict[str, str]:
@@ -184,6 +203,13 @@ def main(argv: list[str] | None = None) -> int:
         description="Convert Microsoft Sentinel analytic rules into XDR Custom Detection YAML."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    maintenance = subparsers.add_parser(
+        "workbook-maintenance-plan",
+        help="Plan explicit published-workbook reuse for a new maintenance run; never approve automatically.",
+    )
+    maintenance.add_argument("--solution", required=True)
+    maintenance.add_argument("--published-ref", required=True, help="Full immutable published commit SHA.")
+    maintenance.add_argument("--repository-url", required=True, help="Published repository remote URL to review.")
     for command in ("workbook-publication-plan", "workbook-publication-clean", "workbook-publication-validate"):
         publication = subparsers.add_parser(command, help="Clean public workbook; retain local authoring evidence.")
         publication.add_argument("--solution", required=True)
@@ -456,6 +482,51 @@ def main(argv: list[str] | None = None) -> int:
         help="Create or update generated Custom Detections through Microsoft Graph beta.",
     )
     deployment.add_argument("--solution", required=True)
+    workbook_deployment_setup = subparsers.add_parser(
+        "setup-workbook-deployment",
+        help="Authenticate for Microsoft Graph Defender Workbook deployment.",
+    )
+    workbook_deployment_setup.add_argument("--tenant-id")
+    workbook_deployment_setup.add_argument("--solution", required=True)
+    workbook_deployment_setup.add_argument(
+        "--workbooks-client-id",
+        help="Public delegated Graph client ID for Defender Workbooks; the built-in client remains the default.",
+    )
+    workbook_deployment_setup.add_argument(
+        "--azure-config-dir",
+        help="Explicitly select and persist an isolated Azure CLI profile for this target.",
+    )
+    workbook_deployment_setup.add_argument(
+        "--auth-method",
+        choices=["azure-cli", "device-code", "browser"],
+        default="azure-cli",
+    )
+    workbook_deployment_parser = subparsers.add_parser(
+        "deploy-workbooks",
+        help="Create or replace generated Defender XDR Workbooks through Microsoft Graph beta.",
+    )
+    workbook_deployment_parser.add_argument("--solution", required=True)
+    workbook_playwright_parser = subparsers.add_parser(
+        "verify-workbooks-playwright",
+        help=(
+            "Open deployed Defender XDR Workbooks in Playwright, check for panel/query errors, "
+            "and update Evidence/qualification-evidence.json without storing PNGs in Evidence."
+        ),
+    )
+    workbook_playwright_parser.add_argument("--solution", required=True)
+    workbook_playwright_parser.add_argument(
+        "--workbook",
+        action="append",
+        help="Optional relative workbook path (e.g. 'XDR Workbooks/LinuxMachines.json'); defaults to all XDR Workbooks.",
+    )
+    workbook_playwright_parser.add_argument("--tenant-id")
+    workbook_playwright_parser.add_argument("--headless", action="store_true")
+    workbook_playwright_parser.add_argument("--wait-seconds", type=int, default=25)
+    workbook_playwright_parser.add_argument(
+        "--no-update-evidence",
+        action="store_true",
+        help="Do not update Evidence/qualification-evidence.json.",
+    )
     deployment_preflight = subparsers.add_parser(
         "preflight-deployment",
         help=(
@@ -823,6 +894,10 @@ def main(argv: list[str] | None = None) -> int:
     workflow_init.add_argument("--subscription-id")
     workflow_init.add_argument("--workspace-resource-id")
     workflow_init.add_argument("--workspace-customer-id")
+    workflow_init.add_argument(
+        "--workbook-maintenance-review",
+        help="Explicitly accepted workbook-maintenance-plan JSON for a new run; never changes an existing baseline.",
+    )
     workflow_init.add_argument(
         "--arm-validation-method", choices=["lab-deployment", "arm-ttk"],
         help="New runs default to lab-deployment; resumption never changes the selected method.",
@@ -1268,6 +1343,7 @@ def main(argv: list[str] | None = None) -> int:
     selection = None
     try:
         isolated_permission_commands = {
+            "workbook-maintenance-plan",
             "workbook-publication-plan", "workbook-publication-clean", "workbook-publication-validate",
             "workbook-update-plan",
             "workbook-update-review",
@@ -1281,6 +1357,7 @@ def main(argv: list[str] | None = None) -> int:
             "workbook-dependency-plan",
             "workbook-review",
             "pr-qualify",
+            "verify-workbooks-playwright",
         }
         if getattr(args, "solution", None) and args.command not in isolated_permission_commands:
             selection = select_run(args.solution, args.run_id)
@@ -1289,7 +1366,12 @@ def main(argv: list[str] | None = None) -> int:
             args.command == "convert" and args.rule_id
         ):
             configure_logging(getattr(args, "solution", None))
-        if args.command in qualification_commands:
+        if args.command == "workbook-maintenance-plan":
+            from solution_manager.authoring.workbook_maintenance import plan_maintenance
+            result = plan_maintenance(
+                args.solution, public_ref=args.published_ref, repository_url=args.repository_url,
+            )
+        elif args.command in qualification_commands:
             result = dispatch_workbook_qualification(args)
         elif args.command == "coordinator-enroll":
             result = coordinator_enroll(
@@ -1529,6 +1611,41 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "deploy":
             result = deploy_solution(args.solution)
+        elif args.command == "setup-workbook-deployment":
+            from solution_manager.qualification.workbook_deployment import (
+                setup_workbook_deployment_authentication,
+            )
+
+            target = require_locked_target(
+                args.solution,
+                tenant_id=args.tenant_id,
+            )
+            result = setup_workbook_deployment_authentication(
+                tenant_id=target["tenantId"],
+                auth_method=args.auth_method,
+                graph_client_id=args.workbooks_client_id,
+                azure_config_dir=args.azure_config_dir,
+            )
+        elif args.command == "deploy-workbooks":
+            from solution_manager.qualification.workbook_deployment import (
+                deploy_workbooks,
+            )
+
+            result = deploy_workbooks(args.solution)
+        elif args.command == "verify-workbooks-playwright":
+            from solution_manager.qualification.workbook_playwright import (
+                verify_deployed_workbooks_playwright,
+            )
+
+            target = {"tenantId": args.tenant_id} if args.tenant_id else None
+            result = verify_deployed_workbooks_playwright(
+                args.solution,
+                workbooks=args.workbook,
+                target=target,
+                headless=bool(args.headless),
+                wait_seconds=int(args.wait_seconds),
+                update_evidence=not bool(args.no_update_evidence),
+            )
         elif args.command == "preflight-deployment":
             result = preflight_deployment(
                 args.solution,
@@ -1968,6 +2085,10 @@ def main(argv: list[str] | None = None) -> int:
                     or args.arm_validation_method is not None else None
                 ),
                 arm_validation_method=args.arm_validation_method,
+                workbook_maintenance_review=(
+                    _json_object_arg(args.workbook_maintenance_review, flag_name="--workbook-maintenance-review")
+                    if args.workbook_maintenance_review is not None else None
+                ),
             )
         elif args.command == "workflow-budget":
             result = budget_summary(args.solution, args.campaign_id)

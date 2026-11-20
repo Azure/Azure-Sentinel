@@ -18,6 +18,7 @@ _CLIENT_KEYS = {
     "appReadback": "appReadbackClientId",
     "advancedHunting": "advancedHuntingClientId",
     "customDetection": "customDetectionClientId",
+    "workbooks": "workbooksClientId",
 }
 _PROFILE_LOCK = threading.RLock()
 

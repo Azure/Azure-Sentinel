@@ -131,6 +131,16 @@ review, runtime/schema, packaging, authentication, or write gates.
 
 ## Migration workflow
 
+For maintenance of AR/CD content with existing published Defender workbooks,
+follow the canonical **Published-workbook maintenance** route before initializing
+a new run. Prepare `workbook-maintenance-plan`, present its published repository,
+commit, selections and dependencies, and obtain explicit baseline approval.
+Manage the local reviewed-plan file for the user and pass
+`--workbook-maintenance-review` to initialization. Never infer baseline trust
+from HEAD or ask the user to fabricate/copy private receipts. Preserve selected
+workbooks; report any required legacy cleanup before packaging. This does not
+waive candidate, provider-contract, qualification or write-consent gates.
+
 1. Run `workflow-status` first. If no state exists, default to **Qualification**
    (or allow explicit **Authoring** as an offline/ISV fallback when no live lab
    is available, or **Cancel**). Explain that Qualification adds deployment,

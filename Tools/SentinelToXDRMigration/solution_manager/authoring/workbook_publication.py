@@ -330,8 +330,28 @@ def main():
     if not (3, 11) <= sys.version_info[:2] < (3, 13):
         raise ValueError("Workbook publication requires Python 3.11 or 3.12.")
     document = json.loads(sys.stdin.read())
-    errors = publication_errors(sys.argv[1], document,
-                                public_ref=os.environ.get("SENTINEL_XDR_WORKBOOK_PUBLIC_REF"))
+    maintenance_run = os.environ.get("SENTINEL_XDR_WORKBOOK_MAINTENANCE_RUN_ID")
+    if maintenance_run:
+        from solution_manager.core.artifacts import using_run
+        from solution_manager.core.workflow import _load
+        from solution_manager.migration.workbook_workflow import verify_inventory
+        try:
+            with using_run(sys.argv[1], maintenance_run):
+                state = _load(sys.argv[1])[1]
+                review = state.get("workbooks", {}).get("maintenanceReview")
+                if review is None:
+                    raise ValueError("selected run has no approved workbook maintenance plan")
+                verify_inventory(sys.argv[1], state)
+                if not is_public(document) or sum(
+                    row["documentSha256"] == digest(document) for row in review["workbooks"]
+                ) != 1:
+                    raise ValueError("in-memory workbook differs from the approved maintenance selection")
+            errors = []
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            errors = [str(exc)]
+    else:
+        errors = publication_errors(sys.argv[1], document,
+                                    public_ref=os.environ.get("SENTINEL_XDR_WORKBOOK_PUBLIC_REF"))
     print(json.dumps({"errors": errors}))
     return int(bool(errors))
 

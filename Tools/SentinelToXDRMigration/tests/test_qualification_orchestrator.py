@@ -1058,6 +1058,76 @@ def test_streaming_compiler_error_e2e_q02_captures_diagnostics_and_runs_finally_
         shutil.rmtree(scratch)
 
 
+def test_workbook_validation_modes_kql_only_and_playwright_short_circuit_on_kql_failure():
+    scratch, sol_root = _create_solution_fixture(
+        num_rules=0,
+        num_sentinel_workbooks=1,
+        num_defender_workbooks=1,
+        num_detections=0,
+        table_name="KubeEvents",
+    )
+    try:
+        plan = plan_qualification_pipeline(sol_root, target=LAB_TARGET)
+        rq_consent, dep_consent, ing_consent = _valid_consents_for_plan(plan)
+
+        # Case 1: workbook_validation_mode="kql-only" runs KQL and skips Playwright
+        pw_calls: list[str] = []
+        kql_only_state = run_qualification_pipeline(
+            sol_root,
+            target=LAB_TARGET,
+            runtime_query_consent=rq_consent,
+            deployment_consent=dep_consent,
+            mock_ingestion_consent=ing_consent,
+            workbook_validation_mode="kql-only",
+            workbook_query_runner=lambda wb, _t: {
+                "workbook": wb,
+                "status": "passed",
+                "executedQueryCount": 3,
+                "failedQueryCount": 0,
+            },
+            playwright_runner=lambda wb, _t: pw_calls.append(wb) or {"status": "passed"},
+            resume=False,
+        )
+        assert pw_calls == []
+        assert kql_only_state["workbookQualificationVerified"] is True
+        assert kql_only_state["workbookContractResult"]["workbookValidationMode"] == "kql-only"
+        assert kql_only_state["workbookContractResult"]["playwrightVerification"]["status"] == "skipped"
+        assert (
+            kql_only_state["workbookContractResult"]["playwrightVerification"]["reason"]
+            == "kql-only-mode-selected"
+        )
+
+        # Case 2: workbook_validation_mode="playwright" short-circuits Playwright when KQL fails
+        pw_short_circuit_state = run_qualification_pipeline(
+            sol_root,
+            target=LAB_TARGET,
+            runtime_query_consent=rq_consent,
+            deployment_consent=dep_consent,
+            mock_ingestion_consent=ing_consent,
+            workbook_validation_mode="playwright",
+            workbook_query_runner=lambda wb, _t: {
+                "workbook": wb,
+                "status": "failed",
+                "executedQueryCount": 3,
+                "failedQueryCount": 1,
+            },
+            playwright_runner=lambda wb, _t: pw_calls.append(wb) or {"status": "passed"},
+            resume=False,
+        )
+        assert pw_calls == []
+        assert pw_short_circuit_state["workbookQualificationVerified"] is False
+        assert pw_short_circuit_state["qualificationStages"]["workbook_qualification"]["status"] == "failed"
+        assert (
+            pw_short_circuit_state["workbookContractResult"]["playwrightVerification"]["status"]
+            == "skipped_due_to_kql_failure"
+        )
+        assert pw_short_circuit_state["qualificationStages"]["workbook_qualification"]["reasons"] == [
+            "One or more Defender Workbook live KQL queries failed validation."
+        ]
+    finally:
+        shutil.rmtree(scratch)
+
+
 import unittest
 
 
@@ -1085,4 +1155,7 @@ class QualificationOrchestratorTestCase(unittest.TestCase):
 
     def test_streaming_compiler_error_e2e_q02_captures_diagnostics_and_runs_finally_disable(self):
         test_streaming_compiler_error_e2e_q02_captures_diagnostics_and_runs_finally_disable()
+
+    def test_workbook_validation_modes_kql_only_and_playwright_short_circuit_on_kql_failure(self):
+        test_workbook_validation_modes_kql_only_and_playwright_short_circuit_on_kql_failure()
 

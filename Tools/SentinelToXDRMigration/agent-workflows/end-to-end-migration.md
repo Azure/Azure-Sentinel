@@ -89,10 +89,57 @@ not carried forward as a public exception.
 
 Portable structural validation of public content does not establish authoring
 acceptance. Authoring/apply/package operations require current hash-bound local
-review evidence. Explicit standalone reproduction against a selected published
+review evidence, or the explicitly approved published-content maintenance
+evidence below for unchanged published workbooks. Explicit standalone reproduction against a selected published
 Git commit can use public dependencies without private receipts; it is not a
 workflow approval and does not relax any candidate, official-check, environment
 authorization or qualification gate.
+
+#### Published-workbook maintenance
+
+For AR/CD-only maintenance with selected clean published workbooks, run
+`workbook-maintenance-plan --solution <path> --published-ref <full-commit-SHA>
+--repository-url <approved-published-repository-remote>`. This is read-only
+preflight. Present the repository, immutable commit, complete workbook selection,
+dependency snapshot and per-workbook acceptance classification to the user.
+A matching configured remote proves repository identity, not publication trust.
+Require explicit approval that this is the intended published baseline; never
+infer it from HEAD, a branch name, an arbitrary commit or successful Git lookup.
+Record the user's nonempty actor/reference and `decision: accept` in the exact
+plan, without editing its hashes or content classifications.
+
+Initialize a new workbook-capable run with
+`--workbook-maintenance-review <reviewed-plan.json>` (and explicit profile and
+normal budget/target options). Existing runs cannot acquire or change this
+approval. The run freezes public authored paths independently of removed source
+provenance. Conversion preserves these files, including their authored versions;
+it does not regenerate legacy proof or reconvert unrelated workbooks.
+
+`published-baseline` entries require identical canonical workbook content and
+unchanged parser/connector inventories at the approved commit. Changed/new
+workbooks or changed dependency inventories require current local authoring
+review (`local-review`). Current structural, identity and dependency checks
+always run; source/selection/dependency drift invalidates the plan. The current
+dependency comparison conservatively includes all solution parser/connector
+files, not only matching connector IDs. Legacy metadata cleanup remains an
+explicit separate reviewed content change, detected before conversion/package
+mutation. Never remove selected workbooks to get past preflight.
+
+The agent manages local plan/evidence files after approval; users should not
+calculate hashes or copy another author's private receipts. Baseline reuse
+satisfies only workbook input acceptance in this maintenance run. It is not
+new conversion evidence or runtime/provider qualification. Reports distinguish
+preserved content from converted content. All candidate, official-check,
+provider-contract and deployment authorization gates remain mandatory.
+
+Finalize approved AR edits and their patch versions before freezing a new
+full-inventory run. Generate final detection output with the deterministic
+converter (including any approved version action), then review its emitted
+`reviewScope`. Reapply decisions only to those exact final hashes; never bump
+source versions after review, hand-edit provenance hashes or clear stale review
+flags. Unchanged retries preserve the same review scope.
+
+#### Candidate generation and acceptance
 
 New CLI runs persist `workbookCapabilityVersion=1` and default to
 `armValidationMethod=lab-deployment`, in either explicitly selected profile.
@@ -211,11 +258,26 @@ Selectors, expected values, request URLs, navigation and timeouts require review
 no guessed production DOM bindings or automatic sign-in. Save/Edit and cleanup
 are prohibited. Browser/network checks are not a browser-wide no-write sandbox.
 
-The optional `browser` extra provides Playwright. UI assertions compare reviewed
-expectations, not automatically fetched API results. Query evidence, browser
-evidence and full ARM/Content Hub acceptance remain separate. Existing
-`workbook-ui-import` accepts explicitly reviewed external captures; it does not
-launch a browser. Live browser execution needs separate exact-scope approval.
+The optional `browser` extra provides Playwright. `doctor` checks whether
+Playwright is installed (`playwright.sync_api`) and warns when missing that
+workbook verification is limited to KQL validation only. When a solution has zero
+workbooks (`workbooksCount == 0`), the XDR Workbooks stage is skipped automatically
+(`status: "not_applicable"`). When workbooks are present (`workbooksCount > 0`),
+ask the user whether they want `"playwright"` verification or `"kql-only"`
+validation (defaulting to `"kql-only"` when `doctor` reports Playwright is not
+installed). In `"playwright"` mode, always run live workbook KQL validation first
+and short-circuit (skip Playwright) if any workbook KQL query fails. When a
+Defender XDR workbook query fails Advanced Hunting validation or
+`verify-workbooks-playwright` UI verification, never modify the Sentinel source
+workbook under `Workbooks/`. Apply fixes exclusively to the converted Defender
+XDR workbook under `XDR Workbooks/` using `workbook-update-plan`,
+`workbook-update-review`, and `workbook-update-apply`, then re-run
+`deploy-workbooks` and `verify-workbooks-playwright`. UI assertions
+compare reviewed expectations, not automatically fetched API results. Query
+evidence, browser evidence and full ARM/Content Hub acceptance remain separate.
+Existing `workbook-ui-import` accepts explicitly reviewed external captures; it
+does not launch a browser. Live browser execution needs separate exact-scope
+approval.
 
 Public Graph beta metadata exposes `security/workbooks` and the security
 workbook `name`/open `content` model. It does not establish write permissions,
