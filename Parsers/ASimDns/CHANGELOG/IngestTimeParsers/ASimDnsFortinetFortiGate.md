@@ -2,7 +2,6 @@
 
 ## Version 0.1.4
 
-- (2026-11-19) Add a non-functional comment to trigger live QTP/ITP validation; parser behavior is unchanged. - [PR #15702](https://github.com/Azure/Azure-Sentinel/pull/15702)
 - (2026-11-11) Convert split domain and hostname values to strings to avoid mixed dynamic and string types during DCR compilation. - [PR #15453](https://github.com/Azure/Azure-Sentinel/pull/15453)
 
 ## Version 0.1.3
