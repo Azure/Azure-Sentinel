@@ -12,6 +12,11 @@ Use it to:
 - **Recover after log pipeline downtime** in SAP Integration Suite, SAP Cloud Connector,
   SAP ERP or the DCE/DCR.
 
+For tenant or endpoint changes, first follow the
+[connection migration procedure](../IntegrationSuite/README.md#changing-an-existing-connections-tenant-or-endpoint).
+It explains cached settings, HTTP 401 windows that automatic retry does not recover,
+and when to run a migration backfill without clamping its intended end time.
+
 > [!IMPORTANT]
 > This tool is provided as-is, as a sample. Test it in a non-production landscape first.
 > Read [Sizing and load protection](#sizing-and-load-protection) before you run any large load.
@@ -178,27 +183,80 @@ Use the `MPLLogID` from the CSV to check the message in the CPI message monitor.
 
 ## Finding gaps
 
-Use time-binned counts to spot empty windows, then export the result as the gap CSV. The query
-uses aligned buckets and only includes completed windows, so it avoids treating a partially
-elapsed current bucket as a gap:
+Check empty windows **separately for every expected SAP system and client**. A table-wide
+count can hide a silent client while other clients continue delivering. Simply adding
+`by SystemId, ClientId` to `make-series` is insufficient: a client with no records anywhere
+in the lookback would still be absent.
+
+Replace the sample inventory below with all clients that should deliver audit events,
+including clients currently silent. Obtain the inventory from your SAP Basis team or
+connection configuration, not only from recent `ABAPAuditLog` records. Match `SystemId`,
+`ClientId` and `SystemUniqueId` exactly as emitted by your deployment; keep client IDs as
+strings to preserve leading zeros. Use `""` for `SystemUniqueId` only when the source
+actually emits an empty value. This identifier distinguishes landscapes that reuse a
+system ID. Set `MonitoringStartUtc` to when each client was expected to start delivering.
+
+The query creates expected windows independently of received events, then left-joins
+per-client counts. It excludes the current bucket and allows an additional ingestion
+delay before checking completed windows. Adjust `ingestion_grace` to your observed latency.
+Set the Logs time picker to cover the entire lookback plus the grace period and one bucket.
 
 ```kusto
 let lookback = 7d;
 let bin_size = 15m;
-let end_utc = bin(now(), bin_size);
+let ingestion_grace = 30m;
+let end_utc = bin(now() - ingestion_grace, bin_size);
 let start_utc = bin(end_utc - lookback, bin_size);
-ABAPAuditLog
+let ExpectedClients = datatable(
+    SystemId:string, ClientId:string, SystemUniqueId:string, MonitoringStartUtc:datetime
+)
+[
+    "PRD", "000", "<system-unique-id>", datetime(2026-01-01T00:00:00Z),
+    "PRD", "100", "<system-unique-id>", datetime(2026-01-01T00:00:00Z)
+];
+let Received = ABAPAuditLog
 | where TimeGenerated >= start_utc and TimeGenerated < end_utc
-| make-series Events = count() default = 0 on TimeGenerated
-    from start_utc to end_utc step bin_size
-| mv-expand TimeGenerated to typeof(datetime), Events to typeof(long)
+| summarize Events = count()
+    by SystemId, ClientId, SystemUniqueId, StartTimeUTC = bin(TimeGenerated, bin_size);
+ExpectedClients
+| distinct SystemId, ClientId, SystemUniqueId, MonitoringStartUtc
+| extend StartTimeUTC = range(start_utc, end_utc - bin_size, bin_size)
+| mv-expand StartTimeUTC to typeof(datetime)
+| where StartTimeUTC >= MonitoringStartUtc
+| join kind=leftouter Received on SystemId, ClientId, SystemUniqueId, StartTimeUTC
+| extend Events = coalesce(Events, tolong(0))
 | where Events == 0
-| project StartTimeUTC = TimeGenerated, EndTimeUTC = TimeGenerated + bin_size
+| project SystemId, ClientId, SystemUniqueId,
+    StartTimeUTC, EndTimeUTC = StartTimeUTC + bin_size, Events
+| order by SystemId asc, ClientId asc, SystemUniqueId asc, StartTimeUTC asc
 ```
 
-Some systems have quiet periods (nights, weekends) that are legitimately empty. Cross-check
-with the connector heartbeat in `SentinelHealth` and the CPI message monitor before you
-reload a window.
+These are **potential gaps, not proof of lost records**. Quiet periods (nights, weekends),
+maintenance and audit configuration can legitimately produce empty windows. Monitor only
+clients expected to produce events at the selected cadence, and cross-check the affected
+connection's `SentinelHealth` heartbeat and CPI message monitor before reloading. A nonempty
+window does not prove that every source record arrived; partial loss needs source-to-target
+reconciliation.
+
+For backfill, select one system/client/landscape at a time, verify its RFC destination,
+and export only `StartTimeUTC,EndTimeUTC` to the gap CSV. The backfill script does not route
+rows using the identity columns and uses one `RfcDestinationName` per invocation.
+
+### Alert on a silent SAP system and client
+
+To run an hourly check, use the query above in a **Microsoft Sentinel scheduled analytics
+rule**, with `lookback = 1h`, `bin_size = 1h` and a suitable `ingestion_grace` (for example,
+`30m`). Run it every hour with a query period of at least **3 hours** for those example
+settings so the rule's implicit time filter includes the complete checked bucket.
+Trigger when the query returns more than zero results and select an alert for each result.
+Include `SystemId`, `ClientId`, `SystemUniqueId`, `StartTimeUTC` and `EndTimeUTC` as custom
+details so the SOC can identify the affected client and window. Configure incident creation
+and notification automation according to your SOC process.
+
+Maintain the expected-client inventory as connections change; a watchlist can replace the
+inline datatable for ongoing operation. Exclude planned quiet or maintenance windows through
+your monitoring policy. This README supplies query and configuration guidance; it does not
+automatically deploy or enable an alert.
 
 ## Sizing and load protection
 
