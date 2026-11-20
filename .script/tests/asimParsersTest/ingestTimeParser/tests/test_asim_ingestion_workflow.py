@@ -1341,6 +1341,37 @@ class WorkflowTopologyTests(unittest.TestCase):
             normalize(isolated_gate),
         )
 
+    def test_security_gate_uses_environment_for_shell_inputs(self):
+        expected_environment = (
+            "IS_FORK: ${{ github.event.pull_request.head.repo.fork }}",
+            "PR_LABELS_JSON: "
+            "${{ toJson(github.event.pull_request.labels.*.name) }}",
+            "TRIGGER_EVENT: ${{ github.event.action }}",
+            "LABEL_NAME: ${{ github.event.label.name }}",
+        )
+        expected_assignments = (
+            'is_fork="$IS_FORK"',
+            'labels="$PR_LABELS_JSON"',
+            'trigger_event="$TRIGGER_EVENT"',
+            'label_added="$LABEL_NAME"',
+        )
+        unsafe_assignments = (
+            'is_fork="${{ github.event.pull_request.head.repo.fork }}"',
+            "labels='${{ "
+            "toJson(github.event.pull_request.labels.*.name) }}'",
+            'trigger_event="${{ github.event.action }}"',
+            'label_added="${{ github.event.label.name }}"',
+        )
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                for value in expected_environment:
+                    self.assertIn(value, workflow)
+                for value in expected_assignments:
+                    self.assertIn(value, workflow)
+                for value in unsafe_assignments:
+                    self.assertNotIn(value, workflow)
+
     def test_fork_gate_protects_testers_and_workflows(self):
         for path in (self.legacy_path, self.isolated_path):
             with self.subTest(path=path.name):
