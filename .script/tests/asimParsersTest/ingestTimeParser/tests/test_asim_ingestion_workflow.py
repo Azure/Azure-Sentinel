@@ -1332,20 +1332,6 @@ class WorkflowTopologyTests(unittest.TestCase):
         isolated_gate = isolated_gate.replace(
             initial_event_branch, "", 1
         )
-        label_removal_always = """\
-      - name: Auto-remove SafeToRun label on synchronize for fork PRs
-        if: |
-          always() &&
-"""
-        self.assertIn(label_removal_always, isolated_gate)
-        isolated_gate = isolated_gate.replace(
-            label_removal_always,
-            """\
-      - name: Auto-remove SafeToRun label on synchronize for fork PRs
-        if: |
-""",
-            1,
-        )
 
         normalize = lambda value: "\n".join(
             line.rstrip() for line in value.splitlines()
@@ -1529,18 +1515,80 @@ class WorkflowTopologyTests(unittest.TestCase):
         )
 
     def test_safe_to_run_removal_runs_after_failed_gate(self):
-        workflow = self.isolated_path.read_text(encoding="utf-8")
-
-        self.assertIn(
-            """\
+        expected = """\
       - name: Auto-remove SafeToRun label on synchronize for fork PRs
         if: |
           always() &&
           github.event.pull_request.head.repo.fork == true &&
           github.event.action == 'synchronize' &&
           steps.check-approval.outputs.should_remove_label == 'true'
-""",
-            workflow,
+"""
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                self.assertIn(
+                    expected, path.read_text(encoding="utf-8")
+                )
+
+    def test_approval_is_bound_to_verified_head_sha(self):
+        legacy = self.legacy_path.read_text(encoding="utf-8")
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+
+        for workflow in (legacy, isolated):
+            self.assertIn(
+                "approved_sha: "
+                "${{ steps.check-approval.outputs.approved_sha }}",
+                workflow,
+            )
+            self.assertIn(
+                "APPROVAL_HEAD_SHA: "
+                "${{ github.event.pull_request.head.sha }}",
+                workflow,
+            )
+            self.assertEqual(
+                2,
+                workflow.count(
+                    'echo "approved_sha=$APPROVAL_HEAD_SHA" '
+                    ">> $GITHUB_OUTPUT"
+                ),
+            )
+            self.assertIn(
+                "Verify approved SHA is still the pull request head",
+                workflow,
+            )
+            self.assertIn(
+                "if (pr.head.sha !== approvedSha)", workflow
+            )
+
+        self.assertEqual(
+            4,
+            legacy.count(
+                "needs.security-gate.outputs.approved_sha == "
+                "github.event.pull_request.head.sha"
+            ),
+        )
+        self.assertEqual(
+            4,
+            legacy.count(
+                "ref: ${{ needs.security-gate.outputs.approved_sha }}"
+            ),
+        )
+        self.assertNotIn(
+            "ref: ${{ github.event.pull_request.head.sha }}",
+            legacy,
+        )
+        self.assertEqual(
+            4,
+            isolated.count(
+                "needs.security-gate.outputs.approved_sha == "
+                "github.event.pull_request.head.sha"
+            ),
+        )
+        self.assertEqual(
+            2,
+            isolated.count(
+                "PR_HEAD_SHA: "
+                "${{ needs.security-gate.outputs.approved_sha }}"
+            ),
         )
 
     def test_untrusted_pr_content_is_materialized_only_as_data(self):
@@ -1565,7 +1613,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_comparison_refs_are_pinned_to_event_shas(self):
+    def test_comparison_refs_are_pinned_to_approved_sha(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
         self.assertEqual(
@@ -1579,7 +1627,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             2,
             workflow.count(
                 "PR_HEAD_SHA: "
-                "${{ github.event.pull_request.head.sha }}"
+                "${{ needs.security-gate.outputs.approved_sha }}"
             ),
         )
         self.assertEqual(
