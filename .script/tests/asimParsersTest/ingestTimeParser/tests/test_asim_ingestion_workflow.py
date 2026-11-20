@@ -1368,8 +1368,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            "Invoke-WebRequest -Uri $url_helper "
-            "-OutFile $filePath_helper",
+            "Restore-TrustedFile $filePath_helper",
             workflow,
         )
 
@@ -1455,6 +1454,80 @@ class WorkflowTopologyTests(unittest.TestCase):
                 "using its legacy validator.",
                 workflow,
             )
+
+    def test_workflows_pin_supply_chain_inputs(self):
+        legacy = self.legacy_path.read_text(encoding="utf-8")
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+        convert_yaml = (
+            self.repo_root
+            / ".script/tests/asimParsersTest/convertYamlToObject.ps1"
+        ).read_text(encoding="utf-8")
+
+        for workflow in (legacy, isolated):
+            for line in workflow.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("uses:"):
+                    self.assertRegex(
+                        stripped,
+                        r"^uses: [^@\s]+@[0-9a-f]{40}(?:\s+#.*)?$",
+                    )
+            self.assertNotIn("python-version: \"3.x\"", workflow)
+            self.assertNotIn(
+                "python -m pip install --upgrade", workflow
+            )
+            self.assertNotIn("curl ", workflow)
+            self.assertNotIn("Invoke-WebRequest", workflow)
+            self.assertIn("pip==26.3", workflow)
+            self.assertIn("requests==2.34.2", workflow)
+            self.assertIn("PyYAML==6.0.3", workflow)
+            self.assertEqual(
+                6, workflow.count("--only-binary=:all:")
+            )
+
+        self.assertEqual(
+            4, legacy.count("sparse-checkout-cone-mode: false")
+        )
+        for pattern in (
+            "/Parsers/**/*.yaml",
+            "/Parsers/**/*.yml",
+            "/Sample Data/ASIM/**/*.csv",
+            "/ASIM/dev/ASimTester/Testers/*.yaml",
+        ):
+            self.assertEqual(4, legacy.count(pattern))
+        self.assertNotIn("allow-unsafe-pr-checkout", legacy)
+        self.assertNotIn("raw.githubusercontent.com", legacy)
+        self.assertEqual(
+            3,
+            legacy.count(
+                'git show "$TRUSTED_BASE_SHA:$path" > "$path"'
+            ),
+        )
+        self.assertIn(
+            '$content = & git show '
+            '"$($env:TRUSTED_BASE_SHA):$Path"',
+            legacy,
+        )
+        self.assertIn('azPSVersion: "17.0.0"', legacy)
+        self.assertIn("azure-core==1.41.0", legacy)
+        self.assertIn("azure-identity==1.27.0", legacy)
+        self.assertIn("azure-monitor-ingestion==1.1.0", legacy)
+        self.assertIn("azure-monitor-query==1.4.1", legacy)
+        self.assertIn("tabulate==0.10.0", legacy)
+        self.assertGreaterEqual(
+            legacy.count('PYTHONSAFEPATH: "1"'), 6
+        )
+        self.assertEqual(
+            3, isolated.count('python-version: "3.11.9"')
+        )
+        self.assertIn("azure-core==1.41.0", isolated)
+        self.assertIn("azure-identity==1.27.0", isolated)
+        self.assertIn(
+            '$requiredVersion = [version]"0.4.12"',
+            convert_yaml,
+        )
+        self.assertIn(
+            "-RequiredVersion $requiredVersion", convert_yaml
+        )
 
     def test_workflow_never_masks_validation_failures(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
