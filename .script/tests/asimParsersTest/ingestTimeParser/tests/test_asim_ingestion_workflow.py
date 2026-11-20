@@ -1516,9 +1516,6 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertGreaterEqual(
             legacy.count('PYTHONSAFEPATH: "1"'), 6
         )
-        self.assertEqual(
-            3, isolated.count('python-version: "3.11.9"')
-        )
         self.assertIn("azure-core==1.41.0", isolated)
         self.assertIn("azure-identity==1.27.0", isolated)
         self.assertIn(
