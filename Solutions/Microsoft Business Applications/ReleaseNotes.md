@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                  |
 |-------------|--------------------------------|---------------------------------------------------------------------|
+| 3.2.6       | 13-11-2026                     | Fixed the legacy Dataverse Security Data Collector **Data Connector** pagination to preserve encoded `@odata.nextLink` and `$skiptoken` values. |
 | 3.2.5       | 26-10-2026                     | Restored **Power Automate**, **Dataverse**, and **Power Platform Admin** CCF **Data Connectors** and repackaged the solution. |
 | 3.2.4       | 25-10-2026                     | Migrated **Analytic Rules** to Defender XDR Custom Detection format and added **XDR Workbooks**. |
 | 3.2.3       | 23-02-2026                     | Updated **Dataverse - Activity after failed logons** hunting query to use valid Enterprise technique |
