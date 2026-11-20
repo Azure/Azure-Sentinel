@@ -34,17 +34,6 @@ DCR_API_VERSION = "2022-06-01"
 TABLE_API_VERSION = "2022-10-01"
 INGESTION_API_VERSION = "2023-01-01"
 
-DEFAULT_SUBSCRIPTION_ID = "419581d6-4853-49bd-83b6-d94bb8a77887"
-DEFAULT_RESOURCE_GROUP = "asim-schemadatatester-githubshared-canary"
-DEFAULT_WORKSPACE_NAME = "ASIM-SchemaDataTester-GithubShared-Canary"
-DEFAULT_WORKSPACE_ID = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
-DEFAULT_DCE_NAME = "ASIM-SchemaDataTester-GithubShared-Canary"
-DEFAULT_INGESTION_ENDPOINT = (
-    "https://asim-schemadatatester-githubshared-canary-qa1f."
-    "eastus2euap-1.canary.ingest.monitor.azure.com"
-)
-DEFAULT_LOCATION = "eastus2euap"
-
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 RESOURCE_NAME_RE = re.compile(r"[^a-z0-9-]+")
 REPLAY_EXCLUDED_COLUMNS = {
@@ -129,13 +118,34 @@ class Clock:
 
 @dataclass(frozen=True)
 class CanaryConfig:
-    subscription_id: str = DEFAULT_SUBSCRIPTION_ID
-    resource_group: str = DEFAULT_RESOURCE_GROUP
-    workspace_name: str = DEFAULT_WORKSPACE_NAME
-    workspace_id: str = DEFAULT_WORKSPACE_ID
-    dce_name: str = DEFAULT_DCE_NAME
-    ingestion_endpoint: str = DEFAULT_INGESTION_ENDPOINT
-    location: str = DEFAULT_LOCATION
+    subscription_id: str
+    resource_group: str
+    workspace_name: str
+    workspace_id: str
+    dce_name: str
+    ingestion_endpoint: str
+    location: str
+
+    def __post_init__(self) -> None:
+        values = {
+            "subscription_id": self.subscription_id,
+            "resource_group": self.resource_group,
+            "workspace_name": self.workspace_name,
+            "workspace_id": self.workspace_id,
+            "dce_name": self.dce_name,
+            "ingestion_endpoint": self.ingestion_endpoint,
+            "location": self.location,
+        }
+        missing = [
+            name
+            for name, value in values.items()
+            if not isinstance(value, str) or not value.strip()
+        ]
+        if missing:
+            raise ValueError(
+                "Canary configuration values must be non-empty: "
+                + ", ".join(missing)
+            )
 
     @property
     def workspace_resource_id(self) -> str:
