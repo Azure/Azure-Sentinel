@@ -15,7 +15,10 @@
 #        Requires the Az.OperationalInsights PowerShell module and an authenticated Azure session.
 
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
+$global:workspaceId = $env:ASIM_CANARY_WORKSPACE_ID
+if ([string]::IsNullOrWhiteSpace($global:workspaceId)) {
+    throw "ASIM_CANARY_WORKSPACE_ID must be set."
+}
 
 # ANSI escape code for green text
 $green = "`e[32m"

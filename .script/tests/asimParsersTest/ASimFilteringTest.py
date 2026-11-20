@@ -35,7 +35,7 @@ import json
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
 MAX_FILTERING_PARAMETERS = 2
 # Workspace ID for the Log Analytics workspace where the ASim filtering tests will be performed.
-WORKSPACE_ID = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
+WORKSPACE_ID = os.getenv("ASIM_CANARY_WORKSPACE_ID")
 # Timespan for the parser query
 TIME_SPAN_IN_DAYS = 2
 
@@ -277,6 +277,11 @@ def handle_test_failure(parser_file_path, error_message=None):
     sys.exit(1)  # Uncomment this line to fail workflow when tests are not successful.
 
 def main():
+    if not WORKSPACE_ID:
+        print("::error::ASIM_CANARY_WORKSPACE_ID must be set.")
+        sys.stdout.flush()
+        sys.exit(1)
+
     global client
     client = attempt_to_connect()
     if client is None:
