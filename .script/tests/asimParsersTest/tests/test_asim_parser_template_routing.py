@@ -513,6 +513,148 @@ class SampleFixtureIngestionTests(unittest.TestCase):
                 self.assertEqual(result["create_dcr"].call_count, 2)
 
 
+class LegacyKqlSecurityTests(unittest.TestCase):
+    def parser_document(self, parser_query="Contoso_CL | take 1"):
+        return {
+            "Parser": {"Version": "1.0.0"},
+            "Normalization": {"Schema": "Authentication"},
+            "ParserName": "ASimAuthenticationContoso",
+            "EquivalentBuiltInParser": "_ASim_Authentication_Contoso",
+            "ParserParams": [
+                {
+                    "Name": "disabled",
+                    "Type": "bool",
+                    "Default": False,
+                },
+                {
+                    "Name": "eventtype_in",
+                    "Type": "dynamic",
+                    "Default": "dynamic([])",
+                },
+            ],
+            "ParserQuery": parser_query,
+        }
+
+    def test_rejects_privileged_query_time_kql(self):
+        queries = (
+            "workspace('workspace-id').SecurityEvent | take 1",
+            (
+                "cluster('https://example.kusto.windows.net')"
+                ".database('db').Table | take 1"
+            ),
+            (
+                "externaldata(Value:string)"
+                "['https://example.test/data.csv']"
+            ),
+            "Contoso_CL | evaluate bag_unpack(Payload)",
+            ".show tables",
+        )
+        for parser_query in queries:
+            with self.subTest(parser_query=parser_query):
+                with self.assertRaisesRegex(
+                    ValueError, "disallowed KQL construct"
+                ):
+                    PARSER_FILE_UTILS.validate_query_time_parser_document(
+                        self.parser_document(parser_query)
+                    )
+
+    def test_ignores_dangerous_words_in_comments_and_strings(self):
+        PARSER_FILE_UTILS.validate_query_time_parser_document(
+            self.parser_document(
+                "Contoso_CL\n"
+                "| extend Note = 'workspace(''other'')'\n"
+                "// evaluate externaldata('ignored')\n"
+                "| take 1"
+            )
+        )
+
+    def test_rejects_unsafe_execution_metadata(self):
+        cases = (
+            ("Normalization", {"Schema": "Auth'); workspace('x')"}),
+            ("ParserName", "Parser); cluster('x')"),
+            (
+                "ParserParams",
+                [
+                    {
+                        "Name": "disabled); evaluate python()",
+                        "Type": "bool",
+                        "Default": False,
+                    }
+                ],
+            ),
+        )
+        for field, value in cases:
+            with self.subTest(field=field):
+                document = self.parser_document()
+                document[field] = value
+                with self.assertRaises(ValueError):
+                    PARSER_FILE_UTILS.validate_query_time_parser_document(
+                        document
+                    )
+
+    def test_legacy_runners_call_trusted_document_validator(self):
+        run_testers = (
+            MODULE_PATH.with_name("runAsimTesters.ps1")
+            .read_text(encoding="utf-8")
+        )
+        filtering = (
+            MODULE_PATH.with_name("ASimFilteringTest.py")
+            .read_text(encoding="utf-8")
+        )
+
+        self.assertIn("assertSafeParserDocument", run_testers)
+        self.assertIn(
+            '.Replace("\'", "\'\'")',
+            run_testers,
+        )
+        self.assertIn(
+            "validate_query_time_parser_document(parser, parser_path)",
+            filtering,
+        )
+
+    def test_validator_cli_rejects_unsafe_document(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "parser.json"
+            path.write_text(
+                json.dumps(self.parser_document()),
+                encoding="utf-8",
+            )
+            safe = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(MODULE_PATH),
+                    "validate-query-document",
+                    str(path),
+                ],
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(0, safe.returncode, safe.stderr)
+
+            path.write_text(
+                json.dumps(
+                    self.parser_document(
+                        "workspace('other').Table | take 1"
+                    )
+                ),
+                encoding="utf-8",
+            )
+            unsafe = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(MODULE_PATH),
+                    "validate-query-document",
+                    str(path),
+                ],
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(1, unsafe.returncode)
+            self.assertIn(
+                "disallowed KQL construct", unsafe.stderr
+            )
+
+
 class SampleTableNameSecurityTests(unittest.TestCase):
     def setUp(self):
         script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
