@@ -1254,7 +1254,17 @@ class CleanupTests(unittest.TestCase):
             pull_request="123",
             run_id="456",
             run_attempt=2,
-            config=WORKFLOW.CanaryConfig(),
+            config=WORKFLOW.CanaryConfig(
+                subscription_id="subscription",
+                resource_group="resource-group",
+                workspace_name="workspace",
+                workspace_id="workspace-id",
+                dce_name="dce",
+                ingestion_endpoint=(
+                    "https://example.ingest.monitor.azure.com"
+                ),
+                location="eastus2euap",
+            ),
         )
 
         names = WORKFLOW.build_resource_names(
