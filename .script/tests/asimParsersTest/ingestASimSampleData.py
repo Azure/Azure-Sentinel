@@ -521,12 +521,21 @@ def convert_data_type(schema_result, data_result):
 
 #main starting point of script
 
-workspace_id = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
-workspaceName = "ASIM-SchemaDataTester-GithubShared-Canary"
-resourceGroupName = "asim-schemadatatester-githubshared-canary"
-subscriptionId = "419581d6-4853-49bd-83b6-d94bb8a77887"
-dataCollectionEndpointname = "ASIM-SchemaDataTester-GithubShared-Canary"
-endpoint_uri = "https://asim-schemadatatester-githubshared-canary-qa1f.eastus2euap-1.canary.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
+def require_environment_variable(name):
+    value = os.getenv(name)
+    if not value:
+        print(f"::error::{name} must be set.")
+        sys.stdout.flush()
+        sys.exit(1)
+    return value
+
+
+workspace_id = require_environment_variable("ASIM_CANARY_WORKSPACE_ID")
+workspaceName = require_environment_variable("ASIM_CANARY_WORKSPACE_NAME")
+resourceGroupName = require_environment_variable("ASIM_CANARY_RESOURCE_GROUP")
+subscriptionId = require_environment_variable("ASIM_CANARY_SUBSCRIPTION_ID")
+dataCollectionEndpointname = require_environment_variable("ASIM_CANARY_DCE_NAME")
+endpoint_uri = require_environment_variable("ASIM_CANARY_INGESTION_ENDPOINT")
 dcr_directory=[]
 
 lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','AlertEvidence','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AWSWAF','AzureAssessmentRecommendation','CommonSecurityLog','CrowdStrikeDetections','DeviceLogonEvents','DeviceProcessEvents','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','EmailEvents','Event','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','GoogleWorkspaceReports','SalesforceAuditTrail','SalesforceLoginHistory','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics', 'AZFWNetworkRule', 'AZFWNatRule', 'AZFWApplicationRule', 'AZFWDnsQuery', 'AZFWIdpsSignature', 'AZFWThreatIntel']
