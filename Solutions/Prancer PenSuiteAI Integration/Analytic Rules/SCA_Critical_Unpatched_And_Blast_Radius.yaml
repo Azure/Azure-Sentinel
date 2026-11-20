@@ -1,0 +1,84 @@
+id: 3335bbd8-2f8f-4269-8c9a-08cc6caea1e4
+name: SCA critical-unpatched and org-wide blast-radius findings
+description: |
+  'Two SCA (DeviceProduct == sca) cases combined into one rule: (1) unpatched-critical-no-fix - CVSSScore
+  >= 9 with no Solution and no RemediationDescription, i.e. no compensating control is documented, not
+  just "update the package"; (2) org-wide blast radius - the same vulnerable Title/CweId recurring across
+  5+ distinct ConfigIds, i.e. a shared dependency or base-image problem invisible at single-finding
+  severity thresholds.'
+severity: High
+requiredDataConnectors:
+- connectorId: PrancerLogData
+  dataTypes:
+    - PrancerFindings_CL
+queryFrequency: 6h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1195
+query: |
+  // DeviceProduct (not ScanType) filters SCA. Both branches filter DeviceProduct=='sca' first; the
+  // blast-radius branch further filters isnotempty(Title)/isnotempty(CweId) before the dcount/make_set
+  // aggregation that drives its cost.
+  let LookbackWindow = 7d;
+  let BlastRadiusThreshold = 5;
+  let ScaFindings = PrancerFindings
+      | where TimeGenerated > ago(LookbackWindow)
+      | where DeviceProduct == 'sca';
+  let UnpatchedCritical = ScaFindings
+      | where CVSSScore >= 9
+      | where isempty(Solution) and isempty(RemediationDescription)
+      | extend AlertReason = 'unpatched_critical_no_fix', BlastRadiusCount = 1
+      | project FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, CweId, CVSSScore, CVSSVector,
+                 Solution, RemediationDescription, AlertReason, BlastRadiusCount, ResourceUrl, TimeGenerated;
+  let BlastRadius = ScaFindings
+      | where isnotempty(Title) and isnotempty(CweId)
+      | summarize
+          BlastRadiusCount = dcount(ConfigId),
+          AffectedConfigIds = make_set(ConfigId, 100),
+          arg_max(TimeGenerated, FindingId, CustomerId, CompanyName, Severity, CVSSScore, CVSSVector, Solution, RemediationDescription, ConfigId, ResourceUrl)
+        by Title, CweId
+      | where BlastRadiusCount >= BlastRadiusThreshold
+      | extend AlertReason = 'org_wide_blast_radius'
+      | project FindingId, ConfigId, CustomerId, CompanyName, Title, Severity, CweId, CVSSScore, CVSSVector,
+                 Solution, RemediationDescription, AlertReason, BlastRadiusCount, AffectedConfigIds, ResourceUrl, TimeGenerated;
+  UnpatchedCritical
+  | union BlastRadius
+  | extend AlertSummary = iff(AlertReason == 'unpatched_critical_no_fix',
+      strcat('Critical CVSS ', CVSSScore, ' with no documented fix or remediation'),
+      strcat('Same vulnerable component recurring across ', BlastRadiusCount, ' distinct ConfigIds'))
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ResourceUrl
+customDetails:
+  UniqueFindingId: FindingId
+  AlertReason: AlertReason
+  BlastRadiusCount: BlastRadiusCount
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 7d
+    matchingMethod: Selected
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails:
+      - UniqueFindingId
+alertDetailsOverride:
+  alertDisplayNameFormat: "SCA {{AlertReason}}: {{Title}}"
+  alertDescriptionFormat: "{{AlertSummary}}"
+  alertSeverityColumnName: Severity
+  alertDynamicProperties:
+    - alertProperty: RemediationSteps
+      value: Solution
+version: 1.0.0
+kind: Scheduled
