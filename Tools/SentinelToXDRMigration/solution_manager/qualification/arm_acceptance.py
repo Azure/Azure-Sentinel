@@ -517,7 +517,12 @@ def _acceptance_package_plan(
         raise ValueError("every declared Deploy* package selection flag must be boolean")
     workspace = workspace_identity(target["workspaceResourceId"])["workspaceName"]
     flags = {name: True for name in declared_flags}
-    parameters = _parameter_values(template, workspace, flags)
+    parameters = _parameter_values(
+        template,
+        workspace,
+        flags,
+        workspace_customer_id=str(target.get("workspaceCustomerId") or "").strip() or None,
+    )
 
     snapshot_path = artifact_path(
         root,

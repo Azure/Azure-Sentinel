@@ -233,7 +233,33 @@ class ContentDeploymentTests(unittest.TestCase):
                         self.assertEqual("2.0", body["languageVersion"])
                         self.assertEqual("1.0.0", body["imports"]["MicrosoftSecurity"]["version"])
                         self.assertEqual("disabled", body["resources"]["detectionRule"]["properties"]["status"])
+                        self.assertEqual(
+                            "[parameters('workspaceId')]",
+                            body["resources"]["detectionRule"]["properties"]["workspaceId"],
+                        )
+                        self.assertEqual(
+                            {"type": "string", "defaultValue": ""},
+                            body["parameters"]["workspaceId"],
+                        )
                         self.assertNotIn("Deploy", json.dumps(body))
+                    self.assertEqual(
+                        {"value": "[parameters('workspaceId')]"},
+                        installed["properties"]["parameters"]["workspaceId"],
+                    )
+                    self.assertEqual(
+                        {
+                            "type": "string",
+                            "defaultValue": "",
+                            "metadata": {
+                                "description": "WorkspaceId for Log Analytics where Microsoft Sentinel is setup"
+                            },
+                        },
+                        template["parameters"]["workspaceId"],
+                    )
+                    self.assertEqual(
+                        "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.properties.customerId))]",
+                        ui["parameters"]["outputs"]["workspaceId"],
+                    )
                     self.assertIn(attribution.AttributionTests.marker(attribution.TRACKING_ID), template["resources"])
                     with zipfile.ZipFile(package / "3.2.2.zip") as archive:
                         self.assertEqual(template, json.loads(archive.read("mainTemplate.json")))
@@ -498,6 +524,7 @@ class ContentDeploymentTests(unittest.TestCase):
                         "xdr-" + document["contentProvenance"]["source"]["id"]
                     )
                     expected["id"] = f"[if(true(), '{expected['id']}', '{expected['id']}')]"
+                    expected["workspaceId"] = "[parameters('workspaceId')]"
                     expected["detectionAction"]["alertTemplate"]["tactics"] = copy.deepcopy(authored)
                     expected["contentProvenance"] = {
                         "packageId": "[if(true(), 'testpublisher.test-sentinel', 'testpublisher.test-sentinel')]",

@@ -165,6 +165,7 @@ function Set-CustomDetectionArmIdentifiers {
     $DetectionResource.properties.contentProvenance.packageId = ConvertTo-CustomDetectionArmLiteral -Value (
         [string]$DetectionResource.properties.contentProvenance.packageId
     )
+    $DetectionResource.properties | Add-Member -MemberType NoteProperty -Name workspaceId -Value "[parameters('workspaceId')]" -Force
 }
 
 function ConvertTo-CustomDetectionTemplateJson {
@@ -375,10 +376,21 @@ function New-CustomDetectionInstallDeployment {
         properties = [pscustomobject]@{
             mode                        = 'Incremental'
             expressionEvaluationOptions = [pscustomobject]@{ scope = 'inner' }
+            parameters                  = [pscustomobject]@{
+                workspaceId = [pscustomobject]@{
+                    value = "[parameters('workspaceId')]"
+                }
+            }
             template                    = [pscustomobject]@{
                 '$schema'       = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#'
                 languageVersion = '2.0'
                 contentVersion  = '1.0.0.0'
+                parameters      = [pscustomobject]@{
+                    workspaceId = [pscustomobject]@{
+                        type         = 'string'
+                        defaultValue = ''
+                    }
+                }
                 imports         = [pscustomobject]@{
                     MicrosoftSecurity = [pscustomobject]@{
                         provider = 'MicrosoftSecurity'
@@ -419,6 +431,12 @@ function New-CustomDetectionRegistration {
             '$schema'       = 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#'
             languageVersion = '2.0'
             contentVersion  = '1.0.0'
+            parameters      = [pscustomobject]@{
+                workspaceId = [pscustomobject]@{
+                    type         = 'string'
+                    defaultValue = ''
+                }
+            }
             imports         = [pscustomobject]@{
                 MicrosoftSecurity = [pscustomobject]@{
                     provider = 'MicrosoftSecurity'
@@ -493,7 +511,9 @@ function Add-XdrCustomDetectionsToSolution {
         [Parameter(Mandatory = $true)]
         [psobject]$ContentToImport,
         [Parameter(Mandatory = $true)]
-        [psobject]$Template
+        [psobject]$Template,
+        [Parameter(Mandatory = $false)]
+        [psobject]$UiDefinition = $null
     )
 
     $detectionProperty = Get-CustomDetectionDataProperty -ContentToImport $ContentToImport
@@ -685,6 +705,22 @@ function Add-XdrCustomDetectionsToSolution {
             version   = [string]$registration.properties.version
         }
         $count++
+    }
+
+    if ($count -gt 0) {
+        if ($null -ne $Template.parameters) {
+            $Template.parameters | Add-Member -MemberType NoteProperty -Name workspaceId -Value ([pscustomobject]@{
+                type         = 'string'
+                defaultValue = ''
+                metadata     = [pscustomobject]@{
+                    description = 'WorkspaceId for Log Analytics where Microsoft Sentinel is setup'
+                }
+            }) -Force
+        }
+        $targetUi = if ($null -ne $UiDefinition) { $UiDefinition } else { $global:baseCreateUiDefinition }
+        if ($null -ne $targetUi -and $null -ne $targetUi.parameters -and $null -ne $targetUi.parameters.outputs) {
+            $targetUi.parameters.outputs | Add-Member -MemberType NoteProperty -Name workspaceId -Value "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.properties.customerId))]" -Force
+        }
     }
 
     Set-XdrCustomDetectionDependencyCriteria -Template $Template -Criteria $dependencyCriteria

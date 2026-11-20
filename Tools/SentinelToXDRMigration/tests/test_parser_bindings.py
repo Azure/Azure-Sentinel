@@ -162,6 +162,7 @@ class ParserBindingTests(unittest.TestCase):
             properties = copy.deepcopy(document["properties"])
             packaged_id = f"xdr-{source_id}"
             properties["id"] = f"[if(true(), '{packaged_id}', '{packaged_id}')]"
+            properties["workspaceId"] = "[parameters('workspaceId')]"
             properties["contentProvenance"] = {
                 "packageId": "[if(true(), 'testpublisher.test-sentinel', 'testpublisher.test-sentinel')]",
                 "packageVersion": "3.1.0",

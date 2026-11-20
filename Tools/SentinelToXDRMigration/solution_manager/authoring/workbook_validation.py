@@ -537,6 +537,8 @@ def _candidate_scope_plan(context: Mapping[str, Any], candidate: Mapping[str, An
             parameters[name] = selected_flags[name]
         elif name == "workspace":
             parameters[name] = workspace_identity(lab["workspaceResourceId"])["workspaceName"]
+        elif name == "workspaceId" and isinstance(lab.get("workspaceCustomerId"), str) and lab["workspaceCustomerId"]:
+            parameters[name] = lab["workspaceCustomerId"]
         elif name == "workspace-location" and isinstance(target.get("workspaceLocation"), str) and target["workspaceLocation"]:
             parameters[name] = target["workspaceLocation"]
         elif "defaultValue" in definition:
