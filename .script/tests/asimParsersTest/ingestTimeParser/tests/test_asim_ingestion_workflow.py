@@ -1472,6 +1472,9 @@ class WorkflowTopologyTests(unittest.TestCase):
                         r"^uses: [^@\s]+@[0-9a-f]{40}(?:\s+#.*)?$",
                     )
             self.assertNotIn("python-version: \"3.x\"", workflow)
+            self.assertEqual(
+                3, workflow.count('python-version: "3.11.18"')
+            )
             self.assertNotIn(
                 "python -m pip install --upgrade", workflow
             )
@@ -1515,9 +1518,6 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertIn("tabulate==0.10.0", legacy)
         self.assertGreaterEqual(
             legacy.count('PYTHONSAFEPATH: "1"'), 6
-        )
-        self.assertEqual(
-            3, isolated.count('python-version: "3.11.9"')
         )
         self.assertIn("azure-core==1.41.0", isolated)
         self.assertIn("azure-identity==1.27.0", isolated)
