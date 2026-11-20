@@ -18,6 +18,9 @@ extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
 filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
+validate_query_time_parser_document = (
+    parser_file_utils.validate_query_time_parser_document
+)
 
 __unittest = True #prevents stacktrace during most assertions
 
@@ -96,9 +99,14 @@ client = None
 def get_parser(parser_path):
     try:
         with open(parser_path, 'r') as file_stream:
-            return yaml.safe_load(file_stream)
-    except:
-        raise Exception()
+            parser = yaml.safe_load(file_stream)
+        validate_query_time_parser_document(parser, parser_path)
+        return parser
+    except (OSError, ValueError, yaml.YAMLError) as error:
+        raise ValueError(
+            f"Unable to load a safe query-time parser from "
+            f"{parser_path}: {error}"
+        ) from error
 
 
 # Creating a string of the parameters of a parser. 
@@ -107,7 +115,11 @@ def get_parser(parser_path):
 def create_parameters_string(parser_file):
     paramsList = []
     for param in parser_file['ParserParams']:
-        paramDefault = f"\'{param['Default']}\'" if param['Type']=="string" else param['Default']
+        paramDefault = (
+            "'" + str(param['Default']).replace("'", "''") + "'"
+            if param['Type'] == "string"
+            else param['Default']
+        )
         paramsList.append(f"{param['Name']}:{param['Type']}={paramDefault}")
     return ','.join(paramsList)
 
