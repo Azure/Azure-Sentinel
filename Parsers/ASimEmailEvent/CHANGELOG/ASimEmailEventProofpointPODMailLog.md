@@ -1,5 +1,9 @@
 # Changelog for ASimEmailEventProofpointPODMailLog.yaml
 
+## Version 0.1.5
+
+- (2026-11-20) Align the query-time parser version with its ingestion-time counterpart; query behavior is unchanged - [PR #15706](https://github.com/Azure/Azure-Sentinel/pull/15706)
+
 ## Version 0.1.3
 
 - (2026-10-30) Read Proofpoint MailLog event IDs directly from the source `id` column - [PR #15463](https://github.com/Azure/Azure-Sentinel/pull/15463)
