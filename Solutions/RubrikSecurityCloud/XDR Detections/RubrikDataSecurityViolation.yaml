@@ -1,0 +1,102 @@
+schemaVersion: 1.0.0
+version: 3.5.6
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: RubrikSecurityCloudAzureFunctions
+  dataTypes:
+  - RubrikViolationData
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Rubrik_Violation_Data_CL
+  requiredDataConnectors:
+  - connectorId: RubrikSecurityCloudAzureFunctions
+    dataTypes:
+    - RubrikViolationData
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 5b70b78e-397c-474c-a556-f6c37fccbb18
+    path: Analytic Rules/RubrikDataSecurityViolation.yaml
+    version: 1.0.1
+    querySha256: dd20bea53e631511b97221cd09142fd1a8e8349a74a07e2d204760cb821d26ae
+    schedule:
+      queryFrequency: 5m
+      queryPeriod: 5m
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5m, lookback=5m; target frequency=PT5M, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - customDetails 'ObjectName' column `custom_details_objectName_s` requires runtime output-schema binding verification
+    - customDetails 'ObjectType' column `custom_details_objectType_s` requires runtime output-schema binding verification
+    - customDetails 'EventType' column `class_s` requires runtime output-schema binding verification
+    - customDetails 'EventName' column `custom_details_eventName_s` requires runtime output-schema binding verification
+    - customDetails 'Summary' column `summary_s` requires runtime output-schema binding verification
+    - customDetails 'EventTimestamp' column `timestamp_t` requires runtime output-schema binding verification
+    - customDetails 'Severity' column `severity_s` requires runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - Exfiltration
+    originalTechniques:
+    - T1567
+    reviewScope:
+      sourceDocumentSha256: 1a6cd23eb5be573330411b8279388a30a22181107952629899c3213991044183
+      targetQuerySha256: 0aaddf7b1a0a6b140ace5b7d319103161a357d231b191caa65a71857567244f3
+properties:
+  id: xdr-5b70b78e-397c-474c-a556-f6c37fccbb18
+  displayName: Create Incident for Data Security Violation events for DSPM license users
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Rubrik_Violation_Data_CL
+      | where class_s == "SecurityViolation" and custom_details_eventName_s in ("CriticalSeverityDataViolationDetected",
+      "CriticalSeverityDataViolationReOpen",
+      "HighSeverityDataViolationDetected",
+      "HighSeverityDataViolationReOpen",
+      "LowOrMediumSeverityDataViolationDetected",
+      "LowOrMediumSeverityDataViolationReOpen")
+      | extend NewSeverity = case(severity_s=="info", "Low",
+                                  severity_s=="warning", "Medium",
+                                  severity_s=="critical", "High",
+                                  "Informational"),
+               ObjectId = iff(isnotempty(custom_details_objectId_s), custom_details_objectId_s, tostring(custom_details_objectId_g)),
+               ViolationId = iff(isnotempty(custom_details_seriesId_s), custom_details_seriesId_s, tostring(custom_details_seriesId_g))
+  schedule:
+    frequency: PT5M
+  detectionAction:
+    alertTemplate:
+      title: Create Incident for Data Security Violation events for DSPM license users
+      description: '''Creates an incident for Data Security Violation events for DSPM license users.'''
+      severity: medium
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: custom_details_objectName_s
+      tactics:
+      - tactic: Exfiltration
+        techniques:
+        - technique: T1567
+      customDetails:
+        ObjectId: ObjectId
+        ObjectName: custom_details_objectName_s
+        ObjectType: custom_details_objectType_s
+        EventType: class_s
+        EventName: custom_details_eventName_s
+        ViolationId: ViolationId
+        Summary: summary_s
+        EventTimestamp: timestamp_t
+        Severity: severity_s
