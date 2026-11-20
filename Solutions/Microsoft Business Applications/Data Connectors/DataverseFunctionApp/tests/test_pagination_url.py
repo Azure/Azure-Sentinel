@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import stat
 import unittest
 from unittest.mock import patch
 from zipfile import ZipFile
@@ -106,6 +107,25 @@ class DataversePaginationUrlTests(unittest.TestCase):
                         archive.read(name).replace(b"\r\n", b"\n"),
                         (source_dir / name).read_bytes().replace(b"\r\n", b"\n"),
                     )
+
+    def test_deployment_zip_is_readable_by_linux_host(self):
+        source_dir = Path(__file__).resolve().parents[1]
+        inaccessible = []
+        with ZipFile(source_dir / "dataversefunction110.zip") as archive:
+            for member in archive.infolist():
+                mode = member.external_attr >> 16
+                if member.is_dir():
+                    accessible = stat.S_ISDIR(mode) and mode & 0o555 == 0o555
+                else:
+                    accessible = stat.S_ISREG(mode) and mode & 0o444 == 0o444
+                if member.create_system != 3 or not accessible:
+                    inaccessible.append(member.filename)
+        self.assertEqual(
+            len(inaccessible),
+            0,
+            f"Linux host cannot read {len(inaccessible)} ZIP members: "
+            f"{inaccessible[:5]}",
+        )
 
 
 if __name__ == "__main__":

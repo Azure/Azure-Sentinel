@@ -40,7 +40,8 @@ The tests exercise real Requests URL preparation while mocking only transport.
 They cover nested encoded continuation URLs, multiple pages, empty pages,
 authorization and timeout propagation, and later-page HTTP and timeout failures.
 They also check that the source and dependency manifest in the deployment ZIP
-match the checked-in files.
+match the checked-in files and that ZIP permissions let the Linux Function host
+read every packaged file.
 
 No Azure credentials or customer environment are used. These tests do not
 replace a live Dataverse multi-page collection and ingestion check.
