@@ -2,6 +2,16 @@
   "version": "Notebook/1.0",
   "items": [
     {
+      "type": 1,
+      "content": {
+        "json": "# Guardicore Workload Protection Dashboard"
+      },
+      "name": "dashboard-intro",
+      "styleSettings": {
+        "margin": "0 0 20px 0"
+      }
+    },
+    {
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
@@ -67,7 +77,7 @@
               "version": "KqlItem/1.0",
               "query": "GuardicorePolicyRules_CL\n| where TimeGenerated {TimeRange}\n| summarize arg_max(TimeGenerated, *) by id\n| where action contains \"block\"\n| extend RulesetName = case(\n    isempty(ruleset_name) or ruleset_name == \"\", \"default\",\n    ruleset_name\n)\n| summarize TotalHitCount = sum(hit_count) by RulesetName\n| top 10 by TotalHitCount desc\n| project RulesetName, BlockingHits = TotalHitCount",
               "size": 0,
-              "title": "Top Blocking Rulesets",
+              "title": "Top Blocking Rulesets \u2013 lifetime hit count (rules polled: {TimeRange:label})",
               "noDataMessage": "No blocked traffic found",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -83,64 +93,47 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let startDate = startofday({TimeRange:start});\nlet endDate = startofday({TimeRange:end});\nlet all_days = range day from startDate to endDate step 1d;\n// Get the latest record per application id per day\nlet dailyLatest = GuardicoreApplications_CL\n| where TimeGenerated >= startDate and TimeGenerated < endDate + 1d\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, *) by id, day;\nlet daily_counts = dailyLatest\n| extend Status = case(\n    tolower(state) contains \"block\", \"Block\",\n    tolower(state) contains \"alert\", \"Alert\",\n    \"Other\"\n)\n| where Status in (\"Block\", \"Alert\")\n| summarize\n    Block = dcountif(project_name, Status == \"Block\"),\n    Alert = dcountif(project_name, Status == \"Alert\")\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend Block = coalesce(Block, 0),\n         Alert = coalesce(Alert, 0)\n| project day = format_datetime(day, \"yyyy-MM-dd\"), Block, Alert\n| sort by day asc",
+              "query": "let startDate = startofday({TimeRange:start});\nlet endDate = startofday({TimeRange:end});\nlet all_days = range day from startDate to endDate step 1d;\n// GuardicoreApplications_CL is filled from Centra GET /api/v3.0/workflow/projects = the Centra \"Projects\" page.\n// Last known state of each project (by id) per day; labels match the Centra Projects grid State column.\nlet daily_counts = GuardicoreApplications_CL\n| where TimeGenerated >= startDate and TimeGenerated < endDate + 1d\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, state) by id, day\n| summarize\n    ['Published Block'] = countif(state == \"PUBLISHED_BLOCK\"),\n    ['Published Alert'] = countif(state == \"PUBLISHED_ALERT\"),\n    Published = countif(state == \"PUBLISHED\")\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| project day = format_datetime(day, \"yyyy-MM-dd\"),\n          ['Published Block'] = coalesce(['Published Block'], 0),\n          ['Published Alert'] = coalesce(['Published Alert'], 0),\n          Published = coalesce(Published, 0)\n| sort by day asc",
               "size": 0,
-              "title": "Applications in Block vs. Alert Status",
-              "noDataMessage": "No applications with block/alert status found",
+              "title": "Projects by State ({TimeRange:label})",
+              "noDataMessage": "No Centra projects found",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
               "visualization": "unstackedbar",
-              "tileSettings": {
-                "showBorder": false,
-                "titleContent": {
-                  "columnMatch": "day",
-                  "formatter": 1
-                },
-                "leftContent": {
-                  "columnMatch": "Block",
-                  "formatter": 12,
-                  "formatOptions": {
-                    "palette": "auto"
-                  },
-                  "numberFormat": {
-                    "unit": 17,
-                    "options": {
-                      "maximumSignificantDigits": 3,
-                      "maximumFractionDigits": 2
-                    }
-                  }
-                }
-              },
-              "graphSettings": {
-                "type": 0,
-                "topContent": {
-                  "columnMatch": "day",
-                  "formatter": 1
-                },
-                "centerContent": {
-                  "columnMatch": "Block",
-                  "formatter": 1,
-                  "numberFormat": {
-                    "unit": 17,
-                    "options": {
-                      "maximumSignificantDigits": 3,
-                      "maximumFractionDigits": 2
-                    }
-                  }
-                }
-              },
               "chartSettings": {
                 "xAxis": "day",
+                "yAxis": [
+                  "Published Block",
+                  "Published Alert",
+                  "Published"
+                ],
                 "seriesLabelSettings": [
                   {
-                    "seriesName": "Block",
+                    "seriesName": "Published Block",
                     "color": "red"
                   },
                   {
-                    "seriesName": "Alert",
+                    "seriesName": "Published Alert",
                     "color": "orange"
+                  },
+                  {
+                    "seriesName": "Published",
+                    "color": "blue"
                   }
-                ]
+                ],
+                "showLegend": true,
+                "showMetrics": false,
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true,
+                      "maximumFractionDigits": 0
+                    }
+                  },
+                  "min": 0
+                }
               }
             },
             "customWidth": "50",
@@ -155,7 +148,7 @@
               "version": "KqlItem/1.0",
               "query": "GuardicorePolicyRules_CL\n| where TimeGenerated {TimeRange}\n| summarize arg_max(TimeGenerated, *) by id\n| summarize count = count() by action\n| extend actionFormatted = replace(\"_\", \" \", tolower(action))\n| extend actionFormatted = strcat(toupper(substring(actionFormatted, 0, 1)), substring(actionFormatted, 1))\n| project Action = actionFormatted, Count = count\n| order by Count desc",
               "size": 0,
-              "title": "Policy Rules by Action Type",
+              "title": "Policy Rules by Action Type ({TimeRange:label})",
               "noDataMessage": "No policy rules found",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -178,7 +171,9 @@
                     "seriesName": "Other",
                     "color": "gray"
                   }
-                ]
+                ],
+                "showLegend": true,
+                "showMetrics": false
               }
             },
             "name": "policy-rules-by-action"
@@ -192,12 +187,12 @@
       "content": {
         "version": "NotebookGroup/1.0",
         "groupType": "editable",
-        "title": "\ud83d\udee1\ufe0f Workload Protection Coverage Dashboard",
+        "title": "Workload Protection Coverage Dashboard",
         "items": [
           {
             "type": 1,
             "content": {
-              "json": "This dashboard provides insights into workload protection status across your environment, including total workloads, protected workloads, and coverage trends over the last 7 days."
+              "json": "Workload protection status across your environment for the selected time range. An agent is **protected** when its enforcement module is running and its effective operating mode is *Enforcing* (an Unset mode falls back to the agent's default operating mode, as in Centra). **Agent Issues** shows how many agents currently report each Centra agent status flag, by severity."
             },
             "name": "workload-protection-intro",
             "styleSettings": {
@@ -208,29 +203,27 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let startDate = startofday({TimeRange:start});\nlet endDate = startofday({TimeRange:end});\nlet all_days = range day from startDate to endDate step 1d;\n// Get the latest record per agent id per day\nlet dailyLatest = GuardicoreAgents_CL\n| where TimeGenerated >= startDate and TimeGenerated < endDate + 1d\n| extend day = startofday(TimeGenerated)\n| summarize arg_max(TimeGenerated, *) by id, day;\nlet daily_counts = dailyLatest\n| summarize\n    total_agents = count(),\n    protected_agents = countif(tostring(health.enforcement_agent.status) == \"RUNNING\" and is_agent_enforcing == true)\n    by day;\nall_days\n| join kind=leftouter (daily_counts) on day\n| extend total_agents = coalesce(total_agents, 0),\n         protected_agents = coalesce(protected_agents, 0)\n| project day = format_datetime(day, \"yyyy-MM-dd\"), total_agents, protected_agents\n| sort by day asc\n",
+              "query": "// An agent is protected when its enforcement module is running and its effective operating mode is Enforcing\n// (same rules Centra uses; an Unset mode falls back to the agent's default operating mode).\nlet IsProtected = (health: dynamic, configuration: dynamic) {\n    let status = toupper(tostring(health.enforcement_agent.status));\n    let mode = tostring(configuration.enforcementagent.agent_operating_mode);\n    isnotempty(status)\n    and status !in (\"DISABLED\", \"NOT_INSTALLED\", \"ERROR\", \"STOPPED\", \"ASSETSHUTDOWN\", \"STOPPING\", \"UNKNOWN\")\n    and iff(mode in (\"\", \"Unset\"),\n            coalesce(toint(health.enforcement_agent.default_operating_mode), 3) !in (1, 2),\n            mode == \"Enforcing\")\n};\n// Bucket size follows the selected time range (polls arrive every 10 minutes).\nlet range_len = {TimeRange:end} - {TimeRange:start};\nlet step = case(range_len <= 4h, 10m, range_len <= 1d, 1h, range_len <= 3d, 6h, 1d);\nlet per_bucket = GuardicoreAgents_CL\n| where TimeGenerated {TimeRange}\n| extend bucket = bin(TimeGenerated, step)\n| summarize arg_max(TimeGenerated, health, configuration) by id, bucket   // last state of each agent per bucket\n| summarize Protected = countif(IsProtected(health, configuration)), Total = count() by bucket;\nlet has_data = toscalar(per_bucket | count) > 0;\nrange bucket from bin({TimeRange:start}, step) to {TimeRange:end} step step\n| where has_data\n| join kind=leftouter (per_bucket) on bucket\n| project Time = iff(step < 1d, format_datetime(bucket, \"yyyy-MM-dd HH:mm\"), format_datetime(bucket, \"yyyy-MM-dd\")),\n          Protected = coalesce(Protected, 0),\n          ['Not protected'] = coalesce(Total, 0) - coalesce(Protected, 0)\n| order by Time asc",
               "size": 1,
-              "title": "\ud83d\udcc8 Protection Coverage Trend (7 Days)",
-              "noDataMessage": "No policy rules found in the specified time range",
+              "title": "Protected vs Not Protected Agents ({TimeRange:label})",
+              "noDataMessage": "No Guardicore agent data in the selected time range",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "unstackedbar",
+              "visualization": "barchart",
               "chartSettings": {
-                "xAxis": "day",
+                "xAxis": "Time",
                 "yAxis": [
-                  "total_agents",
-                  "protected_agents"
+                  "Protected",
+                  "Not protected"
                 ],
                 "seriesLabelSettings": [
                   {
-                    "seriesName": "total_agents",
-                    "label": "Total Agents",
-                    "color": "#0078D4"
+                    "seriesName": "Protected",
+                    "color": "green"
                   },
                   {
-                    "seriesName": "protected_agents",
-                    "label": "Protected Agents",
-                    "color": "#107C10"
+                    "seriesName": "Not protected",
+                    "color": "redBright"
                   }
                 ],
                 "ySettings": {
@@ -242,7 +235,9 @@
                     }
                   },
                   "min": 0
-                }
+                },
+                "showLegend": true,
+                "showMetrics": false
               }
             },
             "customWidth": "60",
@@ -255,24 +250,46 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let latestAgents = GuardicoreAgents_CL\n| where TimeGenerated {TimeRange}\n| summarize arg_max(TimeGenerated, *) by id;\nlet agentCount = toscalar(latestAgents | summarize count());\nlet protectedCount = toscalar(\n    latestAgents\n    | where tostring(health.enforcement_agent.status) == \"RUNNING\"\n    | where is_agent_enforcing == true\n    | summarize count()\n);\nprint Category = \"Total Workloads\", Count = agentCount\n| union (print Category = \"Protected Workloads\", Count = protectedCount)",
+              "query": "// Centra agent status flags (AgentStatusFlagType). Numeric values are mapped to names in case the API returns numbers.\nlet FlagNames = dynamic({\"2\":\"PollingMode\",\"3\":\"OutdatedPolicy\",\"4\":\"OutdatedConfiguration\",\"5\":\"NoRevealReceived\",\n    \"6\":\"HighDropRate\",\"7\":\"AgentMissing\",\"8\":\"PartialPolicy\",\"9\":\"EnforcementPaused\",\"10\":\"NoRevealReported\",\n    \"11\":\"RevealOffline\",\"12\":\"EnforcementOffline\",\"13\":\"RevealModuleError\",\"14\":\"EnforcementModuleError\",\n    \"15\":\"DetectionModuleError\",\"16\":\"DeceptionModuleError\",\"17\":\"ControllerModuleError\",\"18\":\"NoResourceLimits\",\n    \"19\":\"MemoryLimitReached\",\"20\":\"RevealMemoryLimitReached\",\"21\":\"EnforcementMemoryLimitReached\",\n    \"22\":\"DetectionMemoryLimitReached\",\"23\":\"DeceptionMemoryLimitReached\",\"24\":\"ControllerMemoryLimitReached\",\n    \"25\":\"LimitedPolicy\",\"26\":\"EnforcementModeRevealOnly\",\"27\":\"EnforcementModeMonitoring\"});\n// latest state of each agent in the selected time range\nGuardicoreAgents_CL\n| where TimeGenerated {TimeRange}\n| summarize arg_max(TimeGenerated, status_flags) by id\n| mv-expand flag = status_flags\n| extend ft = tostring(flag.flag_type), sev = toupper(tostring(flag.severity))\n| extend flag_name = iff(isnotempty(FlagNames[ft]), tostring(FlagNames[ft]), ft)\n| where isnotempty(flag_name)\n// hidden in the Centra UI too: the operating mode is shown by the protection chart\n| where flag_name !in (\"EnforcementModeMonitoring\", \"EnforcementModeRevealOnly\")\n| extend Issue = replace_regex(flag_name, @\"([a-z])([A-Z])\", @\"\\1 \\2\")\n| extend Severity = case(sev in (\"ERROR\", \"20\"), \"Error\", sev in (\"WARNING\", \"10\"), \"Warning\", \"Information\")\n| summarize Error = dcountif(id, Severity == \"Error\"),\n            Warning = dcountif(id, Severity == \"Warning\"),\n            Information = dcountif(id, Severity == \"Information\"),\n            Agents = dcount(id)\n            by Issue\n| top 15 by Agents desc\n| project Issue, Error, Warning, Information",
               "size": 1,
-              "title": "\ud83d\udd22 Total vs Protected Workloads (Last 24h)",
-              "noDataMessage": "No workload data found",
+              "title": "Agent Issues ({TimeRange:label})",
+              "noDataMessage": "No agent issues reported by Centra in the selected time range",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
-              "visualization": "piechart",
+              "visualization": "barchart",
               "chartSettings": {
-                "xAxis": "Category",
+                "xAxis": "Issue",
                 "yAxis": [
-                  "Count"
+                  "Error",
+                  "Warning",
+                  "Information"
                 ],
                 "seriesLabelSettings": [
                   {
-                    "seriesName": "Count",
+                    "seriesName": "Error",
+                    "color": "redBright"
+                  },
+                  {
+                    "seriesName": "Warning",
+                    "color": "orange"
+                  },
+                  {
+                    "seriesName": "Information",
                     "color": "blue"
                   }
-                ]
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  },
+                  "min": 0
+                },
+                "showLegend": true,
+                "showMetrics": false
               }
             },
             "customWidth": "40",
@@ -284,6 +301,121 @@
         ]
       },
       "name": "workload-protection-container"
+    },
+    {
+      "type": 12,
+      "name": "asset-coverage-container",
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Asset Coverage",
+        "items": [
+          {
+            "type": 1,
+            "name": "asset-coverage-intro",
+            "styleSettings": {
+              "margin": "0 0 20px 0"
+            },
+            "content": {
+              "json": "Centra assets (workloads in the Centra inventory) and whether a Guardicore agent is installed on them. Assets without an agent are not visible to Reveal and cannot be segmented by the agent."
+            }
+          },
+          {
+            "type": 3,
+            "name": "asset-coverage-trend",
+            "customWidth": "60",
+            "styleSettings": {
+              "maxWidth": "60%"
+            },
+            "content": {
+              "version": "KqlItem/1.0",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "size": 1,
+              "visualization": "barchart",
+              "title": "Powered-on Assets With vs Without Agent ({TimeRange:label})",
+              "noDataMessage": "No Guardicore asset data in the selected time range",
+              "query": "let range_len = {TimeRange:end} - {TimeRange:start};\nlet step = case(range_len <= 4h, 10m, range_len <= 1d, 1h, range_len <= 3d, 6h, 1d);\nlet per_bucket = GuardicoreAssets_CL\n| where TimeGenerated {TimeRange}\n| extend bucket = bin(TimeGenerated, step)\n| summarize arg_max(TimeGenerated, is_on, status, is_agent_installed, agent_id) by id, bucket   // last state per asset per bucket\n| where coalesce(is_on, status =~ \"on\")\n| summarize WithAgent = countif(coalesce(is_agent_installed, false) or isnotempty(agent_id)), Total = count() by bucket;\nlet has_data = toscalar(per_bucket | count) > 0;\nrange bucket from bin({TimeRange:start}, step) to {TimeRange:end} step step\n| where has_data\n| join kind=leftouter (per_bucket) on bucket\n| project Time = iff(step < 1d, format_datetime(bucket, \"yyyy-MM-dd HH:mm\"), format_datetime(bucket, \"yyyy-MM-dd\")),\n          ['With agent'] = coalesce(WithAgent, 0),\n          ['Without agent'] = coalesce(Total, 0) - coalesce(WithAgent, 0)\n| order by Time asc",
+              "chartSettings": {
+                "xAxis": "Time",
+                "yAxis": [
+                  "With agent",
+                  "Without agent"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "With agent",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "Without agent",
+                    "color": "redBright"
+                  }
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  },
+                  "min": 0
+                },
+                "showLegend": true,
+                "showMetrics": false
+              }
+            }
+          },
+          {
+            "type": 3,
+            "name": "new-assets-chart",
+            "customWidth": "40",
+            "styleSettings": {
+              "maxWidth": "40%"
+            },
+            "content": {
+              "version": "KqlItem/1.0",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "size": 1,
+              "visualization": "barchart",
+              "title": "Newly Discovered Assets ({TimeRange:label})",
+              "noDataMessage": "No new assets discovered by Centra in the selected time range",
+              "query": "// latest state of each asset; \"with agent\" = Centra is_agent_installed (or a linked agent id)\nlet AssetState = (t: datetime, e: datetime) {\n    GuardicoreAssets_CL\n    | where TimeGenerated between (t .. e)\n    | summarize arg_max(TimeGenerated, is_on, status, is_agent_installed, agent_id, first_seen, last_seen,\n                        name, vm_name, full_name, comments) by id\n    | extend PoweredOn = coalesce(is_on, status =~ \"on\"),\n             HasAgent = coalesce(is_agent_installed, false) or isnotempty(agent_id),\n             Name = coalesce(name, vm_name, full_name, id)\n};\nlet range_len = {TimeRange:end} - {TimeRange:start};\nlet step = case(range_len <= 4h, 10m, range_len <= 1d, 1h, range_len <= 3d, 6h, 1d);\nlet new_assets = AssetState({TimeRange:start}, {TimeRange:end})\n| extend discovered = unixtime_milliseconds_todatetime(tolong(first_seen))\n| where discovered between ({TimeRange:start} .. {TimeRange:end})\n| summarize WithAgent = countif(HasAgent), WithoutAgent = countif(not(HasAgent)) by bucket = bin(discovered, step);\nlet has_data = toscalar(new_assets | count) > 0;\nrange bucket from bin({TimeRange:start}, step) to {TimeRange:end} step step\n| where has_data\n| join kind=leftouter (new_assets) on bucket\n| project Time = iff(step < 1d, format_datetime(bucket, \"yyyy-MM-dd HH:mm\"), format_datetime(bucket, \"yyyy-MM-dd\")),\n          ['With agent'] = coalesce(WithAgent, 0),\n          ['Without agent'] = coalesce(WithoutAgent, 0)\n| order by Time asc",
+              "chartSettings": {
+                "xAxis": "Time",
+                "yAxis": [
+                  "With agent",
+                  "Without agent"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "With agent",
+                    "color": "green"
+                  },
+                  {
+                    "seriesName": "Without agent",
+                    "color": "redBright"
+                  }
+                ],
+                "ySettings": {
+                  "numberFormatSettings": {
+                    "unit": 0,
+                    "options": {
+                      "style": "decimal",
+                      "useGrouping": true
+                    }
+                  },
+                  "min": 0
+                },
+                "showLegend": true,
+                "showMetrics": false
+              }
+            }
+          }
+        ]
+      }
     }
   ],
   "fallbackResourceIds": [],
