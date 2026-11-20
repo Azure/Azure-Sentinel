@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.3.2 | 09-11-2026 | Marked the legacy Azure Function **Data Connector** as deprecated in its title and description. The CCP connector and existing ingestion configuration are unchanged. |
 | 3.3.1       | 18-09-2026                     | Updated Rapid7InsightVM **CCP data connector** definition to use adjustable QueryWindow. |
 | 3.3.0       | 01-07-2026                     | Updated Rapid7InsightVM **CCP data connector** definition generally available. |
 | 3.2.0       | 05-03-2026                     | Added new Rapid7InsightVM **CCP data connector**                              |

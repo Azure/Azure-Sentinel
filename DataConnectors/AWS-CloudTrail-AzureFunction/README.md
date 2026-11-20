@@ -1,4 +1,7 @@
-# Azure native Data connector to ingest AWS CloudTrail Logs  
+# [Deprecated] Azure native Data connector to ingest AWS CloudTrail Logs
+
+> **NOTE:** This data connector has been deprecated.
+
 **Author: Sreedhar Ande**  
 
 Azure native Sentinel Data connector to ingest AWS CloudTrail Logs from centralized AWS S3 bucket - Receiving CloudTrail Log Files from Multiple Accounts 

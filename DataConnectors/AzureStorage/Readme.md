@@ -1,4 +1,6 @@
-﻿# Azure Function
+﻿# [Deprecated] Azure Function
+
+> **NOTE:** This data connector has been deprecated.
 
 ## Prerequisites
 * Ideally have access to Visual Studio or Visual Studio Code

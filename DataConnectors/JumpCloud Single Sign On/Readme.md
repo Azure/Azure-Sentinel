@@ -1,4 +1,6 @@
-# Azure Sentinel Data Connector for JumpCloud SSO event logs
+# [Deprecated] Azure Sentinel Data Connector for JumpCloud SSO event logs
+
+> **NOTE:** This data connector has been deprecated.
 
 This Azure Function App will connect to the JumpCloud Rest-API using your JumpCloud api Token and retrieve the event logs and ingest them into a custom table called "JumpCloud" in your Log Anaytics Workspace used by Azure Sentinel.
 

@@ -1,4 +1,7 @@
-# Deploy a Function App for collecting Azure AD User Information data into Azure Sentinel
+# [Deprecated] Deploy a Function App for collecting Azure AD User Information data into Azure Sentinel
+
+> **NOTE:** This data connector has been deprecated.
+
 This function app run daily, query Azure AD for all users and write the information to Log Analytics.
 
 ### Notes:  
