@@ -11,7 +11,6 @@ Author: Microsoft
 Description: |
   Normalizes AWS Web Application Firewall logs from the AWS S3 WAF CCF connector
   and AWSWAF source table into ASimWebSessionLogs during ingestion.
-  HttpCookie and HttpRequestHeaderCount are retained in AdditionalFields.
 ParserName: ASimWebSessionAWSWAF
 DCRType: Standard
 InputStream: Microsoft-AWSWAF
@@ -52,8 +51,8 @@ ParserQuery: |
   | extend _HeadersJson = tostring(headers)
   | extend _HeadersOrdered = replace(@'\{(?:[^{}"]|"(?:\\.|[^"\\])*")*"value"\s*:\s*("(?:\\.|[^"\\])*")(?:[^{}"]|"(?:\\.|[^"\\])*")*"name"\s*:\s*("(?:\\.|[^"\\])*")(?:[^{}"]|"(?:\\.|[^"\\])*")*\}', @'{"name":\2,"value":\1}', _HeadersJson)
   | extend
-      _HeaderNames = extract_all(@'\{(?:[^{}"]|"(?:\\.|[^"\\])*")*"name"\s*:\s*"((?i:host|user-agent|referer|cookie|x-forwarded-for))"(?:[^{}"]|"(?:\\.|[^"\\])*")*"value"\s*:\s*("(?:\\.|[^"\\])+")(?:[^{}"]|"(?:\\.|[^"\\])*")*\}', parse_json('[1]'), _HeadersOrdered),
-      _HeaderValues = extract_all(@'\{(?:[^{}"]|"(?:\\.|[^"\\])*")*"name"\s*:\s*"((?i:host|user-agent|referer|cookie|x-forwarded-for))"(?:[^{}"]|"(?:\\.|[^"\\])*")*"value"\s*:\s*("(?:\\.|[^"\\])+")(?:[^{}"]|"(?:\\.|[^"\\])*")*\}', parse_json('[2]'), _HeadersOrdered)
+      _HeaderNames = extract_all(@'\{(?:[^{}"]|"(?:\\.|[^"\\])*")*"name"\s*:\s*"((?i:host|user-agent|referer|x-forwarded-for))"(?:[^{}"]|"(?:\\.|[^"\\])*")*"value"\s*:\s*("(?:\\.|[^"\\])+")(?:[^{}"]|"(?:\\.|[^"\\])*")*\}', parse_json('[1]'), _HeadersOrdered),
+      _HeaderValues = extract_all(@'\{(?:[^{}"]|"(?:\\.|[^"\\])*")*"name"\s*:\s*"((?i:host|user-agent|referer|x-forwarded-for))"(?:[^{}"]|"(?:\\.|[^"\\])*")*"value"\s*:\s*("(?:\\.|[^"\\])+")(?:[^{}"]|"(?:\\.|[^"\\])*")*\}', parse_json('[2]'), _HeadersOrdered)
   | extend _HeaderPairs = tostring(zip(
       parse_json(tolower(iif(isnull(_HeaderNames), '[]', tostring(_HeaderNames)))),
       iif(isnull(_HeaderValues), parse_json('[]'), _HeaderValues)
@@ -62,14 +61,12 @@ ParserQuery: |
       host:string,
       ['user-agent']:string,
       referer:string,
-      cookie:string,
       ['x-forwarded-for']:string
-  ) with (regex=@'\[\s*"(host|user-agent|referer|cookie|x-forwarded-for)"\s*,\s*("(?:\\.|[^"\\])*")\s*\]')
+  ) with (regex=@'\[\s*"(host|user-agent|referer|x-forwarded-for)"\s*,\s*("(?:\\.|[^"\\])*")\s*\]')
   | extend
       HttpHost = tostring(parse_json(tostring(parse_json(host)))),
       HttpUserAgent = tostring(parse_json(tostring(parse_json(['user-agent'])))),
       HttpReferrer = tostring(parse_json(tostring(parse_json(referer)))),
-      HttpCookie = tostring(parse_json(tostring(parse_json(cookie)))),
       HttpRequestXff = tostring(parse_json(tostring(parse_json(['x-forwarded-for']))))
   | extend
   scheme = tostring(parsedRequest.scheme),
@@ -84,8 +81,7 @@ ParserQuery: |
   uri
   ),
   HttpVersion = tostring(parsedRequest.httpVersion),
-  HttpRequestMethod = tostring(parsedRequest.httpMethod),
-  HttpRequestHeaderCount = toint(array_length(parsedRequest.headers))
+  HttpRequestMethod = tostring(parsedRequest.httpMethod)
 
   | extend NetworkApplicationProtocol = toupper(scheme),
   NetworkSessionId = tostring(parsedRequest.requestId)
@@ -132,9 +128,7 @@ ParserQuery: |
   'RuleGroupList', RuleGroupList,
   'RateBasedRuleList', RateBasedRuleList,
   'Labels', Labels,
-  'JA3', Ja3Fingerprint,
-  'HttpCookie', HttpCookie,
-  'HttpRequestHeaderCount', HttpRequestHeaderCount
+  'JA3', Ja3Fingerprint
   )
 
   | extend EventOriginalUid = NetworkSessionId, Rule = RuleName
