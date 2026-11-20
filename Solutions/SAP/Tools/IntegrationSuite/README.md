@@ -267,6 +267,139 @@ After running the script:
 
 ---
 
+### Changing an existing connection's tenant or endpoint
+
+Plan an overlap when moving a connection to another SAP Integration Suite (CPI) tenant
+or endpoint. Saving a registration is not proof that the collector has started using the
+new settings.
+
+In the service-telemetry investigation of four connection changes on 10 November 2026,
+updates under the same destination name preserved the polling position: the requested
+windows remained consecutive rather than restarting at the save time. However, cached
+connection settings took about 40 minutes to change. Calls to the previous tenant initially
+succeeded, then returned HTTP 401 after access there was withdrawn. Those failed windows
+were discarded, leaving gaps even though the polling windows themselves were continuous.
+This observed cache delay is not a guaranteed refresh interval.
+
+The seven-day automatic retry mechanism still applies to eligible transient failures;
+it does not recover windows discarded after HTTP 401. Do not rely on it to protect a tenant
+change after old credentials or endpoints are disabled.
+
+#### Preferred: A/B migration (make before break)
+
+**A** is the existing working collection path; **B** is the replacement. Run both against
+the intended SAP sources during validation, then retire A. Do not disconnect A first or
+overwrite its registration and assume B inherits its polling position. A newly created
+connection starts collecting at its own start time; it does not automatically load history
+or inherit another connection's retry windows.
+
+1. **Prepare and rehearse.** Coordinate with the SAP Basis, integration and SOC teams.
+   Record A's connection identity, CPI tenant, destination and expected SAP
+   `SystemId`/`ClientId` pairs, and the corresponding settings for B. Record UTC change
+   times and agree on validation, rollback and duplicate-handling criteria. Rehearse in a
+   non-production landscape and check that SAP and CPI can support the temporary extra
+   polling load. Keep A's tenant, endpoint, destination and credentials working.
+2. **Create B alongside A.** Create the destination in the new tenant under a **new
+   destination name**, for example with a migration suffix, pointing to the intended SAP
+   backend and client. Register B as an **additional Sentinel connection** with a distinct
+   identity; do not overwrite A. With this tool, use a CSV containing only B's destination
+   and supply B's tenant settings. Connections are named
+   `{ConnectionPrefix}-{DestinationName}`; verify the resulting name differs from A's
+   before running the script. Do not alter A's shared DCE/DCR or other working connections.
+3. **Prove B is collecting correctly while A remains active.** Confirm sustained regular
+   polling over multiple completed polling intervals, not just a successful save or
+   connection test. Check `SentinelHealth` using B's actual `SentinelResourceName`, confirm
+   requests and successful processing in B's CPI message monitor, and reconcile new
+   `ABAPAuditLog` events for **every expected `SystemId`/`ClientId`** and `SystemUniqueId`
+   where applicable against SAP source records. Validate the other configured data sources
+   as well. A heartbeat, HTTP 200 or workspace-wide activity does not prove that the correct
+   client's data arrived. Allow for ingestion latency; do not use 25-37 minutes, 40 minutes
+   or any other fixed delay as a readiness test.
+4. **Validate and move downstream analytics to B.** Identify the tables, parsers, analytics
+   rules, workbooks and automation that consume A. Validate their expected results with B
+   before switching their active source selection. Where both paths feed a parser or the
+   same table, explicitly review overlap and source selection as described below; changing
+   a connection registration alone does not move these consumers. Record the UTC analytics
+   cutover and keep A available for rollback. If B fails validation, retain A as the active
+   path and resolve B's configuration before proceeding.
+5. **Retire A only after acceptance.** Once B's per-client coverage and downstream
+   analytics have been accepted, remove only A's Sentinel connection, or stop A's collector
+   if migrating from the container-based connector. Keep its old tenant and credentials
+   available for at least one further hour, and longer if requests still reach it. An
+   elapsed hour alone is not proof that the transition has completed. Do not remove shared
+   infrastructure that B or another connection still uses.
+6. **Reconcile and recover.** Compare coverage around B's start, the analytics cutover and
+   A's final polling windows with SAP source records for each expected system/client.
+   Investigate empty periods rather than assuming they are missing records. For confirmed
+   gaps, obtain approval and use the [time-slice backfill tool](../TimeSliceBackfill/README.md)
+   through the validated endpoint and destination, while the records are still retained
+   in SAP. Follow its dry-run, safety-lag and load-protection guidance, then verify the
+   recovered records. Continue monitoring B before decommissioning A's remaining resources.
+
+This procedure aims to avoid a collection gap by maintaining overlap, but is not an atomic
+handover or a guarantee of zero loss or exactly-once ingestion. Independent collection paths
+do not share a handover cursor. If parallel operation is not possible, treat the change as
+a planned interruption with source retention and approved backfill, not as a gap-free switch.
+
+##### Handling overlap and duplicates in analytics
+
+Temporary duplicate ingestion is expected when A and B read the same source interval.
+The iFlow does not deduplicate these records. SAP parsers can include both legacy and
+agentless sources, so disabling A does not immediately remove its already-ingested records
+from query results.
+
+Before the cutover, compare both paths over a bounded UTC interval and inspect duplicate
+groups using a source-event identity validated against SAP. Do not treat all records with
+the same timestamp, system and client as duplicates: distinct legitimate events can share
+those values. There is no single guaranteed unique event ID for `ABAPAuditLog`; validate
+any composite key against representative source events before using it for query-time
+deduplication.
+
+Use the source discriminator actually exposed by the relevant table or parser to validate
+B separately. `SentinelResourceName` identifies the connection in `SentinelHealth`; do not
+assume that it is also present on every SAP event table. For a container-to-agentless
+migration, review the parser's source selection so historical A records do not continue to
+double-count events. For two agentless connections whose events cannot be distinguished
+in the destination table, use CPI processing evidence and SAP source records to establish
+coverage; do not invent a per-connection event filter.
+
+Agree on one active source or a validated deduplication strategy for each affected consumer,
+including scheduled-rule lookback windows that cross the cutover. Check duplicate-sensitive
+counts and alerts before retiring A. Query-time filtering or deduplication does not prevent
+duplicate ingestion, delete stored rows or reverse ingestion charges.
+
+#### If the destination name must stay the same
+
+If possible, stage B under a temporary destination name and follow the A/B procedure above.
+If the same registration must be updated in place, this is **not** an A/B migration. Keep
+the old tenant and credentials valid while cached settings refresh. Record the save time
+in UTC, then verify regular requests at the new endpoint and the expected per-client data
+before retiring the old environment. Do not assume the seven-day retry mechanism will
+recover a period during which no connection requested data, a successful response with
+the wrong client's data, or discarded HTTP 401 windows.
+
+If uninterrupted access to the old endpoint cannot be maintained, plan an approved backfill
+using [`Invoke-SapAgentlessBackfill.ps1`](../TimeSliceBackfill/README.md) with the **new**
+tenant's endpoint, credentials and destination. Use the interval from **five minutes before
+to at least 60 minutes after the save** as an initial reconciliation range; extend it if
+telemetry shows a later switchover or additional failed windows. This is a planning buffer,
+not a guaranteed upper bound on the gap.
+
+Wait until the selected end time is in the past by the script's safety lag (five minutes by
+default) before requesting the full range. An immediate run clamps the end time and cannot
+recover future windows; explicitly run any remaining interval later. Follow the backfill
+README's dry-run, load-protection and source-retention guidance, inspect its results, and
+verify recovered records against SAP. A successful response alone does not prove complete
+recovery. Replaying already collected windows can create duplicates; query-time
+deduplication does not delete stored rows or reverse ingestion charges.
+
+> [!NOTE]
+> In the investigated save flow, the built-in connection test also requested and ingested
+> the preceding minute. Repeated saves can therefore create short duplicate intervals;
+> they are not a substitute for validating sustained regular polling.
+
+---
+
 ### Destination Discovery (discover-destinations.ps1)
 
 Discover SAP BTP destinations configured for Microsoft Sentinel and export them to a CSV file.
