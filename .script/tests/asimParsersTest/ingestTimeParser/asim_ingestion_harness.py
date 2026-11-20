@@ -18,13 +18,6 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from asim_ingestion.azure.client import AzureMonitorClient
 from asim_ingestion.azure.common import (
-    DEFAULT_DCE_NAME,
-    DEFAULT_INGESTION_ENDPOINT,
-    DEFAULT_LOCATION,
-    DEFAULT_RESOURCE_GROUP,
-    DEFAULT_SUBSCRIPTION_ID,
-    DEFAULT_WORKSPACE_ID,
-    DEFAULT_WORKSPACE_NAME,
     MANAGEMENT_SCOPE,
     HARNESS_RESULT_VERSION,
     CanaryConfig,
@@ -78,48 +71,31 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--subscription-id",
-        default=os.getenv(
-            "ASIM_CANARY_SUBSCRIPTION_ID",
-            DEFAULT_SUBSCRIPTION_ID,
-        ),
+        default=os.getenv("ASIM_CANARY_SUBSCRIPTION_ID"),
     )
     parser.add_argument(
         "--resource-group",
-        default=os.getenv(
-            "ASIM_CANARY_RESOURCE_GROUP",
-            DEFAULT_RESOURCE_GROUP,
-        ),
+        default=os.getenv("ASIM_CANARY_RESOURCE_GROUP"),
     )
     parser.add_argument(
         "--workspace-name",
-        default=os.getenv(
-            "ASIM_CANARY_WORKSPACE_NAME",
-            DEFAULT_WORKSPACE_NAME,
-        ),
+        default=os.getenv("ASIM_CANARY_WORKSPACE_NAME"),
     )
     parser.add_argument(
         "--workspace-id",
-        default=os.getenv(
-            "ASIM_CANARY_WORKSPACE_ID",
-            DEFAULT_WORKSPACE_ID,
-        ),
+        default=os.getenv("ASIM_CANARY_WORKSPACE_ID"),
     )
     parser.add_argument(
         "--dce-name",
-        default=os.getenv("ASIM_CANARY_DCE_NAME", DEFAULT_DCE_NAME),
+        default=os.getenv("ASIM_CANARY_DCE_NAME"),
     )
     parser.add_argument(
         "--ingestion-endpoint",
-        default=os.getenv(
-            "ASIM_CANARY_INGESTION_ENDPOINT",
-            DEFAULT_INGESTION_ENDPOINT,
-        ),
+        default=os.getenv("ASIM_CANARY_INGESTION_ENDPOINT"),
     )
     parser.add_argument(
         "--location",
-        default=os.getenv(
-            "ASIM_CANARY_LOCATION", DEFAULT_LOCATION
-        ),
+        default=os.getenv("ASIM_CANARY_LOCATION"),
     )
     return parser
 
