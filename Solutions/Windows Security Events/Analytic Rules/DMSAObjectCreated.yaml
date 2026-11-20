@@ -1,0 +1,62 @@
+id: 733b539c-8e43-47e7-86c4-7804ddab08ed
+name: Delegated Managed Service Account (dMSA) created
+description: |
+  'Detects the creation of a delegated Managed Service Account (dMSA), object class msDS-DelegatedManagedServiceAccount, in Active Directory using Windows Security Event 5137.
+  dMSAs were introduced with Windows Server 2025 and are rarely created outside planned service account migrations. The BadSuccessor research showed that an account with permission to create objects in an organizational unit can create a dMSA and abuse its migration attributes to escalate privileges.
+  Review new dMSAs, especially those created by accounts that are not service account administrators.
+  Requires Directory Service Changes auditing and a SACL auditing Create Child on the relevant OUs on domain controllers.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques:
+  - T1098
+  - T1078.002
+tags:
+  - BadSuccessor
+query: |
+  SecurityEvent
+  | where EventID == 5137
+  | where EventData has "msDS-DelegatedManagedServiceAccount"
+  | extend ObjectClass = extract(@'<Data Name="ObjectClass">([^<]+)</Data>', 1, EventData),
+           ObjectDN    = extract(@'<Data Name="ObjectDN">([^<]+)</Data>', 1, EventData),
+           ObjectGUID  = extract(@'<Data Name="ObjectGUID">([^<]+)</Data>', 1, EventData)
+  | where ObjectClass =~ "msDS-DelegatedManagedServiceAccount"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Count = count()
+      by Computer, SubjectAccount, SubjectUserName, SubjectDomainName, ObjectDN, ObjectGUID
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SubjectAccount
+      - identifier: Name
+        columnName: SubjectUserName
+      - identifier: NTDomain
+        columnName: SubjectDomainName
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+customDetails:
+  DmsaDN: ObjectDN
+  DmsaGUID: ObjectGUID
+version: 1.0.0
+kind: Scheduled
