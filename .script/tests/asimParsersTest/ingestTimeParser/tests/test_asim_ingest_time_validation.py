@@ -589,6 +589,79 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         )
         self.assertTrue(result["queryTimeEligibility"]["supportsPack"])
 
+    def test_mapped_qtp_blocks_privileged_kql_constructs(self):
+        cases = {
+            "KQL045": (
+                "let remote = workspace('workspace-id').SecurityEvent;\n"
+                "Contoso_CL | project TimeGenerated, EventType"
+            ),
+            "KQL038": (
+                "let remote = externaldata(Value:string)"
+                "['https://example.test/data.csv'];\n"
+                "Contoso_CL | project TimeGenerated, EventType"
+            ),
+            "KQL047": (
+                "Contoso_CL | evaluate bag_unpack(Payload)"
+            ),
+            "KQL048": ".show tables",
+        }
+        for expected_code, parser_query in cases.items():
+            with self.subTest(expected_code=expected_code):
+                query_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/Parsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    self.query_parser(parser_query=parser_query),
+                )
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    self.ingest_parser(),
+                )
+
+                result = VALIDATION.validate_ingest_time_parser(
+                    ingest_path, query_time_path=query_path
+                )
+
+                self.assertEqual(
+                    "blocked",
+                    result["queryTimeEligibility"]["status"],
+                )
+                self.assertIn(
+                    expected_code,
+                    {
+                        finding["code"]
+                        for finding in result["findings"]
+                    },
+                )
+
+    def test_mapped_qtp_blocks_unsafe_parameter_metadata(self):
+        query_document = self.query_parser()
+        query_document["ParserParams"][0]["Name"] = (
+            "disabled) { workspace('other').Table"
+        )
+        query_path = self.write_yaml(
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationContoso.yaml",
+            query_document,
+        )
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(
+            ingest_path, query_time_path=query_path
+        )
+
+        self.assertEqual(
+            "blocked", result["queryTimeEligibility"]["status"]
+        )
+        self.assertIn(
+            "KQL049",
+            {finding["code"] for finding in result["findings"]},
+        )
+
     def test_allows_parser_query_at_dcr_transform_limit(self):
         limit = VALIDATION.parser_common.MAX_DCR_TRANSFORM_KQL_CHARS
         parser_query = self.parser_query_with_length(limit)
@@ -1300,6 +1373,29 @@ source
         }
         self.assertIn("KQL006", codes)
         self.assertNotIn("KQL037", codes)
+
+    def test_scan_blocks_privileged_kql_constructs(self):
+        cases = {
+            "KQL045": "workspace('workspace-id').SecurityEvent | take 1",
+            "KQL038": (
+                "externaldata(Value:string)"
+                "['https://example.test/data.csv']"
+            ),
+            "KQL047": "source | evaluate bag_unpack(Payload)",
+            "KQL048": ".show tables",
+        }
+        for expected_code, query in cases.items():
+            with self.subTest(expected_code=expected_code):
+                analysis = analyze_kql(query)
+                codes = {
+                    finding.code
+                    for finding in STATIC_VALIDATION._scan_kql(
+                        analysis,
+                        "ParserQuery",
+                        query,
+                    )
+                }
+                self.assertIn(expected_code, codes)
 
     def test_allows_newly_supported_dcr_constructs(self):
         ingest_path = self.write_yaml(

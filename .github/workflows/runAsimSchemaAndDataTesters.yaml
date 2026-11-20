@@ -9,7 +9,7 @@
 # - Fork PRs require explicit "SafeToRun" label approval from maintainer
 # - Label is auto-removed on new commits (synchronize event) to prevent TOCTOU
 # - All validation scripts are re-downloaded from master branch before execution
-name: Run ASIM tests on "ASIM-GithubShared-Canary" workspace
+name: Run ASIM query-time parser validation
 
 env:
   ASIM_CANARY_SUBSCRIPTION_ID: "b0c23e5e-a6c4-499e-950a-07de64febd19"
@@ -69,6 +69,7 @@ jobs:
       issues: write
     outputs:
       approved: ${{ steps.check-approval.outputs.approved }}
+      approved_sha: ${{ steps.check-approval.outputs.approved_sha }}
     steps:
       - name: Verify approver has write access (fork + SafeToRun)
         # SECURITY: the dynamic equivalent of an Environment's "required reviewers".
@@ -110,12 +111,18 @@ jobs:
 
       - name: Check if PR needs approval
         id: check-approval
+        env:
+          APPROVAL_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # Function to log with consistent formatting
           log_info() { echo "ℹ️  $1"; }
           log_success() { echo "✅ $1"; }
 
           log_info "Starting PR approval check..."
+          if ! [[ "$APPROVAL_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
 
           # Check if this is a fork PR
           is_fork="${{ github.event.pull_request.head.repo.fork }}"
@@ -140,6 +147,7 @@ jobs:
               if [ "$label_added" = "SafeToRun" ]; then
                 log_success "SafeToRun label being added on fork PR - approving"
                 echo "approved=true" >> $GITHUB_OUTPUT
+                echo "approved_sha=$APPROVAL_HEAD_SHA" >> $GITHUB_OUTPUT
                 echo "needs_approval=false" >> $GITHUB_OUTPUT
                 echo "comment_needed=false" >> $GITHUB_OUTPUT
               else
@@ -165,12 +173,35 @@ jobs:
           else
             log_success "Internal PR - auto-approved"
             echo "approved=true" >> $GITHUB_OUTPUT
+            echo "approved_sha=$APPROVAL_HEAD_SHA" >> $GITHUB_OUTPUT
             echo "needs_approval=false" >> $GITHUB_OUTPUT
             echo "comment_needed=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Verify approved SHA is still the pull request head
+        if: steps.check-approval.outputs.approved == 'true'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        env:
+          APPROVED_SHA: ${{ steps.check-approval.outputs.approved_sha }}
+        with:
+          script: |
+            const approvedSha = process.env.APPROVED_SHA;
+            if (!/^[0-9a-f]{40}$/.test(approvedSha)) {
+              core.setFailed('Approved pull request SHA is invalid');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.head.sha !== approvedSha) {
+              core.setFailed(`Pull request head moved from approved SHA ${approvedSha} to ${pr.head.sha}`);
+            }
+
       - name: Auto-remove SafeToRun label on synchronize for fork PRs
         if: |
+          always() &&
           github.event.pull_request.head.repo.fork == true &&
           github.event.action == 'synchronize' &&
           steps.check-approval.outputs.should_remove_label == 'true'
@@ -224,7 +255,7 @@ jobs:
               console.log(`${icons[level] || 'ℹ️'} ${message}`);
             };
 
-            log('info', 'Checking for modifications to asimParsersTest folder in fork PR...');
+            log('info', 'Checking for modifications to protected ASIM validation paths in fork PR...');
 
             // Paginate through all changed files in the PR
             const files = await github.paginate(github.rest.pulls.listFiles, {
@@ -234,17 +265,22 @@ jobs:
               per_page: 100,
             });
 
+            const protectedPrefixes = [
+              '.script/tests/asimParsersTest/',
+              'ASIM/',
+              '.github/',
+            ];
             const forbiddenFiles = files
               .map(f => f.filename)
-              .filter(name => name.startsWith('.script/tests/asimParsersTest/'));
+              .filter(name => protectedPrefixes.some(prefix => name.startsWith(prefix)));
 
             if (forbiddenFiles.length > 0) {
-              log('error', 'Fork PRs cannot modify the asimParsersTest test infrastructure folder');
-              log('error', 'Modified test files detected:');
+              log('error', 'Fork PRs cannot modify protected ASIM validation or workflow files');
+              log('error', 'Modified protected files detected:');
               forbiddenFiles.forEach(f => console.log(`  - ${f}`));
-              core.setFailed('Fork PR modifies protected test infrastructure files');
+              core.setFailed('Fork PR modifies protected ASIM validation files');
             } else {
-              log('success', 'No modifications to asimParsersTest folder detected');
+              log('success', 'No protected ASIM validation files were modified');
             }
 
       - name: Comment on fork PR for approval guidance
@@ -359,6 +395,7 @@ jobs:
     needs: security-gate
     if: |
       needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
@@ -366,7 +403,7 @@ jobs:
       - name: Checkout pull request branch
         uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
         with:
-          ref: ${{github.event.pull_request.head.sha}}
+          ref: ${{ needs.security-gate.outputs.approved_sha }}
           repository: ${{ github.repository }}
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
@@ -427,9 +464,13 @@ jobs:
           restore_trusted_file "$filePath"
           python "$filePath"
   Run-ASim-Sample-Data-Ingest:
-    needs: Run-ASim-TemplateValidation
+    needs:
+      - security-gate
+      - Run-ASim-TemplateValidation
     name: Run ASim Sample Data Ingestion
     if: |
+      needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
@@ -440,7 +481,7 @@ jobs:
       - name: Checkout pull request branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          ref: ${{github.event.pull_request.head.sha}}
+          ref: ${{ needs.security-gate.outputs.approved_sha }}
           repository: ${{ github.repository }}
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
@@ -516,9 +557,13 @@ jobs:
           restore_trusted_file "$filePath"
           python "$filePath" "${{ github.event.pull_request.number }}"
   Run-ASim-Schema-Data-tests:
-    needs: Run-ASim-Sample-Data-Ingest
+    needs:
+      - security-gate
+      - Run-ASim-Sample-Data-Ingest
     name: Run ASim Schema and Data tests
     if: |
+      needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
@@ -529,7 +574,7 @@ jobs:
       - name: Checkout pull request branch
         uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ needs.security-gate.outputs.approved_sha }}
           repository: ${{ github.repository }}
           persist-credentials: false
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
@@ -596,16 +641,22 @@ jobs:
             }
             $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
             $filePath_convert_yaml = ".script/tests/asimParsersTest/convertYamlToObject.ps1"
+            $filePath_helper = ".script/tests/asimParsersTest/asim_parser_file_utils.py"
             Restore-TrustedFile $filePath
             Restore-TrustedFile $filePath_convert_yaml
+            Restore-TrustedFile $filePath_helper
             & $filePath
           azPSVersion: "17.0.0"
   Run-ASim-Parser-Filtering-Tests:
-    needs: Run-ASim-Sample-Data-Ingest
+    needs:
+      - security-gate
+      - Run-ASim-Sample-Data-Ingest
     name: Run ASim Parser Filtering tests
     # SECURITY: same fork-PR gate as the other secret-bearing jobs - fork PRs may only
     # run on the 'labeled' (SafeToRun) event; internal PRs run unconditionally.
     if: |
+      needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
@@ -616,7 +667,7 @@ jobs:
       - name: Checkout pull request branch
         uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ needs.security-gate.outputs.approved_sha }}
           repository: ${{ github.repository }}
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
