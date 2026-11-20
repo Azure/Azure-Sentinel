@@ -1,0 +1,125 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "UCC - OIDC role for AWS log collection (bring your own CloudTrail / S3 / SQS) (OIDC provider assumed to already exist)",
+    "Parameters": {
+        "UCCLogCollectionRoleName": {
+            "Type": "String",
+            "Description": "Log Collection Role Name",
+            "AllowedPattern": "[-_a-zA-Z0-9]+",
+            "Default": "UCC-LogCollection"
+        },
+        "TenantId": {
+            "Type": "String",
+            "Description": "Customer Microsoft Entra (Azure AD) tenant ID. Required. Used as the suffix of the role session name the connector presents when assuming the role.",
+            "AllowedPattern": "^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"
+        },
+        "ExistingS3BucketName": {
+            "Type": "String",
+            "Description": "Name of the EXISTING S3 bucket that stores the CloudTrail logs to collect from.",
+            "AllowedPattern": "[a-zA-Z0-9.\\-_]{3,63}"
+        },
+        "ExistingSqsQueueArn": {
+            "Type": "String",
+            "Description": "ARN of the EXISTING SQS queue that receives CloudTrail S3 object-created notifications (e.g. arn:aws:sqs:<region>:<account-id>:<queue-name>).",
+            "AllowedPattern": "arn:aws:sqs:[a-z0-9\\-]+:[0-9]{12}:[a-zA-Z0-9_\\-]+"
+        }
+    },
+    "Resources": {
+        "UCCLogsReaderRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "ManagedPolicyArns": [],
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Federated": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/"
+                                }
+                            },
+                            "Action": "sts:AssumeRoleWithWebIdentity",
+                            "Condition": {
+                                "StringEquals": {
+                                    "sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud": [
+                                        "api://1462b192-27f7-4cb9-8523-0f4ecb54b47e"
+                                    ],
+                                    "sts:RoleSessionName": [
+                                        {
+                                            "Fn::Sub": "MicrosoftDefenderForClouds_${TenantId}"
+                                        },
+                                        {
+                                            "Fn::Sub": "MicrosoftSentinel_${TenantId}"
+                                        },
+                                        {
+                                            "Fn::Sub": "Microsoft_${TenantId}"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "UCCLogsReaderPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:ReceiveMessage",
+                                        "sqs:DeleteMessage"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "ExistingSqsQueueArn"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetBucketLocation"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ExistingS3BucketName}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ExistingS3BucketName}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudtrail:LookupEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "RoleName": {
+                    "Ref": "UCCLogCollectionRoleName"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "UCCLogsReaderRoleArn": {
+            "Description": "Role ARN for the UCC logs reader role.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "UCCLogsReaderRole",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}
