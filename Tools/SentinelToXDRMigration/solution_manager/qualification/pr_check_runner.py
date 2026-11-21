@@ -23,7 +23,9 @@ from solution_manager.core.content_paths import (
     strip_microsoft_url_locale,
 )
 from solution_manager.qualification.pr_applicability import (
+    classify_xdr_detection_files,
     determine_pr_applicability,
+    is_migrated_xdr_detection_doc,
 )
 from solution_manager.reporting.decision_manifest import (
     sanitize_decision_text,
@@ -652,13 +654,19 @@ def _extract_xdr_detection_fields(doc: Mapping[str, Any]) -> dict[str, Any]:
         or ""
     ).strip()
 
+    is_migrated = is_migrated_xdr_detection_doc(doc)
+
     raw_src_kind = str(
         top_conv.get("sourceKind")
         or prov.get("sourceKind")
         or prov_conv.get("sourceKind")
         or prov_source.get("ruleKind")
         or (prov_source.get("kind") if str(prov_source.get("kind") or "") not in {"AnalyticsRule", "CustomDetection"} else "")
-        or (doc.get("kind") if str(doc.get("kind") or "") != "CustomDetection" else "")
+        or (
+            doc.get("kind")
+            if is_migrated and str(doc.get("kind") or "") != "CustomDetection"
+            else ""
+        )
         or "Scheduled"
     ).strip()
 
@@ -682,6 +690,7 @@ def _extract_xdr_detection_fields(doc: Mapping[str, Any]) -> dict[str, Any]:
         "frequency": frequency,
         "entities": entities,
         "customDetails": custom_details,
+        "isMigrated": is_migrated,
         "sourceRuleId": source_rule_id,
         "sourceRulePath": source_rule_path,
         "sourceRuleSha256": source_rule_sha256,
@@ -2940,6 +2949,17 @@ def _evaluate_migration_checks(
 
         xdr_det_files = files_by_type.get("xdr-detections", [])
         ar_files = files_by_type.get("analytic-rules", [])
+        det_classification = classify_xdr_detection_files(solution_root, xdr_det_files)
+        migrated_xdr_det_files = list(
+            applicability.get("migratedXdrDetectionFiles")
+            if isinstance(applicability.get("migratedXdrDetectionFiles"), list)
+            else det_classification["migratedFiles"]
+        )
+        native_xdr_det_files = list(
+            applicability.get("nativeXdrDetectionFiles")
+            if isinstance(applicability.get("nativeXdrDetectionFiles"), list)
+            else det_classification["nativeFiles"]
+        )
 
         # ---------------------------------------------------------------------
         # MIG-V01 (TK-V02): XDR detection identity contract (xdr-<GUID>, path & SHA-256)
@@ -2948,13 +2968,18 @@ def _evaluate_migration_checks(
             issues: list[str] = []
             refs: list[dict[str, Any]] = []
             verified_ids: list[str] = []
+            skipped_native: list[str] = []
             for rel in xdr_det_files:
-                refs.append(_make_evidence_ref("XDR Detection YAML", rel))
                 doc, err = _load_yaml_safe(solution_root / rel)
                 if err or not isinstance(doc, Mapping):
+                    refs.append(_make_evidence_ref("XDR Detection YAML", rel))
                     issues.append(f"{rel}: {err or 'invalid YAML'}")
                     continue
                 xdr_fields = _extract_xdr_detection_fields(doc)
+                if not xdr_fields["isMigrated"]:
+                    skipped_native.append(rel)
+                    continue
+                refs.append(_make_evidence_ref("XDR Detection YAML", rel))
                 det_id = xdr_fields["id"]
                 src_id = xdr_fields["sourceRuleId"]
                 src_path = xdr_fields["sourceRulePath"]
@@ -2969,26 +2994,49 @@ def _evaluate_migration_checks(
                 else:
                     verified_ids.append(f"{det_id} (sha256={src_sha[:12]})")
 
-            if issues:
+            if not verified_ids and not issues and skipped_native:
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="NOT_APPLICABLE",
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=(
+                            f"All {len(skipped_native)} XDR Detection(s) are native/standalone without Sentinel migration provenance "
+                            f"({', '.join(skipped_native)})."
+                        ),
+                        why_passed_or_failed="Not applicable: all XDR Detections are native/standalone without migration provenance.",
+                        evidence_refs=[_make_evidence_ref("Native XDR Detection YAML", r) for r in skipped_native],
+                    )
+                )
+            elif issues:
                 results.append(
                     _build_check_result(
                         cdef,
                         status="FAIL",
-                        what_we_checked="Verified xdr-<source GUID> identity and sourceRulePath / sourceRuleSha256 provenance on every XDR Detection.",
-                        what_we_observed=f"Checked {len(xdr_det_files)} XDR Detection(s); issues: {'; '.join(issues)}.",
+                        what_we_checked="Verified xdr-<source GUID> identity and sourceRulePath / sourceRuleSha256 provenance on every migrated XDR Detection.",
+                        what_we_observed=(
+                            f"Checked {len(verified_ids) + len(issues)} migrated XDR Detection(s)"
+                            + (f" (skipped {len(skipped_native)} native/standalone)" if skipped_native else "")
+                            + f"; issues: {'; '.join(issues)}."
+                        ),
                         why_passed_or_failed=f"Identity/provenance contract violation: {'; '.join(issues)}",
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
                 )
             else:
+                native_note = (
+                    f"; skipped {len(skipped_native)} native/standalone detection(s) ({', '.join(skipped_native)})"
+                    if skipped_native
+                    else ""
+                )
                 results.append(
                     _build_check_result(
                         cdef,
                         status="PASS",
-                        what_we_checked="Verified xdr-<source GUID> identity and sourceRulePath / sourceRuleSha256 provenance on every XDR Detection.",
-                        what_we_observed=f"Verified {len(verified_ids)} XDR Detection identity & SHA-256 provenance record(s): {', '.join(verified_ids)}.",
-                        why_passed_or_failed="All XDR detections satisfy the TK-V02 xdr-<source GUID> and SHA-256 provenance contract.",
+                        what_we_checked="Verified xdr-<source GUID> identity and sourceRulePath / sourceRuleSha256 provenance on every migrated XDR Detection.",
+                        what_we_observed=f"Verified {len(verified_ids)} XDR Detection identity & SHA-256 provenance record(s): {', '.join(verified_ids)}{native_note}.",
+                        why_passed_or_failed="All migrated XDR detections satisfy the TK-V02 xdr-<source GUID> and SHA-256 provenance contract.",
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
@@ -3014,7 +3062,7 @@ def _evaluate_migration_checks(
 
                 if not freq:
                     issues.append(f"{rel}: missing queryFrequency/schedule frequency")
-                elif src_kind.upper() == "NRT" and freq.upper() not in {"PT0S", "CONTINUOUS"} and not fallback_reason:
+                elif xdr_fields["isMigrated"] and src_kind.upper() == "NRT" and freq.upper() not in {"PT0S", "CONTINUOUS"} and not fallback_reason:
                     issues.append(f"{rel}: NRT source rule downgraded to '{freq}' without documented scheduleFallbackRationale")
                 else:
                     schedule_notes.append(f"{Path(rel).name}:{freq}")
@@ -3159,6 +3207,20 @@ def _evaluate_migration_checks(
         # E2E-Q03 (TK-Q09/Q10): Sentinel AR <-> Defender XDR CD strict alert parity
         # ---------------------------------------------------------------------
         elif cid == "E2E-Q03":
+            if not migrated_xdr_det_files:
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="NOT_APPLICABLE",
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=(
+                            f"No migrated XDR Detections with Sentinel provenance found "
+                            f"({len(native_xdr_det_files)} native/standalone XDR Detection(s) skipped)."
+                        ),
+                        why_passed_or_failed="Not applicable: solution contains 0 migrated XDR Detections requiring AR<->CD parity.",
+                    )
+                )
+                continue
             ap_ev = (
                 qualification_evidence.get("alertParity")
                 or qualification_evidence.get("ruleParity")
@@ -3179,25 +3241,87 @@ def _evaluate_migration_checks(
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
                 )
-            elif not simulated_flag and isinstance(ap_ev, Mapping) and (
+                continue
+
+            migrated_ids_low: set[str] = set()
+            native_ids_low: set[str] = set()
+            for rel in migrated_xdr_det_files:
+                doc, err = _load_yaml_safe(solution_root / rel)
+                if not err and isinstance(doc, Mapping):
+                    fields = _extract_xdr_detection_fields(doc)
+                    for token in (fields.get("id"), fields.get("sourceRuleId"), Path(rel).stem, rel):
+                        if token and str(token).strip():
+                            migrated_ids_low.add(str(token).strip().lower())
+            for rel in native_xdr_det_files:
+                doc, err = _load_yaml_safe(solution_root / rel)
+                if not err and isinstance(doc, Mapping):
+                    fields = _extract_xdr_detection_fields(doc)
+                    for token in (fields.get("id"), Path(rel).stem, rel):
+                        if token and str(token).strip():
+                            native_ids_low.add(str(token).strip().lower())
+
+            raw_items = (
+                (ap_ev.get("pairs") or ap_ev.get("rules") or ap_ev.get("detections") or [])
+                if isinstance(ap_ev, Mapping)
+                else []
+            )
+            migrated_items: list[Mapping[str, Any]] = []
+            for item in raw_items if isinstance(raw_items, list) else []:
+                if not isinstance(item, Mapping):
+                    continue
+                item_tokens = {
+                    str(item.get(k) or "").strip().lower()
+                    for k in ("id", "ruleId", "detectionId", "customDetectionId", "targetRuleId", "sourceRuleId", "originalRuleId", "file", "path", "name")
+                    if str(item.get(k) or "").strip()
+                }
+                if item.get("native") is True or item.get("isMigrated") is False or str(item.get("status") or "").lower() in {"not_applicable", "skipped_native"}:
+                    continue
+                if item_tokens and (item_tokens & native_ids_low) and not (item_tokens & migrated_ids_low):
+                    continue
+                migrated_items.append(item)
+
+            per_file_migrated_parity_ok = False
+            if migrated_items:
+                def _item_parity_ok(it: Mapping[str, Any]) -> bool:
+                    return bool(
+                        it.get("alertParityVerified") is True
+                        or it.get("parityPassed") is True
+                        or it.get("passed") is True
+                        or str(it.get("status") or "").lower() in {"pass", "passed"}
+                    )
+                if all(_item_parity_ok(it) for it in migrated_items):
+                    per_file_migrated_parity_ok = True
+
+            top_level_parity_ok = isinstance(ap_ev, Mapping) and (
                 ap_ev.get("alertParityVerified") is True
                 or ap_ev.get("parityPassed") is True
                 or ap_ev.get("passed") is True
                 or (ap_ev.get("status") == "passed" and ap_ev.get("alertParityVerified") is not False)
-            ):
-                pair_count = int(ap_ev.get("pairCount") or len(ap_ev.get("pairs") or []) or max(len(ar_files), len(xdr_det_files), 1))
+            )
+
+            if not simulated_flag and (top_level_parity_ok or per_file_migrated_parity_ok):
+                pair_count = int(
+                    ap_ev.get("pairCount")
+                    or len(migrated_items)
+                    or max(len(ar_files), len(migrated_xdr_det_files), 1)
+                )
                 s_alerts = int(ap_ev.get("sentinelAlertCount") or pair_count)
                 x_alerts = int(ap_ev.get("xdrAlertCount") or pair_count)
+                native_skip_note = (
+                    f" ({len(native_xdr_det_files)} native/standalone XDR Detection(s) skipped)"
+                    if native_xdr_det_files
+                    else ""
+                )
                 results.append(
                     _build_check_result(
                         cdef,
                         status="PASS",
                         what_we_checked="Verified strict alert parity between Sentinel Analytic Rules and migrated Defender XDR Custom Detections from shared mock data.",
                         what_we_observed=(
-                            f"Verified strict parity across {pair_count} AR<->CD pair(s): "
+                            f"Verified strict parity across {pair_count} AR<->CD pair(s){native_skip_note}: "
                             f"sentinelAlertCount={s_alerts}, xdrAlertCount={x_alerts}, entities and customDetails matched."
                         ),
-                        why_passed_or_failed="Sentinel Analytic Rules and Defender XDR Custom Detections achieved strict alert parity.",
+                        why_passed_or_failed="Sentinel Analytic Rules and migrated Defender XDR Custom Detections achieved strict alert parity.",
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )

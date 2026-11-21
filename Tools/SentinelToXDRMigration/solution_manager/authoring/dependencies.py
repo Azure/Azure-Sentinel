@@ -136,8 +136,36 @@ def extract_builtin_asim_parsers(query: str) -> list[str]:
     return sorted(found)
 
 
+def _extract_detection_query_text(document: Any) -> str:
+    if not isinstance(document, dict):
+        return ""
+    properties = document.get("properties")
+    if isinstance(properties, dict):
+        qc = properties.get("queryCondition")
+        if isinstance(qc, dict) and isinstance(qc.get("queryText"), str) and qc["queryText"].strip():
+            return qc["queryText"]
+        if isinstance(properties.get("queryText"), str) and properties["queryText"].strip():
+            return properties["queryText"]
+        qd = properties.get("queryDefinition")
+        if isinstance(qd, dict) and isinstance(qd.get("query"), str) and qd["query"].strip():
+            return qd["query"]
+    if isinstance(document.get("queryText"), str) and document["queryText"].strip():
+        return document["queryText"]
+    if isinstance(document.get("query"), str) and document["query"].strip():
+        return document["query"]
+    return ""
+
+
+def compute_query_sha256(query_or_document: Any) -> str:
+    if isinstance(query_or_document, dict):
+        query_text = _extract_detection_query_text(query_or_document)
+    else:
+        query_text = str(query_or_document or "")
+    return hashlib.sha256(query_text.encode("utf-8")).hexdigest()
+
+
 def dependency_plan(
-    source_query: str,
+    source_query: str = "",
     *,
     target_query: str | None = None,
     metadata: Any = None,
@@ -146,7 +174,12 @@ def dependency_plan(
     sentinel_tables: Any = (),
 ) -> dict[str, Any]:
     from solution_manager.migration._workbook_core import rewrite
-    source_free_literal = rewrite.is_source_free_literal_query(source_query)
+    effective_source_query = (
+        source_query
+        if isinstance(source_query, str) and source_query.strip()
+        else (target_query or "")
+    )
+    source_free_literal = rewrite.is_source_free_literal_query(effective_source_query)
     connector_tables = {
         table.strip()
         for record in (connectors if isinstance(connectors, list) else [])
@@ -158,16 +191,16 @@ def dependency_plan(
         t.strip() for t in (sentinel_tables or ()) if isinstance(t, str) and t.strip()
     }
     resolution = resolve_data_types(
-        source_query,
+        effective_source_query,
         None if source_free_literal else metadata,
         known_tables=sentinel_source_tables,
     )
     source_types = set(resolution["dataTypes"])
     code = "".join(text if kind == "code" else " " * len(text)
-                   for kind, text in rewrite._segments(source_query))
+                   for kind, text in rewrite._segments(effective_source_query))
     if re.search(r"\b_GetWatchlist\s*\(", code):
         source_types.add("Watchlist")
-    builtin_asim_parsers = extract_builtin_asim_parsers(source_query)
+    builtin_asim_parsers = extract_builtin_asim_parsers(effective_source_query)
     if not source_types and builtin_asim_parsers and isinstance(connectors, list):
         source_types.update(connector_tables)
     references = sorted(source_types & PLATFORM_REFERENCE_INPUTS)
@@ -182,7 +215,7 @@ def dependency_plan(
     target_tables = telemetry_data_types(target_table_names)
     workloads, unknown = workload_records(target_tables, sentinel_tables=sentinel_target_tables)
     reasons = []
-    if (not source_types and not source_free_literal
+    if (not source_types and not target_tables and not source_free_literal
             and not (builtin_asim_parsers and isinstance(connectors, list))):
         reasons.append("No source inputs resolved; provide source evidence and any telemetry connector prerequisites.")
     if unknown:
@@ -249,16 +282,22 @@ def dependency_validation_errors(document: dict[str, Any]) -> list[str]:
 
 
 def live_dependency_check(
-    document: dict[str, Any], source_query: str, metadata: Any,
+    document: dict[str, Any], source_query: str | None = None, metadata: Any = None,
     *, table_mappings: dict[str, str] | None = None,
     source_connectors: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     errors = dependency_validation_errors(document)
     if errors:
         return {"status": "failed", "errors": errors, "method": "not-evaluated"}
+    target_query = _extract_detection_query_text(document) or None
+    effective_source_query = (
+        source_query
+        if isinstance(source_query, str) and source_query.strip()
+        else (target_query or "")
+    )
     plan = dependency_plan(
-        source_query, metadata=metadata,
-        target_query=((document.get("properties") or {}).get("queryCondition") or {}).get("queryText"),
+        effective_source_query, metadata=metadata,
+        target_query=target_query,
         connectors=(document.get("contentProvenance") or {}).get("requiredDataConnectors"),
         table_mappings=table_mappings,
         sentinel_tables=[
@@ -317,7 +356,8 @@ def plan_solution_dependencies(
     workspace_id: str | None = None,
 ) -> dict[str, Any]:
     # Import here because conversion itself uses the pure dependency helpers.
-    from solution_manager.migration.converter import load_config, runtime_validation_plan
+    from solution_manager.migration.converter import load_config
+    from solution_manager.qualification.runtime import runtime_validation_plan
 
     root = Path(solution).expanduser().resolve()
     rules = runtime_validation_plan(root)["rules"]
@@ -344,8 +384,22 @@ def plan_solution_dependencies(
     for rule in rules:
         document = yaml.safe_load(
             (root / "XDR Detections" / rule["detection"]).read_text(encoding="utf-8-sig")
+        ) or {}
+        source_rule_path = rule.get("sourceRule")
+        if isinstance(source_rule_path, str) and source_rule_path.strip() and Path(source_rule_path).is_file():
+            source = yaml.safe_load(Path(source_rule_path).read_text(encoding="utf-8-sig")) or {}
+            source_connectors = source.get("requiredDataConnectors")
+            effective_query = rule["sentinelQuery"]
+        else:
+            source = {}
+            prov_connectors = (document.get("contentProvenance") or {}).get("requiredDataConnectors")
+            source_connectors = prov_connectors if isinstance(prov_connectors, list) else None
+            effective_query = rule.get("sentinelQuery") or rule.get("advancedHuntingQuery") or _extract_detection_query_text(document)
+        expected_query_sha = (
+            rule.get("sentinelQuerySha256")
+            or rule.get("advancedHuntingQuerySha256")
+            or compute_query_sha256(effective_query)
         )
-        source = yaml.safe_load(Path(rule["sourceRule"]).read_text(encoding="utf-8-sig"))
         entry = entries.get(rule["detection"])
         metadata = None
         if entry is not None:
@@ -360,27 +414,32 @@ def plan_solution_dependencies(
                     and entry["statusCode"] != 200
                 )
                 or entry.get("workspaceId") != workspace_id
-                or entry.get("querySha256") != rule["sentinelQuerySha256"]
+                or entry.get("querySha256") not in {
+                    expected_query_sha,
+                    rule.get("advancedHuntingQuerySha256"),
+                }
             ):
                 raise ValueError(
                     f"dependency metadata failed or has stale/cross-workspace scope: {rule['detection']}"
                 )
             metadata = entry.get("dataSources")
         proposal = dependency_plan(
-            rule["sentinelQuery"], metadata=metadata,
+            effective_query, metadata=metadata,
             target_query=rule["advancedHuntingQuery"],
-            connectors=source.get("requiredDataConnectors"),
+            connectors=source_connectors,
             table_mappings=config.get("tableMappings"),
         )
         results.append({
             **rule,
+            "sentinelQuerySha256": expected_query_sha,
+            "querySha256": expected_query_sha,
             **proposal,
             "workspaceId": workspace_id,
             "dataSources": metadata,
             "validation": live_dependency_check(
-                document, rule["sentinelQuery"], metadata,
+                document, effective_query, metadata,
                 table_mappings=config.get("tableMappings"),
-                source_connectors=source.get("requiredDataConnectors"),
+                source_connectors=source_connectors,
             ) if entry is not None else None,
         })
     return {"solution": str(root), "writesYaml": False, "liveQueriesExecuted": False, "results": results}

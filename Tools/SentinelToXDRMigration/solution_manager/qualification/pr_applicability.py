@@ -586,8 +586,74 @@ def detect_solution_content_types(
     }
 
 
-def _has_xdr_detection_migration_provenance(solution_root: Path, rel_paths: Iterable[str]) -> bool:
-    """Inspect XDR detection YAML files for migration provenance fields."""
+def is_migrated_xdr_detection_doc(doc: Mapping[str, Any]) -> bool:
+    """Return True if an XDR detection YAML document has Sentinel migration provenance."""
+    if not isinstance(doc, Mapping):
+        return False
+    props = doc.get("properties") if isinstance(doc.get("properties"), Mapping) else {}
+    prov = (
+        doc.get("contentProvenance")
+        if isinstance(doc.get("contentProvenance"), Mapping)
+        else (
+            props.get("contentProvenance")
+            if isinstance(props.get("contentProvenance"), Mapping)
+            else {}
+        )
+    )
+    prov_source = prov.get("source") if isinstance(prov.get("source"), Mapping) else None
+    prov_conv = prov.get("conversion") if isinstance(prov.get("conversion"), Mapping) else None
+    top_conv = (
+        doc.get("conversion")
+        if isinstance(doc.get("conversion"), Mapping)
+        else (
+            props.get("conversion")
+            if isinstance(props.get("conversion"), Mapping)
+            else None
+        )
+    )
+
+    origin = str(
+        prov.get("origin")
+        or prov.get("mode")
+        or prov.get("kind")
+        or doc.get("origin")
+        or props.get("origin")
+        or ""
+    ).strip().lower()
+    if origin in {"native", "manual", "standalone", "directly-authored", "direct"} and not (
+        prov_source or prov_conv or top_conv
+    ):
+        return False
+
+    if isinstance(prov_source, Mapping) and bool(prov_source):
+        return True
+    if isinstance(prov_conv, Mapping) and bool(prov_conv):
+        return True
+    if prov.get("sourceRuleId") or prov.get("sourceRulePath") or prov.get("sourceRuleSha256"):
+        return True
+    if isinstance(top_conv, Mapping) and bool(top_conv):
+        return True
+    if (
+        doc.get("sourceRuleId")
+        or doc.get("sourceRulePath")
+        or doc.get("sourceRuleSha256")
+        or props.get("sourceRuleId")
+        or props.get("sourceRulePath")
+        or props.get("sourceRuleSha256")
+    ):
+        return True
+    return False
+
+
+def classify_xdr_detection_files(
+    solution_root: Path,
+    rel_paths: Iterable[str],
+) -> dict[str, Any]:
+    """Classify XDR detection YAML files per-file into migrated vs native/standalone."""
+    migrated_files: list[str] = []
+    native_files: list[str] = []
+    provenance_by_file: dict[str, str] = {}
+
     for rel in rel_paths:
         candidate = solution_root / rel
         if not candidate.is_file() or candidate.is_symlink():
@@ -598,18 +664,33 @@ def _has_xdr_detection_migration_provenance(solution_root: Path, rel_paths: Iter
             continue
         if not isinstance(doc, Mapping):
             continue
-        det_id = str(doc.get("id") or doc.get("ruleId") or "")
-        if det_id.lower().startswith("xdr-"):
-            return True
-        conv = doc.get("conversion")
-        if isinstance(conv, Mapping) and (conv.get("sourceRuleId") or conv.get("sourceRulePath")):
-            return True
-        prov = doc.get("contentProvenance")
-        if isinstance(prov, Mapping) and (prov.get("sourceRuleId") or prov.get("sourceRulePath")):
-            return True
-        if doc.get("sourceRuleId") or doc.get("sourceRulePath"):
-            return True
-    return False
+        if is_migrated_xdr_detection_doc(doc):
+            migrated_files.append(rel)
+            provenance_by_file[rel] = "migrated"
+        else:
+            native_files.append(rel)
+            provenance_by_file[rel] = "native"
+
+    if migrated_files and native_files:
+        detection_mode = "mixed"
+    elif migrated_files:
+        detection_mode = "migrated"
+    elif native_files:
+        detection_mode = "native"
+    else:
+        detection_mode = "none"
+
+    return {
+        "migratedFiles": migrated_files,
+        "nativeFiles": native_files,
+        "provenanceByFile": provenance_by_file,
+        "detectionMode": detection_mode,
+    }
+
+
+def _has_xdr_detection_migration_provenance(solution_root: Path, rel_paths: Iterable[str]) -> bool:
+    """Inspect XDR detection YAML files for migration provenance fields."""
+    return bool(classify_xdr_detection_files(solution_root, rel_paths)["migratedFiles"])
 
 
 def _has_xdr_workbook_migration_provenance(solution_root: Path, rel_paths: Iterable[str]) -> bool:
@@ -668,35 +749,49 @@ def detect_is_migration(
     xdr_wb_files = sorted(set(present.get("xdr-workbooks", []) + active.get("xdr-workbooks", [])))
     wb_files = sorted(set(present.get("workbooks", []) + active.get("workbooks", [])))
 
-    if xdr_det_files and ar_files:
+    det_classification = classify_xdr_detection_files(root, xdr_det_files)
+    migrated_xdr_det_files = det_classification["migratedFiles"]
+    native_xdr_det_files = det_classification["nativeFiles"]
+
+    if migrated_xdr_det_files and native_xdr_det_files:
         return (
             True,
-            f"Detected {len(xdr_det_files)} XDR Detection(s) alongside {len(ar_files)} Sentinel Analytic Rule(s).",
+            f"Detected mixed XDR Detections ({len(migrated_xdr_det_files)} migrated with provenance, {len(native_xdr_det_files)} native/standalone).",
+        )
+    if migrated_xdr_det_files and ar_files:
+        return (
+            True,
+            f"Detected {len(migrated_xdr_det_files)} XDR Detection(s) alongside {len(ar_files)} Sentinel Analytic Rule(s).",
         )
     if xdr_wb_files and wb_files:
         return (
             True,
             f"Detected {len(xdr_wb_files)} XDR Workbook(s) alongside {len(wb_files)} Sentinel Workbook(s).",
         )
-    if xdr_det_files and _has_xdr_detection_migration_provenance(root, xdr_det_files):
+    if migrated_xdr_det_files:
         return (
             True,
-            f"Detected migration provenance (conversion.sourceRuleId / xdr-<GUID>) in {len(xdr_det_files)} XDR Detection(s).",
+            f"Detected migration provenance (source / conversion) in {len(migrated_xdr_det_files)} XDR Detection(s).",
         )
     if xdr_wb_files and _has_xdr_workbook_migration_provenance(root, xdr_wb_files):
         return (
             True,
             f"Detected migration provenance in {len(xdr_wb_files)} XDR Workbook(s).",
         )
-    if xdr_det_files and wb_files:
+    if migrated_xdr_det_files and wb_files:
         return (
             True,
-            f"Detected hybrid XDR Detection(s) ({len(xdr_det_files)}) alongside Sentinel Workbook(s) ({len(wb_files)}).",
+            f"Detected hybrid XDR Detection(s) ({len(migrated_xdr_det_files)}) alongside Sentinel Workbook(s) ({len(wb_files)}).",
         )
     if xdr_wb_files and ar_files:
         return (
             True,
             f"Detected hybrid XDR Workbook(s) ({len(xdr_wb_files)}) alongside Sentinel Analytic Rule(s) ({len(ar_files)}).",
+        )
+    if native_xdr_det_files:
+        return (
+            False,
+            f"Detected {len(native_xdr_det_files)} native/standalone XDR Detection(s) without Sentinel migration provenance.",
         )
 
     return False, "No Sentinel-to-Defender-XDR migration artifacts or conversion provenance detected."
@@ -709,6 +804,8 @@ def _evaluate_single_check_applicability(
     files_by_type: Mapping[str, list[str]],
     is_migration: bool,
     migration_reason: str,
+    migrated_xdr_det_files: list[str] | None = None,
+    native_xdr_det_files: list[str] | None = None,
 ) -> tuple[bool, str]:
     """Determine (applicable, applicabilityReason) for a single check definition."""
     cid = check_def["id"]
@@ -725,12 +822,38 @@ def _evaluate_single_check_applicability(
     has_pkg = "solution-package" in active_types
     has_logos = "logos" in active_types
     has_any_content = bool(active_types)
+    mig_xdr_files = (
+        list(migrated_xdr_det_files)
+        if migrated_xdr_det_files is not None
+        else list(files_by_type.get("xdr-detections", []))
+    )
+    nat_xdr_files = list(native_xdr_det_files) if native_xdr_det_files is not None else []
 
     # Migration checklist: ONLY active when is_migration=True
     if checklist == "migration":
         if not is_migration:
             return False, f"Not applicable: solution PR is not a migration ({migration_reason})"
-        if cid in {"MIG-V01", "MIG-V02", "MIG-V03", "E2E-Q03"}:
+        if cid in {"MIG-V01", "E2E-Q03"}:
+            if mig_xdr_files:
+                if nat_xdr_files:
+                    return (
+                        True,
+                        f"Applicable to {len(mig_xdr_files)} migrated XDR Detection(s); {len(nat_xdr_files)} native/standalone XDR Detection(s) skipped.",
+                    )
+                return (
+                    True,
+                    f"Applicable: migration PR includes {len(mig_xdr_files)} XDR Detection(s).",
+                )
+            if nat_xdr_files:
+                return (
+                    False,
+                    f"Not applicable: all {len(nat_xdr_files)} XDR Detection(s) are native/standalone without migration provenance.",
+                )
+            return (
+                False,
+                "Not applicable: migration PR contains 0 XDR Detections (workbook-only migration).",
+            )
+        if cid in {"MIG-V02", "MIG-V03"}:
             if has_xdr_det:
                 return (
                     True,
@@ -903,6 +1026,12 @@ def determine_pr_applicability(
     catalog = load_check_catalog(docs_dir=docs_dir)
     active_types = set(content_info["detectedContentTypes"])
     files_by_type = content_info["filesByContentType"]
+    det_classification = classify_xdr_detection_files(
+        root,
+        files_by_type.get("xdr-detections", []),
+    )
+    migrated_xdr_det_files = det_classification["migratedFiles"]
+    native_xdr_det_files = det_classification["nativeFiles"]
 
     checks: list[dict[str, Any]] = []
     checks_by_id: dict[str, dict[str, Any]] = {}
@@ -913,6 +1042,8 @@ def determine_pr_applicability(
             files_by_type=files_by_type,
             is_migration=migration_flag,
             migration_reason=migration_reason,
+            migrated_xdr_det_files=migrated_xdr_det_files,
+            native_xdr_det_files=native_xdr_det_files,
         )
         enriched = {
             **deepcopy(entry),
@@ -931,6 +1062,10 @@ def determine_pr_applicability(
         "solutionName": root.name,
         "isMigration": migration_flag,
         "migrationReason": migration_reason,
+        "xdrDetectionMode": det_classification["detectionMode"],
+        "migratedXdrDetectionFiles": migrated_xdr_det_files,
+        "nativeXdrDetectionFiles": native_xdr_det_files,
+        "xdrDetectionProvenanceByFile": det_classification["provenanceByFile"],
         "detectedContentTypes": content_info["detectedContentTypes"],
         "presentContentTypes": content_info["presentContentTypes"],
         "changedContentTypes": content_info["changedContentTypes"],

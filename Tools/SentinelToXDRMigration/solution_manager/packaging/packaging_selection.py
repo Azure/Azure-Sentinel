@@ -29,6 +29,7 @@ from solution_manager.migration.converter import (
     _duration_seconds,
     analytic_rule_files,
     custom_detail_schema_errors,
+    is_sentinel_derived,
     iso_duration,
     validate_solution,
     xdr_detection_files,
@@ -372,12 +373,33 @@ def _load_yaml(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
+def _analytic_rule_files_if_present(root: Path) -> list[Path]:
+    try:
+        return analytic_rule_files(root)
+    except ValueError as exc:
+        if "no 'Analytic Rules'" in str(exc):
+            return []
+        raise
+
+
+def _is_native_detection(document: Any) -> bool:
+    if not isinstance(document, dict):
+        return False
+    if is_sentinel_derived(document):
+        return False
+    provenance = document.get("contentProvenance")
+    if isinstance(provenance, dict):
+        if provenance.get("source") is not None or provenance.get("conversion") is not None:
+            return False
+    return True
+
+
 def _validation_evidence(root: Path, run_directory: Path) -> tuple[dict[str, Any], dict[str, str]]:
     with using_run(root, run_directory.name):
         validation = validate_solution(root)
     results: dict[str, dict[str, Any]] = {}
     full_hashes: dict[str, str] = {}
-    for path in analytic_rule_files(root):
+    for path in _analytic_rule_files_if_present(root):
         relative = path.relative_to(root).as_posix()
         digest = _sha256(path.read_bytes())
         full_hashes[relative] = digest
@@ -1034,14 +1056,35 @@ def _build_package_selection_plan(
             raise ValueError(f"selection plan has an invalid {name} candidate list")
     context_hash = _data_context_sha256(data)
 
+    all_source_paths = {
+        path.relative_to(root).as_posix(): path for path in _analytic_rule_files_if_present(root)
+    }
+    detection_paths = {
+        path.relative_to(root / "XDR Detections").as_posix(): path
+        for path in xdr_detection_files(root / "XDR Detections")
+    }
+    detection_docs: dict[str, dict[str, Any]] = {}
+    native_detection_names: set[str] = set()
+    for output_name, path in detection_paths.items():
+        try:
+            doc = _load_yaml(path, "Custom Detection")
+        except ValueError:
+            doc = {}
+        detection_docs[output_name] = doc
+        if _is_native_detection(doc):
+            native_detection_names.add(output_name)
+
     manifest_path = run_directory / "manifest.json"
-    manifest = _read_json(manifest_path, "current conversion manifest")
-    if (
-        (manifest.get("scope") or {}).get("kind") != "solution"
-        or not isinstance(manifest.get("results"), list)
-        or manifest.get("total") != len(manifest.get("results", []))
-    ):
-        raise ValueError("package selection requires a complete full-solution conversion manifest")
+    if manifest_path.is_file() or all_source_paths or len(native_detection_names) < len(detection_paths):
+        manifest = _read_json(manifest_path, "current conversion manifest")
+        if (
+            (manifest.get("scope") or {}).get("kind") != "solution"
+            or not isinstance(manifest.get("results"), list)
+            or manifest.get("total") != len(manifest.get("results", []))
+        ):
+            raise ValueError("package selection requires a complete full-solution conversion manifest")
+    else:
+        manifest = {"scope": {"kind": "solution"}, "total": 0, "results": []}
     manifest_by_source: dict[str, dict[str, Any]] = {}
     manifest_by_output: dict[str, dict[str, Any]] = {}
     seen_manifest_sources: set[str] = set()
@@ -1088,12 +1131,12 @@ def _build_package_selection_plan(
                         "outputPath": output,
                         "reason": "conversion-output-missing",
                     })
+            for output_name in sorted(native_detection_names):
+                relative = f"XDR Detections/{output_name}"
+                if relative not in manifest_references:
+                    manifest_references.append(relative)
             candidate_lists["xdrDetections"] = manifest_references
 
-    detection_paths = {
-        path.relative_to(root / "XDR Detections").as_posix(): path
-        for path in xdr_detection_files(root / "XDR Detections")
-    }
     structural_report, structural_hashes = _validation_evidence(root, run_directory)
     structural_path = run_directory / STRUCTURAL_NAME
     structural_bytes = (json.dumps(structural_report, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
@@ -1133,9 +1176,14 @@ def _build_package_selection_plan(
                 if match:
                     source_provider = match.group(1)
                     break
+    source_detection_paths = {
+        name: path
+        for name, path in detection_paths.items()
+        if name not in native_detection_names
+    }
     source_runtime, source_provider_evidence, source_errors = _runtime_family(
         root, run_directory, state, provider=source_provider or "azure-monitor-sdk",
-        detection_paths=detection_paths, target_fingerprint=target_fingerprint,
+        detection_paths=source_detection_paths, target_fingerprint=target_fingerprint,
     )
     graph_runtime, graph_provider_evidence, graph_errors = _runtime_family(
         root, run_directory, state, provider="graph",
@@ -1166,9 +1214,6 @@ def _build_package_selection_plan(
     selected_detections = {
         p[len("XDR Detections/"):].casefold()
         for p in candidate_lists["xdrDetections"]
-    }
-    all_source_paths = {
-        path.relative_to(root).as_posix(): path for path in analytic_rule_files(root)
     }
     current_source_keys = {path.casefold() for path in all_source_paths}
     stale_manifest_sources = sorted(
@@ -1331,7 +1376,8 @@ def _build_package_selection_plan(
         item["id"].casefold(): item for item in analytic_inventory
     }
     for output_name, path in sorted(detection_paths.items()):
-        document = _load_yaml(path, "Custom Detection")
+        document = detection_docs.get(output_name) or _load_yaml(path, "Custom Detection")
+        is_native = output_name in native_detection_names
         provenance = (document.get("contentProvenance") or {}).get("source") or {}
         source_id = str(provenance.get("id") or "")
         source_relative = str(provenance.get("path") or "").replace("\\", "/")
@@ -1341,86 +1387,101 @@ def _build_package_selection_plan(
         source_matches = source_ids.get(source_id.casefold(), []) if source_id else []
         reasons: list[str] = []
         checks: dict[str, dict[str, Any]] = {}
-        if len(source_matches) != 1 or source_matches[0].casefold() != source_relative.casefold():
-            reasons.append("source-provenance-does-not-resolve-exactly-one-analytic-rule")
-            checks["sourceProvenance"] = {"status": "failed"}
+        if is_native:
+            checks["sourceProvenance"] = {"status": "not-applicable", "native": True}
+            if not detection_id:
+                reasons.append("custom-detection-id-missing")
+            checks["conversion"] = {"status": "not-applicable", "native": True}
+            dep_review_required = bool(
+                (document.get("contentProvenance") or {}).get("dependencyReviewRequired")
+            )
+            checks["review"] = {
+                "status": "unresolved" if dep_review_required else "not-applicable",
+                "native": True,
+            }
+            if dep_review_required:
+                reasons.append("unresolved-review-required")
         else:
-            checks["sourceProvenance"] = {"status": "passed", "sourcePath": source_relative}
-        if not detection_id:
-            reasons.append("custom-detection-id-missing")
-        conversion = (document.get("contentProvenance") or {}).get("conversion") or {}
-        conversion_ok = bool(
-            record
-            and record.get("status") == "converted"
-            and record.get("reviewRequired") is False
-            and not record.get("errors")
-            and conversion.get("status") == "converted"
-            and conversion.get("reviewRequired") is False
-            and conversion.get("scope", "solution") != "rule"
-        )
-        checks["conversion"] = {
-            "status": "passed" if conversion_ok else "failed",
-            "manifestPath": _relative_artifact(root, manifest_path),
-        }
-        if not conversion_ok:
-            reasons.append("conversion-not-currently-converted-or-reviewed")
-        review = review_by_id.get(source_id.casefold())
-        current_source = all_source_paths.get(source_relative)
-        current_source_hash = _sha256(current_source.read_bytes()) if current_source else None
-        current_conversion = (
-            (document.get("contentProvenance") or {}).get("conversion") or {}
-        )
-        review_custom = (review.get("customDetection") or {}) if review else {}
-        current_scope_sha = _canonical_sha256(
-            current_conversion.get("reviewScope") or {}
-        )
-        reviewed_scope_sha = _canonical_sha256(
-            review_custom.get("reviewScope") or {}
-        )
-        current_decisions_sha = _canonical_sha256(
-            current_conversion.get("reviewDecisions") or []
-        )
-        reviewed_decisions_sha = _canonical_sha256(
-            review_custom.get("reviewDecisions") or []
-        )
-        review_binding_ok = bool(
-            review
-            and current_source_hash
-            and review.get("sourceSha256") == current_source_hash
-            and str((review.get("analyticRule") or {}).get("id") or "").casefold() == source_id.casefold()
-            and review_custom.get("conversionStatus", current_conversion.get("status"))
-            == current_conversion.get("status")
-            and review_custom.get("reviewRequired")
-            == current_conversion.get("reviewRequired")
-            and reviewed_scope_sha == current_scope_sha
-            and reviewed_decisions_sha == current_decisions_sha
-        )
-        review_required = (
-            current_conversion.get("reviewRequired") if review_binding_ok else None
-        )
-        checks["review"] = {
-            "status": (
-                "passed" if review_binding_ok and review_required is False
-                else "unresolved" if review_binding_ok and review_required is True
-                else "missing-or-stale"
-            ),
-            "evidencePath": _relative_artifact(root, review_path) if review_path else None,
-            "reviewEvidenceSha256": review_evidence_hash,
-            "reviewScopeSha256": _canonical_sha256(
+            if len(source_matches) != 1 or source_matches[0].casefold() != source_relative.casefold():
+                reasons.append("source-provenance-does-not-resolve-exactly-one-analytic-rule")
+                checks["sourceProvenance"] = {"status": "failed"}
+            else:
+                checks["sourceProvenance"] = {"status": "passed", "sourcePath": source_relative}
+            if not detection_id:
+                reasons.append("custom-detection-id-missing")
+            conversion = (document.get("contentProvenance") or {}).get("conversion") or {}
+            conversion_ok = bool(
+                record
+                and record.get("status") == "converted"
+                and record.get("reviewRequired") is False
+                and not record.get("errors")
+                and conversion.get("status") == "converted"
+                and conversion.get("reviewRequired") is False
+                and conversion.get("scope", "solution") != "rule"
+            )
+            checks["conversion"] = {
+                "status": "passed" if conversion_ok else "failed",
+                "manifestPath": _relative_artifact(root, manifest_path) if manifest_path.is_file() else None,
+            }
+            if not conversion_ok:
+                reasons.append("conversion-not-currently-converted-or-reviewed")
+            review = review_by_id.get(source_id.casefold())
+            current_source = all_source_paths.get(source_relative)
+            current_source_hash = _sha256(current_source.read_bytes()) if current_source else None
+            current_conversion = (
+                (document.get("contentProvenance") or {}).get("conversion") or {}
+            )
+            review_custom = (review.get("customDetection") or {}) if review else {}
+            current_scope_sha = _canonical_sha256(
+                current_conversion.get("reviewScope") or {}
+            )
+            reviewed_scope_sha = _canonical_sha256(
                 review_custom.get("reviewScope") or {}
-            ) if review else None,
-            "reviewDecisionsSha256": _canonical_sha256(
+            )
+            current_decisions_sha = _canonical_sha256(
+                current_conversion.get("reviewDecisions") or []
+            )
+            reviewed_decisions_sha = _canonical_sha256(
                 review_custom.get("reviewDecisions") or []
-            ) if review else None,
-            "currentReviewScopeSha256": current_scope_sha,
-            "currentReviewDecisionsSha256": current_decisions_sha,
-        }
-        if not review_binding_ok:
-            reasons.append("source-or-review-evidence-stale-or-missing")
-        elif review_required is True:
-            reasons.append("unresolved-review-required")
-        elif review_required is not False:
-            reasons.append("source-or-review-evidence-stale-or-missing")
+            )
+            review_binding_ok = bool(
+                review
+                and current_source_hash
+                and review.get("sourceSha256") == current_source_hash
+                and str((review.get("analyticRule") or {}).get("id") or "").casefold() == source_id.casefold()
+                and review_custom.get("conversionStatus", current_conversion.get("status"))
+                == current_conversion.get("status")
+                and review_custom.get("reviewRequired")
+                == current_conversion.get("reviewRequired")
+                and reviewed_scope_sha == current_scope_sha
+                and reviewed_decisions_sha == current_decisions_sha
+            )
+            review_required = (
+                current_conversion.get("reviewRequired") if review_binding_ok else None
+            )
+            checks["review"] = {
+                "status": (
+                    "passed" if review_binding_ok and review_required is False
+                    else "unresolved" if review_binding_ok and review_required is True
+                    else "missing-or-stale"
+                ),
+                "evidencePath": _relative_artifact(root, review_path) if review_path else None,
+                "reviewEvidenceSha256": review_evidence_hash,
+                "reviewScopeSha256": _canonical_sha256(
+                    review_custom.get("reviewScope") or {}
+                ) if review else None,
+                "reviewDecisionsSha256": _canonical_sha256(
+                    review_custom.get("reviewDecisions") or []
+                ) if review else None,
+                "currentReviewScopeSha256": current_scope_sha,
+                "currentReviewDecisionsSha256": current_decisions_sha,
+            }
+            if not review_binding_ok:
+                reasons.append("source-or-review-evidence-stale-or-missing")
+            elif review_required is True:
+                reasons.append("unresolved-review-required")
+            elif review_required is not False:
+                reasons.append("source-or-review-evidence-stale-or-missing")
         structural = structural_by_path.get(f"XDR Detections/{output_name}", {})
         structure_ok = structural.get("status") == "passed" and structural_hashes.get(f"XDR Detections/{output_name}") == _sha256(path.read_bytes())
         checks["currentStructuralValidation"] = {
@@ -1434,29 +1495,34 @@ def _build_package_selection_plan(
         if output_name.casefold() not in selected_detections:
             reasons.append("not-in-current-xdr-detection-selection")
         runtime_entry = graph_runtime.get(output_name, {})
-        graph_ok = runtime_entry.get("status") == "passed"
+        graph_ok = runtime_entry.get("status") == "passed" or (
+            is_native
+            and (state.get("context") or {}).get("workflowProfile") == "authoring"
+            and runtime_entry.get("reason") == "runtime-report-missing"
+        )
         checks["graphRuntime"] = runtime_entry
         if not graph_ok:
             reasons.append(runtime_entry.get("reason") or "graph-runtime-not-passed-for-current-query")
-        source_analytic = analytic_by_id.get(source_id.casefold())
-        if source_analytic is None or not source_analytic.get("included"):
-            reasons.append("source-analytic-rule-is-not-included")
+        if not is_native:
+            source_analytic = analytic_by_id.get(source_id.casefold())
+            if source_analytic is None or not source_analytic.get("included"):
+                reasons.append("source-analytic-rule-is-not-included")
         if not reasons:
             selected_detections.add(output_name.casefold())
         xdr_inventory.append({
             "id": detection_id,
-            "sourceId": source_id,
-            "sourcePath": source_relative or None,
+            "sourceId": None if is_native else source_id,
+            "sourcePath": None if is_native else (source_relative or None),
             "path": f"XDR Detections/{output_name}",
             "fileSha256": _sha256(path.read_bytes()),
-            "sourceQuerySha256": source_runtime.get(output_name, {}).get("expectedQuerySha256"),
+            "sourceQuerySha256": None if is_native else source_runtime.get(output_name, {}).get("expectedQuerySha256"),
             "advancedHuntingQuerySha256": graph_runtime.get(output_name, {}).get("expectedQuerySha256"),
             "checks": checks,
             "evidencePaths": sorted({
-                _relative_artifact(root, manifest_path),
+                *([_relative_artifact(root, manifest_path)] if manifest_path.is_file() and not is_native else []),
                 _relative_artifact(root, structural_path),
-                *([_relative_artifact(root, review_path)] if review_path else []),
-                *([source_runtime[output_name]["evidencePath"]] if source_runtime.get(output_name, {}).get("evidencePath") else []),
+                *([_relative_artifact(root, review_path)] if review_path and not is_native else []),
+                *([source_runtime[output_name]["evidencePath"]] if not is_native and source_runtime.get(output_name, {}).get("evidencePath") else []),
                 *([graph_runtime[output_name]["evidencePath"]] if graph_runtime.get(output_name, {}).get("evidencePath") else []),
             }),
             "eligible": not reasons,
@@ -1475,7 +1541,7 @@ def _build_package_selection_plan(
     validated_migrated_source_ids = {
         str(item.get("sourceId") or "").casefold()
         for item in xdr_inventory
-        if item.get("included") is True
+        if item.get("included") is True and item.get("sourceId")
     }
     source_id_by_key = {
         item["id"].casefold(): item["id"]
@@ -1490,6 +1556,45 @@ def _build_package_selection_plan(
         },
     )
     source_inventory_sha256 = _canonical_sha256(original_source_inventory)
+    native_only = bool(
+        not original_source_inventory
+        and xdr_inventory
+        and len(native_detection_names) == len(xdr_inventory)
+    )
+    if native_only:
+        summary_outcome = (
+            "blocked"
+            if bool(source_errors + graph_errors + selection_errors)
+            or not any(item["included"] for item in xdr_inventory)
+            else "partial"
+            if any(not item["included"] for item in xdr_inventory)
+            else "complete"
+        )
+        eligibility_block_reason = (
+            "no-eligible-xdr-detections"
+            if not any(item["included"] for item in xdr_inventory)
+            else None
+        )
+    else:
+        summary_outcome = (
+            "blocked"
+            if bool(source_errors + graph_errors + selection_errors)
+            or coverage["originalSourceRuleCount"] == 0
+            or not coverage["partialPublicationAllowed"]
+            or not any(item["included"] for item in analytic_inventory)
+            else "partial"
+            if any(not item["included"] for item in (*analytic_inventory, *xdr_inventory))
+            else "complete"
+        )
+        eligibility_block_reason = (
+            "empty-or-invalid-original-source-inventory"
+            if coverage["originalSourceRuleCount"] == 0
+            else "no-eligible-analytic-rules"
+            if not any(item["included"] for item in analytic_inventory)
+            else "validated-migrated-detection-coverage-not-over-50-percent"
+            if not coverage["partialPublicationAllowed"]
+            else None
+        )
 
     # A failed source rule remains accounted for independently; only its paired
     # Custom Detection is removed by the source-AR closure check above.
@@ -1522,8 +1627,8 @@ def _build_package_selection_plan(
             ),
             "bootstrapMissingOutputs": bootstrap_missing_outputs,
             "candidateReferences": candidate_lists,
-            "conversionManifestPath": _relative_artifact(root, manifest_path),
-            "conversionManifestSha256": _sha256(manifest_path.read_bytes()),
+            "conversionManifestPath": _relative_artifact(root, manifest_path) if manifest_path.is_file() else None,
+            "conversionManifestSha256": _sha256(manifest_path.read_bytes()) if manifest_path.is_file() else None,
             "migrationReportPath": _relative_artifact(root, review_path) if review_path else None,
             "migrationReviewEvidenceSha256": review_evidence_hash,
             "structuralValidationPath": _relative_artifact(root, structural_path),
@@ -1545,25 +1650,8 @@ def _build_package_selection_plan(
             "xdrDetectionIncluded": sum(item["included"] for item in xdr_inventory),
             "xdrDetectionExcluded": sum(not item["included"] for item in xdr_inventory),
             **coverage,
-            "outcome": (
-                "blocked"
-                if bool(source_errors + graph_errors + selection_errors)
-                or coverage["originalSourceRuleCount"] == 0
-                or not coverage["partialPublicationAllowed"]
-                or not any(item["included"] for item in analytic_inventory)
-                else "partial"
-                if any(not item["included"] for item in (*analytic_inventory, *xdr_inventory))
-                else "complete"
-            ),
-            "eligibilityBlockReason": (
-                "empty-or-invalid-original-source-inventory"
-                if coverage["originalSourceRuleCount"] == 0
-                else "no-eligible-analytic-rules"
-                if not any(item["included"] for item in analytic_inventory)
-                else "validated-migrated-detection-coverage-not-over-50-percent"
-                if not coverage["partialPublicationAllowed"]
-                else None
-            ),
+            "outcome": summary_outcome,
+            "eligibilityBlockReason": eligibility_block_reason,
         },
     }
     result["planSha256"] = _selection_plan_hash(result)
@@ -1861,9 +1949,10 @@ def _apply_package_selection_unlocked(
     if _data_context_sha256(data) != plan["input"]["solutionDataContextSha256"]:
         raise ValueError("unrelated solution-data content changed after package selection planning")
     selected = plan["selection"]
-    source_key = _case_key(data, "Analytic Rules") or _case_key(data, "Analytics Rules") or "Analytic Rules"
+    source_key = _case_key(data, "Analytic Rules") or _case_key(data, "Analytics Rules")
     xdr_key = _case_key(data, "XDR Detections") or _case_key(data, "Custom Detections") or "XDR Detections"
-    data[source_key] = list(selected["analyticRules"])
+    if source_key is not None or selected["analyticRules"]:
+        data[source_key or "Analytic Rules"] = list(selected["analyticRules"])
     data[xdr_key] = list(selected["xdrDetections"])
     encoded = (json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
     current = _build_package_selection_plan(root, run_id)

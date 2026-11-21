@@ -14,9 +14,37 @@
       "minLength": 40,
       "maxLength": 40,
       "pattern": "^xdr-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+    },
+    "detectionId": {
+      "$ref": "#/$defs/sentinelDetectionId"
     }
   },
   "allOf": [
+    {
+      "if": {
+        "required": ["contentProvenance"],
+        "properties": {
+          "contentProvenance": {
+            "anyOf": [
+              {"required": ["source"]},
+              {"required": ["conversion"]}
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "contentProvenance": {
+            "required": [
+              "source",
+              "conversion",
+              "requiredWorkloads",
+              "requiredDataConnectors"
+            ]
+          }
+        }
+      }
+    },
     {
       "if": {
         "required": ["contentProvenance"],
@@ -29,7 +57,7 @@
                   "source": {
                     "required": ["platform", "kind"],
                     "properties": {
-                      "platform": {"const": "Microsoft Sentinel"},
+                      "platform": {"enum": ["Microsoft Sentinel", "Sentinel"]},
                       "kind": {"const": "AnalyticsRule"}
                     }
                   }
@@ -53,8 +81,22 @@
       "then": {
         "properties": {
           "contentProvenance": {
+            "required": [
+              "source",
+              "conversion",
+              "requiredWorkloads",
+              "requiredDataConnectors"
+            ],
             "properties": {
               "source": {
+                "required": [
+                  "platform",
+                  "kind",
+                  "id",
+                  "path",
+                  "querySha256",
+                  "schedule"
+                ],
                 "properties": {
                   "id": {"$ref": "#/$defs/sentinelTemplateId"}
                 }
@@ -121,8 +163,6 @@
     "contentProvenance": {
       "type": "object",
       "required": [
-        "source",
-        "conversion",
         "requiredWorkloads",
         "requiredDataConnectors"
       ],
@@ -165,11 +205,7 @@
           "type": "object",
           "required": [
             "platform",
-            "kind",
-            "id",
-            "path",
-            "querySha256",
-            "schedule"
+            "kind"
           ]
         },
         "conversion": {
@@ -208,12 +244,84 @@
     "properties": {
       "type": "object",
       "properties": {
+        "id": {
+          "$ref": "#/$defs/detectionId"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "const": "disabled"
+        },
+        "queryCondition": {
+          "type": "object",
+          "required": ["queryText"],
+          "properties": {
+            "queryText": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "schedule": {
+          "type": "object",
+          "required": ["frequency"],
+          "properties": {
+            "frequency": {
+              "type": "string",
+              "minLength": 1
+            },
+            "period": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
         "detectionAction": {
           "type": "object",
+          "required": ["alertTemplate"],
           "properties": {
             "alertTemplate": {
               "type": "object",
+              "required": ["severity", "entityMappings"],
               "properties": {
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["informational", "low", "medium", "high"]
+                },
+                "entityMappings": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "anyOf": [
+                    {"required": ["hosts"]},
+                    {"required": ["accounts"]},
+                    {"required": ["mailboxes"]},
+                    {"required": ["ips"]}
+                  ],
+                  "properties": {
+                    "hosts": {"type": "array", "minItems": 1},
+                    "accounts": {"type": "array", "minItems": 1},
+                    "mailboxes": {"type": "array", "minItems": 1},
+                    "ips": {"type": "array", "minItems": 1},
+                    "files": {"type": "array"},
+                    "processes": {"type": "array"},
+                    "urls": {"type": "array"},
+                    "registryValues": {"type": "array"},
+                    "cloudResources": {"type": "array"},
+                    "cloudApplications": {"type": "array"},
+                    "securityGroups": {"type": "array"},
+                    "containers": {"type": "array"}
+                  }
+                },
                 "customDetails": {
                   "description": "Open alert detail key-to-query-output-column bindings. At most 20 pairs; runtime values together must fit the documented 4 KB per-alert limit.",
                   "type": "object",

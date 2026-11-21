@@ -303,7 +303,7 @@ def validate_evidence(solution: str | Path, state: dict[str, Any]) -> dict[str, 
 
 
 def inspect_content(solution: str | Path) -> dict[str, Any]:
-    from solution_manager.migration.converter import inspect_solution
+    from solution_manager.migration.converter import inspect_solution, xdr_detection_files
     from solution_manager.migration.workbooks import inventory_workbooks
 
     root = Path(solution).expanduser().resolve()
@@ -313,7 +313,7 @@ def inspect_content(solution: str | Path) -> dict[str, Any]:
     verify_inventory(root, state)
     result = inspect_solution(root) if has_analytic_rules(root) else {
         "solution": str(root), "analyticRuleCount": 0, "analyticRules": [],
-        "existingXdrDetectionCount": 0,
+        "existingXdrDetectionCount": len(xdr_detection_files(root / "XDR Detections")),
     }
     inventory = inventory_workbooks(root)
     return {**result, "workbookCount": len(inventory),
@@ -396,14 +396,14 @@ def convert_content(solution: str | Path, *, overwrite: bool = False,
 
 
 def validate_content(solution: str | Path) -> dict[str, Any]:
-    from solution_manager.migration.converter import validate_solution
+    from solution_manager.migration.converter import validate_solution, xdr_detection_files
 
     root = Path(solution).expanduser().resolve()
     state = current_state(root)
     if not state or not enabled(state):
         return validate_solution(root)
     verify_inventory(root, state)
-    if has_analytic_rules(root):
+    if has_analytic_rules(root) or bool(xdr_detection_files(root / "XDR Detections")):
         result = validate_solution(root)
     else:
         from solution_manager.core.content_paths import scan_solution_urls
@@ -649,7 +649,7 @@ def expected_content_counts(
         if data_xdr_det is not None:
             custom_detections_count = len(data_xdr_det)
         elif (root / "XDR Detections").is_dir():
-            custom_detections_count = len(xdr_detection_files(root))
+            custom_detections_count = len(xdr_detection_files(root / "XDR Detections"))
         else:
             custom_detections_count = 0
 

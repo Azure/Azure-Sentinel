@@ -95,3 +95,15 @@ def test_extract_xdr_detection_fields_supports_properties_nested_schema() -> Non
 def test_azure_ddos_protection_target_checks_pass(tmp_path: Path) -> None:
     """Verify VAL-AR-01, E2E-V02, E2E-V03, MIG-V01, MIG-V02, and MIG-V03 return PASS on Solutions/Azure DDoS Protection."""
     test_ddos_solution_nested_xdr_detections_and_sample_data(tmp_path)
+
+
+def test_pr_check_runner_pure_native_and_mixed_solutions(tmp_path: Path) -> None:
+    """Verify pure native and mixed XDR detection solutions in pr_check_runner."""
+    from tests.test_pr_applicability import (
+        test_mixed_solution_migrated_and_native_detections_applicability_and_runner,
+        test_pure_native_detection_solution_applicability_and_runner,
+    )
+
+    test_pure_native_detection_solution_applicability_and_runner(tmp_path / "native")
+    test_mixed_solution_migrated_and_native_detections_applicability_and_runner(tmp_path / "mixed")
+

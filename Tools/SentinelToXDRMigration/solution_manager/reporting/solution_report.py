@@ -15,8 +15,10 @@ from solution_manager.core.artifacts import existing_artifact_path, existing_art
 from solution_manager.migration.converter import (
     analytic_rule_files,
     custom_detail_binding_warnings,
+    is_sentinel_derived,
     solution_paths,
     validate_document,
+    xdr_detection_files,
 )
 from solution_manager.core.content_paths import content_path
 from solution_manager.qualification.deployment_planning import _consent_state as _validated_planning_consent
@@ -1433,6 +1435,18 @@ def _current_source_whitelist(
     return assessments, evidence
 
 
+def _is_native_detection(document: Any) -> bool:
+    if not isinstance(document, dict):
+        return False
+    if is_sentinel_derived(document):
+        return False
+    provenance = document.get("contentProvenance")
+    if isinstance(provenance, dict):
+        if provenance.get("source") is not None or provenance.get("conversion") is not None:
+            return False
+    return True
+
+
 def build_solution_report(
     solution: str | Path,
     *,
@@ -1451,10 +1465,22 @@ def build_solution_report(
     if workbook_only:
         analytic, output = root / "Analytic Rules", root / "XDR Detections"
     else:
-        root, analytic, output = solution_paths(solution)
+        root, analytic, output = solution_paths(
+            solution,
+            require_analytic_rules=not (root / "XDR Detections").is_dir(),
+        )
     reports = report_directory(root, create=True)
     manifest = _read_json(existing_artifact_path(root, "manifest.json"))
-    runtime_consent = {"status": "notApplicable"} if workbook_only else runtime_query_consent_status(root)
+    if workbook_only:
+        runtime_consent = {"status": "notApplicable"}
+    else:
+        try:
+            runtime_consent = runtime_query_consent_status(root)
+        except ValueError as exc:
+            if "no 'Analytic Rules'" in str(exc):
+                runtime_consent = {"status": "notApplicable"}
+            else:
+                raise
     manifest_by_source = {}
     for item in manifest.get("results") or []:
         reference = str(item.get("sourceRelativePath") or item.get("source") or "").replace("\\", "/")
@@ -1506,7 +1532,13 @@ def build_solution_report(
     ]
 
     rules: list[dict[str, Any]] = []
-    for source_path in ([] if workbook_only else analytic_rule_files(root)):
+    handled_detection_paths: set[Path] = set()
+    source_files = (
+        []
+        if workbook_only or not analytic.is_dir()
+        else analytic_rule_files(root)
+    )
+    for source_path in source_files:
         source = yaml.safe_load(source_path.read_text(encoding="utf-8-sig")) or {}
         conversion = manifest_by_source.get(source_path.relative_to(root).as_posix()) or {}
         detection_name = source_path.relative_to(analytic).as_posix()
@@ -1515,6 +1547,7 @@ def build_solution_report(
         structural_errors: list[str] = []
         structural_warnings: list[str] = []
         if detection_path.exists():
+            handled_detection_paths.add(detection_path.resolve())
             try:
                 detection = (
                     yaml.safe_load(detection_path.read_text(encoding="utf-8-sig")) or {}
@@ -1523,8 +1556,10 @@ def build_solution_report(
                 structural_warnings = custom_detail_binding_warnings(detection)
             except (OSError, ValueError, yaml.YAMLError) as exc:
                 structural_errors = [str(exc)]
-        properties = detection.get("properties") or {}
+        properties = (detection.get("properties") or {}) if isinstance(detection, dict) else {}
         detection_id = str(properties.get("id") or "")
+        doc_provenance = (detection.get("contentProvenance") or {}) if isinstance(detection, dict) else {}
+        doc_conversion = (doc_provenance.get("conversion") or {}) if isinstance(doc_provenance, dict) else {}
         tactic_projection = tactic_projection_by_id.get(detection_id)
         identity_projection = identity_projection_by_id.get(detection_id)
         analytic_runtime: list[dict[str, Any]] = []
@@ -1683,12 +1718,8 @@ def build_solution_report(
                     "draftTactics": (
                         (properties.get("detectionAction") or {}).get("alertTemplate") or {}
                     ).get("tactics"),
-                    "originalTactics": (
-                        (detection.get("contentProvenance") or {}).get("conversion") or {}
-                    ).get("originalTactics"),
-                    "originalTechniques": (
-                        (detection.get("contentProvenance") or {}).get("conversion") or {}
-                    ).get("originalTechniques"),
+                    "originalTactics": doc_conversion.get("originalTactics"),
+                    "originalTechniques": doc_conversion.get("originalTechniques"),
                 },
                 "analyticRule": {
                     "id": source.get("id"),
@@ -1709,15 +1740,23 @@ def build_solution_report(
                 },
                 "customDetection": {
                     "id": detection_id or None,
-                    "conversionStatus": conversion.get("status") or "not-run",
-                    "reviewRequired": bool(conversion.get("reviewRequired")),
-                    "reviewReasons": list(conversion.get("reviewReasons") or []),
-                    "reviewScope": (
-                        (detection.get("contentProvenance") or {}).get("conversion") or {}
-                    ).get("reviewScope"),
-                    "reviewDecisions": (
-                        (detection.get("contentProvenance") or {}).get("conversion") or {}
-                    ).get("reviewDecisions") or [],
+                    "conversionStatus": (
+                        conversion.get("status")
+                        or doc_conversion.get("status")
+                        or ("native" if detection and _is_native_detection(detection) else "not-run")
+                    ),
+                    "reviewRequired": bool(
+                        conversion.get("reviewRequired")
+                        if "reviewRequired" in conversion
+                        else doc_conversion.get("reviewRequired")
+                    ),
+                    "reviewReasons": list(
+                        conversion.get("reviewReasons")
+                        or doc_conversion.get("reviewReasons")
+                        or []
+                    ),
+                    "reviewScope": doc_conversion.get("reviewScope"),
+                    "reviewDecisions": doc_conversion.get("reviewDecisions") or [],
                     "structuralStatus": (
                         "passed"
                         if detection and not structural_errors
@@ -1760,9 +1799,7 @@ def build_solution_report(
                 "informational": list(
                     conversion.get("informational") or []
                     if "informational" in conversion
-                    else (
-                        (detection.get("contentProvenance") or {}).get("conversion") or {}
-                    ).get("informational") or []
+                    else doc_conversion.get("informational") or []
                 ) + ([
                     "V3.1 ARM packaging retains authored tactic "
                     f"{', '.join(tactic_projection.get('packagedTactics') or []) or '(none)'} "
@@ -1777,6 +1814,191 @@ def build_solution_report(
                 "errors": errors,
             }
         )
+
+    if not workbook_only and output.is_dir():
+        for detection_path in xdr_detection_files(output):
+            if detection_path.resolve() in handled_detection_paths:
+                continue
+            detection_name = detection_path.relative_to(output).as_posix()
+            detection = {}
+            structural_errors = []
+            structural_warnings = []
+            try:
+                loaded = yaml.safe_load(detection_path.read_text(encoding="utf-8-sig")) or {}
+                if isinstance(loaded, dict):
+                    detection = loaded
+                    structural_errors = validate_document(detection)
+                    structural_warnings = custom_detail_binding_warnings(detection)
+                else:
+                    structural_errors = ["Custom Detection YAML must contain an object"]
+            except (OSError, ValueError, yaml.YAMLError) as exc:
+                structural_errors = [str(exc)]
+            properties = (detection.get("properties") or {}) if isinstance(detection, dict) else {}
+            detection_id = str(properties.get("id") or "")
+            doc_provenance = (detection.get("contentProvenance") or {}) if isinstance(detection, dict) else {}
+            doc_conversion = (doc_provenance.get("conversion") or {}) if isinstance(doc_provenance, dict) else {}
+            is_native = _is_native_detection(detection)
+            tactic_projection = tactic_projection_by_id.get(detection_id)
+            identity_projection = identity_projection_by_id.get(detection_id)
+            custom_runtime = []
+            rule_warnings = list(doc_conversion.get("warnings") or []) + [
+                value
+                for value in structural_warnings
+                if value not in (doc_conversion.get("warnings") or [])
+            ]
+            errors = []
+            for value in doc_conversion.get("errors") or []:
+                errors.append(_error("conversion", value, provider="local-cli"))
+            for value in structural_errors:
+                errors.append(_error("structural-validation", value, provider="local-cli"))
+            for report in runtime_reports:
+                platform = str(report.get("platform") or "unknown")
+                if "Sentinel" in platform:
+                    continue
+                provider = str(report.get("provider") or "unknown")
+                item = next(
+                    (
+                        candidate
+                        for candidate in report.get("results") or []
+                        if str(candidate.get("detection") or "").replace("\\", "/") == detection_name
+                    ),
+                    None,
+                )
+                if not item:
+                    continue
+                expected_query = str(
+                    (((properties.get("queryCondition") or {}).get("queryText")) or "")
+                )
+                expected_query_hash = hashlib.sha256(
+                    expected_query.encode("utf-8")
+                ).hexdigest()
+                recorded_query_hash = item.get("querySha256")
+                query_hash_matches = recorded_query_hash == expected_query_hash
+                runtime_status = item.get("status")
+                stale_query_message = None
+                if runtime_status == "passed" and not query_hash_matches:
+                    runtime_status = "blocked"
+                    stale_query_message = (
+                        "runtime success is stale or unbound: the exact current query was not "
+                        "validated; rerun this complete query family before claiming validation"
+                    )
+                custom_runtime.append({
+                    "provider": provider,
+                    "platform": platform,
+                    "status": runtime_status,
+                    "recordedStatus": item.get("status"),
+                    "querySha256": recorded_query_hash,
+                    "queryHashStatus": "matches" if query_hash_matches else "stale-or-missing",
+                    "rowCount": item.get("rowCount"),
+                    "providerFallback": report.get("providerFallback"),
+                })
+                if stale_query_message or item.get("status") in {"failed", "blocked"}:
+                    errors.append(
+                        _error(
+                            "custom-detection-runtime-validation",
+                            stale_query_message or item.get("error") or item.get("status"),
+                            provider=provider,
+                            status_code=item.get("statusCode"),
+                            details=item.get("errorDetails"),
+                        )
+                    )
+            deployed = deployment_by_id.get(detection_id) or {}
+            if deployed and not deployed.get("success"):
+                graph_error = deployed.get("error") or {}
+                errors.append(
+                    _error(
+                        "custom-detection-deployment",
+                        graph_error.get("message") or graph_error,
+                        provider=str(deployment.get("provider") or "microsoft-graph"),
+                        status_code=deployed.get("statusCode"),
+                        code=graph_error.get("code"),
+                        details=graph_error,
+                    )
+                )
+            alert_template = (
+                ((properties.get("detectionAction") or {}).get("alertTemplate") or {})
+                if isinstance(properties.get("detectionAction"), dict)
+                else {}
+            )
+            display_name = str(
+                properties.get("displayName")
+                or alert_template.get("title")
+                or detection_path.stem
+            )
+            rules.append(
+                {
+                    "name": display_name,
+                    "sourceFile": None,
+                    "sourceSha256": None,
+                    "outputFile": str(detection_path),
+                    "queries": {
+                        "source": None,
+                        "converted": (properties.get("queryCondition") or {}).get("queryText"),
+                    },
+                    "attackClassification": {
+                        "sourceTactics": None,
+                        "sourceTechniques": None,
+                        "draftTactics": alert_template.get("tactics"),
+                        "originalTactics": doc_conversion.get("originalTactics"),
+                        "originalTechniques": doc_conversion.get("originalTechniques"),
+                    },
+                    "analyticRule": {
+                        "id": None,
+                        "sourceStatus": "not-applicable",
+                        "deploymentStatus": "not-applicable",
+                        "alertStatus": "not-applicable",
+                        "runtime": [],
+                    },
+                    "customDetection": {
+                        "id": detection_id or None,
+                        "native": is_native,
+                        "conversionStatus": (
+                            "native"
+                            if is_native
+                            else (doc_conversion.get("status") or "not-run")
+                        ),
+                        "reviewRequired": bool(
+                            doc_conversion.get("reviewRequired")
+                            or doc_provenance.get("dependencyReviewRequired")
+                        ),
+                        "reviewReasons": list(doc_conversion.get("reviewReasons") or []),
+                        "reviewScope": doc_conversion.get("reviewScope"),
+                        "reviewDecisions": doc_conversion.get("reviewDecisions") or [],
+                        "structuralStatus": (
+                            "passed"
+                            if detection and not structural_errors
+                            else "failed"
+                            if detection
+                            else "not-generated"
+                        ),
+                        "deploymentStatus": deployed.get("operation") or "not-run",
+                        "runtime": custom_runtime,
+                        "alertStatus": "not-applicable" if is_native else "not-run",
+                    },
+                    "packagingProjection": tactic_projection,
+                    "packagingIdentity": identity_projection,
+                    "entityRecommendation": None,
+                    "queryParity": {
+                        "status": "not-applicable" if is_native else "not-run",
+                        "matchKey": None,
+                        "analyticRuleRows": None,
+                        "customDetectionRows": None,
+                    },
+                    "warnings": rule_warnings,
+                    "informational": list(doc_conversion.get("informational") or []) + ([
+                        "V3.1 ARM packaging retains authored tactic "
+                        f"{', '.join(tactic_projection.get('packagedTactics') or []) or '(none)'} "
+                        "and omits "
+                        f"{', '.join(tactic_projection.get('omittedTactics') or []) or '(none)'}; "
+                        "authored YAML is unchanged and this projection is not parity"
+                    ] if tactic_projection and (tactic_projection.get("omittedTactics") or []) else []) + ([
+                        "V3.1 ARM packaging normalized Custom Detection ID "
+                        f"{identity_projection.get('inputId')!r} to {identity_projection.get('packagedId')!r}; "
+                        "source/provenance YAML remains unchanged and deployed IDs are not migrated"
+                    ] if identity_projection and identity_projection.get("changed") else []),
+                    "errors": errors,
+                }
+            )
 
     report = {
         "solution": root.name,
@@ -1831,12 +2053,16 @@ def build_solution_report(
                 item["customDetection"]["conversionStatus"] == "converted"
                 for item in rules
             ),
+            "native": sum(
+                item["customDetection"]["conversionStatus"] == "native"
+                for item in rules
+            ),
             "needsReview": sum(
                 item["customDetection"]["reviewRequired"]
                 for item in rules
             ),
             "deploymentReady": sum(
-                item["customDetection"]["conversionStatus"] == "converted"
+                item["customDetection"]["conversionStatus"] in {"converted", "native"}
                 and not item["customDetection"]["reviewRequired"]
                 and item["customDetection"]["structuralStatus"] == "passed"
                 for item in rules

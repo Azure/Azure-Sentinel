@@ -1086,3 +1086,114 @@ class QualificationOrchestratorTestCase(unittest.TestCase):
     def test_streaming_compiler_error_e2e_q02_captures_diagnostics_and_runs_finally_disable(self):
         test_streaming_compiler_error_e2e_q02_captures_diagnostics_and_runs_finally_disable()
 
+    def test_cd_only_mock_data_fixtures_and_in_memory_query_sha256(self):
+        from solution_manager.qualification.mock_data import (
+            build_cd_only_mock_fixture,
+            compute_query_sha256,
+            generate_mock_data,
+            resolve_detection_query_sha256,
+        )
+
+        scratch, sol_root = _create_solution_fixture(
+            num_rules=0,
+            num_sentinel_workbooks=0,
+            num_defender_workbooks=0,
+            num_detections=0,
+            table_name="DeviceProcessEvents",
+        )
+        try:
+            det_dir = sol_root / "XDR Detections"
+            det_dir.mkdir(parents=True, exist_ok=True)
+            query_text = "DeviceProcessEvents | where FileName =~ 'powershell.exe'"
+            expected_sha = compute_query_sha256(query_text)
+            native_doc = {
+                "schemaVersion": "1.0.0",
+                "version": "1.0.0",
+                "kind": "CustomDetection",
+                "resourceType": "Microsoft.Security/detectionRules",
+                "contentProvenance": {
+                    "requiredWorkloads": [{"workload": "mde", "dataTypes": ["DeviceProcessEvents"]}],
+                    "requiredDataConnectors": [],
+                },
+                "properties": {
+                    "id": "xdr-11111111-2222-3333-4444-555555555555",
+                    "displayName": "Native PowerShell Detection",
+                    "status": "disabled",
+                    "queryCondition": {"queryText": query_text},
+                    "schedule": {"frequency": "PT1H"},
+                    "detectionAction": {
+                        "alertTemplate": {
+                            "title": "Native PowerShell Detection",
+                            "description": "Test",
+                            "severity": "medium",
+                            "entityMappings": {
+                                "hosts": [{"id": "host1", "deviceIdColumn": "DeviceId"}]
+                            },
+                        }
+                    },
+                },
+            }
+            (det_dir / "native_ps.yaml").write_text(yaml.safe_dump(native_doc), encoding="utf-8")
+
+            assert resolve_detection_query_sha256(native_doc) == expected_sha
+            fixture = build_cd_only_mock_fixture(native_doc, table="DeviceProcessEvents")
+            assert fixture["cdOnly"] is True
+            assert fixture["querySha256"] == expected_sha
+            assert len(fixture["positiveControls"]) == 1
+            assert len(fixture["negativeControls"]) == 1
+            assert fixture["expectedBehavior"]["positiveControlMatchRequired"] is True
+            assert fixture["expectedBehavior"]["negativeControlNoMatchRequired"] is True
+            assert fixture["expectedBehavior"]["disabledStateRestorationRequired"] is True
+
+            mock_payload = generate_mock_data(sol_root, reuse_reviewed=False)
+            assert "DeviceProcessEvents" in mock_payload["targetTables"]
+            assert len(mock_payload["detections"]) == 1
+            assert mock_payload["detections"][0]["cdOnly"] is True
+            assert mock_payload["detections"][0]["querySha256"] == expected_sha
+            assert len(mock_payload["cdOnlyFixtures"]) == 1
+            assert mock_payload["cdOnlyFixtures"][0]["querySha256"] == expected_sha
+
+            # Verify reuse_reviewed=True keeps expectedMatchKeys/negativeControlKeys aligned with reviewed table rows
+            reviewed_rows = {
+                "tables": {
+                    "DeviceProcessEvents": [
+                        {
+                            "ControlType": "positive",
+                            "MatchKey": "reviewed-pos-key-1",
+                            "ProcessCommandLine": "powershell -enc AAA",
+                            "DeviceId": "dev-reviewed-1",
+                        },
+                        {
+                            "ControlType": "negative",
+                            "MatchKey": "reviewed-neg-key-1",
+                            "ProcessCommandLine": "cmd.exe /c dir",
+                            "DeviceId": "dev-reviewed-2",
+                        },
+                    ]
+                }
+            }
+            reviewed_path = sol_root / "mock.json"
+            reviewed_path.write_text(json.dumps(reviewed_rows), encoding="utf-8")
+            reused_payload = generate_mock_data(
+                sol_root, reuse_reviewed=True, reviewed_mock_path=reviewed_path
+            )
+            assert reused_payload["cdOnlyFixtures"][0]["expectedMatchKeys"] == ["reviewed-pos-key-1"]
+            assert reused_payload["cdOnlyFixtures"][0]["negativeControlKeys"] == ["reviewed-neg-key-1"]
+            table_match_keys = [
+                row.get("MatchKey")
+                for row in reused_payload["tables"]["DeviceProcessEvents"]
+            ]
+            assert "reviewed-pos-key-1" in table_match_keys
+            assert "reviewed-neg-key-1" in table_match_keys
+            from copy import deepcopy
+            from solution_manager.qualification.graph_readiness import _detection_id
+
+            _detection_id(native_doc)
+            assert native_doc["properties"]["id"] == "xdr-11111111-2222-3333-4444-555555555555"
+            bare_native_doc = deepcopy(native_doc)
+            bare_native_doc["properties"]["id"] = "11111111-2222-3333-4444-555555555555"
+            _detection_id(bare_native_doc)
+            assert bare_native_doc["properties"]["id"] == "xdr-11111111-2222-3333-4444-555555555555"
+        finally:
+            shutil.rmtree(scratch)
+

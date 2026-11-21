@@ -129,13 +129,35 @@ a reason. Report completed, running, approval-needed, and blocked work
 distinctly. Missing evidence stays unknown, and progression never bypasses
 review, runtime/schema, packaging, authentication, or write gates.
 
+## Native vs. Sentinel-derived XDR Custom Detections
+
+The workflow supports both Sentinel-derived and directly authored (native) XDR Custom Detections under `Solutions/<Solution>/XDR Detections/*.yaml` (and mixed solutions containing both):
+
+- **Native / directly authored XDR Custom Detections**:
+  - Authored directly under `Solutions/<Solution>/XDR Detections/*.yaml` and listed in `Solutions/<Solution>/Data/Solution_*.json` under `"XDR Detections"` without a source Sentinel `Analytic Rules/` YAML, without `contentProvenance.source` (or `querySha256`), and without `contentProvenance.conversion`.
+  - Must use `properties.id: xdr-<uuid>` with a newly generated GUID (`^xdr-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$`).
+  - Only `contentProvenance.requiredWorkloads` and `contentProvenance.requiredDataConnectors` are required (with `dependencyReviewRequired: false` allowed once dependencies are reviewed/populated).
+  - Per-file provenance behavior: native detections skip `MIG-V01` (source Analytic Rule and `querySha256` drift checks) and AR↔CD parity checks, and run target structural validation, KQL validation (without Sentinel workspace parser aliases), runtime validation, dependency validation, and V3.1 packaging checks.
+- **Sentinel-derived XDR Custom Detections**:
+  - Batch-migrated from `Solutions/<Solution>/Analytic Rules/*.yaml` via `sentinel-xdr-migration convert`.
+  - Populate `contentProvenance.source` (including `querySha256`) and `contentProvenance.conversion` alongside `requiredWorkloads` and `requiredDataConnectors`.
+  - Run `MIG-V01` and AR↔CD parity checks in addition to structural, KQL, runtime, dependency, and V3.1 packaging checks.
+
+## Offline ISV `authoring` route (`arm-ttk`)
+
+Partners and authors creating or packaging native or converted XDR Custom Detections without live tenant, MCP, or Graph credentials can explicitly select `--workflow-profile authoring`:
+
+- Runs structural validation, KQL validation, V3.1 packaging (`package-v3-1`), and `arm-ttk` template validation offline without requiring live tenant, MCP, or Graph authentication.
+- Skips live deployment, mock ingestion, and AR↔CD alert parity.
+
 ## Migration workflow
 
 1. Run `workflow-status` first. If no state exists, default to **Qualification**
-   (or allow explicit **Authoring** as an offline/ISV fallback when no live lab
-   is available, or **Cancel**). Explain that Qualification adds deployment,
-   mock ingestion, and alert parity while Authoring stops after
-   packaging/reporting.
+   (or allow explicit **Authoring** as an offline/ISV route for structural + KQL
+   validation + V3.1 packaging + `arm-ttk` validation when no live lab/tenant/MCP/Graph
+   credentials are available, or **Cancel**). Explain that Qualification adds deployment,
+   mock ingestion, and alert parity (for Sentinel-derived rules) while Authoring stops after
+   packaging, `arm-ttk`, and reporting.
 2. Initialize or resume with the selected profile (defaults to `qualification`):
 
    ```powershell
