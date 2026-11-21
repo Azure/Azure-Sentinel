@@ -24,14 +24,15 @@ from .common import (
 )
 from .kusto_analyzer import KustoAnalyzerError, analyze_kql
 from .kql import (
-    ALLOWED_DCR_OPERATORS,
     ALLOWED_FILTER_OPERATORS,
-    ASIM_HELPER_RULE,
-    KQL_CONSTRUCT_RULES,
-    KQL_FUNCTION_RULES,
-    KQL_OPERATOR_RULES,
+    DENY_EXTERNAL_ASIM_HELPER_REFERENCE_RULE,
+    DENY_KQL_CONSTRUCT_RULES,
+    DENY_KQL_FUNCTION_RULES,
+    DENY_KQL_OPERATOR_RULES,
     KqlRule,
     _identity_key,
+    iter_untrusted_kql_rule_matches,
+    query_time_parameter_errors,
     query_uses_source_table,
     resolve_source_specific_fixture,
 )
@@ -70,7 +71,12 @@ def _validate_version(
 ) -> None:
     if value is not None and not VERSION_RE.fullmatch(value):
         findings.append(
-            Finding("META003", field, "Version must use X.X.X format.")
+            Finding(
+                "META003",
+                field,
+                "Version must follow Semantic Versioning 2.0.0 "
+                "(https://semver.org/).",
+            )
         )
 
 
@@ -84,7 +90,7 @@ def _finding_for_kql_fact(
     return Finding(
         rule.code,
         field,
-        f"Unsupported DCR construct '{rule.construct}'. {rule.message}",
+        f"Unsupported KQL construct '{rule.construct}'. {rule.message}",
         line=line if isinstance(line, int) else None,
     )
 
@@ -92,6 +98,7 @@ def _finding_for_kql_fact(
 def _scan_kql(
     analysis: dict[str, Any],
     field: str,
+    query: str = "",
 ) -> list[Finding]:
     matches: list[tuple[str, int, Finding]] = []
 
@@ -106,14 +113,18 @@ def _scan_kql(
             )
         )
 
+    for rule, fact in iter_untrusted_kql_rule_matches(
+        analysis, query
+    ):
+        add(rule, fact)
     for operator in analysis["operators"]:
-        rule = KQL_OPERATOR_RULES.get(operator["type"])
+        rule = DENY_KQL_OPERATOR_RULES.get(operator["type"])
         if rule is not None:
             add(rule, operator)
     for function in analysis["functions"]:
         name = function.get("name")
         rule = (
-            KQL_FUNCTION_RULES.get(name.casefold())
+            DENY_KQL_FUNCTION_RULES.get(name.casefold())
             if isinstance(name, str)
             else None
         )
@@ -125,12 +136,12 @@ def _scan_kql(
             isinstance(name, str)
             and name.casefold().startswith("_asim_")
         ):
-            add(ASIM_HELPER_RULE, construct)
+            add(DENY_EXTERNAL_ASIM_HELPER_REFERENCE_RULE, construct)
             continue
         kind = construct["kind"]
-        rule = KQL_CONSTRUCT_RULES.get(kind)
+        rule = DENY_KQL_CONSTRUCT_RULES.get(kind)
         if rule is None:
-            rule = KQL_CONSTRUCT_RULES.get(construct["type"])
+            rule = DENY_KQL_CONSTRUCT_RULES.get(construct["type"])
         if rule is None:
             continue
         if (
@@ -149,57 +160,46 @@ def _scan_kql(
     ]
 
 
+def _scan_untrusted_kql(
+    analysis: dict[str, Any],
+    query: str,
+    field: str,
+) -> list[Finding]:
+    matches = []
+    for rule, fact in iter_untrusted_kql_rule_matches(analysis, query):
+        location = fact.get("location", {})
+        start = location.get("start")
+        matches.append(
+            (
+                rule.code,
+                start if isinstance(start, int) else -1,
+                _finding_for_kql_fact(rule, field, fact),
+            )
+        )
+    return [
+        finding
+        for _, _, finding in sorted(
+            matches,
+            key=lambda match: (match[0], match[1]),
+        )
+    ]
+
+
 def _validate_statement_shape(
     analysis: dict[str, Any],
     field: str,
     findings: list[Finding],
 ) -> dict[str, Any] | None:
-    statements = analysis["statements"]
-    if not statements:
+    if not analysis["sourcePipeline"]["isValid"]:
         findings.append(
-            Finding("KQL039", field, "Query must not be empty.")
+            Finding(
+                "KQL039",
+                field,
+                "Query must contain exactly one expression statement "
+                "rooted at lowercase source.",
+            )
         )
         return None
-    for statement in statements[:-1]:
-        location = statement["location"]
-        line = location.get("line")
-        if statement["type"] != "LetStatement":
-            findings.append(
-                Finding(
-                    "KQL042",
-                    field,
-                    "Only let statements may precede the final source pipeline.",
-                    line=line if isinstance(line, int) else None,
-                )
-            )
-            continue
-        if not statement["hasPipe"]:
-            continue
-        root_type = statement.get("expressionRootType")
-        root_text = statement.get("expressionRootText")
-        allowed_root = (
-            root_type
-            in {
-                "DataTableExpression",
-                "FunctionDeclaration",
-                "ParenthesizedExpression",
-                "PrintOperator",
-            }
-            or (
-                root_type == "NameReference"
-                and isinstance(root_text, str)
-                and root_text.casefold() == "source"
-            )
-        )
-        if not allowed_root:
-            findings.append(
-                Finding(
-                    "KQL043",
-                    field,
-                    "A tabular let binding may only use source, print, or datatable.",
-                    line=line if isinstance(line, int) else None,
-                )
-            )
     return analysis.get("pipeline")
 
 
@@ -215,25 +215,17 @@ def _operator_name(operator: dict[str, Any]) -> str | None:
 def _validate_pipeline_operators(
     analysis: dict[str, Any],
     field: str,
-    allowed_operators: set[str],
+    allowed_operators: set[str] | None,
     findings: list[Finding],
 ) -> None:
     pipeline = _validate_statement_shape(analysis, field, findings)
     if pipeline is None:
-        if analysis["statements"]:
-            findings.append(
-                Finding(
-                    "KQL039",
-                    field,
-                    "Query must be a single source-rooted pipeline.",
-                )
-            )
         return
     root_text = pipeline.get("rootText")
     if (
         pipeline.get("rootType") != "NameReference"
         or not isinstance(root_text, str)
-        or root_text.casefold() != "source"
+        or root_text != "source"
     ):
         findings.append(
             Finding(
@@ -259,7 +251,10 @@ def _validate_pipeline_operators(
                     line=line if isinstance(line, int) else None,
                 )
             )
-        elif operator not in allowed_operators:
+        elif (
+            allowed_operators is not None
+            and operator not in allowed_operators
+        ):
             findings.append(
                 Finding(
                     "KQL041",
@@ -273,7 +268,7 @@ def _validate_pipeline_operators(
 def _validate_kql(
     query: str,
     field: str,
-    allowed_operators: set[str],
+    allowed_operators: set[str] | None,
     findings: list[Finding],
 ) -> dict[str, Any] | None:
     try:
@@ -288,7 +283,11 @@ def _validate_kql(
         )
         return None
 
-    diagnostics = analysis["diagnostics"]
+    diagnostics = [
+        diagnostic
+        for diagnostic in analysis["diagnostics"]
+        if diagnostic["severity"] == "Error"
+    ]
     for diagnostic in diagnostics:
         findings.append(
             Finding(
@@ -309,7 +308,7 @@ def _validate_kql(
         allowed_operators,
         findings,
     )
-    findings.extend(_scan_kql(analysis, field))
+    findings.extend(_scan_kql(analysis, field, query))
     return analysis
 
 
@@ -318,39 +317,12 @@ def _validate_filter_consistency(
     parser_analysis: dict[str, Any],
     findings: list[Finding],
 ) -> None:
-    filter_statements = filter_analysis["statements"]
-    parser_statements = parser_analysis["statements"]
-    if not filter_statements or not parser_statements:
-        return
-    filter_lets = [
-        statement["location"]["normalizedText"]
-        for statement in filter_statements[:-1]
-    ]
-    parser_lets = [
-        statement["location"]["normalizedText"]
-        for statement in parser_statements[:-1]
-    ]
-    parser_let_index = 0
-    for filter_let in filter_lets:
-        try:
-            parser_let_index = parser_lets.index(
-                filter_let, parser_let_index
-            ) + 1
-        except ValueError:
-            findings.append(
-                Finding(
-                    "FILTER003",
-                    "ParserFilterQuery",
-                    "Every filter let statement must appear in ParserQuery in the same order.",
-                )
-            )
-            return
     filter_pipeline = filter_analysis.get("pipeline")
     parser_pipeline = parser_analysis.get("pipeline")
     if (
         not isinstance(filter_pipeline, dict)
         or filter_pipeline.get("rootType") != "NameReference"
-        or str(filter_pipeline.get("rootText", "")).casefold() != "source"
+        or filter_pipeline.get("rootText") != "source"
         or not isinstance(parser_pipeline, dict)
     ):
         return
@@ -718,14 +690,14 @@ def validate_ingest_time_parser(
             parser_analysis = _validate_kql(
                 parser_query,
                 "ParserQuery",
-                ALLOWED_DCR_OPERATORS,
+                None,
                 findings,
             )
         if (
             filter_analysis is not None
             and parser_analysis is not None
-            and not filter_analysis["diagnostics"]
-            and not parser_analysis["diagnostics"]
+            and filter_analysis["sourcePipeline"]["isValid"]
+            and parser_analysis["sourcePipeline"]["isValid"]
         ):
             _validate_filter_consistency(
                 filter_analysis,
@@ -743,13 +715,17 @@ def validate_ingest_time_parser(
 
         if query_time_path is not None:
             def block_query(
-                code: str, field: str, message: str
+                code: str,
+                field: str,
+                message: str,
+                line: int | None = None,
             ) -> None:
                 query_findings.append(
                     Finding(
                         code,
                         field,
                         message,
+                        line=line,
                         severity="blocked",
                     )
                 )
@@ -789,6 +765,47 @@ def validate_ingest_time_parser(
                             "ParserQuery",
                             "Trusted Kusto.Language analyzer failed: "
                             f"{exc}",
+                        )
+                    else:
+                        for diagnostic in query_analysis["diagnostics"]:
+                            if diagnostic["severity"] == "Error":
+                                block_query(
+                                    "KQL001",
+                                    "ParserQuery",
+                                    "Kusto syntax diagnostic "
+                                    f"{diagnostic['code']} at column "
+                                    f"{diagnostic['column']}: "
+                                    f"{diagnostic['message']}",
+                                    line=diagnostic["line"],
+                                )
+                        for finding in _scan_untrusted_kql(
+                            query_analysis,
+                            query_body,
+                            "ParserQuery",
+                        ):
+                            block_query(
+                                finding.code,
+                                finding.field,
+                                finding.message,
+                                line=finding.line,
+                            )
+                for field, message in query_time_parameter_errors(
+                    query_document.get("ParserParams")
+                ):
+                    block_query("KQL049", field, message)
+                for field, value in (
+                    ("ParserName", query_parser_name),
+                    ("Normalization.Schema", query_schema),
+                ):
+                    if (
+                        isinstance(value, str)
+                        and value.strip()
+                        and not IDENTIFIER_RE.fullmatch(value)
+                    ):
+                        block_query(
+                            "KQL050",
+                            field,
+                            f"{field} must be a KQL identifier.",
                         )
                 if schema != query_schema:
                     block_query(

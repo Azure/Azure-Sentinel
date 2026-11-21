@@ -1,0 +1,145 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SecurityEvents
+  dataTypes:
+  - SecurityEvent
+- connectorId: WindowsSecurityEvents
+  dataTypes:
+  - SecurityEvent
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SecurityEvent
+  requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+    - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+    - SecurityEvent
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: eea9c640-afe0-4ce4-9a41-c409d4c2c924
+    path: Analytic Rules/TM010_BITLOCKERStoredBitlockerRecoveryKeyToTierLevelComputerObject.yaml
+    version: 1.0.0
+    querySha256: 0bfd160b61eb6112719354a5772b6b8c76073c9a0cbd74ad3336c978da06cf1f
+    schedule:
+      queryFrequency: 5h
+      queryPeriod: 5h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=5h, lookback=5h; target frequency=PT5H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational:
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.ObjectName from
+      query column `ObjectName`; supplemental details do not restore entity identity, correlation, or alert parity
+    - Account.FullName mismatch is informational because its original value is preserved as customDetails.Account from query
+      column `Account`; supplemental details do not restore entity identity, correlation, or alert parity
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1552.004
+    reviewScope:
+      sourceDocumentSha256: 0a714816e42625ec8e81dfe0796f7641750a8cc0e9954c3dc08f6f1bb3294e0d
+      targetQuerySha256: 7f07e26add61c20b5a326cb59f352ded2e96bf5c435439309f1e8922e12f6ee7
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: ObjectName
+      column: ObjectName
+      status: available
+      customDetailKey: ObjectName
+    - entityType: Account
+      entityIndex: 3
+      identifier: FullName
+      sourceColumn: Account
+      column: Account
+      status: available
+      customDetailKey: Account
+properties:
+  id: xdr-eea9c640-afe0-4ce4-9a41-c409d4c2c924
+  displayName: PROD (TM010.1) - BITLOCKER - Stored Bitlocker Recovery Key to Tier Level Computer Object
+  status: disabled
+  queryCondition:
+    queryText: |-
+      SecurityEvent
+      | where EventID == 5137
+          and (EventData matches regex @"(?i)OU=Domain Controllers"
+              or EventData matches regex @"(?i)OU=Tier 0 PAW"
+              or EventData matches regex @"(?i)OU=Tier 1 PAW"
+              or EventData matches regex @"(?i)OU=Tier 2 PAW"
+              or EventData matches regex @"(?i)OU=Tier 0 Member Servers"
+              or EventData matches regex @"(?i)OU=Tier 1 Member Servers")
+      | extend ObjectClass = extract("<Data Name=\"ObjectClass\">([^<]+)</Data>", 1, EventData)
+      | where ObjectClass has "msFVE-RecoveryInformation"
+      | extend ObjectBitName_e = extract("<Data Name=\"ObjectDN\">([^<]+)</Data>", 1, EventData)
+      | extend ObjectFullName = extract("(?i)(CN=[^,]+,(?i)OU=[^,]+)", 1, ObjectBitName_e)
+      | extend ObjectName = extract("(?i)CN=([^,]+)", 1, ObjectFullName)
+      | extend ObjectTier = case(
+          ObjectFullName has "Tier 0", "Tier 0",
+          ObjectFullName has "Tier 1", "Tier 1",
+          ObjectFullName has "Tier Model Administration", "Tier 0",
+          ObjectFullName has "Tier Model Computer Quarantine", "Tier 0",
+          ObjectFullName has "Domain Controllers", "Tier 0",
+          "Unknown")
+      | extend ActivityType = extract("([a-zA-Z]+)\\.$", 1, Activity)
+      | extend Domain = extract("([^.]+\\.[^.]+)$", 1, Computer)
+      | project TimeGenerated
+         , ObjectName
+         , ObjectTier
+         , ObjectClass
+         , ActivityType
+         , Account
+         , Domain
+         , Computer
+         , Channel
+         , EventID
+         , EventData
+  schedule:
+    frequency: PT5H
+  detectionAction:
+    alertTemplate:
+      title: PROD (TM010.1) - BITLOCKER - Stored Bitlocker Recovery Key to Tier Level Computer Object
+      description: A Bitlocker recovery key was stored within a Tier Model computer object.
+      severity: informational
+      entityMappings:
+        hosts:
+        - id: host1
+          nameColumn: Computer
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1552
+          subTechniques:
+          - T1552.004
+      customDetails:
+        ObjectName: ObjectName
+        ObjectTier: ObjectTier
+        ObjectClass: ObjectClass
+        ActivityType: ActivityType
+        Account: Account
+        Domain: Domain
+        Computer: Computer
+        Channel: Channel
+        EventID: EventID
+        EventData: EventData

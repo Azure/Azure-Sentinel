@@ -13,6 +13,16 @@ from asim_ingestion.fixtures.timestamps import (
 )
 from .queries import MAX_MISMATCH_EXAMPLES, _normalize_column_type
 
+ADDITIONAL_FIELDS_IGNORED_KEYS = frozenset(
+    {
+        "TenantId",
+        "TimeGenerated",
+        "Type",
+        "_ResourceId",
+    }
+)
+
+
 def _normalize_dynamic(value: Any) -> Any:
     if isinstance(value, str):
         try:
@@ -41,7 +51,11 @@ def _canonical_value(
     if column_type == "dynamic":
         normalized = _normalize_dynamic(value)
         if column_name == "AdditionalFields" and isinstance(normalized, dict):
-            return dict.fromkeys(normalized)
+            return {
+                key: None
+                for key in normalized
+                if key not in ADDITIONAL_FIELDS_IGNORED_KEYS
+            }
         return normalized
     if column_type == "real" and isinstance(value, float):
         if math.isnan(value):

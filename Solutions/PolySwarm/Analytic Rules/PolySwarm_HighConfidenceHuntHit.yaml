@@ -1,0 +1,57 @@
+id: f7db5b10-5bcb-42ce-a9b6-864887de3e7a
+name: PolySwarm high-confidence hunt hit
+description: |
+  'Any PolySwarm hunting connector hit (ThreatIntelIndicators, SourceSystem "PolySwarm", with a hunt rule name) with
+  Confidence at or above 90 created in the last hour, grouped by malware family. Each hunt hit is counted once, on its SHA-256 indicator
+  (the SHA-1 and MD5 indicators of the same hit are skipped).
+  Confidence carries the PolyScore for the sample. Family and rule name come from
+  AdditionalFields.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: PolySwarmHuntingCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: PolySwarmFeedCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  ThreatIntelIndicators
+  | where TimeGenerated > ago(1h)
+  | where SourceSystem == "PolySwarm"
+  | where Confidence >= 90
+  | where isnotempty(tostring(parse_json(AdditionalFields).rule_name))
+  | where IsActive and (isempty(ValidUntil) or ValidUntil > now())
+  | where ObservableKey has "file:hashes"
+  | where tostring(parse_json(AdditionalFields).digest_type) == "SHA-256"
+  | extend FileHashValue = ObservableValue
+  | extend HashAlgorithm = case(ObservableKey has "SHA-256", "SHA256", ObservableKey has "SHA-1", "SHA1", ObservableKey has "MD5", "MD5", "")
+  | extend Family = tostring(parse_json(AdditionalFields).family)
+  | extend RuleName = tostring(parse_json(AdditionalFields).rule_name)
+  | extend Community = tostring(parse_json(AdditionalFields).community)
+  | extend Permalink = tostring(parse_json(AdditionalFields).permalink)
+  | extend Detections = tostring(parse_json(AdditionalFields).detections)
+  | summarize HitCount = count(), TimeGenerated = arg_max(TimeGenerated, Permalink, Detections) by Id, FileHashValue, HashAlgorithm, Family, RuleName, Community, Confidence
+  | project TimeGenerated, FileHashValue, HashAlgorithm, Family, RuleName, Community, Confidence, Permalink, Detections, HitCount
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: HashAlgorithm
+customDetails:
+  Family: Family
+  RuleName: RuleName
+  Community: Community
+  Confidence: Confidence
+version: 1.0.3
+kind: Scheduled

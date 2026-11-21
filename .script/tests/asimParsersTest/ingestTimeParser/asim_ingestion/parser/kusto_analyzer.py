@@ -12,7 +12,7 @@ import threading
 from typing import Any
 
 
-ANALYZER_RESULT_VERSION = 2
+ANALYZER_RESULT_VERSION = 3
 _BUILD_LOCK = threading.Lock()
 _PROJECT_DIRECTORY = Path(__file__).resolve().parents[2] / "kusto_analyzer"
 _PROJECT_PATH = _PROJECT_DIRECTORY / "kusto_analyzer.csproj"
@@ -184,6 +184,39 @@ def _validate_source_reference(value: Any) -> bool:
     )
 
 
+def _validate_source_pipeline(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    is_valid = value.get("isValid")
+    failure = value.get("failure")
+    source_location = value.get("sourceLocation")
+    if (
+        not isinstance(is_valid, bool)
+        or not isinstance(value.get("statementCount"), int)
+        or any(
+            value.get(key) is not None
+            and not isinstance(value.get(key), str)
+            for key in (
+                "failure",
+                "statementType",
+                "rootType",
+                "rootText",
+            )
+        )
+    ):
+        return False
+    if is_valid:
+        return (
+            failure is None
+            and value.get("statementCount") == 1
+            and value.get("statementType") == "ExpressionStatement"
+            and value.get("rootType") == "NameReference"
+            and value.get("rootText") == "source"
+            and _validate_location(source_location)
+        )
+    return isinstance(failure, str) and source_location is None
+
+
 def _validate_result_contract(result: Any) -> dict[str, Any]:
     if (
         not isinstance(result, dict)
@@ -243,6 +276,7 @@ def _validate_result_contract(result: Any) -> dict[str, Any]:
             )
     assignments = result.get("assignments")
     source_references = result.get("sourceReferences")
+    source_pipeline = result.get("sourcePipeline")
     if (
         not isinstance(assignments, list)
         or not all(
@@ -254,6 +288,7 @@ def _validate_result_contract(result: Any) -> dict[str, Any]:
             _validate_source_reference(item)
             for item in source_references
         )
+        or not _validate_source_pipeline(source_pipeline)
     ):
         raise KustoAnalyzerError(
             "Kusto analyzer returned an invalid result contract."

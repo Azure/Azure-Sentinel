@@ -53,31 +53,43 @@ class FakeQueryClient:
 
 
 class QueryConstructionTests(unittest.TestCase):
-    def test_alert_data_tester_normalizes_physical_file_size(self):
-        query = VALIDATION.build_asim_tester_query(
-            tester_name="ASimDataTester",
-            tester_query="T | project Result = 'test'",
-            target_table="ASimAlertEventLogs",
-            timestamps=[TIMESTAMP_1],
-            schema_name="AlertEvent",
-        )
+    def test_data_tester_normalizes_physical_file_size(self):
+        for target_table, schema_name in (
+            ("ASimAlertEventLogs", "AlertEvent"),
+            ("ASimWebSessionLogs", "WebSession"),
+        ):
+            with self.subTest(target_table=target_table):
+                query = VALIDATION.build_asim_tester_query(
+                    tester_name="ASimDataTester",
+                    tester_query="T | project Result = 'test'",
+                    target_table=target_table,
+                    timestamps=[TIMESTAMP_1],
+                    schema_name=schema_name,
+                )
 
-        target_query, tester_query = query.split(
-            "let _AsimValidationTester", 1
-        )
-        self.assertIn(
-            "ASimAlertEventLogs\n| where TimeGenerated in "
-            f"(datetime({TIMESTAMP_1}))"
-            "\n| extend FileSize = tolong(FileSize));",
-            target_query,
-        )
-        self.assertNotIn("ThreatFirstReportedTime", target_query)
-        self.assertNotIn("ThreatLastReportedTime", target_query)
-        self.assertNotIn("ThreatOriginalRiskLevel", target_query)
-        self.assertIn(
-            "| invoke _AsimValidationTester('AlertEvent')", tester_query
-        )
-        self.assertNotIn("tolong(FileSize)", tester_query)
+                target_query, tester_query = query.split(
+                    "let _AsimValidationTester", 1
+                )
+                self.assertIn(
+                    f"{target_table}\n| where TimeGenerated in "
+                    f"(datetime({TIMESTAMP_1}))"
+                    "\n| extend FileSize = tolong(FileSize));",
+                    target_query,
+                )
+                self.assertNotIn(
+                    "ThreatFirstReportedTime", target_query
+                )
+                self.assertNotIn(
+                    "ThreatLastReportedTime", target_query
+                )
+                self.assertNotIn(
+                    "ThreatOriginalRiskLevel", target_query
+                )
+                self.assertIn(
+                    f"| invoke _AsimValidationTester('{schema_name}')",
+                    tester_query,
+                )
+                self.assertNotIn("tolong(FileSize)", tester_query)
 
     def test_dns_data_tester_normalizes_physical_threat_columns(self):
         query = VALIDATION.build_asim_tester_query(
@@ -262,6 +274,118 @@ class QueryConstructionTests(unittest.TestCase):
                 },
                 "Contoso_CL",
                 [TIMESTAMP_1],
+            )
+
+    def test_qtp_query_rejects_privileged_kql_constructs(self):
+        queries = (
+            "workspace('workspace-id').SecurityEvent | take 1",
+            (
+                "cluster('https://example.kusto.windows.net')"
+                ".database('db').Table | take 1"
+            ),
+            (
+                "externaldata(Value:string)"
+                "['https://example.test/data.csv']"
+            ),
+            "Contoso_CL | evaluate bag_unpack(Payload)",
+            ".show tables",
+        )
+        for parser_query in queries:
+            with self.subTest(parser_query=parser_query):
+                with self.assertRaisesRegex(
+                    VALIDATION.ValidationError,
+                    "Unsupported KQL construct",
+                ):
+                    VALIDATION.build_query_time_parser_query(
+                        {
+                            "ParserParams": [],
+                            "ParserQuery": parser_query,
+                        },
+                        "Contoso_CL",
+                        [TIMESTAMP_1],
+                    )
+
+    def test_qtp_query_ignores_dangerous_words_in_comments_and_strings(self):
+        query = VALIDATION.build_query_time_parser_query(
+            {
+                "ParserParams": [],
+                "ParserQuery": (
+                    "Contoso_CL\n"
+                    "| extend Note = 'workspace(''other'')', "
+                    'Other = "evaluate externaldata("\n'
+                    "// cluster('ignored')\n"
+                    "| project TimeGenerated, Note, Other"
+                ),
+            },
+            "Contoso_CL",
+            [TIMESTAMP_1],
+        )
+
+        self.assertIn("workspace", query)
+
+    def test_qtp_query_rejects_unsafe_parameter_metadata(self):
+        with self.assertRaisesRegex(
+            VALIDATION.ValidationError,
+            "Parameter name must be a KQL identifier",
+        ):
+            VALIDATION.build_query_time_parser_query(
+                {
+                    "ParserParams": [
+                        {
+                            "Name": "disabled); workspace('other').Table",
+                            "Type": "bool",
+                            "Default": False,
+                        }
+                    ],
+                    "ParserQuery": "Contoso_CL | take 1",
+                },
+                "Contoso_CL",
+                [TIMESTAMP_1],
+            )
+
+    def test_qtp_query_accepts_canonical_typed_null_defaults(self):
+        query = VALIDATION.build_query_time_parser_query(
+            {
+                "ParserParams": [
+                    {
+                        "Name": "starttime",
+                        "Type": "datetime",
+                        "Default": "datetime(null)",
+                    },
+                    {
+                        "Name": "values_has_any",
+                        "Type": "dynamic",
+                        "Default": "dynamic([])",
+                    },
+                    {
+                        "Name": "event_count",
+                        "Type": "int",
+                        "Default": "int(null)",
+                    },
+                ],
+                "ParserQuery": "Contoso_CL | take 1",
+            },
+            "Contoso_CL",
+            [TIMESTAMP_1],
+        )
+
+        self.assertIn("starttime:datetime=datetime(null)", query)
+        self.assertIn("values_has_any:dynamic=dynamic([])", query)
+        self.assertIn("event_count:int=int(null)", query)
+
+    def test_filter_query_rejects_privileged_kql(self):
+        with self.assertRaisesRegex(
+            VALIDATION.ValidationError,
+            "Unsupported KQL construct",
+        ):
+            VALIDATION.build_filter_count_query(
+                "workspace('other').Table",
+                source_schema=[
+                    {"name": "TimeGenerated", "type": "datetime"}
+                ],
+                source_rows=[
+                    {"TimeGenerated": TIMESTAMP_1}
+                ],
             )
 
 
@@ -487,7 +611,7 @@ class FilterValidationTests(unittest.TestCase):
         self.assertEqual("pass-through", result["mode"])
         self.assertEqual(0, result["rejectedRowCount"])
 
-    def test_source_passthrough_allows_scalar_let_prerequisite(self):
+    def test_source_passthrough_rejects_scalar_let_prerequisite(self):
         client = FakeQueryClient(
             [
                 (
@@ -512,18 +636,20 @@ class FilterValidationTests(unittest.TestCase):
             ]
         )
 
-        result = self.validator().evaluate_filter(
-            client,
-            self.snapshot(),
-            {
-                "SourceRawTable": "Contoso_CL",
-                "ParserFilterQuery": (
-                    "let accepted = true;\nsource"
-                ),
-            },
-        )
-
-        self.assertEqual("pass-through", result["mode"])
+        with self.assertRaisesRegex(
+            VALIDATION.ValidationError,
+            "at least one rejected row",
+        ):
+            self.validator().evaluate_filter(
+                client,
+                self.snapshot(),
+                {
+                    "SourceRawTable": "Contoso_CL",
+                    "ParserFilterQuery": (
+                        "let accepted = true;\nsource"
+                    ),
+                },
+            )
 
 
 class ParityTests(unittest.TestCase):
@@ -651,6 +777,38 @@ class ParityTests(unittest.TestCase):
             [{"new": 2}], actual["AdditionalFields"]["Nested"]
         )
 
+    def test_parity_ignores_platform_additional_fields_keys(self):
+        schema = [
+            *self.schema(),
+            {"name": "AdditionalFields", "type": "dynamic"},
+        ]
+        expected = {
+            "TimeGenerated": TIMESTAMP_1,
+            "EventUid": "event-1",
+            "AdditionalFields": {
+                "APIVersion": "2016-11-15",
+                "TenantId": "tenant",
+                "TimeGenerated": TIMESTAMP_1,
+                "Type": "Custom-Table",
+                "_ResourceId": "/subscriptions/example",
+            },
+        }
+        actual = {
+            **expected,
+            "AdditionalFields": {
+                "APIVersion": "different-value",
+            },
+        }
+
+        result = VALIDATION.compare_parser_outputs(
+            expected_schema=schema,
+            expected_rows=[expected],
+            actual_schema=schema,
+            actual_rows=[actual],
+        )
+
+        self.assertEqual("passed", result["status"])
+
     def test_parity_rejects_additional_fields_key_or_shape_differences(self):
         schema = [
             *self.schema(),
@@ -660,6 +818,10 @@ class ParityTests(unittest.TestCase):
             ({"APIVersion": "2016-11-15"}, {}),
             ({"APIVersion": "2016-11-15"}, {"APIVersion": None, "Extra": 1}),
             ({"APIVersion": "2016-11-15"}, {"apiversion": "2016-11-15"}),
+            (
+                {"APIVersion": "2016-11-15", "tenantid": "tenant"},
+                {"APIVersion": "2016-11-15"},
+            ),
             ({"APIVersion": "2016-11-15"}, ["APIVersion"]),
             ({}, None),
             ({}, []),

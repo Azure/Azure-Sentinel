@@ -2,13 +2,13 @@ import { runCheckOverChangedFiles } from "./utils/changedFilesValidator.js";
 import { GetPRDetails } from "./utils/gitHubWrapper.js";
 import { ExitCode } from "./utils/exitCode.js";
 import * as logger from "./utils/logger.js";
-import gitP, { SimpleGit } from 'simple-git';
+import { simpleGit, SimpleGit } from 'simple-git';
 import { readFileSync } from 'fs';
 
 const workingDir: string = process.cwd();
 const guidRegex: string = "[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}";
 const templateIdRegex: string = `(id: ${guidRegex}(.|\n)*){2}`;
-const git: SimpleGit = gitP(workingDir);
+const git: SimpleGit = simpleGit(workingDir);
 
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 

@@ -6,20 +6,36 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-ALLOWED_DCR_OPERATORS = {
-    "extend",
-    "parse",
-    "project",
-    "project-away",
-    "project-rename",
-    "where",
-}
 ALLOWED_FILTER_OPERATORS = {
     "extend",
     "parse",
+    "parse-kv",
     "project-rename",
     "where",
 }
+QUERY_TIME_PARAMETER_TYPES = {
+    "bool",
+    "boolean",
+    "datetime",
+    "dynamic",
+    "int",
+    "long",
+    "real",
+    "string",
+}
+QUERY_TIME_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_IGNORED_KQL_TOKENS_RE = re.compile(
+    r"//[^\r\n]*|/\*.*?\*/|```.*?```"
+    r"|@'(?:''|[^'])*'"
+    r'|@"(?:""|[^"])*"'
+    r"|'(?:\\.|''|[^'\\])*'"
+    r'|"(?:\\.|""|[^"\\])*"',
+    flags=re.DOTALL,
+)
+_MANAGEMENT_COMMAND_RE = re.compile(
+    r"(?:^|;)\s*(\.[A-Za-z])",
+    flags=re.MULTILINE,
+)
 
 
 @dataclass(frozen=True)
@@ -33,13 +49,13 @@ def _named_rules(rule: KqlRule, *names: str) -> dict[str, KqlRule]:
     return {name: rule for name in names}
 
 
-ASIM_HELPER_RULE = KqlRule(
+DENY_EXTERNAL_ASIM_HELPER_REFERENCE_RULE = KqlRule(
     "KQL003",
     "ASIM helper",
     "Inline ASIM helper functions.",
 )
 
-KQL_OPERATOR_RULES = {
+DENY_KQL_OPERATOR_RULES = {
     "InvokeOperator": KqlRule(
         "KQL002", "invoke", "Inline the invoked function."
     ),
@@ -55,21 +71,6 @@ KQL_OPERATOR_RULES = {
         "KQL007",
         "distinct",
         "Per-row transformations cannot deduplicate records.",
-    ),
-    "ProjectReorderOperator": KqlRule(
-        "KQL009",
-        "project-reorder",
-        "Column order is not part of the DCR contract.",
-    ),
-    "ParseKvOperator": KqlRule(
-        "KQL014",
-        "parse-kv",
-        "Rewrite with supported parsing expressions.",
-    ),
-    "ParseWhereOperator": KqlRule(
-        "KQL015",
-        "parse-where",
-        "Rewrite with parse or extract plus where.",
     ),
     "MvApplyOperator": KqlRule(
         "KQL027",
@@ -89,100 +90,9 @@ KQL_OPERATOR_RULES = {
     "JoinOperator": KqlRule(
         "KQL031", "join", "A DCR transformation has one input stream."
     ),
-    "ProjectKeepOperator": KqlRule(
-        "KQL036",
-        "project-keep",
-        "Emit an explicit supported projection.",
-    ),
 }
 
-KQL_FUNCTION_RULES = {
-    **_named_rules(
-        KqlRule(
-            "KQL013",
-            "coalesce",
-            "Rewrite with iif and null or empty checks.",
-        ),
-        "coalesce",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL017",
-            "column_ifexists",
-            "Use columnifexists or a confirmed source column.",
-        ),
-        "column_ifexists",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL018",
-            "Unix time conversion",
-            "Rewrite with datetime arithmetic.",
-        ),
-        "unixtime_milliseconds_todatetime",
-        "unixtime_seconds_todatetime",
-        "unixtime_microseconds_todatetime",
-        "unixtime_nanoseconds_todatetime",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL020",
-            "bag_pack",
-            "Use pack or an explicit supported projection.",
-        ),
-        "bag_pack",
-        "bag_pack_columns",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL021",
-            "replace_string",
-            "Use the DCR-supported replace form.",
-        ),
-        "replace_string",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL022",
-            "array_index_of",
-            "Rewrite as supported scalar logic.",
-        ),
-        "array_index_of",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL023",
-            "array_slice",
-            "Rewrite with indexof and substring.",
-        ),
-        "array_slice",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL024",
-            "trim",
-            "Rewrite with anchored replace.",
-        ),
-        "trim",
-        "trim_start",
-        "trim_end",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL025",
-            "parse_url",
-            "Extract only the required URL components.",
-        ),
-        "parse_url",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL026",
-            "parse_user_agent",
-            "Extract only the required user-agent fields.",
-        ),
-        "parse_user_agent",
-    ),
+DENY_KQL_FUNCTION_RULES = {
     **_named_rules(
         KqlRule(
             "KQL029",
@@ -196,82 +106,9 @@ KQL_FUNCTION_RULES = {
         "take_anyif",
         "take_any",
     ),
-    **_named_rules(
-        KqlRule(
-            "KQL030",
-            "bag_merge",
-            "No sound DCR equivalent is available.",
-        ),
-        "bag_merge",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL032",
-            "tohex",
-            "No general DCR equivalent is available.",
-        ),
-        "tohex",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL033",
-            "IP utility",
-            "This IP utility is not supported by DCR transformations.",
-        ),
-        "ipv6_is_match",
-        "ipv4_netmask_suffix",
-    ),
-    **_named_rules(
-        KqlRule(
-            "KQL034",
-            "url_decode",
-            "No exact DCR equivalent is available.",
-        ),
-        "url_decode",
-    ),
 }
 
-KQL_CONSTRUCT_RULES = {
-    "MaterializeExpression": KqlRule(
-        "KQL008",
-        "materialize",
-        "Remove the query-time caching hint.",
-    ),
-    "DynamicExpression": KqlRule(
-        "KQL010",
-        "dynamic literal",
-        "Use parse_json for dynamic literals.",
-    ),
-    "HasAnyExpression": KqlRule(
-        "KQL011",
-        "has_any",
-        "Expand to supported scalar comparisons.",
-    ),
-    "HasAllExpression": KqlRule(
-        "KQL012",
-        "has_all",
-        "Expand to supported scalar comparisons.",
-    ),
-    "InCsExpression": KqlRule(
-        "KQL016",
-        "case-insensitive operator",
-        "Normalize operands and use the supported operator.",
-    ),
-    "NotInCsExpression": KqlRule(
-        "KQL016",
-        "case-insensitive operator",
-        "Normalize operands and use the supported operator.",
-    ),
-    "BetweenExpression": KqlRule(
-        "KQL019",
-        "between",
-        "Rewrite as explicit comparisons.",
-    ),
-    "NotBetweenExpression": KqlRule(
-        "KQL019",
-        "between",
-        "Rewrite as explicit comparisons.",
-    ),
+DENY_KQL_CONSTRUCT_RULES = {
     "ToScalarExpression": KqlRule(
         "KQL035",
         "toscalar",
@@ -282,12 +119,188 @@ KQL_CONSTRUCT_RULES = {
         "wildcard projection",
         "Resolve wildcard projections explicitly.",
     ),
+}
+
+DENY_UNTRUSTED_KQL_OPERATOR_RULES = {
+    "EvaluateOperator": KqlRule(
+        "KQL047",
+        "evaluate",
+        "Plugin execution is not allowed in untrusted parser KQL.",
+    ),
+}
+
+DENY_UNTRUSTED_KQL_FUNCTION_RULES = {
+    **_named_rules(
+        KqlRule(
+            "KQL045",
+            "cross-resource function",
+            "Cross-workspace, cluster, and database access is not allowed.",
+        ),
+        "workspace",
+        "cluster",
+        "database",
+    ),
+    "external_table": KqlRule(
+        "KQL046",
+        "external_table",
+        "External table access is not allowed in untrusted parser KQL.",
+    ),
+}
+
+DENY_UNTRUSTED_KQL_CONSTRUCT_RULES = {
     "ExternalDataExpression": KqlRule(
         "KQL038",
         "externaldata",
-        "External data sources cannot be used in a DCR transformation.",
+        "External data sources are not allowed in untrusted parser KQL.",
     ),
 }
+
+DENY_MANAGEMENT_COMMAND_RULE = KqlRule(
+    "KQL048",
+    "management command",
+    "Kusto management commands are not allowed in parser KQL.",
+)
+
+
+def _mask_kql_non_code(query: str) -> str:
+    return _IGNORED_KQL_TOKENS_RE.sub(
+        lambda match: re.sub(r"[^\r\n]", " ", match.group()),
+        query,
+    )
+
+
+def iter_untrusted_kql_rule_matches(
+    analysis: dict[str, Any],
+    query: str,
+) -> list[tuple[KqlRule, dict[str, Any]]]:
+    matches: list[tuple[KqlRule, dict[str, Any]]] = []
+    for operator in analysis["operators"]:
+        rule = DENY_UNTRUSTED_KQL_OPERATOR_RULES.get(operator["type"])
+        if rule is not None:
+            matches.append((rule, operator))
+    for function in analysis["functions"]:
+        name = function.get("name")
+        rule = (
+            DENY_UNTRUSTED_KQL_FUNCTION_RULES.get(name.casefold())
+            if isinstance(name, str)
+            else None
+        )
+        if rule is not None:
+            matches.append((rule, function))
+    for construct in analysis["constructs"]:
+        rule = DENY_UNTRUSTED_KQL_CONSTRUCT_RULES.get(
+            construct["type"]
+        )
+        if rule is not None:
+            matches.append((rule, construct))
+
+    command = _MANAGEMENT_COMMAND_RE.search(_mask_kql_non_code(query))
+    if command is not None:
+        start = command.start(1)
+        line = query.count("\n", 0, start) + 1
+        column = start - query.rfind("\n", 0, start)
+        matches.append(
+            (
+                DENY_MANAGEMENT_COMMAND_RULE,
+                {
+                    "location": {
+                        "start": start,
+                        "length": 1,
+                        "line": line,
+                        "column": column,
+                        "text": ".",
+                        "normalizedText": ".",
+                    },
+                },
+            )
+        )
+    return matches
+
+
+def query_time_parameter_errors(
+    parser_params: Any,
+) -> list[tuple[str, str]]:
+    if not isinstance(parser_params, list):
+        return [("ParserParams", "ParserParams must be an array.")]
+
+    errors: list[tuple[str, str]] = []
+    seen_names: set[str] = set()
+    for index, parameter in enumerate(parser_params):
+        field = f"ParserParams[{index}]"
+        if not isinstance(parameter, dict):
+            errors.append((field, "Parser parameter must be an object."))
+            continue
+        name = parameter.get("Name")
+        parameter_type = parameter.get("Type")
+        if (
+            not isinstance(name, str)
+            or not QUERY_TIME_IDENTIFIER_RE.fullmatch(name)
+        ):
+            errors.append(
+                (f"{field}.Name", "Parameter name must be a KQL identifier.")
+            )
+        else:
+            normalized_name = name.casefold()
+            if normalized_name in seen_names:
+                errors.append(
+                    (f"{field}.Name", "Parameter names must be unique.")
+                )
+            seen_names.add(normalized_name)
+
+        normalized_type = (
+            parameter_type.strip().casefold()
+            if isinstance(parameter_type, str)
+            else ""
+        )
+        if (
+            parameter_type != normalized_type
+            or normalized_type not in QUERY_TIME_PARAMETER_TYPES
+        ):
+            errors.append(
+                (
+                    f"{field}.Type",
+                    "Parameter type must be one of "
+                    + ", ".join(sorted(QUERY_TIME_PARAMETER_TYPES))
+                    + ".",
+                )
+            )
+            continue
+        if "Default" not in parameter:
+            errors.append(
+                (f"{field}.Default", "Parameter default is required.")
+            )
+            continue
+        default = parameter["Default"]
+        if normalized_type in {"bool", "boolean"}:
+            valid_default = isinstance(default, bool)
+        elif normalized_type == "string":
+            valid_default = isinstance(default, str)
+        elif normalized_type == "dynamic":
+            valid_default = (
+                isinstance(default, (list, dict))
+                or default == "dynamic([])"
+            )
+        elif normalized_type == "datetime":
+            valid_default = (
+                isinstance(default, str)
+                and (
+                    default == "datetime(null)"
+                    or re.fullmatch(r"[0-9T:.+\-Z]+", default) is not None
+                )
+            )
+        else:
+            valid_default = (
+                not isinstance(default, bool)
+                and isinstance(default, (int, float))
+            ) or default == f"{normalized_type}(null)"
+        if not valid_default:
+            errors.append(
+                (
+                    f"{field}.Default",
+                    f"Default is invalid for type {normalized_type}.",
+                )
+            )
+    return errors
 
 
 def query_uses_source_table(

@@ -1,5 +1,9 @@
 # Changelog for vimAuthenticationSalesforceSC.yaml
 
+## Version 0.2.2
+
+- (2026-11-10) Align the emitted EventSchemaVersion with Authentication schema version 1.0.0 - [PR #15651](https://github.com/Azure/Azure-Sentinel/pull/15651)
+
 ## Version 0.2.1
 
 - (2026-09-15) Update the normalization schema version to 1.0.0 and map EventUid from RequestId - [PR #15135](https://github.com/Azure/Azure-Sentinel/pull/15135)
@@ -16,4 +20,3 @@
 ## Version 0.1.0
 
 - (2023-12-08) Salesforce-asim-authentication parser - [PR #6167](https://github.com/Azure/Azure-Sentinel/pull/6167)
-
