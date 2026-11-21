@@ -1,0 +1,78 @@
+schemaVersion: 1.0.0
+version: 3.1.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: EverpureSyslog
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: c317b007-84e7-4449-93f4-4444f6638fd0
+    path: Analytic Rules/PureControllerFailed.yaml
+    version: 1.0.1
+    querySha256: e8168e40cbc96e5129b96a29f8a8bdf79dd94ca3d328fb7ae2940a16e819db41
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=unknown, lookback=unknown; target frequency=PT1H, native lookback=unknown/unconfigured;
+      source NRT timing is not preserved by the emitted scheduled frequency. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T0871
+    reviewScope:
+      sourceDocumentSha256: 321f1380fb025cafc3e88c8d87bcc0e82c3efa6c9175064626705d5fc5b7dcb8
+      targetQuerySha256: e8168e40cbc96e5129b96a29f8a8bdf79dd94ca3d328fb7ae2940a16e819db41
+properties:
+  id: xdr-c317b007-84e7-4449-93f4-4444f6638fd0
+  displayName: Pure Controller Failed
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Syslog
+      | where SyslogMessage has "purity.alert"
+      | extend Message = replace_regex(SyslogMessage, "#012", "\n")
+      | extend ParsedLog = extract_all(@"((?P<process>.*?)\[(?P<processid>.*?)\]:\s(?P<object>.*)\[(?P<responsecode>\w+)\][\s\S]*Severity:\s*(?P<severity>\S+)\s*(Tag:\s*(?P<reason>\S+))?\s*UTC([\s\S]*)Array Name:\s*(?P<objectname>\S+)\s*Domain:\s*(?P<domainorigin>\S+)\s*(?P<part2log>[\s\S]*))", dynamic(['process','processid','object','objectname','responsecode','severity','reason','domainorigin','part2log']), Message)
+      | mv-expand ParsedLog
+      | extend ResidueLog = tostring(ParsedLog[8])
+      | extend Rlog = extract_all(@"(((Suggested Action:\s*(?P<action>[\s\S]*)\s*Knowledge Base Article:\s*(?P<url>.*))|(Knowledge Base Article:\s*(?P<url>.*)\s*Suggested Action:\s*(?P<action>.*)\s*)|(Suggested Action:\s*(?P<action>[\s\S]*)))(([\s\S]*)Purity Version:\s*(?P<pversion>.*))?\s*([\s\S]*)Variables: \(below\)\s*(?P<subject>[\s\S]*))", dynamic(['action','url','pversion','subject']),ResidueLog)
+      | mv-expand Rlog
+      | extend PureLogType = ParsedLog[0], PureProcessID = ParsedLog[1], PureObject = ParsedLog[2], PureCode = ParsedLog[4], PureSeverity = ParsedLog[5], PureReason = ParsedLog[6], PureObjectName = ParsedLog[3], PureDomainOrigin = ParsedLog[7], PureAction = Rlog[0], PureUrl = Rlog[1], PureVersion = Rlog[2], PureMessage = Rlog[3]
+      | project-away ResidueLog, Rlog, ParsedLog
+      | where PureObject matches regex @"(Controllers ct[0-9] have failed)"
+  schedule:
+    frequency: PT1H
+    queryPeriod: PT4H
+  detectionAction:
+    alertTemplate:
+      title: Pure Controller Failed
+      description: Detect controller failure and take appropriate response action.
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: HostIP
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T0871

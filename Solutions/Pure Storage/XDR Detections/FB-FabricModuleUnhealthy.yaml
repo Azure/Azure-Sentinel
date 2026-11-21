@@ -1,0 +1,81 @@
+schemaVersion: 1.0.0
+version: 3.1.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - Syslog
+  requiredDataConnectors:
+  - connectorId: EverpureSyslog
+    dataTypes:
+    - Syslog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: a8130dcc-3617-41c0-a7ac-5f352bcfffaf
+    path: Analytic Rules/FB-FabricModuleUnhealthy.yaml
+    version: 1.0.1
+    querySha256: 09b5b1b0059dfee630b79fb178f26acbd6a609e72361414af37572d7fec66717
+    schedule:
+      queryFrequency: ''
+      queryPeriod: ''
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=unknown, lookback=unknown; target frequency=PT1H, native lookback=unknown/unconfigured;
+      source NRT timing is not preserved by the emitted scheduled frequency. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    informational: []
+    errors: []
+    originalTactics:
+    - Execution
+    originalTechniques:
+    - T0871
+    reviewScope:
+      sourceDocumentSha256: 77b104729f700c2373ba82c1065feeef10522cf07c30fe495294d40a1d0cb5f3
+      targetQuerySha256: 09b5b1b0059dfee630b79fb178f26acbd6a609e72361414af37572d7fec66717
+properties:
+  id: xdr-a8130dcc-3617-41c0-a7ac-5f352bcfffaf
+  displayName: External Fabric Module XFM1 is unhealthy
+  status: disabled
+  queryCondition:
+    queryText: |-
+      Syslog
+      | where SyslogMessage has "purity.alert"
+      | extend Message = replace_string(SyslogMessage, "#012", "\n")
+      | extend UTCTime = extract(@"UTC Time:\s*(\d{4}\s\w{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2})\sUTC", 1, SyslogMessage)
+      | extend PureAlertID = extract(@"Alert ID: ([\w-]+)", 1, SyslogMessage)
+      | extend PureMessage = extract(@"\(Alert ID: [\w-]+\)\s(.*?)\s\[\d+\]", 1, SyslogMessage)
+      | extend PureSeverity = extract(@"\s(\w+)\s", 1, SyslogMessage)
+      | extend PureAlertState = extract(@"purity\.alert:\s\w+\s(\w+)", 1, SyslogMessage)
+      | extend PureObjectName = extract(@"\s(\S+):", 1, SyslogMessage)
+      | extend PureProcessID = extract(@"\[(\d+)\]", 1, SyslogMessage)
+      | extend PureAction = extract(@"Suggested Action:\s*(.*?)(?:\s*Knowledge Base Article:|$)", 1, SyslogMessage)
+      | extend PureUrl = extract(@"Knowledge Base Article:\s*(.*)", 1, SyslogMessage)
+      | project  PureMessage, TimeGenerated, PureProcessID, HostIP, Computer, PureObjectName, PureSeverity, PureAlertID, PureAlertState, PureAction, PureUrl
+      | where PureMessage matches regex @"(External Fabric Module XFM1 is unhealthy)"
+  schedule:
+    frequency: PT1H
+    queryPeriod: PT4H
+  detectionAction:
+    alertTemplate:
+      title: External Fabric Module XFM1 is unhealthy
+      description: External Fabric Module XFM1 is unhealthy
+      severity: high
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: HostIP
+      tactics:
+      - tactic: Execution
+        techniques:
+        - technique: T0871
