@@ -71,7 +71,12 @@ def _validate_version(
 ) -> None:
     if value is not None and not VERSION_RE.fullmatch(value):
         findings.append(
-            Finding("META003", field, "Version must use X.X.X format.")
+            Finding(
+                "META003",
+                field,
+                "Version must follow Semantic Versioning 2.0.0 "
+                "(https://semver.org/).",
+            )
         )
 
 
