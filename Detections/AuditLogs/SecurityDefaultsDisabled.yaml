@@ -1,0 +1,82 @@
+id: 8fdfa0c5-0a81-4b07-a36b-311a3130090e
+name: Entra ID security defaults disabled
+description: |
+  Identifies when security defaults are turned off in Microsoft Entra ID.
+  Security defaults require all users to register for MFA, require MFA for administrators and when necessary for users, protect access to the Azure portal and other management tools, and block legacy authentication and device code flow.
+  An attacker with the Conditional Access Administrator role or higher can turn them off so that stolen passwords work without MFA.
+  Turning them off is also a normal step when moving to Conditional Access, so check for a planned change.
+  The alert shows the setting before and after the change.
+  Ref: https://learn.microsoft.com/entra/fundamentals/security-defaults
+severity: Medium
+status: InPreview
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1556.006
+query: |
+  AuditLogs
+  | where TimeGenerated > ago(2h)
+  | where ingestion_time() > ago(1h)
+  | where OperationName =~ "Update security defaults"
+  | where Result !~ "failure"
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIPAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+  | extend TargetResourceName = tostring(TargetResources[0].displayName)
+  | extend TargetResourceType = tostring(TargetResources[0].type)
+  | extend ModifiedProperties = TargetResources[0].modifiedProperties
+  | extend SecurityDefaultsEnabledBefore = tostring(parse_json(tostring(ModifiedProperties[0].oldValue)).isEnabled)
+  | extend SecurityDefaultsEnabledAfter = tostring(parse_json(tostring(ModifiedProperties[0].newValue)).isEnabled)
+  | where SecurityDefaultsEnabledAfter !~ "true"
+  | where not(SecurityDefaultsEnabledBefore =~ "false" and SecurityDefaultsEnabledAfter =~ "false")
+  | project-reorder TimeGenerated, OperationName, TargetResourceName, TargetResourceType, SecurityDefaultsEnabledBefore, SecurityDefaultsEnabledAfter, InitiatingUserPrincipalName, InitiatingAppName, InitiatingIPAddress, ModifiedProperties
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+customDetails:
+  Operation: OperationName
+  InitiatingApp: InitiatingAppName
+  TargetName: TargetResourceName
+  TargetType: TargetResourceType
+  EnabledBefore: SecurityDefaultsEnabledBefore
+  EnabledAfter: SecurityDefaultsEnabledAfter
+version: 1.0.0
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: descambiado
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
