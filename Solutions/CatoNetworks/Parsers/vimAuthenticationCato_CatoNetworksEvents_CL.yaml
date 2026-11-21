@@ -1,0 +1,69 @@
+{
+  "id": "f5a983a7-11e0-4162-b613-d452bf902e1d",
+  "Function": {
+    "Title": "Cato Authentication ASIM parser",
+    "Version": "3.0.4",
+    "LastUpdated": "2026-11-20"
+  },
+  "Category": "Microsoft Sentinel Parser",
+  "FunctionName": "vimAuthenticationCato_CatoNetworksEvents_CL",
+  "FunctionAlias": "vimAuthenticationCato_CatoNetworksEvents_CL",
+  "FunctionQuery": "CatoNetworksEvents_CL\n| where not(disabled)\n| where tostring(column_ifexists('event_type', '')) == 'Connectivity'\n    and tostring(column_ifexists('event_sub_type', '')) == 'Authenticated'\n// time is epoch milliseconds; ARM's DCR stores that same clock as TimeGenerated.\n// Select the stored column only when the raw time column is absent, never time_str.\n| where tostring(column_ifexists(\"event_sub_type\", \"\")) != \"Flow\"\n| where tostring(column_ifexists(\"source\", \"\")) != \"cato:hec:flows\"\n    and tostring(column_ifexists(\"sourcetype\", \"\")) != \"cato:hec:flows\"\n    and tostring(column_ifexists(\"Type\", \"\")) != \"cato:hec:flows\"\n| extend _CatoCommonRawCount = column_ifexists(\"event_count\", dynamic(null)),\n    _CatoCommonClock = column_ifexists(\"time\",\n        datetime_diff(\"millisecond\", column_ifexists(\"TimeGenerated\", datetime(null)), datetime(1970-01-01))),\n    _CatoCommonExtra = todynamic(column_ifexists(\"AdditionalFields\", \"{}\"))\n| extend _CatoCommonCountText = tostring(_CatoCommonRawCount),\n    _CatoCommonCount = tolong(_CatoCommonRawCount),\n    _CatoCommonSourceTime = unixtime_milliseconds_todatetime(tolong(tostring(_CatoCommonClock)))\n| where isnull(_CatoCommonRawCount)\n    or (_CatoCommonCountText matches regex @\"^[0-9]+$\" and _CatoCommonCount between (1 .. 2147483647))\n| where isnotnull(_CatoCommonSourceTime)\n| where (isnull(starttime) or _CatoCommonSourceTime >= starttime)\n    and (isnull(endtime) or _CatoCommonSourceTime <= endtime)\n| extend\n    TimeGenerated = _CatoCommonSourceTime,\n    EventStartTime = _CatoCommonSourceTime,\n    EventEndTime = _CatoCommonSourceTime,\n    EventCount = toint(coalesce(_CatoCommonCount, long(1))),\n    EventVendor = \"Cato Networks\",\n    EventProduct = \"Cato Cloud\",\n    EventSchemaVersion = \"1.0.0\",\n    EventOriginalType = tostring(column_ifexists(\"event_type\", \"\")),\n    EventOriginalSubType = tostring(column_ifexists(\"event_sub_type\", \"\")),\n    EventOriginalUid = tostring(column_ifexists(\"event_id\", \"\")),\n    EventUid = tostring(column_ifexists(\"_ItemId\", \"\")),\n    AdditionalFields = iff(gettype(_CatoCommonExtra) == \"dictionary\", _CatoCommonExtra, dynamic({})),\n    Dvc = \"Cato Cloud\",\n    DvcScopeId = tostring(column_ifexists(\"account_id\", \"\")),\n    DvcScope = tostring(column_ifexists(\"account_name\", \"\"))\n| extend _CatoCommonAuthenticated = EventOriginalType == \"Connectivity\" and EventOriginalSubType == \"Authenticated\",\n    _CatoCommonPopScope = EventOriginalType == \"Security\" and EventOriginalSubType in (\n        \"Internet Firewall\", \"WAN Firewall\", \"LAN Firewall\", \"IPS\", \"Suspicious Activity\",\n        \"Dynamic Prevention\", \"DNS Protection\", \"Agentic Threat Prevention\", \"Private Access Policy\",\n        \"RPF\", \"Anti Malware\", \"Apps Security\", \"Misclassification\", \"NG Anti Malware\", \"SDP Activity\", \"TLS\")\n| extend EventMessage = iff(_CatoCommonAuthenticated\n        or (EventOriginalType == \"Security\" and EventOriginalSubType in (\"Data Security Alert\", \"Email Security Alert\")),\n        tostring(column_ifexists(\"event_message\", \"\")), \"\"),\n    DvcOriginalAction = iff(_CatoCommonAuthenticated\n        or (EventOriginalType == \"System\" and EventOriginalSubType == \"Audit\")\n        or (EventOriginalType == \"Security\" and EventOriginalSubType in (\n            \"Internet Firewall\", \"WAN Firewall\", \"LAN Firewall\", \"IPS\", \"Suspicious Activity\",\n            \"Dynamic Prevention\", \"DNS Protection\", \"Agentic Threat Prevention\", \"Private Access Policy\",\n            \"RPF\", \"Anti Malware\", \"Apps Security\", \"NG Anti Malware\", \"SDP Activity\", \"TLS\",\n            \"SaaS Security API Anti Malware\", \"SaaS Security API Data Protection\", \"Endpoint Protection\")),\n        tostring(column_ifexists(\"action\", \"\")), \"\"),\n    AdditionalFields = bag_merge(AdditionalFields,\n        iff((_CatoCommonAuthenticated or _CatoCommonPopScope) and isnotempty(tostring(column_ifexists(\"pop_name\", \"\"))),\n            bag_pack(\"CatoPopName\", tostring(column_ifexists(\"pop_name\", \"\"))), dynamic({})))\n| project-away _CatoCommon*\n// ISO 3166-1 alpha-2 allowlist (tzdata iso3166.tab, ISO/TC 46 N1127, 2024-02-29).\n// Cato's GeoIP country codes are alpha-2; unknown values stay raw, not normalized.\n| extend _CatoIsoCountryCodes = dynamic({\"AD\":1,\"AE\":1,\"AF\":1,\"AG\":1,\"AI\":1,\"AL\":1,\"AM\":1,\"AO\":1,\"AQ\":1,\"AR\":1,\"AS\":1,\"AT\":1,\"AU\":1,\"AW\":1,\"AX\":1,\"AZ\":1,\"BA\":1,\"BB\":1,\"BD\":1,\"BE\":1,\"BF\":1,\"BG\":1,\"BH\":1,\"BI\":1,\"BJ\":1,\"BL\":1,\"BM\":1,\"BN\":1,\"BO\":1,\"BQ\":1,\"BR\":1,\"BS\":1,\"BT\":1,\"BV\":1,\"BW\":1,\"BY\":1,\"BZ\":1,\"CA\":1,\"CC\":1,\"CD\":1,\"CF\":1,\"CG\":1,\"CH\":1,\"CI\":1,\"CK\":1,\"CL\":1,\"CM\":1,\"CN\":1,\"CO\":1,\"CR\":1,\"CU\":1,\"CV\":1,\"CW\":1,\"CX\":1,\"CY\":1,\"CZ\":1,\"DE\":1,\"DJ\":1,\"DK\":1,\"DM\":1,\"DO\":1,\"DZ\":1,\"EC\":1,\"EE\":1,\"EG\":1,\"EH\":1,\"ER\":1,\"ES\":1,\"ET\":1,\"FI\":1,\"FJ\":1,\"FK\":1,\"FM\":1,\"FO\":1,\"FR\":1,\"GA\":1,\"GB\":1,\"GD\":1,\"GE\":1,\"GF\":1,\"GG\":1,\"GH\":1,\"GI\":1,\"GL\":1,\"GM\":1,\"GN\":1,\"GP\":1,\"GQ\":1,\"GR\":1,\"GS\":1,\"GT\":1,\"GU\":1,\"GW\":1,\"GY\":1,\"HK\":1,\"HM\":1,\"HN\":1,\"HR\":1,\"HT\":1,\"HU\":1,\"ID\":1,\"IE\":1,\"IL\":1,\"IM\":1,\"IN\":1,\"IO\":1,\"IQ\":1,\"IR\":1,\"IS\":1,\"IT\":1,\"JE\":1,\"JM\":1,\"JO\":1,\"JP\":1,\"KE\":1,\"KG\":1,\"KH\":1,\"KI\":1,\"KM\":1,\"KN\":1,\"KP\":1,\"KR\":1,\"KW\":1,\"KY\":1,\"KZ\":1,\"LA\":1,\"LB\":1,\"LC\":1,\"LI\":1,\"LK\":1,\"LR\":1,\"LS\":1,\"LT\":1,\"LU\":1,\"LV\":1,\"LY\":1,\"MA\":1,\"MC\":1,\"MD\":1,\"ME\":1,\"MF\":1,\"MG\":1,\"MH\":1,\"MK\":1,\"ML\":1,\"MM\":1,\"MN\":1,\"MO\":1,\"MP\":1,\"MQ\":1,\"MR\":1,\"MS\":1,\"MT\":1,\"MU\":1,\"MV\":1,\"MW\":1,\"MX\":1,\"MY\":1,\"MZ\":1,\"NA\":1,\"NC\":1,\"NE\":1,\"NF\":1,\"NG\":1,\"NI\":1,\"NL\":1,\"NO\":1,\"NP\":1,\"NR\":1,\"NU\":1,\"NZ\":1,\"OM\":1,\"PA\":1,\"PE\":1,\"PF\":1,\"PG\":1,\"PH\":1,\"PK\":1,\"PL\":1,\"PM\":1,\"PN\":1,\"PR\":1,\"PS\":1,\"PT\":1,\"PW\":1,\"PY\":1,\"QA\":1,\"RE\":1,\"RO\":1,\"RS\":1,\"RU\":1,\"RW\":1,\"SA\":1,\"SB\":1,\"SC\":1,\"SD\":1,\"SE\":1,\"SG\":1,\"SH\":1,\"SI\":1,\"SJ\":1,\"SK\":1,\"SL\":1,\"SM\":1,\"SN\":1,\"SO\":1,\"SR\":1,\"SS\":1,\"ST\":1,\"SV\":1,\"SX\":1,\"SY\":1,\"SZ\":1,\"TC\":1,\"TD\":1,\"TF\":1,\"TG\":1,\"TH\":1,\"TJ\":1,\"TK\":1,\"TL\":1,\"TM\":1,\"TN\":1,\"TO\":1,\"TR\":1,\"TT\":1,\"TV\":1,\"TW\":1,\"TZ\":1,\"UA\":1,\"UG\":1,\"UM\":1,\"US\":1,\"UY\":1,\"UZ\":1,\"VA\":1,\"VC\":1,\"VE\":1,\"VG\":1,\"VI\":1,\"VN\":1,\"VU\":1,\"WF\":1,\"WS\":1,\"YE\":1,\"YT\":1,\"ZA\":1,\"ZM\":1,\"ZW\":1})\n| extend _CatoSrcCountry = toupper(trim(@'\\s+', tostring(column_ifexists('src_country', ''))))\n// Generic dest_ip/dest_country do not establish an authentication-server role; retain them raw.\n| extend EventSchema = 'Authentication', EventType = 'Logon', EventResult = 'Success',\n    EventSubType = '', EventResultDetails = '', TargetAppName = '',\n    TargetUsername = tostring(column_ifexists('user_name', '')),\n    SrcIpAddr = iff(isnotempty(parse_ipv6(tostring(column_ifexists('src_ip', ''))))\n        and tostring(column_ifexists('src_ip', '')) !contains '/'\n        and tostring(column_ifexists('src_ip', '')) !contains ' ',\n        tostring(column_ifexists('src_ip', '')), ''),\n    _CatoConfiguredHost = tostring(column_ifexists('configured_host_name', ''))\n| extend _CatoHostParts = split(_CatoConfiguredHost, '.'),\n    _CatoHostValid = isnotempty(_CatoConfiguredHost)\n        and isempty(parse_ipv6(_CatoConfiguredHost))\n        and _CatoConfiguredHost !contains '/'\n        and _CatoConfiguredHost !contains ' '\n        and _CatoConfiguredHost matches regex @'(?i)^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\\.([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?))*$'\n| extend SrcHostname = iff(_CatoHostValid, tostring(_CatoHostParts[0]), ''),\n    SrcDvcId = tostring(column_ifexists('device_id', '')),\n    SrcDvcIdType = iff(isnotempty(tostring(column_ifexists('device_id', ''))), tostring(column_ifexists('device_type', '')), ''),\n    SrcDvcOs = tostring(column_ifexists('device_os_type', '')),\n    SrcIsp = tostring(column_ifexists('isp_name', '')),\n    SrcGeoCountry = iff(isnotnull(_CatoIsoCountryCodes[_CatoSrcCountry]), _CatoSrcCountry, ''),\n    DvcOriginalAction = tostring(column_ifexists('action', '')),\n    LogonProtocol = tostring(column_ifexists('auth_method', ''))\n| extend User = TargetUsername, Src = SrcIpAddr, IpAddr = SrcIpAddr\n| where isempty(tostring(srcipaddr_has_any_prefix)) or tostring(srcipaddr_has_any_prefix) == '[]' or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)\n| where isempty(tostring(srchostname_has_any)) or tostring(srchostname_has_any) == '[]' or SrcHostname has_any (srchostname_has_any)\n| where isempty(tostring(username_has_any)) or tostring(username_has_any) == '[]' or TargetUsername has_any (username_has_any)\n| where isempty(tostring(targetappname_has_any)) or tostring(targetappname_has_any) == '[]' or TargetAppName has_any (targetappname_has_any)\n| where isempty(tostring(eventtype_in)) or tostring(eventtype_in) == '[]' or EventType in (eventtype_in)\n| where isempty(eventresult) or eventresult == '*' or EventResult == eventresult\n| where isempty(tostring(eventresultdetails_in)) or tostring(eventresultdetails_in) == '[]' or EventResultDetails in (eventresultdetails_in)\n| project-away _CatoConfiguredHost, _CatoHostParts, _CatoHostValid, _CatoIsoCountryCodes, _CatoSrcCountry\n| extend AdditionalFields = iff(pack, bag_merge(AdditionalFields, pack_all(true)), AdditionalFields)",
+  "FunctionParams": [
+    {
+      "Name": "starttime",
+      "Type": "datetime",
+      "Default": "datetime(null)"
+    },
+    {
+      "Name": "endtime",
+      "Type": "datetime",
+      "Default": "datetime(null)"
+    },
+    {
+      "Name": "srcipaddr_has_any_prefix",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "srchostname_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "username_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "targetappname_has_any",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "eventtype_in",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "eventresult",
+      "Type": "string",
+      "Default": "*"
+    },
+    {
+      "Name": "eventresultdetails_in",
+      "Type": "dynamic",
+      "Default": "dynamic([])"
+    },
+    {
+      "Name": "disabled",
+      "Type": "bool",
+      "Default": "false"
+    },
+    {
+      "Name": "pack",
+      "Type": "bool",
+      "Default": "false"
+    }
+  ]
+}
