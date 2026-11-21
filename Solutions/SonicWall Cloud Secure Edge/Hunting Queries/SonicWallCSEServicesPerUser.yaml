@@ -1,0 +1,38 @@
+id: 85d79a75-92e8-47d3-bef3-b93616f8fb8d
+name: SonicWall CSE - Private services accessed per user
+description: |
+  'This query searches for the SonicWall Cloud Secure Edge (CSE) private services each user connected to or was denied, with devices and connection counts.'
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+tactics:
+  - Discovery
+  - LateralMovement
+relevantTechniques:
+  - T1046
+  - T1021
+query: |
+  CSEEvents
+  | where EventType == "Access" and isnotempty(ServiceName) and isnotempty(UserEmail)
+  | summarize
+      Connections = countif(Action in ("Connected", "Authorized")),
+      Denials = countif(Action == "Unauthorized"),
+      Devices = make_set_if(DeviceName, isnotempty(DeviceName), 10),
+      FirstSeen = min(EventTime),
+      LastSeen = max(EventTime)
+      by UserEmail, ServiceName, EventSubType
+  | extend
+      AccountName = tostring(split(UserEmail, "@")[0]),
+      UPNSuffix = tostring(split(UserEmail, "@")[1])
+  | order by UserEmail asc, Connections desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.0
