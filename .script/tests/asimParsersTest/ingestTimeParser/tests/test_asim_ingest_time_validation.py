@@ -736,6 +736,83 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             result["queryTimeEligibility"]["status"],
         )
 
+    def test_meta003_accepts_semantic_versions(self):
+        versions = (
+            "0.0.0",
+            "1.2.3",
+            "1.2.3-alpha",
+            "1.2.3-alpha.1",
+            "1.2.3+build.5",
+            "1.2.3-alpha.1+build.5",
+            "1.0.0-x.7.z.92",
+        )
+        for version in versions:
+            with self.subTest(version=version):
+                document = self.ingest_parser()
+                document["Parser"]["Version"] = version
+                document["Normalization"]["Version"] = version
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    document,
+                )
+
+                result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+                self.assertTrue(result["valid"], result["findings"])
+                self.assertNotIn(
+                    "META003",
+                    {finding["code"] for finding in result["findings"]},
+                )
+
+    def test_meta003_rejects_non_semantic_versions(self):
+        versions = (
+            "1.2",
+            "1.2.3.4",
+            "01.2.3",
+            "1.02.3",
+            "1.2.03",
+            "1.2.3-",
+            "1.2.3-01",
+            "1.2.3-alpha..1",
+            "1.2.3-alpha_1",
+            "1.2.3+",
+            "1.2.3+build..1",
+            "v1.2.3",
+            "\u0661.2.3",
+        )
+        for version in versions:
+            with self.subTest(version=version):
+                document = self.ingest_parser()
+                document["Parser"]["Version"] = version
+                document["Normalization"]["Version"] = version
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    document,
+                )
+
+                result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+                findings = [
+                    finding
+                    for finding in result["findings"]
+                    if finding["code"] == "META003"
+                ]
+                self.assertFalse(result["valid"])
+                self.assertEqual(
+                    {"Parser.Version", "Normalization.Version"},
+                    {finding["field"] for finding in findings},
+                )
+                self.assertTrue(
+                    all(
+                        finding["message"]
+                        == "Version must follow Semantic Versioning 2.0.0 "
+                        "(https://semver.org/)."
+                        for finding in findings
+                    )
+                )
+
     def test_qtp_mismatch_blocks_optional_stages_only(self):
         query_path = self.write_yaml(
             "Parsers/ASimAuthentication/Parsers/"
