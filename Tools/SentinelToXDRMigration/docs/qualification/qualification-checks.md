@@ -581,3 +581,64 @@ sourceChecklist: user-e2e-requirement
 automationStatus: automated
 responsible: Planned PR check runner rollup/evidence reconciliation adapter
 ```
+
+## QUAL-TBL-01 — Live ARM table readback preserves custom table and column descriptions
+
+Verifies that Azure Resource Manager retains custom table and column descriptions after deployment.
+
+```yaml check-definition
+id: QUAL-TBL-01
+checklist: qualification
+contentType: data-connectors
+title: Live ARM table readback preserves custom table and column descriptions
+originalCriterion: Verify deployed Microsoft.OperationalInsights/workspaces/tables resources retain table and custom column descriptions via live ARM GET readback.
+applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+category: qualification
+howPerformed: Perform GET against management.azure.com/{workspaceResourceId}/tables/{tableName}?api-version=2025-02-01 (with 2022-10-01 fallback) and reconcile properties.schema.description and properties.schema.columns[].description against authored values.
+expectedEvidence: [ARM table GET readback receipt, apiVersion used, verified custom column description counts]
+passCriteria: Deployed ARM table resource preserves table and custom column descriptions without loss.
+sourceChecklist: ai-table-schema-readiness
+automationStatus: automated
+responsible: solution_manager.qualification.runtime and pr_check_runner
+```
+
+## QUAL-TBL-02 — Graph Advanced Hunting schema exposes custom table and column descriptions
+
+Verifies that Microsoft Graph Security beta Advanced Hunting schema endpoints surface the custom table and its descriptions.
+
+```yaml check-definition
+id: QUAL-TBL-02
+checklist: qualification
+contentType: data-connectors
+title: Graph Advanced Hunting schema exposes custom table and column descriptions
+originalCriterion: Verify Microsoft Graph Security beta getHuntingSchema / getHuntingSchemaTables(workspaceId=...) exposes the deployed custom table and its descriptions.
+applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+category: qualification
+howPerformed: Call GET https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId=<unquoted-workspace-guid>) and/or getHuntingSchema, follow @odata.nextLink pagination, and verify the custom table and its column descriptions are exposed.
+expectedEvidence: [Graph hunting schema receipt, workspaceId, matched table and column description counts]
+passCriteria: Custom table and column descriptions are exposed by the Graph beta Advanced Hunting schema endpoint.
+sourceChecklist: ai-table-schema-readiness
+automationStatus: automated
+responsible: solution_manager.qualification.runtime and pr_check_runner
+```
+
+## QUAL-TBL-03 — Graph Advanced Hunting workspace-scoped query executes against custom table
+
+Verifies that the custom table is queryable through the workspace-scoped Graph beta Advanced Hunting query endpoint.
+
+```yaml check-definition
+id: QUAL-TBL-03
+checklist: qualification
+contentType: data-connectors
+title: Graph Advanced Hunting workspace-scoped query executes against custom table
+originalCriterion: Verify Microsoft Graph Security beta getRunHuntingQuery(query=...,timespan=...,workspaceId=...) executes against each deployed custom table and returns expected schema columns.
+applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+category: qualification
+howPerformed: Call GET https://graph.microsoft.com/beta/security/getRunHuntingQuery(query='<escaped-kql>',timespan='P1D',workspaceId=<unquoted-workspace-guid>) targeting the custom table (for example {TableName} | getschema) and verify returned schema columns match expected custom columns.
+expectedEvidence: [Graph getRunHuntingQuery receipt, workspaceId, query, returned schema columns]
+passCriteria: Workspace-scoped Graph beta hunting query succeeds against the custom table and returns matching schema columns.
+sourceChecklist: ai-table-schema-readiness
+automationStatus: automated
+responsible: solution_manager.qualification.runtime and pr_check_runner
+```
+

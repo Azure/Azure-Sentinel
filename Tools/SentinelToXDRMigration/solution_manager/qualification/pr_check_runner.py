@@ -25,6 +25,13 @@ from solution_manager.core.content_paths import (
 from solution_manager.qualification.pr_applicability import (
     determine_pr_applicability,
 )
+from solution_manager.qualification.table_schema_readiness import (
+    discover_solution_tables,
+    evaluate_val_tbl_01,
+    evaluate_val_tbl_02,
+    evaluate_val_tbl_03,
+    resolve_table_schema_blocking_mode,
+)
 from solution_manager.reporting.decision_manifest import (
     sanitize_decision_text,
 )
@@ -1036,6 +1043,12 @@ def _evaluate_validation_checks(
     files_by_type: Mapping[str, list[str]] = applicability["filesByContentType"]
     present_by_type: Mapping[str, list[str]] = applicability["presentFilesByContentType"]
     quartet = _extract_version_quartet(solution_root, target_version=target_version)
+    table_inventory = discover_solution_tables(solution_root)
+    enforce_tbl_blocking = resolve_table_schema_blocking_mode(
+        dict(qualification_evidence) if isinstance(qualification_evidence, Mapping) else None,
+        dict(workflow_state) if isinstance(workflow_state, Mapping) else None,
+        default_blocking=False,
+    )
     results: list[dict[str, Any]] = []
 
     validation_defs = [c for c in applicability["checks"] if c["checklist"] == "validation"]
@@ -1992,6 +2005,66 @@ def _evaluate_validation_checks(
                     )
                 )
 
+        # ---------------------------------------------------------------------
+        # VAL-TBL-01..03: AI-Ready Custom Table & Column Descriptions
+        # ---------------------------------------------------------------------
+        elif cid in {"VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03"}:
+            tbl_refs: list[dict[str, Any]] = []
+            seen_ref_paths: set[str] = set()
+            for rec in table_inventory.source_tables + table_inventory.packaged_tables:
+                if rec.file_rel_path not in seen_ref_paths:
+                    seen_ref_paths.add(rec.file_rel_path)
+                    tbl_refs.append(_make_evidence_ref(f"Custom table ({rec.table_name})", rec.file_rel_path))
+            if not tbl_refs:
+                for dc_rel in files_by_type.get("data-connectors", [])[:3]:
+                    tbl_refs.append(_make_evidence_ref("Data Connector JSON", dc_rel))
+
+            if cid == "VAL-TBL-01":
+                tbl_status, tbl_obs = evaluate_val_tbl_01(table_inventory, enforce_blocking=enforce_tbl_blocking)
+                checked_msg = (
+                    "Inspected all custom Microsoft.OperationalInsights/workspaces/tables resources for "
+                    "a non-empty, meaningful properties.schema.description."
+                )
+                why_msg = (
+                    "All custom tables satisfy AI-ready table description requirements (or passed in adoption mode)."
+                    if tbl_status == "PASS"
+                    else f"Custom table schema description validation failed: {tbl_obs}"
+                )
+            elif cid == "VAL-TBL-02":
+                tbl_status, tbl_obs = evaluate_val_tbl_02(table_inventory, enforce_blocking=enforce_tbl_blocking)
+                checked_msg = (
+                    "Inspected all custom columns in Microsoft.OperationalInsights/workspaces/tables resources "
+                    "for 100% meaningful column description coverage (system columns exempted)."
+                )
+                why_msg = (
+                    "All custom table columns satisfy 100% description coverage (or passed in adoption mode)."
+                    if tbl_status == "PASS"
+                    else f"Custom table column description validation failed: {tbl_obs}"
+                )
+            else:
+                tbl_status, tbl_obs = evaluate_val_tbl_03(table_inventory, enforce_blocking=enforce_tbl_blocking)
+                checked_msg = (
+                    "Compared source custom table and column descriptions against Package/mainTemplate.json "
+                    "to verify preservation without omission or truncation."
+                )
+                why_msg = (
+                    "Packaged mainTemplate.json preserves all custom table and column descriptions (or passed in adoption mode)."
+                    if tbl_status == "PASS"
+                    else f"Packaged custom table description preservation failed: {tbl_obs}"
+                )
+
+            results.append(
+                _build_check_result(
+                    cdef,
+                    status=tbl_status,
+                    what_we_checked=checked_msg,
+                    what_we_observed=tbl_obs,
+                    why_passed_or_failed=why_msg,
+                    evidence_refs=tbl_refs,
+                    author_exceptions_by_id=author_exceptions_by_id,
+                )
+            )
+
         else:
             results.append(
                 _build_check_result(
@@ -2080,6 +2153,12 @@ def _evaluate_qualification_checks(
     qual_stages = workflow_state.get("qualificationStages") if isinstance(workflow_state.get("qualificationStages"), Mapping) else {}
     wf_stages = workflow_state.get("stages") if isinstance(workflow_state.get("stages"), Mapping) else {}
     simulated_flag, sim_reasons = _has_simulated_or_dry_run_evidence(qualification_evidence, workflow_state)
+    table_inventory = discover_solution_tables(solution_root)
+    enforce_tbl_blocking = resolve_table_schema_blocking_mode(
+        dict(qualification_evidence) if isinstance(qualification_evidence, Mapping) else None,
+        dict(workflow_state) if isinstance(workflow_state, Mapping) else None,
+        default_blocking=False,
+    )
 
     results: list[dict[str, Any]] = []
 
@@ -2830,6 +2909,187 @@ def _evaluate_qualification_checks(
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
                 )
+
+        # ---------------------------------------------------------------------
+        # QUAL-TBL-01..03: Live ARM Table Readback & Graph Beta Hunting Schema
+        # ---------------------------------------------------------------------
+        elif cid in {"QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"}:
+            tbl_qual_root = (
+                qualification_evidence.get("tableSchemaReadiness")
+                if isinstance(qualification_evidence.get("tableSchemaReadiness"), Mapping)
+                else (
+                    qual_stages.get("table_schema_readiness")
+                    if isinstance(qual_stages.get("table_schema_readiness"), Mapping)
+                    else (
+                        wf_stages.get("tableSchemaReadiness")
+                        if isinstance(wf_stages.get("tableSchemaReadiness"), Mapping)
+                        else {}
+                    )
+                )
+            )
+            sub_key = {
+                "QUAL-TBL-01": "armTableReadback",
+                "QUAL-TBL-02": "huntingSchema",
+                "QUAL-TBL-03": "workspaceHuntingQuery",
+            }[cid]
+            sub_ev = tbl_qual_root.get(sub_key) if isinstance(tbl_qual_root, Mapping) else None
+            if not isinstance(sub_ev, Mapping):
+                direct_sub = qualification_evidence.get(sub_key)
+                if isinstance(direct_sub, Mapping):
+                    sub_ev = direct_sub
+
+            has_live_qual_context = bool(
+                qualification_evidence.get("providerReceipts")
+                or qualification_evidence.get("liveReceipts")
+                or qual_stages
+                or qualification_evidence.get("deployment")
+            )
+            custom_tables = table_inventory.source_tables or table_inventory.packaged_tables
+            refs = [
+                _make_evidence_ref(
+                    f"Table schema readiness ({sub_key})",
+                    f"qualification_evidence.tableSchemaReadiness.{sub_key}",
+                    kind="receipt",
+                )
+            ]
+
+            if simulated_flag:
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status="FAIL",
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=f"Detected simulated/dry-run indicators for {cid}: {', '.join(sim_reasons)}.",
+                        why_passed_or_failed="Fail-closed: simulated or dry-run evidence is prohibited in Qualification mode.",
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
+                    )
+                )
+            elif isinstance(sub_ev, Mapping) and sub_ev:
+                passed_flag = bool(
+                    sub_ev.get("verified") is True
+                    or sub_ev.get("passed") is True
+                    or sub_ev.get("ok") is True
+                    or str(sub_ev.get("status") or "").strip().upper() in {"PASS", "PASSED"}
+                )
+                failed_flag = bool(
+                    sub_ev.get("verified") is False
+                    or sub_ev.get("passed") is False
+                    or sub_ev.get("ok") is False
+                    or str(sub_ev.get("status") or "").strip().upper() in {"FAIL", "FAILED", "ERROR"}
+                )
+                extra_errors: list[str] = []
+                if cid == "QUAL-TBL-02" and sub_ev.get("workspaceIdUnquoted") is False:
+                    extra_errors.append("workspaceId parameter in getHuntingSchemaTables must be an unquoted Edm.Guid")
+                if cid == "QUAL-TBL-03":
+                    if sub_ev.get("customTableQueried") is False:
+                        extra_errors.append("getRunHuntingQuery probe did not target the custom table")
+                    if sub_ev.get("schemaColumnsVerified") is False:
+                        extra_errors.append("getRunHuntingQuery response schema columns did not match expected custom table columns")
+
+                detail_msg = str(
+                    sub_ev.get("summary")
+                    or sub_ev.get("reason")
+                    or sub_ev.get("reasonCode")
+                    or f"Evaluated {sub_key} receipt for {len(custom_tables)} custom table(s)."
+                )
+                if extra_errors:
+                    detail_msg = f"{detail_msg}; {'; '.join(extra_errors)}"
+
+                if passed_flag and not failed_flag and not extra_errors:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="PASS",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed=detail_msg,
+                            why_passed_or_failed=f"Live {sub_key} verification passed.",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
+                elif not enforce_tbl_blocking and not extra_errors:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="PASS",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed=f"[Advisory: adoption mode] {detail_msg}",
+                            why_passed_or_failed=f"Recorded {sub_key} finding in minimum-blocking adoption mode.",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
+                else:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="FAIL",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed=detail_msg,
+                            why_passed_or_failed=f"Live {sub_key} verification failed: {detail_msg}",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
+            elif not custom_tables and not table_inventory.parse_errors:
+                if has_live_qual_context:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="PASS",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed=(
+                                "Verified 0 custom Microsoft.OperationalInsights/workspaces/tables resources in solution "
+                                "(solution uses standard/built-in tables); no custom table live schema readback required."
+                            ),
+                            why_passed_or_failed="No custom workspace tables defined in solution; standard tables used.",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
+                else:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="FAIL",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed="No live qualification receipts supplied.",
+                            why_passed_or_failed="Qualification requires live provider receipts.",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
+            else:
+                tbl_names = ", ".join(sorted({r.table_name for r in custom_tables}))
+                missing_msg = (
+                    f"No live {sub_key} receipt supplied for custom table(s) [{tbl_names}] "
+                    f"in qualification_evidence.tableSchemaReadiness.{sub_key}."
+                )
+                if not enforce_tbl_blocking and has_live_qual_context:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="PASS",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed=f"[Advisory: adoption mode] {missing_msg}",
+                            why_passed_or_failed="Passed in minimum-blocking adoption mode while Graph beta hunting schema receipts roll out.",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
+                else:
+                    results.append(
+                        _build_check_result(
+                            cdef,
+                            status="FAIL",
+                            what_we_checked=cdef["originalCriterion"],
+                            what_we_observed=missing_msg,
+                            why_passed_or_failed=f"Missing required live {sub_key} receipt for custom table(s) [{tbl_names}].",
+                            evidence_refs=refs,
+                            author_exceptions_by_id=author_exceptions_by_id,
+                        )
+                    )
 
         elif cid == "QUAL-HR-01":
             refs = []

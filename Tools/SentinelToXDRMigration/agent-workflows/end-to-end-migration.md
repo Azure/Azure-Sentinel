@@ -272,6 +272,34 @@ deployment resolve that quartet from package metadata and canonical content
 identity/version. Only full Content Hub registration includes dependencies.
 Preserve disabled status, source content and classification.
 
+#### AI-ready custom table and column description remediation (`VAL-TBL-01..03` & `QUAL-TBL-01..03`)
+
+When a solution defines custom `Microsoft.OperationalInsights/workspaces/tables`
+resources and `VAL-TBL-01`, `VAL-TBL-02`, or `VAL-TBL-03` reports missing,
+placeholder, or unpreserved table/column descriptions:
+
+1. List the exact custom table names, source JSON paths, and custom column names
+   missing meaningful `properties.schema.description` or
+   `properties.schema.columns[].description` (standard Log Analytics system
+   columns such as `TimeGenerated`, `TenantId`, `Type`, `_ResourceId`, etc. are
+   exempt).
+2. Inspect local solution artifacts (DCR transform KQL, parsers, analytic rules,
+   sample data) and search official vendor documentation for the connector's
+   event schema. If official vendor documentation cannot be located, prompt the
+   author for a vendor documentation URL or schema reference instead of guessing.
+3. Present a proposed table and column description mapping to the author and
+   request explicit approval before writing changes to the source table JSON
+   files.
+4. After author approval, update the source table JSON definitions and re-run
+   `package-v3-1` so `Package/mainTemplate.json` preserves the table and column
+   descriptions identically (`VAL-TBL-03`).
+5. During Qualification (`QUAL-TBL-01..03`), verify live ARM table GET readback
+   (`?api-version=2025-02-01` with `2022-10-01` fallback) and Microsoft Graph
+   Security beta Advanced Hunting schema/query endpoints
+   (`getHuntingSchema`, `getHuntingSchemaTables(workspaceId=<guid>)`, and
+   `getRunHuntingQuery(query='<escaped-kql>',timespan='P1D',workspaceId=<guid>)`
+   with unquoted `Edm.Guid` `workspaceId`).
+
 #### Workbook dependency review
 
 For a workbook gap, show each query/picker pointer and exact hash, source evidence,

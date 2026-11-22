@@ -7,7 +7,9 @@ import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -51,6 +53,11 @@ from solution_manager.migration.source_runtime_waiver import SOURCE_PROVIDERS
 from solution_manager.core.target_context import require_locked_target
 
 ADVANCED_HUNTING_ENDPOINT = "https://graph.microsoft.com/v1.0/security/runHuntingQuery"
+GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT = "https://graph.microsoft.com/beta/security/getHuntingSchema"
+GRAPH_BETA_HUNTING_SCHEMA_TABLES_ENDPOINT = "https://graph.microsoft.com/beta/security/getHuntingSchemaTables"
+GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT = "https://graph.microsoft.com/beta/security/getRunHuntingQuery"
+ARM_TABLES_DEFAULT_API_VERSION = "2025-02-01"
+ARM_TABLES_FALLBACK_API_VERSION = "2022-10-01"
 MAX_GRAPH_IN_FLIGHT_REQUESTS = 5
 MAX_ADVANCED_HUNTING_WORKERS = 3
 ADVANCED_HUNTING_MIN_INTERVAL_SECONDS = 1.5
@@ -1183,6 +1190,368 @@ def run_advanced_hunting_query(
         "errorDetails": "The five-minute request and retry budget was exhausted",
         "failureKind": "provider",
     }
+
+
+_WORKSPACE_ARM_ID_RE = re.compile(
+    r"^/subscriptions/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"/resourceGroups/[^/?#\\]+/providers/Microsoft\.OperationalInsights/workspaces/[^/?#\\]+$",
+    re.IGNORECASE,
+)
+_ARM_API_VERSION_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:-[a-zA-Z0-9]+)?$")
+
+
+def _validate_workspace_guid(workspace_id: str) -> str:
+    """Validate and normalize an OData Edm.Guid workspace ID."""
+    cleaned = str(workspace_id).strip().strip("'").strip('"')
+    try:
+        parsed = uuid.UUID(cleaned)
+    except ValueError as exc:
+        raise ValueError(f"Invalid workspace_id Edm.Guid: {workspace_id!r}") from exc
+    return str(parsed)
+
+
+def _is_trusted_graph_next_link(url: str) -> bool:
+    """Ensure @odata.nextLink points strictly to https://graph.microsoft.com."""
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except Exception:
+        return False
+    if parts.scheme.lower() != "https" or parts.netloc.lower() != "graph.microsoft.com":
+        return False
+    return parts.path.startswith("/beta/security/") or parts.path.startswith("/v1.0/security/")
+
+
+def _escape_odata_string_literal_and_encode(value: str) -> str:
+    """Escape a string literal for an OData function parameter and percent-encode with %20."""
+    doubled_quotes = (value or "").replace("'", "''")
+    return urllib.parse.quote(doubled_quotes, safe="")
+
+
+def build_graph_hunting_schema_tables_url(workspace_id: str | None = None) -> str:
+    """Build Graph beta URL for getHuntingSchemaTables or getHuntingSchemaTables(workspaceId=<guid>).
+
+    Note: ``workspaceId`` is an OData ``Edm.Guid`` and MUST be passed unquoted.
+    """
+    if not workspace_id or not str(workspace_id).strip():
+        return GRAPH_BETA_HUNTING_SCHEMA_TABLES_ENDPOINT
+    cleaned_guid = _validate_workspace_guid(workspace_id)
+    return f"{GRAPH_BETA_HUNTING_SCHEMA_TABLES_ENDPOINT}(workspaceId={cleaned_guid})"
+
+
+def build_graph_run_hunting_query_url(
+    query: str,
+    *,
+    timespan: str = "P1D",
+    workspace_id: str | None = None,
+) -> str:
+    """Build Graph beta URL for getRunHuntingQuery(query='...',timespan='...',workspaceId=<guid>).
+
+    Doubles single quotes inside ``query`` and ``timespan`` for OData string literals,
+    percent-encodes spaces as ``%20``, and passes ``workspaceId`` unquoted as ``Edm.Guid``.
+    """
+    encoded_q = _escape_odata_string_literal_and_encode(query)
+    encoded_ts = _escape_odata_string_literal_and_encode(timespan or "P1D")
+    if workspace_id and str(workspace_id).strip():
+        cleaned_guid = _validate_workspace_guid(workspace_id)
+        return (
+            f"{GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT}"
+            f"(query='{encoded_q}',timespan='{encoded_ts}',workspaceId={cleaned_guid})"
+        )
+    return f"{GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT}(query='{encoded_q}',timespan='{encoded_ts}')"
+
+
+def fetch_graph_hunting_schema(
+    token: str,
+    *,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Call GET https://graph.microsoft.com/beta/security/getHuntingSchema."""
+    request = urllib.request.Request(
+        GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    _GRAPH_REQUEST_SEMAPHORE.acquire()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status_code = getattr(response, "status", None) or response.getcode()
+            body = json.loads(response.read().decode("utf-8", errors="replace"))
+        tables = body.get("tables") if isinstance(body, dict) else None
+        if not isinstance(tables, list):
+            tables = body.get("value", []) if isinstance(body, dict) else []
+        return {
+            "ok": True,
+            "statusCode": status_code,
+            "endpoint": GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT,
+            "tables": tables if isinstance(tables, list) else [],
+            "error": None,
+        }
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        return {
+            "ok": False,
+            "statusCode": exc.code,
+            "endpoint": GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT,
+            "tables": [],
+            "error": raw[:2000],
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "statusCode": 0,
+            "endpoint": GRAPH_BETA_HUNTING_SCHEMA_ENDPOINT,
+            "tables": [],
+            "error": str(exc),
+        }
+    finally:
+        _GRAPH_REQUEST_SEMAPHORE.release()
+
+
+def fetch_graph_hunting_schema_tables(
+    token: str,
+    *,
+    workspace_id: str | None = None,
+    timeout: int = 60,
+    max_pages: int = 10,
+) -> dict[str, Any]:
+    """Call GET https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId=<guid>).
+
+    Follows ``@odata.nextLink`` up to ``max_pages`` and returns all discovered table schema objects.
+    """
+    initial_url = build_graph_hunting_schema_tables_url(workspace_id)
+    next_url: str | None = initial_url
+    tables: list[dict[str, Any]] = []
+    pages_fetched = 0
+    last_status = 0
+
+    while next_url and pages_fetched < max_pages:
+        pages_fetched += 1
+        request = urllib.request.Request(
+            next_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
+        _GRAPH_REQUEST_SEMAPHORE.acquire()
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                last_status = getattr(response, "status", None) or response.getcode()
+                body = json.loads(response.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8", errors="replace")
+            return {
+                "ok": False,
+                "statusCode": exc.code,
+                "endpoint": initial_url,
+                "workspaceId": workspace_id,
+                "tables": tables,
+                "error": raw[:2000],
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "statusCode": 0,
+                "endpoint": initial_url,
+                "workspaceId": workspace_id,
+                "tables": tables,
+                "error": str(exc),
+            }
+        finally:
+            _GRAPH_REQUEST_SEMAPHORE.release()
+
+        if isinstance(body, dict):
+            page_items = body.get("value")
+            if not isinstance(page_items, list):
+                page_items = body.get("tables", [])
+            if isinstance(page_items, list):
+                tables.extend(item for item in page_items if isinstance(item, dict))
+            next_link = body.get("@odata.nextLink")
+            candidate_next = str(next_link).strip() if isinstance(next_link, str) and next_link.strip() else None
+            if candidate_next and not _is_trusted_graph_next_link(candidate_next):
+                return {
+                    "ok": False,
+                    "statusCode": last_status or 0,
+                    "endpoint": initial_url,
+                    "workspaceId": workspace_id,
+                    "tables": tables,
+                    "error": "Untrusted @odata.nextLink host or path rejected",
+                }
+            next_url = candidate_next
+        else:
+            next_url = None
+
+    return {
+        "ok": True,
+        "statusCode": last_status or 200,
+        "endpoint": initial_url,
+        "workspaceId": workspace_id,
+        "tables": tables,
+        "pagesFetched": pages_fetched,
+        "error": None,
+    }
+
+
+def run_workspace_hunting_query_get(
+    query: str,
+    token: str,
+    *,
+    workspace_id: str | None = None,
+    timespan: str = "P1D",
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Execute a workspace-scoped Advanced Hunting KQL query via Graph beta GET getRunHuntingQuery."""
+    url = build_graph_run_hunting_query_url(query, timespan=timespan, workspace_id=workspace_id)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+    _GRAPH_REQUEST_SEMAPHORE.acquire()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status_code = getattr(response, "status", None) or response.getcode()
+            body = json.loads(response.read().decode("utf-8", errors="replace"))
+        response_error = _hunting_query_response_error(body) if isinstance(body, dict) else "Invalid response"
+        if response_error:
+            return {
+                "ok": False,
+                "statusCode": status_code,
+                "endpoint": url,
+                "workspaceId": workspace_id,
+                "rowCount": 0,
+                "schema": [],
+                "error": response_error,
+            }
+        rows = body.get("results", body.get("Results")) or []
+        schema = body.get("schema", body.get("Schema")) or []
+        return {
+            "ok": True,
+            "statusCode": status_code,
+            "endpoint": url,
+            "workspaceId": workspace_id,
+            "rowCount": len(rows) if isinstance(rows, list) else 0,
+            "schema": schema if isinstance(schema, list) else [],
+            "error": None,
+        }
+    except urllib.error.HTTPError as exc:
+        raw = exc.read().decode("utf-8", errors="replace")
+        return {
+            "ok": False,
+            "statusCode": exc.code,
+            "endpoint": url,
+            "workspaceId": workspace_id,
+            "rowCount": 0,
+            "schema": [],
+            "error": raw[:2000],
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "statusCode": 0,
+            "endpoint": url,
+            "workspaceId": workspace_id,
+            "rowCount": 0,
+            "schema": [],
+            "error": str(exc),
+        }
+    finally:
+        _GRAPH_REQUEST_SEMAPHORE.release()
+
+
+def fetch_arm_table_schema(
+    workspace_resource_id: str,
+    table_name: str,
+    arm_token: str,
+    *,
+    api_version: str = ARM_TABLES_DEFAULT_API_VERSION,
+    timeout: int = 60,
+) -> dict[str, Any]:
+    """Read back a live Log Analytics table definition from ARM (/tables/{tableName}).
+
+    Tries ``api_version`` (default ``2025-02-01``) and falls back to ``2022-10-01`` if the
+    resource provider rejects the API version with HTTP 400.
+    """
+    ws_id = "/" + str(workspace_resource_id or "").strip().strip("/")
+    tbl = str(table_name or "").strip().split("/")[-1]
+    if ".." in ws_id or not _WORKSPACE_ARM_ID_RE.match(ws_id):
+        raise ValueError("Invalid Log Analytics workspace ARM resource ID")
+    if not tbl or ".." in tbl or "/" in tbl or "\\" in tbl:
+        raise ValueError(f"Invalid table_name: {table_name!r}")
+    if not _ARM_API_VERSION_RE.match(str(api_version or "")):
+        raise ValueError(f"Invalid ARM api_version: {api_version!r}")
+    versions_to_try = [api_version]
+    if api_version != ARM_TABLES_FALLBACK_API_VERSION:
+        versions_to_try.append(ARM_TABLES_FALLBACK_API_VERSION)
+
+    last_error: dict[str, Any] = {}
+    for ver in versions_to_try:
+        url = f"https://management.azure.com{ws_id}/tables/{urllib.parse.quote(tbl, safe='')}?api-version={ver}"
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {arm_token}",
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                status_code = getattr(response, "status", None) or response.getcode()
+                body = json.loads(response.read().decode("utf-8", errors="replace"))
+            props = body.get("properties") if isinstance(body, dict) else {}
+            schema = props.get("schema") if isinstance(props, dict) else {}
+            raw_columns = schema.get("columns") if isinstance(schema, dict) else []
+            sanitized_columns = [
+                {
+                    "name": c.get("name"),
+                    "type": c.get("type") or c.get("dataType"),
+                    "description": c.get("description"),
+                }
+                for c in (raw_columns if isinstance(raw_columns, list) else [])
+                if isinstance(c, dict)
+            ]
+            return {
+                "ok": True,
+                "statusCode": status_code,
+                "apiVersion": ver,
+                "tableName": tbl,
+                "tableDescription": str(schema.get("description") or "") if isinstance(schema, dict) else "",
+                "columns": sanitized_columns,
+                "error": None,
+            }
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8", errors="replace")
+            last_error = {
+                "ok": False,
+                "statusCode": exc.code,
+                "apiVersion": ver,
+                "tableName": tbl,
+                "tableDescription": "",
+                "columns": [],
+                "error": raw[:2000],
+            }
+            if exc.code == 400 and ver != versions_to_try[-1]:
+                continue
+            return last_error
+        except Exception as exc:
+            return {
+                "ok": False,
+                "statusCode": 0,
+                "apiVersion": ver,
+                "tableName": tbl,
+                "tableDescription": "",
+                "columns": [],
+                "error": str(exc),
+            }
+    return last_error
 
 
 def _not_run_result(
