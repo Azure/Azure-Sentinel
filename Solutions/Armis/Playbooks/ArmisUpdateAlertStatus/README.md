@@ -19,7 +19,7 @@ This playbook can be used to update the status of an Armis alert from the Micros
     * keyvaultname: Name of keyvault where secrets are stored
     * tenantId: TenantId where keyvault is located
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FArmis%2FPlaybooks%2FArmisUpdateAlertStatus%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FArmis%2FPlaybooks%2FArmisUpdateAlertStatus%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FArmis%2FPlaybooks%2FArmisUpdateAlertStatus%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FArmis%2FPlaybooks%2FArmisUpdateAlertStatus%2Fazuredeploy.json)
 
 ### Post-deployment instructions
 

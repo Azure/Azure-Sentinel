@@ -459,6 +459,8 @@ class SampleFixtureIngestionTests(unittest.TestCase):
             "get_table_status": Mock(),
             "create_dcr": Mock(return_value=({}, "dcr-url", "PUT", "synthetic-stream")),
             "hit_api": Mock(return_value=response),
+            "_response_payload": lambda value: json.loads(value.text),
+            "log_arm_response": Mock(),
             "senddtosentinel": Mock(
                 side_effect=upload_results if upload_results is not None else None,
                 return_value=True,
@@ -509,6 +511,284 @@ class SampleFixtureIngestionTests(unittest.TestCase):
                 )
                 self.assertEqual(result["senddtosentinel"].call_count, 2)
                 self.assertEqual(result["create_dcr"].call_count, 2)
+
+
+class LegacyKqlSecurityTests(unittest.TestCase):
+    def parser_document(self, parser_query="Contoso_CL | take 1"):
+        return {
+            "Parser": {"Version": "1.0.0"},
+            "Normalization": {"Schema": "Authentication"},
+            "ParserName": "ASimAuthenticationContoso",
+            "EquivalentBuiltInParser": "_ASim_Authentication_Contoso",
+            "ParserParams": [
+                {
+                    "Name": "disabled",
+                    "Type": "bool",
+                    "Default": False,
+                },
+                {
+                    "Name": "eventtype_in",
+                    "Type": "dynamic",
+                    "Default": "dynamic([])",
+                },
+            ],
+            "ParserQuery": parser_query,
+        }
+
+    def test_rejects_privileged_query_time_kql(self):
+        queries = (
+            "workspace('workspace-id').SecurityEvent | take 1",
+            (
+                "cluster('https://example.kusto.windows.net')"
+                ".database('db').Table | take 1"
+            ),
+            (
+                "externaldata(Value:string)"
+                "['https://example.test/data.csv']"
+            ),
+            "Contoso_CL | evaluate bag_unpack(Payload)",
+            ".show tables",
+        )
+        for parser_query in queries:
+            with self.subTest(parser_query=parser_query):
+                with self.assertRaisesRegex(
+                    ValueError, "disallowed KQL construct"
+                ):
+                    PARSER_FILE_UTILS.validate_query_time_parser_document(
+                        self.parser_document(parser_query)
+                    )
+
+    def test_ignores_dangerous_words_in_comments_and_strings(self):
+        PARSER_FILE_UTILS.validate_query_time_parser_document(
+            self.parser_document(
+                "Contoso_CL\n"
+                "| extend Note = 'workspace(''other'')'\n"
+                "// evaluate externaldata('ignored')\n"
+                "| take 1"
+            )
+        )
+
+    def test_rejects_unsafe_execution_metadata(self):
+        cases = (
+            ("Normalization", {"Schema": "Auth'); workspace('x')"}),
+            ("ParserName", "Parser); cluster('x')"),
+            (
+                "ParserParams",
+                [
+                    {
+                        "Name": "disabled); evaluate python()",
+                        "Type": "bool",
+                        "Default": False,
+                    }
+                ],
+            ),
+        )
+        for field, value in cases:
+            with self.subTest(field=field):
+                document = self.parser_document()
+                document[field] = value
+                with self.assertRaises(ValueError):
+                    PARSER_FILE_UTILS.validate_query_time_parser_document(
+                        document
+                    )
+
+    def test_legacy_runners_call_trusted_document_validator(self):
+        run_testers = (
+            MODULE_PATH.with_name("runAsimTesters.ps1")
+            .read_text(encoding="utf-8")
+        )
+        filtering = (
+            MODULE_PATH.with_name("ASimFilteringTest.py")
+            .read_text(encoding="utf-8")
+        )
+
+        self.assertIn("assertSafeParserDocument", run_testers)
+        self.assertIn(
+            '.Replace("\'", "\'\'")',
+            run_testers,
+        )
+        self.assertIn(
+            "validate_query_time_parser_document(parser, parser_path)",
+            filtering,
+        )
+
+    def test_validator_cli_rejects_unsafe_document(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "parser.json"
+            path.write_text(
+                json.dumps(self.parser_document()),
+                encoding="utf-8",
+            )
+            safe = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(MODULE_PATH),
+                    "validate-query-document",
+                    str(path),
+                ],
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(0, safe.returncode, safe.stderr)
+
+            path.write_text(
+                json.dumps(
+                    self.parser_document(
+                        "workspace('other').Table | take 1"
+                    )
+                ),
+                encoding="utf-8",
+            )
+            unsafe = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(MODULE_PATH),
+                    "validate-query-document",
+                    str(path),
+                ],
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(1, unsafe.returncode)
+            self.assertIn(
+                "disallowed KQL construct", unsafe.stderr
+            )
+
+
+class SampleTableNameSecurityTests(unittest.TestCase):
+    def setUp(self):
+        script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
+        tree = ast.parse(script_path.read_text(encoding="utf-8"))
+        function_names = {
+            "validate_table_name",
+            "_response_payload",
+            "log_arm_response",
+            "convert_data_csv_to_json",
+            "check_for_custom_table",
+            "create_table",
+            "create_dcr",
+        }
+        functions = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name in function_names
+        ]
+        built_in_tables = next(
+            ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "lia_supported_builtin_table"
+                for target in node.targets
+            )
+        )
+        namespace = {
+            "csv": csv,
+            "json": json,
+            "re": re,
+            "CUSTOM_LOG_TABLE_RE": re.compile(
+                r"^[A-Za-z][A-Za-z0-9_]{0,60}_CL$"
+            ),
+            "lia_supported_builtin_table": built_in_tables,
+            "subscriptionId": "subscription",
+            "resourceGroupName": "resource-group",
+            "workspaceName": "workspace",
+            "workspace_id": "workspace-id",
+            "dataCollectionEndpointname": "dce",
+            "prnumber": "123",
+        }
+        exec(
+            compile(
+                ast.Module(body=functions, type_ignores=[]),
+                str(script_path),
+                "exec",
+            ),
+            namespace,
+        )
+        self.functions = namespace
+
+    def write_fixture(self, types):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "fixture.csv"
+        with path.open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(
+                stream, fieldnames=["Type", "TimeGenerated"]
+            )
+            writer.writeheader()
+            for table_name in types:
+                writer.writerow(
+                    {
+                        "Type": table_name,
+                        "TimeGenerated": "2026-01-01T00:00:00Z",
+                    }
+                )
+        return path
+
+    def test_accepts_allowlisted_builtin_and_strict_custom_table(self):
+        validate = self.functions["validate_table_name"]
+
+        self.assertEqual("AWSCloudTrail", validate("AWSCloudTrail"))
+        self.assertEqual(
+            "AZFWIdpsSignature", validate("AZFWIdpsSignature")
+        )
+        self.assertEqual("Contoso_CL", validate("Contoso_CL"))
+
+    def test_rejects_table_name_path_and_url_manipulation(self):
+        validate = self.functions["validate_table_name"]
+
+        for value in (
+            "../../Contoso_CL",
+            "Contoso/Other_CL",
+            "Contoso_CL?api-version=2022-10-01",
+            "Contoso-Logs_CL",
+            "Contoso_CL/../Other_CL",
+            " Contoso_CL",
+            "A" * 62 + "_CL",
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    validate(value)
+
+    def test_fixture_requires_one_valid_type(self):
+        convert = self.functions["convert_data_csv_to_json"]
+
+        with self.assertRaisesRegex(ValueError, "exactly one Type"):
+            convert(self.write_fixture(["First_CL", "Second_CL"]))
+        with self.assertRaises(ValueError):
+            convert(self.write_fixture(["../../Contoso_CL"]))
+
+    def test_arm_builders_validate_table_before_building_url(self):
+        for function_name, args in (
+            ("create_table", ("[]", "../../Contoso_CL")),
+            ("create_dcr", ("[]", "../../Contoso_CL", "Custom")),
+        ):
+            with self.subTest(function=function_name):
+                with self.assertRaises(ValueError):
+                    self.functions[function_name](*args)
+
+    def test_arm_logging_omits_raw_response_message(self):
+        output = io.StringIO()
+        response = SimpleNamespace(
+            status_code=400,
+            text=json.dumps(
+                {
+                    "error": {
+                        "code": "InvalidPayload",
+                        "message": "untrusted response content",
+                    }
+                }
+            ),
+        )
+
+        with patch("sys.stdout", output):
+            self.functions["log_arm_response"](
+                "DCR creation", "Contoso_CL", response
+            )
+
+        self.assertIn("InvalidPayload", output.getvalue())
+        self.assertNotIn("untrusted response content", output.getvalue())
 
 
 class SampleFixtureSelectionTests(unittest.TestCase):
