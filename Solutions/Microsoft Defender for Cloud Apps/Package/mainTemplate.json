@@ -427,16 +427,15 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "columnName": "AttackerIP",
                         "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   },
                   {
-                    "entityType": "FileHash",
                     "fieldMappings": [
                       {
                         "columnName": "HashAlgorithm",
@@ -446,7 +445,8 @@
                         "columnName": "LinkedMaliciousFileHash",
                         "identifier": "Value"
                       }
-                    ]
+                    ],
+                    "entityType": "FileHash"
                   }
                 ]
               }
@@ -595,44 +595,52 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
+                "displayName": "Linked Malicious Storage Artifacts",
                 "id": "[if(true(), 'xdr-b9e3b9f8-a406-4151-9891-e5ff1ddd8c1d', 'xdr-b9e3b9f8-a406-4151-9891-e5ff1ddd8c1d')]",
-                "schedule": {
-                  "frequency": "P1D"
+                "queryCondition": {
+                  "queryText": "//Collect the alert events\nlet alertData = AlertEvidence\n| where Title has \"Potential malware uploaded to\"\n| extend AdditionalFields = parse_json(AdditionalFields);\n//Parse the IP address data\nlet ipData = alertData\n| where EntityType =~ \"Ip\" or tostring(AdditionalFields['Type']) =~ \"ip\"\n| extend AttackerIP = coalesce(RemoteIP, tostring(AdditionalFields['Address'])), AttackerCountry = tostring(AdditionalFields['Location']['CountryName']);\n//Parse the file data\nlet FileData = alertData\n| where EntityType =~ \"File\" or tostring(AdditionalFields['Type']) =~ \"file\"\n| extend MaliciousFileDirectory = coalesce(FolderPath, tostring(AdditionalFields['Directory'])), MaliciousFileName = coalesce(FileName, tostring(AdditionalFields['Name'])), MaliciousFileHashes = coalesce(SHA256, SHA1, tostring(AdditionalFields['FileHashes']));\n//Combine the File and IP data together\nipData\n| join (FileData) on AlertId\n| summarize by Timestamp, AttackerIP, AttackerCountry, Title, ResourceId = ResourceID, AlertType = ServiceSource, MaliciousFileDirectory, MaliciousFileName, MaliciousFileHashes\n//Create a type column so we can track if it was a File storage or blobl storage upload\n| extend type = iff(Title has \"file\", \"File\", \"Blob\")\n| join (\n  union\n  StorageFileLogs,\n  StorageBlobLogs\n  //File upload operations\n  | where OperationName =~ \"PutBlob\" or OperationName =~ \"PutRange\"\n  //Parse out the uploader IP\n  | extend ClientIP = tostring(split(CallerIpAddress, \":\", 0)[0])\n  //Extract the filename from the Uri\n  | extend FileName = extract(@\"\\/([\\w\\-. ]+)\\?\", 1, Uri)\n  //Base64 decode the MD5 filehash, we will encounter non-ascii hex so string operations don't work\n  //We can work around this by making it an array then converting it to hex from an int\n  | extend base64Char = base64_decode_toarray(ResponseMd5)\n  | mv-expand base64Char\n  | extend hexChar = tohex(toint(base64Char))\n  | extend hexChar = iff(strlen(hexChar) < 2, strcat(\"0\", hexChar), hexChar)\n  | extend SourceTable = iff(OperationName has \"range\", \"StorageFileLogs\", \"StorageBlobLogs\")\n  | summarize make_list(hexChar, 1000) by CorrelationId, ResponseMd5, FileName, AccountName, TimeGenerated, RequestBodySize, ClientIP, SourceTable\n  | extend Md5Hash = strcat_array(list_hexChar, \"\")\n  //Pack the file information the summarise into a ClientIP row\n  | extend p = pack(\"FileName\", FileName, \"FileSize\", RequestBodySize, \"Md5Hash\", Md5Hash, \"Time\", TimeGenerated, \"SourceTable\", SourceTable)\n  | summarize UploadedFileInfo=make_list(p, 10000), FilesUploaded=count() by ClientIP\n      | join kind=leftouter (\n        union\n        StorageFileLogs,\n        StorageBlobLogs\n        | where OperationName =~ \"DeleteFile\" or OperationName =~ \"DeleteBlob\"\n        | extend ClientIP = tostring(split(CallerIpAddress, \":\", 0)[0])\n        | extend FileName = extract(@\"\\/([\\w\\-. ]+)\\?\", 1, Uri)\n        | extend SourceTable = iff(OperationName has \"range\", \"StorageFileLogs\", \"StorageBlobLogs\")\n        | extend p = pack(\"FileName\", FileName, \"Time\", TimeGenerated, \"SourceTable\", SourceTable)\n        | summarize DeletedFileInfo=make_list(p, 10000), FilesDeleted=count() by ClientIP\n        ) on ClientIP\n  ) on $left.AttackerIP == $right.ClientIP\n| mvexpand UploadedFileInfo\n| extend LinkedMaliciousFileName = tostring(UploadedFileInfo.FileName)\n| extend LinkedMaliciousFileHash = tostring(UploadedFileInfo.Md5Hash)\n| extend HashAlgorithm = \"MD5\"\n| project AlertTimeGenerated = Timestamp, LinkedMaliciousFileName, LinkedMaliciousFileHash, HashAlgorithm, AlertType, AttackerIP, AttackerCountry, MaliciousFileDirectory, MaliciousFileName, FilesUploaded, UploadedFileInfo"
                 },
                 "detectionAction": {
                   "alertTemplate": {
+                    "description": "'This query identifies the additional files uploaded by the same IP address which triggered a malware alert for malicious content upload on Azure Blob or File Storage Container.'",
                     "customDetails": {
                       "FileHashValue": "LinkedMaliciousFileHash",
                       "FileHashAlgorithm": "HashAlgorithm"
                     },
-                    "description": "'This query identifies the additional files uploaded by the same IP address which triggered a malware alert for malicious content upload on Azure Blob or File Storage Container.'",
+                    "severity": "medium",
                     "tactics": [
                       {
-                        "tactic": "CommandAndControl",
                         "techniques": [
                           {
                             "technique": "T1071"
                           }
-                        ]
+                        ],
+                        "tactic": "CommandAndControl"
+                      },
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1567"
+                          }
+                        ],
+                        "tactic": "Exfiltration"
                       }
                     ],
+                    "title": "Linked Malicious Storage Artifacts",
                     "entityMappings": {
                       "ips": [
                         {
-                          "addressColumn": "AttackerIP",
-                          "id": "[if(true(), 'ip1', 'ip1')]"
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "AttackerIP"
                         }
                       ]
-                    },
-                    "severity": "medium",
-                    "title": "Linked Malicious Storage Artifacts"
+                    }
                   }
                 },
-                "displayName": "Linked Malicious Storage Artifacts",
-                "queryCondition": {
-                  "queryText": "//Collect the alert events\nlet alertData = AlertEvidence\n| where Title has \"Potential malware uploaded to\"\n| extend AdditionalFields = parse_json(AdditionalFields);\n//Parse the IP address data\nlet ipData = alertData\n| where EntityType =~ \"Ip\" or tostring(AdditionalFields['Type']) =~ \"ip\"\n| extend AttackerIP = coalesce(RemoteIP, tostring(AdditionalFields['Address'])), AttackerCountry = tostring(AdditionalFields['Location']['CountryName']);\n//Parse the file data\nlet FileData = alertData\n| where EntityType =~ \"File\" or tostring(AdditionalFields['Type']) =~ \"file\"\n| extend MaliciousFileDirectory = coalesce(FolderPath, tostring(AdditionalFields['Directory'])), MaliciousFileName = coalesce(FileName, tostring(AdditionalFields['Name'])), MaliciousFileHashes = coalesce(SHA256, SHA1, tostring(AdditionalFields['FileHashes']));\n//Combine the File and IP data together\nipData\n| join (FileData) on AlertId\n| summarize by Timestamp, AttackerIP, AttackerCountry, Title, ResourceId = ResourceID, AlertType = ServiceSource, MaliciousFileDirectory, MaliciousFileName, MaliciousFileHashes\n//Create a type column so we can track if it was a File storage or blobl storage upload\n| extend type = iff(Title has \"file\", \"File\", \"Blob\")\n| join (\n  union\n  StorageFileLogs,\n  StorageBlobLogs\n  //File upload operations\n  | where OperationName =~ \"PutBlob\" or OperationName =~ \"PutRange\"\n  //Parse out the uploader IP\n  | extend ClientIP = tostring(split(CallerIpAddress, \":\", 0)[0])\n  //Extract the filename from the Uri\n  | extend FileName = extract(@\"\\/([\\w\\-. ]+)\\?\", 1, Uri)\n  //Base64 decode the MD5 filehash, we will encounter non-ascii hex so string operations don't work\n  //We can work around this by making it an array then converting it to hex from an int\n  | extend base64Char = base64_decode_toarray(ResponseMd5)\n  | mv-expand base64Char\n  | extend hexChar = tohex(toint(base64Char))\n  | extend hexChar = iff(strlen(hexChar) < 2, strcat(\"0\", hexChar), hexChar)\n  | extend SourceTable = iff(OperationName has \"range\", \"StorageFileLogs\", \"StorageBlobLogs\")\n  | summarize make_list(hexChar, 1000) by CorrelationId, ResponseMd5, FileName, AccountName, TimeGenerated, RequestBodySize, ClientIP, SourceTable\n  | extend Md5Hash = strcat_array(list_hexChar, \"\")\n  //Pack the file information the summarise into a ClientIP row\n  | extend p = pack(\"FileName\", FileName, \"FileSize\", RequestBodySize, \"Md5Hash\", Md5Hash, \"Time\", TimeGenerated, \"SourceTable\", SourceTable)\n  | summarize UploadedFileInfo=make_list(p, 10000), FilesUploaded=count() by ClientIP\n      | join kind=leftouter (\n        union\n        StorageFileLogs,\n        StorageBlobLogs\n        | where OperationName =~ \"DeleteFile\" or OperationName =~ \"DeleteBlob\"\n        | extend ClientIP = tostring(split(CallerIpAddress, \":\", 0)[0])\n        | extend FileName = extract(@\"\\/([\\w\\-. ]+)\\?\", 1, Uri)\n        | extend SourceTable = iff(OperationName has \"range\", \"StorageFileLogs\", \"StorageBlobLogs\")\n        | extend p = pack(\"FileName\", FileName, \"Time\", TimeGenerated, \"SourceTable\", SourceTable)\n        | summarize DeletedFileInfo=make_list(p, 10000), FilesDeleted=count() by ClientIP\n        ) on ClientIP\n  ) on $left.AttackerIP == $right.ClientIP\n| mvexpand UploadedFileInfo\n| extend LinkedMaliciousFileName = tostring(UploadedFileInfo.FileName)\n| extend LinkedMaliciousFileHash = tostring(UploadedFileInfo.Md5Hash)\n| extend HashAlgorithm = \"MD5\"\n| project AlertTimeGenerated = Timestamp, LinkedMaliciousFileName, LinkedMaliciousFileHash, HashAlgorithm, AlertType, AttackerIP, AttackerCountry, MaliciousFileDirectory, MaliciousFileName, FilesUploaded, UploadedFileInfo"
-                },
                 "status": "disabled",
+                "schedule": {
+                  "frequency": "P1D"
+                },
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-microsoftdefendercloudapps', 'azuresentinel.azure-sentinel-solution-microsoftdefendercloudapps')]",
                   "packageVersion": "3.2.2",
@@ -672,44 +680,52 @@
               "import": "MicrosoftSecurity",
               "type": "Microsoft.Security/detectionRules@2026-06-01-preview",
               "properties": {
+                "displayName": "Linked Malicious Storage Artifacts",
                 "id": "[if(true(), 'xdr-b9e3b9f8-a406-4151-9891-e5ff1ddd8c1d', 'xdr-b9e3b9f8-a406-4151-9891-e5ff1ddd8c1d')]",
-                "schedule": {
-                  "frequency": "P1D"
+                "queryCondition": {
+                  "queryText": "//Collect the alert events\nlet alertData = AlertEvidence\n| where Title has \"Potential malware uploaded to\"\n| extend AdditionalFields = parse_json(AdditionalFields);\n//Parse the IP address data\nlet ipData = alertData\n| where EntityType =~ \"Ip\" or tostring(AdditionalFields['Type']) =~ \"ip\"\n| extend AttackerIP = coalesce(RemoteIP, tostring(AdditionalFields['Address'])), AttackerCountry = tostring(AdditionalFields['Location']['CountryName']);\n//Parse the file data\nlet FileData = alertData\n| where EntityType =~ \"File\" or tostring(AdditionalFields['Type']) =~ \"file\"\n| extend MaliciousFileDirectory = coalesce(FolderPath, tostring(AdditionalFields['Directory'])), MaliciousFileName = coalesce(FileName, tostring(AdditionalFields['Name'])), MaliciousFileHashes = coalesce(SHA256, SHA1, tostring(AdditionalFields['FileHashes']));\n//Combine the File and IP data together\nipData\n| join (FileData) on AlertId\n| summarize by Timestamp, AttackerIP, AttackerCountry, Title, ResourceId = ResourceID, AlertType = ServiceSource, MaliciousFileDirectory, MaliciousFileName, MaliciousFileHashes\n//Create a type column so we can track if it was a File storage or blobl storage upload\n| extend type = iff(Title has \"file\", \"File\", \"Blob\")\n| join (\n  union\n  StorageFileLogs,\n  StorageBlobLogs\n  //File upload operations\n  | where OperationName =~ \"PutBlob\" or OperationName =~ \"PutRange\"\n  //Parse out the uploader IP\n  | extend ClientIP = tostring(split(CallerIpAddress, \":\", 0)[0])\n  //Extract the filename from the Uri\n  | extend FileName = extract(@\"\\/([\\w\\-. ]+)\\?\", 1, Uri)\n  //Base64 decode the MD5 filehash, we will encounter non-ascii hex so string operations don't work\n  //We can work around this by making it an array then converting it to hex from an int\n  | extend base64Char = base64_decode_toarray(ResponseMd5)\n  | mv-expand base64Char\n  | extend hexChar = tohex(toint(base64Char))\n  | extend hexChar = iff(strlen(hexChar) < 2, strcat(\"0\", hexChar), hexChar)\n  | extend SourceTable = iff(OperationName has \"range\", \"StorageFileLogs\", \"StorageBlobLogs\")\n  | summarize make_list(hexChar, 1000) by CorrelationId, ResponseMd5, FileName, AccountName, TimeGenerated, RequestBodySize, ClientIP, SourceTable\n  | extend Md5Hash = strcat_array(list_hexChar, \"\")\n  //Pack the file information the summarise into a ClientIP row\n  | extend p = pack(\"FileName\", FileName, \"FileSize\", RequestBodySize, \"Md5Hash\", Md5Hash, \"Time\", TimeGenerated, \"SourceTable\", SourceTable)\n  | summarize UploadedFileInfo=make_list(p, 10000), FilesUploaded=count() by ClientIP\n      | join kind=leftouter (\n        union\n        StorageFileLogs,\n        StorageBlobLogs\n        | where OperationName =~ \"DeleteFile\" or OperationName =~ \"DeleteBlob\"\n        | extend ClientIP = tostring(split(CallerIpAddress, \":\", 0)[0])\n        | extend FileName = extract(@\"\\/([\\w\\-. ]+)\\?\", 1, Uri)\n        | extend SourceTable = iff(OperationName has \"range\", \"StorageFileLogs\", \"StorageBlobLogs\")\n        | extend p = pack(\"FileName\", FileName, \"Time\", TimeGenerated, \"SourceTable\", SourceTable)\n        | summarize DeletedFileInfo=make_list(p, 10000), FilesDeleted=count() by ClientIP\n        ) on ClientIP\n  ) on $left.AttackerIP == $right.ClientIP\n| mvexpand UploadedFileInfo\n| extend LinkedMaliciousFileName = tostring(UploadedFileInfo.FileName)\n| extend LinkedMaliciousFileHash = tostring(UploadedFileInfo.Md5Hash)\n| extend HashAlgorithm = \"MD5\"\n| project AlertTimeGenerated = Timestamp, LinkedMaliciousFileName, LinkedMaliciousFileHash, HashAlgorithm, AlertType, AttackerIP, AttackerCountry, MaliciousFileDirectory, MaliciousFileName, FilesUploaded, UploadedFileInfo"
                 },
                 "detectionAction": {
                   "alertTemplate": {
+                    "description": "'This query identifies the additional files uploaded by the same IP address which triggered a malware alert for malicious content upload on Azure Blob or File Storage Container.'",
                     "customDetails": {
                       "FileHashValue": "LinkedMaliciousFileHash",
                       "FileHashAlgorithm": "HashAlgorithm"
                     },
-                    "description": "'This query identifies the additional files uploaded by the same IP address which triggered a malware alert for malicious content upload on Azure Blob or File Storage Container.'",
+                    "severity": "medium",
                     "tactics": [
                       {
-                        "tactic": "CommandAndControl",
                         "techniques": [
                           {
                             "technique": "T1071"
                           }
-                        ]
+                        ],
+                        "tactic": "CommandAndControl"
+                      },
+                      {
+                        "techniques": [
+                          {
+                            "technique": "T1567"
+                          }
+                        ],
+                        "tactic": "Exfiltration"
                       }
                     ],
+                    "title": "Linked Malicious Storage Artifacts",
                     "entityMappings": {
                       "ips": [
                         {
-                          "addressColumn": "AttackerIP",
-                          "id": "[if(true(), 'ip1', 'ip1')]"
+                          "id": "[if(true(), 'ip1', 'ip1')]",
+                          "addressColumn": "AttackerIP"
                         }
                       ]
-                    },
-                    "severity": "medium",
-                    "title": "Linked Malicious Storage Artifacts"
+                    }
                   }
                 },
-                "displayName": "Linked Malicious Storage Artifacts",
-                "queryCondition": {
-                  "queryText": "//Collect the alert events\nlet alertData = AlertEvidence\n| where Title has \"Potential malware uploaded to\"\n| extend AdditionalFields = parse_json(AdditionalFields);\n//Parse the IP address data\nlet ipData = alertData\n| where EntityType =~ \"Ip\" or tostring(AdditionalFields['Type']) =~ \"ip\"\n| extend AttackerIP = coalesce(RemoteIP, tostring(AdditionalFields['Address'])), AttackerCountry = tostring(AdditionalFields['Location']['CountryName']);\n//Parse the file data\nlet FileData = alertData\n| where EntityType =~ \"File\" or tostring(AdditionalFields['Type']) =~ \"file\"\n| extend MaliciousFileDirectory = coalesce(FolderPath, tostring(AdditionalFields['Directory'])), MaliciousFileName = coalesce(FileName, tostring(AdditionalFields['Name'])), MaliciousFileHashes = coalesce(SHA256, SHA1, tostring(AdditionalFields['FileHashes']));\n//Combine the File and IP data together\nipData\n| join (FileData) on AlertId\n| summarize by Timestamp, AttackerIP, AttackerCountry, Title, ResourceId = ResourceID, AlertType = ServiceSource, MaliciousFileDirectory, MaliciousFileName, MaliciousFileHashes\n//Create a type column so we can track if it was a File storage or blobl storage upload\n| extend type = iff(Title has \"file\", \"File\", \"Blob\")\n| join (\n  union\n  StorageFileLogs,\n  StorageBlobLogs\n  //File upload operations\n  | where OperationName =~ \"PutBlob\" or OperationName =~ \"PutRange\"\n  //Parse out the uploader IP\n  | extend ClientIP = tostring(split(CallerIpAddress, \":\", 0)[0])\n  //Extract the filename from the Uri\n  | extend FileName = extract(@\"\\/([\\w\\-. ]+)\\?\", 1, Uri)\n  //Base64 decode the MD5 filehash, we will encounter non-ascii hex so string operations don't work\n  //We can work around this by making it an array then converting it to hex from an int\n  | extend base64Char = base64_decode_toarray(ResponseMd5)\n  | mv-expand base64Char\n  | extend hexChar = tohex(toint(base64Char))\n  | extend hexChar = iff(strlen(hexChar) < 2, strcat(\"0\", hexChar), hexChar)\n  | extend SourceTable = iff(OperationName has \"range\", \"StorageFileLogs\", \"StorageBlobLogs\")\n  | summarize make_list(hexChar, 1000) by CorrelationId, ResponseMd5, FileName, AccountName, TimeGenerated, RequestBodySize, ClientIP, SourceTable\n  | extend Md5Hash = strcat_array(list_hexChar, \"\")\n  //Pack the file information the summarise into a ClientIP row\n  | extend p = pack(\"FileName\", FileName, \"FileSize\", RequestBodySize, \"Md5Hash\", Md5Hash, \"Time\", TimeGenerated, \"SourceTable\", SourceTable)\n  | summarize UploadedFileInfo=make_list(p, 10000), FilesUploaded=count() by ClientIP\n      | join kind=leftouter (\n        union\n        StorageFileLogs,\n        StorageBlobLogs\n        | where OperationName =~ \"DeleteFile\" or OperationName =~ \"DeleteBlob\"\n        | extend ClientIP = tostring(split(CallerIpAddress, \":\", 0)[0])\n        | extend FileName = extract(@\"\\/([\\w\\-. ]+)\\?\", 1, Uri)\n        | extend SourceTable = iff(OperationName has \"range\", \"StorageFileLogs\", \"StorageBlobLogs\")\n        | extend p = pack(\"FileName\", FileName, \"Time\", TimeGenerated, \"SourceTable\", SourceTable)\n        | summarize DeletedFileInfo=make_list(p, 10000), FilesDeleted=count() by ClientIP\n        ) on ClientIP\n  ) on $left.AttackerIP == $right.ClientIP\n| mvexpand UploadedFileInfo\n| extend LinkedMaliciousFileName = tostring(UploadedFileInfo.FileName)\n| extend LinkedMaliciousFileHash = tostring(UploadedFileInfo.Md5Hash)\n| extend HashAlgorithm = \"MD5\"\n| project AlertTimeGenerated = Timestamp, LinkedMaliciousFileName, LinkedMaliciousFileHash, HashAlgorithm, AlertType, AttackerIP, AttackerCountry, MaliciousFileDirectory, MaliciousFileName, FilesUploaded, UploadedFileInfo"
-                },
                 "status": "disabled",
+                "schedule": {
+                  "frequency": "P1D"
+                },
                 "contentProvenance": {
                   "packageId": "[if(true(), 'azuresentinel.azure-sentinel-solution-microsoftdefendercloudapps', 'azuresentinel.azure-sentinel-solution-microsoftdefendercloudapps')]",
                   "packageVersion": "3.2.2",
@@ -738,18 +754,18 @@
           "contentVersion": "3.1.0",
           "requiredWorkloads": [
             {
-              "workload": "mtp",
               "dataTypes": [
                 "AlertEvidence"
-              ]
+              ],
+              "workload": "mtp"
             },
             {
-              "workload": "sentinel",
               "dataTypes": [
                 "SecurityAlert",
                 "StorageBlobLogs",
                 "StorageFileLogs"
-              ]
+              ],
+              "workload": "sentinel"
             }
           ],
           "requiredDataConnectors": [
@@ -870,7 +886,7 @@
                             "multiSelect": true,
                             "quote": "'",
                             "delimiter": ",",
-                            "query": "McasShadowItReporting\r\n| summarize Count = count() by AppScore\r\n| order by Count desc, AppScore asc\r\n| project Value = AppScore, Label = strcat(AppScore, ' - ', Count)",
+                            "query": "let base = McasShadowItReporting\r\n| summarize Count = count() by AppScore\r\n| order by Count desc, AppScore asc\r\n| project Value = AppScore, Label = strcat(AppScore, ' - ', Count);\r\nbase\r\n| union (datatable(Value:int, Label:string)[0, 'All'] | where toscalar(base | count) == 0)",
                             "value": [
                               "value::all"
                             ],
@@ -910,7 +926,7 @@
                             "multiSelect": true,
                             "quote": "'",
                             "delimiter": ",",
-                            "query": "McasShadowItReporting\r\n| summarize Count = dcount(AppName) by StreamName\r\n| order by Count desc\r\n| project Value = StreamName, Label = strcat(StreamName, ' - ', Count)",
+                            "query": "let base = McasShadowItReporting\r\n| summarize Count = dcount(AppName) by StreamName\r\n| order by Count desc\r\n| project Value = StreamName, Label = strcat(StreamName, ' - ', Count);\r\nbase\r\n| union (datatable(Value:string, Label:string)['Global view', 'Global view'] | where toscalar(base | count) == 0)",
                             "value": [
                               "Global view"
                             ],
@@ -935,7 +951,7 @@
                       "type": 3,
                       "content": {
                         "version": "KqlItem/1.0",
-                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertSeverity = Severity, ProductName = ServiceSource, Entities = AdditionalFields\n| where ServiceSource == \"Microsoft Cloud App Security\"\n| where AlertType has \"DISCOVERY\"\n| sort by Timestamp\n| summarize Count= count() by AlertName, AlertSeverity,Name_ = tostring(parse_json(Entities)[0].Name), AppId = tostring(parse_json(Entities)[0].AppId)\n| take 10",
+                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertSeverity = Severity, AlertType = Category, ProductName = ServiceSource, Entities = AdditionalFields\n| where ServiceSource in (\"Microsoft Cloud App Security\", \"Microsoft Defender for Cloud Apps\", \"Microsoft Sentinel\")\n| where AlertType has \"DISCOVERY\"\n| sort by Timestamp\n| summarize Count= count() by AlertName, AlertSeverity, Name_ = coalesce(tostring(parse_json(Entities)[0].Name), tostring(parse_json(Entities).Name)), AppId = coalesce(tostring(parse_json(Entities)[0].AppId), tostring(parse_json(Entities).AppId))\n| take 10",
                         "size": 4,
                         "exportFieldName": "AppId",
                         "exportParameterName": "AppId",
@@ -1075,7 +1091,7 @@
                       "type": 3,
                       "content": {
                         "version": "KqlItem/1.0",
-                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertSeverity = Severity, ProductName = ServiceSource, Description = Title, Entities = AdditionalFields\n| where ServiceSource == \"Microsoft Cloud App Security\"\n| where AlertType has \"DISCOVERY\"\n| extend AppId = tostring(parse_json(Entities)[0].AppId)\n| where AppId == '\u007bAppId\u007d' or '\u007bAppId\u007d' == \"All\"\n| summarize Count= count() by AlertType, Description,AlertName, AlertSeverity,Name_ = tostring(parse_json(Entities)[0].Name), AppId, Entities, ExtendedLinks, bin(Timestamp, \u007bTimeRange:grain\u007d)",
+                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertSeverity = Severity, AlertType = Category, ProductName = ServiceSource, Description = Title, Entities = AdditionalFields, ExtendedLinks = tostring(column_ifexists(\"ExtendedLinks\", \"\"))\n| where ServiceSource in (\"Microsoft Cloud App Security\", \"Microsoft Defender for Cloud Apps\", \"Microsoft Sentinel\")\n| where AlertType has \"DISCOVERY\"\n| extend AppId = coalesce(tostring(parse_json(Entities)[0].AppId), tostring(parse_json(Entities).AppId))\n| where AppId == '\u007bAppId\u007d' or '\u007bAppId\u007d' == \"All\"\n| summarize Count= count() by AlertType, Description, AlertName, AlertSeverity, Name_ = coalesce(tostring(parse_json(Entities)[0].Name), tostring(parse_json(Entities).Name)), AppId, Entities, ExtendedLinks, bin(Timestamp, \u007bTimeRange:grain\u007d)",
                         "size": 0,
                         "exportToExcelOptions": "visible",
                         "title": "Alerts Details ",
@@ -1204,7 +1220,7 @@
                       "type": 3,
                       "content": {
                         "version": "KqlItem/1.0",
-                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, ProductName = ServiceSource, Entities = AdditionalFields\n| where ServiceSource == \"Microsoft Cloud App Security\"\n| where AlertType has \"DISCOVERY\"\n| extend AppId = tostring(parse_json(Entities)[0].AppId)\n| where AppId == '\u007bAppId\u007d' or '\u007bAppId\u007d' == \"All\"\n| summarize Count= count() by AlertName, bin(Timestamp, \u007bTimeRange:grain\u007d)",
+                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertType = Category, ProductName = ServiceSource, Entities = AdditionalFields\n| where ServiceSource in (\"Microsoft Cloud App Security\", \"Microsoft Defender for Cloud Apps\", \"Microsoft Sentinel\")\n| where AlertType has \"DISCOVERY\"\n| extend AppId = coalesce(tostring(parse_json(Entities)[0].AppId), tostring(parse_json(Entities).AppId))\n| where AppId == '\u007bAppId\u007d' or '\u007bAppId\u007d' == \"All\"\n| summarize Count= count() by AlertName, bin(Timestamp, \u007bTimeRange:grain\u007d)",
                         "size": 0,
                         "exportToExcelOptions": "visible",
                         "title": "Alerts Trend by Alert Name",
@@ -1710,7 +1726,7 @@
                             "multiSelect": true,
                             "quote": "'",
                             "delimiter": ",",
-                            "query": "McasShadowItReporting\r\n| summarize Count = count() by AppScore\r\n| order by Count desc, AppScore asc\r\n| project Value = AppScore, Label = strcat(AppScore, ' - ', Count)",
+                            "query": "let base = McasShadowItReporting\r\n| summarize Count = count() by AppScore\r\n| order by Count desc, AppScore asc\r\n| project Value = AppScore, Label = strcat(AppScore, ' - ', Count);\r\nbase\r\n| union (datatable(Value:int, Label:string)[0, 'All'] | where toscalar(base | count) == 0)",
                             "value": [
                               "value::all"
                             ],
@@ -1750,7 +1766,7 @@
                             "multiSelect": true,
                             "quote": "'",
                             "delimiter": ",",
-                            "query": "McasShadowItReporting\r\n| summarize Count = dcount(AppName) by StreamName\r\n| order by Count desc\r\n| project Value = StreamName, Label = strcat(StreamName, ' - ', Count)",
+                            "query": "let base = McasShadowItReporting\r\n| summarize Count = dcount(AppName) by StreamName\r\n| order by Count desc\r\n| project Value = StreamName, Label = strcat(StreamName, ' - ', Count);\r\nbase\r\n| union (datatable(Value:string, Label:string)['Global view', 'Global view'] | where toscalar(base | count) == 0)",
                             "value": [
                               "Global view"
                             ],
@@ -1775,7 +1791,7 @@
                       "type": 3,
                       "content": {
                         "version": "KqlItem/1.0",
-                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertSeverity = Severity, ProductName = ServiceSource, Entities = AdditionalFields\n| where ServiceSource == \"Microsoft Cloud App Security\"\n| where AlertType has \"DISCOVERY\"\n| sort by Timestamp\n| summarize Count= count() by AlertName, AlertSeverity,Name_ = tostring(parse_json(Entities)[0].Name), AppId = tostring(parse_json(Entities)[0].AppId)\n| take 10",
+                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertSeverity = Severity, AlertType = Category, ProductName = ServiceSource, Entities = AdditionalFields\n| where ServiceSource in (\"Microsoft Cloud App Security\", \"Microsoft Defender for Cloud Apps\", \"Microsoft Sentinel\")\n| where AlertType has \"DISCOVERY\"\n| sort by Timestamp\n| summarize Count= count() by AlertName, AlertSeverity, Name_ = coalesce(tostring(parse_json(Entities)[0].Name), tostring(parse_json(Entities).Name)), AppId = coalesce(tostring(parse_json(Entities)[0].AppId), tostring(parse_json(Entities).AppId))\n| take 10",
                         "size": 4,
                         "exportFieldName": "AppId",
                         "exportParameterName": "AppId",
@@ -1915,7 +1931,7 @@
                       "type": 3,
                       "content": {
                         "version": "KqlItem/1.0",
-                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertSeverity = Severity, ProductName = ServiceSource, Description = Title, Entities = AdditionalFields\n| where ServiceSource == \"Microsoft Cloud App Security\"\n| where AlertType has \"DISCOVERY\"\n| extend AppId = tostring(parse_json(Entities)[0].AppId)\n| where AppId == '\u007bAppId\u007d' or '\u007bAppId\u007d' == \"All\"\n| summarize Count= count() by AlertType, Description,AlertName, AlertSeverity,Name_ = tostring(parse_json(Entities)[0].Name), AppId, Entities, ExtendedLinks, bin(Timestamp, \u007bTimeRange:grain\u007d)",
+                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertSeverity = Severity, AlertType = Category, ProductName = ServiceSource, Description = Title, Entities = AdditionalFields, ExtendedLinks = tostring(column_ifexists(\"ExtendedLinks\", \"\"))\n| where ServiceSource in (\"Microsoft Cloud App Security\", \"Microsoft Defender for Cloud Apps\", \"Microsoft Sentinel\")\n| where AlertType has \"DISCOVERY\"\n| extend AppId = coalesce(tostring(parse_json(Entities)[0].AppId), tostring(parse_json(Entities).AppId))\n| where AppId == '\u007bAppId\u007d' or '\u007bAppId\u007d' == \"All\"\n| summarize Count= count() by AlertType, Description, AlertName, AlertSeverity, Name_ = coalesce(tostring(parse_json(Entities)[0].Name), tostring(parse_json(Entities).Name)), AppId, Entities, ExtendedLinks, bin(Timestamp, \u007bTimeRange:grain\u007d)",
                         "size": 0,
                         "exportToExcelOptions": "visible",
                         "title": "Alerts Details ",
@@ -2044,7 +2060,7 @@
                       "type": 3,
                       "content": {
                         "version": "KqlItem/1.0",
-                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, ProductName = ServiceSource, Entities = AdditionalFields\n| where ServiceSource == \"Microsoft Cloud App Security\"\n| where AlertType has \"DISCOVERY\"\n| extend AppId = tostring(parse_json(Entities)[0].AppId)\n| where AppId == '\u007bAppId\u007d' or '\u007bAppId\u007d' == \"All\"\n| summarize Count= count() by AlertName, bin(Timestamp, \u007bTimeRange:grain\u007d)",
+                        "query": "AlertInfo\n| join kind=leftouter AlertEvidence on AlertId\n| extend AlertName = Title, AlertType = Category, ProductName = ServiceSource, Entities = AdditionalFields\n| where ServiceSource in (\"Microsoft Cloud App Security\", \"Microsoft Defender for Cloud Apps\", \"Microsoft Sentinel\")\n| where AlertType has \"DISCOVERY\"\n| extend AppId = coalesce(tostring(parse_json(Entities)[0].AppId), tostring(parse_json(Entities).AppId))\n| where AppId == '\u007bAppId\u007d' or '\u007bAppId\u007d' == \"All\"\n| summarize Count= count() by AlertName, bin(Timestamp, \u007bTimeRange:grain\u007d)",
                         "size": 0,
                         "exportToExcelOptions": "visible",
                         "title": "Alerts Trend by Alert Name",
