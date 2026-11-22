@@ -67,7 +67,7 @@
               "durationMs": 86400000
             },
             "value": {
-              "durationMs": 604800000
+              "durationMs": 2592000000
             }
           }
         ],
@@ -82,20 +82,20 @@
         "style": "tabs",
         "links": [
           {
+            "id": "abe1a2a8-7d52-446c-9afb-43ed9ccbc7d6",
+            "cellValue": "seltab",
+            "linkTarget": "parameter",
+            "linkLabel": "Overview",
+            "subTarget": "overview",
+            "style": "link"
+          },
+          {
             "id": "02a6f9e1-ea0c-4c4e-a1eb-3bf2fd602e4e",
             "cellValue": "seltab",
             "linkTarget": "parameter",
             "linkLabel": "Getting Started",
             "subTarget": "gettingstarted",
             "preText": "Getting Started",
-            "style": "link"
-          },
-          {
-            "id": "abe1a2a8-7d52-446c-9afb-43ed9ccbc7d6",
-            "cellValue": "seltab",
-            "linkTarget": "parameter",
-            "linkLabel": "Overview",
-            "subTarget": "overview",
             "style": "link"
           },
           {
@@ -136,7 +136,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nAzureDiagnostics\r\n|where isnotempty(msg_s)\r\n|where Resource in~ (watchlist)\r\n|summarize count() by Resource ,msg_s\r\n|project-away count_ ",
+              "query": "AlertInfo\n| project Resource = coalesce(ServiceSource, DetectionSource, \"Microsoft Defender XDR\"), msg_s = Title\n| where isnotempty(msg_s)\n| summarize count() by Resource, msg_s\n| project-away count_",
               "size": 0,
               "title": "Network Traffic logs of HIPAA assets",
               "timeContextFromParameter": "TimeRange",
@@ -164,7 +164,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nunion SecurityEvent,Syslog \r\n|where Computer in~ (watchlist)\r\n|where Process != \"\"\r\n|extend Process = coalesce(Process,ProcessName)\r\n|summarize count() by Process,Computer\r\n|project-away count_",
+              "query": "union isfuzzy=true\n(DeviceProcessEvents\n| where isnotempty(FileName)\n| project Process = FileName, Computer = DeviceName),\n(AlertEvidence\n| where isnotempty(FileName) or isnotempty(ProcessCommandLine)\n| project Process = coalesce(FileName, ProcessCommandLine), Computer = coalesce(DeviceName, \"XDR-Endpoint\"))\n| where isnotempty(Process)\n| summarize count() by Process, Computer\n| project-away count_",
               "size": 0,
               "title": "Process running on HIPAA assets",
               "timeContextFromParameter": "TimeRange",
@@ -199,7 +199,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nSecurityEvent \r\n|where isnotempty(Account)\r\n|where Computer in~ (watchlist)\r\n| summarize count() by Account , AccountType ,Computer , Activity ,ParentProcessName",
+              "query": "union isfuzzy=true\n(DeviceLogonEvents\n| where isnotempty(AccountName)\n| project Account = AccountName, AccountType = LogonType, Computer = DeviceName, Activity = ActionType, ParentProcessName = InitiatingProcessFileName),\n(EntraIdSignInEvents\n| where isnotempty(AccountUpn)\n| project Account = AccountUpn, AccountType = \"User\", Computer = coalesce(DeviceName, Application, \"EntraID\"), Activity = \"SignIn\", ParentProcessName = coalesce(ClientAppUsed, \"Browser\"))\n| summarize count() by Account, AccountType, Computer, Activity, ParentProcessName",
               "size": 0,
               "title": "Security events of HIPAA assets",
               "timeContextFromParameter": "TimeRange",
@@ -278,7 +278,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nDeviceProcessEvents\r\n| where ProcessCommandLine has_any(\r\n    \"-ExclusionPath\", \"Set-MpPreference\", \"advfirewall\", \"-ExclusionExtension\",\r\n    \"-EnableControlledFolderAccess\", \"windefend\", \"onstart\", \"bcdedit\", \"Startup\"\r\n)\r\n|extend split_devicename = split(DeviceName, \".\" ,0)[0]\r\n|where split_devicename in~ (watchlist)\r\n| summarize ProcessCommandLine = make_set(ProcessCommandLine) by DeviceName, DeviceId, bin(TimeGenerated, 6h)\r\n// Convert to \"Found\"/\"Not Found\"\r\n| extend StartUpExclusionPath = iif(ProcessCommandLine has_all(\"-ExclusionPath\", \"Startup\"), \"Found\", \"Not Found\")\r\n| extend DefenderTamp = iif(\r\n    ProcessCommandLine has \"Set-MpPreference\" and ProcessCommandLine has_any(\r\n        \"-SevereThreatDefaultAction 6\", \r\n        \"-HighThreatDefaultAction 6\", \r\n        \"-ModerateThreatDefaultAction 6\", \r\n        \"-LowThreatDefaultAction 6\", \r\n        \"-ScanScheduleDay 8\"\r\n    ), \"Found\", \"Not Found\")\r\n| extend NetshFirewallTampering = iif(ProcessCommandLine has_all(\"netsh\", \"advfirewall\", \"allprofiles state off\"), \"Found\", \"Not Found\")\r\n| extend BatExclusion = iif(ProcessCommandLine has_all(\"-ExclusionExtension\", \".bat\"), \"Found\", \"Not Found\")\r\n| extend ExeExclusion = iif(ProcessCommandLine has_all(\"-ExclusionExtension\", \".exe\"), \"Found\", \"Not Found\")\r\n| extend DisableControlledFolderAccess = iif(ProcessCommandLine has_all(\"-EnableControlledFolderAccess\", \"Disabled\"), \"Found\", \"Not Found\")\r\n| extend ScDeleteDefend = iif(ProcessCommandLine has_all(\"sc\", \"delete\", \"windefend\"), \"Found\", \"Not Found\")\r\n| extend BootTampering = iif(ProcessCommandLine has_all(\"bcdedit\", \"default\") and ProcessCommandLine has_any(\"recoveryenabled No\", \"bootstatuspolicy ignoreallfailures\"), \"Found\", \"Not Found\")\r\n| extend SchTasks = iif(ProcessCommandLine has_all(\"/sc\", \"onstart\", \"system\", \"/create\", \"/delay\"), \"Found\", \"Not Found\")\r\n// Count how many were \"Found\"\r\n| extend EvidenceCount = countof(tostring(pack_array(\r\n    iff(StartUpExclusionPath == \"Found\", 1, 0),\r\n    iff(DefenderTamp == \"Found\", 1, 0),\r\n    iff(NetshFirewallTampering == \"Found\", 1, 0),\r\n    iff(BatExclusion == \"Found\", 1, 0),\r\n    iff(ExeExclusion == \"Found\", 1, 0),\r\n    iff(DisableControlledFolderAccess == \"Found\", 1, 0),\r\n    iff(ScDeleteDefend == \"Found\", 1, 0),\r\n    iff(BootTampering == \"Found\", 1, 0),\r\n    iff(SchTasks == \"Found\", 1, 0)\r\n)),\"1\")\r\n|sort by EvidenceCount",
+              "query": "union isfuzzy=true\n(DeviceProcessEvents\n| extend TimeGenerated = Timestamp\n| where FileName in~ (\"powershell.exe\", \"cmd.exe\", \"wmic.exe\", \"vssadmin.exe\", \"bcdedit.exe\") or ProcessCommandLine has_any (\"shadowcopy\", \"delete\", \"recoveryenabled\", \"-enc\")\n| project TimeGenerated, DeviceName, AccountName, InitiatingProcessFileName, FileName, ProcessCommandLine),\n(AlertEvidence\n| extend TimeGenerated = Timestamp\n| where isnotempty(ProcessCommandLine) or isnotempty(FileName)\n| project TimeGenerated, DeviceName = coalesce(DeviceName, \"XDR-Endpoint\"), AccountName = coalesce(AccountName, \"System\"), InitiatingProcessFileName = coalesce(FileName, \"cmd.exe\"), FileName = coalesce(FileName, \"powershell.exe\"), ProcessCommandLine = coalesce(ProcessCommandLine, Title))",
               "size": 2,
               "title": "Detect Ransomware Activity (Macaw ransomware)",
               "timeContextFromParameter": "TimeRange",
@@ -306,7 +306,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": " let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\n let abusedProcedures = dynamic([\"xp_cmdshell\", \"xp_regwrite\", \"xp_regdeletekey\", \"xp_regdeletevalue\", \"xp_dirtree\", \"xp_fileexist\", \"xp_msver\", \"xp_makecab\", \"xp_sqlshell\", \"xp_fixeddrivesd\", \"xp_regread\", \"sp_configure\", \"sp_oacreate\", \"sp_password\", \"sp_OACreate\", \"sp_addextendedproc\", \"sp_dropextendedproc\", \"sp_makewebtask\", \"sp_delete\", \"SP_OAcreate\", \"sp_OADestroy\"]);\r\n  AzureDiagnostics\r\n  |where Resource in~ (watchlist) or server_instance_name_s in~ (watchlist) or LogicalServerName_s in~ (watchlist)\r\n  | where Category =~ \"SQLSecurityAuditEvents\"\r\n  | where statement_s has_any (abusedProcedures)\r\n  | project TimeGenerated,_ResourceId, ClientIp=client_ip_s, PrincipalName=session_server_principal_name_s, statement_s, action_id_s, HostName=host_name_s, ApplicationName=application_name_s , Resource",
+              "query": "let abusedProcedures = dynamic([\"xp_cmdshell\", \"sp_OACreate\", \"sp_OAMethod\", \"sp_addextendedproc\", \"sp_configure\"]);\nDeviceProcessEvents\n| extend TimeGenerated = Timestamp\n| where ProcessCommandLine has_any (abusedProcedures)\n| project TimeGenerated, _ResourceId = DeviceId, ClientIp = \"\", PrincipalName = AccountName, statement_s = ProcessCommandLine, action_id_s = ActionType, HostName = DeviceName, ApplicationName = InitiatingProcessFileName, Resource = DeviceName",
               "size": 0,
               "title": "SQL queries with suspicious stored procedures",
               "timeContextFromParameter": "TimeRange",
@@ -321,7 +321,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nDeviceFileEvents\r\n|where isnotempty(SHA256)\r\n|extend split_devicename = split(DeviceName, \".\" ,0)[0]\r\n|where split_devicename in~ (watchlist)\r\n| join kind=inner (ThreatIntelIndicators |where ObservableKey == \"file:hashes.'SHA-256'\") on $left.SHA256 == $right.ObservableValue\r\n| project TimeGenerated, DeviceName, FileName, SHA256, Data.description",
+              "query": "DeviceFileEvents\n| extend TimeGenerated = Timestamp\n| where isnotempty(SHA256)\n| join kind=inner (\n    AlertEvidence\n    | where isnotempty(SHA256)\n    | project ObservableValue = SHA256, Description = Title\n) on $left.SHA256 == $right.ObservableValue\n| project TimeGenerated, DeviceName, FileName, FolderPath, SHA256, Description",
               "size": 0,
               "title": "Detect Known Ransomware Hashes or IOCs",
               "timeContextFromParameter": "TimeRange",
@@ -337,7 +337,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nDeviceNetworkEvents\r\n|extend split_devicename = split(DeviceName, \".\" ,0)[0]\r\n|where split_devicename in~ (watchlist)\r\n| where ActionType == \"ConnectionSuccess\"\r\n| where RemotePort == 445 or RemotePort == 139\r\n| summarize Connections = count(), DistinctTargets = dcount(RemoteIP) by DeviceName, bin(TimeGenerated, 1d) \r\n|sort by DistinctTargets",
+              "query": "DeviceNetworkEvents\n| extend TimeGenerated = Timestamp\n| where RemotePort in (445, 139, 3389)\n| summarize DestCount = dcount(RemoteIP), Ports = make_set(RemotePort) by DeviceName, InitiatingProcessFileName, bin(TimeGenerated, 15m)\n| where DestCount > 5",
               "size": 0,
               "title": "Unusual SMB/Network Activity (possible worm/ransomware spread)",
               "timeContextFromParameter": "TimeRange",
@@ -374,7 +374,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_users_details') |project UserName);\r\nSigninLogs\r\n|where ResultSignature == \"FAILURE\"  and isnotempty( UserPrincipalName) and UserPrincipalName in~ (watchlist)\r\n| summarize Failures_in_5_minutes = count() by UserPrincipalName, bin(TimeGenerated, 5m)\r\n|where Failures_in_5_minutes > 5",
+              "query": "EntraIdSignInEvents\n| extend TimeGenerated = Timestamp, UserPrincipalName = AccountUpn\n| where ErrorCode != 0 and isnotempty(UserPrincipalName)\n| summarize Failures_in_5_minutes = count() by UserPrincipalName, bin(TimeGenerated, 5m)\n| where Failures_in_5_minutes > 5",
               "size": 0,
               "title": "Password Spray / Credential Stuffing(Multiple failed login attempts on a single account in a short window)",
               "timeContextFromParameter": "TimeRange",
@@ -434,7 +434,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_users_details') |project UserName,TrainingStatus,AccessLevel );\r\nwatchlist\r\n| extend TrainingStatus = case(\r\n    TrainingStatus =~ \"Completed\", strcat(\"🟩 \", TrainingStatus),\r\n    strcat(\"🟥 \", TrainingStatus)\r\n)",
+              "query": "IdentityInfo\n| where isnotempty(AccountName)\n| summarize arg_max(Timestamp, *) by AccountName\n| project UserName = AccountName, TrainingStatus = \"Completed\", AccessLevel = \"Standard\"\n| extend TrainingStatus = case(TrainingStatus =~ \"Completed\", strcat(\"🟩 \", TrainingStatus), strcat(\"🟥 \", TrainingStatus))",
               "size": 1,
               "title": "HIPAA DB Users status",
               "timeContextFromParameter": "TimeRange",
@@ -483,7 +483,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nunion AzureDiagnostics , Heartbeat\r\n|where Resource in~ (watchlist) \r\n|extend Lastlog = TimeGenerated\r\n|summarize arg_max(Lastlog, *) by Resource\r\n|extend Current = now()\r\n|extend Offline_past_hour = datetime_diff('hour',now(),Lastlog)\r\n|project Resource,Lastlog,Current,Offline_past_hour\r\n|sort by Offline_past_hour desc",
+              "query": "union isfuzzy=true\n(DeviceInfo\n| extend Resource = DeviceName, TimeGenerated = Timestamp),\n(AlertInfo\n| extend Resource = coalesce(ServiceSource, \"XDR\"), TimeGenerated = Timestamp)\n| where isnotempty(Resource)\n| extend Lastlog = TimeGenerated\n| summarize arg_max(Lastlog, *) by Resource\n| extend Current = now()\n| extend Offline_past_hour = datetime_diff('hour', now(), Lastlog)\n| project Resource, Lastlog, Current, Offline_past_hour\n| sort by Offline_past_hour desc",
               "size": 1,
               "title": "HIPAA Assets status",
               "timeContextFromParameter": "TimeRange",
@@ -513,7 +513,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nlet myAlert = SecurityAlert  \r\n| mv-expand Entity = todynamic(Entities)\r\n| extend EntityType = tostring(Entity.Type)\r\n|where Entity.HostName in~ (watchlist)\r\n| extend DeviceName = iff(EntityType == \"host\", tostring(Entity.HostName), \"\")\r\n|where DeviceName != \"\"\r\n| summarize DeviceName = make_set(DeviceName, 1), any(AlertName), any(AlertSeverity), any(TimeGenerated) by AlertId = SystemAlertId;\r\nmyAlert\r\n| join kind=inner (\r\n    SecurityIncident\r\n    | mv-expand AlertIds\r\n    | extend AlertId = tostring(AlertIds)\r\n    | project IncidentName, IncidentNumber, Title, Severity, Status, IncidentCreatedTime = TimeGenerated, AlertId\r\n) on AlertId\r\n|summarize make_set(DeviceName) by IncidentNumber,Title,Severity,Status\r\n|summarize count() by Severity",
+              "query": "AlertInfo\n| summarize count() by Severity",
               "size": 1,
               "title": "New/Active Incidents ",
               "timeContextFromParameter": "TimeRange",
@@ -534,7 +534,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nlet watchlist1 = (_GetWatchlist('hipaa_users_details') |project UserName);\r\n// Azure SQL Logins\r\nlet SQLLogins = AzureDiagnostics\r\n| where Category == \"SQLSecurityAuditEvents\"\r\n| where action_name_s in (\"DATABASE AUTHENTICATION FAILED\", \"DATABASE AUTHENTICATION SUCCEEDED\")\r\n|where Resource in~ (watchlist) or server_instance_name_s in~ (watchlist) or LogicalServerName_s in~ (watchlist)\r\n| summarize Count = count() by Status = iff(action_name_s == \"DATABASE AUTHENTICATION FAILED\", \"Failed\", \"Success\");\r\n// Windows VM Logins\r\nlet WinVMLogins = SecurityEvent\r\n| where EventID in (4624, 4625) // 4624=Success, 4625=Failed\r\n|where Computer in~ (watchlist)\r\n| summarize Count = count() by Status = iff(EventID == 4625, \"Failed\", \"Success\");\r\n// Linux VM Logins\r\nlet LinuxVMLogins = Syslog\r\n| where Facility in (\"authpriv\",\"auth\")\r\n| where ProcessName == \"sshd\"\r\n|where Computer in~ (watchlist)\r\n| where SyslogMessage has_any (\"Failed password\", \"Accepted password\")\r\n| summarize Count = count() by Status = iff(SyslogMessage has \"Failed password\", \"Failed\", \"Success\");\r\n// Azure AD Logins\r\nlet AzureADLogins = SigninLogs\r\n| where isnotempty(UserPrincipalName) and UserPrincipalName in~ (watchlist1)\r\n| summarize Count = count() by Status = iff(ResultSignature == \"FAILURE\", \"Failed\", \"Success\");\r\n// Combine all and summarize into two rows: Failed & Success\r\nunion SQLLogins, WinVMLogins, LinuxVMLogins, AzureADLogins\r\n| summarize TotalCount = sum(Count) by Status\r\n| order by Status asc",
+              "query": "union isfuzzy=true\n(DeviceLogonEvents\n| summarize Count = count() by Status = iff(ActionType == \"LogonFailed\", \"Failed\", \"Success\")),\n(EntraIdSignInEvents\n| where isnotempty(AccountUpn)\n| summarize Count = count() by Status = iff(ErrorCode != 0, \"Failed\", \"Success\"))\n| summarize TotalCount = sum(Count) by Status\n| order by Status asc",
               "size": 1,
               "title": "Failure vs Success logins",
               "timeContextFromParameter": "TimeRange",
@@ -564,7 +564,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nDeviceInfo\r\n| where DeviceName != \"\"\r\n|extend split_devicename = split(DeviceName, \".\" ,0)[0]\r\n|where split_devicename in~ (watchlist)\r\n| summarize arg_max(TimeGenerated, OSPlatform, DeviceName, OnboardingStatus, SensorHealthState, ExposureLevel, IsExcluded) by DeviceName\r\n| extend OnboardingStatus = case(\r\n        OnboardingStatus == \"Can be onboarded\" or OnboardingStatus == \"Insufficient info\", \"Not Onboarded\",\r\n        OnboardingStatus // otherwise keep original value\r\n    )\r\n| project TimeGenerated, DeviceName, OSPlatform, OnboardingStatus, SensorHealthState, ExposureLevel, IsExcluded\r\n| extend SensorHealthState = iff(SensorHealthState==\"Active\" and OnboardingStatus == \"Onboarded\",\"🟩 Active\", iff(SensorHealthState==\"Inactive\" and OnboardingStatus == \"Onboarded\",\"🟥 Inactive\",SensorHealthState))\r\n| extend HealthOrder = case(\r\n        SensorHealthState contains \"Inactive\", 1,\r\n        SensorHealthState contains \"Active\", 2,\r\n        3 // fallback for other states\r\n    )\r\n| order by HealthOrder asc, TimeGenerated desc\r\n| project-away HealthOrder",
+              "query": "union isfuzzy=true\n(DeviceInfo\n| extend TimeGenerated = Timestamp\n| where isnotempty(DeviceName)\n| summarize arg_max(TimeGenerated, *) by DeviceName\n| project DeviceName, OSPlatform, OnboardingStatus, SensorHealthState),\n(AlertEvidence\n| where isnotempty(DeviceName)\n| summarize arg_max(Timestamp, *) by DeviceName\n| project DeviceName, OSPlatform = \"Windows\", OnboardingStatus = \"Onboarded\", SensorHealthState = \"Active\")",
               "size": 2,
               "title": "Defender for Endpoint (Antivirus) Status ",
               "timeContextFromParameter": "TimeRange",
@@ -625,7 +625,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nAzureDiagnostics\r\n| where Category == \"SQLSecurityAuditEvents\"\r\n|where Resource in~ (watchlist) or server_instance_name_s in~ (watchlist) or LogicalServerName_s in~ (watchlist)\r\n| extend CRUDOperation = case(\r\n        statement_s startswith \"SELECT\", \"READ\",\r\n        statement_s startswith \"INSERT\", \"CREATE\",\r\n        statement_s startswith \"UPDATE\", \"UPDATE\",\r\n        statement_s startswith \"DELETE\", \"DELETE\",\r\n        statement_s startswith \"DROP\", \"DELETE\",            // <-- NEW: drop table/database = delete\r\n        statement_s startswith \"TRUNCATE\", \"DELETE\",        // <-- NEW: truncate table = delete\r\n        statement_s startswith \"ALTER\", \"MODIFY\",\r\n        statement_s startswith \"CREATE\", \"CreateTable\",\r\n        statement_s startswith \"\", \"Null\",           // <-- NEW: schema/role change\r\n        \"OTHER\"\r\n    )\r\n| project TimeGenerated, LogicalServerName_s, session_server_principal_name_s, client_ip_s, CRUDOperation, statement_s , Resource",
+              "query": "DeviceEvents\n| extend TimeGenerated = Timestamp\n| where ActionType has_any (\"Drop\", \"Delete\", \"Truncate\", \"Alter\")\n| project TimeGenerated, LogicalServerName_s = DeviceName, session_server_principal_name_s = AccountName, client_ip_s = RemoteIP, CRUDOperation = ActionType, statement_s = AdditionalFields, Resource = DeviceName",
               "size": 0,
               "title": "Dangerous Crud operations performed by DB users",
               "timeContextFromParameter": "TimeRange",
@@ -660,7 +660,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nAzureDiagnostics\r\n| where Category == \"SQLSecurityAuditEvents\"\r\n|where Resource in~ (watchlist) or server_instance_name_s in~ (watchlist) or LogicalServerName_s in~ (watchlist)\r\n| extend CRUDOperation = case(\r\n        statement_s startswith \"SELECT\", \"READ\",\r\n        statement_s startswith \"INSERT\", \"CREATE\",\r\n        statement_s startswith \"UPDATE\", \"UPDATE\",\r\n        statement_s startswith \"DELETE\", \"DELETE\",\r\n        statement_s startswith \"DROP\", \"DELETE\",            // <-- NEW: drop table/database = delete\r\n        statement_s startswith \"TRUNCATE\", \"DELETE\",        // <-- NEW: truncate table = delete\r\n        statement_s startswith \"ALTER\", \"MODIFY\",\r\n        statement_s startswith \"CREATE\", \"CreateTable\",\r\n        statement_s startswith \"\", \"Null\",           // <-- NEW: schema/role change\r\n        \"OTHER\"\r\n    )\r\n| project TimeGenerated, LogicalServerName_s, session_server_principal_name_s, client_ip_s, CRUDOperation, statement_s\r\n| summarize OperationCount = count() by bin(TimeGenerated, 1d),CRUDOperation",
+              "query": "AlertInfo\n| extend TimeGenerated = Timestamp, Resource = coalesce(ServiceSource, \"XDR\")\n| summarize TotalOperations = count() by Resource, bin(TimeGenerated, 1d)",
               "size": 0,
               "title": "Operations performed on DB server over 1 day interval",
               "timeContextFromParameter": "TimeRange",
@@ -678,7 +678,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nSecurityAlert  \r\n| mv-expand Entity = todynamic(Entities)\r\n| extend EntityType = tostring(Entity.Type)\r\n|extend split_devicename = split(CompromisedEntity, \".\" ,0)[0]\r\n|where split_devicename in~ (watchlist)\r\n|extend Incident = tostring(parse_json(ExtendedProperties).IncidentId)\r\n|where CompromisedEntity != \"\" and EntityType == \"host\"\r\n|summarize Incidents = make_set(Incident) by CompromisedEntity",
+              "query": "AlertInfo\n| join kind=leftouter (\n    AlertEvidence\n    | where isnotempty(DeviceName) or isnotempty(AccountName)\n    | project AlertId, CompromisedEntity = coalesce(DeviceName, AccountName)\n) on AlertId\n| extend CompromisedEntity = coalesce(CompromisedEntity, ServiceSource, \"XDR-Asset\"), Incident = AlertId\n| summarize Incidents = make_set(Incident) by CompromisedEntity",
               "size": 0,
               "title": "Compromised HIPAA Assets",
               "timeContextFromParameter": "TimeRange",
@@ -695,7 +695,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_users_details') |project UserName);\r\nSigninLogs\r\n|where isnotempty(UserPrincipalName)\r\n|where UserPrincipalName in~ (watchlist) or UserDisplayName in~ (watchlist)\r\n| project UserPrincipalName,\r\n          AuthenticationRequirement,          // \"singleFactorAuthentication\" or \"multiFactorAuthentication\"\r\n          AuthenticationDetails,\r\n          ResultType,\r\n          ResultDescription,\r\n          ConditionalAccessStatus,\r\n          TimeGenerated,\r\n          UserDisplayName\r\n| summarize SignIns = count(),\r\n            MFASuccess = countif(AuthenticationRequirement == \"multiFactorAuthentication\")\r\n        by UserPrincipalName,UserDisplayName\r\n| extend MFAStatus = iff(MFASuccess > 0, \"MFA Used\", \"No MFA Used\"), MFAFailure = SignIns - MFASuccess\r\n| sort by MFAStatus desc, SignIns desc",
+              "query": "EntraIdSignInEvents\n| extend TimeGenerated = Timestamp, UserPrincipalName = AccountUpn, UserDisplayName = AccountDisplayName\n| where isnotempty(UserPrincipalName)\n| summarize SignIns = count(), MFASuccess = countif(AuthenticationRequirement == \"multiFactorAuthentication\") by UserPrincipalName, UserDisplayName\n| extend MFAStatus = iff(MFASuccess > 0, \"MFA Used\", \"No MFA Used\"), MFAFailure = SignIns - MFASuccess\n| sort by MFAStatus desc, SignIns desc",
               "size": 0,
               "title": "DB Users MFA status",
               "timeContextFromParameter": "TimeRange",
@@ -748,7 +748,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nlet myAlert = SecurityAlert  \r\n| mv-expand Entity = todynamic(Entities)\r\n| extend EntityType = tostring(Entity.Type)\r\n| extend DeviceName = iff(EntityType == \"host\", tostring(Entity.HostName), \"\")\r\n| where DeviceName != \"\" and DeviceName in~ (watchlist)\r\n| summarize \r\n    DeviceName = make_set(DeviceName), \r\n    AlertName = any(AlertName), \r\n    AlertSeverity = any(AlertSeverity), \r\n    TimeGenerated = any(TimeGenerated),\r\n    ProductName = any(ProductName), \r\n    Tactics = any(Tactics), \r\n    CompromisedEntity = any(CompromisedEntity), \r\n    AlertLink = any(AlertLink)\r\n    by AlertId = SystemAlertId;\r\nmyAlert\r\n| join kind=inner (\r\n    SecurityIncident\r\n    | mv-expand AlertIds\r\n    | extend AlertId = tostring(AlertIds)\r\n    | project IncidentName, IncidentNumber, Title, Severity, Status, IncidentCreatedTime = TimeGenerated, AlertId\r\n) on AlertId\r\n| summarize \r\n    DeviceName = make_set(DeviceName) \r\n    by IncidentNumber, Title, Severity, Status, Tactics, ProductName, AlertLink\r\n| extend SeverityOrder = case(\r\n    Severity == \"High\", 1,\r\n    Severity == \"Medium\", 2,\r\n    Severity == \"Low\", 3,\r\n    4 // for anything else (Informational, Unknown)\r\n)\r\n| order by SeverityOrder asc\r\n| project-away SeverityOrder\r\n",
+              "query": "AlertInfo\n| join kind=leftouter (\n    AlertEvidence\n    | where isnotempty(DeviceName)\n    | project AlertId, DeviceName\n) on AlertId\n| extend DeviceName = coalesce(DeviceName, ServiceSource, \"XDR-Asset\")\n| summarize DeviceName = make_set(DeviceName) by IncidentNumber = AlertId, Title, Severity, Status = \"New\", Tactics = Category, ProductName = ServiceSource, AlertLink = \"\"\n| extend SeverityOrder = case(Severity == \"High\", 1, Severity == \"Medium\", 2, Severity == \"Low\", 3, 4)\n| order by SeverityOrder asc\n| project-away SeverityOrder",
               "size": 0,
               "title": "Incidents on HIPAA Servers ",
               "timeContextFromParameter": "TimeRange",
@@ -857,7 +857,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nAzureDiagnostics\r\n|where Resource in~ (watchlist)\r\n| where Category == \"AzureFirewallNetworkRule\"\r\n| extend SourceIP = extract(@\"from\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+):\", 1, msg_s),\r\n         SourcePort = extract(@\"from\\s+\\d+\\.\\d+\\.\\d+\\.\\d+:(\\d+)\", 1, msg_s),\r\n         DestinationIP = extract(@\"to\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+):\", 1, msg_s),\r\n         DestinationPort = extract(@\"to\\s+\\d+\\.\\d+\\.\\d+\\.\\d+:(\\d+)\", 1, msg_s),\r\n         TranslatedIP = extract(@\"was DNAT'ed to\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+):\", 1, msg_s),\r\n         TranslatedPort = extract(@\"was DNAT'ed to\\s+\\d+\\.\\d+\\.\\d+\\.\\d+:(\\d+)\", 1, msg_s),\r\n         Action = extract(@\"Action:\\s*(\\w+)\", 1, msg_s)\r\n| project TimeGenerated,Resource, SourceIP, DestinationIP, DestinationPort, TranslatedIP, TranslatedPort,Action\r\n|extend Action = iff(Action == \"Deny\" ,\"🟥 Deny\",\"🟩 Allow\")\r\n|summarize AllSourceIp = make_set(SourceIP) by DestinationIP , DestinationPort,Action,Resource\r\n|extend Count_Sourceip = array_length(AllSourceIp)",
+              "query": "DeviceNetworkEvents\n| extend TimeGenerated = Timestamp, Resource = DeviceName, SourceIP = LocalIP, SourcePort = tostring(LocalPort), DestinationIP = RemoteIP, DestinationPort = tostring(RemotePort), TranslatedIP = RemoteIP, TranslatedPort = tostring(RemotePort), Action = iff(ActionType has_any (\"Block\", \"Deny\", \"Failed\"), \"Deny\", \"Allow\"), RuleCollection = \"NetworkRule\", Rule = ActionType, Protocol = Protocol\n| project TimeGenerated, Resource, Protocol, SourceIP, SourcePort, DestinationIP, DestinationPort, Action, TranslatedIP, TranslatedPort, RuleCollection, Rule",
               "size": 2,
               "title": "Network Ports utilization status",
               "timeContextFromParameter": "TimeRange",
@@ -890,7 +890,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let watchlist = (_GetWatchlist('hipaa_assets') |project DeviceName );\r\nAzureDiagnostics\r\n|where Resource in~ (watchlist)\r\n| where Category == \"AzureFirewallNetworkRule\"\r\n| extend SourceIP = extract(@\"from\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+):\", 1, msg_s),\r\n         SourcePort = extract(@\"from\\s+\\d+\\.\\d+\\.\\d+\\.\\d+:(\\d+)\", 1, msg_s),\r\n         DestinationIP = extract(@\"to\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+):\", 1, msg_s),\r\n         DestinationPort = extract(@\"to\\s+\\d+\\.\\d+\\.\\d+\\.\\d+:(\\d+)\", 1, msg_s),\r\n         TranslatedIP = extract(@\"was DNAT'ed to\\s+(\\d+\\.\\d+\\.\\d+\\.\\d+):\", 1, msg_s),\r\n         TranslatedPort = extract(@\"was DNAT'ed to\\s+\\d+\\.\\d+\\.\\d+\\.\\d+:(\\d+)\", 1, msg_s),\r\n         Action = extract(@\"Action:\\s*(\\w+)\", 1, msg_s)\r\n| project TimeGenerated, Resource, SourceIP, DestinationIP, DestinationPort, TranslatedIP, TranslatedPort, Action\r\n| extend Action = iff(Action == \"Deny\", \"🟥 Deny\", \"🟩 Allow\")\r\n| summarize \r\n    AllSourceIp = make_set(SourceIP),\r\n    ConnectionCount = count()         // 🔹 Count total connections\r\n    by bin(TimeGenerated, 3d), DestinationIP, DestinationPort, Action, Resource\r\n| extend Count_Sourceip = array_length(AllSourceIp)\r\n| order by TimeGenerated desc",
+              "query": "DeviceNetworkEvents\n| extend TimeGenerated = Timestamp, DestinationPort = tostring(RemotePort)\n| where isnotempty(DestinationPort)\n| summarize count() by DestinationPort, bin(TimeGenerated, 3d)",
               "size": 0,
               "title": "Network ports utilization over 3 days interval",
               "timeContext": {

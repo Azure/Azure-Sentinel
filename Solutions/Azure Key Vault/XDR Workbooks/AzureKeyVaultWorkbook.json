@@ -18,10 +18,10 @@
             "version": "KqlParameterItem/1.0",
             "name": "DefaultSubscription_Internal",
             "type": 1,
-            "isRequired": true,
-            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\r\n| take 1\r\n| project subscriptionId",
+            "isRequired": false,
+            "query": "where type =~ 'microsoft.operationalinsights/workspaces'\n| take 1\n| project subscriptionId",
             "crossComponentResources": [
-              "value::selected"
+              "value::all"
             ],
             "isHiddenWhenLocked": true,
             "timeContext": {
@@ -99,20 +99,23 @@
             "version": "KqlParameterItem/1.0",
             "name": "Subscription",
             "type": 6,
-            "isRequired": true,
+            "isRequired": false,
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "summarize by subscriptionId\r\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{DefaultSubscription_Internal}', true, false)\r\n",
+            "query": "summarize by subscriptionId\n| project value = strcat(\"/subscriptions/\", subscriptionId), label = subscriptionId, selected = iff(subscriptionId =~ '{DefaultSubscription_Internal}', true, false)\n",
             "crossComponentResources": [
               "value::selected"
             ],
-            "value": [],
+            "value": [
+              "value::all"
+            ],
             "typeSettings": {
               "additionalResourceOptions": [
                 "value::all"
               ],
-              "showDefault": false
+              "showDefault": false,
+              "includeAll": true
             },
             "timeContext": {
               "durationMs": 0
@@ -126,11 +129,11 @@
             "version": "KqlParameterItem/1.0",
             "name": "KeyVault",
             "type": 5,
-            "isRequired": true,
+            "isRequired": false,
             "multiSelect": true,
             "quote": "'",
             "delimiter": ",",
-            "query": "where type =~ 'microsoft.keyvault/vaults'\r\n| where strcat('/subscriptions/',subscriptionId) in ({Subscription})\r\n| project id=tolower(id)",
+            "query": "where type =~ 'microsoft.keyvault/vaults'\n| where strcat('/subscriptions/',subscriptionId) in (dynamic([{Subscription}]))\n| project id=tolower(id)",
             "value": [
               "value::all"
             ],
@@ -138,14 +141,18 @@
               "additionalResourceOptions": [
                 "value::all"
               ],
-              "showDefault": false
+              "showDefault": false,
+              "includeAll": true
             },
             "timeContext": {
               "durationMs": 0
             },
             "timeContextFromParameter": "TimeRange",
             "queryType": 1,
-            "resourceType": "microsoft.resourcegraph/resources"
+            "resourceType": "microsoft.resourcegraph/resources",
+            "crossComponentResources": [
+              "{Subscription}"
+            ]
           }
         ],
         "style": "pills"
@@ -203,7 +210,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "AzureDiagnostics\r\n| where Category == \"AuditEvent\" and ResourceType == \"VAULTS\"\r\n| summarize count() by _ResourceId = tolower(_ResourceId)\r\n| summarize logsKVs = make_set(_ResourceId)\r\n| extend selectedKVs = \"[{KeyVault}]\"\r\n| extend selectedKVs = replace(\"'\", '\"', selectedKVs)\r\n| extend selectedKVs = todynamic(selectedKVs)\r\n| mv-expand KVId = selectedKVs\r\n| project KVId = toupper(tostring(KVId)), [\"Diagnostic logs\"] = (logsKVs has tostring(KVId))\r\n| extend [\"Diagnostic settings\"] = iff([\"Diagnostic logs\"] == false, strcat(\"https://ms.portal.azure.com/#@microsoft.onmicrosoft.com/resource\", KVId, \"/diagnostics\"), \"\")\r\n| order by [\"Diagnostic settings\"] desc\r\n",
+              "query": "AzureDiagnostics\n| where Category == \"AuditEvent\" and ResourceType == \"VAULTS\"\n| summarize count() by _ResourceId = tolower(_ResourceId)\n| summarize logsKVs = make_set(_ResourceId)\n| extend selectedKVs = \"[{KeyVault}]\"\n| extend selectedKVs = replace(\"'\", '\"', selectedKVs)\n| extend selectedKVs = todynamic(selectedKVs)\n| mv-expand KVId = selectedKVs\n| project KVId = toupper(tostring(KVId)), [\"Diagnostic logs\"] = (logsKVs has tostring(KVId))\n| extend [\"Diagnostic settings\"] = iff([\"Diagnostic logs\"] == false, strcat(\"https://ms.portal.azure.com/#@microsoft.onmicrosoft.com/resource\", KVId, \"/diagnostics\"), \"\")\n| order by [\"Diagnostic settings\"] desc\n",
               "size": 0,
               "timeContext": {
                 "durationMs": 7776000000
@@ -251,7 +258,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "AzureDiagnostics\r\n| where Category == \"AuditEvent\" and ResourceType == \"VAULTS\"\r\n| summarize count() by _ResourceId = tolower(_ResourceId)\r\n| summarize logsKVs = make_set(_ResourceId)\r\n| extend selectedKVs = \"[{KeyVault}]\"\r\n| extend selectedKVs = replace(\"'\", '\"', selectedKVs)\r\n| extend selectedKVs = todynamic(selectedKVs)\r\n| mv-expand KVId = selectedKVs\r\n| project KVId = toupper(tostring(KVId)),isDiag = (logsKVs has tostring(KVId))\r\n| summarize KeyVaults = count() by isDiag\r\n| project KeyVaults, ['Diagnostic logs for Key Vaults'] = iif(isDiag,'Diagnostic logs collected','Diagnostic logs not collected')\r\n",
+              "query": "AzureDiagnostics\n| where Category == \"AuditEvent\" and ResourceType == \"VAULTS\"\n| summarize count() by _ResourceId = tolower(_ResourceId)\n| summarize logsKVs = make_set(_ResourceId)\n| extend selectedKVs = \"[{KeyVault}]\"\n| extend selectedKVs = replace(\"'\", '\"', selectedKVs)\n| extend selectedKVs = todynamic(selectedKVs)\n| mv-expand KVId = selectedKVs\n| project KVId = toupper(tostring(KVId)),isDiag = (logsKVs has tostring(KVId))\n| summarize KeyVaults = count() by isDiag\n| project KeyVaults, ['Diagnostic logs for Key Vaults'] = iif(isDiag,'Diagnostic logs collected','Diagnostic logs not collected')\n",
               "size": 0,
               "timeContext": {
                 "durationMs": 7776000000
@@ -365,7 +372,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "AzureDiagnostics\r\n| where TimeGenerated > {BaselineTimeRange:start}\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize DailyCount = count() by _ResourceId, bin_at(TimeGenerated, 1d, now())\r\n| make-series metric = sum(DailyCount) on TimeGenerated in range({BaselineTimeRange:start}, now()-1d, 1d) by _ResourceId\r\n| extend series_decompose_anomalies(metric) // Anomaly detection\r\n| project _ResourceId, day = (TimeGenerated), DailyCounts = metric, AnomalyScore = series_decompose_anomalies_metric_ad_score\r\n| extend MaxAnomalyScore = AnomalyScore, MinAnomalyScore = AnomalyScore, AnomlyScoreTrend = AnomalyScore\r\n| mv-apply MaxAnomalyScore to typeof(real) on (top 1 by MaxAnomalyScore desc)\r\n| mv-apply MinAnomalyScore to typeof(real) on (top 1 by MinAnomalyScore asc)\r\n| mv-expand with_itemindex=Index AnomalyScore\r\n| where Index == array_length(DailyCounts)-1\r\n| project-away day, Index\r\n| extend AnomalyScoreAbs = abs(toreal(AnomalyScore))\r\n| extend WasAnomalous = iif(MaxAnomalyScore > 3 or MinAnomalyScore < -3, true, false)\r\n| extend Anomalous = iif(AnomalyScoreAbs > 3, true, false)\r\n| order by AnomalyScoreAbs desc\r\n\r\n",
+              "query": "AzureDiagnostics\n| where TimeGenerated > {BaselineTimeRange:start}\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize DailyCount = count() by _ResourceId, bin_at(TimeGenerated, 1d, now())\n| make-series metric = sum(DailyCount) on TimeGenerated in range({BaselineTimeRange:start}, now()-1d, 1d) by _ResourceId\n| extend series_decompose_anomalies(metric) // Anomaly detection\n| project _ResourceId, day = (TimeGenerated), DailyCounts = metric, AnomalyScore = series_decompose_anomalies_metric_ad_score\n| extend MaxAnomalyScore = AnomalyScore, MinAnomalyScore = AnomalyScore, AnomlyScoreTrend = AnomalyScore\n| mv-apply MaxAnomalyScore to typeof(real) on (top 1 by MaxAnomalyScore desc)\n| mv-apply MinAnomalyScore to typeof(real) on (top 1 by MinAnomalyScore asc)\n| mv-expand with_itemindex=Index AnomalyScore\n| where Index == array_length(DailyCounts)-1\n| project-away day, Index\n| extend AnomalyScoreAbs = abs(toreal(AnomalyScore))\n| extend WasAnomalous = iif(MaxAnomalyScore > 3 or MinAnomalyScore < -3, true, false)\n| extend Anomalous = iif(AnomalyScoreAbs > 3, true, false)\n| order by AnomalyScoreAbs desc\n\n",
               "size": 0,
               "title": "Daily anomaly scores, by key vault",
               "exportFieldName": "ResourceId",
@@ -521,7 +528,8 @@
                 "yAxis": [
                   "AnomalyScore"
                 ]
-              }
+              },
+              "exportDefaultValue": ""
             },
             "name": "query - 2"
           },
@@ -529,7 +537,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "AzureDiagnostics\r\n| where TimeGenerated > {BaselineTimeRange:start}\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) == tolower('{SelectedResource}')\r\n| summarize DailyCount = count() by _ResourceId, bin_at(TimeGenerated, 1d, now())\r\n| make-series metric = sum(DailyCount) on TimeGenerated in range({BaselineTimeRange:start}, now()-1d, 1d) by _ResourceId\r\n| extend series_decompose_anomalies(metric) // Anomaly detection\r\n| project _ResourceId, day = (TimeGenerated), DailyCounts = metric, AnomalyScore = series_decompose_anomalies_metric_ad_score\r\n",
+              "query": "AzureDiagnostics\n| where TimeGenerated > {BaselineTimeRange:start}\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) == tolower('{SelectedResource}')\n| summarize DailyCount = count() by _ResourceId, bin_at(TimeGenerated, 1d, now())\n| make-series metric = sum(DailyCount) on TimeGenerated in range({BaselineTimeRange:start}, now()-1d, 1d) by _ResourceId\n| extend series_decompose_anomalies(metric) // Anomaly detection\n| project _ResourceId, day = (TimeGenerated), DailyCounts = metric, AnomalyScore = series_decompose_anomalies_metric_ad_score\n",
               "size": 0,
               "title": "Daily activity over time for the selected key vault (from the list above)",
               "queryType": "advancedHunting",
@@ -556,7 +564,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "AzureDiagnostics\r\n| where TimeGenerated > {BaselineTimeRange:start}\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) == tolower('{SelectedResource}')\r\n| summarize DailyCount = count() by _ResourceId, bin_at(TimeGenerated, 1d, now())\r\n| make-series metric = sum(DailyCount) on TimeGenerated in range({BaselineTimeRange:start}, now()-1d, 1d) by _ResourceId\r\n| extend series_decompose_anomalies(metric) // Anomaly detection\r\n| project _ResourceId, day = (TimeGenerated), DailyCounts = metric, AnomalyScore = series_decompose_anomalies_metric_ad_score\r\n",
+              "query": "AzureDiagnostics\n| where TimeGenerated > {BaselineTimeRange:start}\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) == tolower('{SelectedResource}')\n| summarize DailyCount = count() by _ResourceId, bin_at(TimeGenerated, 1d, now())\n| make-series metric = sum(DailyCount) on TimeGenerated in range({BaselineTimeRange:start}, now()-1d, 1d) by _ResourceId\n| extend series_decompose_anomalies(metric) // Anomaly detection\n| project _ResourceId, day = (TimeGenerated), DailyCounts = metric, AnomalyScore = series_decompose_anomalies_metric_ad_score\n",
               "size": 0,
               "title": "Anomaly score over time for the selected key vault (from the list above)",
               "color": "orange",
@@ -621,7 +629,7 @@
                         "type": 3,
                         "content": {
                           "version": "KqlItem/1.0",
-                          "query": "datatable (Event:string)\r\n    [\"AKV Workbook\"]\r\n| extend keyvault = (strcat(\"[\", \"{KeyVault}\", \"]\"))\r\n| extend keyvault = todynamic(replace(\"'\", '\"', keyvault))\r\n| mvexpand keyvault\r\n| extend subscriptionId = extract(@\"/subscriptions/([^/]+)\", 1, tostring(keyvault))\r\n| summarize AKVs = count() by subscriptionId, DefenderForKV = 0\r\n| union\r\n(\r\nsecurityresources\r\n| where type =~ \"microsoft.security/pricings\"\r\n| where name == \"KeyVaults\"\r\n| project DefenderForKV = iif(properties.pricingTier == 'Standard', 1, 0), AKVs = 0, subscriptionId\r\n)\r\n| summarize AKVs = sum(AKVs), DefenderForKV = sum(DefenderForKV) by subscriptionId\r\n| project Subscription = strcat('/subscriptions/', subscriptionId), [\"Kay Vaults\"] = AKVs, ['Defender for Key Vault'] = iif(DefenderForKV > 0,'yes','no'), ['Onboard Azure Defender'] = iif(DefenderForKV > 0, '', 'https://ms.portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/26')\r\n| order by ['Defender for Key Vault'] asc\r\n ",
+                          "query": "datatable (Event:string)\n    [\"AKV Workbook\"]\n| extend keyvault = (strcat(\"[\", \"{KeyVault}\", \"]\"))\n| extend keyvault = todynamic(replace(\"'\", '\"', keyvault))\n| mvexpand keyvault\n| extend subscriptionId = extract(@\"/subscriptions/([^/]+)\", 1, tostring(keyvault))\n| summarize AKVs = count() by subscriptionId, DefenderForKV = 0\n| union\n(\nsecurityresources\n| where type =~ \"microsoft.security/pricings\"\n| where name == \"KeyVaults\"\n| project DefenderForKV = iif(properties.pricingTier == 'Standard', 1, 0), AKVs = 0, subscriptionId\n)\n| summarize AKVs = sum(AKVs), DefenderForKV = sum(DefenderForKV) by subscriptionId\n| project Subscription = strcat('/subscriptions/', subscriptionId), [\"Kay Vaults\"] = AKVs, ['Defender for Key Vault'] = iif(DefenderForKV > 0,'yes','no'), ['Onboard Azure Defender'] = iif(DefenderForKV > 0, '', 'https://ms.portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/26')\n| order by ['Defender for Key Vault'] asc\n ",
                           "size": 0,
                           "title": "Subscriptions covered by Azure Defender for Key Vault",
                           "queryType": 1,
@@ -657,7 +665,10 @@
                                 }
                               }
                             ]
-                          }
+                          },
+                          "crossComponentResources": [
+                            "{Subscription}"
+                          ]
                         },
                         "customWidth": "50",
                         "name": "query - 3"
@@ -666,11 +677,14 @@
                         "type": 3,
                         "content": {
                           "version": "KqlItem/1.0",
-                          "query": "datatable (Event:string)\r\n    [\"AKV Workbook\"]\r\n| extend keyvaults = (strcat(\"[\", \"{KeyVault}\", \"]\"))\r\n| extend keyvaults = todynamic(replace(\"'\", '\"', keyvaults))\r\n| mvexpand keyvaults\r\n| extend subscriptionId = extract(@\"/subscriptions/([^/]+)\", 1, tostring(keyvaults))\r\n| summarize AKVs = count() by subscriptionId, DefenderForKV = 0\r\n| union\r\n(\r\nsecurityresources\r\n| where type =~ \"microsoft.security/pricings\"\r\n| where name == \"KeyVaults\"\r\n| project DefenderForKV = iif(properties.pricingTier == 'Standard', 1, 0), AKVs = 0, subscriptionId\r\n)\r\n| summarize AKVs = sum(AKVs), DefenderForKV = sum(DefenderForKV) by subscriptionId\r\n| project Subscription = 1, ['Defender for Key Vault'] = iif(DefenderForKV > 0,'Protected by Azure Defender','Not protected by Azure Defender')",
+                          "query": "datatable (Event:string)\n    [\"AKV Workbook\"]\n| extend keyvaults = (strcat(\"[\", \"{KeyVault}\", \"]\"))\n| extend keyvaults = todynamic(replace(\"'\", '\"', keyvaults))\n| mvexpand keyvaults\n| extend subscriptionId = extract(@\"/subscriptions/([^/]+)\", 1, tostring(keyvaults))\n| summarize AKVs = count() by subscriptionId, DefenderForKV = 0\n| union\n(\nsecurityresources\n| where type =~ \"microsoft.security/pricings\"\n| where name == \"KeyVaults\"\n| project DefenderForKV = iif(properties.pricingTier == 'Standard', 1, 0), AKVs = 0, subscriptionId\n)\n| summarize AKVs = sum(AKVs), DefenderForKV = sum(DefenderForKV) by subscriptionId\n| project Subscription = 1, ['Defender for Key Vault'] = iif(DefenderForKV > 0,'Protected by Azure Defender','Not protected by Azure Defender')",
                           "size": 0,
                           "queryType": 1,
                           "resourceType": "microsoft.resourcegraph/resources",
-                          "visualization": "piechart"
+                          "visualization": "piechart",
+                          "crossComponentResources": [
+                            "{Subscription}"
+                          ]
                         },
                         "customWidth": "50",
                         "name": "query - 4"
@@ -696,11 +710,11 @@
                         "version": "KqlParameterItem/1.0",
                         "name": "AlertSeverity",
                         "type": 2,
-                        "isRequired": true,
+                        "isRequired": false,
                         "multiSelect": true,
                         "quote": "'",
                         "delimiter": ",",
-                        "query": "SecurityAlert\r\n| where AlertType startswith \"KV_\"\r\n| summarize Count = count() by AlertSeverity\r\n| order by Count desc, AlertSeverity asc\r\n| project Value = AlertSeverity, Label = strcat(AlertSeverity, ' - ', Count)\r\n",
+                        "query": "SecurityAlert\n| where AlertType startswith \"KV_\"\n| summarize Count = count() by AlertSeverity\n| order by Count desc, AlertSeverity asc\n| project Value = AlertSeverity, Label = strcat(AlertSeverity, ' - ', Count)\n",
                         "value": [
                           "value::all"
                         ],
@@ -709,7 +723,8 @@
                             "value::all"
                           ],
                           "selectAllValue": "*",
-                          "showDefault": false
+                          "showDefault": false,
+                          "includeAll": true
                         },
                         "timeContext": {
                           "durationMs": 0
@@ -726,7 +741,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let data = SecurityAlert\r\n| where \"{AlertSeverity:lable}\" == \"All\" or AlertSeverity in ({AlertSeverity})\r\n| where AlertType startswith \"KV_\"\r\n| where tolower(ResourceId) in ({KeyVault});\r\ndata\r\n| summarize Count = count() by AlertSeverity\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AlertSeverity)\r\n on AlertSeverity\r\n | project-away TimeGenerated\r\n| extend AlertSeveritys = AlertSeverity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend AlertSeverity = 'All', AlertSeveritys = '*' \r\n)\r\n| extend Severity = iif(AlertSeverity == \"All\", 0,iif(AlertSeverity == \"High\", 1, iif(AlertSeverity == \"Medium\", 2, iif(AlertSeverity == \"Low\", 3, 4))))\r\n| order by Severity asc\r\n",
+                    "query": "let data = SecurityAlert\n| where \"{AlertSeverity:lable}\" == \"All\" or AlertSeverity in (dynamic([{AlertSeverity}]))\n| where AlertType startswith \"KV_\"\n| where tolower(ResourceId) in (dynamic([{KeyVault}]));\ndata\n| summarize Count = count() by AlertSeverity\n| join kind = inner (data\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by AlertSeverity)\n on AlertSeverity\n | project-away TimeGenerated\n| extend AlertSeveritys = AlertSeverity\n| union (\n data \n | summarize Count = count() \n | extend jkey = 1\n | join kind=inner (data\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\n | extend jkey = 1) on jkey\n | extend AlertSeverity = 'All', AlertSeveritys = '*' \n)\n| extend Severity = iif(AlertSeverity == \"All\", 0,iif(AlertSeverity == \"High\", 1, iif(AlertSeverity == \"Medium\", 2, iif(AlertSeverity == \"Low\", 3, 4))))\n| order by Severity asc\n",
                     "size": 3,
                     "timeContext": {
                       "durationMs": 0
@@ -771,7 +786,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "SecurityAlert\r\n| where AlertType startswith \"KV_\"\r\n| where tolower(ResourceId) in ({KeyVault})\r\n| where AlertSeverity in ({AlertSeverity})\r\n| summarize AlertCount = count() by ResourceId\r\n| project Resource = tolower(ResourceId), AlertCount\r\n| order by AlertCount desc\r\n",
+                    "query": "SecurityAlert\n| where AlertType startswith \"KV_\"\n| where tolower(ResourceId) in (dynamic([{KeyVault}]))\n| where AlertSeverity in (dynamic([{AlertSeverity}]))\n| summarize AlertCount = count() by ResourceId\n| project Resource = tolower(ResourceId), AlertCount\n| order by AlertCount desc\n",
                     "size": 0,
                     "timeContext": {
                       "durationMs": 7776000000
@@ -806,7 +821,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "SecurityAlert\r\n| where TimeGenerated {TimeRange}\r\n| where \"{AlertSeverity}\" has AlertSeverity or isempty(\"{AlertSeverity}\")\r\n| where AlertType startswith \"KV_\"\r\n| where ResourceId in ({KeyVault})\r\n| make-series Count=count() on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by ResourceId\r\n//| summarize Count=count() by ResourceId, bin(TimeGenerated,{TimeRange:grain})\r\n",
+                    "query": "SecurityAlert\n| where TimeGenerated {TimeRange}\n| where \"{AlertSeverity}\" has AlertSeverity or isempty(\"{AlertSeverity}\")\n| where AlertType startswith \"KV_\"\n| where ResourceId in (dynamic([{KeyVault}]))\n| make-series Count=count() on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by ResourceId\n//| summarize Count=count() by ResourceId, bin(TimeGenerated,{TimeRange:grain})\n",
                     "size": 0,
                     "title": "Key vault alerts",
                     "noDataMessage": "No alrets from Azure Defender for Key Vaults",
@@ -825,7 +840,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let Incidents = SecurityIncident\r\n| project AlertIds, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nSecurityAlert\r\n| where TimeGenerated between ({TimeRange:start} .. ({TimeRange:end} + {TimeRange:grain}))\r\n| where AlertType startswith \"KV_\"\r\n| where ResourceId in ({KeyVault})\r\n| where AlertSeverity in ({AlertSeverity})\r\n| project TimeGenerated, ResourceId, AlertSeverity, DisplayName, AlertLink, AlertId=tostring(SystemAlertId)\r\n| order by TimeGenerated desc\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| project TimeGenerated, ResourceId, AlertSeverity, DisplayName, ['Azure Defender Alert'] = AlertLink, Incident = IncidentUrl, AlertId\r\n",
+                    "query": "let Incidents = SecurityIncident\n| project AlertIds, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nSecurityAlert\n| where TimeGenerated between ({TimeRange:start} .. ({TimeRange:end} + {TimeRange:grain}))\n| where AlertType startswith \"KV_\"\n| where ResourceId in (dynamic([{KeyVault}]))\n| where AlertSeverity in (dynamic([{AlertSeverity}]))\n| project TimeGenerated, ResourceId, AlertSeverity, DisplayName, AlertLink, AlertId=tostring(SystemAlertId)\n| order by TimeGenerated desc\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| project TimeGenerated, ResourceId, AlertSeverity, DisplayName, ['Azure Defender Alert'] = AlertLink, Incident = IncidentUrl, AlertId\n",
                     "size": 0,
                     "title": "Key vault alerts",
                     "timeContext": {
@@ -871,7 +886,8 @@
                         "itemKey": "DisplayName",
                         "sortOrder": 2
                       }
-                    ]
+                    ],
+                    "exportDefaultValue": ""
                   },
                   "name": "query - 15 - Copy - Copy - Copy"
                 },
@@ -879,7 +895,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let data = SecurityAlert\r\n| where AlertType startswith \"KV_\"\r\n| where SystemAlertId == '{SelectedAlertId}';\r\nlet nodes = data\r\n| project Id = SystemAlertId, Name = DisplayName, Size = 1, Kind = 'alert'\r\n| union (\r\ndata \r\n| project parse_json(Entities), SystemAlertId\r\n| mv-expand Entities\r\n| evaluate bag_unpack(Entities)\r\n| project Id = strcat(SystemAlertId, '-',$id), Name = strcat(ResourceId,Address,AadUserId), Size = 1, Kind = Type\r\n);\r\nlet links = data\r\n| project parse_json(Entities), SystemAlertId\r\n| mv-expand Entities\r\n| evaluate bag_unpack(Entities)\r\n| project SourceId = SystemAlertId, TargetId = strcat(SystemAlertId, '-', $id), Size = 1, Kind = Type;\r\nnodes | union (links)\r\n",
+                    "query": "let alertData = SecurityAlert\n| extend ResourceId = tostring(parse_json(Entities)[0].ResourceId)\n| extend AlertType = column_ifexists(\"AlertType\", AlertName)\n| where TimeGenerated {TimeRange}\n| where AlertType startswith \"AzureKeyVault\"\n| where SystemAlertId == '{SelectedAlertId}';\nlet entities=alertData\n| extend Entities = parse_json(Entities)\n| mv-expand Entities\n| extend ['$id'] = tostring(Entities.[\"$id\"]),\n         ResourceId = tostring(Entities.ResourceId),\n         Address = tostring(Entities.Address),\n         AadUserId = tostring(Entities.AadUserId),\n         Type = tostring(Entities.Type)\n| where isnotempty(['$id'])\n| extend EntityName = case(isnotempty(ResourceId), split(ResourceId, '/')[8], isnotempty(Address), Address, isnotempty(AadUserId), strcat(\"UserId: \", AadUserId), Type)\n| extend SourceId = SystemAlertId, SourceName = \"Selected Alert\", SourceKind = 'Alert', TargetId = strcat(SystemAlertId,\"-\", ['$id']), TargetName=EntityName, TargetKind = Type\n| project SourceId, SourceName, SourceKind, TargetId, TargetName, TargetKind;\nalertData\n| extend Entities = parse_json(Entities)\n| mv-expand Entities\n| extend ['$id'] = tostring(Entities.[\"$id\"]),\n         ResourceId = tostring(Entities.ResourceId),\n         Address = tostring(Entities.Address),\n         AadUserId = tostring(Entities.AadUserId),\n         Type = tostring(Entities.Type)\n| where isnotempty(['$id'])\n| extend EntityName = case(isnotempty(ResourceId), split(ResourceId, '/')[8], isnotempty(Address), Address, isnotempty(AadUserId), strcat(\"UserId: \", AadUserId), Type)\n| project Id = strcat(SystemAlertId,\"-\", ['$id']), Name = EntityName, Kind = Type\n| union (alertData\n| distinct Id = SystemAlertId, Name = AlertName, Kind = 'Alert')\n| lookup kind=inner entities on $left.Id == $right.SourceId",
                     "size": 2,
                     "title": "Alert and entity graph (chose an alert from the list above)",
                     "timeContext": {
@@ -1079,7 +1095,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize Count = count() by Resource, bin(TimeGenerated,{TimeRange:grain})",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize Count = count() by Resource, bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by key vault",
                                 "timeContext": {
@@ -1095,7 +1111,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize EventCount=count() by Resource\r\n| order by EventCount desc",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize EventCount=count() by Resource\n| order by EventCount desc",
                                 "size": 0,
                                 "title": "Activity, by key vault",
                                 "timeContext": {
@@ -1122,7 +1138,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize EventCount=count() by Resource",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize EventCount=count() by Resource",
                                 "size": 0,
                                 "title": "Events, by key vault distribution",
                                 "timeContext": {
@@ -1154,7 +1170,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize Count = count() by CallerIPAddress, bin(TimeGenerated,{TimeRange:grain})",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize Count = count() by CallerIPAddress, bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by Caller IP",
                                 "timeContext": {
@@ -1170,7 +1186,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "let AlertIPs = SecurityAlert\r\n| project parse_json(Entities), AlertLink, SystemAlertId\r\n| mv-expand Entities\r\n| extend parse_json(Entities)\r\n| mv-expand Entities\r\n| where Entities has 'Address'\r\n| project IP = tostring(split(split(Entities, 'Address\":\"')[1], '\"')[0]), AlertLink, AlertId = tostring(SystemAlertId);\r\nlet Incidents = SecurityIncident\r\n| project AlertIds, Title, Severity, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nAzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize EventCount=count() by IP = tostring(CallerIPAddress)\r\n| join kind=leftouter AlertIPs on IP\r\n| project-away IP1\r\n| order by EventCount desc\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| extend Incident = IncidentUrl\r\n| summarize ['Related incidents'] = count(Incident != '') by IP, EventCount\r\n| order by ['Related incidents'], EventCount desc\r\n",
+                                "query": "let AlertIPs = SecurityAlert\n| project parse_json(Entities), AlertLink, SystemAlertId\n| mv-expand Entities\n| extend parse_json(Entities)\n| mv-expand Entities\n| where Entities has 'Address'\n| project IP = tostring(split(split(Entities, 'Address\":\"')[1], '\"')[0]), AlertLink, AlertId = tostring(SystemAlertId);\nlet Incidents = SecurityIncident\n| project AlertIds, Title, Severity, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nAzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize EventCount=count() by IP = tostring(CallerIPAddress)\n| join kind=leftouter AlertIPs on IP\n| project-away IP1\n| order by EventCount desc\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| extend Incident = IncidentUrl\n| summarize ['Related incidents'] = count(Incident != '') by IP, EventCount\n| order by ['Related incidents'], EventCount desc\n",
                                 "size": 0,
                                 "title": "Activity by Caller IP",
                                 "timeContext": {
@@ -1198,7 +1214,8 @@
                                     }
                                   ]
                                 },
-                                "sortBy": []
+                                "sortBy": [],
+                                "exportDefaultValue": ""
                               },
                               "customWidth": "60",
                               "name": "Activity by Caller IP"
@@ -1207,7 +1224,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize EventCount=count() by CallerIPAddress",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize EventCount=count() by CallerIPAddress",
                                 "size": 0,
                                 "title": "Events, by Caller IP distribution",
                                 "timeContext": {
@@ -1224,7 +1241,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "let AlertIPs = SecurityAlert\r\n| extend parse_json(Entities), AlertLink, SystemAlertId, AlertType\r\n| mv-expand Entities\r\n| extend parse_json(Entities)\r\n| mv-expand Entities\r\n| where Entities has 'Address'\r\n| project IP = tostring(split(split(Entities, 'Address\":\"')[1], '\"')[0]), TimeGenerated, DisplayName, Description, ProductName, AlertLink, AlertSeverity, AlertId = tostring(SystemAlertId);\r\nlet Incidents = SecurityIncident\r\n| project AlertIds, Title, Severity, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nAlertIPs\r\n| where IP in ('{SelectedIP}')\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| project TimeGenerated, Title, ProductName, Severity, Incident = IncidentUrl\r\n| where isempty(Incident) == false",
+                                "query": "let AlertIPs = SecurityAlert\n| extend parse_json(Entities), AlertLink, SystemAlertId, AlertType\n| mv-expand Entities\n| extend parse_json(Entities)\n| mv-expand Entities\n| where Entities has 'Address'\n| project IP = tostring(split(split(Entities, 'Address\":\"')[1], '\"')[0]), TimeGenerated, DisplayName, Description, ProductName, AlertLink, AlertSeverity, AlertId = tostring(SystemAlertId);\nlet Incidents = SecurityIncident\n| project AlertIds, Title, Severity, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nAlertIPs\n| where IP in ('{SelectedIP}')\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| project TimeGenerated, Title, ProductName, Severity, Incident = IncidentUrl\n| where isempty(Incident) == false",
                                 "size": 0,
                                 "title": "Incidents involving the selected Caller IP (selected above)",
                                 "timeContext": {
@@ -1265,7 +1282,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\r\n| extend ApplicationId = identity_claim_appid_g\r\n| summarize Count = count() by Identity = iff(isempty(User), ObjectId, User) , bin(TimeGenerated,{TimeRange:grain})",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\n| extend ApplicationId = identity_claim_appid_g\n| summarize Count = count() by Identity = iff(isempty(User), ObjectId, User) , bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by Identity",
                                 "timeContext": {
@@ -1281,7 +1298,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "let AlertIDs = SecurityAlert\r\n| project parse_json(Entities), AlertLink, SystemAlertId, TimeGenerated\r\n| mv-expand Entities\r\n| extend parse_json(Entities)\r\n| mv-expand Entities\r\n| where Entities has 'AadUserId'\r\n| project ID = tostring(split(split(Entities, 'AadUserId\":\"')[1], '\"')[0]), TimeGenerated, AlertLink, AlertId = SystemAlertId;\r\nlet Incidents = SecurityIncident\r\n| project AlertIds, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nAzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\r\n| extend ApplicationId = identity_claim_appid_g\r\n| where isempty(ObjectId) == false or isempty(User) == false or isempty(ApplicationId) == false\r\n| extend ID = iif(isempty(ObjectId), ApplicationId, ObjectId)\r\n//| summarize EventCount=count() by Identity = iif(isempty(User),iif(isempty(ObjectId), ApplicationId, ObjectId), User), Identifier = iif(isempty(User),iif(isempty(ObjectId), 'AppId', 'ObjectId'), 'User'), ID\r\n| summarize EventCount=count() by Identity = iif(isempty(ObjectId), ApplicationId, ObjectId), Identifier = iif(isempty(User),iif(isempty(ObjectId), 'AppId', 'ObjectId'), 'User'), User, ID\r\n| join kind=leftouter AlertIDs on ID\r\n| project-away ID, ID1\r\n| order by EventCount desc\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| extend Incident = IncidentUrl\r\n| summarize ['Related incidents'] = count(Incident != '') by Identity, Identifier, User, EventCount\r\n| order by ['Related incidents'], EventCount desc\r\n",
+                                "query": "let AlertIDs = SecurityAlert\n| project parse_json(Entities), AlertLink, SystemAlertId, TimeGenerated\n| mv-expand Entities\n| extend parse_json(Entities)\n| mv-expand Entities\n| where Entities has 'AadUserId'\n| project ID = tostring(split(split(Entities, 'AadUserId\":\"')[1], '\"')[0]), TimeGenerated, AlertLink, AlertId = SystemAlertId;\nlet Incidents = SecurityIncident\n| project AlertIds, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nAzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\n| extend ApplicationId = identity_claim_appid_g\n| where isempty(ObjectId) == false or isempty(User) == false or isempty(ApplicationId) == false\n| extend ID = iif(isempty(ObjectId), ApplicationId, ObjectId)\n//| summarize EventCount=count() by Identity = iif(isempty(User),iif(isempty(ObjectId), ApplicationId, ObjectId), User), Identifier = iif(isempty(User),iif(isempty(ObjectId), 'AppId', 'ObjectId'), 'User'), ID\n| summarize EventCount=count() by Identity = iif(isempty(ObjectId), ApplicationId, ObjectId), Identifier = iif(isempty(User),iif(isempty(ObjectId), 'AppId', 'ObjectId'), 'User'), User, ID\n| join kind=leftouter AlertIDs on ID\n| project-away ID, ID1\n| order by EventCount desc\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| extend Incident = IncidentUrl\n| summarize ['Related incidents'] = count(Incident != '') by Identity, Identifier, User, EventCount\n| order by ['Related incidents'], EventCount desc\n",
                                 "size": 0,
                                 "title": "Activity, by Identity",
                                 "timeContext": {
@@ -1320,7 +1337,8 @@
                                     "itemKey": "$gen_bar_Related incidents_4",
                                     "sortOrder": 2
                                   }
-                                ]
+                                ],
+                                "exportDefaultValue": ""
                               },
                               "customWidth": "60",
                               "name": "Activity, by Identity"
@@ -1329,7 +1347,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\r\n| extend ApplicationId = identity_claim_appid_g\r\n| summarize EventCount=count() by Identiy = iif(isempty(User), ObjectId, User)",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\n| extend ApplicationId = identity_claim_appid_g\n| summarize EventCount=count() by Identiy = iif(isempty(User), ObjectId, User)",
                                 "size": 0,
                                 "title": "Events, by Identity distribution",
                                 "timeContext": {
@@ -1346,7 +1364,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "let AlertIDs = SecurityAlert\r\n| extend parse_json(Entities), AlertLink, SystemAlertId\r\n| mv-expand Entities\r\n| extend parse_json(Entities)\r\n| mv-expand Entities\r\n| where Entities has 'AadUserId'\r\n| project ID = tostring(split(split(Entities, 'AadUserId\":\"')[1], '\"')[0]), TimeGenerated, DisplayName, Description, ProductName, AlertLink, AlertSeverity, AlertId = tostring(SystemAlertId);\r\nlet Incidents = SecurityIncident\r\n| project AlertIds, Title, Severity, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nAlertIDs\r\n| where ID in ('{SelectedID}')\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| project TimeGenerated, Title, ProductName, Severity, Incident = IncidentUrl\r\n| where isempty(Incident) == false",
+                                "query": "let AlertIDs = SecurityAlert\n| extend parse_json(Entities), AlertLink, SystemAlertId\n| mv-expand Entities\n| extend parse_json(Entities)\n| mv-expand Entities\n| where Entities has 'AadUserId'\n| project ID = tostring(split(split(Entities, 'AadUserId\":\"')[1], '\"')[0]), TimeGenerated, DisplayName, Description, ProductName, AlertLink, AlertSeverity, AlertId = tostring(SystemAlertId);\nlet Incidents = SecurityIncident\n| project AlertIds, Title, Severity, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nAlertIDs\n| where ID in ('{SelectedID}')\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| project TimeGenerated, Title, ProductName, Severity, Incident = IncidentUrl\n| where isempty(Incident) == false",
                                 "size": 0,
                                 "title": "Incidents involving the selected identity (selected above)",
                                 "timeContext": {
@@ -1387,7 +1405,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize Count = count() by OperationName, bin(TimeGenerated,{TimeRange:grain})",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize Count = count() by OperationName, bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by operation name",
                                 "timeContext": {
@@ -1403,7 +1421,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize EventCount=count() by OperationName",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize EventCount=count() by OperationName",
                                 "size": 0,
                                 "title": "Activity, by operation name",
                                 "timeContext": {
@@ -1430,7 +1448,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| summarize EventCount=count() by OperationName\r\n| order by EventCount desc",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| summarize EventCount=count() by OperationName\n| order by EventCount desc",
                                 "size": 0,
                                 "title": "Events, by operation name distribution",
                                 "timeContext": {
@@ -1519,7 +1537,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize Count = count() by Resource, bin(TimeGenerated,{TimeRange:grain})",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize Count = count() by Resource, bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by key vault",
                                 "timeContext": {
@@ -1535,7 +1553,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize EventCount=count() by Resource\r\n| order by EventCount desc",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize EventCount=count() by Resource\n| order by EventCount desc",
                                 "size": 0,
                                 "title": "Activity, by key vault",
                                 "timeContext": {
@@ -1562,7 +1580,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize EventCount=count() by Resource",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize EventCount=count() by Resource",
                                 "size": 0,
                                 "title": "Events, by key vault distribution",
                                 "timeContext": {
@@ -1594,7 +1612,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize Count = count() by CallerIPAddress, bin(TimeGenerated,{TimeRange:grain})",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize Count = count() by CallerIPAddress, bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by Caller IP",
                                 "timeContext": {
@@ -1610,7 +1628,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "let AlertIPs = SecurityAlert\r\n| project parse_json(Entities), AlertLink, SystemAlertId\r\n| mv-expand Entities\r\n| extend parse_json(Entities)\r\n| mv-expand Entities\r\n| where Entities has 'Address'\r\n| project IP = tostring(split(split(Entities, 'Address\":\"')[1], '\"')[0]), AlertLink, AlertId = tostring(SystemAlertId);\r\nlet Incidents = SecurityIncident\r\n| project AlertIds, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nAzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize EventCount=count() by IP = tostring(CallerIPAddress)\r\n| join kind=leftouter AlertIPs on IP\r\n| project-away IP1\r\n| order by EventCount desc\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| extend Incident = IncidentUrl\r\n| summarize ['Related incidents'] = count(Incident != '') by IP, EventCount\r\n| order by ['Related incidents'], EventCount desc\r\n",
+                                "query": "let AlertIPs = SecurityAlert\n| project parse_json(Entities), AlertLink, SystemAlertId\n| mv-expand Entities\n| extend parse_json(Entities)\n| mv-expand Entities\n| where Entities has 'Address'\n| project IP = tostring(split(split(Entities, 'Address\":\"')[1], '\"')[0]), AlertLink, AlertId = tostring(SystemAlertId);\nlet Incidents = SecurityIncident\n| project AlertIds, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nAzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize EventCount=count() by IP = tostring(CallerIPAddress)\n| join kind=leftouter AlertIPs on IP\n| project-away IP1\n| order by EventCount desc\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| extend Incident = IncidentUrl\n| summarize ['Related incidents'] = count(Incident != '') by IP, EventCount\n| order by ['Related incidents'], EventCount desc\n",
                                 "size": 0,
                                 "title": "Activity by Caller IP",
                                 "timeContext": {
@@ -1637,7 +1655,8 @@
                                       }
                                     }
                                   ]
-                                }
+                                },
+                                "exportDefaultValue": ""
                               },
                               "customWidth": "60",
                               "name": "Activity by Caller IP"
@@ -1646,7 +1665,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize EventCount=count() by CallerIPAddress",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize EventCount=count() by CallerIPAddress",
                                 "size": 0,
                                 "title": "Events, by Caller IP distribution",
                                 "timeContext": {
@@ -1663,7 +1682,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "let AlertIPs = SecurityAlert\r\n| extend parse_json(Entities), AlertLink, SystemAlertId, AlertType\r\n| mv-expand Entities\r\n| extend parse_json(Entities)\r\n| mv-expand Entities\r\n| where Entities has 'Address'\r\n| project IP = tostring(split(split(Entities, 'Address\":\"')[1], '\"')[0]), TimeGenerated, DisplayName, Description, ProductName, AlertLink, AlertSeverity, AlertId = tostring(SystemAlertId);\r\nlet Incidents = SecurityIncident\r\n| project AlertIds, Title, Severity, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nAlertIPs\r\n| where IP in ('{SelectedIP}')\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| project TimeGenerated, Title, ProductName, Severity, Incident = IncidentUrl\r\n| where isempty(Incident) == false",
+                                "query": "let AlertIPs = SecurityAlert\n| extend parse_json(Entities), AlertLink, SystemAlertId, AlertType\n| mv-expand Entities\n| extend parse_json(Entities)\n| mv-expand Entities\n| where Entities has 'Address'\n| project IP = tostring(split(split(Entities, 'Address\":\"')[1], '\"')[0]), TimeGenerated, DisplayName, Description, ProductName, AlertLink, AlertSeverity, AlertId = tostring(SystemAlertId);\nlet Incidents = SecurityIncident\n| project AlertIds, Title, Severity, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nAlertIPs\n| where IP in ('{SelectedIP}')\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| project TimeGenerated, Title, ProductName, Severity, Incident = IncidentUrl\n| where isempty(Incident) == false",
                                 "size": 0,
                                 "title": "Incidents involving the selected Caller IP (selected above)",
                                 "timeContext": {
@@ -1704,7 +1723,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\r\n| extend ApplicationId = identity_claim_appid_g\r\n| summarize Count = count() by Identity = iff(isempty(User), ObjectId, User) , bin(TimeGenerated,{TimeRange:grain})",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\n| extend ApplicationId = identity_claim_appid_g\n| summarize Count = count() by Identity = iff(isempty(User), ObjectId, User) , bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by Identity",
                                 "timeContext": {
@@ -1720,7 +1739,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "let AlertIDs = SecurityAlert\r\n| project parse_json(Entities), AlertLink, SystemAlertId, TimeGenerated\r\n| mv-expand Entities\r\n| extend parse_json(Entities)\r\n| mv-expand Entities\r\n| where Entities has 'AadUserId'\r\n| project ID = tostring(split(split(Entities, 'AadUserId\":\"')[1], '\"')[0]), TimeGenerated, AlertLink, AlertId = SystemAlertId;\r\nlet Incidents = SecurityIncident\r\n| project AlertIds, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nAzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\r\n| extend ApplicationId = identity_claim_appid_g\r\n| where isempty(ObjectId) == false or isempty(User) == false or isempty(ApplicationId) == false\r\n| extend ID = iif(isempty(ObjectId), ApplicationId, ObjectId)\r\n//| summarize EventCount=count() by Identity = iif(isempty(User),iif(isempty(ObjectId), ApplicationId, ObjectId), User), Identifier = iif(isempty(User),iif(isempty(ObjectId), 'AppId', 'ObjectId'), 'User'), ID\r\n| summarize EventCount=count() by Identity = iif(isempty(ObjectId), ApplicationId, ObjectId), Identifier = iif(isempty(User),iif(isempty(ObjectId), 'AppId', 'ObjectId'), 'User'), User, ID\r\n| join kind=leftouter AlertIDs on ID\r\n| project-away ID, ID1\r\n| order by EventCount desc\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| extend Incident = IncidentUrl\r\n| summarize ['Related incidents'] = count(Incident != '') by Identity, Identifier, User, EventCount\r\n| order by ['Related incidents'], EventCount desc\r\n",
+                                "query": "let AlertIDs = SecurityAlert\n| project parse_json(Entities), AlertLink, SystemAlertId, TimeGenerated\n| mv-expand Entities\n| extend parse_json(Entities)\n| mv-expand Entities\n| where Entities has 'AadUserId'\n| project ID = tostring(split(split(Entities, 'AadUserId\":\"')[1], '\"')[0]), TimeGenerated, AlertLink, AlertId = SystemAlertId;\nlet Incidents = SecurityIncident\n| project AlertIds, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nAzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\n| extend ApplicationId = identity_claim_appid_g\n| where isempty(ObjectId) == false or isempty(User) == false or isempty(ApplicationId) == false\n| extend ID = iif(isempty(ObjectId), ApplicationId, ObjectId)\n//| summarize EventCount=count() by Identity = iif(isempty(User),iif(isempty(ObjectId), ApplicationId, ObjectId), User), Identifier = iif(isempty(User),iif(isempty(ObjectId), 'AppId', 'ObjectId'), 'User'), ID\n| summarize EventCount=count() by Identity = iif(isempty(ObjectId), ApplicationId, ObjectId), Identifier = iif(isempty(User),iif(isempty(ObjectId), 'AppId', 'ObjectId'), 'User'), User, ID\n| join kind=leftouter AlertIDs on ID\n| project-away ID, ID1\n| order by EventCount desc\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| extend Incident = IncidentUrl\n| summarize ['Related incidents'] = count(Incident != '') by Identity, Identifier, User, EventCount\n| order by ['Related incidents'], EventCount desc\n",
                                 "size": 0,
                                 "title": "Activity, by Identity",
                                 "timeContext": {
@@ -1747,7 +1766,8 @@
                                       }
                                     }
                                   ]
-                                }
+                                },
+                                "exportDefaultValue": ""
                               },
                               "customWidth": "60",
                               "name": "Activity, by Identity"
@@ -1756,7 +1776,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\r\n| extend ApplicationId = identity_claim_appid_g\r\n| summarize EventCount=count() by Identiy = iif(isempty(User), ObjectId, User)",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\n| extend ApplicationId = identity_claim_appid_g\n| summarize EventCount=count() by Identiy = iif(isempty(User), ObjectId, User)",
                                 "size": 0,
                                 "title": "Events, by Identity distribution",
                                 "timeContext": {
@@ -1773,7 +1793,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "let AlertIDs = SecurityAlert\r\n| extend parse_json(Entities), AlertLink, SystemAlertId\r\n| mv-expand Entities\r\n| extend parse_json(Entities)\r\n| mv-expand Entities\r\n| where Entities has 'AadUserId'\r\n| project ID = tostring(split(split(Entities, 'AadUserId\":\"')[1], '\"')[0]), TimeGenerated, DisplayName, Description, ProductName, AlertLink, AlertSeverity, AlertId = tostring(SystemAlertId);\r\nlet Incidents = SecurityIncident\r\n| project AlertIds, Title, Severity, IncidentUrl\r\n|mv-expand AlertId = AlertIds\r\n| extend AlertId = tostring(AlertId);\r\nAlertIDs\r\n| where ID in ('{SelectedID}')\r\n| join kind=leftouter Incidents on AlertId\r\n| project-away AlertIds, AlertId1\r\n| project TimeGenerated, Title, ProductName, Severity, Incident = IncidentUrl\r\n| where isempty(Incident) == false",
+                                "query": "let AlertIDs = SecurityAlert\n| extend parse_json(Entities), AlertLink, SystemAlertId\n| mv-expand Entities\n| extend parse_json(Entities)\n| mv-expand Entities\n| where Entities has 'AadUserId'\n| project ID = tostring(split(split(Entities, 'AadUserId\":\"')[1], '\"')[0]), TimeGenerated, DisplayName, Description, ProductName, AlertLink, AlertSeverity, AlertId = tostring(SystemAlertId);\nlet Incidents = SecurityIncident\n| project AlertIds, Title, Severity, IncidentUrl\n|mv-expand AlertId = AlertIds\n| extend AlertId = tostring(AlertId);\nAlertIDs\n| where ID in ('{SelectedID}')\n| join kind=leftouter Incidents on AlertId\n| project-away AlertIds, AlertId1\n| project TimeGenerated, Title, ProductName, Severity, Incident = IncidentUrl\n| where isempty(Incident) == false",
                                 "size": 0,
                                 "title": "Incidents involving the selected identity (selected above)",
                                 "timeContext": {
@@ -1814,7 +1834,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize Count = count() by OperationName, bin(TimeGenerated,{TimeRange:grain})",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize Count = count() by OperationName, bin(TimeGenerated,{TimeRange:grain})",
                                 "size": 0,
                                 "title": "Events, by operation name",
                                 "timeContext": {
@@ -1830,7 +1850,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize EventCount=count() by OperationName",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize EventCount=count() by OperationName",
                                 "size": 0,
                                 "title": "Activity, by operation name",
                                 "timeContext": {
@@ -1857,7 +1877,7 @@
                               "type": 3,
                               "content": {
                                 "version": "KqlItem/1.0",
-                                "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\r\n| summarize EventCount=count() by OperationName\r\n| order by EventCount desc",
+                                "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| where HttpStatusCode = tostring(httpStatusCode_d) !startswith \"20\"\n| summarize EventCount=count() by OperationName\n| order by EventCount desc",
                                 "size": 0,
                                 "title": "Events, by operation name distribution",
                                 "timeContext": {
@@ -1908,7 +1928,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "let SensitiveOperationList = dynamic([\"VaultDelete\", \"KeyDelete\", \"SecretDelete\", \"SecretPurge\", \"KeyPurge\", \"SecretBackup\", \"KeyBackup\"]);\r\nAzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| extend Result = columnifexists(\"ResultType\", \"NoResult\")\r\n| extend requestUri_s = columnifexists(\"requestUri_s\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = columnifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\")\r\n| extend id_s = columnifexists(\"id_s\", \"None\"), CallerIPAddress = columnifexists(\"CallerIPAddress\", \"None\"), clientInfo_s = columnifexists(\"clientInfo_s\", \"None\")\r\n| where Result !~ \"None\" and isnotempty(Result)\r\n| where identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g !~ \"None\" and isnotempty(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g)\r\n| where id_s !~ \"None\" and isnotempty(id_s)\r\n| where CallerIPAddress !~ \"None\" and isnotempty(CallerIPAddress)\r\n| where clientInfo_s !~ \"None\" and isnotempty(clientInfo_s)\r\n| where requestUri_s !~ \"None\" and isnotempty(requestUri_s)\r\n| where ResourceType =~ \"VAULTS\" and Result =~ \"Success\" \r\n| where OperationName in~ (SensitiveOperationList)  \r\n| project TimeGenerated, _ResourceId, Result, OperationName, CallerIPAddress, identity_claim_appid_g, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_http_schemas_microsoft_com_identity_claims_scope_s, requestUri_s, clientInfo_s\r\n",
+        "query": "let SensitiveOperationList = dynamic([\"VaultDelete\", \"KeyDelete\", \"SecretDelete\", \"SecretPurge\", \"KeyPurge\", \"SecretBackup\", \"KeyBackup\"]);\nAzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| extend Result = column_ifexists(\"ResultType\", \"NoResult\")\n| extend requestUri_s = column_ifexists(\"requestUri_s\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = column_ifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\")\n| extend id_s = column_ifexists(\"id_s\", \"None\"), CallerIPAddress = column_ifexists(\"CallerIPAddress\", \"None\"), clientInfo_s = column_ifexists(\"clientInfo_s\", \"None\")\n| where Result !~ \"None\" and isnotempty(Result)\n| where identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g !~ \"None\" and isnotempty(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g)\n| where id_s !~ \"None\" and isnotempty(id_s)\n| where CallerIPAddress !~ \"None\" and isnotempty(CallerIPAddress)\n| where clientInfo_s !~ \"None\" and isnotempty(clientInfo_s)\n| where requestUri_s !~ \"None\" and isnotempty(requestUri_s)\n| where ResourceType =~ \"VAULTS\" and Result =~ \"Success\" \n| where OperationName in~ (SensitiveOperationList)  \n| project TimeGenerated, _ResourceId, Result, OperationName, CallerIPAddress, identity_claim_appid_g, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_http_schemas_microsoft_com_identity_claims_scope_s, requestUri_s, clientInfo_s\n",
         "size": 0,
         "title": "Sensitive Operations",
         "timeContext": {
@@ -2011,7 +2031,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "let EventCountThreshold = toint({EventCountThreshold});\r\nlet MonitoredTimeRange = datetime({MonitoredTimeRange:start});\r\nlet OperationList = dynamic(\r\n[\"SecretGet\", \"KeyGet\", \"VaultGet\"]);\r\nAzureDiagnostics\r\n| where TimeGenerated > MonitoredTimeRange\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVault})\r\n| extend Result = columnifexists(\"ResultType\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = columnifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\")\r\n| where Result !~ \"None\" and isnotempty(Result)\r\n| where identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g !~ \"None\" and isnotempty(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g)\r\n| where ResourceType =~ \"VAULTS\" and Result =~ \"Success\"\r\n| where OperationName in (OperationList) \r\n| summarize EventCount = count(), OperationNames = make_set(OperationName), CallerIPList = make_set(CallerIPAddress), RequestUriList = make_set(requestUri_s), ClientInfoList = make_set(clientInfo_s) by _ResourceId, Result, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_appid_g, identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| where EventCount > EventCountThreshold\r\n| order by EventCount desc\r\n\r\n\r\n\r\n",
+              "query": "let EventCountThreshold = toint({EventCountThreshold});\nlet MonitoredTimeRange = todatetime({MonitoredTimeRange:start});\nlet OperationList = dynamic(\n[\"SecretGet\", \"KeyGet\", \"VaultGet\"]);\nAzureDiagnostics\n| where TimeGenerated > MonitoredTimeRange\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVault}]))\n| extend Result = column_ifexists(\"ResultType\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = column_ifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\")\n| where Result !~ \"None\" and isnotempty(Result)\n| where identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g !~ \"None\" and isnotempty(identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g)\n| where ResourceType =~ \"VAULTS\" and Result =~ \"Success\"\n| where OperationName in (OperationList) \n| summarize EventCount = count(), OperationNames = make_set(OperationName), CallerIPList = make_set(CallerIPAddress), RequestUriList = make_set(requestUri_s), ClientInfoList = make_set(clientInfo_s) by _ResourceId, Result, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_appid_g, identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\n| where EventCount > EventCountThreshold\n| order by EventCount desc\n\n\n\n",
               "size": 0,
               "title": "Mass Secret Retrieval",
               "queryType": "advancedHunting",
@@ -2068,17 +2088,20 @@
                   "version": "KqlParameterItem/1.0",
                   "name": "KeyVaultOperationAnalysis",
                   "type": 5,
-                  "isRequired": true,
+                  "isRequired": false,
                   "multiSelect": true,
                   "quote": "'",
                   "delimiter": ",",
-                  "query": "where type =~ 'microsoft.keyvault/vaults'\r\n| where strcat('/subscriptions/',subscriptionId) in ({Subscription})\r\n| project id=tolower(id)\r\n| where id in ({KeyVault})",
-                  "value": [],
+                  "query": "where type =~ 'microsoft.keyvault/vaults'\n| where strcat('/subscriptions/',subscriptionId) in (dynamic([{Subscription}]))\n| project id=tolower(id)\n| where id in (dynamic([{KeyVault}]))",
+                  "value": [
+                    "value::all"
+                  ],
                   "typeSettings": {
                     "additionalResourceOptions": [
                       "value::all"
                     ],
-                    "showDefault": false
+                    "showDefault": false,
+                    "includeAll": true
                   },
                   "timeContext": {
                     "durationMs": 86400000
@@ -2150,7 +2173,7 @@
                         "typeSettings": {
                           "additionalResourceOptions": []
                         },
-                        "jsonData": "[\r\n    { \"value\":\"log\", \"label\":\"Logarithmic\" },\r\n    { \"value\":\"linear\", \"label\":\"Linear\" }\r\n]",
+                        "jsonData": "[\n    { \"value\":\"log\", \"label\":\"Logarithmic\" },\n    { \"value\":\"linear\", \"label\":\"Linear\" }\n]",
                         "timeContext": {
                           "durationMs": 86400000
                         }
@@ -2165,7 +2188,7 @@
                         "typeSettings": {
                           "additionalResourceOptions": []
                         },
-                        "jsonData": "[\r\n    { \"value\":\"all\", \"label\":\"All\" },\r\n    { \"value\":\"users\", \"label\":\"Users\" },\r\n    { \"value\":\"servicesr\", \"label\":\"Services\" }\r\n]",
+                        "jsonData": "[\n    { \"value\":\"all\", \"label\":\"All\" },\n    { \"value\":\"users\", \"label\":\"Users\" },\n    { \"value\":\"servicesr\", \"label\":\"Services\" }\n]",
                         "timeContext": {
                           "durationMs": 86400000
                         }
@@ -2179,7 +2202,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "AzureDiagnostics\r\n| where ResourceType == \"VAULTS\"\r\n| where Category == \"AuditEvent\"\r\n| where tolower(_ResourceId) in ({KeyVaultOperationAnalysis})\r\n| where OperationName contains tostring('{selectedTab}')\r\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\r\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\r\n| extend userActivity = iif(isempty(User),0,1), serviceActivity = iif(isempty(User),1,0)\r\n| summarize UserCount=sum(userActivity), ServiceCount=sum(serviceActivity), AllCount = count() by OperationName, bin(TimeGenerated,{TimeRange:grain}/10)\r\n| extend Count = iif(tostring('{Identity}') == 'all', AllCount, iif(tostring('{Identity}') == 'users', UserCount, ServiceCount))\r\n| extend Count = iif(tostring('{GetOperationsScale}') == 'log', iif(OperationName contains \"get\", log(Count), toreal(Count)), toreal(Count))\r\n\r\n",
+                    "query": "AzureDiagnostics\n| where ResourceType == \"VAULTS\"\n| where Category == \"AuditEvent\"\n| where tolower(_ResourceId) in (dynamic([{KeyVaultOperationAnalysis}]))\n| where OperationName contains tostring('{selectedTab}')\n| extend User = identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\n| extend ObjectId = identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\n| extend userActivity = iif(isempty(User),0,1), serviceActivity = iif(isempty(User),1,0)\n| summarize UserCount=sum(userActivity), ServiceCount=sum(serviceActivity), AllCount = count() by OperationName, bin(TimeGenerated,{TimeRange:grain}/10)\n| extend Count = iif(tostring('{Identity}') == 'all', AllCount, iif(tostring('{Identity}') == 'users', UserCount, ServiceCount))\n| extend Count = iif(tostring('{GetOperationsScale}') == 'log', iif(OperationName contains \"get\", log(Count), toreal(Count)), toreal(Count))\n\n",
                     "size": 0,
                     "timeContext": {
                       "durationMs": 7776000000
