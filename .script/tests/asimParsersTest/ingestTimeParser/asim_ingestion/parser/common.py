@@ -26,7 +26,14 @@ FIXTURE_PATH_RE = re.compile(
 PARSER_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]+$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 STREAM_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
-VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+VERSION_RE = re.compile(
+    r"^(?:0|[1-9][0-9]*)\."
+    r"(?:0|[1-9][0-9]*)\."
+    r"(?:0|[1-9][0-9]*)"
+    r"(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 
 ADDITIONAL_UNION_PARSERS = {
     "ProcessEvent": {

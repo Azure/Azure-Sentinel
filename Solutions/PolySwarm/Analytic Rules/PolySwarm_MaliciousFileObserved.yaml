@@ -1,0 +1,110 @@
+id: 8c1ad849-0d24-429f-9b6e-aeb1baa2b470
+name: PolySwarm malicious file observed
+description: |
+  'Matches PolySwarm file-hash indicators (from live hunt results and the curated feed,
+  both landing in ThreatIntelIndicators with SourceSystem "PolySwarm") against
+  DeviceFileEvents, DeviceProcessEvents, SecurityEvent and CommonSecurityLog on SHA-256, SHA-1 and MD5 (both sides lowercased). The alert carries
+  the evidence: PolyScore, detection counts, malware family, hunt rule and report link.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: PolySwarmHuntingCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: PolySwarmFeedCCFDefinition
+    dataTypes:
+      - ThreatIntelIndicators
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+      - DeviceProcessEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CefAma
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let PolySwarmHashes = ThreatIntelIndicators
+      | where TimeGenerated > ago(ioc_lookBack)
+      | where SourceSystem == "PolySwarm"
+      | where ObservableKey in ("file:hashes.'SHA-256'", "file:hashes.SHA-256", "file:hashes.'SHA-1'", "file:hashes.SHA-1", "file:hashes.'MD5'", "file:hashes.MD5")
+      | where isnotempty(ObservableValue)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id
+      | where IsActive and (isempty(ValidUntil) or ValidUntil > now())
+      | extend FileHashValue = tolower(ObservableValue)
+      | extend HashAlgorithm = case(ObservableKey has "SHA-256", "SHA256", ObservableKey has "SHA-1", "SHA1", "MD5")
+      | extend Family = tostring(parse_json(AdditionalFields).family)
+      | extend RuleName = tostring(parse_json(AdditionalFields).rule_name)
+      | extend PolyScore = tostring(parse_json(AdditionalFields).polyscore)
+      | extend DetectionsMalicious = tostring(parse_json(AdditionalFields).detections.malicious)
+      | extend DetectionsTotal = tostring(parse_json(AdditionalFields).detections.total)
+      | extend Permalink = tostring(parse_json(AdditionalFields).permalink);
+  let DeviceHashEvents = union
+      (DeviceFileEvents
+        | where TimeGenerated > ago(dt_lookBack)
+        | extend HostName = DeviceName, AccountName = InitiatingProcessAccountName, EventTime = TimeGenerated
+        | extend HashList = pack_array(tolower(SHA256), tolower(SHA1), tolower(MD5))
+        | mv-expand FileHashValue = HashList to typeof(string)
+        | where isnotempty(FileHashValue)),
+      (DeviceProcessEvents
+        | where TimeGenerated > ago(dt_lookBack)
+        | extend HostName = DeviceName, AccountName = InitiatingProcessAccountName, EventTime = TimeGenerated
+        | extend HashList = pack_array(tolower(SHA256), tolower(SHA1), tolower(MD5))
+        | mv-expand FileHashValue = HashList to typeof(string)
+        | where isnotempty(FileHashValue));
+  let SecurityEventHashEvents = SecurityEvent
+      | where TimeGenerated > ago(dt_lookBack)
+      | where isnotempty(FileHash)
+      | extend FileHashValue = tolower(FileHash), HostName = Computer, AccountName = Account, EventTime = TimeGenerated;
+  let CommonSecurityLogHashEvents = CommonSecurityLog
+      | where TimeGenerated > ago(dt_lookBack)
+      | where isnotempty(FileHash)
+      | extend FileHashValue = tolower(FileHash), HostName = DeviceName, AccountName = SourceUserName, EventTime = TimeGenerated;
+  let AllHashEvents = union DeviceHashEvents, SecurityEventHashEvents, CommonSecurityLogHashEvents;
+  PolySwarmHashes
+  | join kind=innerunique (AllHashEvents) on $left.FileHashValue == $right.FileHashValue
+  | where EventTime < ValidUntil or isempty(ValidUntil)
+  | summarize EventTime = arg_max(EventTime, *) by Id, FileHashValue, HostName
+  | extend EvidenceSummary = strcat(HashAlgorithm, " ", FileHashValue, ", PolyScore ", PolyScore, ", ", DetectionsMalicious, " of ", DetectionsTotal, " engines malicious, malware family ", Family, ", hunt rule ", RuleName)
+  | project TimeGenerated = EventTime, EvidenceSummary, FileHashValue, HashAlgorithm, HostName, AccountName, Family, RuleName, PolyScore, DetectionsMalicious, DetectionsTotal, Permalink, Confidence, SourceSystem
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: HashAlgorithm
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+customDetails:
+  PolyScore: PolyScore
+  DetectionsMalicious: DetectionsMalicious
+  DetectionsTotal: DetectionsTotal
+  MalwareFamily: Family
+  HuntRuleName: RuleName
+  ReportLink: Permalink
+alertDetailsOverride:
+  alertDisplayNameFormat: PolySwarm malicious file {{FileHashValue}} observed on {{HostName}}
+  alertDescriptionFormat: PolySwarm flagged a file on {{HostName}}. {{EvidenceSummary}}. Full report {{Permalink}}
+version: 1.0.1
+kind: Scheduled
