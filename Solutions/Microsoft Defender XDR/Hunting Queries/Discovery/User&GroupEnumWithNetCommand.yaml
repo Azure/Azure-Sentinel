@@ -11,9 +11,11 @@ requiredDataConnectors:
 query: |
   DeviceProcessEvents 
   | where TimeGenerated > ago(7d) 
-  | where FileName == 'net.exe' and AccountName != "" and ProcessCommandLine !contains '\\'  and ProcessCommandLine !contains '/add' 
+  | where (FileName in~ ('net.exe', 'net1.exe') or ProcessVersionInfoOriginalFileName in~ ('net.exe', 'net1.exe')) and AccountName != "" and ProcessCommandLine !contains '\\'  and ProcessCommandLine !contains '/add'
+  // net.exe starts net1.exe with the same command line; drop that child so each command is counted once
+  | where not((FileName =~ 'net1.exe' or ProcessVersionInfoOriginalFileName =~ 'net1.exe') and (InitiatingProcessFileName =~ 'net.exe' or InitiatingProcessVersionInfoOriginalFileName =~ 'net.exe'))
   | where (ProcessCommandLine contains ' user ' or ProcessCommandLine contains ' group ') and (ProcessCommandLine contains ' /do' or ProcessCommandLine contains ' /domain') 
   | extend Target = extract("(?i)[user|group] (\"*[a-zA-Z0-9-_ ]+\"*)", 1, ProcessCommandLine) | filter Target  != '' 
   | project AccountName, Target, ProcessCommandLine, DeviceName, TimeGenerated  
   | sort by AccountName, Target
-version: 1.0.0
+version: 1.0.1
