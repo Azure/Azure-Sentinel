@@ -1479,7 +1479,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             self.assertNotIn("Invoke-WebRequest", workflow)
             self.assertIn("pip==26.3", workflow)
             self.assertIn("requests==2.34.2", workflow)
-            self.assertIn("PyYAML==6.0.3", workflow)
+            self.assertIn("PyYAML==6.0.4", workflow)
             self.assertEqual(
                 6, workflow.count("--only-binary=:all:")
             )
