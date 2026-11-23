@@ -589,6 +589,79 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
         )
         self.assertTrue(result["queryTimeEligibility"]["supportsPack"])
 
+    def test_mapped_qtp_blocks_privileged_kql_constructs(self):
+        cases = {
+            "KQL045": (
+                "let remote = workspace('workspace-id').SecurityEvent;\n"
+                "Contoso_CL | project TimeGenerated, EventType"
+            ),
+            "KQL038": (
+                "let remote = externaldata(Value:string)"
+                "['https://example.test/data.csv'];\n"
+                "Contoso_CL | project TimeGenerated, EventType"
+            ),
+            "KQL047": (
+                "Contoso_CL | evaluate bag_unpack(Payload)"
+            ),
+            "KQL048": ".show tables",
+        }
+        for expected_code, parser_query in cases.items():
+            with self.subTest(expected_code=expected_code):
+                query_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/Parsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    self.query_parser(parser_query=parser_query),
+                )
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    self.ingest_parser(),
+                )
+
+                result = VALIDATION.validate_ingest_time_parser(
+                    ingest_path, query_time_path=query_path
+                )
+
+                self.assertEqual(
+                    "blocked",
+                    result["queryTimeEligibility"]["status"],
+                )
+                self.assertIn(
+                    expected_code,
+                    {
+                        finding["code"]
+                        for finding in result["findings"]
+                    },
+                )
+
+    def test_mapped_qtp_blocks_unsafe_parameter_metadata(self):
+        query_document = self.query_parser()
+        query_document["ParserParams"][0]["Name"] = (
+            "disabled) { workspace('other').Table"
+        )
+        query_path = self.write_yaml(
+            "Parsers/ASimAuthentication/Parsers/"
+            "ASimAuthenticationContoso.yaml",
+            query_document,
+        )
+        ingest_path = self.write_yaml(
+            "Parsers/ASimAuthentication/IngestTimeParsers/"
+            "ASimAuthenticationContoso.yaml",
+            self.ingest_parser(),
+        )
+
+        result = VALIDATION.validate_ingest_time_parser(
+            ingest_path, query_time_path=query_path
+        )
+
+        self.assertEqual(
+            "blocked", result["queryTimeEligibility"]["status"]
+        )
+        self.assertIn(
+            "KQL049",
+            {finding["code"] for finding in result["findings"]},
+        )
+
     def test_allows_parser_query_at_dcr_transform_limit(self):
         limit = VALIDATION.parser_common.MAX_DCR_TRANSFORM_KQL_CHARS
         parser_query = self.parser_query_with_length(limit)
@@ -662,6 +735,83 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "not-applicable",
             result["queryTimeEligibility"]["status"],
         )
+
+    def test_meta003_accepts_semantic_versions(self):
+        versions = (
+            "0.0.0",
+            "1.2.3",
+            "1.2.3-alpha",
+            "1.2.3-alpha.1",
+            "1.2.3+build.5",
+            "1.2.3-alpha.1+build.5",
+            "1.0.0-x.7.z.92",
+        )
+        for version in versions:
+            with self.subTest(version=version):
+                document = self.ingest_parser()
+                document["Parser"]["Version"] = version
+                document["Normalization"]["Version"] = version
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    document,
+                )
+
+                result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+                self.assertTrue(result["valid"], result["findings"])
+                self.assertNotIn(
+                    "META003",
+                    {finding["code"] for finding in result["findings"]},
+                )
+
+    def test_meta003_rejects_non_semantic_versions(self):
+        versions = (
+            "1.2",
+            "1.2.3.4",
+            "01.2.3",
+            "1.02.3",
+            "1.2.03",
+            "1.2.3-",
+            "1.2.3-01",
+            "1.2.3-alpha..1",
+            "1.2.3-alpha_1",
+            "1.2.3+",
+            "1.2.3+build..1",
+            "v1.2.3",
+            "\u0661.2.3",
+        )
+        for version in versions:
+            with self.subTest(version=version):
+                document = self.ingest_parser()
+                document["Parser"]["Version"] = version
+                document["Normalization"]["Version"] = version
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    document,
+                )
+
+                result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+                findings = [
+                    finding
+                    for finding in result["findings"]
+                    if finding["code"] == "META003"
+                ]
+                self.assertFalse(result["valid"])
+                self.assertEqual(
+                    {"Parser.Version", "Normalization.Version"},
+                    {finding["field"] for finding in findings},
+                )
+                self.assertTrue(
+                    all(
+                        finding["message"]
+                        == "Version must follow Semantic Versioning 2.0.0 "
+                        "(https://semver.org/)."
+                        for finding in findings
+                    )
+                )
 
     def test_qtp_mismatch_blocks_optional_stages_only(self):
         query_path = self.write_yaml(
@@ -1300,6 +1450,29 @@ source
         }
         self.assertIn("KQL006", codes)
         self.assertNotIn("KQL037", codes)
+
+    def test_scan_blocks_privileged_kql_constructs(self):
+        cases = {
+            "KQL045": "workspace('workspace-id').SecurityEvent | take 1",
+            "KQL038": (
+                "externaldata(Value:string)"
+                "['https://example.test/data.csv']"
+            ),
+            "KQL047": "source | evaluate bag_unpack(Payload)",
+            "KQL048": ".show tables",
+        }
+        for expected_code, query in cases.items():
+            with self.subTest(expected_code=expected_code):
+                analysis = analyze_kql(query)
+                codes = {
+                    finding.code
+                    for finding in STATIC_VALIDATION._scan_kql(
+                        analysis,
+                        "ParserQuery",
+                        query,
+                    )
+                }
+                self.assertIn(expected_code, codes)
 
     def test_allows_newly_supported_dcr_constructs(self):
         ingest_path = self.write_yaml(
