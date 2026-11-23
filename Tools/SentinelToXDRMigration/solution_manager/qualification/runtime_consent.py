@@ -20,7 +20,11 @@ from solution_manager.core.artifacts import (
     write_json_artifact,
 )
 from solution_manager.core.content_paths import content_path
-from solution_manager.migration.converter import analytic_rule_files, xdr_detection_files
+from solution_manager.migration.converter import (
+    analytic_rule_files,
+    is_sentinel_derived,
+    xdr_detection_files,
+)
 from solution_manager.qualification.graph_client_config import (
     configured_azure_cli_profile,
     graph_auth_record_path,
@@ -632,9 +636,50 @@ def _query_entry(
     }
 
 
+def _is_migrated_detection_doc(doc: Any) -> bool:
+    if not isinstance(doc, Mapping):
+        return False
+    if is_sentinel_derived(doc):
+        return True
+    prov = doc.get("contentProvenance")
+    source = prov.get("source") if isinstance(prov, Mapping) else None
+    if isinstance(source, Mapping):
+        for key in ("id", "path"):
+            val = source.get(key)
+            if isinstance(val, str) and val.strip():
+                return True
+    for key in ("sourceRuleId", "sourceRulePath"):
+        val = doc.get(key)
+        if isinstance(val, str) and val.strip():
+            return True
+    return False
+
+
+def _has_migrated_xdr_detections(root: Path) -> bool:
+    xdr_dir = root / "XDR Detections"
+    if not xdr_dir.is_dir():
+        return False
+    for path in xdr_detection_files(xdr_dir):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+        if _is_migrated_detection_doc(doc):
+            return True
+    return False
+
+
 def _source_inventory(root: Path) -> list[dict[str, Any]]:
+    has_migrated_xdr = _has_migrated_xdr_detections(root)
+    analytic_files = analytic_rule_files(root, require_analytic_rules=False)
+    if not analytic_files:
+        xdr_dir = root / "XDR Detections"
+        if not has_migrated_xdr and xdr_dir.is_dir() and xdr_detection_files(xdr_dir):
+            return []
+        analytic_files = analytic_rule_files(root, require_analytic_rules=True)
+        if not analytic_files and has_migrated_xdr:
+            raise ValueError(
+                f"source Analytic Rules not found under {root} for migrated XDR detections"
+            )
     inventory = []
-    for path in analytic_rule_files(root):
+    for path in analytic_files:
         document = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
         if not isinstance(document, dict) or not isinstance(document.get("query"), str):
             raise ValueError(f"source Analytic Rule has no query: {path}")
@@ -750,12 +795,28 @@ def build_runtime_query_plan(
             "queries": xdr_queries,
         },
     }
-    for family in families.values():
-        family["status"] = "ready" if family["ruleCount"] else "incomplete"
+    has_migrated_xdr = _has_migrated_xdr_detections(root)
+    for name, family in families.items():
+        if name == "sentinelSourceQueryFamily":
+            if family["ruleCount"] > 0:
+                family["status"] = "ready"
+            elif xdr_rules and not has_migrated_xdr:
+                family["status"] = "not-applicable"
+            else:
+                family["status"] = "incomplete"
+        else:
+            family["status"] = "ready" if family["ruleCount"] else "incomplete"
         family["familySha256"] = _canonical_sha256(family)
     plan = {
         "schemaVersion": PLAN_SCHEMA_VERSION,
-        "status": "ready" if source_queries or xdr_queries else "incomplete",
+        "status": (
+            "ready"
+            if (
+                families["defenderXdrQueryFamily"]["status"] == "ready"
+                and families["sentinelSourceQueryFamily"]["status"] in {"ready", "not-applicable"}
+            )
+            else "incomplete"
+        ),
         "solution": root.name,
         "solutionPath": ".",
         "runId": run_id,
@@ -1442,17 +1503,27 @@ def runtime_query_consent_status(
                 "queryHashesAreConsentBindings": False,
             },
             "families": {
-                name: {
-                    "status": "approved" if name in approved else "not-approved",
-                    **(
-                        _family_execution_status(
-                            root,
-                            plan["families"][name],
-                        )
-                        if name in approved
-                        else {"executionStatus": "not-run"}
-                    ),
-                }
+                name: (
+                    {
+                        "status": "not-applicable",
+                        "executionStatus": "not-applicable",
+                        "completedQueries": 0,
+                        "totalQueries": 0,
+                        "missingQueries": 0,
+                    }
+                    if plan["families"][name].get("status") == "not-applicable"
+                    else {
+                        "status": "approved" if name in approved else "not-approved",
+                        **(
+                            _family_execution_status(
+                                root,
+                                plan["families"][name],
+                            )
+                            if name in approved
+                            else {"executionStatus": "not-run"}
+                        ),
+                    }
+                )
                 for name in sorted(FAMILIES)
             },
             "planSha256": plan["planSha256"],

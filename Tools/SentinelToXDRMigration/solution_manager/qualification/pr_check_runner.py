@@ -3243,67 +3243,349 @@ def _evaluate_migration_checks(
                 )
                 continue
 
-            migrated_ids_low: set[str] = set()
-            native_ids_low: set[str] = set()
+            migrated_primary_tokens_by_rel: dict[str, set[str]] = {}
+            migrated_fallback_tokens_by_rel: dict[str, set[str]] = {}
+            native_primary_tokens_by_rel: dict[str, set[str]] = {}
+            native_fallback_tokens_by_rel: dict[str, set[str]] = {}
             for rel in migrated_xdr_det_files:
-                doc, err = _load_yaml_safe(solution_root / rel)
-                if not err and isinstance(doc, Mapping):
-                    fields = _extract_xdr_detection_fields(doc)
-                    for token in (fields.get("id"), fields.get("sourceRuleId"), Path(rel).stem, rel):
-                        if token and str(token).strip():
-                            migrated_ids_low.add(str(token).strip().lower())
-            for rel in native_xdr_det_files:
-                doc, err = _load_yaml_safe(solution_root / rel)
-                if not err and isinstance(doc, Mapping):
-                    fields = _extract_xdr_detection_fields(doc)
-                    for token in (fields.get("id"), Path(rel).stem, rel):
-                        if token and str(token).strip():
-                            native_ids_low.add(str(token).strip().lower())
-
-            raw_items = (
-                (ap_ev.get("pairs") or ap_ev.get("rules") or ap_ev.get("detections") or [])
-                if isinstance(ap_ev, Mapping)
-                else []
-            )
-            migrated_items: list[Mapping[str, Any]] = []
-            for item in raw_items if isinstance(raw_items, list) else []:
-                if not isinstance(item, Mapping):
-                    continue
-                item_tokens = {
-                    str(item.get(k) or "").strip().lower()
-                    for k in ("id", "ruleId", "detectionId", "customDetectionId", "targetRuleId", "sourceRuleId", "originalRuleId", "file", "path", "name")
-                    if str(item.get(k) or "").strip()
+                norm_rel = Path(rel).as_posix().lower()
+                primary_toks = {
+                    rel.lower(),
+                    norm_rel,
                 }
-                if item.get("native") is True or item.get("isMigrated") is False or str(item.get("status") or "").lower() in {"not_applicable", "skipped_native"}:
-                    continue
-                if item_tokens and (item_tokens & native_ids_low) and not (item_tokens & migrated_ids_low):
-                    continue
-                migrated_items.append(item)
+                if norm_rel.startswith("xdr detections/"):
+                    sub_rel = norm_rel[len("xdr detections/"):].lstrip("/")
+                    if sub_rel:
+                        primary_toks.add(sub_rel)
+                fallback_toks = {
+                    Path(rel).name.lower(),
+                    Path(rel).stem.lower(),
+                }
+                doc, err = _load_yaml_safe(solution_root / rel)
+                if not err and isinstance(doc, Mapping):
+                    fields = _extract_xdr_detection_fields(doc)
+                    for token in (fields.get("id"), fields.get("sourceRuleId")):
+                        if token and str(token).strip():
+                            primary_toks.add(str(token).strip().lower())
+                    if fields.get("displayName") and str(fields.get("displayName")).strip():
+                        fallback_toks.add(str(fields.get("displayName")).strip().lower())
+                    prov = doc.get("contentProvenance")
+                    source = prov.get("source") if isinstance(prov, Mapping) else None
+                    for raw_src_path in (
+                        source.get("path") if isinstance(source, Mapping) else None,
+                        doc.get("sourceRulePath"),
+                    ):
+                        if isinstance(raw_src_path, str) and raw_src_path.strip():
+                            norm_src = raw_src_path.strip().replace("\\", "/").lower()
+                            primary_toks.add(norm_src)
+                            for prefix in ("analytic rules/", "analytics rules/"):
+                                if norm_src.startswith(prefix):
+                                    sub_src = norm_src[len(prefix):].lstrip("/")
+                                    if sub_src:
+                                        primary_toks.add(sub_src)
+                            fallback_toks.add(Path(norm_src).name.lower())
+                            fallback_toks.add(Path(norm_src).stem.lower())
+                migrated_primary_tokens_by_rel[rel] = primary_toks
+                migrated_fallback_tokens_by_rel[rel] = fallback_toks | primary_toks
+            for rel in native_xdr_det_files:
+                norm_rel = Path(rel).as_posix().lower()
+                primary_toks = {
+                    rel.lower(),
+                    norm_rel,
+                }
+                if norm_rel.startswith("xdr detections/"):
+                    sub_rel = norm_rel[len("xdr detections/"):].lstrip("/")
+                    if sub_rel:
+                        primary_toks.add(sub_rel)
+                fallback_toks = {
+                    Path(rel).name.lower(),
+                    Path(rel).stem.lower(),
+                }
+                doc, err = _load_yaml_safe(solution_root / rel)
+                if not err and isinstance(doc, Mapping):
+                    fields = _extract_xdr_detection_fields(doc)
+                    for token in (fields.get("id"),):
+                        if token and str(token).strip():
+                            primary_toks.add(str(token).strip().lower())
+                    if fields.get("displayName") and str(fields.get("displayName")).strip():
+                        fallback_toks.add(str(fields.get("displayName")).strip().lower())
+                native_primary_tokens_by_rel[rel] = primary_toks
+                native_fallback_tokens_by_rel[rel] = fallback_toks | primary_toks
 
-            per_file_migrated_parity_ok = False
-            if migrated_items:
-                def _item_parity_ok(it: Mapping[str, Any]) -> bool:
-                    return bool(
-                        it.get("alertParityVerified") is True
-                        or it.get("parityPassed") is True
-                        or it.get("passed") is True
-                        or str(it.get("status") or "").lower() in {"pass", "passed"}
-                    )
-                if all(_item_parity_ok(it) for it in migrated_items):
-                    per_file_migrated_parity_ok = True
-
-            top_level_parity_ok = isinstance(ap_ev, Mapping) and (
-                ap_ev.get("alertParityVerified") is True
-                or ap_ev.get("parityPassed") is True
-                or ap_ev.get("passed") is True
-                or (ap_ev.get("status") == "passed" and ap_ev.get("alertParityVerified") is not False)
+            ap_ev_map = ap_ev if isinstance(ap_ev, Mapping) else {}
+            raw_ap_status = str(
+                ap_ev_map.get("status")
+                or ap_ev_map.get("result")
+                or ap_ev_map.get("verdict")
+                or ""
+            ).strip().lower()
+            has_aggregate_failure = bool(
+                ap_ev_map.get("comparisonError")
+                or ap_ev_map.get("scopeVerificationError")
+                or ap_ev_map.get("passed") is False
+                or ap_ev_map.get("parityPassed") is False
+                or ap_ev_map.get("alertParityVerified") is False
+                or raw_ap_status in {"failed", "fail", "error", "blocked", "incomplete"}
             )
+
+            raw_items: Any = []
+            for _key in ("comparisons", "results", "detections", "rules", "pairs"):
+                _val = ap_ev_map.get(_key)
+                if isinstance(_val, list) and len(_val) > 0:
+                    raw_items = _val
+                    break
+            if raw_items == []:
+                for _key in ("comparisons", "results", "detections", "rules", "pairs"):
+                    _val = ap_ev_map.get(_key)
+                    if _val is not None and not isinstance(_val, list):
+                        raw_items = _val
+                        break
+
+            def _item_primary_tokens(item: Mapping[str, Any]) -> set[str]:
+                tokens: set[str] = set()
+                for k in (
+                    "detection",
+                    "customDetection",
+                    "xdrDetection",
+                    "detectionPath",
+                    "xdrDetectionPath",
+                    "file",
+                    "path",
+                    "id",
+                    "ruleId",
+                    "detectionId",
+                    "customDetectionId",
+                    "xdrId",
+                    "targetRuleId",
+                    "sourceRuleId",
+                    "analyticRuleId",
+                    "sentinelRuleId",
+                    "originalRuleId",
+                    "analyticRule",
+                    "analyticRulePath",
+                    "sourceRulePath",
+                ):
+                    val = item.get(k)
+                    if isinstance(val, str) and val.strip():
+                        raw = val.strip().lower()
+                        norm = Path(raw).as_posix().lower()
+                        tokens.add(raw)
+                        tokens.add(norm)
+                        for prefix in ("xdr detections/", "analytic rules/", "analytics rules/"):
+                            if norm.startswith(prefix):
+                                sub = norm[len(prefix):].lstrip("/")
+                                if sub:
+                                    tokens.add(sub)
+                for nested_key in (
+                    "customDetection",
+                    "xdrDetection",
+                    "detection",
+                    "analyticRule",
+                    "sentinelRule",
+                    "sourceRule",
+                ):
+                    nested = item.get(nested_key)
+                    if isinstance(nested, Mapping):
+                        for sub_key in ("id", "ruleId", "detectionId", "customDetectionId", "path", "file"):
+                            sub_val = nested.get(sub_key)
+                            if isinstance(sub_val, str) and sub_val.strip():
+                                raw = sub_val.strip().lower()
+                                norm = Path(raw).as_posix().lower()
+                                tokens.add(raw)
+                                tokens.add(norm)
+                                for prefix in ("xdr detections/", "analytic rules/", "analytics rules/"):
+                                    if norm.startswith(prefix):
+                                        sub = norm[len(prefix):].lstrip("/")
+                                        if sub:
+                                            tokens.add(sub)
+                return tokens
+
+            def _item_tokens(item: Mapping[str, Any]) -> set[str]:
+                tokens: set[str] = set(_item_primary_tokens(item))
+                for k in (
+                    "detection",
+                    "customDetection",
+                    "xdrDetection",
+                    "detectionPath",
+                    "xdrDetectionPath",
+                    "rule",
+                    "file",
+                    "path",
+                    "name",
+                    "displayName",
+                    "id",
+                    "ruleId",
+                    "detectionId",
+                    "customDetectionId",
+                    "xdrId",
+                    "targetRuleId",
+                    "sourceRuleId",
+                    "analyticRuleId",
+                    "sentinelRuleId",
+                    "originalRuleId",
+                    "analyticRule",
+                    "analyticRulePath",
+                    "sourceRulePath",
+                ):
+                    val = item.get(k)
+                    if isinstance(val, str) and val.strip():
+                        raw = val.strip().lower()
+                        tokens.add(raw)
+                        tokens.add(Path(raw).as_posix().lower())
+                        tokens.add(Path(raw).name.lower())
+                        tokens.add(Path(raw).stem.lower())
+                for nested_key in (
+                    "customDetection",
+                    "xdrDetection",
+                    "detection",
+                    "analyticRule",
+                    "sentinelRule",
+                    "sourceRule",
+                ):
+                    nested = item.get(nested_key)
+                    if isinstance(nested, Mapping):
+                        for sub_key in ("id", "ruleId", "detectionId", "customDetectionId", "path", "file", "name", "displayName"):
+                            sub_val = nested.get(sub_key)
+                            if isinstance(sub_val, str) and sub_val.strip():
+                                raw = sub_val.strip().lower()
+                                tokens.add(raw)
+                                tokens.add(Path(raw).as_posix().lower())
+                                tokens.add(Path(raw).name.lower())
+                                tokens.add(Path(raw).stem.lower())
+                return tokens
+
+            def _item_migrated_parity_ok(item: Mapping[str, Any]) -> bool:
+                raw_mode = str(item.get("mode") or "").strip().lower()
+                if item.get("cdOnly") is True or raw_mode in {"cd-only", "cd_only", "cdonly"}:
+                    return False
+                if item.get("native") is True or item.get("isMigrated") is False:
+                    return False
+                for ar_key in ("analyticRule", "sentinelAlert", "arAlert"):
+                    if ar_key in item and item.get(ar_key) is None:
+                        return False
+                raw_status = str(
+                    item.get("status") or item.get("result") or item.get("verdict") or ""
+                ).strip().lower()
+                if (
+                    item.get("passed") is False
+                    or item.get("parityPassed") is False
+                    or item.get("alertParityVerified") is False
+                    or raw_status in {"failed", "fail", "error", "blocked", "incomplete", "not_applicable", "skipped_native"}
+                ):
+                    return False
+                return bool(
+                    item.get("passed") is True
+                    or item.get("parityPassed") is True
+                    or item.get("alertParityVerified") is True
+                    or raw_status in {"passed", "pass", "verified", "succeeded", "complete", "completed", "ok", "matched", "match"}
+                )
+
+            def _item_native_ok(item: Mapping[str, Any]) -> bool:
+                raw_status = str(
+                    item.get("status") or item.get("result") or item.get("verdict") or ""
+                ).strip().lower()
+                if (
+                    item.get("passed") is False
+                    or item.get("parityPassed") is False
+                    or item.get("alertParityVerified") is False
+                    or raw_status in {"failed", "fail", "error", "blocked", "incomplete"}
+                ):
+                    return False
+                return bool(
+                    item.get("passed") is True
+                    or item.get("parityPassed") is True
+                    or item.get("alertParityVerified") is True
+                    or raw_status in {
+                        "passed",
+                        "pass",
+                        "verified",
+                        "succeeded",
+                        "complete",
+                        "completed",
+                        "ok",
+                        "matched",
+                        "match",
+                        "not_applicable",
+                        "skipped_native",
+                    }
+                )
+
+            if isinstance(raw_items, list) and len(raw_items) > 0:
+                matched_migrated: dict[str, list[Mapping[str, Any]]] = {
+                    rel: [] for rel in migrated_primary_tokens_by_rel
+                }
+                matched_native: dict[str, list[Mapping[str, Any]]] = {
+                    rel: [] for rel in native_primary_tokens_by_rel
+                }
+                unmatched_or_ambiguous = False
+                for item in raw_items:
+                    if not isinstance(item, Mapping):
+                        unmatched_or_ambiguous = True
+                        break
+                    item_primary = _item_primary_tokens(item)
+                    item_toks = _item_tokens(item)
+                    m_rels = [
+                        rel for rel, toks in migrated_primary_tokens_by_rel.items() if toks & item_primary
+                    ]
+                    n_rels = [
+                        rel for rel, toks in native_primary_tokens_by_rel.items() if toks & item_primary
+                    ]
+                    if not m_rels and not n_rels:
+                        m_rels = [
+                            rel for rel, toks in migrated_primary_tokens_by_rel.items() if toks & item_toks
+                        ]
+                        n_rels = [
+                            rel for rel, toks in native_primary_tokens_by_rel.items() if toks & item_toks
+                        ]
+                    if not m_rels and not n_rels:
+                        m_rels = [
+                            rel for rel, toks in migrated_fallback_tokens_by_rel.items() if toks & item_toks
+                        ]
+                        n_rels = [
+                            rel for rel, toks in native_fallback_tokens_by_rel.items() if toks & item_toks
+                        ]
+                    if len(m_rels) == 1 and len(n_rels) == 0:
+                        matched_migrated[m_rels[0]].append(item)
+                    elif len(n_rels) == 1 and len(m_rels) == 0:
+                        matched_native[n_rels[0]].append(item)
+                    else:
+                        unmatched_or_ambiguous = True
+                per_file_migrated_parity_ok = (
+                    not has_aggregate_failure
+                    and not unmatched_or_ambiguous
+                    and bool(migrated_primary_tokens_by_rel)
+                    and all(
+                        len(items) == 1 and _item_migrated_parity_ok(items[0])
+                        for items in matched_migrated.values()
+                    )
+                    and all(
+                        len(items) <= 1 and (not items or _item_native_ok(items[0]))
+                        for items in matched_native.values()
+                    )
+                )
+                top_level_parity_ok = False
+            elif not raw_items:
+                per_file_migrated_parity_ok = False
+                top_level_parity_ok = (
+                    not has_aggregate_failure
+                    and len(migrated_xdr_det_files) == 1
+                    and not native_xdr_det_files
+                    and (
+                        ap_ev_map.get("passed") is True
+                        or ap_ev_map.get("parityPassed") is True
+                        or ap_ev_map.get("alertParityVerified") is True
+                        or raw_ap_status in {"passed", "pass", "verified", "succeeded", "complete", "completed", "ok"}
+                    )
+                )
+            else:
+                per_file_migrated_parity_ok = False
+                top_level_parity_ok = False
 
             if not simulated_flag and (top_level_parity_ok or per_file_migrated_parity_ok):
                 pair_count = int(
-                    ap_ev.get("pairCount")
-                    or len(migrated_items)
-                    or max(len(ar_files), len(migrated_xdr_det_files), 1)
+                    ap_ev_map.get("pairCount")
+                    or len(migrated_xdr_det_files)
+                    or max(len(ar_files), 1)
                 )
                 s_alerts = int(ap_ev.get("sentinelAlertCount") or pair_count)
                 x_alerts = int(ap_ev.get("xdrAlertCount") or pair_count)

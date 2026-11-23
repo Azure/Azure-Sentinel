@@ -583,7 +583,7 @@ class AlertParityTests(unittest.TestCase):
                 "requiredDataConnectors": [],
             },
             "properties": {
-                "id": "native-cd-only-01",
+                "id": "xdr-11111111-2222-3333-4444-555555555555",
                 "displayName": "Native CD Only 01",
                 "status": "disabled",
                 "queryCondition": {"queryText": query_text},
@@ -657,7 +657,7 @@ class AlertParityTests(unittest.TestCase):
                 ) as arm_req,
                 mock.patch(
                     "sentinel_xdr_migration.alert_parity._graph_request",
-                    return_value=(200, {"id": "native-cd-only-01", "status": "disabled", "isEnabled": False}),
+                    return_value=(200, {"id": "xdr-11111111-2222-3333-4444-555555555555", "status": "disabled", "isEnabled": False}),
                 ) as graph_req,
             ):
                 states = _read_rule_states(
@@ -694,6 +694,228 @@ class AlertParityTests(unittest.TestCase):
                 )
                 self.assertTrue(cleanup[0]["returnedToDisabled"])
                 self.assertTrue(state_obj["tkQ11Passed"])
+
+    def test_migrated_detection_cannot_be_downgraded_to_cd_only_in_compare_and_complete(
+        self,
+    ) -> None:
+        import yaml
+        from solution_manager.qualification.alert_parity import (
+            _expected_alert_modes_by_detection,
+            poll_alert_parity_batch,
+        )
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            output = root / "XDR Detections"
+            output.mkdir()
+            migrated_doc = {
+                "kind": "CustomDetection",
+                "contentProvenance": {
+                    "origin": "migrated",
+                    "source": {"id": "11111111-2222-3333-4444-555555555555"},
+                    "conversion": {"status": "converted", "reviewRequired": False},
+                },
+                "properties": {
+                    "id": "xdr-11111111-2222-3333-4444-555555555555",
+                    "displayName": "Migrated Rule",
+                    "queryCondition": {"queryText": "DeviceEvents | take 1"},
+                    "detectionAction": {"alertTemplate": {}},
+                },
+            }
+            native_doc = {
+                "kind": "CustomDetection",
+                "contentProvenance": {"origin": "native"},
+                "properties": {
+                    "id": "xdr-22222222-3333-4444-5555-666666666666",
+                    "displayName": "Native Rule",
+                    "queryCondition": {"queryText": "DeviceProcessEvents | take 1"},
+                    "detectionAction": {"alertTemplate": {}},
+                },
+            }
+            (output / "Migrated.yaml").write_text(
+                yaml.safe_dump(migrated_doc), encoding="utf-8"
+            )
+            (output / "Native.yaml").write_text(
+                yaml.safe_dump(native_doc), encoding="utf-8"
+            )
+            pairs = [
+                {
+                    "detection": "Migrated.yaml",
+                    "displayName": "Migrated Rule",
+                    "analyticRuleId": "11111111-2222-3333-4444-555555555555",
+                    "customDetectionId": "xdr-11111111-2222-3333-4444-555555555555",
+                    "cdOnly": False,
+                },
+                {
+                    "detection": "Native.yaml",
+                    "displayName": "Native Rule",
+                    "analyticRuleId": None,
+                    "customDetectionId": "xdr-22222222-3333-4444-5555-666666666666",
+                    "cdOnly": True,
+                },
+            ]
+            expected_modes = _expected_alert_modes_by_detection(root, pairs)
+            self.assertEqual(
+                {"Migrated.yaml": "parity", "Native.yaml": "cd-only"},
+                expected_modes,
+            )
+
+            for bad_entry in (
+                {
+                    "detection": "Migrated.yaml",
+                    "cdOnly": True,
+                    "customDetection": {"alerts": [alert("event-1")]},
+                },
+                {
+                    "detection": "Migrated.yaml",
+                    "mode": "cd-only",
+                    "customDetection": {"alerts": [alert("event-1")]},
+                },
+                {
+                    "detection": "Migrated.yaml",
+                    "customDetection": {"alerts": [alert("event-1")]},
+                },
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "Migrated.yaml: migrated detection requires"
+                ):
+                    compare_alert_captures(
+                        {"Migrated.yaml"},
+                        {"results": [bad_entry]},
+                        expected_modes_by_detection=expected_modes,
+                    )
+
+            for bad_native in (
+                {
+                    "detection": "Native.yaml",
+                    "cdOnly": False,
+                    "customDetection": {"alerts": [alert("event-1")]},
+                },
+                {
+                    "detection": "Native.yaml",
+                    "mode": "parity",
+                    "customDetection": {"alerts": [alert("event-1")]},
+                },
+                {
+                    "detection": "Native.yaml",
+                    "analyticRule": {"alerts": [alert("event-1")]},
+                    "customDetection": {"alerts": [alert("event-1")]},
+                },
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "Native.yaml: native detection requires cd-only mode"
+                ):
+                    compare_alert_captures(
+                        {"Native.yaml"},
+                        {"results": [bad_native]},
+                        expected_modes_by_detection=expected_modes,
+                    )
+
+            valid_compare = compare_alert_captures(
+                {"Migrated.yaml", "Native.yaml"},
+                {
+                    "results": [
+                        {
+                            "detection": "Migrated.yaml",
+                            "analyticRule": {"alerts": [alert("event-1")]},
+                            "customDetection": {"alerts": [alert("event-1")]},
+                        },
+                        {
+                            "detection": "Native.yaml",
+                            "cdOnly": True,
+                            "mode": "cd-only",
+                            "customDetection": {"alerts": [alert("event-2")]},
+                        },
+                    ]
+                },
+                expected_modes_by_detection=expected_modes,
+            )
+            self.assertTrue(all(item["passed"] for item in valid_compare))
+
+            # Omitting a detection from captures when expected_modes_by_detection has it must fail
+            with self.assertRaisesRegex(ValueError, r"missing detections: Native\.yaml"):
+                compare_alert_captures(
+                    set(),
+                    {
+                        "results": [
+                            {
+                                "detection": "Migrated.yaml",
+                                "analyticRule": {"alerts": [alert("event-1")]},
+                                "customDetection": {"alerts": [alert("event-1")]},
+                            }
+                        ]
+                    },
+                    expected_modes_by_detection=expected_modes,
+                )
+
+            # Windows backslash path in expected_detections normalizes cleanly
+            backslash_compare = compare_alert_captures(
+                {"Sub\\Native.yaml"},
+                {
+                    "results": [
+                        {
+                            "detection": "Sub/Native.yaml",
+                            "cdOnly": True,
+                            "mode": "cd-only",
+                            "customDetection": {"alerts": [alert("event-2")]},
+                        }
+                    ]
+                },
+                expected_modes_by_detection={"Sub\\Native.yaml": "cd-only"},
+            )
+            self.assertEqual(1, len(backslash_compare))
+            self.assertTrue(backslash_compare[0]["passed"])
+
+            scope = _qualification_scope(root, [pairs[0]], None)
+            state_payload = {
+                "runId": "run-1",
+                "status": "awaiting-alerts",
+                "target": TARGET,
+                "workspaceResourceId": TARGET["workspaceResourceId"],
+                "qualificationScope": scope,
+                "rules": [pairs[0]],
+                "fixtures": [{"detection": "Migrated.yaml"}],
+            }
+            state_path = artifact_path(root, "alert-parity-state.json", create_parent=True)
+            state_path.write_text(json.dumps(state_payload), encoding="utf-8")
+            captures_path = root / "downgraded-captures.json"
+            captures_path.write_text(
+                json.dumps(
+                    {
+                        "results": [
+                            {
+                                "detection": "Migrated.yaml",
+                                "cdOnly": True,
+                                "mode": "cd-only",
+                                "customDetection": {"alerts": [alert("event-1")]},
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch(
+                    "sentinel_xdr_migration.alert_parity.require_locked_target",
+                    return_value=TARGET,
+                ),
+                mock.patch(
+                    "sentinel_xdr_migration.alert_parity._verify_qualification_scope",
+                    return_value=scope,
+                ),
+                mock.patch(
+                    "sentinel_xdr_migration.alert_parity._disable_all",
+                    return_value=[{"detection": "Migrated.yaml", "disabled": True, "errors": []}],
+                ),
+            ):
+                complete_report = complete_alert_parity(root, results_path=captures_path)
+                self.assertEqual("failed", complete_report["status"])
+                self.assertIn("migrated detection requires", complete_report["comparisonError"])
+
+                state_path.write_text(json.dumps(state_payload), encoding="utf-8")
+                poll_report = poll_alert_parity_batch(root, results_path=captures_path)
+                self.assertEqual("failed", poll_report["status"])
+                self.assertIn("migrated detection requires", poll_report["comparisonError"])
 
 
 if __name__ == "__main__":

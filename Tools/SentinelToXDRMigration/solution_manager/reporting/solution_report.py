@@ -1461,7 +1461,7 @@ def build_solution_report(
     )
     current_workflow = workbook_workflow.current_state(root) if has_workbook_state else None
     workbook_only = bool(current_workflow and workbook_workflow.enabled(current_workflow)
-                         and not workbook_workflow.has_analytic_rules(root))
+                         and not workbook_workflow.has_detection_content(root))
     if workbook_only:
         analytic, output = root / "Analytic Rules", root / "XDR Detections"
     else:

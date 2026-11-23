@@ -359,7 +359,7 @@ def _write_runtime_artifacts(
 
         detection_paths = {
             path.relative_to(root / "XDR Detections").as_posix(): path
-            for path in _detection_files(root / "XDR Detections")
+            for path in _expected_detection_files_for_provider(root, provider)
         }
         expected_query_hashes = {
             name: current_runtime_query_hash(root, path, provider=provider)
@@ -531,16 +531,24 @@ def _is_explicitly_non_converted(document: Any) -> bool:
 def _has_sentinel_source_rule(root: Path, document: Any) -> bool:
     if not isinstance(document, dict):
         return False
+    if is_sentinel_derived(document):
+        return True
     source = ((document.get("contentProvenance") or {}).get("source") or {})
-    if not isinstance(source, dict):
-        return False
-    source_ref = source.get("path")
-    if isinstance(source_ref, str) and source_ref.strip():
-        try:
-            return content_path(root, source_ref).is_file()
-        except Exception:
+    if isinstance(source, dict):
+        source_id = source.get("id")
+        if isinstance(source_id, str) and source_id.strip():
             return True
-    return is_sentinel_derived(document)
+        source_ref = source.get("path")
+        if isinstance(source_ref, str) and source_ref.strip():
+            try:
+                return content_path(root, source_ref).is_file()
+            except Exception:
+                return True
+    for key in ("sourceRuleId", "sourceRulePath"):
+        val = document.get(key)
+        if isinstance(val, str) and val.strip():
+            return True
+    return False
 
 
 def _runnable_detection_files(output: Path) -> list[Path]:
@@ -556,6 +564,32 @@ def _runnable_detection_files(output: Path) -> list[Path]:
         if not _is_explicitly_non_converted(doc):
             runnable.append(path)
     return runnable
+
+
+def _is_native_only_detection(root: Path, document: Any) -> bool:
+    if not isinstance(document, dict):
+        return False
+    if _has_sentinel_source_rule(root, document):
+        return False
+    return isinstance(document.get("properties"), dict) or isinstance(
+        document.get("contentProvenance"), dict
+    )
+
+
+def _expected_detection_files_for_provider(root: Path, provider: str) -> list[Path]:
+    output = root / "XDR Detections"
+    files = _runnable_detection_files(output)
+    if provider in SOURCE_PROVIDERS:
+        expected: list[Path] = []
+        for path in files:
+            try:
+                doc = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+            except Exception:
+                doc = None
+            if not _is_native_only_detection(root, doc):
+                expected.append(path)
+        return expected
+    return files
 
 
 def runtime_validation_plan(solution: str | Path) -> dict[str, Any]:
@@ -1781,7 +1815,10 @@ def record_runtime_validation(
     if provider_fallback and provider != provider_fallback["fallbackProvider"]:
         raise ValueError("Sentinel MCP fallback results must be recorded under the approved fallback provider")
     output = root / "XDR Detections"
-    detection_paths = {path.relative_to(output).as_posix(): path for path in _runnable_detection_files(output)}
+    detection_paths = {
+        path.relative_to(output).as_posix(): path
+        for path in _expected_detection_files_for_provider(root, provider)
+    }
     expected = set(detection_paths)
     if (results_path is None) == (results_data is None):
         raise ValueError("provide exactly one of results_path or results_data")

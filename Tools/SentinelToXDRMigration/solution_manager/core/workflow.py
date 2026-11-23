@@ -2456,7 +2456,23 @@ def run_yolo_authoring(solution: str | Path) -> dict[str, Any]:
                         "resumed": discovery["status"] == "running",
                         "workPerformed": False,
                     }
-                if inspection["analyticRuleCount"] != len(inventory):
+                frozen_from_native_xdr = (
+                    not workbook_workflow.enabled(state)
+                    and bool(inventory)
+                    and all(
+                        str(item.get("path", "")).startswith("XDR Detections/")
+                        for item in inventory
+                    )
+                )
+                expected_inventory_count = (
+                    len(_native_detection_paths(root))
+                    if frozen_from_native_xdr and inspection["analyticRuleCount"] == 0
+                    else inspection["analyticRuleCount"]
+                )
+                if (
+                    (frozen_from_native_xdr and inspection["analyticRuleCount"] > 0)
+                    or expected_inventory_count != len(inventory)
+                ):
                     _mark_yolo_conflicted(
                         state_path, state,
                         "Discovery inventory count changed after YOLO scope freeze.",
@@ -2884,7 +2900,7 @@ def initialize_workflow(
             root,
             campaign_id,
             yolo=yolo is True and not (
-                workbook_capability_version == 1 and not workbook_workflow.has_analytic_rules(root)
+                workbook_capability_version == 1 and not workbook_workflow.has_detection_content(root)
             ),
         )
         run = create_run(root)
@@ -3010,7 +3026,7 @@ def initialize_workflow(
                 "next": _next_stage_name(state),
             }
 
-    workbook_only = workbook_capability_version == 1 and not workbook_workflow.has_analytic_rules(root)
+    workbook_only = workbook_capability_version == 1 and not workbook_workflow.has_detection_content(root)
     frozen_inventory = _source_inventory(root) if yolo is True and not workbook_only else None
     if frozen_inventory is not None and not campaign_id:
         raise ValueError("new YOLO workflows require an explicit --campaign-id")
@@ -6273,7 +6289,7 @@ def _complete_workflow_stage_unlocked(
     if (
         stage == "validation" and status == "passed"
         and workbook_workflow.enabled(state)
-        and not workbook_workflow.has_analytic_rules(solution)
+        and not workbook_workflow.has_detection_content(solution)
         and state["context"]["workflowProfile"] == "qualification"
     ):
         if state["context"].get("workbookQualificationAfterArm") is True:

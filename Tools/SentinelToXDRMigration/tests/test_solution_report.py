@@ -1127,7 +1127,7 @@ class SolutionReportTests(unittest.TestCase):
                 "requiredDataConnectors": [],
             },
             "properties": {
-                "id": "55555555-5555-5555-5555-555555555555",
+                "id": "xdr-55555555-5555-5555-5555-555555555555",
                 "displayName": "Standalone Native Detection",
                 "status": "disabled",
                 "queryCondition": {
@@ -1171,7 +1171,7 @@ class SolutionReportTests(unittest.TestCase):
             self.assertEqual(0, packet["summary"]["totalItems"])
             self.assertTrue(packet["summary"]["readyForValidation"])
             self.assertEqual(
-                "55555555-5555-5555-5555-555555555555",
+                "xdr-55555555-5555-5555-5555-555555555555",
                 packet["detections"][0]["ruleId"],
             )
 

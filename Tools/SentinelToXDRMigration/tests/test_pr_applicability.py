@@ -380,3 +380,39 @@ def test_is_migrated_xdr_detection_doc_variants() -> None:
             "properties": {"id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0"},
         }
     ) is True
+
+
+def test_native_only_solution_with_workbooks_is_not_classified_as_workbook_only(
+    tmp_path: Path,
+) -> None:
+    """Gap 3 regression: native-only solution with XDR Detections + Workbooks is not workbook-only."""
+    from solution_manager.migration import workbook_workflow
+
+    sol = tmp_path / "NativeWithWorkbookSol"
+    native_id = "xdr-a1b2c3d4-1111-4222-8333-444455556666"
+    _build_base_v31_package(sol, custom_detection_ids=[native_id])
+    _build_native_xdr_detection(
+        sol / "XDR Detections" / "NativeThreatDetection.yaml",
+        det_id=native_id,
+    )
+    _write_json(
+        sol / "Workbooks" / "OverviewWorkbook.json",
+        {"version": "Notebook/1.0", "items": []},
+    )
+
+    assert workbook_workflow.has_analytic_rules(sol) is False
+    assert workbook_workflow.has_detection_content(sol) is True
+    state = {"context": {"workbookCapabilityVersion": workbook_workflow.CAPABILITY_VERSION}}
+    assert workbook_workflow.enabled(state) is True
+    workbook_only = workbook_workflow.enabled(state) and not workbook_workflow.has_detection_content(sol)
+    assert workbook_only is False
+
+    wb_only_sol = tmp_path / "PureWorkbookOnlySol"
+    wb_only_sol.mkdir(parents=True)
+    _write_json(
+        wb_only_sol / "Workbooks" / "OverviewWorkbook.json",
+        {"version": "Notebook/1.0", "items": []},
+    )
+    assert workbook_workflow.has_detection_content(wb_only_sol) is False
+    assert (workbook_workflow.enabled(state) and not workbook_workflow.has_detection_content(wb_only_sol)) is True
+

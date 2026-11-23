@@ -253,6 +253,7 @@ def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str,
             "returnedToDisabled": True,
         },
     ]
+    alert_parity_results: list[dict[str, Any]] = []
     if sol_dir is not None and sol_dir.is_dir():
         for folder_name in ("Analytic Rules", "XDR Detections"):
             folder = sol_dir / folder_name
@@ -266,6 +267,7 @@ def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str,
                     doc.get("originalRuleId")
                     or props.get("originalRuleId")
                     or (doc.get("conversion") or {}).get("sourceRuleId")
+                    or ((doc.get("contentProvenance") or {}).get("source") or {}).get("id")
                     or ""
                 ).strip()
                 q_str = str(
@@ -292,6 +294,16 @@ def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str,
                         lifecycle_entry["originalRuleId"] = orig_id
                     verified_rules.append(entry)
                     lifecycle_detections.append(lifecycle_entry)
+                if folder_name == "XDR Detections" and rid:
+                    parity_entry: dict[str, Any] = {
+                        "detection": yml.relative_to(folder).as_posix(),
+                        "id": rid,
+                        "passed": True,
+                        "parityPassed": True,
+                    }
+                    if orig_id:
+                        parity_entry["sourceRuleId"] = orig_id
+                    alert_parity_results.append(parity_entry)
     return {
         "simulated": False,
         "dryRun": False,
@@ -353,9 +365,14 @@ def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str,
         },
         "alertParity": {
             "alertParityVerified": True,
-            "pairCount": 1,
-            "sentinelAlertCount": 1,
-            "xdrAlertCount": 1,
+            "pairCount": max(1, len(alert_parity_results)),
+            "sentinelAlertCount": max(1, len(alert_parity_results)),
+            "xdrAlertCount": max(1, len(alert_parity_results)),
+            **(
+                {"results": alert_parity_results}
+                if alert_parity_results
+                else {}
+            ),
         },
     }
 
@@ -1805,5 +1822,261 @@ def test_modified_analytic_rule_and_xdr_detection_patch_version_bump(tmp_path: P
 
     qual_pass = run_pr_qualification_checks(sol, run_qualification=False)
     assert qual_pass["checksById"]["VAL-AR-01"]["status"] == "PASS"
+
+
+def test_e2e_q03_rejects_partial_unrelated_and_aggregate_failed_receipts_and_accepts_mixed_complete_receipt(
+    tmp_path: Path,
+) -> None:
+    """Gap 2 regression: E2E-Q03 must reject partial, unrelated, duplicate, or aggregate-failed receipts."""
+    sol = tmp_path / "TwoRuleSol"
+    src1_id = "6e76fd9d-8104-41eb-bad3-26054a3ad5f0"
+    src2_id = "22222222-3333-4444-8555-666666666666"
+    _build_base_package(
+        sol,
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/SampleRule.yaml", "Analytic Rules/SecondRule.yaml"],
+            "XDR Detections": ["XDR Detections/SampleRule.yaml", "XDR Detections/SecondRule.yaml"],
+        },
+    )
+    sha1 = _build_valid_analytic_rule(sol / "Analytic Rules" / "SampleRule.yaml", rule_id=src1_id)
+    sha2 = _build_valid_analytic_rule(sol / "Analytic Rules" / "SecondRule.yaml", rule_id=src2_id)
+    _build_valid_xdr_detection(
+        sol / "XDR Detections" / "SampleRule.yaml",
+        source_rule_id=src1_id,
+        source_rule_path="Analytic Rules/SampleRule.yaml",
+        source_rule_sha256=sha1,
+    )
+    _build_valid_xdr_detection(
+        sol / "XDR Detections" / "SecondRule.yaml",
+        source_rule_id=src2_id,
+        source_rule_path="Analytic Rules/SecondRule.yaml",
+        source_rule_sha256=sha2,
+    )
+
+    # 1. Partial receipt (only 1 of 2 migrated detections present) -> FAIL
+    partial_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {
+            "results": [
+                {"detection": "SampleRule.yaml", "id": f"xdr-{src1_id}", "passed": True}
+            ]
+        },
+    }
+    res_partial = run_pr_qualification_checks(
+        sol, run_qualification=True, qualification_evidence=partial_ev
+    )
+    assert res_partial["checksById"]["E2E-Q03"]["status"] == "FAIL"
+
+    # 2. Top-level-only receipt on multi-detection solution -> FAIL
+    top_only_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {"alertParityVerified": True, "passed": True},
+    }
+    res_top_only = run_pr_qualification_checks(
+        sol, run_qualification=True, qualification_evidence=top_only_ev
+    )
+    assert res_top_only["checksById"]["E2E-Q03"]["status"] == "FAIL"
+
+    # 3. Unrelated item alongside valid items -> FAIL
+    unrelated_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {
+            "results": [
+                {"detection": "SampleRule.yaml", "id": f"xdr-{src1_id}", "passed": True},
+                {"detection": "SecondRule.yaml", "id": f"xdr-{src2_id}", "passed": True},
+                {"detection": "UnrelatedRule.yaml", "id": "xdr-99999999-9999-4999-8999-999999999999", "passed": True},
+            ]
+        },
+    }
+    res_unrelated = run_pr_qualification_checks(
+        sol, run_qualification=True, qualification_evidence=unrelated_ev
+    )
+    assert res_unrelated["checksById"]["E2E-Q03"]["status"] == "FAIL"
+
+    # 4. Duplicate item for same detection -> FAIL
+    duplicate_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {
+            "results": [
+                {"detection": "SampleRule.yaml", "id": f"xdr-{src1_id}", "passed": True},
+                {"detection": "SampleRule.yaml", "id": f"xdr-{src1_id}", "passed": True},
+                {"detection": "SecondRule.yaml", "id": f"xdr-{src2_id}", "passed": True},
+            ]
+        },
+    }
+    res_dup = run_pr_qualification_checks(
+        sol, run_qualification=True, qualification_evidence=duplicate_ev
+    )
+    assert res_dup["checksById"]["E2E-Q03"]["status"] == "FAIL"
+
+    # 5. Aggregate failure (e.g. comparisonError or status='failed') alongside passing items -> FAIL
+    agg_fail_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {
+            "status": "failed",
+            "comparisonError": "Mismatch in alert entity counts",
+            "results": [
+                {"detection": "SampleRule.yaml", "id": f"xdr-{src1_id}", "passed": True},
+                {"detection": "SecondRule.yaml", "id": f"xdr-{src2_id}", "passed": True},
+            ],
+        },
+    }
+    res_agg_fail = run_pr_qualification_checks(
+        sol, run_qualification=True, qualification_evidence=agg_fail_ev
+    )
+    assert res_agg_fail["checksById"]["E2E-Q03"]["status"] == "FAIL"
+
+    # 6. Complete receipt with both migrated detections passing (and not cdOnly) -> PASS
+    complete_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {
+            "results": [
+                {"detection": "SampleRule.yaml", "id": f"xdr-{src1_id}", "passed": True},
+                {"detection": "SecondRule.yaml", "id": f"xdr-{src2_id}", "passed": True},
+            ],
+        },
+    }
+    res_complete = run_pr_qualification_checks(
+        sol, run_qualification=True, qualification_evidence=complete_ev
+    )
+    assert res_complete["checksById"]["E2E-Q03"]["status"] == "PASS"
+
+    # 7. Mixed solution (1 migrated + 1 native) with migrated parity item + native cd-only item -> PASS
+    mixed_sol = tmp_path / "Solutions" / "MixedParitySol"
+    native_id = "xdr-33333333-3333-4333-8333-333333333333"
+    _build_base_package(
+        mixed_sol,
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/SampleRule.yaml"],
+            "XDR Detections": ["XDR Detections/SampleRule.yaml", "XDR Detections/NativeRule.yaml"],
+        },
+    )
+    mixed_sha = _build_valid_analytic_rule(
+        mixed_sol / "Analytic Rules" / "SampleRule.yaml", rule_id=src1_id
+    )
+    _build_valid_xdr_detection(
+        mixed_sol / "XDR Detections" / "SampleRule.yaml",
+        source_rule_id=src1_id,
+        source_rule_path="Analytic Rules/SampleRule.yaml",
+        source_rule_sha256=mixed_sha,
+    )
+    _write_yaml(
+        mixed_sol / "XDR Detections" / "NativeRule.yaml",
+        {
+            "id": native_id,
+            "displayName": "Native XDR Rule",
+            "severity": "Medium",
+            "queryFrequency": "PT1H",
+            "query": "DeviceProcessEvents | project Timestamp, DeviceId, ReportId",
+            "entityMappings": [
+                {
+                    "entityType": "Machine",
+                    "fieldMappings": [{"identifier": "DeviceId", "columnName": "DeviceId"}],
+                }
+            ],
+            "customDetails": {"Proc": "DeviceId"},
+        },
+    )
+    mixed_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {
+            "results": [
+                {"detection": "SampleRule.yaml", "id": f"xdr-{src1_id}", "passed": True},
+                {"detection": "NativeRule.yaml", "id": native_id, "cdOnly": True, "passed": True},
+            ],
+        },
+    }
+    res_mixed = run_pr_qualification_checks(
+        mixed_sol, run_qualification=True, qualification_evidence=mixed_ev
+    )
+    assert res_mixed["checksById"]["E2E-Q03"]["status"] == "PASS"
+
+    # 8. alert-parity-state.json structure with both "rules" (config pairs) and "comparisons" (results) -> PASS
+    state_style_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {
+            "status": "passed",
+            "rules": [
+                {
+                    "detection": "SampleRule.yaml",
+                    "customDetectionId": f"xdr-{src1_id}",
+                    "analyticRuleId": src1_id,
+                    "cdOnly": False,
+                },
+                {
+                    "detection": "NativeRule.yaml",
+                    "customDetectionId": native_id,
+                    "analyticRuleId": None,
+                    "cdOnly": True,
+                },
+            ],
+            "comparisons": [
+                {"detection": "SampleRule.yaml", "id": f"xdr-{src1_id}", "passed": True},
+                {"detection": "NativeRule.yaml", "id": native_id, "cdOnly": True, "passed": True},
+            ],
+        },
+    }
+    res_state_style = run_pr_qualification_checks(
+        mixed_sol, run_qualification=True, qualification_evidence=state_style_ev
+    )
+    assert res_state_style["checksById"]["E2E-Q03"]["status"] == "PASS"
+
+    # 9. Disambiguated matching when two detections in subdirectories share the same filename stem -> PASS
+    sub_sol = tmp_path / "Solutions" / "SubdirStemSol"
+    sub_id_b = "xdr-bbbb2222-2222-4222-8222-222222222222"
+    _build_base_package(
+        sub_sol,
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/SameStem.yaml"],
+            "XDR Detections": [
+                "XDR Detections/SubA/SameStem.yaml",
+                "XDR Detections/SubB/SameStem.yaml",
+            ],
+        },
+    )
+    sub_sha = _build_valid_analytic_rule(
+        sub_sol / "Analytic Rules" / "SameStem.yaml", rule_id=src1_id
+    )
+    _build_valid_xdr_detection(
+        sub_sol / "XDR Detections" / "SubA" / "SameStem.yaml",
+        source_rule_id=src1_id,
+        source_rule_path="Analytic Rules/SameStem.yaml",
+        source_rule_sha256=sub_sha,
+    )
+    _write_yaml(
+        sub_sol / "XDR Detections" / "SubB" / "SameStem.yaml",
+        {
+            "id": sub_id_b,
+            "displayName": "Sample XDR Detection",
+            "severity": "Medium",
+            "queryFrequency": "PT1H",
+            "query": "DeviceProcessEvents | project Timestamp, DeviceId, ReportId",
+            "entityMappings": [
+                {
+                    "entityType": "Machine",
+                    "fieldMappings": [{"identifier": "DeviceId", "columnName": "DeviceId"}],
+                }
+            ],
+            "customDetails": {"Proc": "DeviceId"},
+        },
+    )
+    sub_ev = {
+        "dualSurfaceKql": {"dualSurfaceVerified": True},
+        "alertParity": {
+            "comparisons": [
+                {"detection": "SubA/SameStem.yaml", "cdOnly": False, "passed": True},
+                {"detection": "SubB/SameStem.yaml", "cdOnly": True, "passed": True},
+            ],
+        },
+    }
+    res_sub = run_pr_qualification_checks(
+        sub_sol, run_qualification=True, qualification_evidence=sub_ev
+    )
+    assert res_sub["checksById"]["E2E-Q03"]["status"] == "PASS"
+
+
 
 

@@ -1611,6 +1611,148 @@ class RuntimeQueryConsentTests(unittest.TestCase):
             observed_env,
         )
 
+    def test_native_only_solution_without_analytic_rules_dir_supports_graph_runtime_consent(
+        self,
+    ) -> None:
+        import shutil
+
+        # Verify both an empty Analytic Rules directory and a missing Analytic Rules directory
+        for child in (self.solution / "Analytic Rules").glob("*"):
+            child.unlink()
+        native_doc = {
+            "kind": "CustomDetection",
+            "version": "1.0.0",
+            "contentProvenance": {"origin": "native"},
+            "properties": {
+                "id": "xdr-11111111-2222-4333-8444-555555555555",
+                "displayName": "Native Rule",
+                "isEnabled": True,
+                "queryCondition": {"queryText": "DeviceProcessEvents | take 1"},
+                "schedule": {"period": "1H"},
+                "detectionAction": {
+                    "alertTemplate": {
+                        "title": "Native Rule",
+                        "description": "Desc",
+                        "severity": "medium",
+                        "category": "Execution",
+                        "mitreTechniques": ["T1059"],
+                        "recommendedActions": "Check",
+                        "impactedAssets": [
+                            {"@odata.type": "#microsoft.graph.security.impactedDeviceAsset", "identifier": "deviceId"}
+                        ],
+                    }
+                },
+            },
+        }
+        (self.solution / "XDR Detections" / "Rule.yaml").write_text(
+            yaml.safe_dump(native_doc, sort_keys=False), encoding="utf-8"
+        )
+
+        empty_dir_plan = build_runtime_query_plan(self.solution)
+        self.assertEqual("ready", empty_dir_plan["status"])
+        self.assertEqual(
+            "not-applicable",
+            empty_dir_plan["families"][SOURCE]["status"],
+        )
+        shutil.rmtree(self.solution / "Analytic Rules")
+
+        plan = build_runtime_query_plan(self.solution)
+        self.assertEqual("ready", plan["status"])
+        self.assertEqual(
+            "not-applicable",
+            plan["families"][SOURCE]["status"],
+        )
+        self.assertEqual(
+            "ready",
+            plan["families"][XDR]["status"],
+        )
+
+        with mock.patch(
+            "sentinel_xdr_migration.runtime_consent._authentication_requirement",
+            return_value=self._cached_graph_authentication(),
+        ):
+            consent_receipt = self._approve(XDR)
+            self.assertEqual("approved", consent_receipt["status"])
+            verified = require_runtime_query_consent(
+                self.solution,
+                family=XDR,
+                provider="graph",
+            )
+            self.assertEqual("approved", verified["status"])
+            status_report = runtime_query_consent_status(self.solution)
+            self.assertEqual(
+                "not-applicable",
+                status_report["families"][SOURCE]["status"],
+            )
+            self.assertEqual(
+                "not-applicable",
+                status_report["families"][SOURCE]["executionStatus"],
+            )
+
+    def test_mixed_solution_sentinel_runtime_import_only_requires_migrated_detections(
+        self,
+    ) -> None:
+        from solution_manager.qualification.runtime import (
+            current_runtime_query_hash,
+            record_runtime_validation,
+        )
+
+        _query, cached, _client = self._prepare_sdk_detection()
+        native_id = "xdr-22222222-3333-4444-8555-666666666666"
+        (self.solution / "XDR Detections" / "Native.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "kind": "CustomDetection",
+                    "contentProvenance": {"origin": "native"},
+                    "properties": {
+                        "id": native_id,
+                        "displayName": "Native Rule",
+                        "queryCondition": {"queryText": "DeviceProcessEvents | take 1"},
+                        "detectionAction": {"alertTemplate": {}},
+                    },
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+        with mock.patch(
+            "sentinel_xdr_migration.runtime_consent._authentication_requirement",
+            return_value=cached,
+        ):
+            self._approve(SOURCE)
+            q_hash = current_runtime_query_hash(
+                self.solution,
+                self.solution / "XDR Detections" / "Rule.yaml",
+                provider="azure-monitor-sdk",
+            )
+            receipt = record_runtime_validation(
+                self.solution,
+                provider="azure-monitor-sdk",
+                results_data=[
+                    {
+                        "detection": "Rule.yaml",
+                        "status": "passed",
+                        "valid": True,
+                        "querySha256": q_hash,
+                        "statusCode": 200,
+                        "rowCount": 1,
+                        "schema": [{"name": "Account", "type": "string"}],
+                    }
+                ],
+            )
+            self.assertEqual(1, receipt["valid"])
+            self.assertEqual(0, receipt["invalid"])
+            self.assertEqual(1, receipt["total"])
+            self.assertEqual(["Rule.yaml"], [r["detection"] for r in receipt["results"]])
+
+            with self.assertRaisesRegex(ValueError, "missing detections: Rule.yaml"):
+                record_runtime_validation(
+                    self.solution,
+                    provider="azure-monitor-sdk",
+                    results_data=[],
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

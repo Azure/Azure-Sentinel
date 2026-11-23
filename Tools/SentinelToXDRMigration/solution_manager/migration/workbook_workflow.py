@@ -38,6 +38,16 @@ def has_analytic_rules(solution: str | Path) -> bool:
     )
 
 
+def has_detection_content(solution: str | Path) -> bool:
+    root = Path(solution).expanduser().resolve()
+    from solution_manager.migration.converter import xdr_detection_files
+
+    xdr_dir = root / "XDR Detections"
+    return has_analytic_rules(root) or (
+        xdr_dir.is_dir() and bool(xdr_detection_files(xdr_dir))
+    )
+
+
 def _digest(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -483,7 +493,7 @@ def create_candidate(solution: str | Path, *, validation_receipt: str | Path | N
         if context["workflowProfile"] == "authoring":
             workflow._validate_offline_authoring_gates(root, state_path, state)
         else:
-            if has_analytic_rules(root):
+            if has_detection_content(root):
                 from solution_manager.qualification.runtime import current_runtime_evidence
                 if current_runtime_evidence(root).get("passed") is not True:
                     raise ValueError("combined Qualification still requires all current detection runtime gates")

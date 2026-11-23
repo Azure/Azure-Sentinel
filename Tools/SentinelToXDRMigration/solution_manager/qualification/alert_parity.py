@@ -300,7 +300,7 @@ def _load_pairs(
         source = (document.get("contentProvenance") or {}).get("source") or {}
         source_id = str(source.get("id") or "").strip() if isinstance(source, dict) else ""
         detection_id = str((document.get("properties") or {}).get("id") or "").strip()
-        sentinel_derived = is_sentinel_derived(document) or (isinstance(source, dict) and bool(source))
+        sentinel_derived = _is_migrated_detection_doc(document)
         if sentinel_derived and (not source_id or not detection_id):
             raise ValueError(f"{detection_name}: source and detection IDs are required")
         if not detection_id:
@@ -1258,6 +1258,43 @@ def _normalize_alert(alert: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _is_migrated_detection_doc(doc: Any) -> bool:
+    if not isinstance(doc, dict):
+        return False
+    if is_sentinel_derived(doc):
+        return True
+    prov = doc.get("contentProvenance") if isinstance(doc.get("contentProvenance"), dict) else {}
+    src = prov.get("source") if isinstance(prov.get("source"), dict) else {}
+    for ref in (src.get("id"), src.get("path"), doc.get("sourceRuleId"), doc.get("sourceRulePath")):
+        if isinstance(ref, str) and ref.strip():
+            return True
+    return False
+
+
+def _expected_alert_modes_by_detection(
+    root: Path,
+    pairs: list[dict[str, Any]],
+) -> dict[str, str]:
+    expected: dict[str, str] = {}
+    for pair in pairs:
+        if not isinstance(pair, dict):
+            continue
+        det_rel = str(pair.get("detection") or "").strip().replace("\\", "/")
+        if not det_rel:
+            continue
+        det_path = root / "XDR Detections" / det_rel
+        doc = (
+            yaml.safe_load(det_path.read_text(encoding="utf-8-sig"))
+            if det_path.is_file()
+            else None
+        )
+        if _is_migrated_detection_doc(doc) or not bool(pair.get("cdOnly")):
+            expected[det_rel] = "parity"
+        else:
+            expected[det_rel] = "cd-only"
+    return expected
+
+
 def compare_alert_captures(
     expected_detections: set[str],
     raw_results: Any,
@@ -1266,24 +1303,74 @@ def compare_alert_captures(
     expected_match_keys_by_detection: dict[str, set[str]] | None = None,
     negative_control_keys: set[str] | None = None,
     negative_control_keys_by_detection: dict[str, set[str]] | None = None,
+    expected_modes_by_detection: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     entries = raw_results.get("results") if isinstance(raw_results, dict) else raw_results
     if not isinstance(entries, list):
         raise ValueError("alert parity results must contain a results list")
+    normalized_expected_modes = (
+        {
+            str(k).strip().replace("\\", "/"): str(v).strip().lower()
+            for k, v in expected_modes_by_detection.items()
+        }
+        if expected_modes_by_detection is not None
+        else None
+    )
+    normalized_expected_detections = {
+        str(item).strip().replace("\\", "/")
+        for item in (expected_detections or set())
+        if str(item).strip()
+    }
+    if normalized_expected_modes is not None:
+        normalized_expected_detections |= set(normalized_expected_modes.keys())
     names: set[str] = set()
     comparisons: list[dict[str, Any]] = []
     for entry in entries:
         if not isinstance(entry, dict):
             raise ValueError("each alert parity result must be an object")
-        detection = str(entry.get("detection") or "")
+        detection = str(entry.get("detection") or "").strip().replace("\\", "/")
         if not detection or detection in names:
             raise ValueError("each detection must occur exactly once")
         names.add(detection)
-        is_cd_only = bool(
-            entry.get("cdOnly") is True
-            or (entry.get("analyticRule") is None and "customDetection" in entry)
-            or ("analyticRule" not in entry and "customDetection" in entry)
+        expected_mode = (
+            normalized_expected_modes.get(detection)
+            if normalized_expected_modes is not None
+            else None
         )
+        raw_mode = str(entry.get("mode") or "").strip().lower()
+        has_analytic_rule = (
+            "analyticRule" in entry and entry.get("analyticRule") is not None
+        )
+        if expected_mode == "parity":
+            if entry.get("cdOnly") is True or raw_mode in {"cd-only", "cd_only", "cdonly"}:
+                raise ValueError(
+                    f"{detection}: migrated detection requires Sentinel analyticRule alert capture and cannot be downgraded to cdOnly mode"
+                )
+            if not has_analytic_rule:
+                raise ValueError(
+                    f"{detection}: migrated detection requires a Sentinel analyticRule capture"
+                )
+            is_cd_only = False
+        elif expected_mode == "cd-only":
+            if entry.get("cdOnly") is False or raw_mode == "parity" or has_analytic_rule:
+                raise ValueError(
+                    f"{detection}: native detection requires cd-only mode"
+                )
+            is_cd_only = True
+        else:
+            if (entry.get("cdOnly") is False or raw_mode == "parity") and not has_analytic_rule:
+                raise ValueError(
+                    f"{detection}: parity mode requires a Sentinel analyticRule capture"
+                )
+            if (entry.get("cdOnly") is True or raw_mode in {"cd-only", "cd_only", "cdonly"}) and has_analytic_rule:
+                raise ValueError(
+                    f"{detection}: cdOnly mode cannot include a Sentinel analyticRule capture"
+                )
+            is_cd_only = bool(
+                entry.get("cdOnly") is True
+                or raw_mode in {"cd-only", "cd_only", "cdonly"}
+                or not has_analytic_rule
+            )
         detection_expected_keys = (
             (expected_match_keys_by_detection or {}).get(detection)
             or (
@@ -1438,8 +1525,8 @@ def compare_alert_captures(
                 ),
             }
         )
-    missing = sorted(expected_detections - names)
-    unknown = sorted(names - expected_detections)
+    missing = sorted(normalized_expected_detections - names)
+    unknown = sorted(names - normalized_expected_detections)
     if missing or unknown:
         details = []
         if missing:
@@ -1562,6 +1649,7 @@ def complete_alert_parity(
             Path(results_path).expanduser().read_text(encoding="utf-8-sig")
         )
         expected = {pair["detection"] for pair in state["rules"]}
+        expected_modes = _expected_alert_modes_by_detection(root, state["rules"])
         comparisons = compare_alert_captures(
             expected,
             raw,
@@ -1572,6 +1660,7 @@ def complete_alert_parity(
                     state.get("expectedMatchKeysByDetection") or {}
                 ).items()
             },
+            expected_modes_by_detection=expected_modes,
         )
     except Exception as exc:
         if verified_scope is None:
@@ -1689,6 +1778,7 @@ def poll_alert_parity_batch(
                 "statePath": str(state_path),
             }
         expected = {pair["detection"] for pair in state["rules"]}
+        expected_modes = _expected_alert_modes_by_detection(root, state["rules"])
         comparisons = compare_alert_captures(
             expected,
             raw,
@@ -1699,6 +1789,7 @@ def poll_alert_parity_batch(
                     state.get("expectedMatchKeysByDetection") or {}
                 ).items()
             },
+            expected_modes_by_detection=expected_modes,
         )
         all_captures_matched = bool(comparisons) and all(
             item["passed"] for item in comparisons
