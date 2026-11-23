@@ -20,19 +20,21 @@ query: |
   // Find attempts to stop processes using taskkill.exe
   let taskKill = DeviceProcessEvents
   | where TimeGenerated > ago(1d)
-  | where FileName =~ "taskkill.exe" 
+  | where (FileName =~ "taskkill.exe" or ProcessVersionInfoOriginalFileName =~ "taskkill.exe") 
   | summarize taskKillCount = dcount(tostring(ProcessCommandLine)), TaskKillList = make_set(ProcessCommandLine) by DeviceId, bin(TimeGenerated, 2m)
   | where taskKillCount > 10;
   // Find attempts to stop processes using net stop
   let netStop = DeviceProcessEvents
   | where TimeGenerated > ago(1d)
-  | where FileName =~ "net.exe" and ProcessCommandLine has "stop"
+  | where (FileName in~ ("net.exe", "net1.exe") or ProcessVersionInfoOriginalFileName in~ ("net.exe", "net1.exe")) and ProcessCommandLine has "stop"
+  // net.exe starts net1.exe for the same command; drop that child so each command is counted once
+  | where not((FileName =~ 'net1.exe' or ProcessVersionInfoOriginalFileName =~ 'net1.exe') and (InitiatingProcessFileName =~ 'net.exe' or InitiatingProcessVersionInfoOriginalFileName =~ 'net.exe'))
   | summarize netStopCount = dcount(tostring(ProcessCommandLine)), NetStopList = make_set(ProcessCommandLine) by DeviceId, bin(TimeGenerated, 2m)
   | where netStopCount > 10;
   // Look for cipher.exe deleting data from multiple drives
   let cipher = DeviceProcessEvents
   | where TimeGenerated > ago(1d)
-  | where FileName =~ "cipher.exe" 
+  | where (FileName =~ "cipher.exe" or ProcessVersionInfoOriginalFileName =~ "cipher.exe") 
   // cipher.exe /w flag used for deleting data 
   | where ProcessCommandLine has "/w" 
   | summarize CipherCount = dcount(tostring(ProcessCommandLine)), 
@@ -54,8 +56,8 @@ query: |
   // Main query for counting and aggregating evidence
   DeviceProcessEvents
   | where TimeGenerated > ago(1d)
-  | where FileName =~ "vssadmin.exe" and ProcessCommandLine has_any("list shadows", "delete shadows")
-  or FileName =~ "fsutil.exe" and ProcessCommandLine has "usn" and ProcessCommandLine has "deletejournal"
+  | where (FileName =~ "vssadmin.exe" or ProcessVersionInfoOriginalFileName =~ "vssadmin.exe") and ProcessCommandLine has_any("list shadows", "delete shadows")
+  or (FileName =~ "fsutil.exe" or ProcessVersionInfoOriginalFileName =~ "fsutil.exe") and ProcessCommandLine has "usn" and ProcessCommandLine has "deletejournal"
   or ProcessCommandLine has("bcdedit") and ProcessCommandLine has_any("recoveryenabled no", "bootstatuspolicy ignoreallfailures")
   or ProcessCommandLine has "wbadmin" and ProcessCommandLine has "delete" and ProcessCommandLine has_any("backup", "catalog", "systemstatebackup")
   or (ProcessCommandLine has "wevtutil" and ProcessCommandLine has "cl") 
@@ -63,9 +65,9 @@ query: |
   or (ProcessCommandLine has "sc" and ProcessCommandLine has "config" and ProcessCommandLine has "disabled")
   | extend Bcdedit = iff(ProcessCommandLine has "bcdedit" and ProcessCommandLine has_any("recoveryenabled no", "bootstatuspolicy ignoreallfailures"), 1, 0)
   | extend ShadowCopyDelete = iff (ProcessCommandLine has "shadowcopy delete", 1, 0)
-  | extend VssAdminShadows = iff(ProcessCommandLine has "vssadmin" and ProcessCommandLine has_any("list shadows", "delete shadows"), 1, 0)
+  | extend VssAdminShadows = iff((ProcessCommandLine has "vssadmin" or ProcessVersionInfoOriginalFileName =~ "vssadmin.exe") and ProcessCommandLine has_any("list shadows", "delete shadows"), 1, 0)
   | extend Wbadmin = iff(ProcessCommandLine has "wbadmin" and ProcessCommandLine has "delete" and ProcessCommandLine has_any("backup", "catalog", "systemstatebackup"), 1,0)
-  | extend Fsutil = iff(ProcessCommandLine has "fsutil" and ProcessCommandLine has "usn" and ProcessCommandLine has "deletejournal", 1, 0)
+  | extend Fsutil = iff((ProcessCommandLine has "fsutil" or ProcessVersionInfoOriginalFileName =~ "fsutil.exe") and ProcessCommandLine has "usn" and ProcessCommandLine has "deletejournal", 1, 0)
   | summarize FirstActivity = min(TimeGenerated), ReportId = any(ReportId), Commands = make_set(ProcessCommandLine) by DeviceId, Fsutil, Wbadmin, ShadowCopyDelete, Bcdedit, VssAdminShadows, bin(TimeGenerated, 6h)
   // Joining extra evidence
   | join kind=leftouter (wevtutilClear) on $left.DeviceId == $right.DeviceId
@@ -87,4 +89,4 @@ query: |
   ScDisable = iff(make_set(ScDisableUse) contains "1", 1, 0), TotalEvidenceCount = dcount(tostring(CommandList)), EvidenceList = make_set(Commands), StartofBehavior = min(FirstActivity) by DeviceId, bin(TimeGenerated, 1d)
   | extend UniqueEvidenceCount = BcdEdit + NetStop10PlusCommands + Wevtutil10PlusLogsCleared + CipherMultipleDrives + Wbadmin + Fsutil + TaskKill10PlusCommand + VssAdminShadow + ScDisable + ShadowCopyDelete
   | where UniqueEvidenceCount > 2
-version: 1.0.0
+version: 1.0.1
