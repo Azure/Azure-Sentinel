@@ -736,6 +736,83 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             result["queryTimeEligibility"]["status"],
         )
 
+    def test_meta003_accepts_semantic_versions(self):
+        versions = (
+            "0.0.0",
+            "1.2.3",
+            "1.2.3-alpha",
+            "1.2.3-alpha.1",
+            "1.2.3+build.5",
+            "1.2.3-alpha.1+build.5",
+            "1.0.0-x.7.z.92",
+        )
+        for version in versions:
+            with self.subTest(version=version):
+                document = self.ingest_parser()
+                document["Parser"]["Version"] = version
+                document["Normalization"]["Version"] = version
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    document,
+                )
+
+                result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+                self.assertTrue(result["valid"], result["findings"])
+                self.assertNotIn(
+                    "META003",
+                    {finding["code"] for finding in result["findings"]},
+                )
+
+    def test_meta003_rejects_non_semantic_versions(self):
+        versions = (
+            "1.2",
+            "1.2.3.4",
+            "01.2.3",
+            "1.02.3",
+            "1.2.03",
+            "1.2.3-",
+            "1.2.3-01",
+            "1.2.3-alpha..1",
+            "1.2.3-alpha_1",
+            "1.2.3+",
+            "1.2.3+build..1",
+            "v1.2.3",
+            "\u0661.2.3",
+        )
+        for version in versions:
+            with self.subTest(version=version):
+                document = self.ingest_parser()
+                document["Parser"]["Version"] = version
+                document["Normalization"]["Version"] = version
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    document,
+                )
+
+                result = VALIDATION.validate_ingest_time_parser(ingest_path)
+
+                findings = [
+                    finding
+                    for finding in result["findings"]
+                    if finding["code"] == "META003"
+                ]
+                self.assertFalse(result["valid"])
+                self.assertEqual(
+                    {"Parser.Version", "Normalization.Version"},
+                    {finding["field"] for finding in findings},
+                )
+                self.assertTrue(
+                    all(
+                        finding["message"]
+                        == "Version must follow Semantic Versioning 2.0.0 "
+                        "(https://semver.org/)."
+                        for finding in findings
+                    )
+                )
+
     def test_qtp_mismatch_blocks_optional_stages_only(self):
         query_path = self.write_yaml(
             "Parsers/ASimAuthentication/Parsers/"
@@ -916,7 +993,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         self.assertTrue(result["valid"], result["findings"])
 
-    def test_rejects_filter_stage_missing_from_parser_query(self):
+    def test_filter_where_does_not_need_to_match_parser_query(self):
         ingest_path = self.write_yaml(
             "Parsers/ASimAuthentication/IngestTimeParsers/"
             "ASimAuthenticationContoso.yaml",
@@ -929,9 +1006,7 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         result = VALIDATION.validate_ingest_time_parser(ingest_path)
 
-        self.assertIn(
-            "FILTER002", {finding["code"] for finding in result["findings"]}
-        )
+        self.assertTrue(result["valid"], result["findings"])
 
     def test_requires_filter_where_when_parser_has_where(self):
         ingest_path = self.write_yaml(
@@ -946,28 +1021,48 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
             "FILTER004", {finding["code"] for finding in result["findings"]}
         )
 
-    def test_non_pass_through_filter_requires_where(self):
-        stage = '| extend FilterValue = tostring(EventType)'
-        ingest_path = self.write_yaml(
-            "Parsers/ASimAuthentication/IngestTimeParsers/"
-            "ASimAuthenticationContoso.yaml",
-            self.ingest_parser(
-                parser_filter_query=f"source\n{stage}",
-                parser_query=(
-                    f"source\n{stage}\n"
-                    '| extend EventVendor = "Contoso", '
-                    'EventProduct = "Contoso"\n'
-                    "| project TimeGenerated, EventType, "
-                    "EventVendor, EventProduct"
-                ),
+    def test_filter_allows_only_where_operators(self):
+        cases = {
+            "extend": (
+                "source\n"
+                "| extend FilterValue = tostring(EventType)"
             ),
-        )
+            "parse": (
+                "source\n"
+                '| parse EventType with FilterValue ":" *'
+            ),
+            "parse-kv": (
+                "source\n"
+                "| parse-kv EventType as (FilterValue:string) "
+                'with (pair_delimiter=";", kv_delimiter="=")'
+            ),
+            "project-rename": (
+                "source\n"
+                "| project-rename FilterValue = EventType"
+            ),
+        }
+        for operator, filter_query in cases.items():
+            with self.subTest(operator=operator):
+                ingest_path = self.write_yaml(
+                    "Parsers/ASimAuthentication/IngestTimeParsers/"
+                    "ASimAuthenticationContoso.yaml",
+                    self.ingest_parser(
+                        parser_filter_query=filter_query,
+                    ),
+                )
 
-        result = VALIDATION.validate_ingest_time_parser(ingest_path)
+                result = VALIDATION.validate_ingest_time_parser(
+                    ingest_path
+                )
 
-        self.assertIn(
-            "FILTER001", {finding["code"] for finding in result["findings"]}
-        )
+                self.assertIn(
+                    "KQL041",
+                    {
+                        finding["code"]
+                        for finding in result["findings"]
+                        if finding["field"] == "ParserFilterQuery"
+                    },
+                )
 
     def test_filter_let_is_rejected_by_source_pipeline_shape(self):
         ingest_path = self.write_yaml(
@@ -986,32 +1081,6 @@ class AsimIngestTimeValidationTests(unittest.TestCase):
 
         self.assertIn(
             "KQL039", {finding["code"] for finding in result["findings"]}
-        )
-
-    def test_filter_stage_comparison_ignores_formatting(self):
-        ingest_path = self.write_yaml(
-            "Parsers/ASimAuthentication/IngestTimeParsers/"
-            "ASimAuthenticationContoso.yaml",
-            self.ingest_parser(
-                parser_filter_query=(
-                    "source\n"
-                    '| where EventType=="Login"'
-                ),
-                parser_query=(
-                    "source\n"
-                    '| where EventType == "Login"\n'
-                    '| extend EventVendor = "Contoso", '
-                    'EventProduct = "Contoso"\n'
-                    "| project TimeGenerated, EventType, "
-                    "EventVendor, EventProduct"
-                ),
-            ),
-        )
-
-        result = VALIDATION.validate_ingest_time_parser(ingest_path)
-
-        self.assertNotIn(
-            "FILTER002", {finding["code"] for finding in result["findings"]}
         )
 
     def test_allows_filter_with_one_of_multiple_parser_wheres(self):
@@ -1404,8 +1473,7 @@ source
             self.ingest_parser(
                 parser_filter_query=(
                     "source\n"
-                    "| parse-kv Data as (ParsedKey:string)\n"
-                    '| where ParsedKey == "allow"'
+                    '| where Data has "allow"'
                 ),
                 parser_query=(
                     "source\n"
