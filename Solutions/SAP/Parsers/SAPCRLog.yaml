@@ -1,0 +1,68 @@
+Contentkind: Function
+Description: SAPCRLog
+Function:
+  Title: SAPCRLog
+  Version: 3.1.6
+  LastUpdated: '2024-06-06'
+Category: SAPFunctions
+FunctionName: SAPCRLog
+FunctionQuery: |
+  //generated function structure for custom log ABAPCRLog
+  //Sentinel4SAP solution version 3.1.5
+  // ABAPCRLogHeader_CL is a custom log that holds the change requests headers coming from S4S agents starting from October 2022
+  let D_ABAPCRLogHeader_CL = datatable(TimeGeneratedHeader:datetime
+  ,TimeGenerated: datetime
+  ,UpdatedOn: datetime
+  ,Request:string
+  ,Description:string
+  ,Category:string
+  ,ClientID:string
+  ,Owner:string
+  ,Status:string
+  ,SystemID:string
+  ,SystemNumber:string
+  ,Instance:string
+  ,Host:string
+  ,Type:string
+  )['1000-01-01T00:00:00Z', '1000-01-01T00:00:00Z', '1000-01-01T00:00:00Z','initialString','initialString','initialString','initialString','initialString','initialString','initialString','initialString','initialString','initialString','initialString'];
+  let T_CRHeader= ABAPCRLogHeader_CL
+  | project TimeGeneratedHeader = column_ifexists('TimeGenerated', todatetime('1000-01-01T00:00:00Z'))
+  ,Request = column_ifexists('Request_s', 'initialString')
+  ,Description = column_ifexists('Description_s', 'initialString')
+  ,Category = column_ifexists('Category', 'initialString')
+  ,ClientID = column_ifexists('ClientID_s', 'initialString')
+  ,Owner = column_ifexists('Owner_s', 'initialString')
+  ,Status = column_ifexists('Status_s', 'initialString')
+  ,SystemID = column_ifexists('SystemID_s', 'initialString')
+  ,SystemNumber = column_ifexists('SystemNumber_s', 'initialString')
+  ,Instance = column_ifexists('Instance_s', 'initialString')
+  ,Host = column_ifexists('Host_s', 'initialString')
+  ,Type = column_ifexists('Type', 'initialString')
+  ,UpdatedOn= column_ifexists('UpdatedOn_t', '1000-01-01T00:00:00Z');
+  // ABAPCRLogLine_CL is a custom log that holds the change requests line items coming from S4S agents starting October 2022
+  let D_ABAPCRLogLine_CL = datatable(TimeGenerated:datetime
+  ,Request:string
+  ,ObjectType:string
+  ,ObjectName:string
+  ,TableName:string
+  ,ViewName:string
+  ,TableKey:string
+  ,SystemID:string
+  )['1000-01-01T00:00:00Z','initialString','initialString','initialString','initialString','initialString','initialString','initialString'];
+  let T_CRLine= ABAPCRLogLine_CL
+  | project-away TenantId, SourceSystem, Host_s, Instance_s, MG, ManagementGroupName, Type, _ResourceId
+  | project TimeGenerated = column_ifexists('TimeGenerated', '1000-01-01T00:00:00Z')
+  ,Request = column_ifexists('Request_s', 'initialString')
+  ,ObjectType = column_ifexists('ObjectType_s', 'initialString')
+  ,ObjectName = column_ifexists('ObjectName_s', 'initialString')
+  ,TableName = column_ifexists('TableName_s', 'initialString')
+  ,ViewName = column_ifexists('ViewName_s', 'initialString')
+  ,TableKey = column_ifexists('TableKey_s', 'initialString')
+  ,SystemID = column_ifexists('SystemID_s', 'initialString');
+  // create a view that details that "stiches" the CR header and line together
+  let T_CRLogVT = (T_CRHeader | union isfuzzy=true D_ABAPCRLogHeader_CL | project-away TimeGenerated) | join kind=inner  (T_CRLine | union isfuzzy=true (D_ABAPCRLogLine_CL
+  )) on Request, SystemID
+  | project-away Request1, SystemID1
+  | where SystemID != 'initialString'
+  | extend Type= "ABAPCRLog_CL_VT";
+  T_CRLogVT

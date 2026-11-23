@@ -1,0 +1,121 @@
+id: 9fadb366-a7ec-474c-90e1-d1a823176a1e
+kind: Scheduled
+name: SAP - Sensitive Role Changes
+description: |
+  Identifies changes in sensitive roles.
+  Source Action: Change a role using PFCG.
+  Sensitive roles should be maintained in "SAP - Sensitive Roles" Watchlist
+
+  *Data Sources: SAPcon - Change Documents Log*
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPAuditLog
+      - SAPChangeDocsLog
+      - SAPGetSourceIdentifier
+      - SAPSystems
+queryFrequency: 2h
+queryPeriod: 12h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - PrivilegeEscalation
+  - Persistence
+relevantTechniques: []
+query: |
+  // Sensitive Roles Changes
+  // Define variables
+  let TimeAgo= 2h;
+  let RoleObjectClass = "PFCG";
+  let ChangeType = "U";
+  let AuditLogIn = dynamic(['AU1', 'AU5']); // Messages of connect with user
+  let SensitiveRoles = _GetWatchlist("SAP - Sensitive Roles");
+  // Maintain if watchlist is not available
+  let fixedRoles = datatable(Role: string)['SAP_BC_BASIS_ADMIN', 'SAP_BC_AUTH_PROFILE_ADMIN'];
+  let UnitedRoles =toscalar(union fixedRoles, SensitiveRoles
+  | summarize Roles = make_list(Role));
+  let SelectedSystemRoles =  dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles=SelectedSystemRoles) | project SystemID= SearchKey, SystemRole;
+  // here you can exclude system users which are OK to run sensitive role updates
+  // by adding those users in the SAP_User_Config watchlist with a tag of 'UpdateSensitiveAuthOK'
+  let excludeUsersTags= dynamic(['UpdateSensitiveAuthOK']);
+  let excludedUsers= _GetWatchlist('SAP_User_Config')| where Tags has_any (excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  // Query logic
+  let RoleChanges= SAPChangeDocsLog
+  | where TimeGenerated> ago(TimeAgo+ 1h)
+  | where ingestion_time() > ago(TimeAgo)
+  | where TableName contains ("1251")
+  | where ObjectClass == RoleObjectClass // Relevant role object class
+  | where TypeofChange_Header == ChangeType
+  | join kind= inner  SelectedSystems on SystemID
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  | extend AuthorizationObj = extract(@"\S+\s+(\S+)\s+", 1, ChangedTableKey, typeof(string)) // Extract Authorization Object
+  | extend Authorization = extract(@"\S+\s+\S+\s+(\S+\d+)", 1, ChangedTableKey, typeof(string)) // Extract Authorization
+  | where ObjectID in (UnitedRoles) // Role is sensitive
+  | project-rename ChangedOn= UpdatedOn_t
+  | extend BagOfChange= bag_pack("Authorization",Authorization, "AuthorizationObj", AuthorizationObj, "FieldName", FieldName, "OldValue", ValueOld,"NewValue", ValueNew )
+  | summarize TableName=any(TableName), TransactionCode=any(TransactionCode), SystemRole=any(SystemRole), Host=any(Host), Instance=any(Instance), Authorizations= makeset(Authorization), BagOfChanges= make_set(BagOfChange, 30) by ChangedOn , SystemID, ClientID, ChangedRole= ObjectID, User;
+  let RoleChangesEarliest= toscalar(RoleChanges | summarize EarliestChange= min(ChangedOn));
+  let Logins = SAPAuditLog
+  | where TimeGenerated> RoleChangesEarliest - 1h
+  | where MessageID in (AuditLogIn)
+  | where User in((RoleChanges | distinct User))
+  | project-rename LoggedOn= UpdatedOn_t
+  | summarize count() by Email, TerminalIPv6, User, SystemID, ClientID, bin(LoggedOn, 1h); // Get last connection date for user
+  RoleChanges
+  | lookup kind=inner Logins on User, ClientID, SystemID // Get IP
+  | where ChangedOn > LoggedOn
+  | extend ChangeKey=strcat(ChangedRole, User, SystemID, ChangedOn)
+  | order by ChangeKey
+  | extend UpdatedOnDiff= datetime_diff('minute', ChangedOn, LoggedOn)
+  | extend Rank=row_number(1, prev(ChangeKey) != ChangeKey)
+  | where Rank< 3 // allow up to 2 IP addresses per 1h for capture replay scenarios
+  | project Authorizations, TimeGenerated= ChangedOn, Instance, SystemID, ClientID, Email, User, TerminalIPv6, Host, ChangedRole, BagOfChanges, SystemRole
+  | extend Email= iff(isempty(Email),User, Email), Host= iff(isempty(Host), TerminalIPv6, Host)
+  | extend AlertName= strcat('Sensitive Role ' , ChangedRole, ' was updated by ', User, " in a ", tolower(SystemRole), " system"), Dummy=' '
+  | extend PackedDetails= pack_all()
+  | extend AlertDescription= strcat(" The sensitive role ", ChangedRole, " was changed by user ", User,". Changed authorizations: ", Authorizations,". The list of changes detected: ", BagOfChanges)
+  | extend AlertRuleUniqueName = 'sensitiverolechanges'
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Email
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TerminalIPv6
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Host
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+  - entityType: SecurityGroup
+    fieldMappings:
+      - identifier: DistinguishedName
+        columnName: ChangedRole
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: |
+    {{AlertDescription}}
+    Identifies changes in sensitive roles.
+    Source Action: Change a role using PFCG.
+    Sensitive roles should be maintained in "SAP - Sensitive Roles" Watchlist
+
+    *Data Sources: SAPcon - Change Documents Log*
+    {{PackedDetails}}
+  alertTacticsColumnName: Dummy
+  alertSeverityColumnName: Dummy
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09

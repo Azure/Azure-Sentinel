@@ -1,0 +1,81 @@
+id: 63562246-8abb-4e85-a7ae-0e5074ed161b
+kind: Scheduled
+name: SAP - (Preview) AS JAVA - Sign-In from Unexpected Network
+description: |
+  Identifies sign-ins from an unexpected network.
+
+  Source Action:  Sign in to the backend system from an IP address that isn't assigned to one of the networks in the SAP - Networks watchlist.
+  *Data Sources: SAP JAVAFilesLog*
+  Networks should be maintained in watchlist "SAP - Networks"
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SAPCC
+    dataTypes:
+      - SAPGetSourceIdentifier
+      - SAPJAVAFilesLogs
+      - SAPSystems
+      - SAPUsersGetVIP
+queryFrequency: 1h
+queryPeriod: 1h15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1599
+query: |
+  //SAP - AS JAVA - High - Login from unexpected network
+  let SelectedSystemRoles = dynamic(["Production"]); //can also do// let SelectedSystemRoles =  dynamic(["Production", "UAT"]); dynamic(["All System Roles"])
+  let SelectedSystems = SAPSystems(SelectedSystemRoles= SelectedSystemRoles)
+      | project SystemID= SearchKey, SystemRole;
+  // here you can exclude system users which are OK to execute this action
+  // by adding those users in the SAP_User_Config watchlist with a tag of "LoginUnExpectedOK"
+  let excludeUsersTags= dynamic(["LoginUnExpectedOK"]);// dynamic(["LoginUnExpectedOK","SAP_ALL"]);
+  let excludedUsers= SAPUsersGetVIP(SearchForTags= excludeUsersTags)| summarize by User2Exclude=SAPUser;
+  let Networks = _GetWatchlist("SAP - Networks");
+  SAPJAVAFilesLogs()
+  | where SourceName == "/System/Security/Authentication"
+  | join kind=leftantisemi excludedUsers on $left.User == $right.User2Exclude
+  | join kind= inner SelectedSystems on SystemID
+  | extend Login= tostring(column_ifexists("_Login", ""))
+  | extend IPAddress= column_ifexists("_IP_Address", "")
+  | where isnotempty( Login)
+  | order by TimeGenerated asc
+  | evaluate ipv4_lookup(Networks, IPAddress, Network, return_unmatched = true)
+  | where isempty(Network) // Network is not expected
+  // Details
+  | summarize Count=count(), Time=min(Time)
+  , LogonInfo=take_anyif(tostring(Text), isnotempty(Text)), Login=take_any(Login)
+  by SystemID, User, SystemRole, IPAddress, Instance
+  | extend GeoLocation= iff(ipv4_is_private( IPAddress), dynamic({"IsPrivate": true}), geo_info_from_ip_address(IPAddress))
+  | extend AlertName= strcat("SAP AS JAVA - Login from unexpected network ", IPAddress, " by user ", User)
+  | extend Action= iff(Login contains "OK", " successfully logged in to a "," failed to log in to a ")
+  | extend AlertDescription= strcat("User ", User, Action, SystemRole, " System ", Count, iff(Count > 1, " times. ", "time. "), " \nLogin info: ", LogonInfo)
+  | extend Severity= iff(Login == "OK", "Low", "High")
+  | extend AlertRuleUniqueName = "signinfromunexpectednetwork"
+  | extend SourceIdentifier= trim("-", strcat_delim("-","SAP", column_ifexists("SystemID", ""), column_ifexists("ClientID", ""), toscalar(SAPGetSourceIdentifier() | project SourceIdentifier)))
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: SourceIdentifier
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{AlertName}}'
+  alertDescriptionFormat: |
+    {{AlertDescription}}
+    Identifies SAP Dialog logon from an unexpected network.
+
+    Source Action: Logon to the backend system from an unexpected network.
+    Expected networks can be maintained in "SAP - Networks" Watchlist
+customDetails:
+  AlertRuleUniqueName: AlertRuleUniqueName
+  SAP_User: User
+version: 3.5.09
