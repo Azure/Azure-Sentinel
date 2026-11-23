@@ -42,68 +42,110 @@ Confirm network access to the DCE and token endpoint.
 
 ## Alerts
 
-### Supported product
+### Select the CloudHub platform
 
-This alerts connector uses the **CloudHub 1.0** API at
-`/cloudhub/api/v2/alerts`. API version `v2` does not mean CloudHub 2.0.
-CloudHub 1.0 entitlement is required. CloudHub 2.0 and on-premises Runtime
-Manager alerts are not supported by this connector.
+The **CloudHub deployment platform** radio selector displays the fields required
+for CloudHub 1.0 or CloudHub 2.0. API version `v2` does not identify the deployment
+platform. Customers using both can create separate connections in the same
+connector; each connection selects one platform and environment.
+
+| Selection | Authentication and fields | API and destination |
+| --- | --- | --- |
+| CloudHub 1.0 | Connected App client ID/secret; environment ID; optional application filter | `/cloudhub/api/v2/alerts` -> `MulesoftCloudhubAlerts_CL` |
+| CloudHub 2.0 | Connected App client ID/secret; organization/business group ID; environment ID | `/amc/application-manager/api/v2/organizations/{organizationId}/environments/{environmentId}/alerts` -> `MulesoftCloudhubAlerts_CL` |
+
+Both platforms write to **MulesoftCloudhubAlerts_CL**. The DCR assigns the
+**CloudHubVersion** string column to `1.0` or `2.0` based on the input stream,
+not a vendor-provided field. Two input streams are retained to identify the
+source platform; both data flows target this one table.
+
+```kusto
+MulesoftCloudhubAlerts_CL
+| where ingestion_time() > ago(1h)
+| summarize Records = count() by CloudHubVersion
+```
+
+CloudHub 1.0 requires its product entitlement. CloudHub 2.0-only access cannot
+enable the 1.0 API. Both paths collect **alert configuration snapshots**, not
+fired-alert history or application logs. On-premises Runtime Manager alerts are
+not supported. OAuth2 token issuance uses the same Anypoint Platform
+`/accounts/api/v2/oauth2/token` endpoint for both platforms.
 
 MuleSoft documents [CloudHub](https://docs.mulesoft.com/cloudhub/),
 [CloudHub 2.0](https://docs.mulesoft.com/cloudhub-2/), and the
 [CloudHub API](https://docs.mulesoft.com/cloudhub/cloudhub-api) separately.
+The [AMC API reference](https://dev-portal.mulesoft.com/apis/amc-application-manager.html)
+documents the CloudHub 2.0 organization/environment-scoped alerts API.
 
 ### Connect
 
-1. Confirm CloudHub 1.0 entitlement under Access Management's subscription
-   information or with your MuleSoft account owner.
+1. Select **CloudHub 1.0** or **CloudHub 2.0** according to the deployment
+   platform used by the source environment. Confirm the relevant access with
+   your MuleSoft account owner. For 1.0, confirm CloudHub 1.0 entitlement.
 2. Enter your regional Anypoint Platform URL, such as
    `https://anypoint.mulesoft.com` or `https://eu1.anypoint.mulesoft.com`.
    The connector resolves the alerts and token endpoint paths on this origin.
    Existing URLs ending in `/cloudhub/api` also work. Custom proxy paths are
    not supported.
-3. Select **OAuth2** (recommended). Create a
+3. Create a
    [Connected App](https://docs.mulesoft.com/access-management/creating-connected-apps-dev)
    that **acts on its own behalf (client credentials)**. Grant
    **Runtime Manager > Read Alerts** for the requested business group and
    environment. Use the **Connected App's** client ID and secret, not the
-   environment's client credentials.
-4. Alternatively, select **Basic** only if your Anypoint account supports
-   Basic API authentication. Enter its username and password.
-5. Supply the matching environment ID and, optionally, an application filter.
-   Verify records arrive in `MulesoftCloudhubAlerts_CL`.
+   environment's client credentials. Connected App OAuth2 is the only offered
+   authentication method for both platforms; no authentication selector or
+   Anypoint username/password fields are displayed.
+4. For **1.0** only, optionally enter an application name to filter alert
+   configurations. Leave it blank for no application restriction.
+5. For **2.0**, enter the organization/business group ID that owns the environment.
+   Supply the matching environment ID for either platform, then verify receipt
+   in `MulesoftCloudhubAlerts_CL` using `ingestion_time()` and `CloudHubVersion`.
 
 Existing connections are not updated automatically by changing these local files.
-After publishing/deploying the updated package, select the intended authentication
-method when creating a connection. Basic remains available. Before changing the
-authentication method for an existing source, delete its old connection using
+After publishing/deploying the updated package, select the intended platform
+and enter Connected App credentials when creating a connection. Basic is no
+longer offered for new connections. Installing this package does not delete
+or convert existing Basic connections; replace them manually with OAuth2.
+Before replacing an existing source connection, delete its old connection using
 **DeleteConnector** in the connection grid, then create the replacement.
 ARM deployment does not remove the old, differently named authentication branch;
 keeping both active causes duplicate collection.
+The same applies to a previously deployed separate `MulesoftCloudhub2Connector`:
+its active connections are not moved or deleted by this unified definition.
+Existing 1.0 connections can have a blank platform column until re-created.
+Deploy the updated shared table schema and DCR before recreating connections.
+Existing CloudHub 2.0 connections must be recreated to use the shared destination
+configuration. Historical data in `MulesoftCloudhub2Alerts_CL` is not moved or
+deleted; that table is no longer provisioned by this package. The `MuleSoftCloudhub`
+parser still reads it alongside the shared table, legacy Function data and Push logs.
+Older 1.0 rows have no `CloudHubVersion` value in the raw table. The parser labels
+them `1.0` and historical rows from the former 2.0 table `2.0`; existing nonempty
+platform values are preserved. Push logs have no inferred platform value.
 
-### Diagnose without ingestion
+### Recorded validation and remaining checks
 
-Open a standalone **PowerShell 7** or VS Code `pwsh` terminal, not PowerShell ISE.
-From this directory, run:
-
-```powershell
-.\Test-MulesoftCloudHubAlerts.ps1 `
-  -AuthType OAuth2 `
-  -MulesoftBaseUrl 'https://anypoint.mulesoft.com' `
-  -EnvironmentId '<environment-id>'
-```
-
-The script prompts for the Connected App ID and a masked secret, requests a token
-at `/accounts/api/v2/oauth2/token`, then calls the alerts endpoint. Tokens and secrets
-are not printed. No Azure resources are changed and no records are ingested.
-Use `-AuthType Basic` to test username/password, and `-MaxPages 3` for bounded
-pagination. `-ShowResponsePreview` displays vendor response bodies, which can
-contain sensitive data; redact before sharing.
+Earlier CloudHub 2.0 testing recorded successful Connected App authentication,
+an AMC alerts response, native connection creation and a matching ingested
+configuration. Those results validate the earlier separate 2.0 path, not this
+new unified UI/package. Neither this change nor the 2.0 results prove live
+CloudHub 1.0 collection.
 
 Token HTTP 200 confirms token issuance, not alert permissions or ingestion.
 For API HTTP 403, read the vendor error: **"organization does not have Cloudhub
 1.0 entitlement enabled"** requires a product entitlement change, not a credential
 change. Other 403 errors can indicate missing access to the target environment.
+
+If connection creation fails with an invalid `concat(workspace-name, ...)`
+expression, the failure occurs during ARM template validation, before
+authentication. Install the corrected package before retrying: both OAuth2 poller
+names use the connection template's `innerWorkspace` parameter so the workspace
+is resolved at connection deployment, not inserted as unquoted expression text.
+Replacing the local ZIP alone does not update an installed connection template.
+
+Before production use, verify OAuth2 for each intended platform in
+the portal, including required-field visibility, connection creation, repeated
+polls, pagination and token renewal. Validate additional control planes separately.
+Do not retire the legacy Function based on content deployment alone.
 
 ### Repeated alert revisions
 
@@ -115,11 +157,13 @@ The connector provides an optional **Deduplicate repeated CloudHub alert revisio
 sample query:
 
 ```kusto
-let alerts = MulesoftCloudhubAlerts_CL | where TimeGenerated > ago(24h);
+let alerts = MulesoftCloudhubAlerts_CL
+    | where ingestion_time() > ago(24h)
+    | extend CloudHubVersion = coalesce(tostring(column_ifexists('CloudHubVersion', '')), '1.0');
 union
 (alerts
  | where isnotempty(Id) and isnotnull(LastModified)
- | summarize arg_max(TimeGenerated, *) by OrganizationId, EnvironmentId, Id,
+ | summarize arg_max(ingestion_time(), *) by CloudHubVersion, OrganizationId, EnvironmentId, Id,
      CreatedAt, LastModified, Name, Severity, ProductName, Enabled, IsSystem,
      _ConditionKey = tostring(Condition), _ActionsKey = tostring(Actions)
  | project-away _ConditionKey, _ActionsKey),
@@ -130,10 +174,11 @@ This keeps one collected copy of an identical alert revision in the queried peri
 while retaining revisions with different timestamps or payload fields. Records
 without an ID or last-modified timestamp pass through unchanged. Nested JSON
 serialization differences can prevent duplicates from matching. Identical revisions
-collected by multiple connections are intentionally combined.
+collected by multiple connections on the same platform are intentionally combined.
+The `CloudHubVersion` key keeps the two platforms separate.
 
 Use this query, or save it as a workspace function, in consumers that require
-deduplicated alerts. The existing `MuleSoftCloudhub` parser is unchanged.
+deduplicated alerts. The `MuleSoftCloudhub` parser also includes historical 2.0 data.
 Deduplication does **not** remove stored rows, lower ingestion costs, or prove that
 the source provides a complete history of alert occurrences.
 
