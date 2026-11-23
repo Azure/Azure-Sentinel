@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.5.7       | 10-11-2026                     | Added 5 Defender **XDR Detections** migrated from **Analytic Rules**. |
 | 3.5.5       | 26-10-2026                     | Added support of DSPM & IR Violation events collection as part of Azure function app based dta connector, Added analytic rules and playbooks rleated DSPM & IR Violation and quarntine.
 | 3.5.4       | 12-10-2026                     | Updated Events Data table schema for CCF Connector.
 | 3.5.3       | 03-09-2026                     | Added RubrikCCFConnector to ingest Anomaly, Ransomware, ThreatHunt and other events data along with audit logs via webhook. |
