@@ -32,7 +32,7 @@ The tool finds the data collection rule used by the CSE connector in that worksp
 2. Download the tool into Cloud Shell:
 
    ```bash
-   curl -fsSLO "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SonicWall%20Cloud%20Secure%20Edge/Tools/cse_backfill.py"
+   curl -fsSLO "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/SonicWall%20Cloud%20Secure%20Edge/Data%20Connectors/SonicWallCSEEventsLogs_ccf/Tools/cse_backfill.py"
    ```
 
    Alternatively, download `cse_backfill.py` from this folder and upload it with
