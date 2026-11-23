@@ -118,6 +118,9 @@ Existing CloudHub 2.0 connections must be recreated to use the shared destinatio
 configuration. Historical data in `MulesoftCloudhub2Alerts_CL` is not moved or
 deleted; that table is no longer provisioned by this package. The `MuleSoftCloudhub`
 parser still reads it alongside the shared table, legacy Function data and Push logs.
+The parser discovers the optional historical Alerts table using a wildcard and
+restricts the results to the two supported Alerts table names, so the former
+2.0 table is not required in a new deployment.
 Older 1.0 rows have no `CloudHubVersion` value in the raw table. The parser labels
 them `1.0` and historical rows from the former 2.0 table `2.0`; existing nonempty
 platform values are preserved. Push logs have no inferred platform value.
