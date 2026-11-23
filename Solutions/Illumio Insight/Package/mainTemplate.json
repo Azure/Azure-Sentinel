@@ -45,16 +45,16 @@
   },
   "variables": {
     "_solutionName": "Illumio Insight",
-    "_solutionVersion": "3.3.3",
+    "_solutionVersion": "3.3.4",
     "solutionId": "illumioinc1629822633689.azure-sentinel-solution-illumioinsight",
     "_solutionId": "[variables('solutionId')]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.3.3",
+    "dataConnectorCCPVersion": "3.3.4",
     "_dataConnectorContentIdConnectorDefinition1": "IllumioInsightsDefinition",
     "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
     "_dataConnectorContentIdConnections1": "IllumioInsightsDefinitionConnections",
     "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
-    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "DataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
     "blanks": "[replace('b', 'b', '')]",
     "_dataConnectorContentIdConnectorDefinition2": "IllumioInsightsSummaryCCP",
     "dataConnectorTemplateNameConnectorDefinition2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition2')))]",
@@ -229,12 +229,55 @@
               }
             },
             {
-              "name": "illumioInsightsDCR",
+              "name": "IllumioInsightsDCR",
               "apiVersion": "2022-06-01",
               "type": "Microsoft.Insights/dataCollectionRules",
               "location": "[parameters('workspace-location')]",
               "kind": "[variables('blanks')]",
               "properties": {
+                "dataCollectionEndpointId": "[variables('DataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-IllumioInsights": {
+                    "columns": [
+                      {
+                        "name": "ResourceId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceInternalId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IllumioTenantId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceTenantId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceSubId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceRegion",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ResourceVnetId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "IllumioUrl",
+                        "type": "string"
+                      },
+                      {
+                        "name": "Insights",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
                 "destinations": {
                   "logAnalytics": [
                     {
@@ -246,18 +289,19 @@
                 "dataFlows": [
                   {
                     "streams": [
-                      "Microsoft-IlumioInsights"
+                      "Custom-IllumioInsights"
                     ],
                     "destinations": [
                       "clv2ws1"
-                    ]
+                    ],
+                    "outputStream": "Custom-IllumioInsights_CL",
+                    "transformKql": "source | extend Insights = parse_json(todynamic(Insights)) | extend TimeGenerated = iff(isempty(todatetime(Insights.TimeGenerated)), now(), todatetime(Insights.TimeGenerated)) | project TimeGenerated, Name = tostring(Insights.Name), AzureResourceId = tostring(ResourceId), ResourceInternalId = tostring(ResourceInternalId), IllumioTenantId = tostring(IllumioTenantId), ResourceTenantId = tostring(ResourceTenantId), ResourceSubId = tostring(ResourceSubId), ResourceRegion = tostring(ResourceRegion), ResourceVnetId = tostring(ResourceVnetId), IllumioUrl = tostring(IllumioUrl), Service = tostring(Insights.Service), Port = toint(Insights.Port), Proto = tostring(Insights.Proto), Status = tostring(Insights.Status), SrcLabel = tostring(Insights.SrcLabel), DestLabel = tostring(Insights.DestLabel), TotalSentBytes = toint(Insights.TotalSentBytes), TotalReceivedBytes = toint(Insights.TotalReceivedBytes), FlowCount = toint(Insights.FlowCount), SrcIP = tostring(Insights.SrcIP), SrcPort = toint(Insights.SrcPort), SrcThreatLevel = tostring(Insights.SrcThreatLevel), SrcIsWellKnown = tobool(Insights.SrcIsWellKnown), SrcCity = tostring(Insights.SrcCity), SrcCountry = tostring(Insights.SrcCountry), DestIP = tostring(Insights.DestIP), DestPort = toint(Insights.DestPort), DestThreatLevel = tostring(Insights.DestThreatLevel), DestIsWellKnown = tobool(Insights.DestIsWellKnown), DestCity = tostring(Insights.DestCity), DestCountry = tostring(Insights.DestCountry), CvssSeverity = tostring(Insights.CvssSeverity), VEScore = toreal(Insights.VEScore), UniqueId = tostring(Insights.UniqueId), SourceSystem = 'IllumioInsights'"
                   }
-                ],
-                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]"
+                ]
               }
             },
             {
-              "name": "IllumioInsightsGraph_CL",
+              "name": "IllumioInsights_CL",
               "apiVersion": "2022-10-01",
               "type": "Microsoft.OperationalInsights/workspaces/tables",
               "location": "[parameters('workspace-location')]",
@@ -265,8 +309,8 @@
               "properties": {
                 "retentionInDays": 180,
                 "schema": {
-                  "name": "IllumioInsightsGraph_CL",
-                  "description": "Illumio Insights Graph reports containing security insights and threat analysis data",
+                  "name": "IllumioInsights_CL",
+                  "description": "Illumio Insights resource insights containing risky service traffic, malicious IP traffic, ML labels and vulnerability exposure data per resource",
                   "columns": [
                     {
                       "name": "TimeGenerated",
@@ -277,19 +321,7 @@
                       "type": "string"
                     },
                     {
-                      "name": "SrcResId",
-                      "type": "string"
-                    },
-                    {
-                      "name": "SrcIP",
-                      "type": "string"
-                    },
-                    {
-                      "name": "DestResId",
-                      "type": "string"
-                    },
-                    {
-                      "name": "DestIP",
+                      "name": "AzureResourceId",
                       "type": "string"
                     },
                     {
@@ -302,6 +334,18 @@
                     },
                     {
                       "name": "ResourceTenantId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceSubId",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceRegion",
+                      "type": "string"
+                    },
+                    {
+                      "name": "ResourceVnetId",
                       "type": "string"
                     },
                     {
@@ -321,6 +365,10 @@
                       "type": "string"
                     },
                     {
+                      "name": "Status",
+                      "type": "string"
+                    },
+                    {
                       "name": "SrcLabel",
                       "type": "string"
                     },
@@ -337,8 +385,24 @@
                       "type": "int"
                     },
                     {
-                      "name": "SrcThreatLevel",
+                      "name": "FlowCount",
                       "type": "int"
+                    },
+                    {
+                      "name": "SrcIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SrcPort",
+                      "type": "int"
+                    },
+                    {
+                      "name": "SrcThreatLevel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "SrcIsWellKnown",
+                      "type": "boolean"
                     },
                     {
                       "name": "SrcCity",
@@ -349,8 +413,20 @@
                       "type": "string"
                     },
                     {
-                      "name": "DestThreatLevel",
+                      "name": "DestIP",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestPort",
                       "type": "int"
+                    },
+                    {
+                      "name": "DestThreatLevel",
+                      "type": "string"
+                    },
+                    {
+                      "name": "DestIsWellKnown",
+                      "type": "boolean"
                     },
                     {
                       "name": "DestCity",
@@ -361,116 +437,20 @@
                       "type": "string"
                     },
                     {
-                      "name": "SrcPort",
-                      "type": "int"
+                      "name": "CvssSeverity",
+                      "type": "string"
                     },
                     {
-                      "name": "DestPort",
-                      "type": "int"
-                    },
-                    {
-                      "name": "SrcIsWellKnown",
-                      "type": "boolean"
-                    },
-                    {
-                      "name": "DestIsWellKnown",
-                      "type": "boolean"
-                    },
-                    {
-                      "name": "FlowCount",
-                      "type": "int"
+                      "name": "VEScore",
+                      "type": "real"
                     },
                     {
                       "name": "UniqueId",
                       "type": "string"
                     },
                     {
-                      "name": "Status",
-                      "type": "string"
-                    },
-                    {
                       "name": "SourceSystem",
                       "type": "string"
-                    },
-                    {
-                      "name": "SrcRegion",
-                      "type": "string"
-                    },
-                    {
-                      "name": "DestRegion",
-                      "type": "string"
-                    },
-                    {
-                      "name": "SrcVnetId",
-                      "type": "string"
-                    },
-                    {
-                      "name": "DestVnetId",
-                      "type": "string"
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              "name": "IllumioInsightsSummary_CL",
-              "apiVersion": "2022-10-01",
-              "type": "Microsoft.OperationalInsights/workspaces/tables",
-              "location": "[parameters('workspace-location')]",
-              "kind": null,
-              "properties": {
-                "retentionInDays": 180,
-                "schema": {
-                  "name": "IllumioInsightsSummary_CL",
-                  "description": "Illumio Insights Summary reports containing security insights and threat analysis data",
-                  "columns": [
-                    {
-                      "name": "TimeGenerated",
-                      "type": "datetime"
-                    },
-                    {
-                      "name": "ReportId",
-                      "type": "string"
-                    },
-                    {
-                      "name": "SummaryStartDate",
-                      "type": "string"
-                    },
-                    {
-                      "name": "SummaryEndDate",
-                      "type": "string"
-                    },
-                    {
-                      "name": "ComparisonStartDate",
-                      "type": "string"
-                    },
-                    {
-                      "name": "ComparisonEndDate",
-                      "type": "string"
-                    },
-                    {
-                      "name": "CreatedAt",
-                      "type": "long"
-                    },
-                    {
-                      "name": "Persona",
-                      "type": "string"
-                    },
-                    {
-                      "name": "DataSources",
-                      "type": "dynamic"
-                    },
-                    {
-                      "name": "ReportPayload",
-                      "type": "dynamic"
-                    },
-                    {
-                      "name": "IllumioTenantId",
-                      "type": "string"
-                    },
-                    {
-                      "name": "Tags",
-                      "type": "dynamic"
                     }
                   ]
                 }
@@ -721,7 +701,7 @@
               "kind": "RestApiPoller",
               "properties": {
                 "connectorDefinitionName": "IllumioInsightsDefinition",
-                "dataType": "IlumioInsights",
+                "dataType": "IllumioInsights_CL",
                 "auth": {
                   "type": "APIKey",
                   "ApiKey": "[[parameters('apiToken')]",
@@ -752,7 +732,7 @@
                   "format": "json"
                 },
                 "dcrConfig": {
-                  "streamName": "ILUMIO_INSIGHTS",
+                  "streamName": "Custom-IllumioInsights",
                   "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
                   "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
                 }
@@ -2146,7 +2126,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.3.3",
+        "version": "3.3.4",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Illumio Insight",
