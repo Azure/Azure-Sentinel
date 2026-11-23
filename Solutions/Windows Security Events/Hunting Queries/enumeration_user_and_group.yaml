@@ -22,8 +22,10 @@ query: |
   InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
   processEvents};
   ProcessCreationEvents
-  | where FileName == 'net.exe' and AccountName != "" and ProcessCommandLine !contains '\\'  and ProcessCommandLine !contains '/add' 
-  | where (ProcessCommandLine contains ' user ' or ProcessCommandLine contains ' group ') and (ProcessCommandLine endswith ' /do' or ProcessCommandLine endswith ' /domain') 
+  | where FileName in~ ('net.exe', 'net1.exe') and AccountName != "" and ProcessCommandLine !contains '\\'  and ProcessCommandLine !contains '/add'
+  // net.exe starts net1.exe with the same command line; drop that child so each command is counted once
+  | where not(FileName =~ 'net1.exe' and InitiatingProcessFileName endswith '\\net.exe')
+  | where (ProcessCommandLine contains ' user ' or ProcessCommandLine contains ' group ') and (ProcessCommandLine contains ' /do' or ProcessCommandLine contains ' /domain')
   | extend Target = extract("(?i)[user|group] (\"*[a-zA-Z0-9-_ ]+\"*)", 1, ProcessCommandLine) | filter Target  != '' 
   | summarize minTimeGenerated=min(TimeGenerated), maxTimeGenerated=max(TimeGenerated), count() by AccountName, Target, ProcessCommandLine, ComputerName
   | project minTimeGenerated, maxTimeGenerated, count_, AccountName, Target, ProcessCommandLine, ComputerName
@@ -43,4 +45,4 @@ entityMappings:
         columnName: HostName
       - identifier: DnsDomain
         columnName: DnsDomain
-version: 2.0.1
+version: 2.0.2
