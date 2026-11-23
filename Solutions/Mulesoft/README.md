@@ -156,6 +156,15 @@ The endpoint is an alert-list API. No verified timestamp filter is configured.
 The polling interval does **not** restrict results to new alerts. Pagination
 retrieves the list but does not prevent repeat ingestion.
 
+Both CCF platforms now poll every 24 hours (`queryWindowInMin: 1440`) rather than
+every five minutes. This reduces repeated snapshots but does not prevent duplicates
+across days. Changes can take up to 24 hours to appear, and intermediate revisions
+can be missed. Connectivity checks use a 48-hour receipt window to accommodate
+daily polling. Deploy the regenerated package and recreate existing connections
+to apply the interval; source changes alone do not update deployed pollers.
+This is an interval, not a fixed-time daily schedule; retries and pagination can
+make multiple API calls. The legacy Function and Logs Push connector are unchanged.
+
 The connector provides an optional **Deduplicate repeated CloudHub alert revisions**
 sample query:
 
