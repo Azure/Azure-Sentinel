@@ -1,5 +1,10 @@
 # Changelog for ASimDnsFortinetFortiGate.yaml
 
+## Version 1.0.0
+
+- (2026-11-23) Set the ingestion-time parser version to 1.0.0 and standardize its display name; parser queries and normalization behavior are unchanged.
+- Rename the display name to `CommonSecurityLog Fortinet FortiGate Dns ASIM parser`.
+
 ## Version 0.1.4
 
 - (2026-11-11) Convert split domain and hostname values to strings to avoid mixed dynamic and string types during DCR compilation. - [PR #15453](https://github.com/Azure/Azure-Sentinel/pull/15453)

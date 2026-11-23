@@ -1,5 +1,10 @@
 # Changelog for ASimEmailEventProofpointPODMailLog.yaml
 
+## Version 1.0.0
+
+- (2026-11-23) Set the ingestion-time parser version to 1.0.0 and standardize its display name; parser queries and normalization behavior are unchanged.
+- Rename the display name to `ProofpointPODMailLog_CL EmailEvent ASIM parser`.
+
 ## Version 0.1.4
 
 - (2026-11-06) Validate relay IP addresses inline without native IP functions or top-level helpers - [PR #15572](https://github.com/Azure/Azure-Sentinel/pull/15572)

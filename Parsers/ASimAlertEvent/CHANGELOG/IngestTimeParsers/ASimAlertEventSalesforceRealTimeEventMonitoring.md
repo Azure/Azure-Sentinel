@@ -1,5 +1,10 @@
 # Changelog for ASimAlertEventSalesforceRealTimeEventMonitoring.yaml
 
+## Version 1.0.0
+
+- (2026-11-23) Set the ingestion-time parser version to 1.0.0 and standardize its display name; parser queries and normalization behavior are unchanged.
+- Rename the display name to `SalesForceRealTimeEventMonitoring_CL AlertEvent ASIM parser`.
+
 ## Version 0.1.1
 
 - (2026-11-13) Preserve original AdditionalFields keys without the added QueryTimeFields bag, matching established ingestion-time parsers - [PR #15657](https://github.com/Azure/Azure-Sentinel/pull/15657)
