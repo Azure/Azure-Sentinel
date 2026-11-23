@@ -1,81 +1,96 @@
 id: 37da203d-4edd-429e-83cd-fccf11e60c20
 Function:
   Title: Parser for LookoutEvents
-  Version: '3.1.0'
-  LastUpdated: '2026-03-11'
+  Version: '3.2.0'
+  LastUpdated: '2026-11-23'
 Category: Microsoft Sentinel Parser
 FunctionName: LookoutEvents
 FunctionAlias: LookoutEvents
 FunctionQuery: |
-    // Parser for Lookout MRA v2 Streaming API (/mra/stream/v2/events)
+    // Parser for Lookout Mobile Risk API v2 polling endpoint (/mra/api/v2/events)
     // Supports: THREAT, DEVICE, SMISHING_ALERT, AUDIT event types
-    let LookoutEvents_view = view () { 
+    // Field paths follow the MRA v2 OpenAPI models (models.Event, models.Device, models.Threat, models.SmishingAlertEvent).
+    let LookoutEvents_view = view () {
         LookoutMtdV2_CL
-        | extend 
+        | extend
             // Core Event Fields
             EventVendor = "Lookout",
             EventProduct = "Lookout Mobile Risk API v2",
             EventType = log_type,
-            EventId = coalesce(tostring(id), tostring(oid)),
+            EventId = coalesce(tostring(oid), tostring(id)),
             EventTime = TimeGenerated,
             ChangeType = change_type,
-            
+
             // === THREAT EVENT FIELDS (from threat.* object) ===
             ThreatId = tostring(threat.guid),
             ThreatType = tostring(threat.type),
             ThreatAction = tostring(threat.details.response),
             ThreatSeverity = tostring(threat.severity),
-            ThreatClassification = tostring(threat.classification),
+            ThreatClassification = tostring(threat.assessments[0].classification),
             ThreatClassifications = tostring(threat.classifications),
-            ThreatRisk = tostring(threat.risk),
+            ThreatRisk = tostring(threat.assessments[0].risk),
             ThreatStatus = tostring(threat.status),
-            ThreatDescription = tostring(threat.description),
-            ThreatApplicationName = tostring(threat.application_name),
-            ThreatPackageName = tostring(threat.package_name),
-            ThreatPackageSha = tostring(threat.package_sha),
-            ThreatNetworkSSID = tostring(threat.details.network_ssid),
+            ThreatName = tostring(threat.assessments[0].details.name),
+            ThreatDescription = coalesce(tostring(threat.assessments[0].details.description), tostring(threat.assessments[0].details.summary)),
+            ThreatApplicationName = tostring(threat.details.application_name),
+            ThreatPackageName = tostring(threat.details.package_name),
+            ThreatPackageSha = tostring(threat.details.package_sha),
+            ThreatFileName = tostring(threat.details.file_name),
+            ThreatFilePath = tostring(threat.details.path),
+            ThreatURL = tostring(threat.details.url),
+            ThreatReason = tostring(threat.details.reason),
+            ThreatUserResponse = tostring(threat.details.user_response),
+            ThreatNetworkSSID = coalesce(tostring(threat.details.network_ssid), tostring(threat.details.network.network_name)),
+            ThreatDetectedAt = todatetime(threat.detected_at),
+            ThreatResolvedAt = todatetime(threat.resolved_at),
             // Threat's device info (for THREAT events)
             ThreatDeviceEmail = tostring(threat.device.email),
             ThreatDevicePlatform = tostring(threat.device.platform),
             ThreatDeviceGuid = tostring(threat.device.guid),
-            
-            // === DEVICE EVENT FIELDS (from device.* object) ===
-            // Supports BOTH: REST API (flat: device.email_address) AND Streaming API (nested: device.info.email)
+
+            // === DEVICE FIELDS ===
+            // DEVICE events carry device.*; THREAT and SMISHING_ALERT events carry a reduced device object (threat.device.*, smishing_alert.device.*)
             DeviceGuid = coalesce(tostring(smishing_alert.device.guid), tostring(threat.device.guid), tostring(device.guid)),
-            DeviceEmailAddress = coalesce(tostring(smishing_alert.device.email), tostring(threat.device.email), tostring(device.info.email), tostring(device.email_address)),
-            DevicePlatform = coalesce(tostring(threat.device.platform), tostring(device.platform)),
-            DeviceOSVersion = coalesce(tostring(threat.device.os_version), tostring(device.software.os_version), tostring(device.os_version)),
-            DeviceManufacturer = coalesce(tostring(threat.device.manufacturer), tostring(device.hardware.manufacturer), tostring(device.manufacturer)),
-            DeviceModel = coalesce(tostring(threat.device.model), tostring(device.hardware.model), tostring(device.model)),
-            DeviceActivationStatus = coalesce(tostring(threat.device.activation_status), tostring(device.status.activation_status), tostring(device.activation_status)),
-            DeviceSecurityStatus = coalesce(tostring(threat.device.security_status), tostring(device.security_status)),
+            DeviceEmailAddress = coalesce(tostring(smishing_alert.device.email), tostring(threat.device.email), tostring(device.info.email)),
+            DevicePlatform = tostring(device.platform),
+            DeviceOSVersion = tostring(device.software.os_version),
+            DeviceLatestOSVersion = tostring(device.software.latest_os_version),
+            DeviceSecurityPatchLevel = tostring(device.software.security_patch_level),
+            DeviceManufacturer = tostring(device.hardware.manufacturer),
+            DeviceModel = tostring(device.hardware.model),
+            DeviceActivationStatus = tostring(device.status.activation_status),
+            DeviceSecurityStatus = tostring(device.status.security_status),
+            DeviceProtectionStatus = tostring(device.status.protection_status),
             DeviceProfileType = tostring(device.profile_type),
-            DeviceSDKVersion = coalesce(tostring(device.software.sdk_version), tostring(device.sdk_version)),
-            // Timestamps (REST API fields)
+            DeviceSDKVersion = tostring(device.software.sdk_version),
+            DeviceCountry = tostring(device.location.country),
+            // Not present in the MRA v2 events model; kept for backward compatibility
             DeviceActivatedAt = todatetime(device.activated_at),
             DeviceDeactivatedAt = todatetime(device.deactivated_at),
             DeviceCheckinTime = todatetime(device.checkin_time),
-            DeviceGroupGuid = tostring(device.device_group_guid),
-            DeviceCustomerId = tostring(device.customer_device_id),
-            // MDM fields - support both REST API (device.details.*) and Streaming API (device.info.*)
-            MDMConnectorId = coalesce(toint(device.details.mdm_connector_id), toint(device.info.mdm_connector_id)),
-            MDMConnectorUuid = tostring(device.details.mdm_connector_uuid),
-            MDMExternalId = coalesce(tostring(device.details.external_id), tostring(device.info.external_id)),
-            // Client app fields (REST API)
+            DeviceGroupGuid = tostring(device.info.device_group_guids[0]),
+            DeviceCustomerId = coalesce(tostring(device.info.customer_device_id), tostring(threat.device.customer_device_id), tostring(smishing_alert.device.customer_device_id)),
+            // MDM fields
+            MDMType = coalesce(tostring(device.info.mdm_type), tostring(threat.device.mdm_type), tostring(smishing_alert.device.mdm_type)),
+            MDMConnectorId = coalesce(toint(device.info.mdm_connector_id), toint(threat.device.details.mdm_connector_id), toint(smishing_alert.device.details.mdm_connector_id)),
+            MDMConnectorUuid = coalesce(tostring(threat.device.details.mdm_connector_uuid), tostring(smishing_alert.device.details.mdm_connector_uuid)),
+            MDMExternalId = coalesce(tostring(device.info.external_id), tostring(threat.device.details.external_id), tostring(smishing_alert.device.details.external_id)),
+            // Client app fields
             ClientLookoutSDKVersion = tostring(device.client.lookout_sdk_version),
             ClientOTAVersion = tostring(device.client.ota_version),
             ClientPackageName = tostring(device.client.package_name),
             ClientPackageVersion = tostring(device.client.package_version),
             DeviceParentGuid = tostring(device.parent_status.parent_device_guid),
-            
+
             // === SMISHING_ALERT EVENT FIELDS (from smishing_alert.* object) ===
             SmishingAlertId = tostring(smishing_alert.guid),
             SmishingAlertType = tostring(smishing_alert.detections[0].alert_type),
-            SmishingAlertSeverity = tostring(smishing_alert.severity),
-            SmishingAlertDescription = tostring(smishing_alert.description),
+            SmishingAlertDescription = tostring(smishing_alert.message_preview),
             SmishingAlertCategory = tostring(smishing_alert.detections[0].category),
             SmishingAlertURL = tostring(smishing_alert.detections[0].original_url),
-            
+            SmishingImpersonatedEmployee = tostring(smishing_alert.detections[0].impersonated_employee),
+            SmishingSenderId = tostring(smishing_alert.sender_id),
+
             // === AUDIT EVENT FIELDS (from audit.*, actor.*, target.* objects) ===
             AuditType = tostring(audit.type),
             AuditAttributeChanges = tostring(audit.attribute_changes),
@@ -83,12 +98,20 @@ FunctionQuery: |
             ActorGuid = tostring(actor.guid),
             TargetType = tostring(target.type),
             TargetGuid = tostring(target.guid),
+            // Not present in the MRA v2 events model; kept for backward compatibility
             TargetEmailAddress = tostring(target.email_address),
             TargetPlatform = tostring(target.platform),
             TargetOSVersion = tostring(target.os_version),
             TargetManufacturer = tostring(target.manufacturer),
             TargetModel = tostring(target.model)
-            
+        // The API has no smishing severity; derive one from the detection type
+        | extend SmishingAlertSeverity = case(
+            SmishingAlertType in ("FRAUD_DETECTION", "URL_DETECTION"), "HIGH",
+            SmishingAlertType == "SUSPICIOUS_DETECTION", "MEDIUM",
+            isnotempty(SmishingAlertId), "LOW",
+            ""
+        )
+
         // Event Priority for alerting
         | extend EventPriority = case(
             log_type == "THREAT", 1,
@@ -97,23 +120,26 @@ FunctionQuery: |
             log_type == "AUDIT", 4,
             5
         )
-        
+
         // Security Risk Level
         | extend SecurityRiskLevel = case(
-            ThreatSeverity in ("CRITICAL", "HIGH") or SmishingAlertSeverity in ("CRITICAL", "HIGH"), "High",
+            ThreatSeverity == "HIGH" or SmishingAlertSeverity == "HIGH", "High",
             ThreatSeverity == "MEDIUM" or SmishingAlertSeverity == "MEDIUM", "Medium",
             ThreatSeverity == "LOW" or SmishingAlertSeverity == "LOW", "Low",
+            ThreatSeverity in ("ADVISORY", "NONE"), "Informational",
             "Unknown"
         )
-        
-        // Device Compliance Status
+
+        // Device Compliance Status (DEVICE events only; derived from activation, protection and security status)
         | extend DeviceComplianceStatus = case(
-            DeviceActivationStatus in ("ACTIVE", "ACTIVATED"), "Compliant",
             DeviceActivationStatus == "PENDING", "Pending",
-            DeviceActivationStatus in ("INACTIVE", "DEACTIVATED", "DELETED"), "Non-Compliant",
+            DeviceActivationStatus in ("DEACTIVATED", "DELETED"), "Inactive",
+            DeviceSecurityStatus == "THREATS_HIGH" or DeviceProtectionStatus == "DISCONNECTED", "Non-Compliant",
+            DeviceSecurityStatus in ("THREATS_MEDIUM", "THREATS_LOW"), "Partial",
+            DeviceSecurityStatus == "SECURE", "Compliant",
             "Unknown"
         )
-        
+
         | project
             TimeGenerated,
             EventVendor,
@@ -125,36 +151,41 @@ FunctionQuery: |
             EventPriority,
             SecurityRiskLevel,
             EnterpriseGuid = enterprise_guid,
-            
+
             // Device fields
             DeviceGuid,
             DeviceEmailAddress,
             DevicePlatform,
             DeviceOSVersion,
+            DeviceLatestOSVersion,
+            DeviceSecurityPatchLevel,
             DeviceManufacturer,
             DeviceModel,
             DeviceActivationStatus,
             DeviceSecurityStatus,
+            DeviceProtectionStatus,
             DeviceComplianceStatus,
             DeviceProfileType,
             DeviceSDKVersion,
+            DeviceCountry,
             DeviceActivatedAt,
             DeviceDeactivatedAt,
             DeviceCheckinTime,
             DeviceGroupGuid,
             DeviceCustomerId,
-            
+
             // MDM Integration
+            MDMType,
             MDMConnectorId,
             MDMConnectorUuid,
             MDMExternalId,
-            
+
             // Client Application
             ClientLookoutSDKVersion,
             ClientOTAVersion,
             ClientPackageName,
             ClientPackageVersion,
-            
+
             // Threat fields
             ThreatId,
             ThreatType,
@@ -164,12 +195,20 @@ FunctionQuery: |
             ThreatClassifications,
             ThreatRisk,
             ThreatStatus,
+            ThreatName,
             ThreatDescription,
             ThreatApplicationName,
             ThreatPackageName,
             ThreatPackageSha,
+            ThreatFileName,
+            ThreatFilePath,
+            ThreatURL,
+            ThreatReason,
+            ThreatUserResponse,
             ThreatNetworkSSID,
-            
+            ThreatDetectedAt,
+            ThreatResolvedAt,
+
             // Smishing fields
             SmishingAlertId,
             SmishingAlertType,
@@ -177,13 +216,15 @@ FunctionQuery: |
             SmishingAlertDescription,
             SmishingAlertCategory,
             SmishingAlertURL,
-            
+            SmishingImpersonatedEmployee,
+            SmishingSenderId,
+
             // Audit fields
             AuditType,
             AuditAttributeChanges,
             ActorType,
             ActorGuid,
-            
+
             // Target fields
             TargetType,
             TargetGuid,
@@ -192,7 +233,7 @@ FunctionQuery: |
             TargetOSVersion,
             TargetManufacturer,
             TargetModel,
-            
+
             // Raw objects for advanced analysis
             device,
             threat,

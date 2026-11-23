@@ -1,7 +1,7 @@
 id: 8b4a5c7e-2f91-4d8a-9e3b-1c6f8a2d4e9f
 name: Lookout - High Severity Mobile Threats Detected (v2)
 description: |
-  'Detects high severity mobile threats from Lookout Mobile Risk API v2 with enhanced threat intelligence and device context. This rule leverages the comprehensive v2 field set to provide detailed threat classification, risk assessment, and device compliance status for improved security monitoring.'
+  'Detects open high severity mobile threats reported by the Lookout Mobile Risk API v2, including malicious applications, OS and configuration risks, network threats and web content threats. Each threat is alerted once per ingestion window with the affected device, user, file hash and URL mapped as entities.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -24,108 +24,85 @@ relevantTechniques:
   - T1630
 query: |
   LookoutEvents
+  | where ingestion_time() > ago(5m) and ingestion_time() <= now()
   | where EventType == "THREAT"
-  | where ThreatSeverity in ("CRITICAL", "HIGH")
-  | where ThreatStatus in ("OPEN", "ACTIVE")
-  | where ThreatAction == "DETECTED"
+  | where ThreatSeverity == "HIGH"
+  | where ThreatStatus == "OPEN"
+  | summarize arg_max(TimeGenerated, *) by ThreatId
   | extend
-      ThreatRiskScore = case(
-          ThreatSeverity == "CRITICAL", 10,
-          ThreatSeverity == "HIGH", 8,
-          ThreatSeverity == "MEDIUM", 5,
-          ThreatSeverity == "LOW", 2,
-          1
-      ),
-      DeviceRiskLevel = case(
-          DeviceSecurityStatus == "THREATS_HIGH", "High",
-          DeviceSecurityStatus == "THREATS_MEDIUM", "Medium",
-          DeviceSecurityStatus == "THREATS_LOW", "Low",
-          "Unknown"
-      ),
       ThreatCategory = case(
-          ThreatClassifications has "MALWARE", "Malware",
-          ThreatClassifications has "PHISHING", "Phishing", 
-          ThreatClassifications has "SPYWARE", "Spyware",
-          ThreatClassifications has "TROJAN", "Trojan",
-          ThreatClassifications has "ADWARE", "Adware",
-          "Other"
+          ThreatType == "APPLICATION", "Malicious or Risky App",
+          ThreatType == "FILE", "Malicious File",
+          ThreatType == "OS", "Vulnerable OS",
+          ThreatType == "NETWORK", "Network Threat",
+          ThreatType == "CONFIGURATION", "Risky Device Configuration",
+          ThreatType == "WEB_CONTENT", "Malicious Web Content",
+          ThreatType
+      ),
+      HashAlgorithm = case(
+          strlen(ThreatPackageSha) == 64, "SHA256",
+          strlen(ThreatPackageSha) == 40, "SHA1",
+          strlen(ThreatPackageSha) == 32, "MD5",
+          ""
       )
-  | extend ComplianceImpact = case(
-      DeviceComplianceStatus == "Non-Compliant" and ThreatRiskScore >= 8, "Critical",
-      DeviceComplianceStatus == "Non-Compliant" and ThreatRiskScore >= 5, "High", 
-      DeviceComplianceStatus == "Partial" and ThreatRiskScore >= 8, "High",
-      DeviceComplianceStatus == "Partial" and ThreatRiskScore >= 5, "Medium",
-      "Low"
-  )
   | project
       TimeGenerated,
       EventId,
+      ChangeType,
       ThreatId,
       ThreatType,
-      ThreatSeverity,
-      ThreatRiskScore,
       ThreatCategory,
-      ThreatClassifications,
+      ThreatSeverity,
       ThreatStatus,
+      ThreatAction,
+      ThreatClassification,
+      ThreatClassifications,
+      ThreatName,
       ThreatDescription,
       ThreatApplicationName,
       ThreatPackageName,
       ThreatPackageSha,
+      HashAlgorithm,
+      ThreatFileName,
+      ThreatURL,
+      ThreatDetectedAt,
       DeviceGuid,
-      DevicePlatform,
-      DeviceOSVersion,
-      DeviceManufacturer,
-      DeviceModel,
       DeviceEmailAddress,
-      DeviceSecurityStatus,
-      DeviceRiskLevel,
-      DeviceComplianceStatus,
-      ComplianceImpact,
-      ClientLookoutSDKVersion,
-      MDMConnectorId,
-      MDMExternalId,
-      TargetEmailAddress,
-      TargetPlatform,
-      ActorType,
-      ActorGuid
+      DeviceCustomerId,
+      MDMType,
+      MDMExternalId
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: DeviceEmailAddress
-      - identifier: Name
-        columnName: TargetEmailAddress
   - entityType: Host
     fieldMappings:
       - identifier: HostName
         columnName: DeviceGuid
-      - identifier: OSFamily
-        columnName: DevicePlatform
-      - identifier: OSVersion
-        columnName: DeviceOSVersion
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: ThreatApplicationName
+        columnName: HashAlgorithm
       - identifier: Value
         columnName: ThreatPackageSha
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: ThreatURL
 customDetails:
+  ThreatId: ThreatId
   ThreatType: ThreatType
-  ThreatSeverity: ThreatSeverity
-  ThreatRiskScore: ThreatRiskScore
   ThreatCategory: ThreatCategory
-  ThreatClasses: ThreatClassifications
   ThreatStatus: ThreatStatus
-  DevicePlatform: DevicePlatform
-  DeviceSecStatus: DeviceSecurityStatus
-  DeviceRiskLevel: DeviceRiskLevel
-  ComplianceImpact: ComplianceImpact
-  MDMConnectorId: MDMConnectorId
+  ThreatAction: ThreatAction
+  ThreatClass: ThreatClassification
+  AppName: ThreatApplicationName
+  PackageName: ThreatPackageName
+  MDMExternalId: MDMExternalId
 alertDetailsOverride:
-  alertDisplayNameFormat: "High Severity Mobile Threat: {{ThreatType}} on {{DevicePlatform}} Device"
-  alertDescriptionFormat: "{{ThreatSeverity}} {{ThreatCategory}} threat on {{DevicePlatform}}"
-  alertTacticsColumnName: ThreatCategory
-  alertSeverityColumnName: ThreatSeverity
+  alertDisplayNameFormat: "Lookout high severity threat: {{ThreatCategory}}"
+  alertDescriptionFormat: "Open {{ThreatType}} threat ({{ThreatClassification}}) for {{DeviceEmailAddress}}"
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -134,17 +111,12 @@ incidentConfiguration:
     lookbackDuration: P1D
     matchingMethod: Selected
     groupByEntities:
-      - Account
       - Host
-    groupByAlertDetails:
-      - ThreatType
-      - DeviceGuid
     groupByCustomDetails:
-      - ThreatCategory
-      - DevicePlatform
+      - ThreatType
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 suppressionEnabled: false
 suppressionDuration: PT1H
-version: 2.0.6
+version: 2.1.0
 kind: Scheduled

@@ -1,7 +1,7 @@
 id: 6b2d4e8a-5f7c-4b9e-8a1d-3c5e7a9b2f4d
 name: Lookout - Critical Audit and Policy Changes (v2)
 description: |
-  'Monitors critical audit events and policy changes from Lookout Mobile Risk API v2. Detects unauthorized configuration changes, policy modifications, security setting adjustments, and administrative actions that could impact mobile security posture. Provides comprehensive audit trail for compliance and security governance.'
+  'Detects administrative changes in the Lookout console reported by the Lookout Mobile Risk API v2 audit feed: changes to admin accounts, tenancy and enterprise settings, classification, allowlist and denylist policies, smishing and vishing settings, device groups, URL classifications, data exports and admin-initiated device deletions. Routine admin logins and logouts and system-initiated changes are excluded. Changes are grouped into one alert per admin and audit type per run, with the change count, affected targets and attribute changes included.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -16,92 +16,65 @@ tactics:
   - DefenseEvasion
   - Persistence
   - PrivilegeEscalation
-  - Impact
 relevantTechniques:
   - T1629
   - T1626
 query: |
+  let HighImpactAuditTypes = dynamic(["ADMIN", "TENANCY", "EXPORT", "ENTERPRISE", "DENYLIST_POLICY", "ALLOWLIST_POLICY"]);
+  let PolicyAuditTypes = dynamic(["CLASSIFICATION_POLICY", "ENTERPRISE_FEATURE", "SMISHING_SETTINGS", "VISHING_SETTINGS", "PCP_AI_DENYLIST_DOMAIN", "URL_CLASSIFICATION", "EMAIL_INVITE", "DEVICE_GROUP_CHANGE"]);
   LookoutEvents
+  | where ingestion_time() > ago(15m) and ingestion_time() <= now()
   | where EventType == "AUDIT"
-  | where AuditType in ("POLICY_CHANGE", "SECURITY_SETTING_CHANGE", "USER_MANAGEMENT", "CONFIGURATION_CHANGE")
-  | extend 
-      ChangeImpact = case(
-          AuditType == "POLICY_CHANGE", "High",
-          AuditType == "SECURITY_SETTING_CHANGE", "High",
-          AuditType == "USER_MANAGEMENT", "Medium",
-          AuditType == "CONFIGURATION_CHANGE", "Medium",
-          "Low"
-      ),
-      RiskLevel = case(
-          ActorType == "SYSTEM" and AuditType in ("POLICY_CHANGE", "SECURITY_SETTING_CHANGE"), "Automated Change",
-          ActorType == "ADMIN_USER" and AuditType == "POLICY_CHANGE", "Administrative Change",
-          ActorType == "USER" and AuditType in ("POLICY_CHANGE", "SECURITY_SETTING_CHANGE"), "Unauthorized Change",
-          ActorType == "UNKNOWN", "Suspicious Change",
-          "Standard Change"
+  | where ActorType == "ADMIN"
+  | where AuditType in (HighImpactAuditTypes) or AuditType in (PolicyAuditTypes)
+      or (AuditType == "DEVICE" and ChangeType == "DELETED")
+  // One alert per admin and audit type per run: a single console session can emit dozens of policy events
+  | summarize
+      TimeGenerated = max(TimeGenerated),
+      ChangeCount = dcount(EventId),
+      ChangeTypes = make_set(ChangeType),
+      Targets = make_set(TargetGuid, 20),
+      AuditAttributeChanges = make_list(AuditAttributeChanges, 20)
+      by ActorGuid, ActorType, AuditType
+  | extend
+      AlertSeverity = iff(AuditType in (HighImpactAuditTypes) or AuditType == "DEVICE", "Medium", "Low"),
+      ChangeSummary = case(
+          AuditType == "ADMIN", "Admin account change",
+          AuditType == "TENANCY", "Tenancy change",
+          AuditType == "EXPORT", "Data export",
+          AuditType == "ENTERPRISE", "Enterprise settings change",
+          AuditType in ("DENYLIST_POLICY", "ALLOWLIST_POLICY"), "Allowlist/denylist policy change",
+          AuditType == "DEVICE", "Device deleted by admin",
+          AuditType == "DEVICE_GROUP_CHANGE", "Device group change",
+          AuditType in (PolicyAuditTypes), "Policy or settings change",
+          "Audit change"
       )
-  | extend SecurityImplications = case(
-      AuditAttributeChanges has "threat_response_level" and AuditAttributeChanges has "LOW", "Threat Response Weakened",
-      AuditAttributeChanges has "auto_quarantine_enabled" and AuditAttributeChanges has "false", "Auto-Quarantine Disabled",
-      AuditAttributeChanges has "compliance_enforcement" and AuditAttributeChanges has "false", "Compliance Enforcement Disabled",
-      AuditAttributeChanges has "device_wipe_enabled" and AuditAttributeChanges has "false", "Device Wipe Disabled",
-      AuditAttributeChanges has "admin" or AuditAttributeChanges has "privilege", "Privilege Changes",
-      "Configuration Update"
-  )
-  | extend ComplianceRisk = case(
-      SecurityImplications in ("Threat Response Weakened", "Auto-Quarantine Disabled", "Compliance Enforcement Disabled"), "Critical",
-      SecurityImplications == "Device Wipe Disabled", "High",
-      SecurityImplications == "Privilege Changes", "High",
-      RiskLevel == "Unauthorized Change", "High",
-      RiskLevel == "Suspicious Change", "Medium",
-      "Low"
-  )
-  | extend ChangeDetails = case(
-      isnotempty(AuditAttributeChanges), strcat("Attribute changes: ", tostring(AuditAttributeChanges)),
-      isnotempty(TargetGuid), strcat("Target: ", TargetType, " (", TargetGuid, ")"),
-      "General audit event"
-  )
   | project
       TimeGenerated,
-      EventId,
       AuditType,
-      ChangeImpact,
-      RiskLevel,
-      SecurityImplications,
-      ComplianceRisk,
-      ChangeDetails,
-      AuditAttributeChanges,
+      ChangeSummary,
+      ChangeCount,
+      ChangeTypes,
+      AlertSeverity,
       ActorType,
       ActorGuid,
-      TargetType,
-      TargetGuid,
-      TargetEmailAddress,
-      ChangeType,
-      EnterpriseGuid
+      Targets,
+      AuditAttributeChanges
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: ActorGuid
       - identifier: Name
-        columnName: TargetEmailAddress
-  - entityType: Host
-    fieldMappings:
-      - identifier: HostName
-        columnName: TargetGuid
+        columnName: ActorGuid
 customDetails:
   AuditType: AuditType
-  ChangeImpact: ChangeImpact
-  RiskLevel: RiskLevel
-  SecurityImpact: SecurityImplications
-  ComplianceRisk: ComplianceRisk
+  ChangeSummary: ChangeSummary
+  ChangeCount: ChangeCount
+  ChangeTypes: ChangeTypes
   ActorType: ActorType
-  TargetType: TargetType
-  ChangeType: ChangeType
 alertDetailsOverride:
-  alertDisplayNameFormat: "Critical Audit Event: {{SecurityImplications}} by {{ActorType}}"
-  alertDescriptionFormat: "{{AuditType}} by {{ActorType}} with {{ComplianceRisk}} risk"
-  alertTacticsColumnName: SecurityImplications
-  alertSeverityColumnName: ComplianceRisk
+  alertDisplayNameFormat: "Lookout admin change: {{ChangeSummary}}"
+  alertDescriptionFormat: "{{ChangeCount}} {{AuditType}} changes by admin {{ActorGuid}}"
+  alertSeverityColumnName: AlertSeverity
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
@@ -111,16 +84,11 @@ incidentConfiguration:
     matchingMethod: Selected
     groupByEntities:
       - Account
-    groupByAlertDetails:
-      - AuditType
-      - ActorGuid
     groupByCustomDetails:
-      - SecurityImpact
-      - ComplianceRisk
-      - ActorType
+      - ChangeSummary
 eventGroupingSettings:
   aggregationKind: AlertPerResult
 suppressionEnabled: false
 suppressionDuration: PT30M
-version: 2.0.4
+version: 2.1.0
 kind: Scheduled
