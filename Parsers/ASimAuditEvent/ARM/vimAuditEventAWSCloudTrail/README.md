@@ -2,7 +2,8 @@
 
 ARM template for ASIM AuditEvent schema parser for AWS CloudTrail.
 
-This ASIM parser supports normalizing Audit Event activity in AWS Cloud Trail for the following event sources: (ec2.amazonaws.com)
+Filters and unifies the EC2 action-family parsers for AWSCloudTrail audit events using
+a fuzzy union. All AuditEvent filters, disabled, and pack are forwarded to each child parser.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

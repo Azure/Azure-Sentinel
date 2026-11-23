@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
+import math
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -262,11 +265,43 @@ def _deployment_token(
     return token
 
 
+MAX_GRAPH_DEPLOY_WORKERS = 3
+MAX_GRAPH_REQUEST_RETRIES = 3
+MAX_GRAPH_RETRY_BUDGET_SECONDS = 300
+_ACTIVE_STAGE_RETRY_DEADLINE: float | None = None
+
+
+def _parse_retry_after_seconds(
+    retry_header: str | None,
+    *,
+    default_seconds: int,
+    remaining_budget_seconds: float,
+) -> int | None:
+    if not math.isfinite(remaining_budget_seconds) or remaining_budget_seconds < 1.0:
+        return None
+    budget_cap = int(remaining_budget_seconds)
+    default_wait = max(1, int(default_seconds))
+    if not retry_header:
+        return default_wait if default_wait <= budget_cap else None
+    try:
+        parsed_float = float(retry_header.strip())
+    except (TypeError, ValueError):
+        return default_wait if default_wait <= budget_cap else None
+    if not math.isfinite(parsed_float):
+        return default_wait if default_wait <= budget_cap else None
+    parsed_seconds = max(1, int(math.ceil(parsed_float))) if parsed_float > 0 else 1
+    if parsed_seconds > remaining_budget_seconds:
+        return None
+    return min(budget_cap, parsed_seconds)
+
+
 def _graph_request(
     method: str,
     url: str,
     token: str,
     body: dict[str, Any] | None = None,
+    *,
+    retry_deadline: float | None = None,
 ) -> tuple[int, dict[str, Any]]:
     request = urllib.request.Request(
         url,
@@ -276,6 +311,11 @@ def _graph_request(
             "Content-Type": "application/json",
         },
         method=method,
+    )
+    effective_deadline = (
+        retry_deadline
+        if retry_deadline is not None
+        else _ACTIVE_STAGE_RETRY_DEADLINE
     )
     try:
         with urllib.request.urlopen(request, timeout=90) as response:
@@ -287,6 +327,52 @@ def _graph_request(
             parsed = json.loads(content)
         except json.JSONDecodeError:
             parsed = {"error": {"message": content[:4000]}}
+        if exc.code in (429, 502, 503, 504):
+            deadline = (
+                effective_deadline
+                if effective_deadline is not None
+                else time.monotonic() + float(MAX_GRAPH_RETRY_BUDGET_SECONDS)
+            )
+            retry_header = exc.headers.get("Retry-After") if exc.headers else None
+            wait_seconds = _parse_retry_after_seconds(
+                retry_header,
+                default_seconds=2,
+                remaining_budget_seconds=deadline - time.monotonic(),
+            )
+            for retry_attempt in range(MAX_GRAPH_REQUEST_RETRIES):
+                if wait_seconds is None:
+                    return exc.code, parsed
+                time.sleep(wait_seconds)
+                remaining_for_req = deadline - time.monotonic()
+                if remaining_for_req <= 0:
+                    return exc.code, parsed
+                try:
+                    with urllib.request.urlopen(
+                        request, timeout=max(1, min(90, int(remaining_for_req)))
+                    ) as retry_resp:
+                        retry_content = retry_resp.read().decode("utf-8")
+                        return retry_resp.status, json.loads(retry_content) if retry_content else {}
+                except urllib.error.HTTPError as retry_exc:
+                    retry_content = retry_exc.read().decode("utf-8", errors="replace")
+                    try:
+                        parsed = json.loads(retry_content)
+                    except json.JSONDecodeError:
+                        parsed = {"error": {"message": retry_content[:4000]}}
+                    remaining_budget = deadline - time.monotonic()
+                    if (
+                        retry_exc.code not in (429, 502, 503, 504)
+                        or retry_attempt + 1 == MAX_GRAPH_REQUEST_RETRIES
+                        or remaining_budget < 1.0
+                    ):
+                        return retry_exc.code, parsed
+                    retry_header = retry_exc.headers.get("Retry-After") if retry_exc.headers else None
+                    wait_seconds = _parse_retry_after_seconds(
+                        retry_header,
+                        default_seconds=2 ** (retry_attempt + 2),
+                        remaining_budget_seconds=remaining_budget,
+                    )
+                    if wait_seconds is None:
+                        return retry_exc.code, parsed
         return exc.code, parsed
 
 
@@ -353,8 +439,8 @@ def deploy_solution(
 
     package_context = solution_package_context(root)
     token = _deployment_token(state_dir, tenant_id=target["tenantId"])
-    results: list[dict[str, Any]] = []
-    for path in files:
+
+    def _deploy_one(path: Path) -> dict[str, Any]:
         try:
             document = yaml.safe_load(path.read_text(encoding="utf-8-sig")) or {}
             payload, tactic_projection = graph_detection_payload_with_projection(
@@ -386,11 +472,24 @@ def deploy_solution(
             provenance_verified = None
             if success:
                 verify_status, verified = _graph_request("GET", item_url, token)
-                deployed_status = (
+                raw_status = (
                     str(verified.get("status") or "").lower()
                     if isinstance(verified, dict)
                     else ""
                 )
+                is_enabled_val = (
+                    verified.get("isEnabled")
+                    if isinstance(verified, dict)
+                    else None
+                )
+                if is_enabled_val is True:
+                    deployed_status = "enabled"
+                elif raw_status:
+                    deployed_status = raw_status
+                elif is_enabled_val is False:
+                    deployed_status = "disabled"
+                else:
+                    deployed_status = ""
                 projected_tactics = (
                     ((payload.get("detectionAction") or {}).get("alertTemplate") or {}).get(
                         "tactics"
@@ -429,31 +528,45 @@ def deploy_solution(
                         "tacticProjectionVerified": tactic_projection_verified,
                         "contentProvenanceVerified": provenance_verified,
                     }
-            results.append(
-                {
-                    "file": str(path),
-                    "id": payload["id"],
-                    "operation": operation if success else "failed",
-                    "statusCode": response_status,
-                    "success": success,
-                    "deployedStatus": deployed_status,
-                    "tacticProjection": tactic_projection,
-                    "tacticProjectionVerified": tactic_projection_verified,
-                    "contentProvenanceVerified": provenance_verified,
-                    "error": error,
-                }
-            )
+            initial_disabled = bool(success and deployed_status == "disabled")
+            return {
+                "file": str(path),
+                "id": payload["id"],
+                "operation": operation if success else "failed",
+                "statusCode": response_status,
+                "success": success,
+                "deployedStatus": deployed_status,
+                "initialDisabled": initial_disabled,
+                "readbackVerified": initial_disabled,
+                "tacticProjection": tactic_projection,
+                "tacticProjectionVerified": tactic_projection_verified,
+                "contentProvenanceVerified": provenance_verified,
+                "error": error,
+            }
         except (OSError, ValueError, yaml.YAMLError) as exc:
-            results.append(
-                {
-                    "file": str(path),
-                    "id": None,
-                    "operation": "failed",
-                    "statusCode": 0,
-                    "success": False,
-                    "error": {"message": str(exc)},
-                }
-            )
+            return {
+                "file": str(path),
+                "id": None,
+                "operation": "failed",
+                "statusCode": 0,
+                "success": False,
+                "initialDisabled": False,
+                "readbackVerified": False,
+                "error": {"message": str(exc)},
+            }
+
+    global _ACTIVE_STAGE_RETRY_DEADLINE
+    prev_deadline = _ACTIVE_STAGE_RETRY_DEADLINE
+    _ACTIVE_STAGE_RETRY_DEADLINE = time.monotonic() + float(MAX_GRAPH_RETRY_BUDGET_SECONDS)
+    try:
+        if len(files) <= 1:
+            results = [_deploy_one(path) for path in files]
+        else:
+            workers = max(1, min(MAX_GRAPH_DEPLOY_WORKERS, len(files)))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                results = list(executor.map(_deploy_one, files))
+    finally:
+        _ACTIVE_STAGE_RETRY_DEADLINE = prev_deadline
     report = {
         "solution": str(root),
         "provider": "microsoft-graph-beta",
@@ -462,6 +575,7 @@ def deploy_solution(
         "total": len(results),
         "succeeded": sum(result["success"] for result in results),
         "failed": sum(not result["success"] for result in results),
+        "initialDisabled": bool(results) and all(bool(result.get("initialDisabled")) for result in results),
         "results": results,
     }
     if applied_selection is not None:

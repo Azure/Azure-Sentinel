@@ -872,6 +872,48 @@ class ReportTests(unittest.TestCase):
         )
         self.assertIn("InvalidStream", output.getvalue())
 
+    def test_workspace_qtp_replay_is_not_applicable(self):
+        validation = self.base_validation()
+        validation["rawDcr"] = None
+        validation["rawUpload"] = []
+        validation["qtpSourceReplay"] = {
+            "status": "not-applicable",
+            "inputStream": "none",
+            "error": None,
+        }
+        detail = "Skipped because this parser has no replayable InputStream."
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": detail,
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": detail,
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["status"])
+        self.assertFalse(report["requiredFailure"])
+        self.assertEqual(
+            "not-applicable",
+            report["stages"]["rawDcr"]["status"],
+        )
+        self.assertEqual(
+            "not-applicable",
+            report["stages"]["rawIngestion"]["status"],
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(detail, report["stages"]["qtpExecution"]["detail"])
+        self.assertEqual("blocked", report["stages"]["parity"]["status"])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            WORKFLOW.emit_annotations(report)
+        self.assertNotIn("ASIM rawDcr warning", output.getvalue())
+
     def test_qtp_raw_ingestion_failure_fails_overall(self):
         validation = self.base_validation()
         validation["status"] = "failed"
@@ -932,12 +974,52 @@ class ReportTests(unittest.TestCase):
             ),
         )
 
+    def test_qtp_execution_error_is_reported_as_failed(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "not-applicable",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "not-applicable",
+        }
+        validation["error"] = {
+            "stage": "qtp-execution",
+            "message": "POST failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "failed",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "POST failed with HTTP 400.",
+            report["stages"]["qtpExecution"]["detail"],
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["parity"]["status"],
+        )
+        self.assertEqual(
+            "Blocked because QTP execution failed.",
+            report["stages"]["parity"]["detail"],
+        )
+
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
         validation = self.base_validation()
         validation["status"] = "failed"
         validation["error"] = {
             "stage": "target-visibility",
             "message": "timed out",
+        }
+        validation["targetVisibility"] = {
+            "status": "failed",
+            "error": {
+                "stage": "target-visibility",
+                "message": "timed out",
+            },
         }
         validation["outputValidation"] = None
 
@@ -948,8 +1030,160 @@ class ReportTests(unittest.TestCase):
             report["stages"]["parserIngestion"]["status"],
         )
         self.assertEqual(
-            "passed", report["stages"]["schema"]["status"]
+            "failed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
         )
+        self.assertEqual(
+            "not-run", report["stages"]["schema"]["status"]
+        )
+
+    def test_query_deadline_visibility_failure_overrides_accepted_upload(self):
+        validation = self.base_validation()
+        details = {
+            "expectedCounts": {"timestamp": 1},
+            "observedCounts": {"timestamp": 0},
+            "missingTimestamps": ["timestamp"],
+            "observedQueryTable": {
+                "columns": [{"name": "TimeGenerated", "type": "datetime"}],
+                "rows": [],
+            },
+        }
+        validation["status"] = "failed"
+        validation["targetVisibility"] = {
+            "status": "failed",
+            "error": {
+                "stage": "query",
+                "message": "Validation deadline expired.",
+                "details": details,
+            },
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "Validation deadline expired.",
+            "details": details,
+        }
+        validation["outputValidation"] = None
+
+        report = self.build(validation)
+        ingestion = report["stages"]["parserIngestion"]
+
+        self.assertEqual("failed", ingestion["status"])
+        self.assertEqual("failed", ingestion["targetVisibility"]["status"])
+        self.assertEqual("query", report["error"]["stage"])
+        self.assertEqual(
+            details,
+            ingestion["targetVisibility"]["evidence"]["error"]["details"],
+        )
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+        self.assertEqual("not-run", report["stages"]["rawDcr"]["status"])
+        self.assertEqual(
+            "not-run", report["stages"]["rawIngestion"]["status"]
+        )
+        self.assertEqual("not-run", report["stages"]["data"]["status"])
+        self.assertEqual(
+            "not-run", report["stages"]["qtpExecution"]["status"]
+        )
+        self.assertEqual("not-run", report["stages"]["parity"]["status"])
+
+    def test_legacy_query_deadline_with_visibility_timing_is_failed(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["telemetry"]["stageTimingsSeconds"] = {
+            "target-visibility": 889.465,
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "Validation deadline expired.",
+            "details": None,
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "failed", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "failed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+        self.assertTrue(
+            report["stages"]["parserIngestion"]["targetVisibility"][
+                "evidence"
+            ]["legacy"]
+        )
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+
+    def test_generic_query_error_does_not_infer_visibility_failure(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["telemetry"]["stageTimingsSeconds"] = {
+            "filter-validation": 1.0,
+        }
+        validation["error"] = {
+            "stage": "query",
+            "message": "POST failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "not-run", report["stages"]["parserIngestion"]["status"]
+        )
+        self.assertEqual(
+            "not-run",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+
+    def test_schema_stage_uses_only_schema_validation_outcome(self):
+        validation = self.base_validation()
+        validation["targetVisibility"] = {
+            "status": "passed",
+            "expectedCounts": {"timestamp": 1},
+            "observedCounts": {"timestamp": 1},
+            "missingTimestamps": [],
+        }
+        validation["outputValidation"]["schemaValidation"] = {
+            "status": "passed",
+            "authority": "parser-dcr-output-stream",
+        }
+
+        report = self.build(validation)
+        self.assertEqual("passed", report["stages"]["schema"]["status"])
+        self.assertEqual(
+            "passed",
+            report["stages"]["parserIngestion"]["targetVisibility"]["status"],
+        )
+        self.assertEqual(
+            "parser-dcr-output-stream",
+            report["stages"]["schema"]["evidence"]["authority"],
+        )
+
+        validation["outputValidation"]["schemaValidation"] = {
+            "status": "failed",
+            "authority": "parser-dcr-output-stream",
+        }
+        report = self.build(validation)
+        self.assertEqual("failed", report["stages"]["schema"]["status"])
+
+        validation["outputValidation"].pop("schemaValidation")
+        report = self.build(validation)
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+
+    def test_schema_remains_not_run_when_data_tester_fails_first(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"] = None
+        validation["error"] = {
+            "stage": "asim-data",
+            "message": "ASimDataTester query failed.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("not-run", report["stages"]["schema"]["status"])
+        self.assertEqual("failed", report["stages"]["data"]["status"])
 
     def test_parity_failure_records_successful_qtp_execution(self):
         validation = self.base_validation()
@@ -1020,7 +1254,17 @@ class CleanupTests(unittest.TestCase):
             pull_request="123",
             run_id="456",
             run_attempt=2,
-            config=WORKFLOW.CanaryConfig(),
+            config=WORKFLOW.CanaryConfig(
+                subscription_id="subscription",
+                resource_group="resource-group",
+                workspace_name="workspace",
+                workspace_id="workspace-id",
+                dce_name="dce",
+                ingestion_endpoint=(
+                    "https://example.ingest.monitor.azure.com"
+                ),
+                location="eastus2euap",
+            ),
         )
 
         names = WORKFLOW.build_resource_names(
@@ -1050,6 +1294,10 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.isolated_path = (
             self.repo_root
             / ".github/workflows/runAsimIngestionTimeValidation.yaml"
+        )
+        self.unit_test_path = (
+            self.repo_root
+            / ".github/workflows/runAsimIngestionTimeValidationTests.yaml"
         )
 
     def test_security_gate_matches_legacy_except_initial_events(self):
@@ -1084,20 +1332,6 @@ class WorkflowTopologyTests(unittest.TestCase):
         isolated_gate = isolated_gate.replace(
             initial_event_branch, "", 1
         )
-        label_removal_always = """\
-      - name: Auto-remove SafeToRun label on synchronize for fork PRs
-        if: |
-          always() &&
-"""
-        self.assertIn(label_removal_always, isolated_gate)
-        isolated_gate = isolated_gate.replace(
-            label_removal_always,
-            """\
-      - name: Auto-remove SafeToRun label on synchronize for fork PRs
-        if: |
-""",
-            1,
-        )
 
         normalize = lambda value: "\n".join(
             line.rstrip() for line in value.splitlines()
@@ -1105,6 +1339,37 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertEqual(
             normalize(legacy_gate),
             normalize(isolated_gate),
+        )
+
+    def test_fork_gate_protects_testers_and_workflows(self):
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                self.assertIn(
+                    "const protectedPrefixes = [", workflow
+                )
+                self.assertIn(
+                    "'.script/tests/asimParsersTest/'", workflow
+                )
+                self.assertIn("'ASIM/'", workflow)
+                self.assertIn("'.github/'", workflow)
+                self.assertIn(
+                    "protectedPrefixes.some(prefix => "
+                    "name.startsWith(prefix))",
+                    workflow,
+                )
+
+    def test_legacy_live_runner_restores_trusted_kql_validator(self):
+        workflow = self.legacy_path.read_text(encoding="utf-8")
+
+        self.assertIn(
+            '$filePath_helper = '
+            '".script/tests/asimParsersTest/asim_parser_file_utils.py"',
+            workflow,
+        )
+        self.assertIn(
+            "Restore-TrustedFile $filePath_helper",
+            workflow,
         )
 
     def test_isolated_workflow_has_requested_job_topology(self):
@@ -1139,6 +1404,126 @@ class WorkflowTopologyTests(unittest.TestCase):
                 "ingestionValidation",
             ],
             jobs["report"]["needs"],
+        )
+
+    def test_workflows_build_pinned_kusto_analyzer(self):
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+        unit_tests = self.unit_test_path.read_text(encoding="utf-8")
+        job_markers = (
+            ("  discover:\n", "\n  templateValidate:"),
+            ("  templateValidate:\n", "\n  ingestionValidation:"),
+            ("  ingestionValidation:\n", "\n  report:"),
+        )
+        analyzer_jobs = [
+            isolated[
+                isolated.index(start):isolated.index(
+                    end,
+                    isolated.index(start),
+                )
+            ]
+            for start, end in job_markers
+        ]
+        setup_action = (
+            "actions/setup-dotnet@"
+            "67a3573c9a986a3f9c594539f4ab511d57bb3ce9"
+        )
+
+        for workflow in (unit_tests, *analyzer_jobs):
+            self.assertIn(setup_action, workflow)
+            self.assertIn('dotnet-version: "8.0.x"', workflow)
+            self.assertIn(
+                "kusto_analyzer/kusto_analyzer.csproj",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet restore "$analyzer_project" '
+                "--locked-mode --nologo",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet build "$analyzer_project"',
+                workflow,
+            )
+            self.assertIn(
+                "ASIM_KUSTO_ANALYZER_DLL=",
+                workflow,
+            )
+        for workflow in analyzer_jobs:
+            self.assertIn(
+                "Trusted base predates the Kusto analyzer; "
+                "using its legacy validator.",
+                workflow,
+            )
+
+    def test_workflows_pin_supply_chain_inputs(self):
+        legacy = self.legacy_path.read_text(encoding="utf-8")
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+        convert_yaml = (
+            self.repo_root
+            / ".script/tests/asimParsersTest/convertYamlToObject.ps1"
+        ).read_text(encoding="utf-8")
+
+        for workflow in (legacy, isolated):
+            for line in workflow.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("uses:"):
+                    self.assertRegex(
+                        stripped,
+                        r"^uses: [^@\s]+@[0-9a-f]{40}(?:\s+#.*)?$",
+                    )
+            self.assertNotIn("python-version: \"3.x\"", workflow)
+            self.assertNotIn(
+                "python -m pip install --upgrade", workflow
+            )
+            self.assertNotIn("curl ", workflow)
+            self.assertNotIn("Invoke-WebRequest", workflow)
+            self.assertIn("pip==26.3", workflow)
+            self.assertIn("requests==2.34.2", workflow)
+            self.assertIn("PyYAML==6.0.3", workflow)
+            self.assertEqual(
+                6, workflow.count("--only-binary=:all:")
+            )
+
+        self.assertEqual(
+            4, legacy.count("sparse-checkout-cone-mode: false")
+        )
+        for pattern in (
+            "/Parsers/**/*.yaml",
+            "/Parsers/**/*.yml",
+            "/Sample Data/ASIM/**/*.csv",
+            "/ASIM/dev/ASimTester/Testers/*.yaml",
+        ):
+            self.assertEqual(4, legacy.count(pattern))
+        self.assertNotIn("allow-unsafe-pr-checkout", legacy)
+        self.assertNotIn("raw.githubusercontent.com", legacy)
+        self.assertEqual(
+            3,
+            legacy.count(
+                'git show "$TRUSTED_BASE_SHA:$path" > "$path"'
+            ),
+        )
+        self.assertIn(
+            '$content = & git show '
+            '"$($env:TRUSTED_BASE_SHA):$Path"',
+            legacy,
+        )
+        self.assertIn('azPSVersion: "17.0.0"', legacy)
+        self.assertIn("azure-core==1.41.0", legacy)
+        self.assertIn("azure-identity==1.27.0", legacy)
+        self.assertIn("azure-monitor-ingestion==1.1.0", legacy)
+        self.assertIn("azure-monitor-query==1.4.1", legacy)
+        self.assertIn("tabulate==0.10.0", legacy)
+        self.assertGreaterEqual(
+            legacy.count('PYTHONSAFEPATH: "1"'), 6
+        )
+        self.assertIn("azure-core==1.41.0", isolated)
+        self.assertIn("azure-identity==1.27.0", isolated)
+        self.assertIn(
+            '$requiredVersion = [version]"0.4.12"',
+            convert_yaml,
+        )
+        self.assertIn(
+            "-RequiredVersion $requiredVersion", convert_yaml
         )
 
     def test_workflow_never_masks_validation_failures(self):
@@ -1200,18 +1585,80 @@ class WorkflowTopologyTests(unittest.TestCase):
         )
 
     def test_safe_to_run_removal_runs_after_failed_gate(self):
-        workflow = self.isolated_path.read_text(encoding="utf-8")
-
-        self.assertIn(
-            """\
+        expected = """\
       - name: Auto-remove SafeToRun label on synchronize for fork PRs
         if: |
           always() &&
           github.event.pull_request.head.repo.fork == true &&
           github.event.action == 'synchronize' &&
           steps.check-approval.outputs.should_remove_label == 'true'
-""",
-            workflow,
+"""
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                self.assertIn(
+                    expected, path.read_text(encoding="utf-8")
+                )
+
+    def test_approval_is_bound_to_verified_head_sha(self):
+        legacy = self.legacy_path.read_text(encoding="utf-8")
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+
+        for workflow in (legacy, isolated):
+            self.assertIn(
+                "approved_sha: "
+                "${{ steps.check-approval.outputs.approved_sha }}",
+                workflow,
+            )
+            self.assertIn(
+                "APPROVAL_HEAD_SHA: "
+                "${{ github.event.pull_request.head.sha }}",
+                workflow,
+            )
+            self.assertEqual(
+                2,
+                workflow.count(
+                    'echo "approved_sha=$APPROVAL_HEAD_SHA" '
+                    ">> $GITHUB_OUTPUT"
+                ),
+            )
+            self.assertIn(
+                "Verify approved SHA is still the pull request head",
+                workflow,
+            )
+            self.assertIn(
+                "if (pr.head.sha !== approvedSha)", workflow
+            )
+
+        self.assertEqual(
+            4,
+            legacy.count(
+                "needs.security-gate.outputs.approved_sha == "
+                "github.event.pull_request.head.sha"
+            ),
+        )
+        self.assertEqual(
+            4,
+            legacy.count(
+                "ref: ${{ needs.security-gate.outputs.approved_sha }}"
+            ),
+        )
+        self.assertNotIn(
+            "ref: ${{ github.event.pull_request.head.sha }}",
+            legacy,
+        )
+        self.assertEqual(
+            4,
+            isolated.count(
+                "needs.security-gate.outputs.approved_sha == "
+                "github.event.pull_request.head.sha"
+            ),
+        )
+        self.assertEqual(
+            2,
+            isolated.count(
+                "PR_HEAD_SHA: "
+                "${{ needs.security-gate.outputs.approved_sha }}"
+            ),
         )
 
     def test_untrusted_pr_content_is_materialized_only_as_data(self):
@@ -1236,7 +1683,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_comparison_refs_are_pinned_to_event_shas(self):
+    def test_comparison_refs_are_pinned_to_approved_sha(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
         self.assertEqual(
@@ -1250,7 +1697,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             2,
             workflow.count(
                 "PR_HEAD_SHA: "
-                "${{ github.event.pull_request.head.sha }}"
+                "${{ needs.security-gate.outputs.approved_sha }}"
             ),
         )
         self.assertEqual(

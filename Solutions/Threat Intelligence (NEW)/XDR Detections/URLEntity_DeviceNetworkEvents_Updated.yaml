@@ -1,0 +1,153 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mde
+    dataTypes:
+    - DeviceNetworkEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - DeviceNetworkEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 4f0356b2-d344-4c19-9375-31b9575d80cb
+    path: Analytic Rules/URLEntity_DeviceNetworkEvents_Updated.yaml
+    version: 1.0.5
+    querySha256: f8dfd91432756305fd3f3ede845543d41c82da0571a2d06c5304f0208b05c120
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.5
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Best-effort entity mapping requires review: source Host.FullName column `DeviceName`
+      is provisionally represented by hosts.nameColumn `DeviceName`; confirm that
+      this column is the intended host identifier. The original value is also retained
+      in customDetails when the query output binding is available; this assumption
+      does not prove entity parity'
+    - Host.FullName output column `DeviceName` cannot be proven after a destructive
+      projection; no supplemental customDetails binding was added and KQL was not
+      rewritten. Runtime output-schema verification is required
+    - Process.CommandLine output column `InitiatingProcessCommandLine` cannot be proven
+      after a destructive projection; no supplemental customDetails binding was added
+      and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: dd979a648765966d12d1087993ed10725df02781eab8e79855de615a5ae68822
+      targetQuerySha256: 03b3697122c465e0720045d3d97d8a7c64cf79ee4ceb11e99a82e78efedfb69e
+    supplementalEntityDetails:
+    - entityType: Host
+      entityIndex: 2
+      identifier: FullName
+      sourceColumn: DeviceName
+      column: DeviceName
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+    - entityType: Process
+      entityIndex: 4
+      identifier: CommandLine
+      sourceColumn: InitiatingProcessCommandLine
+      column: InitiatingProcessCommandLine
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-4f0356b2-d344-4c19-9375-31b9575d80cb
+  displayName: TI Map URL Entity to DeviceNetworkEvents
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceNetworkEvents_\
+      \ = DeviceNetworkEvents\n  | where TimeGenerated >= ago(dt_lookBack)\n  | where\
+      \ ActionType !has \"ConnectionFailed\"\n  | project-rename DeviceNetworkEvents_TimeGenerated\
+      \ = TimeGenerated;\nlet DeviceNetworkEventUrls = DeviceNetworkEvents_\n  | distinct\
+      \ Url = RemoteUrl\n  | summarize make_list(Url);\nThreatIntelIndicators\n//extract\
+      \ key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\"\
+      , \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType ==\
+      \ \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel\
+      \ = tostring(parse_json(AdditionalFields).TLPLevel)\n| where TimeGenerated >=\
+      \ ago(ioc_lookBack)\n| extend Url = tolower(Url)\n| where Url in (DeviceNetworkEventUrls)\n\
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n\
+      | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description\
+      \ = tostring(parse_json(Data).description)\n| where Description !contains_cs\
+      \ \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n \
+      \  | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type\n| join kind=innerunique\
+      \ (DeviceNetworkEvents_) on $left.Url == $right.RemoteUrl\n| where DeviceNetworkEvents_TimeGenerated\
+      \ < ValidUntil\n| summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated,\
+      \ *) by Id, Url\n| extend Description = tostring(parse_json(Data).description)\n\
+      | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      | project DeviceNetworkEvents_TimeGenerated, Id, Url, Confidence, Description,\
+      \ Type, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn,\
+      \ InitiatingProcessCommandLine, RemoteIP, RemotePort\n| extend Name = tostring(split(InitiatingProcessAccountUpn,\
+      \ '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@',\
+      \ 1)[0])\n| extend timestamp = DeviceNetworkEvents_TimeGenerated, UserPrincipalName\
+      \ = InitiatingProcessAccountUpn"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map URL Entity to DeviceNetworkEvents
+      description: '''This query identifies any URL indicators of compromise (IOCs)
+        from threat intelligence (TI) by searching for matches in DeviceNetworkEvents.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          nameColumn: Name
+          upnSuffixColumn: UPNSuffix
+        hosts:
+        - id: host1
+          nameColumn: DeviceName
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071

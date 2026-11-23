@@ -3,7 +3,8 @@
 # Validates modified ASIM parsers by running schema and data tests against a Log Analytics workspace.
 #
 # The script performs the following steps:
-#   1. Detects ASIM parser YAML files modified in the current PR by diffing against upstream/master.
+#   1. Detects ASIM query-time parser YAML files modified in the current PR, excluding
+#      IngestTimeParsers, by diffing against upstream/master.
 #   2. Converts each parser YAML to an object and wraps its query in a KQL let statement.
 #   3. Runs the ASimSchemaTester against each parser to verify its output conforms to the ASIM schema.
 #   4. Runs the ASimDataTester against each parser using the last 30 minutes of ingested data.
@@ -14,7 +15,10 @@
 #        Requires the Az.OperationalInsights PowerShell module and an authenticated Azure session.
 
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
+$global:workspaceId = $env:ASIM_CANARY_WORKSPACE_ID
+if ([string]::IsNullOrWhiteSpace($global:workspaceId)) {
+    throw "ASIM_CANARY_WORKSPACE_ID must be set."
+}
 
 # ANSI escape code for green text
 $green = "`e[32m"
@@ -71,8 +75,8 @@ function run {
         # Assigning the first part to $status and the last part to $file
         $status = $parts[0]
         $file = $parts[-1]  # -1 index refers to the last element
-        # Check if the file is a YAML file
-        if ($file -like "*.yaml") {
+        # Select query-time parser YAML files only.
+        if ($file -like "*.yaml" -and 'IngestTimeParsers' -cnotin ($file -split '[/\\]')) {
             # Add the file name and status to the array
             $global:modifiedFiles += New-Object PSObject -Property @{
                 Name = $file
@@ -121,7 +125,31 @@ function testSchema([string] $ParserFile) {
         Write-Host "${yellow}The parser '$functionName' is a union or empty parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
+        assertSafeParserDocument $parsersAsObject $ParserFile
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema, $parsersAsObject.ParserParams))
+    }
+}
+
+function assertSafeParserDocument(
+    [System.Object] $parserDocument,
+    [string] $parserFile
+) {
+    $temporaryFile = New-TemporaryFile
+    try {
+        $json = $parserDocument | ConvertTo-Json -Depth 100
+        [System.IO.File]::WriteAllText(
+            $temporaryFile.FullName,
+            $json,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        & python "$($PSScriptRoot)/asim_parser_file_utils.py" `
+            validate-query-document $temporaryFile.FullName
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unsafe query-time parser document: $parserFile"
+        }
+    } finally {
+        Remove-Item -LiteralPath $temporaryFile.FullName -Force `
+            -ErrorAction SilentlyContinue
     }
 }
 
@@ -225,7 +253,8 @@ function getParameters([System.Collections.Generic.List`1[System.Object]] $parse
     if ($parserParams) {
         $parserParams | ForEach-Object {
             if ($_.Type -eq "string") {
-                $_.Default = "'$($_.Default)'"
+                $escapedDefault = ([string]$_.Default).Replace("'", "''")
+                $_.Default = "'$escapedDefault'"
             }
             $paramsArray += "$($_.Name):$($_.Type)= $($_.Default)"
         }

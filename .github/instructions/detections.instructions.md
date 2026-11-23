@@ -113,6 +113,9 @@ Analytic Rules are YAML files that define scheduled queries to detect threats, s
 - **Format**: Semantic versioning `X.Y.Z`
 - **Pattern**: `/^\d+\.\d+\.\d+$/`
 - **Example**: `1.2.3` ✅
+- **Rules**:
+  - Whenever an existing Analytic Rule (`Analytic Rules/*.yaml` or `Detections/**/*.yaml`) or Custom Detection (`XDR Detections/*.yaml`) is modified, bump its patch version (`X.Y.Z` -> `X.Y.(Z+1)`).
+  - Unmodified rules and detections must keep their existing `version`.
 
 #### **metadata** (Metadata Information - Required for Standalone Files)
 - **Required**: Yes (for standalone detections in `Detections/` folder); No (for rules in `Solutions/**/Analytic Rules/`)

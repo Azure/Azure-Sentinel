@@ -1,0 +1,154 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: mda
+    dataTypes:
+    - CloudAppEvents
+  - workload: sentinel
+    dataTypes:
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+    - CloudAppEvents
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 526df43b-f514-477c-af7a-c8d3586457fb
+    path: Analytic Rules/URLEntity_CloudAppEvents_Updated.yaml
+    version: 1.0.7
+    querySha256: 71ee5b6e8c2b323865682e562c79d6b246af74e230458950631bf25adfe27f74
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.0.7
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - catalog column mappings were not applied because table/alias scope is ambiguous
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping was repaired from projected column `userPrincipalName`
+    - Account.ObjectGuid value is retained as customDetails.AccountObjectGuid from
+      query column `AccountObjectId`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountObjectGuid column `AccountObjectId` requires
+      runtime output-schema binding verification
+    - Account.DisplayName value is retained as customDetails.AccountDisplayName from
+      query column `AccountDisplayName`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountDisplayName column `AccountDisplayName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational:
+    - Account.FullName `userPrincipalName` is retained by an equivalent account mapping
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: e972f1093fac29db35262da552a961f49e28f0deb82c230727ad5fc0c98bc188
+      targetQuerySha256: e466a1622f81b05b543a362a1eda20f54e0c28aaa1b66bf460f7d43bdea3a575
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: ObjectGuid
+      sourceColumn: AccountObjectId
+      column: AccountObjectId
+      status: runtime-binding-pending
+      customDetailKey: AccountObjectGuid
+    - entityType: Account
+      entityIndex: 1
+      identifier: DisplayName
+      sourceColumn: AccountDisplayName
+      column: AccountDisplayName
+      status: runtime-binding-pending
+      customDetailKey: AccountDisplayName
+properties:
+  id: xdr-526df43b-f514-477c-af7a-c8d3586457fb
+  displayName: TI Map URL entity to Cloud App Events
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n\
+      //extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\
+      \"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType\
+      \ == \"url\"\n| extend Url = ObservableValue\n| extend IndicatorId = tostring(split(Id,\
+      \ \"--\")[2])\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by IndicatorId, ObservableValue\n| where IsActive\
+      \ and (ValidUntil > now() or isempty(ValidUntil))\n| join kind=innerunique (CloudAppEvents\n\
+      | where TimeGenerated >= ago(dt_lookBack)\n| extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\
+      \\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1, tostring(ActivityObjects))\n\
+      | extend userPrincipalName = tostring(RawEventData.UserId)\n| extend TargetResourceDisplayName\
+      \ = tostring(ActivityObjects[0].displayName)\n| extend CloudApps_TimeGenerated\
+      \ = TimeGenerated) on Url\n| where CloudApps_TimeGenerated < ValidUntil\n| summarize\
+      \ CloudApps_TimeGenerated = argmax(CloudApps_TimeGenerated, *) by IndicatorId,\
+      \ Url\n| extend\n  Description = column_ifexists(\"max_CloudApps_TimeGenerated_Description\"\
+      , \"\"),\n  ActivityGroupNames = column_ifexists(\"max_CloudApps_TimeGenerated_ActivityGroupNames\"\
+      , \"\"),\n  ThreatType = column_ifexists(\"max_CloudApps_TimeGenerated_ThreatType\"\
+      , \"\"),\n  ExpirationDateTime = column_ifexists(\"max_CloudApps_TimeGenerated_ExpirationDateTime\"\
+      , \"\"),\n  ConfidenceScore = column_ifexists(\"max_CloudApps_TimeGenerated_ConfidenceScore\"\
+      , \"\"),\n  IPAddress = column_ifexists(\"max_CloudApps_TimeGenerated_IPAddress\"\
+      , \"\"),\n  AccountObjectId = column_ifexists(\"max_CloudApps_TimeGenerated_AccountObjectId\"\
+      , \"\"),\n  AccountDisplayName = column_ifexists(\"max_CloudApps_TimeGenerated_AccountDisplayName\"\
+      , \"\"),\n  ObjectName = column_ifexists(\"max_CloudApps_TimeGenerated_ObjectName\"\
+      , \"\"),\n  Application = column_ifexists(\"max_CloudApps_TimeGenerated_Application\"\
+      , \"\"),\n  ApplicationID = column_ifexists(\"max_CloudApps_TimeGenerated_ApplicationId\"\
+      , \"\"),\n  userPrincipalName = column_ifexists(\"max_CloudApps_TimeGenerated_userPrincipalName\"\
+      , \"\")\n| project CloudApps_TimeGenerated, Description, IndicatorId, ThreatType,\
+      \ ExpirationDateTime, ConfidenceScore, Url, IPAddress, userPrincipalName, AccountObjectId,\
+      \ AccountDisplayName, ObjectName, Application, ApplicationID"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map URL entity to Cloud App Events
+      description: '''Identifies compromises and attacks and detect malicious activities
+        in one''s URL entity from TI'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: userPrincipalName
+        urls:
+        - id: url1
+          addressColumn: Url
+        ips:
+        - id: ip1
+          addressColumn: IPAddress
+        cloudApplications:
+        - id: cloudApplication1
+          nameColumn: Application
+          appIdColumn: ApplicationID
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountObjectGuid: AccountObjectId
+        AccountDisplayName: AccountDisplayName

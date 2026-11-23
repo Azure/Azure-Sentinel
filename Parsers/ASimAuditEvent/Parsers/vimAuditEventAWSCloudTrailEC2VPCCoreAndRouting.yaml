@@ -1,0 +1,334 @@
+Parser:
+  Title: Audit Event ASIM filtering parser for AWS CloudTrail EC2 VPCCoreAndRouting activity
+  Version: '0.1.0'
+  LastUpdated: Nov 04, 2026
+Product:
+  Name: AWS CloudTrail
+Normalization:
+  Schema: AuditEvent
+  Version: '1.0.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Amazon EC2 actions by service and resource
+  Link: https://docs.aws.amazon.com/ec2/latest/devguide/OperationList-query.html
+Description: |
+  Filters and normalizes AWSCloudTrail events from ec2.amazonaws.com for VPCs, subnets, DHCP options,
+  VPC peering and ClassicLink, route tables and route servers, internet gateways, and NAT
+  gateways. This parser is referenced by vimAuditEventAWSCloudTrail.
+ParserName: vimAuditEventAWSCloudTrailEC2VPCCoreAndRouting
+ParentParser: vimAuditEventAWSCloudTrail
+EquivalentBuiltInParser: _Im_AuditEvent_AWSCloudTrailEC2VPCCoreAndRouting
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    actorusername_has_any:dynamic=dynamic([]),
+    operation_has_any:dynamic=dynamic([]),
+    eventtype_in:dynamic=dynamic([]),
+    eventresult:string='*',
+    object_has_any:dynamic=dynamic([]),
+    newvalue_has_any:dynamic=dynamic([]),
+    disabled:bool=false,
+    pack:bool=false
+  ) {
+  let Events = datatable(EventName: string, EventType: string, Object: string)
+  [
+    "AcceptVpcPeeringConnection", "Execute", "VPC",
+    "AssignPrivateNatGatewayAddress", "Set", "NAT Gateway",
+    "AssociateDhcpOptions", "Set", "VPC",
+    "AssociateNatGatewayAddress", "Set", "NAT Gateway",
+    "AssociateRouteServer", "Set", "VPC",
+    "AssociateRouteTable", "Set", "VPC Route Table",
+    "AssociateSubnetCidrBlock", "Set", "Subnet",
+    "AssociateVpcCidrBlock", "Set", "VPC",
+    "AttachClassicLinkVpc", "Set", "VPC",
+    "AttachInternetGateway", "Set", "VPC",
+    "CreateDefaultSubnet", "Create", "Subnet",
+    "CreateDefaultVpc", "Create", "VPC",
+    "CreateDhcpOptions", "Create", "Dhcp Options",
+    "CreateEgressOnlyInternetGateway", "Create", "Egress-only Internet Gateway",
+    "CreateInternetGateway", "Create", "Internet Gateway",
+    "CreateNatGateway", "Create", "NAT Gateway",
+    "CreateRoute", "Create", "Route Table",
+    "CreateRouteServer", "Create", "Route Server",
+    "CreateRouteServerEndpoint", "Create", "Route Server Endpoint",
+    "CreateRouteServerPeer", "Create", "Route Server Peer",
+    "CreateRouteTable", "Create", "Route Table",
+    "CreateSubnet", "Create", "Subnet",
+    "CreateSubnetCidrReservation", "Create", "Subnet CIDR Reservation",
+    "CreateVpc", "Create", "VPC",
+    "CreateVpcPeeringConnection", "Create", "VPC Peering Connection",
+    "DeleteDhcpOptions", "Delete", "DHCP Options",
+    "DeleteEgressOnlyInternetGateway", "Delete", "Egress-only Internet Gateway",
+    "DeleteInternetGateway", "Delete", "Internet Gateway",
+    "DeleteNatGateway", "Delete", "NAT Gateway",
+    "DeleteRoute", "Delete", "Route Table",
+    "DeleteRouteServer", "Delete", "Route Server",
+    "DeleteRouteServerEndpoint", "Delete", "Route Server Endpoint",
+    "DeleteRouteServerPeer", "Delete", "Route Server Peer",
+    "DeleteRouteTable", "Delete", "Route Table",
+    "DeleteSubnet", "Delete", "Subnet",
+    "DeleteSubnetCidrReservation", "Delete", "Subnet CIDR Reservation",
+    "DeleteVpc", "Delete", "VPC",
+    "DeleteVpcPeeringConnection", "Delete", "VPC Peering Connection",
+    "DescribeClassicLinkInstances", "Read", "EC2 Classic Instances",
+    "DescribeDhcpOptions", "Read", "DHCP Options",
+    "DescribeEgressOnlyInternetGateways", "Read", "Egress-only Internet Gateway",
+    "DescribeInternetGateways", "Read", "Internet Gateway",
+    "DescribeNatGateways", "Read", "NAT Gateway",
+    "DescribeRouteServerEndpoints", "Read", "Route Server Endpoint",
+    "DescribeRouteServerPeers", "Read", "Route Server Peer",
+    "DescribeRouteServers", "Read", "Route Sever",
+    "DescribeRouteTables", "Read", "Route Table",
+    "DescribeSubnets", "Read", "Subnet",
+    "DescribeVpcAttribute", "Read", "VPC",
+    "DescribeVpcClassicLink", "Read", "VPC Classic Link",
+    "DescribeVpcClassicLinkDnsSupport", "Read", "VPC Classic Link",
+    "DescribeVpcPeeringConnections", "Read", "VPC Peering Connection",
+    "DescribeVpcs", "Read", "VPC",
+    "DetachClassicLinkVpc", "Set", "VPC",
+    "DetachInternetGateway", "Set", "VPC",
+    "DisableRouteServerPropagation", "Disable", "Route Table",
+    "DisableVgwRoutePropagation", "Disable", "Virtual Private Gateway",
+    "DisableVpcClassicLink", "Disable", "VPC Classic Link",
+    "DisableVpcClassicLinkDnsSupport", "Disable", "VPC Classic Link",
+    "DisassociateNatGatewayAddress", "Set", "NAT Gateway",
+    "DisassociateRouteServer", "Set", "VPC",
+    "DisassociateRouteTable", "Set", "Route Table",
+    "DisassociateSubnetCidrBlock", "Set", "Subnet",
+    "DisassociateVpcCidrBlock", "Set", "VPC",
+    "EnableRouteServerPropagation", "Enable", "Route Server",
+    "EnableVgwRoutePropagation", "Enable", "Virtual Private Gateway",
+    "EnableVpcClassicLink", "Enable", "VPC Classic Link",
+    "EnableVpcClassicLinkDnsSupport", "Enable", "VPC Classic Link",
+    "GetRouteServerAssociations", "Read", "Route Server",
+    "GetRouteServerPropagations", "Read", "Route Server",
+    "GetRouteServerRoutingDatabase", "Read", "Route Server",
+    "GetSubnetCidrReservations", "Read", "Subnet",
+    "GetVpcResourcesBlockingEncryptionEnforcement", "Read", "VPC",
+    "ModifyRouteServer", "Set", "Route Server",
+    "ModifySubnetAttribute", "Set", "Subnet",
+    "ModifyVpcAttribute", "Set", "VPC",
+    "ModifyVpcPeeringConnectionOptions", "Set", "VPC Peering Connection",
+    "ModifyVpcTenancy", "Set", "VPC",
+    "RejectVpcPeeringConnection", "Execute", "VPC",
+    "ReplaceRoute", "Set", "VPC Endpoint",
+    "ReplaceRouteTableAssociation", "Set", "Subnet",
+    "UnassignPrivateNatGatewayAddress", "Delete", "NAT Gateway Address"
+  ]
+  | where array_length(eventtype_in) == 0 or EventType in (eventtype_in)
+  | where array_length(object_has_any) == 0 or Object has_any (object_has_any);
+  AWSCloudTrail
+  | where not(disabled)
+  | where EventSource == "ec2.amazonaws.com"
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+  | where array_length(operation_has_any) == 0 or EventName has_any (operation_has_any)
+  | where array_length(actorusername_has_any) == 0 or UserIdentityUserName has_any (actorusername_has_any)
+  | where array_length(srcipaddr_has_any_prefix) == 0
+      or (ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0")
+          and has_any_ipv4_prefix(SourceIpAddress, srcipaddr_has_any_prefix))
+  | where EventName in (Events | project EventName)
+  | extend EventResult = iff(isempty(ErrorCode) and isempty(ErrorMessage), "Success", "Failure")
+  | where eventresult == "*" or EventResult == eventresult
+  | lookup kind=inner Events on EventName
+  | extend Req = todynamic(RequestParameters), Resp = todynamic(ResponseElements)
+  | extend NewValue = iff(EventResult == "Success", case(
+      EventName in ("AcceptVpcPeeringConnection", "CreateVpcPeeringConnection"),
+        Resp.vpcPeeringConnection,
+      EventName == "AssignPrivateNatGatewayAddress", Req.PrivateIpAddress,
+      EventName == "AssociateDhcpOptions", Req.DhcpOptionsId,
+      EventName == "AssociateNatGatewayAddress", Resp.natGatewayAddressSet,
+      EventName == "AssociateRouteServer", Resp.routeServerAssociation,
+      EventName == "AssociateRouteTable", Resp.associationId,
+      EventName == "AssociateSubnetCidrBlock", Resp.ipv6CidrBlockAssociation,
+      EventName == "AssociateVpcCidrBlock",
+        coalesce(Resp.cidrBlockAssociation,Resp.ipv6CidrBlockAssociation),
+      EventName == "AttachClassicLinkVpc", Req.InstanceId,
+      EventName == "AttachInternetGateway", Req.InternetGatewayId,
+      EventName in ("CreateDefaultSubnet", "CreateSubnet"), Resp.subnet,
+      EventName in ("CreateDefaultVpc", "CreateVpc"), Resp.vpc,
+      EventName == "CreateDhcpOptions", Resp.dhcpOptions,
+      EventName == "CreateEgressOnlyInternetGateway", Resp.egressOnlyInternetGateway,
+      EventName == "CreateInternetGateway", Resp.internetGateway,
+      EventName == "CreateNatGateway", Resp.natGateway,
+      EventName in ("CreateRouteServer", "ModifyRouteServer"), Resp.routeServer,
+      EventName == "CreateRouteServerEndpoint", Resp.routeServerEndpoint,
+      EventName == "CreateRouteServerPeer", Resp.routeServerPeer,
+      EventName == "CreateRouteTable", Resp.routeTable,
+      EventName == "CreateSubnetCidrReservation", Resp.subnetCidrReservation,
+      EventName == "EnableRouteServerPropagation", Resp.routeServerPropagation,
+      EventName == "ModifyVpcPeeringConnectionOptions", Req.RequesterPeeringConnectionOptions,
+      EventName == "ModifyVpcTenancy", Req.InstanceTenancy,
+      EventName == "ReplaceRouteTableAssociation", Resp.newAssociationId,
+      ""
+    ), "")
+  | where array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any)
+  | extend ObjectId = case(
+      EventName in ("AcceptVpcPeeringConnection", "CreateVpcPeeringConnection"),
+        Resp.vpcPeeringConnection.vpcPeeringConnectionId,
+      EventName in ("AssignPrivateNatGatewayAddress", "DeleteNatGateway", "DescribeNatGateways",
+        "UnassignPrivateNatGatewayAddress"), Req.NatGatewayId,
+      EventName in ("AssociateDhcpOptions", "AssociateVpcCidrBlock", "AttachClassicLinkVpc",
+        "AttachInternetGateway", "DeleteVpc", "DescribeVpcClassicLink", "DescribeVpcs", "DetachClassicLinkVpc",
+        "DetachInternetGateway", "DisableVpcClassicLink", "DisableVpcClassicLinkDnsSupport",
+        "DisassociateRouteServer", "EnableVpcClassicLink", "EnableVpcClassicLinkDnsSupport",
+        "GetVpcResourcesBlockingEncryptionEnforcement", "ModifyVpcAttribute", "ModifyVpcTenancy"),
+        Req.VpcId,
+      EventName in ("AssociateNatGatewayAddress", "DisassociateNatGatewayAddress"),
+        Resp.natGatewayId,
+      EventName in ("AssociateRouteServer", "DeleteRouteServer", "DescribeRouteServers",
+        "EnableRouteServerPropagation", "GetRouteServerAssociations", "GetRouteServerPropagations",
+        "GetRouteServerRoutingDatabase", "ModifyRouteServer"), Req.RouteServerId,
+      EventName == "AssociateRouteTable", Resp.associationId,
+      EventName in ("AssociateSubnetCidrBlock", "DisassociateSubnetCidrBlock"), Resp.subnetId,
+      EventName in ("CreateDefaultSubnet", "CreateSubnet"), Resp.subnet.subnetId,
+      EventName in ("CreateDefaultVpc", "CreateVpc"), Resp.vpc.vpcId,
+      EventName == "CreateDhcpOptions", Resp.dhcpOptions.dhcpOptionsId,
+      EventName == "CreateEgressOnlyInternetGateway", Resp.egressOnlyInternetGateway.vpcId,
+      EventName == "CreateInternetGateway", Resp.internetGateway.internetGatewayId,
+      EventName == "CreateNatGateway", Resp.natGateway.natGatewayId,
+      EventName in ("CreateRoute", "DeleteRoute", "DeleteRouteTable", "DescribeRouteTables",
+        "DisableRouteServerPropagation", "ReplaceRouteTableAssociation"), Req.RouteTableId,
+      EventName == "CreateRouteServer", Resp.routeServer.routeServerId,
+      EventName == "CreateRouteServerEndpoint", Resp.routeServerEndpoint.routeServerEndpointId,
+      EventName == "CreateRouteServerPeer", Resp.routeServerPeer.routeServerPeerId,
+      EventName == "CreateRouteTable", Resp.routeTable.routeTableId,
+      EventName == "CreateSubnetCidrReservation",
+        Resp.subnetCidrReservation.subnetCidrReservationId,
+      EventName in ("DeleteDhcpOptions", "DescribeDhcpOptions"), Req.DhcpOptionsId,
+      EventName in ("DeleteEgressOnlyInternetGateway", "DescribeEgressOnlyInternetGateways"),
+        Req.EgressOnlyInternetGatewayId,
+      EventName in ("DeleteInternetGateway", "DescribeInternetGateways"), Req.InternetGatewayId,
+      EventName in ("DeleteRouteServerEndpoint", "DescribeRouteServerEndpoints"),
+        Req.RouteServerEndpointId,
+      EventName in ("DeleteRouteServerPeer", "DescribeRouteServerPeers"), Req.RouteServerPeerId,
+      EventName in ("DeleteSubnet", "DescribeSubnets", "GetSubnetCidrReservations", "ModifySubnetAttribute"),
+        Req.SubnetId,
+      EventName == "DeleteSubnetCidrReservation", Req.SubnetCidrReservationId,
+      EventName in ("DeleteVpcPeeringConnection", "DescribeVpcPeeringConnections",
+        "ModifyVpcPeeringConnectionOptions", "RejectVpcPeeringConnection"),
+        Req.VpcPeeringConnectionId,
+      EventName == "DescribeClassicLinkInstances", Req.InstanceId,
+      EventName in ("DescribeVpcAttribute", "DisassociateVpcCidrBlock"), Resp.vpcId,
+      EventName == "DescribeVpcClassicLinkDnsSupport", Req.VpcIds,
+      EventName in ("DisableVgwRoutePropagation", "EnableVgwRoutePropagation"), Req.GatewayId,
+      EventName == "DisassociateRouteTable", Req.AssociationId,
+      EventName == "ReplaceRoute", Req.VpcEndpointId,
+      ""
+    )
+  | extend
+      Type = "AWSCloudTrail",
+      EventCount = int(1),
+      EventStartTime = TimeGenerated,
+      EventEndTime = TimeGenerated,
+      EventSeverity = "Informational",
+      EventSchema = "AuditEvent",
+      EventSchemaVersion = "1.0.0",
+      EventVendor = "AWS",
+      EventProduct = "CloudTrail",
+      Dvc = "CloudTrail",
+      EventMessage = ErrorMessage,
+      ObjectType = "Cloud Resource",
+      TargetAppName = "Amazon Elastic Compute Cloud",
+      TargetAppType = "Service"
+  | project-rename
+      EventOriginalSubType = EventTypeName,
+      EventOriginalType = EventName,
+      EventUid = AwsEventId,
+      EventOriginalResultDetails = ErrorMessage,
+      EventProductVersion = EventVersion,
+      ActorUserId = UserIdentityAccountId,
+      ActorUsername = UserIdentityUserName,
+      ActorOriginalUserType = UserIdentityType,
+      HttpUserAgent = UserAgent
+  | extend
+      ActorUserIdType = iff(isempty(ActorUserId), "", "AWSId"),
+      ActorUsernameType = iff(isempty(ActorUsername), "", "Simple"),
+      SrcIpAddr = iff(ipv4_is_in_range(SourceIpAddress, "0.0.0.0/0"), SourceIpAddress, ""),
+      ActingApplicationEntityKey = "",
+      ActorUserAdditionalIds = dynamic([]),
+      ActorUserEntityKey = "",
+      AdditionalEntities = dynamic([]),
+      DvcEntityKey = "",
+      SrcSystemEntityKey = "",
+      TargetApplicationEntityKey = "",
+      TargetSystemEntityKey = ""
+  | extend AdditionalFields = iff(pack, bag_pack(
+      "ActorAccessKeyId", UserIdentityAccessKeyId,
+      "AWSRegion", AWSRegion,
+      "APIVersion", APIVersion,
+      "ManagementEvent", ManagementEvent,
+      "ReadOnly", ReadOnly,
+      "RequestParameters", Req,
+      "ResponseElements", Resp
+    ), dynamic({}))
+  | extend
+      Operation = EventOriginalType,
+      User = ActorUsername,
+      IpAddr = SrcIpAddr,
+      Application = TargetAppName,
+      Value = NewValue
+  | project
+      TimeGenerated, Type, EventCount, EventStartTime, EventEndTime, EventSeverity,
+      EventSchema, EventSchemaVersion, EventVendor, EventProduct, Dvc, EventResult,
+      EventMessage, TargetAppName, EventOriginalSubType, EventOriginalType, EventUid,
+      EventOriginalResultDetails, EventProductVersion, ActorUserId, ActorUsername,
+      ActorOriginalUserType, HttpUserAgent, ActorUserIdType, ActorUsernameType,
+      SrcIpAddr, AdditionalFields, User, IpAddr, Application, EventType, NewValue,
+      Value, ObjectId, ObjectType, Object, TargetAppType, Operation,
+      ActingApplicationEntityKey, ActorUserAdditionalIds, ActorUserEntityKey,
+      AdditionalEntities, DvcEntityKey, SrcSystemEntityKey,
+      TargetApplicationEntityKey, TargetSystemEntityKey
+  };
+  parser(
+    starttime,
+    endtime,
+    srcipaddr_has_any_prefix,
+    actorusername_has_any,
+    operation_has_any,
+    eventtype_in,
+    eventresult,
+    object_has_any,
+    newvalue_has_any,
+    disabled,
+    pack
+  )

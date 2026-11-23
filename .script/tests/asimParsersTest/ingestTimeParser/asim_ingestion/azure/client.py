@@ -8,6 +8,7 @@ from typing import Any, Mapping, Sequence
 
 import requests
 
+from ..runtime.queries import _quote_column_name
 from .common import (
     DCR_API_VERSION,
     INGESTION_API_VERSION,
@@ -24,6 +25,7 @@ from .common import (
     _compact_json_bytes,
     _normalize_dcr_type,
     _query_timestamp_counts,
+    _require_identifier,
     _safe_response_body,
     _validate_timestamp,
     build_exact_timestamp_query,
@@ -241,6 +243,92 @@ class AzureMonitorClient:
         self._poll_resource_succeeded(
             resource_path, TABLE_API_VERSION, "raw-table"
         )
+
+    def build_raw_replay_transform(
+        self, table_name: str, schema: Sequence[Mapping[str, str]]
+    ) -> str:
+        _require_identifier(table_name, "table_name")
+        resource_path = (
+            f"{self.config.workspace_resource_id}/tables/{table_name}"
+        )
+        response = self._request(
+            "GET",
+            self._management_url(resource_path, TABLE_API_VERSION),
+            scope=MANAGEMENT_SCOPE,
+            stage="raw-schema",
+            accepted_statuses={200},
+        )
+        body = _safe_response_body(response)
+        properties = body.get("properties") if isinstance(body, Mapping) else None
+        destination = (
+            properties.get("schema") if isinstance(properties, Mapping) else None
+        )
+        if not isinstance(destination, Mapping):
+            raise HarnessError(
+                "raw-schema", "Raw destination returned invalid table metadata."
+            )
+        # Query responses can expose GUID columns as strings; ARM preserves GUIDs.
+        columns = destination.get("columns", [])
+        standard_columns = destination.get("standardColumns", [])
+        if (
+            not isinstance(columns, list)
+            or not isinstance(standard_columns, list)
+            or not (columns or standard_columns)
+        ):
+            raise HarnessError(
+                "raw-schema", "Raw destination returned no column metadata."
+            )
+        destination_types: dict[str, str] = {}
+        for column in columns + standard_columns:
+            if not isinstance(column, Mapping):
+                raise HarnessError(
+                    "raw-schema", "Invalid raw destination column metadata."
+                )
+            name, column_type = column.get("name"), column.get("type")
+            if (
+                not isinstance(name, str) or not name
+                or not isinstance(column_type, str) or not column_type
+                or name in destination_types
+            ):
+                raise HarnessError(
+                    "raw-schema",
+                    "Invalid or duplicate raw destination column metadata.",
+                    details=column,
+                )
+            destination_types[name] = column_type.strip().lower()
+
+        conversions = {
+            "boolean": "tobool",
+            "datetime": "todatetime",
+            "dynamic": "parse_json",
+            "guid": "toguid",
+            "int": "toint",
+            "long": "tolong",
+            "real": "toreal",
+            "string": "tostring",
+        }
+        assignments: list[str] = []
+        for column in schema:
+            target_type = destination_types.get(column["name"])
+            if target_type is None:
+                continue
+            try:
+                if target_type != "guid":
+                    target_type = _normalize_dcr_type(target_type)
+                input_type = _normalize_dcr_type(column["type"])
+            except ValueError as exc:
+                raise HarnessError(
+                    "raw-schema",
+                    f"Unsupported replay type for {column['name']}: {exc}",
+                ) from exc
+            if target_type != input_type:
+                name = _quote_column_name(column["name"])
+                assignments.append(
+                    f"{name} = {conversions[target_type]}({name})"
+                )
+        if not assignments:
+            return "source"
+        return "source\n| extend " + ", ".join(assignments)
 
     def _poll_resource_succeeded(
         self, resource_path: str, api_version: str, stage: str
@@ -497,69 +585,96 @@ class AzureMonitorClient:
             raise ValueError("Expected counts cannot be negative.")
         poll_index = 0
         stable_once = False
-        while True:
-            query_table = self.query_exact_rows(table_name, timestamps)
-            raw_observed_counts = _query_timestamp_counts(
-                query_table, stage
-            )
-            unexpected = {
-                timestamp: count
-                for timestamp, count in raw_observed_counts.items()
-                if timestamp not in expected_counts
-            }
-            if unexpected:
-                raise HarnessError(
-                    stage,
-                    "Exact timestamp query returned unexpected timestamps.",
-                    details={
-                        "unexpected": unexpected,
-                        "observedQueryTable": query_table,
-                    },
+        query_table = None
+        observed_counts: dict[str, int] = {}
+        try:
+            while True:
+                query_table = self.query_exact_rows(table_name, timestamps)
+                raw_observed_counts = _query_timestamp_counts(
+                    query_table, stage
                 )
-            observed_counts = {
-                timestamp: raw_observed_counts.get(timestamp, 0)
-                for timestamp in expected_counts
-            }
-            overages = {
-                timestamp: {
-                    "expected": expected_counts.get(timestamp, 0),
-                    "observed": observed,
+                unexpected = {
+                    timestamp: count
+                    for timestamp, count in raw_observed_counts.items()
+                    if timestamp not in expected_counts
                 }
-                for timestamp, observed in observed_counts.items()
-                if observed > expected_counts.get(timestamp, 0)
+                if unexpected:
+                    raise HarnessError(
+                        stage,
+                        "Exact timestamp query returned unexpected timestamps.",
+                        details={
+                            "unexpected": unexpected,
+                            "observedQueryTable": query_table,
+                        },
+                    )
+                observed_counts = {
+                    timestamp: raw_observed_counts.get(timestamp, 0)
+                    for timestamp in expected_counts
+                }
+                overages = {
+                    timestamp: {
+                        "expected": expected_counts.get(timestamp, 0),
+                        "observed": observed,
+                    }
+                    for timestamp, observed in observed_counts.items()
+                    if observed > expected_counts.get(timestamp, 0)
+                }
+                if overages:
+                    raise HarnessError(
+                        stage,
+                        "Exact timestamp slice contains more rows than "
+                        "expected for one or more timestamps.",
+                        details={
+                            "overages": overages,
+                            "observedQueryTable": query_table,
+                        },
+                    )
+                if observed_counts == expected_counts:
+                    if stable_once:
+                        return query_table
+                    stable_once = True
+                    self._sleep(self.settling_delay_seconds)
+                    continue
+                stable_once = False
+                if self._remaining() <= 0:
+                    raise HarnessError(
+                        stage,
+                        "Timed out waiting for exact table rows.",
+                        details={
+                            "expectedCounts": expected_counts,
+                            "observedCounts": observed_counts,
+                            "missingTimestamps": [
+                                timestamp
+                                for timestamp, count in expected_counts.items()
+                                if observed_counts.get(timestamp, 0) < count
+                            ],
+                            "observedQueryTable": query_table,
+                        },
+                    )
+                delay = self.poll_delays[
+                    min(poll_index, len(self.poll_delays) - 1)
+                ]
+                poll_index += 1
+                self._sleep(delay)
+        except HarnessError as exc:
+            # Only enrich locally generated deadline errors, not query failures.
+            if (
+                exc.stage not in {"query", "deadline"}
+                or str(exc) != "Validation deadline expired."
+                or exc.status_code is not None
+            ):
+                raise
+            exc.details = {
+                "expectedCounts": expected_counts,
+                "observedCounts": observed_counts,
+                "missingTimestamps": [
+                    timestamp
+                    for timestamp, count in expected_counts.items()
+                    if observed_counts.get(timestamp, 0) < count
+                ],
+                "observedQueryTable": query_table,
             }
-            if overages:
-                raise HarnessError(
-                    stage,
-                    "Exact timestamp slice contains more rows than "
-                    "expected for one or more timestamps.",
-                    details={
-                        "overages": overages,
-                        "observedQueryTable": query_table,
-                    },
-                )
-            if observed_counts == expected_counts:
-                if stable_once:
-                    return query_table
-                stable_once = True
-                self._sleep(self.settling_delay_seconds)
-                continue
-            stable_once = False
-            if self._remaining() <= 0:
-                raise HarnessError(
-                    stage,
-                    "Timed out waiting for exact table rows.",
-                    details={
-                        "expectedCounts": expected_counts,
-                        "observedCounts": observed_counts,
-                        "observedQueryTable": query_table,
-                    },
-                )
-            delay = self.poll_delays[
-                min(poll_index, len(self.poll_delays) - 1)
-            ]
-            poll_index += 1
-            self._sleep(delay)
+            raise
 
     def upload_rows(
         self,

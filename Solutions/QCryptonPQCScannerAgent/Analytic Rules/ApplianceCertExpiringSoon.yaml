@@ -1,0 +1,38 @@
+id: f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c
+name: Appliance certificate expiring within 30 days with classical algorithm
+description: |
+  A network appliance TLS certificate is expiring within the next 30 days and uses a classical
+  (quantum-vulnerable) signature algorithm. Certificate renewal is an ideal time to migrate to a
+  PQ-hybrid certificate. If the certificate is renewed with a classical algorithm, the
+  harvest-now-decrypt-later exposure window resets for the new validity period.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: QCryptonPQCScannerAgentCCPDefinition
+    dataTypes:
+      - PQReadiness_CL
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1556
+query: |
+  PQReadiness_CL
+  | where TimeGenerated > ago(1d)
+  | where AssetKind == "tls-cert"
+  | where QuantumPosture == "vulnerable"
+  | where isnotnull(ExpiresOn) and ExpiresOn between (now() .. ago(-30d))
+  | where ResourceType has_any ("F5", "CheckPoint", "PaloAlto", "Cisco", "Fortinet")
+      or Metadata contains "certificate_expiring"
+  | project TimeGenerated, ResourceName, ResourceType, AssetIdentifier, SignatureAlgorithm, ExpiresOn, RiskScore, PostureReason, SubscriptionId, ResourceGroup
+  | order by ExpiresOn asc
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: ResourceName
+version: 1.0.0
+kind: Scheduled

@@ -45,8 +45,8 @@ default to the versioned lab ARM-validation route described below.
 The intended operator flow is:
 
 1. **Define scope and mode.** Supply the solution definition and account for
-   every source object. Explicitly select `authoring` or `qualification`;
-   environment configuration does not implicitly select Qualification.
+   every source object. Default to `qualification` (with `--workflow-profile authoring`
+   available as an explicit offline/ISV fallback when no live lab is available).
 2. **Prepare candidates in a batch.** Prefer stable, evidence-supported
    mappings. When semantics are uncertain but a defensible target candidate
    exists, generate that candidate without pausing for a per-rule decision,
@@ -1601,10 +1601,10 @@ provider.
 
 ### Contributor authoring guide
 
-Select **Authoring**, **Qualification**, or **Cancel** before initialization;
-there is no default profile. Authoring is the normal offline-capable content
-workflow. Qualification is an explicit optional lab workflow, not a requirement
-for publishing. Follow the [canonical stages and gates](agent-workflows/end-to-end-migration.md).
+Select **Qualification**, **Authoring**, or **Cancel** before initialization;
+`qualification` is the default CLI `--workflow-profile`, with
+`--workflow-profile authoring` available as an explicit offline/ISV fallback
+when no live lab is available. Follow the [canonical stages and gates](agent-workflows/end-to-end-migration.md).
 
 Authoring reviews the discovered source and existing output, converts the
 complete solution, resolves each `needsReview` item with scoped evidence and an

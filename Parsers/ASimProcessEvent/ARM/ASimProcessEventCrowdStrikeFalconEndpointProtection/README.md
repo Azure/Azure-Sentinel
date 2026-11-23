@@ -4,7 +4,6 @@ ARM template for ASIM ProcessEvent schema parser for CrowdStrike Falcon Endpoint
 
 Normalizes CrowdStrike_Process_Events_CL process creation, synthetic process observations,
 process termination, and termination requests to ASIM ProcessEvent 1.0.0.
-Retains raw source fields in AdditionalFields for every normalized event.
 This parser was created using the agentic ASIM parser creation tool, powered by Skills in GitHub.
 
 

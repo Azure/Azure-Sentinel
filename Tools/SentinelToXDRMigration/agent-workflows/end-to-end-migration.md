@@ -69,6 +69,8 @@ disabled-by-default, and exact-scope authorization gates remain in force.
 
 `Discovery -> Conversion -> Validation -> Packaging -> Report`
 
+Whenever an existing Analytic Rule (`Analytic Rules/*.yaml`) or Custom Detection (`XDR Detections/*.yaml`) is modified, its semantic patch version (`X.Y.Z` -> `X.Y.(Z+1)`) must be bumped, while unmodified rules and detections retain their existing version.
+
 Legacy offline Authoring does not require a tenant, workspace, deployment, mock
 ingestion, or alert-parity test. New capability-version-1 CLI runs use the
 candidate ARM lifecycle below; their default lab route requires an approved
@@ -729,22 +731,9 @@ Install the CLI when necessary:
 python -m pip install -e Tools\SentinelToXDRMigration
 ```
 
-Run `workflow-status` first. If state does not exist, default to `authoring`
-(or confirm whether the user wants optional `qualification`) before
-initializing:
-
-```powershell
-sentinel-xdr-migration workflow-init `
-  --solution "<solution-path>" `
-  --workflow-profile authoring `
-  --version-bump none
-```
-
-For an approved qualification run, use `qualification` and include
-the complete locked target. Alternatively, after reviewing the per-solution
-configuration above, use `--confirm-configured-target` instead of supplying
-tenant/workspace values; the workflow derives the subscription and reads the
-customer ID only from that exact approved workspace:
+Run `workflow-status` first. If state does not exist, default to `qualification`
+(with `--workflow-profile authoring` available as an explicit offline/ISV
+fallback when no live lab is available) before initializing:
 
 ```powershell
 sentinel-xdr-migration workflow-init `
@@ -752,6 +741,16 @@ sentinel-xdr-migration workflow-init `
   --workflow-profile qualification `
   --confirm-configured-target `
   --version-bump "<none-patch-minor-or-major>"
+```
+
+When no live lab is available, explicitly select the offline `authoring`
+fallback:
+
+```powershell
+sentinel-xdr-migration workflow-init `
+  --solution "<solution-path>" `
+  --workflow-profile authoring `
+  --version-bump none
 ```
 
 Before requesting a workspace value, inspect `doctor`. If

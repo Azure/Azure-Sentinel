@@ -48,8 +48,36 @@ foreach ($dir in $solutions) {
     $templateText = (Get-ChildItem -LiteralPath $dir.FullName -Filter mainTemplate.json -Recurse |
         ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
     $testParameter = Get-SentinelArmTtkTestParameter -TemplateText $templateText
-    $results = @(Test-AzTemplate -TemplatePath $dir.FullName -TestParameter $testParameter)
+    # Capture emitted errors, not ARM-TTK's internally handled exceptions.
+    $invocationOutput = @(
+        Test-AzTemplate `
+            -TemplatePath $dir.FullName `
+            -TestParameter $testParameter `
+            -ErrorAction Continue 2>&1
+    )
+    $invocationErrors = @($invocationOutput | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] })
+    $results = @($invocationOutput | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] })
+    # Write-Error can copy an ErrorRecord, but retains its exception instance.
+    $exemptInvocationExceptions = @(
+        foreach ($result in $results) {
+            if ($result.Name -eq $script:SentinelArmTtkIdTestName) {
+                $result.Errors |
+                    Where-Object { Test-SentinelArmTtkExemptIdError -ErrorItem $_ } |
+                    ForEach-Object { $_.Exception }
+            }
+        }
+    )
+    $unexpectedInvocationErrors = @($invocationErrors | Where-Object { $_.Exception -notin $exemptInvocationExceptions })
+    foreach ($invocationError in $unexpectedInvocationErrors) {
+        Write-Host "ARM-TTK execution error: $invocationError"
+    }
     $resolved = Resolve-SentinelArmTtkMainTemplateResults -Results $results
+
+    if (($resolved.Pass + $resolved.Fail) -eq 0) {
+        Write-Host "ARM-TTK returned no validation results: $name"
+        $fails += $name
+        continue
+    }
 
     foreach ($testInfo in $resolved.Results) {
         $testInfo.PSObject.Properties.Remove('TestInput')
@@ -59,7 +87,11 @@ foreach ($dir in $solutions) {
     $resolved.Results
     Write-Host "ARM-TTK: Pass=$($resolved.Pass) Fail=$($resolved.Fail) ExemptedIdErrors=$($resolved.ExemptedErrors)"
 
-    if ($resolved.Fail -gt 0) {
+    if ($unexpectedInvocationErrors.Count -gt 0) {
+        Write-Host "ARM-TTK returned $($unexpectedInvocationErrors.Count) nonexempt execution error(s): $name"
+    }
+
+    if ($resolved.Fail -gt 0 -or $unexpectedInvocationErrors.Count -gt 0) {
         Write-Host "Failed arm-ttk (Test-AzTemplate): $name"
         $fails += $name
     }

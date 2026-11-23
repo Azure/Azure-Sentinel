@@ -1,5 +1,22 @@
 # Changelog for ASimEmailEvent.yaml
 
+## Version 1.0.6
+
+- (2026-11-04) Added the native parser - [PR #15556](https://github.com/Azure/Azure-Sentinel/pull/15556)
+
+## Version 1.0.5
+
+- (2026-11-03) Registered the Proofpoint TAP blocked-click interaction parser with packing and watchlist disable controls - [PR #15530](https://github.com/Azure/Azure-Sentinel/pull/15530)
+
+## Version 1.0.4
+
+- (2026-10-29) Register ASimEmailEventProofpointTAPBlocked parser - [PR #15500](https://github.com/Azure/Azure-Sentinel/pull/15500)
+- Add the Proofpoint TAP messages-delivered parser as ASimEmailEventProofpointTAPDelivered
+
+## Version 1.0.3
+
+- (2026-10-28) Registered the Proofpoint TAP permitted-click interaction parser with pack forwarding and watchlist disable controls - [PR #15483](https://github.com/Azure/Azure-Sentinel/pull/15483)
+
 ## Version 1.0.2
 
 - (2026-10-26) Add Microsoft Defender for Office 365 EmailEvents support - [PR #15430](https://github.com/Azure/Azure-Sentinel/pull/15430)

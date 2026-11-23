@@ -5,6 +5,7 @@ import hashlib
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -169,6 +170,32 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def resolve_operator_hash() -> str:
+    raw = ""
+    for env_key in ("GITHUB_ACTOR", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        candidate = (os.environ.get(env_key) or "").strip()
+        if candidate:
+            raw = candidate
+            break
+    if not raw:
+        try:
+            proc = subprocess.run(
+                ["git", "config", "user.email"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                check=False,
+            )
+            if proc.returncode == 0 and proc.stdout:
+                raw = proc.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            raw = ""
+    normalized = raw.strip().lower()
+    if not normalized:
+        return "0000000000000000"
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
 def _version_action_was_consumed(
     before: str | None,
     after: str | None,
@@ -218,6 +245,14 @@ def _write_unlocked(path: Path, state: dict[str, Any]) -> None:
         raise ValueError("workflow state path does not belong to the selected run")
     state["runId"] = destination.parent.name
     state["updatedAt"] = _utc_now()
+    operator_hash = state.get("operatorHash") or (
+        state.get("context", {}).get("operatorHash")
+        if isinstance(state.get("context"), dict)
+        else None
+    ) or resolve_operator_hash()
+    state["operatorHash"] = operator_hash
+    if isinstance(state.get("context"), dict) and not state["context"].get("operatorHash"):
+        state["context"]["operatorHash"] = operator_hash
     _validate(state)
     _atomic_json(path, portable_artifact(root, state))
 
@@ -2594,7 +2629,7 @@ def initialize_workflow(
     workspace_customer_id: str | None = None,
     version_bump: str | None = None,
     target_version: str | None = None,
-    workflow_profile: str | None = "authoring",
+    workflow_profile: str | None = "qualification",
     yolo: bool | None = None,
     campaign_id: str | None = None,
     new_run: bool = False,
@@ -2659,7 +2694,9 @@ def initialize_workflow(
             workspace_resource_id=workspace_resource_id or "",
             workspace_customer_id=workspace_customer_id or "",
         )
+    operator_hash = resolve_operator_hash()
     requested_context = {
+        "operatorHash": operator_hash,
         "tenantId": target["tenantId"] if target else tenant_id,
         "subscriptionId": target["subscriptionId"] if target else subscription_id,
         "workspaceResourceId": (
@@ -2717,7 +2754,7 @@ def initialize_workflow(
                     "target version cannot be combined with the workflow's selected version bump"
                 )
             for key, value in requested_context.items():
-                if key == "targetContextLocked":
+                if key in {"targetContextLocked", "operatorHash"}:
                     continue
                 if value is not None and context.get(key) not in (None, value):
                     raise ValueError(
@@ -2770,6 +2807,7 @@ def initialize_workflow(
                         "campaign; initialize an explicitly linked replacement run"
                     )
                 link_campaign = True
+            state.setdefault("operatorHash", operator_hash)
             for key, value in requested_context.items():
                 if key == "targetContextLocked":
                     if value:
@@ -2836,6 +2874,7 @@ def initialize_workflow(
     path = artifact_path(root, STATE_FILE_NAME, create_parent=True)
     state = {
         "schemaVersion": SCHEMA_VERSION,
+        "operatorHash": operator_hash,
         "solution": str(root),
         "workflowStatus": "inProgress",
         "createdAt": now,

@@ -108,7 +108,7 @@ function New-ParametersForConnectorInstuctions($instructions) {
                 $templateParameter | Add-Member -MemberType NoteProperty -Name "redirectUri" -Value $newParameter
             }
         }
-        elseif ($instruction.type -eq "ContextPane") {
+        elseif ($instruction.type -eq "ContextPane" -or $instruction.type -eq "InstructionStepsGroup") {
             New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
         }
         elseif ($instruction.type -eq "Dropdown") {
@@ -118,8 +118,12 @@ function New-ParametersForConnectorInstuctions($instructions) {
                 }
             }
             else {
+                if (-not $instruction.parameters.options -or [string]::IsNullOrWhiteSpace($instruction.parameters.options[0].key)) {
+                    throw "Dropdown '$($instruction.parameters.name)' must define at least one option with a non-empty key."
+                }
+
                 $newParameter = [PSCustomObject]@{
-                    defaultValue = $instruction.parameters.name;
+                    defaultValue = @($instruction.parameters.options[0].key);
                     type         = "array";
                 }
             }

@@ -163,46 +163,76 @@ themselves establish a toolkit fix is required.
   rejecting residual `dynamic([...])` and `mv-apply` / `mv-expand` in `PT0S`
   rules (`HuntingRuleQueryStreamingNotSupported`).
 
+- **Flip default workflow profile from `authoring` to `qualification`.**
+  Switched the default `--workflow-profile` in `solution_manager/cli.py`,
+  `initialize_workflow` in `solution_manager/core/workflow.py`,
+  `Tools/SentinelToXDRMigration/agent-workflows/end-to-end-migration.md`, and
+  agent adapters (`AGENTS.md`, `CLAUDE.md`, `.github`, `.claude`, `.cursor`, and
+  `.windsurf`) from `authoring` to `qualification`, preserving
+  `--workflow-profile authoring` as an explicit offline/ISV fallback when no
+  live lab is available.
+- **Enable XDR Custom Detections and Sentinel Analytic Rules during
+  Qualification flow.** Enabled deployed Defender XDR Custom Detections and
+  Sentinel Analytic Rules during lab Qualification, exercising live rule
+  enablement and the Defender XDR NRT streaming compiler before disabling or
+  cleaning up rules after the test window.
+- **Reject false-success packaging results in V3.1 without changing legacy V3
+  flow.** Enforced strict artifact, resource, and error checks in V3.1 packaging
+  acceptance while preserving zero as the normal success exit code.
+- **Extend KQL static validations to XDR artifacts and allow Qualification mode
+  overrides.** Extended `.script/tests/KqlvalidationsTests` and local validation
+  to `XDR Detections/*.yaml` and `XDR Workbooks/*.json`, and allowed verified
+  live `qualification` evidence to override offline static KQL analyzer false
+  positives.
+- **Instrument NPF metrics in CI labeler, validation, and qualification
+  artifacts.** Added `passesPerSolution`, `commitPasses`, `highestStage`,
+  `verdicts`, `runNumber`, `stageTimestamps`, `verdict`, `verdictReasons`,
+  `overrides[]`, and `operatorHash` across `.github/workflows/npf-pr-labeler.yaml`
+  and `solution_manager`.
+- **Unblock six identity/risk tables, preserve `TimeGenerated` everywhere, and
+  allow lab/connector table evidence to override static catalogs.** Changed
+  `AADProvisioningLogs`, `AADRiskyUsers`, `AADUserRiskEvents`, `ADFSSignInLogs`,
+  `RiskyUsers`, and `UserRiskEvents` to `tier: "1to1"`, removed
+  `TimeGenerated -> Timestamp` rewrites across detections and workbooks, and
+  threaded reviewed/lab/connector table evidence (`allowed_tables` /
+  `known_tables`) through dependency planning, workbook conversion, and
+  validators.
+- **Surface CI `DocumentsLinkValidation` locale failures in validation mode and
+  normalize URL verification evidence.** Extended `VAL-URL-01` and `validate`
+  mode (`validate_solution` and `validate_content`) to scan all solution text
+  files with the CI locale regex and recommend locale-stripped URLs, and
+  normalized `url` / `resolvedUrl` fields in URL verification evidence
+  (`QUAL-URL-01`).
+
 ## Candidate follow-ups
 
-- **Enable XDR Custom Detections and Sentinel Analytic Rules during
-  Qualification flow.** Enable deployed Defender XDR Custom Detections and
-  Sentinel Analytic Rules during lab Qualification (instead of keeping them
-  `enabled: false` / `status: disabled` throughout Qualification) so that
-  Qualification exercises live rule enablement, triggers the Defender XDR NRT
-  streaming compiler (`HuntingRuleQueryStreamingNotSupported` /
-  `KqlCompilationFailed`) on `PT0S` rules, and validates live alert generation
-  before disabling or cleaning up rules after the test window.
-- **Reject false-success packaging results in V3.1 without changing legacy V3
-  flow.** Do not accept a null or zero exit status as sufficient proof of
-  packaging success. Fail V3.1 packaging acceptance on reported packaging
-  errors, missing or stale output artifacts, or missing required resources,
-  even when the invoked script returns no explicit failure status. Preserve
-  zero as the normal success exit code when artifact and resource checks pass.
-  Cover swallowed connector-processing errors and incomplete CCF packages in
-  regression tests.
-- **Flip default workflow profile from `authoring` to `qualification` after live
-  lab sign-off.** `evaluate_qualification_promotion_gate` now verifies all 5
-  qualification stages end-to-end; once signed off against a live lab run,
-  switch the default profile in `workflow-init` and agent adapters.
-- **KQL static validations extend to XDR artifacts.** Extend static KQL syntax
-  and schema validation coverage (such as `.script/tests/KqlvalidationsTests`
-  and local validation) to `Solutions/**/XDR Detections/*.yaml` and
-  `Solutions/**/XDR Workbooks/*.json` alongside Sentinel `Analytic Rules`,
-  `Hunting Queries`, and `Parsers`.
-- **Qualification mode overrides static KQL failures.** When a solution has
-  verified live `qualification` evidence (such as live KQL execution, alert
-  parity, and workbook query receipts), allow Qualification mode to override
-  offline static KQL analyzer false positives (for example `KS107` on
-  `todynamic(<dynamic>)` in `Microsoft.Azure.Sentinel.KustoServices`).
-  See `Tools/ignored/kql-static-validation-and-qualification-override-plan.md`.
-- **Instrument NPF metrics in validation and qualification artifacts.** Record
-  first-pass PR validation rate (`runNumber`, `firstPassPassed`), per-stage UTC
-  cycle-time timestamps (`stageTimestamps`), top-level qualification `verdict`
-  and `verdictReasons`, structured human `overrides[]` in
-  `decision-manifest.json`, and privacy-safe `operatorHash` toolkit usage in
-  `workflow-state.json`, alongside `<!-- npf-meta: ... -->` PR solution-count
-  metadata. See `Tools/ignored/npf-metrics-instrumentation-plan.md`.
+- [x] **Flip default workflow profile from `authoring` to `qualification` after live
+  lab sign-off.** Completed: `workflow-init`, `initialize_workflow`, canonical
+  workflow docs, and all agent adapters now default to `qualification` with
+  `authoring` preserved as an explicit offline/ISV fallback.
+- [x] **Unblock the six explicitly blocked identity/risk tables in the mapping
+  catalog.** Change `AADProvisioningLogs`, `AADRiskyUsers`, `AADUserRiskEvents`,
+  `ADFSSignInLogs`, `RiskyUsers`, and `UserRiskEvents` from `tier: "blocked"` to
+  `tier: "1to1"` (same-name Advanced Hunting parser support).
+- [x] **Allow working KQL queries in Defender workbooks even when a table is not
+  listed in the static catalog.** Ensure a missing static catalog entry never
+  blocks workbook conversion, validation replay, publication, or V3.1 packaging
+  when the query works in Advanced Hunting or has reviewed dependency/runtime
+  evidence.
+- [x] **Assume Sentinel table exposure in Defender XDR once the required data
+  connector is connected.** Reflect across dependency and validation checks that
+  a table belonging to the `sentinel` workload with a declared/connected data
+  connector is exposed in the unified Defender XDR environment.
+- [x] **Preserve `TimeGenerated` everywhere without rewriting to `Timestamp`.**
+  Remove `TimeGenerated -> Timestamp` column rewrites across detection and
+  workbook conversion, catalog renames, and validators, because Defender XDR
+  Advanced Hunting virtually maps `TimeGenerated` to `Timestamp` on all tables.
+- [x] **Let live lab or Data Connector table evidence override static table
+  lists.** Treat evidence of a table in the live lab or in a solution Data
+  Connector definition file (`dataTypes`) as sufficient to override static table
+  catalogs, distinguishing "unknown to our offline snapshot" from "unsupported in
+  this environment."
+- [x] **Surface CI `DocumentsLinkValidation` locale failures in validation mode and recommend fixes:** Extend `VAL-URL-01` (`solution_manager/qualification/pr_check_runner.py`) and `validate` mode to scan all solution text files (including `Evidence/`, `Analytic Rules/`, `XDR Detections/`, `SolutionMetadata.json`, and `ReleaseNotes.md`) using the CI regex `/(https:\/\/docs\.microsoft\.com|https:\/\/azure\.microsoft\.com)(\/[a-z]{2}-[a-z]{2})/i` from `.script/documentsLinkValidator.ts` (and optionally `learn.microsoft.com`), surface any matches in validation mode with a recommended locale-stripped URL fix, and normalize recorded `resolvedUrl` values when generating URL verification evidence (`QUAL-URL-01`).
 
 Any future environment write remains separately gated by explicit approval
 immediately before the exact operation. No cloud action is authorized by this

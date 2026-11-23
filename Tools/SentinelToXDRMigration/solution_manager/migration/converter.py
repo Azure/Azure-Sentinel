@@ -32,7 +32,16 @@ from solution_manager.migration.catalog import (
 )
 from solution_manager.authoring.columns import projected_columns
 from solution_manager.authoring.dependencies import dependency_plan, dependency_validation_errors
-from solution_manager.core.content_paths import content_path, yaml_files
+from solution_manager.core.content_paths import (
+    _bump_patch_version,
+    _git_head_tracked_files,
+    _load_git_head_yaml,
+    _version_tuple,
+    _without_version,
+    content_path,
+    scan_solution_urls,
+    yaml_files,
+)
 from solution_manager.migration.parser_bindings import normalize_parser_bindings
 from solution_manager.reporting.report import write_transformation_report
 
@@ -104,6 +113,8 @@ NRT_SUPPORTED_TABLES = frozenset(
         "OfficeActivity",
         "Okta_CL",
         "OktaV2_CL",
+        "PowerBIActivity",
+        "PowerPlatformAdminActivity",
         "ProofpointPOD",
         "ProofPointTAPClicksPermitted_CL",
         "ProofPointTAPMessagesDelivered_CL",
@@ -249,7 +260,7 @@ class ConversionResult:
             "errors": list(self.errors),
             "informational": list(self.informational),
             "directGraphDeploymentReady": (
-                self.status == "converted" and not self.review_required and self.tactic_count <= 1
+                self.status == "converted" and not self.review_required
             ),
         }
 
@@ -436,7 +447,7 @@ def _parse_cosmetic_summarize_agg(item: str, default_time_col: str) -> tuple[str
         arg = args[0].strip()
         if arg not in COSMETIC_TIME_COLUMNS:
             return None, None, False, False
-        target_col = default_time_col if arg in {"TimeGenerated", "Timestamp"} else arg
+        target_col = arg
         out_alias = alias or f"{func}_{arg}"
         return out_alias, target_col, False, True
 
@@ -785,7 +796,7 @@ def rewrite_cosmetic_nrt_summarize(query: str) -> tuple[str, bool, list[str]]:
             g_expr = m_assign.group(2).strip()
             m_bin = re.match(r"^bin\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,.*\)$", g_expr, re.IGNORECASE | re.DOTALL)
             if m_bin and m_bin.group(1) in COSMETIC_TIME_COLUMNS:
-                target_t = default_time_col if m_bin.group(1) in {"TimeGenerated", "Timestamp"} else m_bin.group(1)
+                target_t = m_bin.group(1)
                 if g_alias != target_t:
                     extend_assignments.append(f"{g_alias} = {target_t}")
             elif g_alias != g_expr:
@@ -795,7 +806,7 @@ def rewrite_cosmetic_nrt_summarize(query: str) -> tuple[str, bool, list[str]]:
             continue
         m_bin_unaliased = re.match(r"^bin\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,.*\)$", item_stripped, re.IGNORECASE | re.DOTALL)
         if m_bin_unaliased and m_bin_unaliased.group(1) in COSMETIC_TIME_COLUMNS:
-            target_t = default_time_col if m_bin_unaliased.group(1) in {"TimeGenerated", "Timestamp"} else m_bin_unaliased.group(1)
+            target_t = m_bin_unaliased.group(1)
             if target_t not in group_projected_cols:
                 group_projected_cols.append(target_t)
             continue
@@ -1496,15 +1507,11 @@ def constrain_event_window(
             "but the source query does not establish an event-time column"
         )
     bound_query = target_query
-    if source_time_column == "TimeGenerated":
-        bound_query = _replace_event_time_column(
-            bound_query, "TimeGenerated", "Timestamp",
-        )
-        if bound_query is None:
-            return target_query, None, (
-                "Original Sentinel lookback is shorter than the native XDR service window, "
-                "but TimeGenerated cannot be safely bound to the target Timestamp column"
-            )
+    target_time_column = (
+        "TimeGenerated"
+        if "TimeGenerated" in _tokens(bound_query)
+        else ("Timestamp" if "Timestamp" in _tokens(bound_query) else source_time_column)
+    )
 
     source_bound, source_issue = _event_window(source_query, source_time_column)
     if source_issue and source_issue != "no explicit event-time bound proves equivalence to Defender ingestion-time evaluation":
@@ -1514,7 +1521,7 @@ def constrain_event_window(
         )
     effective_window = min(source_period, source_bound) if source_bound is not None else source_period
 
-    target_bound, target_issue = _event_window(bound_query, "Timestamp")
+    target_bound, target_issue = _event_window(bound_query, target_time_column)
     if target_issue and target_issue != "no explicit event-time bound proves equivalence to Defender ingestion-time evaluation":
         return target_query, None, (
             "Original Sentinel lookback is shorter than the native XDR service window, "
@@ -1549,7 +1556,7 @@ def constrain_event_window(
         span = _format_kql_duration(effective_window)
         bound_query = (
             bound_query[:first_table.end()]
-            + f" | where Timestamp >= ago({span})"
+            + f" | where {target_time_column} >= ago({span})"
             + bound_query[first_table.end():]
         )
 
@@ -1559,15 +1566,15 @@ def constrain_event_window(
         "effectiveEventWindowSeconds": effective_window,
         "xdrServiceWindowSeconds": service_window,
         "sourceTimeColumn": source_time_column,
-        "targetTimeColumn": "Timestamp",
+        "targetTimeColumn": target_time_column,
         "filterInjected": injected,
         "rationale": (
             "A conservative single-native-table pipeline proof established the source and target "
-            "input and time-column binding. The target Timestamp filter is placed immediately "
+            "input and time-column binding. The target event-time filter is placed immediately "
             "after the table input and before all filters, projections, and aggregations."
         ),
         "lateIngestionRisk": (
-            "Late-ingestion risk: events ingested after their Timestamp falls outside this "
+            "Late-ingestion risk: events ingested after their event time falls outside this "
             "constrained event-time window can be missed; runtime qualification is required."
         ),
     }
@@ -1620,8 +1627,9 @@ def assess_schedule(
     if reason:
         return [f"{summary}; {reason}. See {SCHEDULE_REFERENCE}"], []
     source_time = "TimeGenerated" if "TimeGenerated" in _tokens(source_query) else "Timestamp"
+    target_time = "TimeGenerated" if "TimeGenerated" in _tokens(target_query) else "Timestamp"
     source_bound, source_issue = _event_window(source_query, source_time)
-    target_bound, target_issue = _event_window(target_query, "Timestamp")
+    target_bound, target_issue = _event_window(target_query, target_time)
     narrower_source_period = source_period < target_period
     if (
         narrower_source_period
@@ -2147,11 +2155,13 @@ def _extract_raw_yaml_version(raw_text: str, doc: dict[str, Any]) -> str:
     return str(doc.get("version") or "")
 
 
-def _version_tuple(version: str) -> tuple[int, int, int]:
-    parts = str(version).split(".")
-    if len(parts) == 3 and all(part.isdigit() for part in parts):
-        return int(parts[0]), int(parts[1]), int(parts[2])
-    return (0, 0, 0)
+def _replace_raw_yaml_top_level_version(raw_text: str, new_version: str) -> str:
+    pattern = re.compile(
+        r"(?m)^(version[ \t]*:[ \t]*)(['\"]?)[^'\"\r\n#]+?\2([ \t]*(?:#.*)?)$"
+    )
+    if pattern.search(raw_text):
+        return pattern.sub(rf"\g<1>\g<2>{new_version}\g<2>\g<3>", raw_text, count=1)
+    return raw_text
 
 
 def _solution_release_version(solution_root: Path, config: dict[str, Any] | None = None) -> str:
@@ -2461,12 +2471,6 @@ def build_xdr_document(source: Path, solution_root: Path, config: dict[str, Any]
     )
     errors.extend(classification_errors)
     warnings.extend(classification_warnings)
-    if len(tactic_payload) > 1:
-        informational.append(
-            "All source MITRE tactics are preserved in source order in authored YAML. "
-            "V3.1 ARM packaging carries only the first tactic and its compatible techniques; "
-            "this classification loss is not validated parity. Direct Graph deployment requires a single tactic."
-        )
     if not mappings:
         errors.append("no supported entity mappings were produced")
     elif not REQUIRED_ASSET_COLLECTIONS.intersection(mappings):
@@ -2866,12 +2870,26 @@ def convert_solution(
         raise ValueError("excludedRuleIds must contain an object of rule IDs and reasons")
 
     source_documents: dict[Path, dict[str, Any]] = {}
+    raw_source_texts: dict[Path, str] = {}
     sources_by_id: dict[str, list[Path]] = {}
+    repo_root, tracked_head_files = _git_head_tracked_files(root)
+    yolo_frozen = False
+    try:
+        from solution_manager.core.artifacts import current_workflow_state
+
+        wf_state = current_workflow_state(root)
+        if isinstance(wf_state, dict) and isinstance(wf_state.get("yolo"), dict):
+            yolo_frozen = bool(wf_state["yolo"].get("inventory"))
+    except Exception:
+        yolo_frozen = False
+
     for source in sources:
         with source.open(encoding="utf-8-sig") as handle:
-            source_document = yaml.safe_load(handle) or {}
+            raw_source_text = handle.read()
+        source_document = yaml.safe_load(raw_source_text) or {}
         if not isinstance(source_document, dict):
             raise ValueError(f"analytic rule must contain a YAML object: {source}")
+        raw_source_texts[source] = raw_source_text
         source_documents[source] = source_document
         source_id = str(source_document.get("id") or "")
         if source_id:
@@ -2990,7 +3008,24 @@ def convert_solution(
                 )
             )
             continue
+        if overwrite and not yolo_frozen and tracked_head_files:
+            head_source_doc = _load_git_head_yaml(source, repo_root, tracked_head_files)
+            if isinstance(head_source_doc, dict) and head_source_doc.get("version") is not None:
+                if _without_version(source_document) != _without_version(head_source_doc):
+                    raw_source_text = raw_source_texts[source]
+                    head_ver_str = str(head_source_doc.get("version")).strip()
+                    cur_ver_str = _extract_raw_yaml_version(raw_source_text, source_document)
+                    if _version_tuple(cur_ver_str) <= _version_tuple(head_ver_str):
+                        bumped_source_ver = _bump_patch_version(head_ver_str)
+                        updated_raw = _replace_raw_yaml_top_level_version(raw_source_text, bumped_source_ver)
+                        if updated_raw != raw_source_text:
+                            with source.open("w", encoding="utf-8", newline="") as handle:
+                                handle.write(updated_raw)
+                            raw_source_texts[source] = updated_raw
+                            source_document = yaml.safe_load(updated_raw) or {}
+                            source_documents[source] = source_document
         document = build_xdr_document(source, root, config)
+        head_target_doc = _load_git_head_yaml(target, repo_root, tracked_head_files) if tracked_head_files else None
         if target.exists():
             previous_provenance = existing_document.get("contentProvenance") or {}
             dependencies_current = (
@@ -3013,8 +3048,6 @@ def convert_solution(
                         )
                     )
                     continue
-                if _version_tuple(existing_document["version"]) >= _version_tuple(document["version"]):
-                    document["version"] = existing_document["version"]
             previous_id = existing_document["properties"]["id"]
             identity_change = (
                 (existing_document.get("contentProvenance") or {}).get("conversion") or {}
@@ -3044,6 +3077,48 @@ def convert_solution(
                     "were updated, deleted, or migrated. Review existing deployed rules "
                     "and reconcile their identities before any separately approved deployment."
                 )
+            if isinstance(existing_document, dict) and "version" in existing_document:
+                existing_ver_str = str(existing_document["version"]).strip()
+                if not overwrite:
+                    document["version"] = existing_ver_str
+                else:
+                    if (
+                        isinstance(head_target_doc, dict)
+                        and "version" in head_target_doc
+                        and not xdr_version_error(head_target_doc["version"])
+                    ):
+                        head_ver_str = str(head_target_doc["version"]).strip()
+                        if _without_version(document) != _without_version(head_target_doc):
+                            bumped_ver = _bump_patch_version(head_ver_str)
+                            document["version"] = (
+                                max((bumped_ver, existing_ver_str), key=_version_tuple)
+                                if not xdr_version_error(bumped_ver)
+                                else existing_ver_str
+                            )
+                        else:
+                            document["version"] = existing_ver_str
+                    elif _without_version(document) != _without_version(existing_document):
+                        bumped_ver = _bump_patch_version(existing_ver_str)
+                        document["version"] = (
+                            bumped_ver if not xdr_version_error(bumped_ver) else existing_ver_str
+                        )
+                    else:
+                        document["version"] = existing_ver_str
+            else:
+                document["version"] = INITIAL_XDR_VERSION
+        elif (
+            isinstance(head_target_doc, dict)
+            and "version" in head_target_doc
+            and not xdr_version_error(head_target_doc["version"])
+        ):
+            head_ver_str = str(head_target_doc["version"]).strip()
+            if _without_version(document) != _without_version(head_target_doc):
+                bumped_ver = _bump_patch_version(head_ver_str)
+                document["version"] = (
+                    bumped_ver if not xdr_version_error(bumped_ver) else head_ver_str
+                )
+            else:
+                document["version"] = head_ver_str
         rendered = yaml.dump(
             document,
             Dumper=XdrYamlDumper,
@@ -3113,7 +3188,7 @@ def convert_solution(
         "needsReview": sum(result.status == "needsReview" for result in results),
         "reviewRequired": sum(result.review_required for result in results),
         "deploymentReady": sum(
-            result.status == "converted" and not result.review_required and result.tactic_count <= 1
+            result.status == "converted" and not result.review_required
             for result in results
         ),
         "conflicts": sum(result.status == "conflict" for result in results),
@@ -3169,13 +3244,32 @@ def validate_solution(solution: str | Path) -> dict[str, Any]:
             for result in duplicates:
                 result["errors"].append(f"duplicate Custom Detection id {detection_id!r}")
                 result["valid"] = False
+    url_scan = scan_solution_urls(root)
+    locale_issues = url_scan["localeIssues"]
+    results_by_path = {
+        Path(item["file"]).resolve(): item for item in results if item.get("file")
+    }
+    non_detection_locale_issues = 0
+    for issue in locale_issues:
+        issue_path = (root / issue["file"]).resolve()
+        matched_detection = results_by_path.get(issue_path)
+        if matched_detection is not None:
+            matched_detection["errors"].append(issue["message"])
+            matched_detection["valid"] = False
+        else:
+            non_detection_locale_issues += 1
     return {
         "solution": str(root),
         "conversionScope": conversion_scope(root),
         "total": len(results),
         "valid": sum(item["valid"] for item in results),
-        "invalid": sum(not item["valid"] for item in results),
+        "invalid": sum(not item["valid"] for item in results) + non_detection_locale_issues,
         "results": results,
+        "documentsLinkValidation": {
+            "valid": not locale_issues,
+            "issueCount": len(locale_issues),
+            "issues": locale_issues,
+        },
     }
 
 

@@ -1,0 +1,151 @@
+schemaVersion: 1.0.0
+version: 3.1.0
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: ThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: ThreatIntelligenceTaxii
+  dataTypes:
+  - ThreatIntelIndicators
+- connectorId: AWS
+  dataTypes:
+  - AWSCloudTrail
+- connectorId: MicrosoftDefenderThreatIntelligence
+  dataTypes:
+  - ThreatIntelIndicators
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - AWSCloudTrail
+    - Event
+    - ThreatIntelIndicators
+  requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+    - ThreatIntelIndicators
+  - connectorId: AWS
+    dataTypes:
+    - AWSCloudTrail
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+    - ThreatIntelIndicators
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 69f55be4-1b13-42d0-b975-a1e59c996dd2
+    path: Analytic Rules/IPEntity_AWSCloudTrail.yaml
+    version: 1.4.7
+    querySha256: fddb92ea14fa08a38a83eb81833baf0ba7431e3e1e6ea08fabf10c312c188475
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+    ruleVersion: 1.4.7
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Account.ObjectGuid value is retained as customDetails.AccountObjectGuid from
+      query column `UserIdentityUserName`, but its target output binding requires
+      runtime-schema verification; custom details do not restore entity identity or
+      correlation
+    - Supplemental customDetails.AccountObjectGuid column `UserIdentityUserName` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    reviewScope:
+      sourceDocumentSha256: da7a85583092c7416757eb2fc3d0aec9e2d734f0672d557f2793e56d4786a361
+      targetQuerySha256: 6535c5736284d768a6c899ae8ed3f63d635c07915828780ffac83394b25fddd6
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: ObjectGuid
+      sourceColumn: UserIdentityUserName
+      column: UserIdentityUserName
+      status: runtime-binding-pending
+      customDetailKey: AccountObjectGuid
+properties:
+  id: xdr-69f55be4-1b13-42d0-b975-a1e59c996dd2
+  displayName: TI Map IP entity to AWSCloudTrail
+  status: disabled
+  queryCondition:
+    queryText: "let dt_lookBack = 1h; // Look back 1 hour for AWSCloudTrail logs\n\
+      let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n\
+      // Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators\
+      \ = ThreatIntelIndicators\n  //extract key part of kv pair\n      | extend IndicatorType\
+      \ = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\",\
+      \ 0)))\n      | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\"\
+      )\n      | extend NetworkSourceIP = toupper(ObservableValue)\n      | extend\
+      \ TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n\
+      \  // Filter out indicators without relevant IP address fields\n  | where TimeGenerated\
+      \ >= ago(ioc_lookBack)\n  // Select the IP entity based on availability of different\
+      \ IP fields\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP,\
+      \ NetworkSourceIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP),\
+      \ NetworkSourceIP, TI_ipEntity)\n  | extend Url = iff(ObservableKey == \"url:value\"\
+      , ObservableValue, \"\")\n  // Exclude local addresses using the ipv4_is_private\
+      \ operator and filtering out specific address prefixes\n  | where ipv4_is_private(TI_ipEntity)\
+      \ == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith\
+      \ \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime\
+      \ = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and\
+      \ (ValidUntil > now() or isempty(ValidUntil));\n// Perform a join between IP\
+      \ indicators and AWSCloudTrail logs to identify potential malicious activity\n\
+      IP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP,\
+      \ Type, TI_ipEntity\n  // Use innerunique to keep performance fast and result\
+      \ set low, as we only need one match to indicate potential malicious activity\
+      \ that needs investigation\n  | join kind=innerunique (\n      AWSCloudTrail\n\
+      \      | where TimeGenerated >= ago(dt_lookBack)\n      | extend AWSCloudTrail_TimeGenerated\
+      \ = TimeGenerated // Rename time column for clarity\n    )\n    on $left.TI_ipEntity\
+      \ == $right.SourceIpAddress\n  // Filter out logs that occurred after the expiration\
+      \ of the corresponding indicator\n  | where AWSCloudTrail_TimeGenerated < ValidUntil\n\
+      \  // Group the results by IndicatorId and SourceIpAddress, and keep the log\
+      \ entry with the latest timestamp\n  | summarize AWSCloudTrail_TimeGenerated\
+      \ = arg_max(AWSCloudTrail_TimeGenerated, *) by Id, SourceIpAddress\n  // Select\
+      \ the desired output fields\n  | extend Description = tostring(parse_json(Data).description)\n\
+      \  | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n\
+      \  | project AWSCloudTrail_TimeGenerated, Description, ActivityGroupNames, Id,\
+      \ ValidUntil, Confidence,\n    TI_ipEntity, EventName, EventTypeName, UserIdentityAccountId,\
+      \ UserIdentityPrincipalid, UserIdentityUserName, SourceIpAddress,\n    NetworkSourceIP,\
+      \ Url\n  // Rename the timestamp field\n  | extend timestamp = AWSCloudTrail_TimeGenerated"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: TI Map IP entity to AWSCloudTrail
+      description: Identifies a match in AWSCloudTrail from any IP IOC from TI
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: SourceIpAddress
+        urls:
+        - id: url1
+          addressColumn: Url
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+      customDetails:
+        AccountObjectGuid: UserIdentityUserName
