@@ -1,0 +1,116 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: CefAma
+  dataTypes:
+  - CommonSecurityLog
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - CiscoSEGEvent
+    - CommonSecurityLog
+  requiredDataConnectors:
+  - connectorId: CefAma
+    dataTypes:
+    - CommonSecurityLog
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: ef0a253c-95b5-48e1-8ebc-dbeb073b9338
+    path: Analytic Rules/CiscoSEGSuspiciousSenderDomain.yaml
+    version: 1.0.3
+    querySha256: 1467bb510dc0920b088ac7750051c55a9b2d3a870a645830abedbe73a07a8cb0
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Unconfirmed generic Account.Name mapping was omitted because another required Host, Mailbox, or IP asset is available
+    - Account.Name output column `AccountCustomEntity` cannot be proven after a destructive projection; no supplemental customDetails
+      binding was added and KQL was not rewritten. Runtime output-schema verification is required
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1566
+    reviewScope:
+      sourceDocumentSha256: bd05752632f9e4fd4111aef49d420d0b68ca687b6cc33d6f55c8c5ca96da76b9
+      targetQuerySha256: 80b2710160658ec10cec423f5efe674458beaeafa58038ed3a19a7f60d2d1541
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: false
+      aggregationWindowDifference: false
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based lookback window for PT1H execution frequency,
+        not the execution frequency; original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: No summarize/make-series aggregation detected in query; native 4-hour XDR lookback relies on
+        Defender XDR alert deduplication across hourly runs.
+      sourceDocumentSha256: bd05752632f9e4fd4111aef49d420d0b68ca687b6cc33d6f55c8c5ca96da76b9
+      targetQuerySha256: 80b2710160658ec10cec423f5efe674458beaeafa58038ed3a19a7f60d2d1541
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: unproven-destructive-projection
+      reason: unproven-destructive-projection
+properties:
+  id: xdr-ef0a253c-95b5-48e1-8ebc-dbeb073b9338
+  displayName: Cisco SEG - Suspicious sender domain
+  status: disabled
+  queryCondition:
+    queryText: |-
+      CiscoSEGEvent
+      | where NetworkDirection =~ 'Incoming'
+      | extend rec_domain = extract(@'@(.*)', 1, DstUserName)
+      | extend s_domain = extract(@'@(.*)', 1, SrcUserName)
+      | where s_domain != rec_domain
+      | where tostring(AdditionalFields) has 'ESASDRDomainAge'
+      | extend domain_age = extract(@'ESASDRDomainAge":"(.*days)"', 1, tostring(AdditionalFields))
+      | extend yy = toint(extract(@'(\d+)\syears', 1, domain_age))
+      | extend mm = toint(extract(@'(\d+)\smonths', 1, domain_age))
+      | extend dd = toint(extract(@'(\d+)\sdays', 1, domain_age))
+      | where isempty(yy)
+      | where isempty(mm) or mm <= 2
+      | extend AccountCustomEntity = SrcUserName, IPCustomEntity = coalesce(SourceIP, DvcIpAddr)
+      | project-away AdditionalFields
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Cisco SEG - Suspicious sender domain
+      description: '''Detects suspicious sender domain age.'''
+      severity: medium
+      entityMappings:
+        ips:
+        - id: ip1
+          addressColumn: IPCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1566

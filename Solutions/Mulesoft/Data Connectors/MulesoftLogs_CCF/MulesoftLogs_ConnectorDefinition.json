@@ -9,8 +9,8 @@
       "id": "MulesoftCloudhubPushConnector",
       "title": "MuleSoft CloudHub Logs (Push Connector via Codeless Connector Framework)",
       "publisher": "Microsoft",
-      "descriptionMarkdown": "MuleSoft CloudHub Log4j push-based connector for receiving application logs directly from MuleSoft CloudHub via Log4j HTTP appender. This connector allows customers to stream logs in real-time as recommended by MuleSoft, avoiding API rate limiting and duplicate data issues. Configure your MuleSoft applications with the provided Log4j HTTP appender configuration to stream logs to Microsoft Sentinel.",
-      "graphQueriesTableName": "MuleSoftCloudhubLogs",
+      "descriptionMarkdown": "Receive MuleSoft CloudHub application logs through the Azure Monitor Logs Ingestion API. Configure each application with a compatible custom asynchronous Log4j appender, or forward through an external collector that supports this API and the connector's schema. This connector deploys the receiving resources; it does not include a sender, discover applications, or call the CloudHub application/log APIs. Use the setup steps below to configure and validate your sender.",
+      "graphQueriesTableName": "MuleSoftCloudhubLogs_CL",
       "graphQueries": [
         {
           "metricName": "Total logs received",
@@ -57,8 +57,8 @@
       ],
       "dataTypes": [
         {
-          "name": "MuleSoftCloudhubLogs",
-          "lastDataReceivedQuery": "MuleSoftCloudhubLogs\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+          "name": "MuleSoftCloudhubLogs_CL",
+          "lastDataReceivedQuery": "MuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
         }
       ],
       "connectivityCriteria": [
@@ -68,7 +68,7 @@
         {
           "type": "IsConnectedQuery",
           "value": [
-            "MuleSoftCloudhubLogs | where TimeGenerated > ago(1h) | take 1"
+            "MuleSoftCloudhubLogs_CL | where TimeGenerated > ago(1h) | take 1"
           ]
         }
       ],
@@ -108,26 +108,26 @@
       },
       "instructionSteps": [
         {
-          "title": "1. Create ARM Resources and Provide the Required Permissions",
-          "description": "This connector receives data from external security systems that push logs to Microsoft Sentinel. The external system must be configured to send raw event data to the Microsoft Sentinel Ingestion API. Clicking on **Deploy** will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n[Learn more about the connector setup process](https://review.learn.microsoft.com/azure/sentinel/create-push-codeless-connector)",
+          "title": "1. Deploy the receiving resources",
+          "description": "Select Deploy to provision the receiving resources and obtain the configuration values below. Deployment does not configure MuleSoft applications or start forwarding logs. Your sender needs an Entra access token and Monitoring Metrics Publisher access on the DCR. See the [Logs Ingestion API overview](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview).",
           "instructions": [
             {
               "type": "Markdown",
               "parameters": {
-                "content": "## Azure Resource Deployment\n\nThe deployment process will create the following resources:\n- Log Analytics custom table(s)\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR)\n- Entra ID Application Registration\n- Role assignments for data ingestion"
+                "content": "Deploy the Log Analytics table, Data Collection Endpoint (DCE), Data Collection Rule (DCR), and Entra application with ingestion permissions."
               }
             },
             {
               "type": "DeployPushConnectorButton",
               "parameters": {
-                "label": "Deploy MuleSoft CloudHub Log4j connector resources",
+                "label": "Deploy MuleSoft CloudHub Logs receiving resources",
                 "applicationDisplayName": "MuleSoft CloudHub Logs Push Connector"
               }
             },
             {
               "type": "Markdown",
               "parameters": {
-                "content": "### Configuration Values\n\nAfter deployment, copy the following values to configure your external security system:"
+                "content": "### Sender configuration\n\nCopy these values into your compatible appender or external collector. The DCR value below is its immutable ID, not its ARM resource ID. Use Entra application credentials, not MuleSoft Connected App credentials."
               }
             },
             {
@@ -184,14 +184,14 @@
               "type": "CopyableLabel",
               "parameters": {
                 "fillWith": [],
-                "label": "Stream Name (MuleSoftCloudhubLogs)",
+                "label": "Stream Name",
                 "value": "Custom-MuleSoftCloudhubLogs_CL"
               }
             },
             {
               "type": "InfoMessage",
               "parameters": {
-                "text": "Keep these values secure. You will need them to configure your external security system.",
+                "text": "Store the client secret in protected application or collector configuration. Do not hardcode it in log4j2.xml or include it in logs.",
                 "visible": true,
                 "inline": true
               }
@@ -199,8 +199,12 @@
           ]
         },
         {
-          "title": "2. Configure your external system to push logs",
-          "description": "Use the following parameters to configure your external security system to send logs to the workspace.\n\n### Configuration Steps\n\n1. Access your external security system's configuration interface.\n2. Navigate to the data forwarding, integration, or SIEM settings.\n3. Select **Azure Monitor** or **Microsoft Sentinel** as the destination.\n4. Select **Data Collection Endpoint** as the authentication method.\n5. Configure the required fields using the values from the previous step:\n   - **Tenant ID**: Copy from above\n   - **Application (Client) ID**: Copy from above\n   - **Client Secret**: Copy from above\n   - **Data Collection Endpoint**: Copy from above\n   - **Data Collection Rule Immutable ID**: Copy from above\n   - **Stream Name**: Copy the appropriate stream name from above\n6. Save the configuration and enable/start the forwarder.\n\n### Validation\n\n> **Note**: Data will appear in the **MuleSoftCloudhubLogs** table in your Log Analytics workspace within a few minutes.\n\nTo verify data is being received, run the following query in your Log Analytics workspace:\n\n```kusto\nMuleSoftCloudhubLogs\n| where TimeGenerated > ago(1h)\n| take 10\n```\n\n### Troubleshooting\n\nIf data is not appearing:\n- Verify the configuration values are correct\n- Check that the forwarder/integration is enabled and running\n- Review logs in your external security system for any errors\n- Ensure network connectivity from your system to Azure\n- Verify the Entra application has the correct permissions"          
+          "title": "2. Configure application log forwarding",
+          "description": "1. Choose a custom asynchronous Log4j appender that supports Azure Monitor Logs Ingestion, or send logs to an external collector that implements it. No ready-made sender is supplied with this connector; a generic HTTP appender alone does not implement Entra token refresh or schema mapping.\n2. Add the appender dependency to your Mule application's `pom.xml` and configure `src/main/resources/log4j2.xml` using that appender's instructions. Repeat for each application, or use your deployment automation. Follow the guide for your platform: [CloudHub 1.0](https://docs.mulesoft.com/cloudhub/custom-log-appender) or [CloudHub 2.0](https://docs.mulesoft.com/cloudhub-2/ch2-integrate-log-system). Do not use the 1.0 file/appender configuration unchanged on 2.0.\n3. Configure the sender with the tenant ID, client ID, protected client secret, DCE URL, DCR immutable ID and stream name from step 1. It must acquire and refresh an Entra token with scope `https://monitor.azure.com/.default`, then POST a JSON array to `{DCE}/dataCollectionRules/{DCR-immutable-ID}/streams/Custom-MuleSoftCloudhubLogs_CL?api-version=2023-01-01` with `Authorization: Bearer <token>` and `Content-Type: application/json`.\n4. Map records to the DCR fields: `EventTime` (UTC timestamp), `Level`, `Logger`, `Message`, `Thread`, `Exception`, `ApplicationDomainName`, `InstanceId`, `WorkerId`, `Environment`, `Region`, and `ApplicationData` (JSON object). Configure batching, retry/backoff and delivery monitoring in the sender. See [Logs Ingestion API examples](https://learn.microsoft.com/azure/azure-monitor/logs/tutorial-logs-ingestion-code).\n5. Deploy a test application and verify forwarding before rolling out to other applications or disabling existing logging."
+        },
+        {
+          "title": "3. Verify ingestion",
+          "description": "Generate a uniquely identifiable test log and confirm its message and application context in `MuleSoftCloudhubLogs_CL`:\n\n```kusto\nMuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(1h)\n| project TimeGenerated, ApplicationDomainName, Level, Message\n| take 10\n```\n\nIf the record is missing, inspect sender delivery errors: check the Entra token for 401, DCR permissions for 403, and the stream name and JSON field types for 400. Confirm connectivity to the DCE and token endpoint. Receiving-resource deployment alone does not confirm end-to-end ingestion."
         }
       ]
     }

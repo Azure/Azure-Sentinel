@@ -47,7 +47,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Mulesoft",
-    "_solutionVersion": "3.2.1",
+    "_solutionVersion": "3.2.2",
     "solutionId": "azuresentinel.azure-sentinel-solution-mulesoft",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "MuleSoft",
@@ -60,7 +60,7 @@
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-    "dataConnectorCCPVersion": "3.2.1",
+    "dataConnectorCCPVersion": "3.2.2",
     "_dataConnectorContentIdConnectorDefinition2": "MulesoftCloudhubPushConnector",
     "dataConnectorTemplateNameConnectorDefinition2": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition2')))]",
     "_dataConnectorContentIdConnections2": "MulesoftCloudhubPushConnectorConnections",
@@ -75,7 +75,7 @@
       "_parserName1": "[concat(parameters('workspace'),'/','MuleSoftCloudhub')]",
       "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'MuleSoftCloudhub')]",
       "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('MuleSoftCloudhub-Parser')))]",
-      "parserVersion1": "1.0.1",
+      "parserVersion1": "1.2.0",
       "parserContentId1": "MuleSoftCloudhub-Parser"
     },
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
@@ -90,7 +90,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Mulesoft data connector with template version 3.2.1",
+        "description": "Mulesoft data connector with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -478,8 +478,8 @@
                   "id": "MulesoftCloudhubPushConnector",
                   "title": "MuleSoft CloudHub Logs (Push Connector via Codeless Connector Framework)",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "MuleSoft CloudHub Log4j push-based connector for receiving application logs directly from MuleSoft CloudHub via Log4j HTTP appender. This connector allows customers to stream logs in real-time as recommended by MuleSoft, avoiding API rate limiting and duplicate data issues. Configure your MuleSoft applications with the provided Log4j HTTP appender configuration to stream logs to Microsoft Sentinel.",
-                  "graphQueriesTableName": "MuleSoftCloudhubLogs",
+                  "descriptionMarkdown": "Receive MuleSoft CloudHub application logs through the Azure Monitor Logs Ingestion API. Configure each application with a compatible custom asynchronous Log4j appender, or forward through an external collector that supports this API and the connector's schema. This connector deploys the receiving resources; it does not include a sender, discover applications, or call the CloudHub application/log APIs. Use the setup steps below to configure and validate your sender.",
+                  "graphQueriesTableName": "MuleSoftCloudhubLogs_CL",
                   "graphQueries": [
                     {
                       "metricName": "Total logs received",
@@ -526,8 +526,8 @@
                   ],
                   "dataTypes": [
                     {
-                      "name": "MuleSoftCloudhubLogs",
-                      "lastDataReceivedQuery": "MuleSoftCloudhubLogs\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                      "name": "MuleSoftCloudhubLogs_CL",
+                      "lastDataReceivedQuery": "MuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -537,7 +537,7 @@
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "MuleSoftCloudhubLogs | where TimeGenerated > ago(1h) | take 1"
+                        "MuleSoftCloudhubLogs_CL | where TimeGenerated > ago(1h) | take 1"
                       ]
                     }
                   ],
@@ -577,26 +577,26 @@
                   },
                   "instructionSteps": [
                     {
-                      "title": "1. Create ARM Resources and Provide the Required Permissions",
-                      "description": "This connector receives data from external security systems that push logs to Microsoft Sentinel. The external system must be configured to send raw event data to the Microsoft Sentinel Ingestion API. Clicking on **Deploy** will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n[Learn more about the connector setup process](https://review.learn.microsoft.com/azure/sentinel/create-push-codeless-connector)",
+                      "title": "1. Deploy the receiving resources",
+                      "description": "Select Deploy to provision the receiving resources and obtain the configuration values below. Deployment does not configure MuleSoft applications or start forwarding logs. Your sender needs an Entra access token and Monitoring Metrics Publisher access on the DCR. See the [Logs Ingestion API overview](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview).",
                       "instructions": [
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "## Azure Resource Deployment\n\nThe deployment process will create the following resources:\n- Log Analytics custom table(s)\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR)\n- Entra ID Application Registration\n- Role assignments for data ingestion"
+                            "content": "Deploy the Log Analytics table, Data Collection Endpoint (DCE), Data Collection Rule (DCR), and Entra application with ingestion permissions."
                           }
                         },
                         {
                           "type": "DeployPushConnectorButton",
                           "parameters": {
-                            "label": "Deploy MuleSoft CloudHub Log4j connector resources",
+                            "label": "Deploy MuleSoft CloudHub Logs receiving resources",
                             "applicationDisplayName": "MuleSoft CloudHub Logs Push Connector"
                           }
                         },
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "### Configuration Values\n\nAfter deployment, copy the following values to configure your external security system:"
+                            "content": "### Sender configuration\n\nCopy these values into your compatible appender or external collector. The DCR value below is its immutable ID, not its ARM resource ID. Use Entra application credentials, not MuleSoft Connected App credentials."
                           }
                         },
                         {
@@ -653,14 +653,14 @@
                           "type": "CopyableLabel",
                           "parameters": {
                             "fillWith": [],
-                            "label": "Stream Name (MuleSoftCloudhubLogs)",
+                            "label": "Stream Name",
                             "value": "Custom-MuleSoftCloudhubLogs_CL"
                           }
                         },
                         {
                           "type": "InfoMessage",
                           "parameters": {
-                            "text": "Keep these values secure. You will need them to configure your external security system.",
+                            "text": "Store the client secret in protected application or collector configuration. Do not hardcode it in log4j2.xml or include it in logs.",
                             "visible": true,
                             "inline": true
                           }
@@ -668,8 +668,12 @@
                       ]
                     },
                     {
-                      "title": "2. Configure your external system to push logs",
-                      "description": "Use the following parameters to configure your external security system to send logs to the workspace.\n\n### Configuration Steps\n\n1. Access your external security system's configuration interface.\n2. Navigate to the data forwarding, integration, or SIEM settings.\n3. Select **Azure Monitor** or **Microsoft Sentinel** as the destination.\n4. Select **Data Collection Endpoint** as the authentication method.\n5. Configure the required fields using the values from the previous step:\n   - **Tenant ID**: Copy from above\n   - **Application (Client) ID**: Copy from above\n   - **Client Secret**: Copy from above\n   - **Data Collection Endpoint**: Copy from above\n   - **Data Collection Rule Immutable ID**: Copy from above\n   - **Stream Name**: Copy the appropriate stream name from above\n6. Save the configuration and enable/start the forwarder.\n\n### Validation\n\n> **Note**: Data will appear in the **MuleSoftCloudhubLogs** table in your Log Analytics workspace within a few minutes.\n\nTo verify data is being received, run the following query in your Log Analytics workspace:\n\n```kusto\nMuleSoftCloudhubLogs\n| where TimeGenerated > ago(1h)\n| take 10\n```\n\n### Troubleshooting\n\nIf data is not appearing:\n- Verify the configuration values are correct\n- Check that the forwarder/integration is enabled and running\n- Review logs in your external security system for any errors\n- Ensure network connectivity from your system to Azure\n- Verify the Entra application has the correct permissions"
+                      "title": "2. Configure application log forwarding",
+                      "description": "1. Choose a custom asynchronous Log4j appender that supports Azure Monitor Logs Ingestion, or send logs to an external collector that implements it. No ready-made sender is supplied with this connector; a generic HTTP appender alone does not implement Entra token refresh or schema mapping.\n2. Add the appender dependency to your Mule application's `pom.xml` and configure `src/main/resources/log4j2.xml` using that appender's instructions. Repeat for each application, or use your deployment automation. Follow the guide for your platform: [CloudHub 1.0](https://docs.mulesoft.com/cloudhub/custom-log-appender) or [CloudHub 2.0](https://docs.mulesoft.com/cloudhub-2/ch2-integrate-log-system). Do not use the 1.0 file/appender configuration unchanged on 2.0.\n3. Configure the sender with the tenant ID, client ID, protected client secret, DCE URL, DCR immutable ID and stream name from step 1. It must acquire and refresh an Entra token with scope `https://monitor.azure.com/.default`, then POST a JSON array to `{DCE}/dataCollectionRules/{DCR-immutable-ID}/streams/Custom-MuleSoftCloudhubLogs_CL?api-version=2023-01-01` with `Authorization: Bearer <token>` and `Content-Type: application/json`.\n4. Map records to the DCR fields: `EventTime` (UTC timestamp), `Level`, `Logger`, `Message`, `Thread`, `Exception`, `ApplicationDomainName`, `InstanceId`, `WorkerId`, `Environment`, `Region`, and `ApplicationData` (JSON object). Configure batching, retry/backoff and delivery monitoring in the sender. See [Logs Ingestion API examples](https://learn.microsoft.com/azure/azure-monitor/logs/tutorial-logs-ingestion-code).\n5. Deploy a test application and verify forwarding before rolling out to other applications or disabling existing logging."
+                    },
+                    {
+                      "title": "3. Verify ingestion",
+                      "description": "Generate a uniquely identifiable test log and confirm its message and application context in `MuleSoftCloudhubLogs_CL`:\n\n```kusto\nMuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(1h)\n| project TimeGenerated, ApplicationDomainName, Level, Message\n| take 10\n```\n\nIf the record is missing, inspect sender delivery errors: check the Entra token for 401, DCR permissions for 403, and the stream name and JSON field types for 400. Confirm connectivity to the DCE and token endpoint. Receiving-resource deployment alone does not confirm end-to-end ingestion."
                     }
                   ]
                 }
@@ -885,8 +889,13 @@
                 "retentionInDays": 90,
                 "schema": {
                   "name": "MulesoftCloudhubAlerts_CL",
-                  "description": "Mulesoft CloudHub alerts from the CloudHub API v2",
+                  "description": "Mulesoft CloudHub 1.0 and 2.0 alert configuration snapshots",
                   "columns": [
+                    {
+                      "name": "CloudHubVersion",
+                      "type": "string",
+                      "description": "CloudHub deployment platform: 1.0 or 2.0; empty for records ingested before consolidation"
+                    },
                     {
                       "name": "TimeGenerated",
                       "type": "datetime",
@@ -978,8 +987,8 @@
           "id": "MulesoftCloudhubPushConnector",
           "title": "MuleSoft CloudHub Logs (Push Connector via Codeless Connector Framework)",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "MuleSoft CloudHub Log4j push-based connector for receiving application logs directly from MuleSoft CloudHub via Log4j HTTP appender. This connector allows customers to stream logs in real-time as recommended by MuleSoft, avoiding API rate limiting and duplicate data issues. Configure your MuleSoft applications with the provided Log4j HTTP appender configuration to stream logs to Microsoft Sentinel.",
-          "graphQueriesTableName": "MuleSoftCloudhubLogs",
+          "descriptionMarkdown": "Receive MuleSoft CloudHub application logs through the Azure Monitor Logs Ingestion API. Configure each application with a compatible custom asynchronous Log4j appender, or forward through an external collector that supports this API and the connector's schema. This connector deploys the receiving resources; it does not include a sender, discover applications, or call the CloudHub application/log APIs. Use the setup steps below to configure and validate your sender.",
+          "graphQueriesTableName": "MuleSoftCloudhubLogs_CL",
           "graphQueries": [
             {
               "metricName": "Total logs received",
@@ -1026,8 +1035,8 @@
           ],
           "dataTypes": [
             {
-              "name": "MuleSoftCloudhubLogs",
-              "lastDataReceivedQuery": "MuleSoftCloudhubLogs\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+              "name": "MuleSoftCloudhubLogs_CL",
+              "lastDataReceivedQuery": "MuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(12h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
@@ -1037,7 +1046,7 @@
             {
               "type": "IsConnectedQuery",
               "value": [
-                "MuleSoftCloudhubLogs | where TimeGenerated > ago(1h) | take 1"
+                "MuleSoftCloudhubLogs_CL | where TimeGenerated > ago(1h) | take 1"
               ]
             }
           ],
@@ -1077,26 +1086,26 @@
           },
           "instructionSteps": [
             {
-              "title": "1. Create ARM Resources and Provide the Required Permissions",
-              "description": "This connector receives data from external security systems that push logs to Microsoft Sentinel. The external system must be configured to send raw event data to the Microsoft Sentinel Ingestion API. Clicking on **Deploy** will trigger the creation of Log Analytics tables and a Data Collection Rule (DCR). It will then create an Entra application, link the DCR to it, and set the entered secret in the application. This setup enables data to be sent securely to the DCR using an Entra token.\n\n[Learn more about the connector setup process](https://review.learn.microsoft.com/azure/sentinel/create-push-codeless-connector)",
+              "title": "1. Deploy the receiving resources",
+              "description": "Select Deploy to provision the receiving resources and obtain the configuration values below. Deployment does not configure MuleSoft applications or start forwarding logs. Your sender needs an Entra access token and Monitoring Metrics Publisher access on the DCR. See the [Logs Ingestion API overview](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview).",
               "instructions": [
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "## Azure Resource Deployment\n\nThe deployment process will create the following resources:\n- Log Analytics custom table(s)\n- Data Collection Endpoint (DCE)\n- Data Collection Rule (DCR)\n- Entra ID Application Registration\n- Role assignments for data ingestion"
+                    "content": "Deploy the Log Analytics table, Data Collection Endpoint (DCE), Data Collection Rule (DCR), and Entra application with ingestion permissions."
                   }
                 },
                 {
                   "type": "DeployPushConnectorButton",
                   "parameters": {
-                    "label": "Deploy MuleSoft CloudHub Log4j connector resources",
+                    "label": "Deploy MuleSoft CloudHub Logs receiving resources",
                     "applicationDisplayName": "MuleSoft CloudHub Logs Push Connector"
                   }
                 },
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "### Configuration Values\n\nAfter deployment, copy the following values to configure your external security system:"
+                    "content": "### Sender configuration\n\nCopy these values into your compatible appender or external collector. The DCR value below is its immutable ID, not its ARM resource ID. Use Entra application credentials, not MuleSoft Connected App credentials."
                   }
                 },
                 {
@@ -1153,14 +1162,14 @@
                   "type": "CopyableLabel",
                   "parameters": {
                     "fillWith": [],
-                    "label": "Stream Name (MuleSoftCloudhubLogs)",
+                    "label": "Stream Name",
                     "value": "Custom-MuleSoftCloudhubLogs_CL"
                   }
                 },
                 {
                   "type": "InfoMessage",
                   "parameters": {
-                    "text": "Keep these values secure. You will need them to configure your external security system.",
+                    "text": "Store the client secret in protected application or collector configuration. Do not hardcode it in log4j2.xml or include it in logs.",
                     "visible": true,
                     "inline": true
                   }
@@ -1168,8 +1177,12 @@
               ]
             },
             {
-              "title": "2. Configure your external system to push logs",
-              "description": "Use the following parameters to configure your external security system to send logs to the workspace.\n\n### Configuration Steps\n\n1. Access your external security system's configuration interface.\n2. Navigate to the data forwarding, integration, or SIEM settings.\n3. Select **Azure Monitor** or **Microsoft Sentinel** as the destination.\n4. Select **Data Collection Endpoint** as the authentication method.\n5. Configure the required fields using the values from the previous step:\n   - **Tenant ID**: Copy from above\n   - **Application (Client) ID**: Copy from above\n   - **Client Secret**: Copy from above\n   - **Data Collection Endpoint**: Copy from above\n   - **Data Collection Rule Immutable ID**: Copy from above\n   - **Stream Name**: Copy the appropriate stream name from above\n6. Save the configuration and enable/start the forwarder.\n\n### Validation\n\n> **Note**: Data will appear in the **MuleSoftCloudhubLogs** table in your Log Analytics workspace within a few minutes.\n\nTo verify data is being received, run the following query in your Log Analytics workspace:\n\n```kusto\nMuleSoftCloudhubLogs\n| where TimeGenerated > ago(1h)\n| take 10\n```\n\n### Troubleshooting\n\nIf data is not appearing:\n- Verify the configuration values are correct\n- Check that the forwarder/integration is enabled and running\n- Review logs in your external security system for any errors\n- Ensure network connectivity from your system to Azure\n- Verify the Entra application has the correct permissions"
+              "title": "2. Configure application log forwarding",
+              "description": "1. Choose a custom asynchronous Log4j appender that supports Azure Monitor Logs Ingestion, or send logs to an external collector that implements it. No ready-made sender is supplied with this connector; a generic HTTP appender alone does not implement Entra token refresh or schema mapping.\n2. Add the appender dependency to your Mule application's `pom.xml` and configure `src/main/resources/log4j2.xml` using that appender's instructions. Repeat for each application, or use your deployment automation. Follow the guide for your platform: [CloudHub 1.0](https://docs.mulesoft.com/cloudhub/custom-log-appender) or [CloudHub 2.0](https://docs.mulesoft.com/cloudhub-2/ch2-integrate-log-system). Do not use the 1.0 file/appender configuration unchanged on 2.0.\n3. Configure the sender with the tenant ID, client ID, protected client secret, DCE URL, DCR immutable ID and stream name from step 1. It must acquire and refresh an Entra token with scope `https://monitor.azure.com/.default`, then POST a JSON array to `{DCE}/dataCollectionRules/{DCR-immutable-ID}/streams/Custom-MuleSoftCloudhubLogs_CL?api-version=2023-01-01` with `Authorization: Bearer <token>` and `Content-Type: application/json`.\n4. Map records to the DCR fields: `EventTime` (UTC timestamp), `Level`, `Logger`, `Message`, `Thread`, `Exception`, `ApplicationDomainName`, `InstanceId`, `WorkerId`, `Environment`, `Region`, and `ApplicationData` (JSON object). Configure batching, retry/backoff and delivery monitoring in the sender. See [Logs Ingestion API examples](https://learn.microsoft.com/azure/azure-monitor/logs/tutorial-logs-ingestion-code).\n5. Deploy a test application and verify forwarding before rolling out to other applications or disabling existing logging."
+            },
+            {
+              "title": "3. Verify ingestion",
+              "description": "Generate a uniquely identifiable test log and confirm its message and application context in `MuleSoftCloudhubLogs_CL`:\n\n```kusto\nMuleSoftCloudhubLogs_CL\n| where TimeGenerated > ago(1h)\n| project TimeGenerated, ApplicationDomainName, Level, Message\n| take 10\n```\n\nIf the record is missing, inspect sender delivery errors: check the Entra token for 401, DCR permissions for 403, and the stream name and JSON field types for 400. Confirm connectivity to the DCE and token endpoint. Receiving-resource deployment alone does not confirm end-to-end ingestion."
             }
           ]
         }
@@ -1357,28 +1370,28 @@
                   "id": "MulesoftCloudhubConnector",
                   "title": "Mulesoft CloudHub Alerts Connector (via Codeless Connector Framework)",
                   "publisher": "Microsoft",
-                  "descriptionMarkdown": "The Mulesoft CloudHub data connector enables you to ingest alerts from Mulesoft CloudHub into Microsoft Sentinel through the CloudHub REST API v2. This connector supports configurable endpoints to accommodate different Mulesoft regions and deployment environments including US Commercial Cloud, EU Cloud, Government Cloud, and on-premises deployments. It uses multi-stream support so you can connect to multiple Mulesoft environments simultaneously. Configure the connector with your Anypoint Platform credentials, environment ID, and optional application name filter to begin collecting data. Use the `MuleSoftCloudhub` parser to query ingested alerts. Refer to [Mulesoft CloudHub API documentation](https://anypoint.mulesoft.com/exchange/portals/anypoint-platform/) for more information about the CloudHub APIs.",
+                  "descriptionMarkdown": "Collect MuleSoft CloudHub 1.0 or CloudHub 2.0 alert configuration snapshots into Microsoft Sentinel using Connected App OAuth2. Select the CloudHub deployment platform for each connection. CloudHub 1.0 uses the CloudHub API and requires CloudHub 1.0 entitlement; CloudHub 2.0 uses the organization/environment-scoped AMC Application Manager API. API version v2 does not identify the CloudHub deployment platform. Both platforms write to MulesoftCloudhubAlerts_CL, with CloudHubVersion set to 1.0 or 2.0. The connector polls every 24 hours and may collect unchanged configurations again; it does not collect fired-alert history, application logs or on-premises Runtime Manager alerts. The MuleSoftCloudhub parser also retains access to historical data in the former 2.0 table. See the [CloudHub API](https://docs.mulesoft.com/cloudhub/cloudhub-api), [AMC API](https://dev-portal.mulesoft.com/apis/amc-application-manager.html) and [Connected App setup](https://docs.mulesoft.com/access-management/creating-connected-apps-dev).",
                   "graphQueriesTableName": "MulesoftCloudhubAlerts_CL",
                   "graphQueries": [
                     {
-                      "metricName": "Total alerts received",
+                      "metricName": "Alert configurations received",
                       "legend": "Mulesoft CloudHub Alerts",
-                      "baseQuery": "{{graphQueriesTableName}}"
+                      "baseQuery": "MulesoftCloudhubAlerts_CL"
                     },
                     {
                       "metricName": "Critical alerts",
                       "legend": "Critical Alerts",
-                      "baseQuery": "{{graphQueriesTableName}} | where Severity == 'CRITICAL'"
+                      "baseQuery": "MulesoftCloudhubAlerts_CL | where Severity == 'CRITICAL'"
                     },
                     {
                       "metricName": "Error alerts",
                       "legend": "Error Alerts",
-                      "baseQuery": "{{graphQueriesTableName}} | where Severity == 'ERROR'"
+                      "baseQuery": "MulesoftCloudhubAlerts_CL | where Severity == 'ERROR'"
                     },
                     {
                       "metricName": "System alerts",
                       "legend": "System Alerts",
-                      "baseQuery": "{{graphQueriesTableName}} | where IsSystem == true"
+                      "baseQuery": "MulesoftCloudhubAlerts_CL | where IsSystem == true"
                     }
                   ],
                   "sampleQueries": [
@@ -1397,12 +1410,24 @@
                     {
                       "description": "Summary by alert name",
                       "query": "MuleSoftCloudhub\n| summarize count() by EventResult"
+                    },
+                    {
+                      "description": "Recently ingested CloudHub 2.0 alert configurations",
+                      "query": "MulesoftCloudhubAlerts_CL\n| where ingestion_time() > ago(2d)\n| where CloudHubVersion == '2.0'\n| project TimeGenerated, CloudHubVersion, OrganizationId, EnvironmentId, Id, Name, Severity, ProductName"
+                    },
+                    {
+                      "description": "Latest CloudHub 2.0 configuration per alert",
+                      "query": "MulesoftCloudhubAlerts_CL\n| where CloudHubVersion == '2.0'\n| summarize arg_max(ingestion_time(), *) by CloudHubVersion, OrganizationId, EnvironmentId, Id"
+                    },
+                    {
+                      "description": "Deduplicate repeated CloudHub alert revisions (last 24 hours)",
+                      "query": "let alerts = MulesoftCloudhubAlerts_CL | where ingestion_time() > ago(24h) | extend CloudHubVersion = coalesce(tostring(column_ifexists('CloudHubVersion', '')), '1.0');\nunion\n(alerts | where isnotempty(Id) and isnotnull(LastModified) | summarize arg_max(ingestion_time(), *) by CloudHubVersion, OrganizationId, EnvironmentId, Id, CreatedAt, LastModified, Name, Severity, ProductName, Enabled, IsSystem, _ConditionKey = tostring(Condition), _ActionsKey = tostring(Actions) | project-away _ConditionKey, _ActionsKey),\n(alerts | where isempty(Id) or isnull(LastModified))"
                     }
                   ],
                   "dataTypes": [
                     {
                       "name": "MulesoftCloudhubAlerts_CL",
-                      "lastDataReceivedQuery": "MulesoftCloudhubAlerts_CL\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                      "lastDataReceivedQuery": "MulesoftCloudhubAlerts_CL\n| summarize Time = max(ingestion_time())\n| where isnotempty(Time)"
                     }
                   ],
                   "connectivityCriteria": [
@@ -1412,7 +1437,7 @@
                     {
                       "type": "IsConnectedQuery",
                       "value": [
-                        "MulesoftCloudhubAlerts_CL | where TimeGenerated > ago(1h) | take 1"
+                        "MulesoftCloudhubAlerts_CL | where ingestion_time() > ago(2d) | take 1"
                       ]
                     }
                   ],
@@ -1438,25 +1463,25 @@
                     "customs": [
                       {
                         "name": "Mulesoft CloudHub API access",
-                        "description": "**Mulesoft CloudHub API** access with read permissions is required."
+                        "description": "Access to the selected CloudHub deployment platform and Read Alerts permission for the target business group/environment are required. CloudHub 1.0 additionally requires CloudHub 1.0 entitlement. Both platforms use Connected App OAuth2 with an app that acts on its own behalf, not environment client credentials. CloudHub 2.0 also requires the organization/business group ID."
                       }
                     ]
                   },
                   "instructionSteps": [
                     {
-                      "title": "1. Mulesoft CloudHub Connections",
-                      "description": "Manage connections to your Mulesoft CloudHub environments",
+                      "title": "Configuration",
+                      "description": "This connector supports MuleSoft CloudHub 1.0 and CloudHub 2.0.",
                       "instructions": [
                         {
                           "type": "Markdown",
                           "parameters": {
-                            "content": "## Prerequisites\r\n\r\nBefore configuring this connector, ensure you have:\r\n\r\n1. **Mulesoft Anypoint Platform Account** with appropriate permissions\r\n2. **Environment Access** to the CloudHub environment you want to monitor\r\n3. **API Access Credentials** (username and password)\r\n4. **Environment ID** from your Mulesoft CloudHub console\r\n\r\n### Finding Your Environment ID\r\n\r\n1. Log in to [Anypoint Platform](https://anypoint.mulesoft.com/)\r\n2. Navigate to **Access Management** > **Environments**\r\n3. Select your target environment\r\n4. Copy the Environment ID from the URL or environment details"
+                            "content": "## Prerequisites\r\n\r\n1. Choose the **CloudHub deployment platform** used by the environment, not the API version. Customers with both platforms can create separate connections for each.\r\n2. Both platforms use **Connected App OAuth2**. Create a Connected App under **Access Management > Connected Apps** with **App acts on its own behalf (client credentials)**. Grant **Runtime Manager > Read Alerts** for the target business group and environment. Use its client ID and secret, not an Anypoint username/password or the environment's client credentials.\r\n3. **CloudHub 1.0** requires CloudHub 1.0 entitlement.\r\n4. **CloudHub 2.0** also requires the ID of the organization/business group owning the environment. It uses the AMC API, not `/cloudhub/api/v2/alerts`.\r\n5. Find the environment ID under **Access Management > Business Groups > Environments**. The environment and business group must match the app's Read Alerts scope.\r\n\r\nSee [Connected App setup](https://docs.mulesoft.com/access-management/creating-connected-apps-dev)."
                           }
                         },
                         {
                           "type": "InfoMessage",
                           "parameters": {
-                            "text": "This connector requires read access to the CloudHub API. Contact your Mulesoft administrator if you don't have the necessary permissions.",
+                            "text": "Both platforms provide alert configuration snapshots, not fired-alert history. Select the platform that owns the environment. CloudHub 2.0-only access does not enable the CloudHub 1.0 API.",
                             "visible": true,
                             "inline": false
                           }
@@ -1468,6 +1493,14 @@
                               {
                                 "columnName": "Connection Alias",
                                 "columnValue": "properties.addOnAttributes.connectionAlias"
+                              },
+                              {
+                                "columnName": "CloudHub Platform",
+                                "columnValue": "properties.addOnAttributes.cloudHubVersion"
+                              },
+                              {
+                                "columnName": "Environment ID",
+                                "columnValue": "properties.addOnAttributes.environmentId"
                               },
                               {
                                 "columnName": "Stream Type",
@@ -1536,7 +1569,7 @@
                                   {
                                     "type": "InfoMessage",
                                     "parameters": {
-                                      "text": "**Regional Endpoints**:\n- **US**: https://anypoint.mulesoft.com\n- **EU**: https://eu1.anypoint.mulesoft.com\n- **Government**: https://gov.anypoint.mulesoft.com",
+                                      "text": "Enter the regional Anypoint Platform HTTPS origin hosting your organization, such as https://anypoint.mulesoft.com or https://eu1.anypoint.mulesoft.com. The connector resolves the selected platform's API and OAuth token endpoint on this origin. An existing /cloudhub/api suffix also works. Do not enter an application URL or a custom proxy path. Other control planes require separate compatibility validation.",
                                       "visible": true,
                                       "inline": true
                                     }
@@ -1544,22 +1577,86 @@
                                 ]
                               },
                               {
-                                "title": "Credentials",
-                                "description": "Provide your Anypoint Platform credentials",
+                                "title": "CloudHub Platform",
+                                "description": "Select the platform to display its required connection fields",
                                 "instructions": [
                                   {
-                                    "type": "Markdown",
+                                    "type": "Radio",
                                     "parameters": {
-                                      "content": "### Authentication"
+                                      "title": "CloudHub deployment platform",
+                                      "name": "cloudHubVersion",
+                                      "validations": {
+                                        "required": true
+                                      },
+                                      "options": [
+                                        {
+                                          "label": "CloudHub 1.0",
+                                          "value": "1.0",
+                                          "instructions": [
+                                            {
+                                              "type": "InfoMessage",
+                                              "parameters": {
+                                                "text": "Requires CloudHub 1.0 entitlement. Uses /cloudhub/api/v2/alerts and stores snapshots in MulesoftCloudhubAlerts_CL with CloudHubVersion = 1.0.",
+                                                "visible": true,
+                                                "inline": true
+                                              }
+                                            },
+                                            {
+                                              "type": "Textbox",
+                                              "parameters": {
+                                                "label": "Application Name Filter",
+                                                "placeholder": "Optional CloudHub 1.0 application filter",
+                                                "type": "text",
+                                                "name": "applicationName",
+                                                "validations": {
+                                                  "required": false
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "label": "CloudHub 2.0",
+                                          "value": "2.0",
+                                          "instructions": [
+                                            {
+                                              "type": "InfoMessage",
+                                              "parameters": {
+                                                "text": "Uses the AMC Application Manager API and stores snapshots in MulesoftCloudhubAlerts_CL with CloudHubVersion = 2.0. The CloudHub 1.0 application filter does not apply.",
+                                                "visible": true,
+                                                "inline": true
+                                              }
+                                            },
+                                            {
+                                              "type": "Textbox",
+                                              "parameters": {
+                                                "label": "Organization / Business Group ID",
+                                                "placeholder": "Business group UUID that owns the environment",
+                                                "type": "text",
+                                                "name": "organizationId",
+                                                "validations": {
+                                                  "required": true
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ]
                                     }
-                                  },
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Connected App Authentication",
+                                "description": "Both CloudHub platforms use OAuth2 client credentials",
+                                "instructions": [
                                   {
                                     "type": "Textbox",
                                     "parameters": {
-                                      "label": "Username",
-                                      "placeholder": "Your Mulesoft Anypoint Platform username",
+                                      "label": "Connected App Client ID",
+                                      "placeholder": "Client ID from Access Management > Connected Apps",
                                       "type": "text",
-                                      "name": "username",
+                                      "name": "clientId",
                                       "validations": {
                                         "required": true
                                       }
@@ -1568,10 +1665,10 @@
                                   {
                                     "type": "Textbox",
                                     "parameters": {
-                                      "label": "Password",
-                                      "placeholder": "Your Mulesoft Anypoint Platform password",
+                                      "label": "Connected App Client Secret",
+                                      "placeholder": "Connected App secret value",
                                       "type": "password",
-                                      "name": "password",
+                                      "name": "clientSecret",
                                       "validations": {
                                         "required": true
                                       }
@@ -1600,47 +1697,10 @@
                                         "required": true
                                       }
                                     }
-                                  },
-                                  {
-                                    "type": "Textbox",
-                                    "parameters": {
-                                      "label": "Application Name Filter",
-                                      "placeholder": "Optional: Filter alerts for a specific application",
-                                      "type": "text",
-                                      "name": "applicationName"
-                                    }
-                                  },
-                                  {
-                                    "type": "InfoMessage",
-                                    "parameters": {
-                                      "text": "Leave the application name filter empty to collect alerts for all applications in the environment.",
-                                      "visible": true,
-                                      "inline": true
-                                    }
                                   }
                                 ]
                               }
                             ]
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "title": "2. Monitor and Validate",
-                      "description": "Monitor data ingestion and validate connectivity",
-                      "instructions": [
-                        {
-                          "type": "Markdown",
-                          "parameters": {
-                            "content": "### Post-Connection Steps\r\n\r\n1. **Monitor Connection Status**: Check the connector status in the Data connectors page\r\n2. **Validate Data Flow**: Use the sample queries provided to verify data is being collected\r\n3. **Review Logs**: Check Azure Monitor logs for any connection or authentication issues\r\n\r\n### Data Collection Schedule\r\n- **Alerts**: Polled every 5 minutes from `/v2/alerts` endpoint\r\n\r\n### Expected Timeline\r\n- **Initial Data**: Allow 10-15 minutes for initial data to appear\r\n- **Alerts Data**: Available in the `MuleSoftCloudhub` table\r\n\r\n### Troubleshooting\r\n- **Authentication errors**: Verify credentials and environment access\r\n- **No data**: Ensure alerts exist in the specified environment\r\n- **Partial data**: Check environment ID and application filter settings"
-                          }
-                        },
-                        {
-                          "type": "InfoMessage",
-                          "parameters": {
-                            "text": "**Sample Query**: `MuleSoftCloudhub | where TimeGenerated > ago(24h) | summarize count() by EventSeverity`",
-                            "visible": true,
-                            "inline": true
                           }
                         }
                       ]
@@ -1744,6 +1804,58 @@
                         "type": "dynamic"
                       }
                     ]
+                  },
+                  "Custom-MulesoftCloudhub2Alerts_CL": {
+                    "columns": [
+                      {
+                        "name": "createdAt",
+                        "type": "long"
+                      },
+                      {
+                        "name": "lastModified",
+                        "type": "long"
+                      },
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "name",
+                        "type": "string"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "organizationId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "environmentId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "productName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "enabled",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "isSystem",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "condition",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "actions",
+                        "type": "dynamic"
+                      }
+                    ]
                   }
                 },
                 "destinations": {
@@ -1763,7 +1875,17 @@
                       "clv2ws1"
                     ],
                     "outputStream": "Custom-MulesoftCloudhubAlerts_CL",
-                    "transformKql": "source | extend TimeGenerated = iff(isnull(['lastModified']), datetime(1970-01-01) + (['createdAt'] * 1ms), datetime(1970-01-01) + (['lastModified'] * 1ms)) , CreatedAt = datetime(1970-01-01) + (['createdAt'] * 1ms) , LastModified = datetime(1970-01-01) + (['lastModified'] * 1ms) , Id = ['id'] , Name = ['name'] , Severity = ['severity'] , OrganizationId = ['organizationId'] , EnvironmentId = ['environmentId'] , ProductName = ['productName'] , Enabled = ['enabled'] , IsSystem = ['isSystem'] , Condition = ['condition'] , Actions = ['actions'] | project TimeGenerated , CreatedAt , LastModified , Id , Name , Severity , OrganizationId , EnvironmentId , ProductName , Enabled , IsSystem , Condition , Actions"
+                    "transformKql": "source | extend TimeGenerated = iff(isnull(['lastModified']), datetime(1970-01-01) + (['createdAt'] * 1ms), datetime(1970-01-01) + (['lastModified'] * 1ms)) , CreatedAt = datetime(1970-01-01) + (['createdAt'] * 1ms) , LastModified = datetime(1970-01-01) + (['lastModified'] * 1ms) , Id = ['id'] , Name = ['name'] , Severity = ['severity'] , OrganizationId = ['organizationId'] , EnvironmentId = ['environmentId'] , ProductName = ['productName'] , Enabled = ['enabled'] , IsSystem = ['isSystem'] , Condition = ['condition'] , Actions = ['actions'] , CloudHubVersion = '1.0' | project TimeGenerated , CreatedAt , LastModified , Id , Name , Severity , OrganizationId , EnvironmentId , ProductName , Enabled , IsSystem , Condition , Actions , CloudHubVersion"
+                  },
+                  {
+                    "streams": [
+                      "Custom-MulesoftCloudhub2Alerts_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "outputStream": "Custom-MulesoftCloudhubAlerts_CL",
+                    "transformKql": "source | extend TimeGenerated = iff(isnull(['lastModified']), datetime(1970-01-01) + (['createdAt'] * 1ms), datetime(1970-01-01) + (['lastModified'] * 1ms)) , CreatedAt = datetime(1970-01-01) + (['createdAt'] * 1ms) , LastModified = datetime(1970-01-01) + (['lastModified'] * 1ms) , Id = ['id'] , Name = ['name'] , Severity = ['severity'] , OrganizationId = ['organizationId'] , EnvironmentId = ['environmentId'] , ProductName = ['productName'] , Enabled = ['enabled'] , IsSystem = ['isSystem'] , Condition = ['condition'] , Actions = ['actions'] , CloudHubVersion = '2.0' | project TimeGenerated , CreatedAt , LastModified , Id , Name , Severity , OrganizationId , EnvironmentId , ProductName , Enabled , IsSystem , Condition , Actions , CloudHubVersion"
                   }
                 ]
               }
@@ -1778,8 +1900,13 @@
                 "retentionInDays": 90,
                 "schema": {
                   "name": "MulesoftCloudhubAlerts_CL",
-                  "description": "Mulesoft CloudHub alerts from the CloudHub API v2",
+                  "description": "Mulesoft CloudHub 1.0 and 2.0 alert configuration snapshots",
                   "columns": [
+                    {
+                      "name": "CloudHubVersion",
+                      "type": "string",
+                      "description": "CloudHub deployment platform: 1.0 or 2.0; empty for records ingested before consolidation"
+                    },
                     {
                       "name": "TimeGenerated",
                       "type": "datetime",
@@ -1871,28 +1998,28 @@
           "id": "MulesoftCloudhubConnector",
           "title": "Mulesoft CloudHub Alerts Connector (via Codeless Connector Framework)",
           "publisher": "Microsoft",
-          "descriptionMarkdown": "The Mulesoft CloudHub data connector enables you to ingest alerts from Mulesoft CloudHub into Microsoft Sentinel through the CloudHub REST API v2. This connector supports configurable endpoints to accommodate different Mulesoft regions and deployment environments including US Commercial Cloud, EU Cloud, Government Cloud, and on-premises deployments. It uses multi-stream support so you can connect to multiple Mulesoft environments simultaneously. Configure the connector with your Anypoint Platform credentials, environment ID, and optional application name filter to begin collecting data. Use the `MuleSoftCloudhub` parser to query ingested alerts. Refer to [Mulesoft CloudHub API documentation](https://anypoint.mulesoft.com/exchange/portals/anypoint-platform/) for more information about the CloudHub APIs.",
+          "descriptionMarkdown": "Collect MuleSoft CloudHub 1.0 or CloudHub 2.0 alert configuration snapshots into Microsoft Sentinel using Connected App OAuth2. Select the CloudHub deployment platform for each connection. CloudHub 1.0 uses the CloudHub API and requires CloudHub 1.0 entitlement; CloudHub 2.0 uses the organization/environment-scoped AMC Application Manager API. API version v2 does not identify the CloudHub deployment platform. Both platforms write to MulesoftCloudhubAlerts_CL, with CloudHubVersion set to 1.0 or 2.0. The connector polls every 24 hours and may collect unchanged configurations again; it does not collect fired-alert history, application logs or on-premises Runtime Manager alerts. The MuleSoftCloudhub parser also retains access to historical data in the former 2.0 table. See the [CloudHub API](https://docs.mulesoft.com/cloudhub/cloudhub-api), [AMC API](https://dev-portal.mulesoft.com/apis/amc-application-manager.html) and [Connected App setup](https://docs.mulesoft.com/access-management/creating-connected-apps-dev).",
           "graphQueriesTableName": "MulesoftCloudhubAlerts_CL",
           "graphQueries": [
             {
-              "metricName": "Total alerts received",
+              "metricName": "Alert configurations received",
               "legend": "Mulesoft CloudHub Alerts",
-              "baseQuery": "{{graphQueriesTableName}}"
+              "baseQuery": "MulesoftCloudhubAlerts_CL"
             },
             {
               "metricName": "Critical alerts",
               "legend": "Critical Alerts",
-              "baseQuery": "{{graphQueriesTableName}} | where Severity == 'CRITICAL'"
+              "baseQuery": "MulesoftCloudhubAlerts_CL | where Severity == 'CRITICAL'"
             },
             {
               "metricName": "Error alerts",
               "legend": "Error Alerts",
-              "baseQuery": "{{graphQueriesTableName}} | where Severity == 'ERROR'"
+              "baseQuery": "MulesoftCloudhubAlerts_CL | where Severity == 'ERROR'"
             },
             {
               "metricName": "System alerts",
               "legend": "System Alerts",
-              "baseQuery": "{{graphQueriesTableName}} | where IsSystem == true"
+              "baseQuery": "MulesoftCloudhubAlerts_CL | where IsSystem == true"
             }
           ],
           "sampleQueries": [
@@ -1911,12 +2038,24 @@
             {
               "description": "Summary by alert name",
               "query": "MuleSoftCloudhub\n| summarize count() by EventResult"
+            },
+            {
+              "description": "Recently ingested CloudHub 2.0 alert configurations",
+              "query": "MulesoftCloudhubAlerts_CL\n| where ingestion_time() > ago(2d)\n| where CloudHubVersion == '2.0'\n| project TimeGenerated, CloudHubVersion, OrganizationId, EnvironmentId, Id, Name, Severity, ProductName"
+            },
+            {
+              "description": "Latest CloudHub 2.0 configuration per alert",
+              "query": "MulesoftCloudhubAlerts_CL\n| where CloudHubVersion == '2.0'\n| summarize arg_max(ingestion_time(), *) by CloudHubVersion, OrganizationId, EnvironmentId, Id"
+            },
+            {
+              "description": "Deduplicate repeated CloudHub alert revisions (last 24 hours)",
+              "query": "let alerts = MulesoftCloudhubAlerts_CL | where ingestion_time() > ago(24h) | extend CloudHubVersion = coalesce(tostring(column_ifexists('CloudHubVersion', '')), '1.0');\nunion\n(alerts | where isnotempty(Id) and isnotnull(LastModified) | summarize arg_max(ingestion_time(), *) by CloudHubVersion, OrganizationId, EnvironmentId, Id, CreatedAt, LastModified, Name, Severity, ProductName, Enabled, IsSystem, _ConditionKey = tostring(Condition), _ActionsKey = tostring(Actions) | project-away _ConditionKey, _ActionsKey),\n(alerts | where isempty(Id) or isnull(LastModified))"
             }
           ],
           "dataTypes": [
             {
               "name": "MulesoftCloudhubAlerts_CL",
-              "lastDataReceivedQuery": "MulesoftCloudhubAlerts_CL\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+              "lastDataReceivedQuery": "MulesoftCloudhubAlerts_CL\n| summarize Time = max(ingestion_time())\n| where isnotempty(Time)"
             }
           ],
           "connectivityCriteria": [
@@ -1926,7 +2065,7 @@
             {
               "type": "IsConnectedQuery",
               "value": [
-                "MulesoftCloudhubAlerts_CL | where TimeGenerated > ago(1h) | take 1"
+                "MulesoftCloudhubAlerts_CL | where ingestion_time() > ago(2d) | take 1"
               ]
             }
           ],
@@ -1952,25 +2091,25 @@
             "customs": [
               {
                 "name": "Mulesoft CloudHub API access",
-                "description": "**Mulesoft CloudHub API** access with read permissions is required."
+                "description": "Access to the selected CloudHub deployment platform and Read Alerts permission for the target business group/environment are required. CloudHub 1.0 additionally requires CloudHub 1.0 entitlement. Both platforms use Connected App OAuth2 with an app that acts on its own behalf, not environment client credentials. CloudHub 2.0 also requires the organization/business group ID."
               }
             ]
           },
           "instructionSteps": [
             {
-              "title": "1. Mulesoft CloudHub Connections",
-              "description": "Manage connections to your Mulesoft CloudHub environments",
+              "title": "Configuration",
+              "description": "This connector supports MuleSoft CloudHub 1.0 and CloudHub 2.0.",
               "instructions": [
                 {
                   "type": "Markdown",
                   "parameters": {
-                    "content": "## Prerequisites\r\n\r\nBefore configuring this connector, ensure you have:\r\n\r\n1. **Mulesoft Anypoint Platform Account** with appropriate permissions\r\n2. **Environment Access** to the CloudHub environment you want to monitor\r\n3. **API Access Credentials** (username and password)\r\n4. **Environment ID** from your Mulesoft CloudHub console\r\n\r\n### Finding Your Environment ID\r\n\r\n1. Log in to [Anypoint Platform](https://anypoint.mulesoft.com/)\r\n2. Navigate to **Access Management** > **Environments**\r\n3. Select your target environment\r\n4. Copy the Environment ID from the URL or environment details"
+                    "content": "## Prerequisites\r\n\r\n1. Choose the **CloudHub deployment platform** used by the environment, not the API version. Customers with both platforms can create separate connections for each.\r\n2. Both platforms use **Connected App OAuth2**. Create a Connected App under **Access Management > Connected Apps** with **App acts on its own behalf (client credentials)**. Grant **Runtime Manager > Read Alerts** for the target business group and environment. Use its client ID and secret, not an Anypoint username/password or the environment's client credentials.\r\n3. **CloudHub 1.0** requires CloudHub 1.0 entitlement.\r\n4. **CloudHub 2.0** also requires the ID of the organization/business group owning the environment. It uses the AMC API, not `/cloudhub/api/v2/alerts`.\r\n5. Find the environment ID under **Access Management > Business Groups > Environments**. The environment and business group must match the app's Read Alerts scope.\r\n\r\nSee [Connected App setup](https://docs.mulesoft.com/access-management/creating-connected-apps-dev)."
                   }
                 },
                 {
                   "type": "InfoMessage",
                   "parameters": {
-                    "text": "This connector requires read access to the CloudHub API. Contact your Mulesoft administrator if you don't have the necessary permissions.",
+                    "text": "Both platforms provide alert configuration snapshots, not fired-alert history. Select the platform that owns the environment. CloudHub 2.0-only access does not enable the CloudHub 1.0 API.",
                     "visible": true,
                     "inline": false
                   }
@@ -1982,6 +2121,14 @@
                       {
                         "columnName": "Connection Alias",
                         "columnValue": "properties.addOnAttributes.connectionAlias"
+                      },
+                      {
+                        "columnName": "CloudHub Platform",
+                        "columnValue": "properties.addOnAttributes.cloudHubVersion"
+                      },
+                      {
+                        "columnName": "Environment ID",
+                        "columnValue": "properties.addOnAttributes.environmentId"
                       },
                       {
                         "columnName": "Stream Type",
@@ -2050,7 +2197,7 @@
                           {
                             "type": "InfoMessage",
                             "parameters": {
-                              "text": "**Regional Endpoints**:\n- **US**: https://anypoint.mulesoft.com\n- **EU**: https://eu1.anypoint.mulesoft.com\n- **Government**: https://gov.anypoint.mulesoft.com",
+                              "text": "Enter the regional Anypoint Platform HTTPS origin hosting your organization, such as https://anypoint.mulesoft.com or https://eu1.anypoint.mulesoft.com. The connector resolves the selected platform's API and OAuth token endpoint on this origin. An existing /cloudhub/api suffix also works. Do not enter an application URL or a custom proxy path. Other control planes require separate compatibility validation.",
                               "visible": true,
                               "inline": true
                             }
@@ -2058,22 +2205,86 @@
                         ]
                       },
                       {
-                        "title": "Credentials",
-                        "description": "Provide your Anypoint Platform credentials",
+                        "title": "CloudHub Platform",
+                        "description": "Select the platform to display its required connection fields",
                         "instructions": [
                           {
-                            "type": "Markdown",
+                            "type": "Radio",
                             "parameters": {
-                              "content": "### Authentication"
+                              "title": "CloudHub deployment platform",
+                              "name": "cloudHubVersion",
+                              "validations": {
+                                "required": true
+                              },
+                              "options": [
+                                {
+                                  "label": "CloudHub 1.0",
+                                  "value": "1.0",
+                                  "instructions": [
+                                    {
+                                      "type": "InfoMessage",
+                                      "parameters": {
+                                        "text": "Requires CloudHub 1.0 entitlement. Uses /cloudhub/api/v2/alerts and stores snapshots in MulesoftCloudhubAlerts_CL with CloudHubVersion = 1.0.",
+                                        "visible": true,
+                                        "inline": true
+                                      }
+                                    },
+                                    {
+                                      "type": "Textbox",
+                                      "parameters": {
+                                        "label": "Application Name Filter",
+                                        "placeholder": "Optional CloudHub 1.0 application filter",
+                                        "type": "text",
+                                        "name": "applicationName",
+                                        "validations": {
+                                          "required": false
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "label": "CloudHub 2.0",
+                                  "value": "2.0",
+                                  "instructions": [
+                                    {
+                                      "type": "InfoMessage",
+                                      "parameters": {
+                                        "text": "Uses the AMC Application Manager API and stores snapshots in MulesoftCloudhubAlerts_CL with CloudHubVersion = 2.0. The CloudHub 1.0 application filter does not apply.",
+                                        "visible": true,
+                                        "inline": true
+                                      }
+                                    },
+                                    {
+                                      "type": "Textbox",
+                                      "parameters": {
+                                        "label": "Organization / Business Group ID",
+                                        "placeholder": "Business group UUID that owns the environment",
+                                        "type": "text",
+                                        "name": "organizationId",
+                                        "validations": {
+                                          "required": true
+                                        }
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
                             }
-                          },
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Connected App Authentication",
+                        "description": "Both CloudHub platforms use OAuth2 client credentials",
+                        "instructions": [
                           {
                             "type": "Textbox",
                             "parameters": {
-                              "label": "Username",
-                              "placeholder": "Your Mulesoft Anypoint Platform username",
+                              "label": "Connected App Client ID",
+                              "placeholder": "Client ID from Access Management > Connected Apps",
                               "type": "text",
-                              "name": "username",
+                              "name": "clientId",
                               "validations": {
                                 "required": true
                               }
@@ -2082,10 +2293,10 @@
                           {
                             "type": "Textbox",
                             "parameters": {
-                              "label": "Password",
-                              "placeholder": "Your Mulesoft Anypoint Platform password",
+                              "label": "Connected App Client Secret",
+                              "placeholder": "Connected App secret value",
                               "type": "password",
-                              "name": "password",
+                              "name": "clientSecret",
                               "validations": {
                                 "required": true
                               }
@@ -2114,47 +2325,10 @@
                                 "required": true
                               }
                             }
-                          },
-                          {
-                            "type": "Textbox",
-                            "parameters": {
-                              "label": "Application Name Filter",
-                              "placeholder": "Optional: Filter alerts for a specific application",
-                              "type": "text",
-                              "name": "applicationName"
-                            }
-                          },
-                          {
-                            "type": "InfoMessage",
-                            "parameters": {
-                              "text": "Leave the application name filter empty to collect alerts for all applications in the environment.",
-                              "visible": true,
-                              "inline": true
-                            }
                           }
                         ]
                       }
                     ]
-                  }
-                }
-              ]
-            },
-            {
-              "title": "2. Monitor and Validate",
-              "description": "Monitor data ingestion and validate connectivity",
-              "instructions": [
-                {
-                  "type": "Markdown",
-                  "parameters": {
-                    "content": "### Post-Connection Steps\r\n\r\n1. **Monitor Connection Status**: Check the connector status in the Data connectors page\r\n2. **Validate Data Flow**: Use the sample queries provided to verify data is being collected\r\n3. **Review Logs**: Check Azure Monitor logs for any connection or authentication issues\r\n\r\n### Data Collection Schedule\r\n- **Alerts**: Polled every 5 minutes from `/v2/alerts` endpoint\r\n\r\n### Expected Timeline\r\n- **Initial Data**: Allow 10-15 minutes for initial data to appear\r\n- **Alerts Data**: Available in the `MuleSoftCloudhub` table\r\n\r\n### Troubleshooting\r\n- **Authentication errors**: Verify credentials and environment access\r\n- **No data**: Ensure alerts exist in the specified environment\r\n- **Partial data**: Check environment ID and application filter settings"
-                  }
-                },
-                {
-                  "type": "InfoMessage",
-                  "parameters": {
-                    "text": "**Sample Query**: `MuleSoftCloudhub | where TimeGenerated > ago(24h) | summarize count() by EventSeverity`",
-                    "visible": true,
-                    "inline": true
                   }
                 }
               ]
@@ -2248,23 +2422,32 @@
               "type": "securestring",
               "minLength": 1
             },
-            "username": {
-              "defaultValue": "username",
+            "cloudHubVersion": {
+              "defaultValue": "1.0",
               "type": "securestring",
               "minLength": 1
             },
-            "password": {
-              "defaultValue": "password",
+            "applicationName": {
+              "defaultValue": "",
+              "type": "securestring"
+            },
+            "organizationId": {
+              "defaultValue": "organizationId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientId": {
+              "defaultValue": "clientId",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "clientSecret": {
+              "defaultValue": "clientSecret",
               "type": "securestring",
               "minLength": 1
             },
             "environmentId": {
               "defaultValue": "environmentId",
-              "type": "securestring",
-              "minLength": 1
-            },
-            "applicationName": {
-              "defaultValue": "applicationName",
               "type": "securestring",
               "minLength": 1
             }
@@ -2300,22 +2483,28 @@
               }
             },
             {
-              "name": "[[concat('parameters('workspace')', '/Microsoft.SecurityInsights/','MulesoftCloudhubAlerts_CL' , uniqueString(parameters('connectionAlias')) )]",
+              "name": "[[concat(parameters('innerWorkspace'), '/Microsoft.SecurityInsights/', 'MulesoftCloudhubAlertsOAuth2_CL', uniqueString(parameters('connectionAlias')))]",
               "apiVersion": "2023-02-01-preview",
               "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
               "location": "[parameters('workspace-location')]",
               "kind": "RestApiPoller",
               "properties": {
                 "auth": {
-                  "type": "Basic",
-                  "UserName": "[[parameters('username')]",
-                  "Password": "[[parameters('password')]"
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[uri(parameters('mulesoftBaseUrl'), '/accounts/api/v2/oauth2/token')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  }
                 },
                 "request": {
-                  "apiEndpoint": "[[concat(parameters('mulesoftBaseUrl'),'/v2/alerts')]",
+                  "apiEndpoint": "[[uri(parameters('mulesoftBaseUrl'), '/cloudhub/api/v2/alerts')]",
                   "httpMethod": "GET",
                   "rateLimitQPS": 15,
-                  "queryWindowInMin": 5,
+                  "queryWindowInMin": 1440,
                   "retryCount": 3,
                   "timeoutInSeconds": 30,
                   "headers": {
@@ -2350,9 +2539,83 @@
                 "addOnAttributes": {
                   "connectionAlias": "[[parameters('connectionAlias')]",
                   "streamType": "Alerts",
-                  "mulesoftBaseUrl": "[[parameters('mulesoftBaseUrl')]"
+                  "mulesoftBaseUrl": "[[parameters('mulesoftBaseUrl')]",
+                  "authenticationType": "OAuth2",
+                  "cloudHubVersion": "1.0",
+                  "environmentId": "[[parameters('environmentId')]"
                 }
-              }
+              },
+              "condition": "[[equals(parameters('cloudHubVersion'), '1.0')]"
+            },
+            {
+              "name": "[[concat(parameters('innerWorkspace'), '/Microsoft.SecurityInsights/', 'MulesoftCloudhub2Alerts-', uniqueString(parameters('connectionAlias'), parameters('mulesoftBaseUrl'), parameters('organizationId'), parameters('environmentId'), parameters('clientId')))]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "auth": {
+                  "type": "OAuth2",
+                  "ClientId": "[[parameters('clientId')]",
+                  "ClientSecret": "[[parameters('clientSecret')]",
+                  "GrantType": "client_credentials",
+                  "TokenEndpoint": "[[uri(parameters('mulesoftBaseUrl'), '/accounts/api/v2/oauth2/token')]",
+                  "TokenEndpointHeaders": {
+                    "Accept": "application/json",
+                    "Content-Type": "application/x-www-form-urlencoded"
+                  },
+                  "TokenEndpointQueryParameters": {}
+                },
+                "request": {
+                  "apiEndpoint": "[[uri(parameters('mulesoftBaseUrl'), concat('/amc/application-manager/api/v2/organizations/', parameters('organizationId'), '/environments/', parameters('environmentId'), '/alerts'))]",
+                  "httpMethod": "GET",
+                  "rateLimitQPS": 1,
+                  "paginatedCallsPerSecond": 1,
+                  "queryWindowInMin": 1440,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 30,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "MS-Sentinel-CCP-Mulesoft",
+                    "X-ANYPNT-ORG-ID": "[[parameters('organizationId')]",
+                    "X-ANYPNT-ENV-ID": "[[parameters('environmentId')]"
+                  },
+                  "queryParameters": {
+                    "offset": "0"
+                  }
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.data[*]"
+                  ],
+                  "format": "json"
+                },
+                "paging": {
+                  "pagingType": "Offset",
+                  "offsetParaName": "offset",
+                  "pageSize": 100,
+                  "pageSizeParameterName": "limit",
+                  "pagingInfoPlacement": "QueryString",
+                  "pagingQueryParamOnly": false
+                },
+                "connectorDefinitionName": "MulesoftCloudhubConnector",
+                "dataType": "MulesoftCloudhubAlerts_CL",
+                "dcrConfig": {
+                  "streamName": "Custom-MulesoftCloudhub2Alerts_CL",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "addOnAttributes": {
+                  "connectionAlias": "[[parameters('connectionAlias')]",
+                  "streamType": "CloudHub2Alerts",
+                  "mulesoftBaseUrl": "[[parameters('mulesoftBaseUrl')]",
+                  "authenticationType": "OAuth2",
+                  "cloudHubVersion": "2.0",
+                  "organizationId": "[[parameters('organizationId')]",
+                  "environmentId": "[[parameters('environmentId')]"
+                }
+              },
+              "condition": "[[equals(parameters('cloudHubVersion'), '2.0')]"
             }
           ]
         },
@@ -2374,7 +2637,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "MuleSoftCloudhub Data Parser with template version 3.2.1",
+        "description": "MuleSoftCloudhub Data Parser with template version 3.2.2",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -2391,7 +2654,7 @@
                 "displayName": "MuleSoftCloudhub",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "MuleSoftCloudhub",
-                "query": "let oldTable_view = view() {\n    MuleSoft_Cloudhub_CL\n    | extend\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = tostring(column_ifexists('id_g', '')),\n        EventResult = tostring(column_ifexists('name_s', '')),\n        EventSeverity = tostring(column_ifexists('severity_s', '')),\n        ProductName = tostring(column_ifexists('productName_s', '')),\n        AdditionalData = column_ifexists('actions_s', ''),\n        ConditionResourceType = tostring(column_ifexists('condition_resourceType_s', '')),\n        ConditionResources = tostring(column_ifexists('condition_resources_s', '')),\n        EventResultDetails = tostring(column_ifexists('condition_type_s', '')),\n        OrganizationId = tostring(column_ifexists('organizationId_g', '')),\n        EnvironmentId = tostring(column_ifexists('environmentId_g', '')),\n        Enabled = column_ifexists('enabled_b', bool(null)),\n        IsSystem = column_ifexists('isSystem_b', bool(null)),\n        LastModified = unixtime_milliseconds_todatetime(column_ifexists('lastModified_d', real(null))),\n        CreatedAt = unixtime_milliseconds_todatetime(column_ifexists('createdAt_d', real(null))),\n        EventEndTime = unixtime_milliseconds_todatetime(column_ifexists('event_timestamp_d', real(null))),\n        EventLoggerName = tostring(column_ifexists('event_loggerName_s', '')),\n        EventMessage = tostring(column_ifexists('event_message_s', '')),\n        EventPriority = tostring(column_ifexists('event_priority_s', '')),\n        EventThreadName = tostring(column_ifexists('event_threadName_s', '')),\n        InstanceId = tostring(column_ifexists('instanceId_s', '')),\n        DeploymentId = tostring(column_ifexists('deploymentId_s', '')),\n        RecordId = tostring(column_ifexists('recordId_s', '')),\n        EventType = tostring(column_ifexists('event_type_s', '')),\n        Line = column_ifexists('line_d', real(null))\n    | project\n        TimeGenerated, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nlet alertsTable_view = view() {\n    MulesoftCloudhubAlerts_CL\n    | extend\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = tostring(column_ifexists('Id', '')),\n        EventResult = tostring(column_ifexists('Name', '')),\n        EventSeverity = tostring(column_ifexists('Severity', '')),\n        ProductName = tostring(column_ifexists('ProductName', '')),\n        AdditionalData = column_ifexists('Actions', dynamic(null)),\n        ConditionResourceType = tostring(column_ifexists('Condition', dynamic(null)).resourceType),\n        ConditionResources = tostring(column_ifexists('Condition', dynamic(null)).resources),\n        EventResultDetails = tostring(column_ifexists('Condition', dynamic(null)).type),\n        OrganizationId = tostring(column_ifexists('OrganizationId', '')),\n        EnvironmentId = tostring(column_ifexists('EnvironmentId', '')),\n        Enabled = column_ifexists('Enabled', bool(null)),\n        IsSystem = column_ifexists('IsSystem', bool(null)),\n        LastModified = column_ifexists('LastModified', datetime(null)),\n        CreatedAt = column_ifexists('CreatedAt', datetime(null)),\n        EventEndTime = datetime(null),\n        EventLoggerName = '',\n        EventMessage = '',\n        EventPriority = '',\n        EventThreadName = '',\n        InstanceId = '',\n        DeploymentId = '',\n        RecordId = '',\n        EventType = '',\n        Line = real(null)\n    | project\n        TimeGenerated, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nlet logsTable_view = view() {\n    MuleSoftCloudhubLogs_CL\n    | extend\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = '',\n        EventResult = '',\n        EventSeverity = '',\n        ProductName = '',\n        AdditionalData = dynamic(null),\n        ConditionResourceType = '',\n        ConditionResources = '',\n        EventResultDetails = '',\n        OrganizationId = '',\n        EnvironmentId = '',\n        Enabled = bool(null),\n        IsSystem = bool(null),\n        LastModified = datetime(null),\n        CreatedAt = datetime(null),\n        EventEndTime = column_ifexists('EventTime', datetime(null)),\n        EventLoggerName = tostring(column_ifexists('Logger', '')),\n        EventMessage = tostring(column_ifexists('Message', '')),\n        EventPriority = tostring(column_ifexists('Level', '')),\n        EventThreadName = tostring(column_ifexists('Thread', '')),\n        InstanceId = tostring(column_ifexists('InstanceId', '')),\n        DeploymentId = '',\n        RecordId = '',\n        EventType = '',\n        Line = real(null)\n    | project\n        TimeGenerated, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nunion isfuzzy=true (oldTable_view), (alertsTable_view), (logsTable_view)\n",
+                "query": "let oldTable_view = view() {\n    MuleSoft_Cloudhub_CL\n    | extend\n        CloudHubVersion = '1.0',\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = tostring(column_ifexists('id_g', '')),\n        EventResult = tostring(column_ifexists('name_s', '')),\n        EventSeverity = tostring(column_ifexists('severity_s', '')),\n        ProductName = tostring(column_ifexists('productName_s', '')),\n        AdditionalData = column_ifexists('actions_s', ''),\n        ConditionResourceType = tostring(column_ifexists('condition_resourceType_s', '')),\n        ConditionResources = tostring(column_ifexists('condition_resources_s', '')),\n        EventResultDetails = tostring(column_ifexists('condition_type_s', '')),\n        OrganizationId = tostring(column_ifexists('organizationId_g', '')),\n        EnvironmentId = tostring(column_ifexists('environmentId_g', '')),\n        Enabled = column_ifexists('enabled_b', bool(null)),\n        IsSystem = column_ifexists('isSystem_b', bool(null)),\n        LastModified = unixtime_milliseconds_todatetime(column_ifexists('lastModified_d', real(null))),\n        CreatedAt = unixtime_milliseconds_todatetime(column_ifexists('createdAt_d', real(null))),\n        EventEndTime = unixtime_milliseconds_todatetime(column_ifexists('event_timestamp_d', real(null))),\n        EventLoggerName = tostring(column_ifexists('event_loggerName_s', '')),\n        EventMessage = tostring(column_ifexists('event_message_s', '')),\n        EventPriority = tostring(column_ifexists('event_priority_s', '')),\n        EventThreadName = tostring(column_ifexists('event_threadName_s', '')),\n        InstanceId = tostring(column_ifexists('instanceId_s', '')),\n        DeploymentId = tostring(column_ifexists('deploymentId_s', '')),\n        RecordId = tostring(column_ifexists('recordId_s', '')),\n        EventType = tostring(column_ifexists('event_type_s', '')),\n        Line = column_ifexists('line_d', real(null))\n    | project\n        TimeGenerated, CloudHubVersion, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nlet alertsTable_view = view() {\n    // Discover the optional historical table without an unresolved explicit table reference.\n    union isfuzzy=true withsource=AlertSourceTable MulesoftCloudhub*Alerts_CL\n    | where AlertSourceTable in ('MulesoftCloudhubAlerts_CL', 'MulesoftCloudhub2Alerts_CL')\n    | extend\n        CloudHubVersion = coalesce(tostring(column_ifexists('CloudHubVersion', '')), iff(AlertSourceTable endswith 'MulesoftCloudhub2Alerts_CL', '2.0', '1.0')),\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = tostring(column_ifexists('Id', '')),\n        EventResult = tostring(column_ifexists('Name', '')),\n        EventSeverity = tostring(column_ifexists('Severity', '')),\n        ProductName = tostring(column_ifexists('ProductName', '')),\n        AdditionalData = column_ifexists('Actions', dynamic(null)),\n        ConditionResourceType = tostring(column_ifexists('Condition', dynamic(null)).resourceType),\n        ConditionResources = tostring(column_ifexists('Condition', dynamic(null)).resources),\n        EventResultDetails = tostring(column_ifexists('Condition', dynamic(null)).type),\n        OrganizationId = tostring(column_ifexists('OrganizationId', '')),\n        EnvironmentId = tostring(column_ifexists('EnvironmentId', '')),\n        Enabled = column_ifexists('Enabled', bool(null)),\n        IsSystem = column_ifexists('IsSystem', bool(null)),\n        LastModified = column_ifexists('LastModified', datetime(null)),\n        CreatedAt = column_ifexists('CreatedAt', datetime(null)),\n        EventEndTime = datetime(null),\n        EventLoggerName = '',\n        EventMessage = '',\n        EventPriority = '',\n        EventThreadName = '',\n        InstanceId = '',\n        DeploymentId = '',\n        RecordId = '',\n        EventType = '',\n        Line = real(null)\n    | project\n        TimeGenerated, CloudHubVersion, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nlet logsTable_view = view() {\n    MuleSoftCloudhubLogs_CL\n    | extend\n        CloudHubVersion = '',\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = '',\n        EventResult = '',\n        EventSeverity = '',\n        ProductName = '',\n        AdditionalData = dynamic(null),\n        ConditionResourceType = '',\n        ConditionResources = '',\n        EventResultDetails = '',\n        OrganizationId = '',\n        EnvironmentId = '',\n        Enabled = bool(null),\n        IsSystem = bool(null),\n        LastModified = datetime(null),\n        CreatedAt = datetime(null),\n        EventEndTime = column_ifexists('EventTime', datetime(null)),\n        EventLoggerName = tostring(column_ifexists('Logger', '')),\n        EventMessage = tostring(column_ifexists('Message', '')),\n        EventPriority = tostring(column_ifexists('Level', '')),\n        EventThreadName = tostring(column_ifexists('Thread', '')),\n        InstanceId = tostring(column_ifexists('InstanceId', '')),\n        DeploymentId = '',\n        RecordId = '',\n        EventType = '',\n        Line = real(null)\n    | project\n        TimeGenerated, CloudHubVersion, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nunion isfuzzy=true (oldTable_view), (alertsTable_view), (logsTable_view)\n",
                 "functionParameters": "",
                 "version": 2,
                 "tags": [
@@ -2441,8 +2704,8 @@
         "contentId": "[variables('parserObject1').parserContentId1]",
         "contentKind": "Parser",
         "displayName": "MuleSoftCloudhub",
-        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.1')))]",
-        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.1')))]",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.2.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.2.0')))]",
         "version": "[variables('parserObject1').parserVersion1]"
       }
     },
@@ -2456,7 +2719,7 @@
         "displayName": "MuleSoftCloudhub",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "MuleSoftCloudhub",
-        "query": "let oldTable_view = view() {\n    MuleSoft_Cloudhub_CL\n    | extend\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = tostring(column_ifexists('id_g', '')),\n        EventResult = tostring(column_ifexists('name_s', '')),\n        EventSeverity = tostring(column_ifexists('severity_s', '')),\n        ProductName = tostring(column_ifexists('productName_s', '')),\n        AdditionalData = column_ifexists('actions_s', ''),\n        ConditionResourceType = tostring(column_ifexists('condition_resourceType_s', '')),\n        ConditionResources = tostring(column_ifexists('condition_resources_s', '')),\n        EventResultDetails = tostring(column_ifexists('condition_type_s', '')),\n        OrganizationId = tostring(column_ifexists('organizationId_g', '')),\n        EnvironmentId = tostring(column_ifexists('environmentId_g', '')),\n        Enabled = column_ifexists('enabled_b', bool(null)),\n        IsSystem = column_ifexists('isSystem_b', bool(null)),\n        LastModified = unixtime_milliseconds_todatetime(column_ifexists('lastModified_d', real(null))),\n        CreatedAt = unixtime_milliseconds_todatetime(column_ifexists('createdAt_d', real(null))),\n        EventEndTime = unixtime_milliseconds_todatetime(column_ifexists('event_timestamp_d', real(null))),\n        EventLoggerName = tostring(column_ifexists('event_loggerName_s', '')),\n        EventMessage = tostring(column_ifexists('event_message_s', '')),\n        EventPriority = tostring(column_ifexists('event_priority_s', '')),\n        EventThreadName = tostring(column_ifexists('event_threadName_s', '')),\n        InstanceId = tostring(column_ifexists('instanceId_s', '')),\n        DeploymentId = tostring(column_ifexists('deploymentId_s', '')),\n        RecordId = tostring(column_ifexists('recordId_s', '')),\n        EventType = tostring(column_ifexists('event_type_s', '')),\n        Line = column_ifexists('line_d', real(null))\n    | project\n        TimeGenerated, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nlet alertsTable_view = view() {\n    MulesoftCloudhubAlerts_CL\n    | extend\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = tostring(column_ifexists('Id', '')),\n        EventResult = tostring(column_ifexists('Name', '')),\n        EventSeverity = tostring(column_ifexists('Severity', '')),\n        ProductName = tostring(column_ifexists('ProductName', '')),\n        AdditionalData = column_ifexists('Actions', dynamic(null)),\n        ConditionResourceType = tostring(column_ifexists('Condition', dynamic(null)).resourceType),\n        ConditionResources = tostring(column_ifexists('Condition', dynamic(null)).resources),\n        EventResultDetails = tostring(column_ifexists('Condition', dynamic(null)).type),\n        OrganizationId = tostring(column_ifexists('OrganizationId', '')),\n        EnvironmentId = tostring(column_ifexists('EnvironmentId', '')),\n        Enabled = column_ifexists('Enabled', bool(null)),\n        IsSystem = column_ifexists('IsSystem', bool(null)),\n        LastModified = column_ifexists('LastModified', datetime(null)),\n        CreatedAt = column_ifexists('CreatedAt', datetime(null)),\n        EventEndTime = datetime(null),\n        EventLoggerName = '',\n        EventMessage = '',\n        EventPriority = '',\n        EventThreadName = '',\n        InstanceId = '',\n        DeploymentId = '',\n        RecordId = '',\n        EventType = '',\n        Line = real(null)\n    | project\n        TimeGenerated, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nlet logsTable_view = view() {\n    MuleSoftCloudhubLogs_CL\n    | extend\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = '',\n        EventResult = '',\n        EventSeverity = '',\n        ProductName = '',\n        AdditionalData = dynamic(null),\n        ConditionResourceType = '',\n        ConditionResources = '',\n        EventResultDetails = '',\n        OrganizationId = '',\n        EnvironmentId = '',\n        Enabled = bool(null),\n        IsSystem = bool(null),\n        LastModified = datetime(null),\n        CreatedAt = datetime(null),\n        EventEndTime = column_ifexists('EventTime', datetime(null)),\n        EventLoggerName = tostring(column_ifexists('Logger', '')),\n        EventMessage = tostring(column_ifexists('Message', '')),\n        EventPriority = tostring(column_ifexists('Level', '')),\n        EventThreadName = tostring(column_ifexists('Thread', '')),\n        InstanceId = tostring(column_ifexists('InstanceId', '')),\n        DeploymentId = '',\n        RecordId = '',\n        EventType = '',\n        Line = real(null)\n    | project\n        TimeGenerated, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nunion isfuzzy=true (oldTable_view), (alertsTable_view), (logsTable_view)\n",
+        "query": "let oldTable_view = view() {\n    MuleSoft_Cloudhub_CL\n    | extend\n        CloudHubVersion = '1.0',\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = tostring(column_ifexists('id_g', '')),\n        EventResult = tostring(column_ifexists('name_s', '')),\n        EventSeverity = tostring(column_ifexists('severity_s', '')),\n        ProductName = tostring(column_ifexists('productName_s', '')),\n        AdditionalData = column_ifexists('actions_s', ''),\n        ConditionResourceType = tostring(column_ifexists('condition_resourceType_s', '')),\n        ConditionResources = tostring(column_ifexists('condition_resources_s', '')),\n        EventResultDetails = tostring(column_ifexists('condition_type_s', '')),\n        OrganizationId = tostring(column_ifexists('organizationId_g', '')),\n        EnvironmentId = tostring(column_ifexists('environmentId_g', '')),\n        Enabled = column_ifexists('enabled_b', bool(null)),\n        IsSystem = column_ifexists('isSystem_b', bool(null)),\n        LastModified = unixtime_milliseconds_todatetime(column_ifexists('lastModified_d', real(null))),\n        CreatedAt = unixtime_milliseconds_todatetime(column_ifexists('createdAt_d', real(null))),\n        EventEndTime = unixtime_milliseconds_todatetime(column_ifexists('event_timestamp_d', real(null))),\n        EventLoggerName = tostring(column_ifexists('event_loggerName_s', '')),\n        EventMessage = tostring(column_ifexists('event_message_s', '')),\n        EventPriority = tostring(column_ifexists('event_priority_s', '')),\n        EventThreadName = tostring(column_ifexists('event_threadName_s', '')),\n        InstanceId = tostring(column_ifexists('instanceId_s', '')),\n        DeploymentId = tostring(column_ifexists('deploymentId_s', '')),\n        RecordId = tostring(column_ifexists('recordId_s', '')),\n        EventType = tostring(column_ifexists('event_type_s', '')),\n        Line = column_ifexists('line_d', real(null))\n    | project\n        TimeGenerated, CloudHubVersion, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nlet alertsTable_view = view() {\n    // Discover the optional historical table without an unresolved explicit table reference.\n    union isfuzzy=true withsource=AlertSourceTable MulesoftCloudhub*Alerts_CL\n    | where AlertSourceTable in ('MulesoftCloudhubAlerts_CL', 'MulesoftCloudhub2Alerts_CL')\n    | extend\n        CloudHubVersion = coalesce(tostring(column_ifexists('CloudHubVersion', '')), iff(AlertSourceTable endswith 'MulesoftCloudhub2Alerts_CL', '2.0', '1.0')),\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = tostring(column_ifexists('Id', '')),\n        EventResult = tostring(column_ifexists('Name', '')),\n        EventSeverity = tostring(column_ifexists('Severity', '')),\n        ProductName = tostring(column_ifexists('ProductName', '')),\n        AdditionalData = column_ifexists('Actions', dynamic(null)),\n        ConditionResourceType = tostring(column_ifexists('Condition', dynamic(null)).resourceType),\n        ConditionResources = tostring(column_ifexists('Condition', dynamic(null)).resources),\n        EventResultDetails = tostring(column_ifexists('Condition', dynamic(null)).type),\n        OrganizationId = tostring(column_ifexists('OrganizationId', '')),\n        EnvironmentId = tostring(column_ifexists('EnvironmentId', '')),\n        Enabled = column_ifexists('Enabled', bool(null)),\n        IsSystem = column_ifexists('IsSystem', bool(null)),\n        LastModified = column_ifexists('LastModified', datetime(null)),\n        CreatedAt = column_ifexists('CreatedAt', datetime(null)),\n        EventEndTime = datetime(null),\n        EventLoggerName = '',\n        EventMessage = '',\n        EventPriority = '',\n        EventThreadName = '',\n        InstanceId = '',\n        DeploymentId = '',\n        RecordId = '',\n        EventType = '',\n        Line = real(null)\n    | project\n        TimeGenerated, CloudHubVersion, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nlet logsTable_view = view() {\n    MuleSoftCloudhubLogs_CL\n    | extend\n        CloudHubVersion = '',\n        EventVendor = 'MuleSoft',\n        EventProduct = 'Cloudhub',\n        EventCount = 1,\n        EventOriginalUid = '',\n        EventResult = '',\n        EventSeverity = '',\n        ProductName = '',\n        AdditionalData = dynamic(null),\n        ConditionResourceType = '',\n        ConditionResources = '',\n        EventResultDetails = '',\n        OrganizationId = '',\n        EnvironmentId = '',\n        Enabled = bool(null),\n        IsSystem = bool(null),\n        LastModified = datetime(null),\n        CreatedAt = datetime(null),\n        EventEndTime = column_ifexists('EventTime', datetime(null)),\n        EventLoggerName = tostring(column_ifexists('Logger', '')),\n        EventMessage = tostring(column_ifexists('Message', '')),\n        EventPriority = tostring(column_ifexists('Level', '')),\n        EventThreadName = tostring(column_ifexists('Thread', '')),\n        InstanceId = tostring(column_ifexists('InstanceId', '')),\n        DeploymentId = '',\n        RecordId = '',\n        EventType = '',\n        Line = real(null)\n    | project\n        TimeGenerated, CloudHubVersion, EventVendor, EventProduct, EventCount,\n        EventOriginalUid, EventResult, EventSeverity, ProductName,\n        AdditionalData, ConditionResourceType, ConditionResources, EventResultDetails,\n        OrganizationId, EnvironmentId, Enabled, IsSystem,\n        LastModified, CreatedAt, EventEndTime,\n        EventLoggerName, EventMessage, EventPriority, EventThreadName,\n        InstanceId, DeploymentId, RecordId, EventType, Line\n};\nunion isfuzzy=true (oldTable_view), (alertsTable_view), (logsTable_view)\n",
         "functionParameters": "",
         "version": 2,
         "tags": [
@@ -2502,12 +2765,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.2.1",
+        "version": "3.2.2",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Mulesoft",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Mulesoft/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.mulesoft.com/platform/saas/cloudhub-ipaas-cloud-based-integration\">MuleSoft Cloudhub</a> solution provides the capability to ingest logs from Cloudhub applications into Microsoft Sentinel. This solution includes two data connector options: an Azure Function-based connector using the Cloudhub API, and a push-based CCF connector that receives logs directly via Log4j HTTP appender as recommended by MuleSoft.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework (CCF)</a></p>\n</li>\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Log Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Data Collection Rules (DCR)</a></p>\n</li>\n<li><p><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/data-collector-api\">Azure Monitor HTTP Data Collector API</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/#overview\">Azure Functions</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 3, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Mulesoft/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://www.mulesoft.com/platform/saas/cloudhub-ipaas-cloud-based-integration\">MuleSoft Cloudhub</a> solution ingests CloudHub data into Microsoft Sentinel. Its Alerts CCF connector uses Connected App OAuth2 for CloudHub 1.0 or 2.0 to collect alert configuration snapshots using the corresponding API. The separate Logs CCF connector receives application logs from a customer-configured, Azure Monitor-compatible sender. A legacy Azure Function connector is also included.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>Dependencies can be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> or incur additional costs:</p>\n<ol type=\"a\">\n<li><p><a href=\"https://learn.microsoft.com/azure/sentinel/create-codeless-connector\">Codeless Connector Framework</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview\">Logs Ingestion API</a></p>\n</li>\n<li><p><a href=\"https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview\">Data Collection Rules</a></p>\n</li>\n<li><p><a href=\"https://azure.microsoft.com/services/functions/\">Azure Functions</a></p>\n</li>\n</ol>\n<p><strong>Data Connectors:</strong> 3, <strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",

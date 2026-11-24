@@ -17,6 +17,7 @@ from typing import Any, Mapping, Protocol, Sequence
 import requests
 import yaml
 
+from asim_ingestion.fixtures.data import canonicalize_row_column_names
 from asim_ingestion.fixtures.timestamps import (
     parse_kusto_datetime_ticks,
     ticks_to_kusto_datetime,
@@ -32,17 +33,6 @@ INGESTION_SCOPE = "https://monitor.azure.com/.default"
 DCR_API_VERSION = "2022-06-01"
 TABLE_API_VERSION = "2022-10-01"
 INGESTION_API_VERSION = "2023-01-01"
-
-DEFAULT_SUBSCRIPTION_ID = "419581d6-4853-49bd-83b6-d94bb8a77887"
-DEFAULT_RESOURCE_GROUP = "asim-schemadatatester-githubshared-canary"
-DEFAULT_WORKSPACE_NAME = "ASIM-SchemaDataTester-GithubShared-Canary"
-DEFAULT_WORKSPACE_ID = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
-DEFAULT_DCE_NAME = "ASIM-SchemaDataTester-GithubShared-Canary"
-DEFAULT_INGESTION_ENDPOINT = (
-    "https://asim-schemadatatester-githubshared-canary-qa1f."
-    "eastus2euap-1.canary.ingest.monitor.azure.com"
-)
-DEFAULT_LOCATION = "eastus2euap"
 
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 RESOURCE_NAME_RE = re.compile(r"[^a-z0-9-]+")
@@ -128,13 +118,34 @@ class Clock:
 
 @dataclass(frozen=True)
 class CanaryConfig:
-    subscription_id: str = DEFAULT_SUBSCRIPTION_ID
-    resource_group: str = DEFAULT_RESOURCE_GROUP
-    workspace_name: str = DEFAULT_WORKSPACE_NAME
-    workspace_id: str = DEFAULT_WORKSPACE_ID
-    dce_name: str = DEFAULT_DCE_NAME
-    ingestion_endpoint: str = DEFAULT_INGESTION_ENDPOINT
-    location: str = DEFAULT_LOCATION
+    subscription_id: str
+    resource_group: str
+    workspace_name: str
+    workspace_id: str
+    dce_name: str
+    ingestion_endpoint: str
+    location: str
+
+    def __post_init__(self) -> None:
+        values = {
+            "subscription_id": self.subscription_id,
+            "resource_group": self.resource_group,
+            "workspace_name": self.workspace_name,
+            "workspace_id": self.workspace_id,
+            "dce_name": self.dce_name,
+            "ingestion_endpoint": self.ingestion_endpoint,
+            "location": self.location,
+        }
+        missing = [
+            name
+            for name, value in values.items()
+            if not isinstance(value, str) or not value.strip()
+        ]
+        if missing:
+            raise ValueError(
+                "Canary configuration values must be non-empty: "
+                + ", ".join(missing)
+            )
 
     @property
     def workspace_resource_id(self) -> str:
@@ -281,20 +292,30 @@ def build_fixture_snapshot(
         }
         for column in schema
     ]
+    try:
+        normalized_rows = canonicalize_row_column_names(
+            normalized_schema,
+            fixture_rows,
+        )
+    except ValueError as exc:
+        raise HarnessError("source-snapshot", str(exc)) from exc
     known_names = {
         column["name"] for column in normalized_schema
     }
+    excluded_names = {
+        name.casefold() for name in REPLAY_EXCLUDED_COLUMNS
+    }
     extra_names = [
         str(name)
-        for row in fixture_rows
+        for row in normalized_rows
         for name in row
         if str(name) not in known_names
-        and str(name) not in REPLAY_EXCLUDED_COLUMNS
+        and str(name).casefold() not in excluded_names
     ]
     for name in dict.fromkeys(extra_names):
         values = [
             row.get(name)
-            for row in fixture_rows
+            for row in normalized_rows
             if row.get(name) is not None
         ]
         if values and all(isinstance(value, bool) for value in values):
@@ -322,10 +343,11 @@ def build_fixture_snapshot(
         )
         known_names.add(name)
     column_names = [column["name"] for column in normalized_schema]
-    if len(column_names) != len(set(column_names)):
+    folded_column_names = [name.casefold() for name in column_names]
+    if len(folded_column_names) != len(set(folded_column_names)):
         raise HarnessError(
             "source-snapshot",
-            "Fixture schema contains duplicate columns.",
+            "Fixture schema contains case-insensitive duplicate columns.",
         )
     type_by_name = {
         column["name"]: column["type"]
@@ -337,7 +359,7 @@ def build_fixture_snapshot(
             name: _json_safe_value(row.get(name), type_by_name[name])
             for name in column_names
         }
-        for row in fixture_rows
+        for row in normalized_rows
     ]
     for row in rows:
         timestamp = row.get("TimeGenerated")
@@ -352,7 +374,7 @@ def build_fixture_snapshot(
     ).hexdigest()
     fixture_columns = {
         str(name)
-        for row in fixture_rows
+        for row in normalized_rows
         for name in row
     }
     return {

@@ -9,28 +9,28 @@
       "id": "MulesoftCloudhubConnector",
       "title": "Mulesoft CloudHub Alerts Connector (via Codeless Connector Framework)",
       "publisher": "Microsoft",
-      "descriptionMarkdown": "The Mulesoft CloudHub data connector enables you to ingest alerts from Mulesoft CloudHub into Microsoft Sentinel through the CloudHub REST API v2. This connector supports configurable endpoints to accommodate different Mulesoft regions and deployment environments including US Commercial Cloud, EU Cloud, Government Cloud, and on-premises deployments. It uses multi-stream support so you can connect to multiple Mulesoft environments simultaneously. Configure the connector with your Anypoint Platform credentials, environment ID, and optional application name filter to begin collecting data. Use the `MuleSoftCloudhub` parser to query ingested alerts. Refer to [Mulesoft CloudHub API documentation](https://anypoint.mulesoft.com/exchange/portals/anypoint-platform/) for more information about the CloudHub APIs.",
+      "descriptionMarkdown": "Collect MuleSoft CloudHub 1.0 or CloudHub 2.0 alert configuration snapshots into Microsoft Sentinel using Connected App OAuth2. Select the CloudHub deployment platform for each connection. CloudHub 1.0 uses the CloudHub API and requires CloudHub 1.0 entitlement; CloudHub 2.0 uses the organization/environment-scoped AMC Application Manager API. API version v2 does not identify the CloudHub deployment platform. Both platforms write to MulesoftCloudhubAlerts_CL, with CloudHubVersion set to 1.0 or 2.0. The connector polls every 24 hours and may collect unchanged configurations again; it does not collect fired-alert history, application logs or on-premises Runtime Manager alerts. The MuleSoftCloudhub parser also retains access to historical data in the former 2.0 table. See the [CloudHub API](https://docs.mulesoft.com/cloudhub/cloudhub-api), [AMC API](https://dev-portal.mulesoft.com/apis/amc-application-manager.html) and [Connected App setup](https://docs.mulesoft.com/access-management/creating-connected-apps-dev).",
       "graphQueriesTableName": "MulesoftCloudhubAlerts_CL",
       "graphQueries": [
         {
-          "metricName": "Total alerts received",
+          "metricName": "Alert configurations received",
           "legend": "Mulesoft CloudHub Alerts",
-          "baseQuery": "{{graphQueriesTableName}}"
+          "baseQuery": "MulesoftCloudhubAlerts_CL"
         },
         {
           "metricName": "Critical alerts",
           "legend": "Critical Alerts",
-          "baseQuery": "{{graphQueriesTableName}} | where Severity == 'CRITICAL'"
+          "baseQuery": "MulesoftCloudhubAlerts_CL | where Severity == 'CRITICAL'"
         },
         {
           "metricName": "Error alerts",
           "legend": "Error Alerts",
-          "baseQuery": "{{graphQueriesTableName}} | where Severity == 'ERROR'"
+          "baseQuery": "MulesoftCloudhubAlerts_CL | where Severity == 'ERROR'"
         },
         {
           "metricName": "System alerts",
           "legend": "System Alerts",
-          "baseQuery": "{{graphQueriesTableName}} | where IsSystem == true"
+          "baseQuery": "MulesoftCloudhubAlerts_CL | where IsSystem == true"
         }
       ],
       "sampleQueries": [
@@ -49,12 +49,24 @@
         {
           "description": "Summary by alert name",
           "query": "MuleSoftCloudhub\n| summarize count() by EventResult"
+        },
+        {
+          "description": "Recently ingested CloudHub 2.0 alert configurations",
+          "query": "MulesoftCloudhubAlerts_CL\n| where ingestion_time() > ago(2d)\n| where CloudHubVersion == '2.0'\n| project TimeGenerated, CloudHubVersion, OrganizationId, EnvironmentId, Id, Name, Severity, ProductName"
+        },
+        {
+          "description": "Latest CloudHub 2.0 configuration per alert",
+          "query": "MulesoftCloudhubAlerts_CL\n| where CloudHubVersion == '2.0'\n| summarize arg_max(ingestion_time(), *) by CloudHubVersion, OrganizationId, EnvironmentId, Id"
+        },
+        {
+          "description": "Deduplicate repeated CloudHub alert revisions (last 24 hours)",
+          "query": "let alerts = MulesoftCloudhubAlerts_CL | where ingestion_time() > ago(24h) | extend CloudHubVersion = coalesce(tostring(column_ifexists('CloudHubVersion', '')), '1.0');\nunion\n(alerts | where isnotempty(Id) and isnotnull(LastModified) | summarize arg_max(ingestion_time(), *) by CloudHubVersion, OrganizationId, EnvironmentId, Id, CreatedAt, LastModified, Name, Severity, ProductName, Enabled, IsSystem, _ConditionKey = tostring(Condition), _ActionsKey = tostring(Actions) | project-away _ConditionKey, _ActionsKey),\n(alerts | where isempty(Id) or isnull(LastModified))"
         }
       ],
       "dataTypes": [
         {
           "name": "MulesoftCloudhubAlerts_CL",
-          "lastDataReceivedQuery": "MulesoftCloudhubAlerts_CL\n| where TimeGenerated > ago(6h)\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+          "lastDataReceivedQuery": "MulesoftCloudhubAlerts_CL\n| summarize Time = max(ingestion_time())\n| where isnotempty(Time)"
         }
       ],
       "connectivityCriteria": [
@@ -64,7 +76,7 @@
         {
           "type": "IsConnectedQuery",
           "value": [
-            "MulesoftCloudhubAlerts_CL | where TimeGenerated > ago(1h) | take 1"
+            "MulesoftCloudhubAlerts_CL | where ingestion_time() > ago(2d) | take 1"
           ]
         }
       ],
@@ -90,25 +102,25 @@
         "customs": [
           {
             "name": "Mulesoft CloudHub API access",
-            "description": "**Mulesoft CloudHub API** access with read permissions is required."
+            "description": "Access to the selected CloudHub deployment platform and Read Alerts permission for the target business group/environment are required. CloudHub 1.0 additionally requires CloudHub 1.0 entitlement. Both platforms use Connected App OAuth2 with an app that acts on its own behalf, not environment client credentials. CloudHub 2.0 also requires the organization/business group ID."
           }
         ]
       },
       "instructionSteps": [
         {
-          "title": "1. Mulesoft CloudHub Connections",
-          "description": "Manage connections to your Mulesoft CloudHub environments",
+          "title": "Configuration",
+          "description": "This connector supports MuleSoft CloudHub 1.0 and CloudHub 2.0.",
           "instructions": [
             {
               "type": "Markdown",
               "parameters": {
-                "content": "## Prerequisites\r\n\r\nBefore configuring this connector, ensure you have:\r\n\r\n1. **Mulesoft Anypoint Platform Account** with appropriate permissions\r\n2. **Environment Access** to the CloudHub environment you want to monitor\r\n3. **API Access Credentials** (username and password)\r\n4. **Environment ID** from your Mulesoft CloudHub console\r\n\r\n### Finding Your Environment ID\r\n\r\n1. Log in to [Anypoint Platform](https://anypoint.mulesoft.com/)\r\n2. Navigate to **Access Management** > **Environments**\r\n3. Select your target environment\r\n4. Copy the Environment ID from the URL or environment details"
+                "content": "## Prerequisites\r\n\r\n1. Choose the **CloudHub deployment platform** used by the environment, not the API version. Customers with both platforms can create separate connections for each.\r\n2. Both platforms use **Connected App OAuth2**. Create a Connected App under **Access Management > Connected Apps** with **App acts on its own behalf (client credentials)**. Grant **Runtime Manager > Read Alerts** for the target business group and environment. Use its client ID and secret, not an Anypoint username/password or the environment's client credentials.\r\n3. **CloudHub 1.0** requires CloudHub 1.0 entitlement.\r\n4. **CloudHub 2.0** also requires the ID of the organization/business group owning the environment. It uses the AMC API, not `/cloudhub/api/v2/alerts`.\r\n5. Find the environment ID under **Access Management > Business Groups > Environments**. The environment and business group must match the app's Read Alerts scope.\r\n\r\nSee [Connected App setup](https://docs.mulesoft.com/access-management/creating-connected-apps-dev)."
               }
             },
             {
               "type": "InfoMessage",
               "parameters": {
-                "text": "This connector requires read access to the CloudHub API. Contact your Mulesoft administrator if you don't have the necessary permissions.",
+                "text": "Both platforms provide alert configuration snapshots, not fired-alert history. Select the platform that owns the environment. CloudHub 2.0-only access does not enable the CloudHub 1.0 API.",
                 "visible": true,
                 "inline": false
               }
@@ -120,6 +132,14 @@
                   {
                     "columnName": "Connection Alias",
                     "columnValue": "properties.addOnAttributes.connectionAlias"
+                  },
+                  {
+                    "columnName": "CloudHub Platform",
+                    "columnValue": "properties.addOnAttributes.cloudHubVersion"
+                  },
+                  {
+                    "columnName": "Environment ID",
+                    "columnValue": "properties.addOnAttributes.environmentId"
                   },
                   {
                     "columnName": "Stream Type",
@@ -188,7 +208,7 @@
                       {
                         "type": "InfoMessage",
                         "parameters": {
-                          "text": "**Regional Endpoints**:\n- **US**: https://anypoint.mulesoft.com\n- **EU**: https://eu1.anypoint.mulesoft.com\n- **Government**: https://gov.anypoint.mulesoft.com",
+                          "text": "Enter the regional Anypoint Platform HTTPS origin hosting your organization, such as https://anypoint.mulesoft.com or https://eu1.anypoint.mulesoft.com. The connector resolves the selected platform's API and OAuth token endpoint on this origin. An existing /cloudhub/api suffix also works. Do not enter an application URL or a custom proxy path. Other control planes require separate compatibility validation.",
                           "visible": true,
                           "inline": true
                         }
@@ -196,22 +216,86 @@
                     ]
                   },
                   {
-                    "title": "Credentials",
-                    "description": "Provide your Anypoint Platform credentials",
+                    "title": "CloudHub Platform",
+                    "description": "Select the platform to display its required connection fields",
                     "instructions": [
                       {
-                        "type": "Markdown",
+                        "type": "Radio",
                         "parameters": {
-                          "content": "### Authentication"
+                          "title": "CloudHub deployment platform",
+                          "name": "cloudHubVersion",
+                          "validations": {
+                            "required": true
+                          },
+                          "options": [
+                            {
+                              "label": "CloudHub 1.0",
+                              "value": "1.0",
+                              "instructions": [
+                                {
+                                  "type": "InfoMessage",
+                                  "parameters": {
+                                    "text": "Requires CloudHub 1.0 entitlement. Uses /cloudhub/api/v2/alerts and stores snapshots in MulesoftCloudhubAlerts_CL with CloudHubVersion = 1.0.",
+                                    "visible": true,
+                                    "inline": true
+                                  }
+                                },
+                                {
+                                  "type": "Textbox",
+                                  "parameters": {
+                                    "label": "Application Name Filter",
+                                    "placeholder": "Optional CloudHub 1.0 application filter",
+                                    "type": "text",
+                                    "name": "applicationName",
+                                    "validations": {
+                                      "required": false
+                                    }
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "label": "CloudHub 2.0",
+                              "value": "2.0",
+                              "instructions": [
+                                {
+                                  "type": "InfoMessage",
+                                  "parameters": {
+                                    "text": "Uses the AMC Application Manager API and stores snapshots in MulesoftCloudhubAlerts_CL with CloudHubVersion = 2.0. The CloudHub 1.0 application filter does not apply.",
+                                    "visible": true,
+                                    "inline": true
+                                  }
+                                },
+                                {
+                                  "type": "Textbox",
+                                  "parameters": {
+                                    "label": "Organization / Business Group ID",
+                                    "placeholder": "Business group UUID that owns the environment",
+                                    "type": "text",
+                                    "name": "organizationId",
+                                    "validations": {
+                                      "required": true
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          ]
                         }
-                      },
+                      }
+                    ]
+                  },
+                  {
+                    "title": "Connected App Authentication",
+                    "description": "Both CloudHub platforms use OAuth2 client credentials",
+                    "instructions": [
                       {
                         "type": "Textbox",
                         "parameters": {
-                          "label": "Username",
-                          "placeholder": "Your Mulesoft Anypoint Platform username",
+                          "label": "Connected App Client ID",
+                          "placeholder": "Client ID from Access Management > Connected Apps",
                           "type": "text",
-                          "name": "username",
+                          "name": "clientId",
                           "validations": {
                             "required": true
                           }
@@ -220,10 +304,10 @@
                       {
                         "type": "Textbox",
                         "parameters": {
-                          "label": "Password",
-                          "placeholder": "Your Mulesoft Anypoint Platform password",
+                          "label": "Connected App Client Secret",
+                          "placeholder": "Connected App secret value",
                           "type": "password",
-                          "name": "password",
+                          "name": "clientSecret",
                           "validations": {
                             "required": true
                           }
@@ -252,47 +336,10 @@
                             "required": true
                           }
                         }
-                      },
-                      {
-                        "type": "Textbox",
-                        "parameters": {
-                          "label": "Application Name Filter",
-                          "placeholder": "Optional: Filter alerts for a specific application",
-                          "type": "text",
-                          "name": "applicationName"
-                        }
-                      },
-                      {
-                        "type": "InfoMessage",
-                        "parameters": {
-                          "text": "Leave the application name filter empty to collect alerts for all applications in the environment.",
-                          "visible": true,
-                          "inline": true
-                        }
                       }
                     ]
                   }
                 ]
-              }
-            }
-          ]
-        },
-        {
-          "title": "2. Monitor and Validate",
-          "description": "Monitor data ingestion and validate connectivity",
-          "instructions": [
-            {
-              "type": "Markdown",
-              "parameters": {
-                "content": "### Post-Connection Steps\r\n\r\n1. **Monitor Connection Status**: Check the connector status in the Data connectors page\r\n2. **Validate Data Flow**: Use the sample queries provided to verify data is being collected\r\n3. **Review Logs**: Check Azure Monitor logs for any connection or authentication issues\r\n\r\n### Data Collection Schedule\r\n- **Alerts**: Polled every 5 minutes from `/v2/alerts` endpoint\r\n\r\n### Expected Timeline\r\n- **Initial Data**: Allow 10-15 minutes for initial data to appear\r\n- **Alerts Data**: Available in the `MuleSoftCloudhub` table\r\n\r\n### Troubleshooting\r\n- **Authentication errors**: Verify credentials and environment access\r\n- **No data**: Ensure alerts exist in the specified environment\r\n- **Partial data**: Check environment ID and application filter settings"
-              }
-            },
-            {
-              "type": "InfoMessage",
-              "parameters": {
-                "text": "**Sample Query**: `MuleSoftCloudhub | where TimeGenerated > ago(24h) | summarize count() by EventSeverity`",
-                "visible": true,
-                "inline": true
               }
             }
           ]
