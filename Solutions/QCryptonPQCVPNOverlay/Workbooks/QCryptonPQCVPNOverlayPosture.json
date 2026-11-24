@@ -1,0 +1,147 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# QCrypton PQC VPN Overlay \u2014 Hybrid Post-Quantum WireGuard Dashboard\n\nTunnel telemetry from PQC VPN Overlay instances. Tracks hybrid PQC adoption, classical fallback events, HNDL risk, policy enforcement, and tunnel lifecycle metrics. Data source: `PQCVPNOverlay_CL`."
+      },
+      "name": "title"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "d4e5f6a7-b8c9-4d0e-a1f2-3b4c5d6e7f80",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": { "durationMs": 86400000 },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 43200000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 259200000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "params"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCVPNOverlay_CL\n| where EventType_s == 'tunnel_up'\n| extend TunnelType = iff(PQCUsed_d == 1, 'PQC Hybrid', 'Classical')\n| summarize Count = count() by TunnelType\n| render piechart",
+        "size": 0,
+        "title": "PQC vs classical tunnel adoption",
+        "timeContext": { "durationMs": 0 },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "customWidth": "50"
+      },
+      "name": "pqcVsClassical"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCVPNOverlay_CL\n| where EventType_s == 'tunnel_up'\n| summarize Count = count() by KeyExchange_s\n| render piechart",
+        "size": 0,
+        "title": "Key exchange algorithm distribution",
+        "timeContext": { "durationMs": 0 },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "customWidth": "50"
+      },
+      "name": "keyExchangeDist"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCVPNOverlay_CL\n| where EventType_s in ('tunnel_up', 'tunnel_down', 'classical_fallback', 'handshake_fail')\n| summarize Count = count() by bin(TimeGenerated, 1h), EventType_s\n| render timechart",
+        "size": 0,
+        "title": "Tunnel lifecycle events over time",
+        "timeContext": { "durationMs": 0 },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "tunnelEvents"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCVPNOverlay_CL\n| where EventType_s == 'tunnel_up'\n| summarize Protected = countif(HNDLRisk_d == 0), AtRisk = countif(HNDLRisk_d == 1) by bin(TimeGenerated, 1h)\n| render timechart",
+        "size": 0,
+        "title": "HNDL risk \u2014 protected vs at-risk tunnels over time",
+        "timeContext": { "durationMs": 0 },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "hndlRisk"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCVPNOverlay_CL\n| where EventType_s in ('policy_block', 'policy_warn')\n| summarize Count = count() by bin(TimeGenerated, 1h), EventType_s\n| render timechart",
+        "size": 0,
+        "title": "Policy enforcement events over time",
+        "timeContext": { "durationMs": 0 },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "policyEvents"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCVPNOverlay_CL\n| where EventType_s == 'tunnel_up'\n| summarize Tunnels = count(), PQC = countif(PQCUsed_d == 1), Classical = countif(PQCUsed_d == 0), AvgLatencyMs = round(avg(LatencyMs_d), 2) by PeerID_s\n| extend PQCPct = round(100.0 * PQC / Tunnels, 1)\n| project PeerID_s, Tunnels, PQC, Classical, PQCPct, AvgLatencyMs\n| order by Tunnels desc",
+        "size": 0,
+        "title": "Per-peer tunnel summary",
+        "timeContext": { "durationMs": 0 },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "peerSummary"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "PQCVPNOverlay_CL\n| where EventType_s == 'tunnel_down'\n| summarize TotalSentGB = round(sum(BytesSent_d) / 1073741824.0, 2), TotalRecvGB = round(sum(BytesRecv_d) / 1073741824.0, 2), AvgDurationMin = round(avg(DurationSec_d) / 60.0, 1) by PeerID_s\n| project PeerID_s, TotalSentGB, TotalRecvGB, AvgDurationMin\n| order by TotalSentGB desc",
+        "size": 0,
+        "title": "Tunnel data volume by peer",
+        "timeContext": { "durationMs": 0 },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "dataVolume"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "QCrypton-PQCVPNOverlayPosture",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -1,0 +1,179 @@
+Parser:
+  DisplayName: 'AWSWAF WebSession ASIM parser'
+  Version: '1.0.0'
+  LastUpdated: '2026-11-23'
+Product:
+  Name: AWS WAF
+Normalization:
+  Schema: WebSession
+  Version: '0.2.7'
+Author: Microsoft
+Description: |
+  Normalizes AWS Web Application Firewall logs from the AWS S3 WAF CCF connector
+  and AWSWAF source table into ASimWebSessionLogs during ingestion.
+ParserName: ASimWebSessionAWSWAF
+DCRType: Standard
+InputStream: Microsoft-AWSWAF
+SourceRawTable: AWSWAF
+TargetASIMTable: ASimWebSessionLogs
+ParserFilterQuery: |
+  source
+ParserQuery: |
+  source
+  | extend Type = 'AWSWAF'
+  | extend
+  EventCount = int(1),
+  EventStartTime = TimeGenerated,
+  EventEndTime = TimeGenerated,
+  EventType = 'HTTPsession',
+  EventVendor = 'AWS',
+  EventProduct = 'WAF',
+  EventSchemaVersion = '0.2.7'
+  | extend Dvc = iif(isnotempty(WebAclId), WebAclId, strcat(EventVendor, '/', EventProduct))
+  | extend
+  DvcAction = case(Action == 'ALLOW', 'Allow', Action == 'BLOCK', 'Deny', Action == 'CAPTCHA', 'Deny', Action == 'CHALLENGE', 'Deny', Action == '', '', ''),
+  EventResult = case(Action == 'ALLOW', 'Success', Action == 'BLOCK', 'Failure', Action == 'CAPTCHA', 'Failure', Action == 'CHALLENGE', 'Failure', Action == '', 'NA', ''),
+  EventSeverity = case(Action == 'ALLOW', 'Informational', Action == 'BLOCK', 'Low', Action == 'CAPTCHA', 'Low', Action == 'CHALLENGE', 'Low', Action == '', 'Informational', '')
+
+  | extend DvcId = Dvc,
+  DvcIdType = 'Other'
+  | project-rename DvcOriginalAction = Action
+
+  | extend EventResultDetails = tostring(ResponseCodeSent)
+
+  | extend parsedRequest = parse_json(HttpRequest)
+
+  | extend SrcIpAddr = tostring(parsedRequest.clientIp),
+  SrcGeoCountry = tostring(parsedRequest.country)
+  | extend headers = iff(array_length(parsedRequest.headers) > 0, parsedRequest.headers, parse_json('[{}]'))
+
+
+  | extend _HeadersJson = tostring(headers)
+  | extend _HeadersOrdered = replace(@'\{(?:[^{}"]|"(?:\\.|[^"\\])*")*"value"\s*:\s*("(?:\\.|[^"\\])*")(?:[^{}"]|"(?:\\.|[^"\\])*")*"name"\s*:\s*("(?:\\.|[^"\\])*")(?:[^{}"]|"(?:\\.|[^"\\])*")*\}', @'{"name":\2,"value":\1}', _HeadersJson)
+  | extend
+      _HeaderNames = extract_all(@'\{(?:[^{}"]|"(?:\\.|[^"\\])*")*"name"\s*:\s*"((?i:host|user-agent|referer|x-forwarded-for))"(?:[^{}"]|"(?:\\.|[^"\\])*")*"value"\s*:\s*("(?:\\.|[^"\\])+")(?:[^{}"]|"(?:\\.|[^"\\])*")*\}', parse_json('[1]'), _HeadersOrdered),
+      _HeaderValues = extract_all(@'\{(?:[^{}"]|"(?:\\.|[^"\\])*")*"name"\s*:\s*"((?i:host|user-agent|referer|x-forwarded-for))"(?:[^{}"]|"(?:\\.|[^"\\])*")*"value"\s*:\s*("(?:\\.|[^"\\])+")(?:[^{}"]|"(?:\\.|[^"\\])*")*\}', parse_json('[2]'), _HeadersOrdered)
+  | extend _HeaderPairs = tostring(zip(
+      parse_json(tolower(iif(isnull(_HeaderNames), '[]', tostring(_HeaderNames)))),
+      iif(isnull(_HeaderValues), parse_json('[]'), _HeaderValues)
+  ))
+  | parse-kv _HeaderPairs as (
+      host:string,
+      ['user-agent']:string,
+      referer:string,
+      ['x-forwarded-for']:string
+  ) with (regex=@'\[\s*"(host|user-agent|referer|x-forwarded-for)"\s*,\s*("(?:\\.|[^"\\])*")\s*\]')
+  | extend
+      HttpHost = tostring(parse_json(tostring(parse_json(host)))),
+      HttpUserAgent = tostring(parse_json(tostring(parse_json(['user-agent'])))),
+      HttpReferrer = tostring(parse_json(tostring(parse_json(referer)))),
+      HttpRequestXff = tostring(parse_json(tostring(parse_json(['x-forwarded-for']))))
+  | extend
+  scheme = tostring(parsedRequest.scheme),
+  host = iif(isnotempty(tostring(parsedRequest.host)), tostring(parsedRequest.host), HttpHost),
+  uri = tostring(parsedRequest.uri),
+  args = tostring(parsedRequest.args)
+  | extend Url = case(
+  isnotempty(scheme) and isnotempty(host),
+  strcat(scheme, '://', host, uri, iff(isnotempty(args), strcat('?', args), '')),
+  isnotempty(host),
+  strcat(host, uri, iff(isnotempty(args), strcat('?', args), '')),
+  uri
+  ),
+  HttpVersion = tostring(parsedRequest.httpVersion),
+  HttpRequestMethod = tostring(parsedRequest.httpMethod)
+
+  | extend NetworkApplicationProtocol = toupper(scheme),
+  NetworkSessionId = tostring(parsedRequest.requestId)
+
+  | project-rename DstDvcId = HttpSourceId
+  | extend DstDvcIdType = 'Other',
+  DstPortNumber = case(
+  scheme =~ 'https', toint(443),
+  scheme =~ 'http', toint(80),
+  int(null)
+  )
+
+  | extend _hostNoPort = case(
+  host startswith '[', extract(@'^\[(.+?)\]', 1, host),
+  host matches regex @'^[^:]+:\d+$', tostring(split(host, ':')[0]),
+  host
+  )
+  | extend _hostIsIp =
+  isnotnull(parse_ipv4(_hostNoPort))
+  or (_hostNoPort contains ':' and isnotnull(parse_ipv6(_hostNoPort)))
+  | extend _hostIsIpShaped =
+  _hostIsIp
+  or _hostNoPort matches regex @'^\d{1,3}(\.\d{1,3}){3}$'
+  | extend _hostIsClean = _hostNoPort matches regex @'^[A-Za-z0-9\.\-\_]+$' or _hostIsIp
+  | extend _hostHasDomain = _hostIsClean and not(_hostIsIpShaped) and array_length(split(_hostNoPort, '.')) > 1
+  | extend
+  DstIpAddr   = iff(_hostIsIp, _hostNoPort, ''),
+  DstHostname = case(
+  _hostIsIp, _hostNoPort,
+  _hostIsIpShaped, '',
+  _hostIsClean, tostring(split(_hostNoPort, '.')[0]),
+  ''
+  ),
+  DstFQDN     = iff(_hostHasDomain, _hostNoPort, ''),
+  DstDomain   = iff(_hostHasDomain, substring(_hostNoPort, indexof(_hostNoPort, '.') + 1), '')
+  | extend DstDomainType = iff(isnotempty(DstDomain), 'FQDN', '')
+
+  | project-rename RuleName = TerminatingRuleId
+
+  | extend AdditionalFields = pack(
+  'HttpSourceName', HttpSourceName,
+  'TerminatingRuleType', TerminatingRuleType,
+  'TerminatingRuleMatchDetails', TerminatingRuleMatchDetails,
+  'RuleGroupList', RuleGroupList,
+  'RateBasedRuleList', RateBasedRuleList,
+  'Labels', Labels,
+  'JA3', Ja3Fingerprint
+  )
+
+  | extend EventOriginalUid = NetworkSessionId, Rule = RuleName
+
+  | project
+  TimeGenerated,
+  EventCount,
+  EventStartTime,
+  EventEndTime,
+  EventType,
+  EventResult,
+  EventProduct,
+  EventVendor,
+  EventSchemaVersion,
+  Dvc,
+  Url,
+  EventResultDetails,
+  EventSeverity,
+  DvcAction,
+  DvcOriginalAction,
+  DvcId,
+  DvcIdType,
+  HttpRequestMethod,
+  DstHostname,
+  SrcIpAddr,
+  EventOriginalUid,
+  HttpVersion,
+  HttpHost,
+  HttpUserAgent,
+  HttpReferrer,
+  HttpRequestXff,
+  DstDvcId,
+  DstDvcIdType,
+  DstIpAddr,
+  DstPortNumber,
+  DstFQDN,
+  DstDomain,
+  DstDomainType,
+  SrcGeoCountry,
+  NetworkApplicationProtocol,
+  NetworkSessionId,
+  RuleName,
+  Rule,
+  AdditionalFields,
+  Type
+Change:
+  Date: '2026-11-23'
+  Description: Initial ingestion-time conversion of ASimWebSessionAWSWAF for the AWS S3 WAF CCF connector.

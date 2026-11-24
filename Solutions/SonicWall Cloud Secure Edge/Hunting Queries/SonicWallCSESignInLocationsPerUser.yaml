@@ -1,0 +1,41 @@
+id: c2fd48a8-dfb3-439d-8fa8-d3ade70b92a1
+name: SonicWall CSE - Sign-in locations per user
+description: |
+  'This query searches for the countries and cities each user signed in from through SonicWall Cloud Secure Edge (CSE), with granted and denied counts.'
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  CSEEvents
+  | where EventType == "Identity" and isnotempty(ClientCountry) and isnotempty(UserEmail)
+  | summarize
+      Granted = countif(Action == "Grant"),
+      Denied = countif(Action == "Deny"),
+      ClientIps = make_set_if(ClientIp, isnotempty(ClientIp), 10),
+      ClientIp = take_anyif(ClientIp, isnotempty(ClientIp)),
+      FirstSeen = min(EventTime),
+      LastSeen = max(EventTime)
+      by UserEmail, ClientCountry, ClientCity
+  | extend
+      AccountName = tostring(split(UserEmail, "@")[0]),
+      UPNSuffix = tostring(split(UserEmail, "@")[1])
+  | order by UserEmail asc, LastSeen desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.0.0

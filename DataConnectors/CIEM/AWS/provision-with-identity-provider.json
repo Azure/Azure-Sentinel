@@ -1,0 +1,375 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "UCC - OIDC role and AWS CloudTrail log collection resources",
+    "Parameters": {
+        "UCCLogCollectionRoleName": {
+            "Type": "String",
+            "Description": "Log Collection Role Name",
+            "AllowedPattern": "[-_a-zA-Z0-9]+",
+            "Default": "UCC-LogCollection"
+        },
+        "UCCLogCollectionCloudTrailName": {
+            "Type": "String",
+            "Description": "Log Collection AWS CloudTrail name",
+            "AllowedPattern": "[-_a-zA-Z0-9]+",
+            "Default": "ucc-lc-cloudtrail"
+        },
+        "UCCLogCollectionS3BucketName": {
+            "Type": "String",
+            "Description": "Log Collection AWS S3 bucket name",
+            "AllowedPattern": "[-_a-zA-Z0-9]+",
+            "Default": "ucc-lc-s3-bucket"
+        },
+        "UCCLogCollectionSqsQueueName": {
+            "Type": "String",
+            "Description": "Log Collection  AWS SQS queue name",
+            "AllowedPattern": "[-_a-zA-Z0-9]+",
+            "Default": "ucc-lc-sqs-queue"
+        },
+        "TenantId": {
+            "Type": "String",
+            "Description": "Customer Microsoft Entra (Azure AD) tenant ID. Required. Used as the suffix of the role session name the connector presents when assuming the role.",
+            "AllowedPattern": "^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"
+        }
+    },
+    "Resources": {
+        "UCCOIDCIdentityProvider": {
+            "Description": "Identity provider resource using for UCC authentication with the required thumbprint list and the issuer url",
+            "Type": "AWS::IAM::OIDCProvider",
+            "Properties": {
+                "ClientIdList": [
+                    "api://1462b192-27f7-4cb9-8523-0f4ecb54b47e"
+                ],
+                "ThumbprintList": [
+                    "626d44e704d1ceabe3bf0d53397464ac8080142c"
+                ],
+                "Url": "https://sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/"
+            }
+        },
+        "CloudTrailSNSTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "DisplayName": "UCCLogCollectionCloudTrailLogDeliveryNotifications"
+            }
+        },
+        "CloudTrailSNSTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "CloudTrailSNSTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": "SNS:Publish",
+                            "Resource": {
+                                "Ref": "CloudTrailSNSTopic"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudTrailSQSQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "ReceiveMessageWaitTimeSeconds": 20,
+                "QueueName": {
+                    "Ref": "UCCLogCollectionSqsQueueName"
+                }
+            }
+        },
+        "CloudTrailS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "DependsOn": "CloudTrailSNSTopicPolicy",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Join": [
+                        "-",
+                        [
+                            {
+                                "Ref": "AWS::AccountId"
+                            },
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            {
+                                "Ref": "UCCLogCollectionS3BucketName"
+                            }
+                        ]
+                    ]
+                },
+                "NotificationConfiguration": {
+                    "TopicConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Topic": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailSNSTopic",
+                                    "TopicArn"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "CloudTrailS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailS3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudTrailSQSQueuePolicy": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "Queues": [
+                    {
+                        "Ref": "CloudTrailSQSQueue"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "sns.amazonaws.com"
+                            },
+                            "Action": "sqs:SendMessage",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailSQSQueue",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "ArnEquals": {
+                                    "aws:SourceArn": {
+                                        "Ref": "CloudTrailSNSTopic"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudTrailSNSSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "sqs",
+                "RawMessageDelivery": true,
+                "Endpoint": {
+                    "Fn::GetAtt": [
+                        "CloudTrailSQSQueue",
+                        "Arn"
+                    ]
+                },
+                "TopicArn": {
+                    "Ref": "CloudTrailSNSTopic"
+                }
+            }
+        },
+        "CloudTrailTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "Properties": {
+                "S3BucketName": {
+                    "Ref": "CloudTrailS3Bucket"
+                },
+                "IsLogging": true,
+                "IncludeGlobalServiceEvents": true,
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "TrailName": {
+                    "Ref": "UCCLogCollectionCloudTrailName"
+                }
+            },
+            "DependsOn": [
+                "CloudTrailSNSTopicPolicy",
+                "CloudTrailS3BucketPolicy",
+                "CloudTrailSQSQueuePolicy"
+            ]
+        },
+        "UCCLogsReaderRole": {
+            "Type": "AWS::IAM::Role",
+            "DependsOn": "UCCOIDCIdentityProvider",
+            "Properties": {
+                "ManagedPolicyArns": [],
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Federated": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/"
+                                }
+                            },
+                            "Action": "sts:AssumeRoleWithWebIdentity",
+                            "Condition": {
+                                "StringEquals": {
+                                    "sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud": [
+                                        "api://1462b192-27f7-4cb9-8523-0f4ecb54b47e"
+                                    ],
+                                    "sts:RoleSessionName": [
+                                        {
+                                            "Fn::Sub": "MicrosoftDefenderForClouds_${TenantId}"
+                                        },
+                                        {
+                                            "Fn::Sub": "MicrosoftSentinel_${TenantId}"
+                                        },
+                                        {
+                                            "Fn::Sub": "Microsoft_${TenantId}"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "UCCLogsReaderPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:ReceiveMessage",
+                                        "sqs:DeleteMessage"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "CloudTrailSQSQueue",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetBucketLocation"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    "arn:aws:s3:::",
+                                                    {
+                                                        "Ref": "CloudTrailS3Bucket"
+                                                    }
+                                                ]
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Join": [
+                                                "",
+                                                [
+                                                    "arn:aws:s3:::",
+                                                    {
+                                                        "Ref": "CloudTrailS3Bucket"
+                                                    },
+                                                    "/*"
+                                                ]
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "cloudtrail:LookupEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "RoleName": {
+                    "Ref": "UCCLogCollectionRoleName"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "UCCLogsReaderRoleArn": {
+            "Description": "Role ARN for the UCC logs reader role.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "UCCLogsReaderRole",
+                    "Arn"
+                ]
+            }
+        },
+        "CloudTrailS3BucketArn": {
+            "Description": "The ARN of the S3 bucket storing CloudTrail logs.",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CloudTrailS3Bucket",
+                    "Arn"
+                ]
+            }
+        },
+        "CloudTrailSQSQueueUrl": {
+            "Description": "The URL of the SQS Queue for UCC CIEM log ingestion.",
+            "Value": {
+                "Ref": "CloudTrailSQSQueue"
+            }
+        }
+    }
+}

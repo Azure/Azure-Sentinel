@@ -1,9 +1,9 @@
 # Validates ASIM ingestion-time parsers in the shared canary workspace.
 #
 # SECURITY BOUNDARIES:
-# - OIDC federated identity (AZURE_ASIM_CLIENT_ID) is scoped to canary workspace only:
-#   Workspace: ASIM-SchemaDataTester-GithubShared-Canary
-#   Resource Group: asim-schemadatatester-githubshared-canary
+# - OIDC federated identity (AZURE_ASIM_CLIENT_ID_MC01) is scoped to canary workspace only:
+#   Workspace: ASIM-GithubShared-Canary
+#   Resource Group: github-asim-rg
 #   Identity permissions: Canary RG/workspace only; deny cross-workspace and out-of-RG access
 # - Runs under pull_request_target so privileged workflow code comes from master.
 # - Fork PRs require explicit "SafeToRun" label approval from maintainer
@@ -27,6 +27,13 @@ permissions:
 env:
   ASIM_INGESTION_MAX_TARGETS: "100"
   ASIM_INGESTION_MAX_FIXTURE_BYTES: "5242880"
+  ASIM_CANARY_SUBSCRIPTION_ID: "b0c23e5e-a6c4-499e-950a-07de64febd19"
+  ASIM_CANARY_RESOURCE_GROUP: "github-asim-rg"
+  ASIM_CANARY_WORKSPACE_NAME: "ASIM-GithubShared-Canary"
+  ASIM_CANARY_WORKSPACE_ID: "979d8dd3-e81d-4476-a1ef-b30833ada11b"
+  ASIM_CANARY_DCE_NAME: "ASIM-GithubShared-Canary-DCE"
+  ASIM_CANARY_INGESTION_ENDPOINT: "https://asim-githubshared-canary-dce-nz1r.eastus2euap-1.canary.ingest.monitor.azure.com"
+  ASIM_CANARY_LOCATION: "eastus2euap"
 
 concurrency:
   # group: asim-tests-${{ github.event.pull_request.number || github.sha }}
@@ -50,6 +57,7 @@ jobs:
       issues: write
     outputs:
       approved: ${{ steps.check-approval.outputs.approved }}
+      approved_sha: ${{ steps.check-approval.outputs.approved_sha }}
     steps:
       - name: Verify approver has write access (fork + SafeToRun)
         # SECURITY: the dynamic equivalent of an Environment's "required reviewers".
@@ -91,36 +99,47 @@ jobs:
 
       - name: Check if PR needs approval
         id: check-approval
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          PR_LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+          TRIGGER_EVENT: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name }}
+          APPROVAL_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # Function to log with consistent formatting
           log_info() { echo "ℹ️  $1"; }
           log_success() { echo "✅ $1"; }
 
           log_info "Starting PR approval check..."
+          if ! [[ "$APPROVAL_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
 
           # Check if this is a fork PR
-          is_fork="${{ github.event.pull_request.head.repo.fork }}"
+          is_fork="$IS_FORK"
           log_info "Fork PR: $is_fork"
 
           if [ "$is_fork" = "true" ]; then
             log_info "FORK PR DETECTED - Proceeding with security checks"
 
             # Check if "SafeToRun" label is present
-            labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+            labels="$PR_LABELS_JSON"
             log_info "Available labels: $labels"
 
             # For fork PRs, only approve on 'labeled' events where SafeToRun is being added
-            trigger_event="${{ github.event.action }}"
+            trigger_event="$TRIGGER_EVENT"
             log_info "Workflow triggered by event: $trigger_event"
 
             if [ "$trigger_event" = "labeled" ]; then
               # Check if the label being added is 'SafeToRun'
-              label_added="${{ github.event.label.name }}"
+              label_added="$LABEL_NAME"
               log_info "Label event: $label_added"
 
               if [ "$label_added" = "SafeToRun" ]; then
                 log_success "SafeToRun label being added on fork PR - approving"
                 echo "approved=true" >> $GITHUB_OUTPUT
+                echo "approved_sha=$APPROVAL_HEAD_SHA" >> $GITHUB_OUTPUT
                 echo "needs_approval=false" >> $GITHUB_OUTPUT
                 echo "comment_needed=false" >> $GITHUB_OUTPUT
               else
@@ -153,9 +172,31 @@ jobs:
           else
             log_success "Internal PR - auto-approved"
             echo "approved=true" >> $GITHUB_OUTPUT
+            echo "approved_sha=$APPROVAL_HEAD_SHA" >> $GITHUB_OUTPUT
             echo "needs_approval=false" >> $GITHUB_OUTPUT
             echo "comment_needed=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Verify approved SHA is still the pull request head
+        if: steps.check-approval.outputs.approved == 'true'
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        env:
+          APPROVED_SHA: ${{ steps.check-approval.outputs.approved_sha }}
+        with:
+          script: |
+            const approvedSha = process.env.APPROVED_SHA;
+            if (!/^[0-9a-f]{40}$/.test(approvedSha)) {
+              core.setFailed('Approved pull request SHA is invalid');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (pr.head.sha !== approvedSha) {
+              core.setFailed(`Pull request head moved from approved SHA ${approvedSha} to ${pr.head.sha}`);
+            }
 
       - name: Auto-remove SafeToRun label on synchronize for fork PRs
         if: |
@@ -213,7 +254,7 @@ jobs:
               console.log(`${icons[level] || 'ℹ️'} ${message}`);
             };
 
-            log('info', 'Checking for modifications to asimParsersTest folder in fork PR...');
+            log('info', 'Checking for modifications to protected ASIM validation paths in fork PR...');
 
             // Paginate through all changed files in the PR
             const files = await github.paginate(github.rest.pulls.listFiles, {
@@ -223,17 +264,22 @@ jobs:
               per_page: 100,
             });
 
+            const protectedPrefixes = [
+              '.script/tests/asimParsersTest/',
+              'ASIM/',
+              '.github/',
+            ];
             const forbiddenFiles = files
               .map(f => f.filename)
-              .filter(name => name.startsWith('.script/tests/asimParsersTest/'));
+              .filter(name => protectedPrefixes.some(prefix => name.startsWith(prefix)));
 
             if (forbiddenFiles.length > 0) {
-              log('error', 'Fork PRs cannot modify the asimParsersTest test infrastructure folder');
-              log('error', 'Modified test files detected:');
+              log('error', 'Fork PRs cannot modify protected ASIM validation or workflow files');
+              log('error', 'Modified protected files detected:');
               forbiddenFiles.forEach(f => console.log(`  - ${f}`));
-              core.setFailed('Fork PR modifies protected test infrastructure files');
+              core.setFailed('Fork PR modifies protected ASIM validation files');
             } else {
-              log('success', 'No modifications to asimParsersTest folder detected');
+              log('success', 'No protected ASIM validation files were modified');
             }
 
       - name: Comment on fork PR for approval guidance
@@ -348,6 +394,7 @@ jobs:
     needs: security-gate
     if: |
       needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
@@ -371,7 +418,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}
         run: |
           if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Invalid pull request base SHA."
@@ -453,7 +500,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.x"
+          python-version: "3.15.x"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
@@ -461,9 +508,14 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Install trusted helper dependencies
+        env:
+          PYTHONNOUSERSITE: "1"
+          PYTHONSAFEPATH: "1"
         run: |
-          python -m pip install --disable-pip-version-check --quiet \
-            requests PyYAML
+          python -m pip install --disable-pip-version-check --quiet --only-binary=:all: pip==26.3
+          python -m pip install --disable-pip-version-check --quiet --only-binary=:all: \
+            requests==2.34.2 \
+            PyYAML==6.0.4
 
       - name: Restore trusted ingestion validation helpers
         run: |
@@ -552,6 +604,7 @@ jobs:
       - discover
     if: |
       needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       needs.discover.outputs.has_targets == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
@@ -580,7 +633,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}
         run: |
           if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Invalid pull request base SHA."
@@ -668,7 +721,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.x"
+          python-version: "3.15.x"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
@@ -676,9 +729,14 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Install trusted helper dependencies
+        env:
+          PYTHONNOUSERSITE: "1"
+          PYTHONSAFEPATH: "1"
         run: |
-          python -m pip install --disable-pip-version-check --quiet \
-            requests PyYAML
+          python -m pip install --disable-pip-version-check --quiet --only-binary=:all: pip==26.3
+          python -m pip install --disable-pip-version-check --quiet --only-binary=:all: \
+            requests==2.34.2 \
+            PyYAML==6.0.4
 
       - name: Restore trusted ingestion validation helpers
         run: |
@@ -817,6 +875,7 @@ jobs:
     if: |
       always() &&
       needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha &&
       needs.discover.outputs.has_targets == 'true' &&
       (github.event.pull_request.head.repo.fork == false ||
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
@@ -867,7 +926,7 @@ jobs:
         if: always()
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.x"
+          python-version: "3.15.x"
 
       - name: Set up .NET
         if: always()
@@ -877,9 +936,16 @@ jobs:
 
       - name: Install trusted helper dependencies
         if: always()
+        env:
+          PYTHONNOUSERSITE: "1"
+          PYTHONSAFEPATH: "1"
         run: |
-          python -m pip install --disable-pip-version-check --quiet \
-            azure-identity requests PyYAML
+          python -m pip install --disable-pip-version-check --quiet --only-binary=:all: pip==26.3
+          python -m pip install --disable-pip-version-check --quiet --only-binary=:all: \
+            azure-core==1.41.0 \
+            azure-identity==1.27.0 \
+            requests==2.34.2 \
+            PyYAML==6.0.4
 
       - name: Restore trusted ingestion validation helpers
         if: always()
@@ -968,8 +1034,9 @@ jobs:
           steps.template-decision.outputs.qtp_input_prepared == 'true'
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
         with:
-          client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ secrets.AZURE_ASIM_CLIENT_ID_MC01 }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID_MC01 }}
+          subscription-id: ${{ env.ASIM_CANARY_SUBSCRIPTION_ID }}
           allow-no-subscriptions: true
 
       - name: Execute ingestion-time data validation and optional parity
@@ -1108,7 +1175,8 @@ jobs:
       - ingestionValidation
     if: |
       always() &&
-      needs.security-gate.outputs.approved == 'true'
+      needs.security-gate.outputs.approved == 'true' &&
+      needs.security-gate.outputs.approved_sha == github.event.pull_request.head.sha
     runs-on: ubuntu-latest
     permissions:
       contents: read
