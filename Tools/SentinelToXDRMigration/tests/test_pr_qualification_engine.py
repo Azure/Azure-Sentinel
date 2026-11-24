@@ -304,6 +304,15 @@ def _build_live_qualification_evidence(sol_dir: Path | None = None) -> dict[str,
                     if orig_id:
                         parity_entry["sourceRuleId"] = orig_id
                     alert_parity_results.append(parity_entry)
+    if not alert_parity_results:
+        alert_parity_results.append(
+            {
+                "id": "xdr-6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+                "sourceRuleId": "6e76fd9d-8104-41eb-bad3-26054a3ad5f0",
+                "passed": True,
+                "parityPassed": True,
+            }
+        )
     return {
         "simulated": False,
         "dryRun": False,
@@ -2076,6 +2085,65 @@ def test_e2e_q03_rejects_partial_unrelated_and_aggregate_failed_receipts_and_acc
         sub_sol, run_qualification=True, qualification_evidence=sub_ev
     )
     assert res_sub["checksById"]["E2E-Q03"]["status"] == "PASS"
+
+    # 10. Single migrated detection with aggregate-only {"status": "passed"} (no per-file results) -> FAIL E2E-Q03
+    single_mig_sol = tmp_path / "Solutions" / "SingleMigSol"
+    single_src_id = "11111111-1111-4111-8111-111111111111"
+    _build_base_package(
+        single_mig_sol,
+        include_xdr_props=True,
+        data_lists={
+            "Analytic Rules": ["Analytic Rules/A.yaml"],
+            "XDR Detections": ["XDR Detections/A.yaml"],
+        },
+    )
+    single_sha = _build_valid_analytic_rule(
+        single_mig_sol / "Analytic Rules" / "A.yaml", rule_id=single_src_id
+    )
+    _build_valid_xdr_detection(
+        single_mig_sol / "XDR Detections" / "A.yaml",
+        source_rule_id=single_src_id,
+        source_rule_path="Analytic Rules/A.yaml",
+        source_rule_sha256=single_sha,
+    )
+    ev_single_unbound = _build_live_qualification_evidence(single_mig_sol)
+    ev_single_unbound["alertParity"] = {"status": "passed"}
+    res_single_unbound = run_pr_qualification_checks(
+        single_mig_sol,
+        run_qualification=True,
+        qualification_evidence=ev_single_unbound,
+    )
+    assert res_single_unbound["checksById"]["E2E-Q03"]["status"] == "FAIL"
+
+    # 11. Single migrated detection with conflicting path and/or conflicting rule ID -> FAIL E2E-Q03
+    for bad_parity_item in (
+        {
+            "detection": "Unrelated/A.yaml",
+            "id": "xdr-99999999-9999-4999-8999-999999999999",
+            "passed": True,
+        },
+        {
+            "detection": "Unrelated/A.yaml",
+            "passed": True,
+        },
+        {
+            "detection": "XDR Detections/A.yaml",
+            "id": "xdr-99999999-9999-4999-8999-999999999999",
+            "passed": True,
+        },
+    ):
+        ev_single_conflict = _build_live_qualification_evidence(single_mig_sol)
+        ev_single_conflict["alertParity"] = {
+            "status": "passed",
+            "results": [bad_parity_item],
+        }
+        res_single_conflict = run_pr_qualification_checks(
+            single_mig_sol,
+            run_qualification=True,
+            qualification_evidence=ev_single_conflict,
+        )
+        assert res_single_conflict["checksById"]["E2E-Q03"]["status"] == "FAIL"
+
 
 
 

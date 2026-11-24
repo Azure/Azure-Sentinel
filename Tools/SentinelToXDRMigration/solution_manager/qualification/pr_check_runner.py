@@ -3247,16 +3247,23 @@ def _evaluate_migration_checks(
             migrated_fallback_tokens_by_rel: dict[str, set[str]] = {}
             native_primary_tokens_by_rel: dict[str, set[str]] = {}
             native_fallback_tokens_by_rel: dict[str, set[str]] = {}
+            migrated_paths_by_rel: dict[str, set[str]] = {}
+            migrated_ids_by_rel: dict[str, set[str]] = {}
+            migrated_fallback_by_rel: dict[str, set[str]] = {}
+            native_paths_by_rel: dict[str, set[str]] = {}
+            native_ids_by_rel: dict[str, set[str]] = {}
+            native_fallback_by_rel: dict[str, set[str]] = {}
             for rel in migrated_xdr_det_files:
                 norm_rel = Path(rel).as_posix().lower()
-                primary_toks = {
+                cand_paths = {
                     rel.lower(),
                     norm_rel,
                 }
                 if norm_rel.startswith("xdr detections/"):
                     sub_rel = norm_rel[len("xdr detections/"):].lstrip("/")
                     if sub_rel:
-                        primary_toks.add(sub_rel)
+                        cand_paths.add(sub_rel)
+                cand_ids: set[str] = set()
                 fallback_toks = {
                     Path(rel).name.lower(),
                     Path(rel).stem.lower(),
@@ -3264,39 +3271,47 @@ def _evaluate_migration_checks(
                 doc, err = _load_yaml_safe(solution_root / rel)
                 if not err and isinstance(doc, Mapping):
                     fields = _extract_xdr_detection_fields(doc)
-                    for token in (fields.get("id"), fields.get("sourceRuleId")):
-                        if token and str(token).strip():
-                            primary_toks.add(str(token).strip().lower())
-                    if fields.get("displayName") and str(fields.get("displayName")).strip():
-                        fallback_toks.add(str(fields.get("displayName")).strip().lower())
                     prov = doc.get("contentProvenance")
                     source = prov.get("source") if isinstance(prov, Mapping) else None
+                    for token in (
+                        fields.get("id"),
+                        fields.get("sourceRuleId"),
+                        source.get("id") if isinstance(source, Mapping) else None,
+                    ):
+                        if token and str(token).strip():
+                            cand_ids.add(str(token).strip().lower())
+                    if fields.get("displayName") and str(fields.get("displayName")).strip():
+                        fallback_toks.add(str(fields.get("displayName")).strip().lower())
                     for raw_src_path in (
                         source.get("path") if isinstance(source, Mapping) else None,
                         doc.get("sourceRulePath"),
                     ):
                         if isinstance(raw_src_path, str) and raw_src_path.strip():
                             norm_src = raw_src_path.strip().replace("\\", "/").lower()
-                            primary_toks.add(norm_src)
+                            cand_paths.add(norm_src)
                             for prefix in ("analytic rules/", "analytics rules/"):
                                 if norm_src.startswith(prefix):
                                     sub_src = norm_src[len(prefix):].lstrip("/")
                                     if sub_src:
-                                        primary_toks.add(sub_src)
+                                        cand_paths.add(sub_src)
                             fallback_toks.add(Path(norm_src).name.lower())
                             fallback_toks.add(Path(norm_src).stem.lower())
-                migrated_primary_tokens_by_rel[rel] = primary_toks
-                migrated_fallback_tokens_by_rel[rel] = fallback_toks | primary_toks
+                migrated_paths_by_rel[rel] = cand_paths
+                migrated_ids_by_rel[rel] = cand_ids
+                migrated_fallback_by_rel[rel] = fallback_toks
+                migrated_primary_tokens_by_rel[rel] = cand_paths | cand_ids
+                migrated_fallback_tokens_by_rel[rel] = fallback_toks | cand_paths | cand_ids
             for rel in native_xdr_det_files:
                 norm_rel = Path(rel).as_posix().lower()
-                primary_toks = {
+                cand_paths = {
                     rel.lower(),
                     norm_rel,
                 }
                 if norm_rel.startswith("xdr detections/"):
                     sub_rel = norm_rel[len("xdr detections/"):].lstrip("/")
                     if sub_rel:
-                        primary_toks.add(sub_rel)
+                        cand_paths.add(sub_rel)
+                cand_ids = set()
                 fallback_toks = {
                     Path(rel).name.lower(),
                     Path(rel).stem.lower(),
@@ -3306,11 +3321,14 @@ def _evaluate_migration_checks(
                     fields = _extract_xdr_detection_fields(doc)
                     for token in (fields.get("id"),):
                         if token and str(token).strip():
-                            primary_toks.add(str(token).strip().lower())
+                            cand_ids.add(str(token).strip().lower())
                     if fields.get("displayName") and str(fields.get("displayName")).strip():
                         fallback_toks.add(str(fields.get("displayName")).strip().lower())
-                native_primary_tokens_by_rel[rel] = primary_toks
-                native_fallback_tokens_by_rel[rel] = fallback_toks | primary_toks
+                native_paths_by_rel[rel] = cand_paths
+                native_ids_by_rel[rel] = cand_ids
+                native_fallback_by_rel[rel] = fallback_toks
+                native_primary_tokens_by_rel[rel] = cand_paths | cand_ids
+                native_fallback_tokens_by_rel[rel] = fallback_toks | cand_paths | cand_ids
 
             ap_ev_map = ap_ev if isinstance(ap_ev, Mapping) else {}
             raw_ap_status = str(
@@ -3341,8 +3359,27 @@ def _evaluate_migration_checks(
                         raw_items = _val
                         break
 
-            def _item_primary_tokens(item: Mapping[str, Any]) -> set[str]:
-                tokens: set[str] = set()
+            def _expand_item_path_group(raw_val: str) -> set[str]:
+                raw = raw_val.strip().lower()
+                norm = raw.replace("\\", "/")
+                while norm.startswith("./"):
+                    norm = norm[2:]
+                group = {raw, norm}
+                sol_prefix = f"solutions/{solution_root.name.lower()}/"
+                if norm.startswith(sol_prefix):
+                    after_sol = norm[len(sol_prefix):].lstrip("/")
+                    if after_sol:
+                        group.add(after_sol)
+                for candidate in list(group):
+                    for prefix in ("xdr detections/", "analytic rules/", "analytics rules/"):
+                        if candidate.startswith(prefix):
+                            sub = candidate[len(prefix):].lstrip("/")
+                            if sub:
+                                group.add(sub)
+                return group
+
+            def _item_path_groups(item: Mapping[str, Any]) -> list[set[str]]:
+                groups: list[set[str]] = []
                 for k in (
                     "detection",
                     "customDetection",
@@ -3351,31 +3388,13 @@ def _evaluate_migration_checks(
                     "xdrDetectionPath",
                     "file",
                     "path",
-                    "id",
-                    "ruleId",
-                    "detectionId",
-                    "customDetectionId",
-                    "xdrId",
-                    "targetRuleId",
-                    "sourceRuleId",
-                    "analyticRuleId",
-                    "sentinelRuleId",
-                    "originalRuleId",
                     "analyticRule",
                     "analyticRulePath",
                     "sourceRulePath",
                 ):
                     val = item.get(k)
                     if isinstance(val, str) and val.strip():
-                        raw = val.strip().lower()
-                        norm = Path(raw).as_posix().lower()
-                        tokens.add(raw)
-                        tokens.add(norm)
-                        for prefix in ("xdr detections/", "analytic rules/", "analytics rules/"):
-                            if norm.startswith(prefix):
-                                sub = norm[len(prefix):].lstrip("/")
-                                if sub:
-                                    tokens.add(sub)
+                        groups.append(_expand_item_path_group(val))
                 for nested_key in (
                     "customDetection",
                     "xdrDetection",
@@ -3386,33 +3405,15 @@ def _evaluate_migration_checks(
                 ):
                     nested = item.get(nested_key)
                     if isinstance(nested, Mapping):
-                        for sub_key in ("id", "ruleId", "detectionId", "customDetectionId", "path", "file"):
+                        for sub_key in ("path", "file"):
                             sub_val = nested.get(sub_key)
                             if isinstance(sub_val, str) and sub_val.strip():
-                                raw = sub_val.strip().lower()
-                                norm = Path(raw).as_posix().lower()
-                                tokens.add(raw)
-                                tokens.add(norm)
-                                for prefix in ("xdr detections/", "analytic rules/", "analytics rules/"):
-                                    if norm.startswith(prefix):
-                                        sub = norm[len(prefix):].lstrip("/")
-                                        if sub:
-                                            tokens.add(sub)
-                return tokens
+                                groups.append(_expand_item_path_group(sub_val))
+                return groups
 
-            def _item_tokens(item: Mapping[str, Any]) -> set[str]:
-                tokens: set[str] = set(_item_primary_tokens(item))
+            def _item_id_tokens(item: Mapping[str, Any]) -> set[str]:
+                tokens: set[str] = set()
                 for k in (
-                    "detection",
-                    "customDetection",
-                    "xdrDetection",
-                    "detectionPath",
-                    "xdrDetectionPath",
-                    "rule",
-                    "file",
-                    "path",
-                    "name",
-                    "displayName",
                     "id",
                     "ruleId",
                     "detectionId",
@@ -3423,15 +3424,33 @@ def _evaluate_migration_checks(
                     "analyticRuleId",
                     "sentinelRuleId",
                     "originalRuleId",
-                    "analyticRule",
-                    "analyticRulePath",
-                    "sourceRulePath",
                 ):
+                    val = item.get(k)
+                    if isinstance(val, str) and val.strip():
+                        tokens.add(val.strip().lower())
+                for nested_key in (
+                    "customDetection",
+                    "xdrDetection",
+                    "detection",
+                    "analyticRule",
+                    "sentinelRule",
+                    "sourceRule",
+                ):
+                    nested = item.get(nested_key)
+                    if isinstance(nested, Mapping):
+                        for sub_key in ("id", "ruleId", "detectionId", "customDetectionId"):
+                            sub_val = nested.get(sub_key)
+                            if isinstance(sub_val, str) and sub_val.strip():
+                                tokens.add(sub_val.strip().lower())
+                return tokens
+
+            def _item_fallback_tokens(item: Mapping[str, Any]) -> set[str]:
+                tokens: set[str] = set()
+                for k in ("rule", "name", "displayName"):
                     val = item.get(k)
                     if isinstance(val, str) and val.strip():
                         raw = val.strip().lower()
                         tokens.add(raw)
-                        tokens.add(Path(raw).as_posix().lower())
                         tokens.add(Path(raw).name.lower())
                         tokens.add(Path(raw).stem.lower())
                 for nested_key in (
@@ -3444,15 +3463,30 @@ def _evaluate_migration_checks(
                 ):
                     nested = item.get(nested_key)
                     if isinstance(nested, Mapping):
-                        for sub_key in ("id", "ruleId", "detectionId", "customDetectionId", "path", "file", "name", "displayName"):
+                        for sub_key in ("name", "displayName"):
                             sub_val = nested.get(sub_key)
                             if isinstance(sub_val, str) and sub_val.strip():
                                 raw = sub_val.strip().lower()
                                 tokens.add(raw)
-                                tokens.add(Path(raw).as_posix().lower())
                                 tokens.add(Path(raw).name.lower())
                                 tokens.add(Path(raw).stem.lower())
                 return tokens
+
+            def _item_matches_candidate(
+                path_groups: list[set[str]],
+                id_tokens: set[str],
+                fallback_tokens: set[str],
+                cand_paths: set[str],
+                cand_ids: set[str],
+                cand_fallback: set[str],
+            ) -> bool:
+                if path_groups or id_tokens:
+                    if path_groups and not all(bool(group & cand_paths) for group in path_groups):
+                        return False
+                    if id_tokens and (not cand_ids or not id_tokens.issubset(cand_ids)):
+                        return False
+                    return True
+                return bool(fallback_tokens and (fallback_tokens & cand_fallback))
 
             def _item_migrated_parity_ok(item: Mapping[str, Any]) -> bool:
                 raw_mode = str(item.get("mode") or "").strip().lower()
@@ -3522,28 +3556,33 @@ def _evaluate_migration_checks(
                     if not isinstance(item, Mapping):
                         unmatched_or_ambiguous = True
                         break
-                    item_primary = _item_primary_tokens(item)
-                    item_toks = _item_tokens(item)
+                    item_paths = _item_path_groups(item)
+                    item_ids = _item_id_tokens(item)
+                    item_fallback = _item_fallback_tokens(item)
                     m_rels = [
-                        rel for rel, toks in migrated_primary_tokens_by_rel.items() if toks & item_primary
+                        rel
+                        for rel in migrated_primary_tokens_by_rel
+                        if _item_matches_candidate(
+                            item_paths,
+                            item_ids,
+                            item_fallback,
+                            migrated_paths_by_rel[rel],
+                            migrated_ids_by_rel[rel],
+                            migrated_fallback_by_rel[rel],
+                        )
                     ]
                     n_rels = [
-                        rel for rel, toks in native_primary_tokens_by_rel.items() if toks & item_primary
+                        rel
+                        for rel in native_primary_tokens_by_rel
+                        if _item_matches_candidate(
+                            item_paths,
+                            item_ids,
+                            item_fallback,
+                            native_paths_by_rel[rel],
+                            native_ids_by_rel[rel],
+                            native_fallback_by_rel[rel],
+                        )
                     ]
-                    if not m_rels and not n_rels:
-                        m_rels = [
-                            rel for rel, toks in migrated_primary_tokens_by_rel.items() if toks & item_toks
-                        ]
-                        n_rels = [
-                            rel for rel, toks in native_primary_tokens_by_rel.items() if toks & item_toks
-                        ]
-                    if not m_rels and not n_rels:
-                        m_rels = [
-                            rel for rel, toks in migrated_fallback_tokens_by_rel.items() if toks & item_toks
-                        ]
-                        n_rels = [
-                            rel for rel, toks in native_fallback_tokens_by_rel.items() if toks & item_toks
-                        ]
                     if len(m_rels) == 1 and len(n_rels) == 0:
                         matched_migrated[m_rels[0]].append(item)
                     elif len(n_rels) == 1 and len(m_rels) == 0:
@@ -3564,19 +3603,6 @@ def _evaluate_migration_checks(
                     )
                 )
                 top_level_parity_ok = False
-            elif not raw_items:
-                per_file_migrated_parity_ok = False
-                top_level_parity_ok = (
-                    not has_aggregate_failure
-                    and len(migrated_xdr_det_files) == 1
-                    and not native_xdr_det_files
-                    and (
-                        ap_ev_map.get("passed") is True
-                        or ap_ev_map.get("parityPassed") is True
-                        or ap_ev_map.get("alertParityVerified") is True
-                        or raw_ap_status in {"passed", "pass", "verified", "succeeded", "complete", "completed", "ok"}
-                    )
-                )
             else:
                 per_file_migrated_parity_ok = False
                 top_level_parity_ok = False

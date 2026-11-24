@@ -1371,29 +1371,81 @@ def compare_alert_captures(
                 or raw_mode in {"cd-only", "cd_only", "cdonly"}
                 or not has_analytic_rule
             )
+        persisted_expected_keys = (
+            {
+                str(k).strip()
+                for k in ((expected_match_keys_by_detection or {}).get(detection) or [])
+                if str(k).strip()
+            }
+            or {
+                str(k).strip()
+                for k in (expected_match_keys or [])
+                if str(k).strip()
+            }
+            or None
+        )
+        entry_expected_keys = (
+            {str(k).strip() for k in entry["expectedMatchKeys"] if str(k).strip()}
+            if isinstance(entry.get("expectedMatchKeys"), list)
+            else None
+        )
+        entry_positive_keys = (
+            {str(k).strip() for k in entry["positiveControlKeys"] if str(k).strip()}
+            if isinstance(entry.get("positiveControlKeys"), list)
+            else None
+        )
+        capture_positive_keys = (
+            entry_expected_keys
+            if entry_expected_keys is not None
+            else entry_positive_keys
+        )
+        positive_control_conflict = bool(
+            (
+                entry_expected_keys is not None
+                and entry_positive_keys is not None
+                and entry_expected_keys != entry_positive_keys
+            )
+            or (
+                persisted_expected_keys is not None
+                and entry_expected_keys is not None
+                and entry_expected_keys != persisted_expected_keys
+            )
+            or (
+                persisted_expected_keys is not None
+                and entry_positive_keys is not None
+                and entry_positive_keys != persisted_expected_keys
+            )
+        )
         detection_expected_keys = (
-            (expected_match_keys_by_detection or {}).get(detection)
-            or (
-                {str(k).strip() for k in entry["expectedMatchKeys"] if str(k).strip()}
-                if isinstance(entry.get("expectedMatchKeys"), list)
-                else None
-            )
-            or (
-                {str(k).strip() for k in entry["positiveControlKeys"] if str(k).strip()}
-                if isinstance(entry.get("positiveControlKeys"), list)
-                else None
-            )
-            or expected_match_keys
+            persisted_expected_keys
+            if persisted_expected_keys is not None
+            else capture_positive_keys
+        )
+        persisted_negative_keys = (
+            {
+                str(k).strip()
+                for k in ((negative_control_keys_by_detection or {}).get(detection) or [])
+                if str(k).strip()
+            }
+            or {
+                str(k).strip()
+                for k in (negative_control_keys or [])
+                if str(k).strip()
+            }
+            or None
+        )
+        entry_negative_keys = (
+            {str(k).strip() for k in entry["negativeControlKeys"] if str(k).strip()}
+            if isinstance(entry.get("negativeControlKeys"), list)
+            else None
+        )
+        negative_control_conflict = bool(
+            persisted_negative_keys is not None
+            and entry_negative_keys is not None
+            and not persisted_negative_keys.issubset(entry_negative_keys)
         )
         detection_negative_keys = (
-            (negative_control_keys_by_detection or {}).get(detection)
-            or (
-                {str(k).strip() for k in entry["negativeControlKeys"] if str(k).strip()}
-                if isinstance(entry.get("negativeControlKeys"), list)
-                else None
-            )
-            or negative_control_keys
-            or set()
+            (persisted_negative_keys or set()) | (entry_negative_keys or set())
         )
         if is_cd_only:
             custom_val = entry.get("customDetection") or {}
@@ -1407,11 +1459,14 @@ def compare_alert_captures(
             custom = sorted(normalized_custom, key=lambda item: item["matchKey"])
             custom_by_key = {item["matchKey"]: item for item in custom}
             matched_negative = sorted(set(custom_by_key) & set(detection_negative_keys))
-            negative_ok = len(matched_negative) == 0
+            negative_ok = len(matched_negative) == 0 and not negative_control_conflict
             positive_ok = (
-                set(custom_by_key) == set(detection_expected_keys)
-                if detection_expected_keys is not None
-                else len(custom_by_key) > 0
+                not positive_control_conflict
+                and (
+                    set(custom_by_key) == set(detection_expected_keys)
+                    if detection_expected_keys is not None
+                    else len(custom_by_key) > 0
+                )
             )
             disabled_restored = (
                 bool(entry.get("initialDisabled", True))
@@ -1482,7 +1537,9 @@ def compare_alert_captures(
             "alertCount": len(analytic) == len(custom),
             "matchKeys": set(analytic_by_key) == set(custom_by_key),
             "expectedMatches": (
-                (
+                not positive_control_conflict
+                and not negative_control_conflict
+                and (
                     detection_expected_keys is None
                     or (
                         set(analytic_by_key) == detection_expected_keys
@@ -1653,11 +1710,24 @@ def complete_alert_parity(
         comparisons = compare_alert_captures(
             expected,
             raw,
-            expected_match_keys=set(state.get("expectedMatchKeys") or []),
+            expected_match_keys=set(
+                state.get("expectedMatchKeys")
+                or state.get("positiveControlKeys")
+                or []
+            ),
             expected_match_keys_by_detection={
                 detection: set(keys)
                 for detection, keys in (
-                    state.get("expectedMatchKeysByDetection") or {}
+                    state.get("expectedMatchKeysByDetection")
+                    or state.get("positiveControlKeysByDetection")
+                    or {}
+                ).items()
+            },
+            negative_control_keys=set(state.get("negativeControlKeys") or []),
+            negative_control_keys_by_detection={
+                detection: set(keys)
+                for detection, keys in (
+                    state.get("negativeControlKeysByDetection") or {}
                 ).items()
             },
             expected_modes_by_detection=expected_modes,
@@ -1782,11 +1852,24 @@ def poll_alert_parity_batch(
         comparisons = compare_alert_captures(
             expected,
             raw,
-            expected_match_keys=set(state.get("expectedMatchKeys") or []),
+            expected_match_keys=set(
+                state.get("expectedMatchKeys")
+                or state.get("positiveControlKeys")
+                or []
+            ),
             expected_match_keys_by_detection={
                 detection: set(keys)
                 for detection, keys in (
-                    state.get("expectedMatchKeysByDetection") or {}
+                    state.get("expectedMatchKeysByDetection")
+                    or state.get("positiveControlKeysByDetection")
+                    or {}
+                ).items()
+            },
+            negative_control_keys=set(state.get("negativeControlKeys") or []),
+            negative_control_keys_by_detection={
+                detection: set(keys)
+                for detection, keys in (
+                    state.get("negativeControlKeysByDetection") or {}
                 ).items()
             },
             expected_modes_by_detection=expected_modes,

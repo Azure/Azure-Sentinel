@@ -917,6 +917,102 @@ class AlertParityTests(unittest.TestCase):
                 self.assertEqual("failed", poll_report["status"])
                 self.assertIn("migrated detection requires", poll_report["comparisonError"])
 
+    def test_persisted_positive_and_negative_controls_cannot_be_overridden_by_submitted_captures(
+        self,
+    ) -> None:
+        import yaml
+        from solution_manager.qualification.alert_parity import poll_alert_parity_batch
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            output = root / "XDR Detections"
+            output.mkdir()
+            native_doc = {
+                "kind": "CustomDetection",
+                "contentProvenance": {"origin": "native"},
+                "properties": {
+                    "id": "xdr-11111111-1111-4111-8111-111111111111",
+                    "displayName": "Native Rule",
+                    "queryCondition": {"queryText": "DeviceInfo | take 1"},
+                    "detectionAction": {"alertTemplate": {"title": "Native Rule", "severity": "medium"}},
+                },
+            }
+            (output / "NativeRule.yaml").write_text(
+                yaml.safe_dump(native_doc), encoding="utf-8"
+            )
+            pairs = [
+                {
+                    "detection": "NativeRule.yaml",
+                    "displayName": "Native Rule",
+                    "analyticRuleId": None,
+                    "customDetectionId": "xdr-11111111-1111-4111-8111-111111111111",
+                    "cdOnly": True,
+                }
+            ]
+            scope = _qualification_scope(root, pairs, None)
+            state_payload = {
+                "runId": "run-native-controls",
+                "status": "awaiting-alerts",
+                "target": TARGET,
+                "workspaceResourceId": TARGET["workspaceResourceId"],
+                "qualificationScope": scope,
+                "rules": pairs,
+                "expectedMatchKeys": ["reviewed-positive"],
+                "negativeControlKeys": ["reviewed-negative"],
+                "fixtures": [{"detection": "NativeRule.yaml"}],
+            }
+            state_path = artifact_path(root, "alert-parity-state.json", create_parent=True)
+            state_path.write_text(json.dumps(state_payload), encoding="utf-8")
+            substituted_captures = root / "substituted-captures.json"
+            substituted_captures.write_text(
+                json.dumps(
+                    {
+                        "results": [
+                            {
+                                "detection": "NativeRule.yaml",
+                                "cdOnly": True,
+                                "expectedMatchKeys": ["wrong-positive"],
+                                "customDetection": {
+                                    "alerts": [alert("wrong-positive")]
+                                },
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with (
+                mock.patch(
+                    "sentinel_xdr_migration.alert_parity.require_locked_target",
+                    return_value=TARGET,
+                ),
+                mock.patch(
+                    "sentinel_xdr_migration.alert_parity._verify_qualification_scope",
+                    return_value=scope,
+                ),
+                mock.patch(
+                    "sentinel_xdr_migration.alert_parity._disable_all",
+                    return_value=[{"detection": "NativeRule.yaml", "disabled": True, "errors": []}],
+                ),
+            ):
+                report = complete_alert_parity(root, results_path=substituted_captures)
+                self.assertEqual("failed", report["status"])
+                self.assertFalse(report["comparisons"][0]["passed"])
+                self.assertEqual([], report["comparisons"][0]["matchedPositiveControls"])
+                self.assertEqual(
+                    ["reviewed-positive"],
+                    report["comparisons"][0]["missingPositiveControls"],
+                )
+
+                state_path.write_text(json.dumps(state_payload), encoding="utf-8")
+                poll_report = poll_alert_parity_batch(root, results_path=substituted_captures)
+                self.assertEqual("failed", poll_report["status"])
+                self.assertFalse(poll_report["comparisons"][0]["passed"])
+                self.assertEqual(
+                    ["reviewed-positive"],
+                    poll_report["comparisons"][0]["missingPositiveControls"],
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
