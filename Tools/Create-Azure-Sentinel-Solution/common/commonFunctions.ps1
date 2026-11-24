@@ -1127,7 +1127,7 @@ function GetWorkbookDataMetadata($file, $isPipelineRun, $contentResourceDetails,
         }
 
         $workbookOrderedProps = [ordered]@{
-            description = "$dependencies.description";
+            description = "$($dependencies.description)";
             parentId    = "[variables('workbookId$global:workbookCounter')]"
             contentId   = "[variables('_workbookContentId$global:workbookCounter')]";
             kind        = "Workbook";

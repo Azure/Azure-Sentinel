@@ -1,0 +1,162 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "QCrypton PQC Proxy — notify on PQC downgrade or certificate alert",
+    "description": "Logic App playbook: on Microsoft Sentinel incident trigger, post a card to a Microsoft Teams channel summarizing the PQC Proxy alert (downgrade, cert expiry, or handshake failure).",
+    "prerequisites": [
+      "A Microsoft Teams team and channel where notifications should be posted.",
+      "The Teams Group ID and Channel ID for the target channel.",
+      "A user account with permissions to authorize the Microsoft Teams API connection."
+    ],
+    "postDeployment": ["After deployment, authorize the Teams connection, assign the Sentinel Responder role to the managed identity, and create an automation rule to attach the playbook to incidents."],
+    "lastUpdateTime": "2026-10-29T00:00:00.000Z",
+    "entities": ["Host", "IP"],
+    "tags": ["Notification", "PQC", "TLS", "ReverseProxy"],
+    "support": {
+      "tier": "community",
+      "armtemplate": "Generated from https://github.com/qcrypton/pqc-proxy"
+    },
+    "author": { "name": "QCrypton, Inc." },
+    "releaseNotes": [
+      {
+        "version": "1.0.0",
+        "title": "QCrypton PQC Proxy — notify on PQC downgrade or certificate alert",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ]
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "QCryptonPQCProxy-Notify",
+      "metadata": { "description": "Name of the Logic App playbook." }
+    },
+    "TeamsGroupId": {
+      "type": "string",
+      "metadata": { "description": "Target Teams group (team) ID." }
+    },
+    "TeamsChannelId": {
+      "type": "string",
+      "metadata": { "description": "Target Teams channel ID." }
+    }
+  },
+  "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('AzureSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('TeamsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('TeamsConnectionName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "hidden-SentinelTemplateName": "QCryptonPQCProxy-Notify",
+        "hidden-SentinelTemplateVersion": "2.9",
+        "LogicAppsCategory": "security"
+      },
+      "identity": { "type": "SystemAssigned" },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+      ],
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": { "defaultValue": {}, "type": "Object" },
+            "TeamsGroupId": { "defaultValue": "", "type": "String" },
+            "TeamsChannelId": { "defaultValue": "", "type": "String" }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": { "callback_url": "@{listCallbackUrl()}" },
+                "host": { "connection": { "name": "@parameters('$connections')['azuresentinel']['connectionId']" } },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Post_message_to_Teams": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": { "connection": { "name": "@parameters('$connections')['teams']['connectionId']" } },
+                "method": "post",
+                "path": "/v3/beta/teams/@{encodeURIComponent(parameters('TeamsGroupId'))}/channels/@{encodeURIComponent(parameters('TeamsChannelId'))}/messages",
+                "body": {
+                  "body": {
+                    "contentType": "html",
+                    "content": "<b>QCrypton PQC Proxy alert:</b> @{triggerBody()?['object']?['properties']?['title']}<br/>Severity: @{triggerBody()?['object']?['properties']?['severity']}<br/>Incident: <a href=\"@{triggerBody()?['object']?['properties']?['incidentUrl']}\">Open in Sentinel</a>"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": {
+          "TeamsGroupId": {
+            "value": "[parameters('TeamsGroupId')]"
+          },
+          "TeamsChannelId": {
+            "value": "[parameters('TeamsChannelId')]"
+          },
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                },
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "connectionName": "[variables('TeamsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
