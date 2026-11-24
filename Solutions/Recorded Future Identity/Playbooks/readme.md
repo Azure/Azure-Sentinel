@@ -168,9 +168,9 @@ Logic App that runs on a recurring schedule.
 | Parameter | Description |
 |-|-|
 | **Playbook Name** | Name for this Logic App (default: `RFI-Playbook-Alert-Importer`). |
-| **Entra_id_security_group_id** | Object ID of the Entra ID security group to place risky users into. The group must be pre-created — search for "Groups" in the Azure Portal. Leave empty to skip group assignment. |
+| **Entra_id_security_group_id** | Object ID of the Entra ID security group to place risky users into. The group must be pre-created — search for "Groups" in the Azure Portal. Set to `none` (default) or leave empty to skip group assignment. |
 | **Confirm_user_as_risky** | Confirm affected users as risky in Entra ID Identity Protection. Note: this only acts on users already flagged as risky by Microsoft — it does not flag them itself. Requires Entra ID P1 or P2 license. |
-| **Entra_id_domain** | Optional domain override — use this if your Entra ID domain differs from the leaked credential domain (e.g. leaked email is `user@acme.com` but the Entra ID UPN is `user@acme.onmicrosoft.com`, set this to `acme.onmicrosoft.com`). Leave empty if your Entra ID domain matches the leaked credential domain. |
+| **Entra_id_domain** | Optional domain override — use this if your Entra ID domain differs from the leaked credential domain (e.g. leaked email is `user@acme.com` but the Entra ID UPN is `user@acme.onmicrosoft.com`, set this to `acme.onmicrosoft.com`). Set to `none` (default) or leave empty if your Entra ID domain matches the leaked credential domain. |
 | **RFI Custom Connector** | Name of the connector deployed in A1 (default: `RFI-CustomConnector-0-2-0`). |
 
 </details>
@@ -231,9 +231,9 @@ Logic App that runs on a recurring schedule.
 |-|-|
 | **Playbook Name** | Name for this Logic App (default: `RFI-Playbook-Alert-Importer-LAW`). |
 | **Save_to_log_analytics_workspace** | Whether to save detailed Playbook Alert data to Log Analytics. Defaults to `true`. |
-| **Entra_id_security_group_id** | Object ID of the Entra ID security group to place risky users into. The group must be pre-created — search for "Groups" in the Azure Portal. Leave empty to skip group assignment. |
+| **Entra_id_security_group_id** | Object ID of the Entra ID security group to place risky users into. The group must be pre-created — search for "Groups" in the Azure Portal. Set to `none` (default) or leave empty to skip group assignment. |
 | **Confirm_user_as_risky** | Confirm affected users as risky in Entra ID Identity Protection. Note: this only acts on users already flagged as risky by Microsoft — it does not flag them itself. Requires Entra ID P1 or P2 license. |
-| **Entra_id_domain** | Optional domain override — use this if your Entra ID domain differs from the leaked credential domain (e.g. leaked email is `user@acme.com` but the Entra ID UPN is `user@acme.onmicrosoft.com`, set this to `acme.onmicrosoft.com`). Leave empty if your Entra ID domain matches the leaked credential domain. |
+| **Entra_id_domain** | Optional domain override — use this if your Entra ID domain differs from the leaked credential domain (e.g. leaked email is `user@acme.com` but the Entra ID UPN is `user@acme.onmicrosoft.com`, set this to `acme.onmicrosoft.com`). Set to `none` (default) or leave empty if your Entra ID domain matches the leaked credential domain. |
 | **Playbook_alert_log_analytics_custom_log_name** | Name of the Log Analytics table to write alert data to (default: `RFI_PlaybookAlertResults_V2_CL`). |
 | **log_analytics_workspace_name** | Name of your Log Analytics Workspace. |
 | **create_role_assignment** | Whether to automatically assign the _Monitoring Metrics Publisher_ role on the DCR to the Logic App's managed identity. See [Required Permissions](#required-permissions) for details. |
