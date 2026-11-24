@@ -604,7 +604,7 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
 
     def fake_urlopen(req: Any, timeout: int = 60) -> _FakeHttpResponse:
         url = req.full_url
-        if "management.azure.com" in url:
+        if url.startswith("https://management.azure.com/"):
             return _FakeHttpResponse(
                 {
                     "name": "AcmeEvents_CL",
@@ -620,7 +620,7 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
                     },
                 }
             )
-        if "getHuntingSchemaTables" in url:
+        if url.startswith("https://graph.microsoft.com/beta/security/getHuntingSchemaTables"):
             return _FakeHttpResponse(
                 {
                     "value": [
@@ -632,7 +632,7 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
                     ]
                 }
             )
-        if "getRunHuntingQuery" in url:
+        if url.startswith("https://graph.microsoft.com/beta/security/getRunHuntingQuery"):
             return _FakeHttpResponse(
                 {
                     "schema": [

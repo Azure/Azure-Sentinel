@@ -26,7 +26,6 @@ from solution_manager.qualification.pr_applicability import (
     determine_pr_applicability,
 )
 from solution_manager.qualification.table_schema_readiness import (
-    build_expected_custom_table_map,
     discover_solution_tables,
     evaluate_qual_tbl_01,
     evaluate_qual_tbl_02,
