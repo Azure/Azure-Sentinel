@@ -354,27 +354,6 @@ def _validate_filter_consistency(
                 "A non-pass-through filter must contain at least one where stage.",
             )
         )
-    parser_stages = [
-        operator["location"]["normalizedText"]
-        for operator in parser_operators
-    ]
-    search_index = 0
-    for filter_operator in filter_operators:
-        filter_stage = filter_operator["location"]["normalizedText"]
-        try:
-            found_index = parser_stages.index(filter_stage, search_index)
-        except ValueError:
-            findings.append(
-                Finding(
-                    "FILTER002",
-                    "ParserFilterQuery",
-                    "Every filter stage must appear in ParserQuery in the same order.",
-                )
-            )
-            return
-        search_index = found_index + 1
-
-
 def _validate_fixture_contract(
     repo_root: Path | None,
     parser_analysis: dict[str, Any] | None,

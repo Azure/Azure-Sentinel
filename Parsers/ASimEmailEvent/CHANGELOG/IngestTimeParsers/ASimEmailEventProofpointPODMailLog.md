@@ -6,6 +6,11 @@
 - Rename the display name to `ProofpointPODMailLog_CL EmailEvent ASIM parser`.
 - Align Change.Date with Parser.LastUpdated to satisfy static metadata validation.
 
+## Version 0.1.5
+
+- (2026-11-20) Inline the envelope-recipient expression in ParserFilterQuery for where-only raw-retention compilation - [PR #15706](https://github.com/Azure/Azure-Sentinel/pull/15706)
+- Preserve missing-recipient handling and row selection; leave ParserQuery unchanged.
+
 ## Version 0.1.4
 
 - (2026-11-06) Validate relay IP addresses inline without native IP functions or top-level helpers - [PR #15572](https://github.com/Azure/Azure-Sentinel/pull/15572)
