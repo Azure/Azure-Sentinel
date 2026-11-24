@@ -433,7 +433,11 @@ def _parse_table_resource(
                 )
             if name_unresolved:
                 c_unresolved = True
-            is_sys = c_name.lower() in SYSTEM_COLUMN_NAMES_LOWER
+            # Every column explicitly declared in properties.schema.columns or
+            # properties.schema.customColumns is part of the authored custom-log schema
+            # and must carry a meaningful description, survive packaging, and appear in
+            # live schema readback (even if named TimeGenerated, Computer, or RawData).
+            is_sys = False
             columns.append(
                 ColumnSchemaRecord(
                     name=c_name,
@@ -996,6 +1000,43 @@ def _check_static_table_prerequisites(
     return None
 
 
+def _check_target_conflict(
+    authoritative_target: Optional[Dict[str, Any]],
+    candidate_target: Optional[Dict[str, Any]],
+    check_id: str,
+) -> Optional[str]:
+    """Return an error string if a receipt-embedded target conflicts with the authoritative target."""
+    if not isinstance(authoritative_target, dict) or not isinstance(candidate_target, dict):
+        return None
+    exp_ws_res = str(authoritative_target.get("workspaceResourceId") or "").strip().rstrip("/")
+    exp_ws_guid = str(
+        authoritative_target.get("workspaceCustomerId") or authoritative_target.get("workspaceId") or ""
+    ).strip().lower()
+    exp_tenant = str(authoritative_target.get("tenantId") or "").strip().lower()
+
+    cand_ws_res = str(candidate_target.get("workspaceResourceId") or "").strip().rstrip("/")
+    cand_ws_guid = str(
+        candidate_target.get("workspaceId") or candidate_target.get("workspaceCustomerId") or ""
+    ).strip().lower()
+    cand_tenant = str(candidate_target.get("tenantId") or "").strip().lower()
+
+    if exp_ws_res and cand_ws_res and cand_ws_res.lower() != exp_ws_res.lower():
+        return (
+            f"{check_id} receipt target workspaceResourceId '{cand_ws_res}' does not match approved target "
+            f"'{exp_ws_res}'."
+        )
+    if exp_ws_guid and cand_ws_guid and cand_ws_guid != exp_ws_guid:
+        return (
+            f"{check_id} receipt target workspaceId '{cand_ws_guid}' does not match approved target "
+            f"workspaceCustomerId '{exp_ws_guid}'."
+        )
+    if exp_tenant and cand_tenant and cand_tenant != exp_tenant:
+        return (
+            f"{check_id} receipt target tenantId '{cand_tenant}' does not match approved target '{exp_tenant}'."
+        )
+    return None
+
+
 def _check_receipt_integrity_and_target(
     receipt: Any,
     check_id: str,
@@ -1003,10 +1044,15 @@ def _check_receipt_integrity_and_target(
     *,
     require_workspace_resource_id: bool = False,
     require_workspace_guid: bool = False,
+    require_execution_metadata: bool = True,
+    require_request_url: bool = False,
 ) -> Optional[str]:
     """Validate receipt authenticity, HTTP/auth status, and target workspace binding."""
     if not isinstance(receipt, dict) or not receipt:
         return f"Missing live {check_id} qualification receipt."
+
+    if receipt.get("_targetConflictError"):
+        return str(receipt["_targetConflictError"])
 
     if (
         receipt.get("simulated") is True
@@ -1016,8 +1062,9 @@ def _check_receipt_integrity_and_target(
     ):
         return f"{check_id} receipt is marked simulated/dry-run; simulated evidence cannot qualify as PASS."
 
-    status_code = receipt.get("statusCode") or receipt.get("httpStatus")
-    if status_code is not None:
+    status_code = receipt.get("statusCode") if receipt.get("statusCode") is not None else receipt.get("httpStatus")
+    code_int: Optional[int] = None
+    if status_code is not None and not isinstance(status_code, bool):
         try:
             code_int = int(status_code)
         except (TypeError, ValueError):
@@ -1026,6 +1073,8 @@ def _check_receipt_integrity_and_target(
             return f"{check_id} failed with HTTP {code_int} authorization error."
         if code_int < 200 or code_int >= 300:
             return f"{check_id} failed with HTTP status {status_code}."
+    elif isinstance(status_code, bool):
+        return f"{check_id} receipt has invalid boolean HTTP status metadata."
 
     if receipt.get("authorizationFailed") is True or receipt.get("authError"):
         return f"{check_id} reported an authorization failure: {receipt.get('authError') or 'authorizationFailed'}."
@@ -1037,35 +1086,57 @@ def _check_receipt_integrity_and_target(
     if receipt.get("ok") is False:
         return f"{check_id} receipt explicitly reports ok=False."
 
-    if isinstance(target, dict) and target:
-        exp_ws_res = str(target.get("workspaceResourceId") or "").strip().rstrip("/")
-        exp_ws_guid = str(target.get("workspaceCustomerId") or target.get("workspaceId") or "").strip().lower()
-        exp_tenant = str(target.get("tenantId") or "").strip().lower()
+    if require_execution_metadata:
+        if receipt.get("ok") is not True:
+            return f"{check_id} receipt is missing required provider success metadata (ok=True)."
+        if code_int is None:
+            return f"{check_id} receipt is missing required HTTP statusCode/httpStatus metadata."
 
-        rec_ws_res = str(receipt.get("workspaceResourceId") or "").strip().rstrip("/")
-        rec_ws_guid = str(receipt.get("workspaceId") or receipt.get("workspaceCustomerId") or "").strip().lower()
-        rec_tenant = str(receipt.get("tenantId") or "").strip().lower()
+    if require_request_url:
+        req_url_val = str(receipt.get("requestUrl") or receipt.get("endpoint") or "").strip()
+        if not req_url_val:
+            return f"{check_id} receipt is missing required requestUrl/endpoint metadata."
 
-        if exp_ws_res:
-            if rec_ws_res and rec_ws_res.lower() != exp_ws_res.lower():
-                return (
-                    f"{check_id} receipt workspaceResourceId '{rec_ws_res}' does not match approved target "
-                    f"'{exp_ws_res}'."
-                )
-            if require_workspace_resource_id and not rec_ws_res:
-                return f"{check_id} receipt is missing workspaceResourceId for target verification."
+    if isinstance(receipt.get("target"), dict) and isinstance(target, dict) and target:
+        conflict = _check_target_conflict(target, receipt["target"], check_id)
+        if conflict:
+            return conflict
 
-        if exp_ws_guid:
-            if rec_ws_guid and rec_ws_guid != exp_ws_guid:
-                return (
-                    f"{check_id} receipt workspaceId '{rec_ws_guid}' does not match approved target "
-                    f"workspaceCustomerId '{exp_ws_guid}'."
-                )
-            if require_workspace_guid and not rec_ws_guid:
-                return f"{check_id} receipt is missing workspaceId for target verification."
+    exp_ws_res = str((target or {}).get("workspaceResourceId") or "").strip().rstrip("/")
+    exp_ws_guid = str(
+        (target or {}).get("workspaceCustomerId") or (target or {}).get("workspaceId") or ""
+    ).strip().lower()
+    exp_tenant = str((target or {}).get("tenantId") or "").strip().lower()
 
-        if exp_tenant and rec_tenant and rec_tenant != exp_tenant:
-            return f"{check_id} receipt tenantId '{rec_tenant}' does not match approved target '{exp_tenant}'."
+    rec_ws_res = str(receipt.get("workspaceResourceId") or "").strip().rstrip("/")
+    rec_ws_guid = str(receipt.get("workspaceId") or receipt.get("workspaceCustomerId") or "").strip().lower()
+    rec_tenant = str(receipt.get("tenantId") or "").strip().lower()
+
+    if require_workspace_resource_id and not exp_ws_res:
+        return f"{check_id} is missing approved target workspaceResourceId for target verification."
+    if require_workspace_guid and not exp_ws_guid:
+        return f"{check_id} is missing approved target workspaceId/workspaceCustomerId for target verification."
+
+    if exp_ws_res:
+        if rec_ws_res and rec_ws_res.lower() != exp_ws_res.lower():
+            return (
+                f"{check_id} receipt workspaceResourceId '{rec_ws_res}' does not match approved target "
+                f"'{exp_ws_res}'."
+            )
+        if require_workspace_resource_id and not rec_ws_res:
+            return f"{check_id} receipt is missing workspaceResourceId for target verification."
+
+    if exp_ws_guid:
+        if rec_ws_guid and rec_ws_guid != exp_ws_guid:
+            return (
+                f"{check_id} receipt workspaceId '{rec_ws_guid}' does not match approved target "
+                f"workspaceCustomerId '{exp_ws_guid}'."
+            )
+        if require_workspace_guid and not rec_ws_guid:
+            return f"{check_id} receipt is missing workspaceId for target verification."
+
+    if exp_tenant and rec_tenant and rec_tenant != exp_tenant:
+        return f"{check_id} receipt tenantId '{rec_tenant}' does not match approved target '{exp_tenant}'."
 
     return None
 
@@ -1197,20 +1268,39 @@ def _unwrap_qual_receipt_and_target(
     receipt: Any,
     target: Optional[Dict[str, Any]],
     sub_keys: Tuple[str, ...],
+    check_id: str = "QUAL-TBL",
 ) -> Tuple[Any, Optional[Dict[str, Any]]]:
     """Unwrap parent qualification_evidence or tableSchemaReadiness dicts when passed directly."""
     if not isinstance(receipt, dict):
         return receipt, target
-    resolved_target = target
-    if resolved_target is None and isinstance(receipt.get("target"), dict):
-        resolved_target = receipt.get("target")
+    resolved_target = target if isinstance(target, dict) and target else None
+    outer_target = receipt.get("target") if isinstance(receipt.get("target"), dict) else None
+    if outer_target is None and isinstance(receipt.get("workspace"), dict):
+        outer_target = receipt.get("workspace")
+    if resolved_target is None and outer_target:
+        resolved_target = outer_target
+
     root = receipt.get("tableSchemaReadiness") if isinstance(receipt.get("tableSchemaReadiness"), dict) else receipt
-    if resolved_target is None and isinstance(root.get("target"), dict):
-        resolved_target = root.get("target")
+    root_target = root.get("target") if isinstance(root.get("target"), dict) else None
+
+    target_conflict: Optional[str] = None
+    if resolved_target and outer_target and resolved_target is not outer_target:
+        target_conflict = _check_target_conflict(resolved_target, outer_target, check_id)
+    if not target_conflict and resolved_target and root_target and resolved_target is not root_target:
+        target_conflict = _check_target_conflict(resolved_target, root_target, check_id)
+    if resolved_target is None and root_target:
+        resolved_target = root_target
+
+    unwrapped: Any = root
     for key in sub_keys:
         if isinstance(root.get(key), dict):
-            return root[key], resolved_target
-    return root, resolved_target
+            unwrapped = root[key]
+            break
+
+    if target_conflict and isinstance(unwrapped, dict):
+        unwrapped = dict(unwrapped)
+        unwrapped["_targetConflictError"] = target_conflict
+    return unwrapped, resolved_target
 
 
 def evaluate_qual_tbl_01(
@@ -1226,6 +1316,7 @@ def evaluate_qual_tbl_01(
         receipt,
         target,
         ("armTableReadback", "armTables", "armReadbackTables"),
+        check_id="QUAL-TBL-01",
     )
     expected_map = build_expected_custom_table_map(inventory)
     if not expected_map and not inventory.parse_errors:
@@ -1248,6 +1339,7 @@ def evaluate_qual_tbl_01(
         "QUAL-TBL-01",
         target=target,
         require_workspace_resource_id=not bool(live_tables),
+        require_execution_metadata=not bool(live_tables),
     )
     if base_err:
         return "FAIL", base_err
@@ -1272,14 +1364,37 @@ def evaluate_qual_tbl_01(
             issues.append(f"Missing live ARM table readback for expected custom table '{exp_rec.table_name}'")
             continue
 
+        effective_entry = dict(live_entry)
+        if not effective_entry.get("workspaceResourceId") and receipt.get("workspaceResourceId"):
+            effective_entry["workspaceResourceId"] = receipt.get("workspaceResourceId")
+        if not effective_entry.get("tenantId") and receipt.get("tenantId"):
+            effective_entry["tenantId"] = receipt.get("tenantId")
+        if not effective_entry.get("requestUrl") and not effective_entry.get("endpoint"):
+            if receipt.get("requestUrl") or receipt.get("endpoint"):
+                effective_entry["requestUrl"] = receipt.get("requestUrl") or receipt.get("endpoint")
+
         entry_err = _check_receipt_integrity_and_target(
-            live_entry,
+            effective_entry,
             f"QUAL-TBL-01 ({exp_rec.table_name})",
             target=target,
-            require_workspace_resource_id=bool(exp_ws_res and not receipt.get("workspaceResourceId")),
+            require_workspace_resource_id=True,
+            require_execution_metadata=True,
+            require_request_url=True,
         )
         if entry_err:
             issues.append(entry_err)
+            continue
+
+        entry_req_url = str(effective_entry.get("requestUrl") or effective_entry.get("endpoint") or "").strip()
+        entry_req_no_frag = entry_req_url.split("#", 1)[0].lower()
+        if exp_ws_res and (
+            not entry_req_no_frag.startswith("https://management.azure.com/")
+            or exp_ws_res not in entry_req_no_frag
+            or f"/tables/{exp_rec.table_name.lower()}" not in entry_req_no_frag
+        ):
+            issues.append(
+                f"Table '{exp_rec.table_name}' ARM requestUrl '{entry_req_url}' does not target approved workspace '{exp_ws_res}'"
+            )
             continue
 
         entry_res_id = str(live_entry.get("resourceId") or live_entry.get("id") or "").strip().lower()
@@ -1355,6 +1470,7 @@ def evaluate_qual_tbl_02(
         receipt,
         target,
         ("huntingSchema", "graphHuntingSchema", "huntingSchemaTables"),
+        check_id="QUAL-TBL-02",
     )
     expected_map = build_expected_custom_table_map(inventory)
     if not expected_map and not inventory.parse_errors:
@@ -1369,6 +1485,7 @@ def evaluate_qual_tbl_02(
         "QUAL-TBL-02",
         target=target,
         require_workspace_guid=True,
+        require_execution_metadata=True,
     )
     if base_err:
         return "FAIL", base_err
@@ -1376,8 +1493,12 @@ def evaluate_qual_tbl_02(
     if receipt.get("graphHuntingSchemaVerified") is False:
         return "FAIL", "QUAL-TBL-02 receipt explicitly reports graphHuntingSchemaVerified=False."
 
+    has_explicit_complete = (
+        receipt.get("paginationComplete") is True or receipt.get("complete") is True
+    )
     if (
-        receipt.get("paginationComplete") is False
+        not has_explicit_complete
+        or receipt.get("paginationComplete") is False
         or receipt.get("incompletePagination") is True
         or receipt.get("complete") is False
         or receipt.get("hasUnfetchedPages") is True
@@ -1386,22 +1507,32 @@ def evaluate_qual_tbl_02(
         return (
             "FAIL",
             "QUAL-TBL-02 failed (incomplete_hunting_schema_pagination): Graph getHuntingSchemaTables pagination is incomplete "
-            "(@odata.nextLink was not exhausted).",
+            "or missing explicit paginationComplete/complete=True confirmation.",
         )
 
     req_url = str(receipt.get("requestUrl") or receipt.get("endpoint") or "").strip()
-    if req_url:
-        if "workspaceId='" in req_url or 'workspaceId="' in req_url or "workspaceId=%27" in req_url:
-            return (
-                "FAIL",
-                f"QUAL-TBL-02 invalid OData syntax in requestUrl '{req_url}': workspaceId is Edm.Guid and must not be quoted.",
-            )
-        exp_guid = str((target or {}).get("workspaceCustomerId") or (target or {}).get("workspaceId") or "").strip().lower()
-        if exp_guid and "gethuntingschematables" in req_url.lower() and exp_guid not in req_url.lower():
-            return (
-                "FAIL",
-                f"QUAL-TBL-02 requestUrl '{req_url}' does not target approved workspaceCustomerId '{exp_guid}'.",
-            )
+    if not req_url:
+        return (
+            "FAIL",
+            "QUAL-TBL-02 receipt is missing required requestUrl/endpoint metadata for getHuntingSchemaTables.",
+        )
+    req_url_no_frag = req_url.split("#", 1)[0]
+    if "gethuntingschematables" not in req_url_no_frag.lower():
+        return (
+            "FAIL",
+            f"QUAL-TBL-02 requestUrl '{req_url}' did not use the getHuntingSchemaTables endpoint.",
+        )
+    if "workspaceId='" in req_url_no_frag or 'workspaceId="' in req_url_no_frag or "workspaceId=%27" in req_url_no_frag:
+        return (
+            "FAIL",
+            f"QUAL-TBL-02 invalid OData syntax in requestUrl '{req_url}': workspaceId is Edm.Guid and must not be quoted.",
+        )
+    exp_guid = str((target or {}).get("workspaceCustomerId") or (target or {}).get("workspaceId") or "").strip().lower()
+    if not exp_guid or not re.search(rf"workspaceid={re.escape(exp_guid)}(?:[),\s]|$)", req_url_no_frag, re.IGNORECASE):
+        return (
+            "FAIL",
+            f"QUAL-TBL-02 requestUrl '{req_url}' does not target approved workspaceCustomerId '{exp_guid}'.",
+        )
 
     live_tables = _index_live_table_entries(
         receipt,
@@ -1425,7 +1556,12 @@ def evaluate_qual_tbl_02(
             )
             continue
 
-        entry_err = _check_receipt_integrity_and_target(live_entry, f"QUAL-TBL-02 ({exp_rec.table_name})")
+        entry_err = _check_receipt_integrity_and_target(
+            live_entry,
+            f"QUAL-TBL-02 ({exp_rec.table_name})",
+            target=target,
+            require_execution_metadata=False,
+        )
         if entry_err:
             issues.append(entry_err)
             continue
@@ -1496,6 +1632,7 @@ def evaluate_qual_tbl_03(
         receipt,
         target,
         ("workspaceHuntingQuery", "graphRunHuntingQuery", "huntingQuery"),
+        check_id="QUAL-TBL-03",
     )
     expected_map = build_expected_custom_table_map(inventory)
     if not expected_map and not inventory.parse_errors:
@@ -1523,6 +1660,7 @@ def evaluate_qual_tbl_03(
         "QUAL-TBL-03",
         target=target,
         require_workspace_guid=not bool(live_queries),
+        require_execution_metadata=not bool(live_queries),
     )
     if base_err:
         return "FAIL", base_err
@@ -1555,11 +1693,19 @@ def evaluate_qual_tbl_03(
             )
             continue
 
+        effective_q_entry = dict(q_entry)
+        if not effective_q_entry.get("workspaceId") and not effective_q_entry.get("workspaceCustomerId"):
+            if receipt.get("workspaceId") or receipt.get("workspaceCustomerId"):
+                effective_q_entry["workspaceId"] = receipt.get("workspaceId") or receipt.get("workspaceCustomerId")
+        if not effective_q_entry.get("tenantId") and receipt.get("tenantId"):
+            effective_q_entry["tenantId"] = receipt.get("tenantId")
+
         entry_err = _check_receipt_integrity_and_target(
-            q_entry,
+            effective_q_entry,
             f"QUAL-TBL-03 ({exp_rec.table_name})",
             target=target,
-            require_workspace_guid=bool(exp_guid and not receipt.get("workspaceId")),
+            require_workspace_guid=True,
+            require_execution_metadata=True,
         )
         if entry_err:
             issues.append(entry_err)
@@ -1578,22 +1724,27 @@ def evaluate_qual_tbl_03(
             or receipt.get("endpoint")
             or ""
         ).strip()
-        if req_url:
-            if "getrunhuntingquery" not in req_url.lower():
-                issues.append(
-                    f"Table '{exp_rec.table_name}' requestUrl '{req_url}' did not use getRunHuntingQuery endpoint"
-                )
-                continue
-            if "workspaceId='" in req_url or 'workspaceId="' in req_url or "workspaceId=%27" in req_url:
-                issues.append(
-                    f"Table '{exp_rec.table_name}' requestUrl '{req_url}' quotes Edm.Guid workspaceId"
-                )
-                continue
-            if exp_guid and exp_guid not in req_url.lower():
-                issues.append(
-                    f"Table '{exp_rec.table_name}' requestUrl '{req_url}' does not match target workspaceId '{exp_guid}'"
-                )
-                continue
+        if not req_url:
+            issues.append(
+                f"Table '{exp_rec.table_name}' receipt is missing required requestUrl/endpoint metadata for getRunHuntingQuery"
+            )
+            continue
+        req_url_no_frag = req_url.split("#", 1)[0]
+        if "getrunhuntingquery" not in req_url_no_frag.lower():
+            issues.append(
+                f"Table '{exp_rec.table_name}' requestUrl '{req_url}' did not use getRunHuntingQuery endpoint"
+            )
+            continue
+        if "workspaceId='" in req_url_no_frag or 'workspaceId="' in req_url_no_frag or "workspaceId=%27" in req_url_no_frag:
+            issues.append(
+                f"Table '{exp_rec.table_name}' requestUrl '{req_url}' quotes Edm.Guid workspaceId"
+            )
+            continue
+        if not exp_guid or not re.search(rf"workspaceid={re.escape(exp_guid)}(?:[),\s]|$)", req_url_no_frag, re.IGNORECASE):
+            issues.append(
+                f"Table '{exp_rec.table_name}' requestUrl '{req_url}' does not match target workspaceId '{exp_guid}'"
+            )
+            continue
 
         q_text = str(q_entry.get("query") or receipt.get("query") or "").strip()
         if not q_text or exp_rec.table_name.lower() not in q_text.lower():

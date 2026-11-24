@@ -452,25 +452,184 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
         or (state.get("consolidatedPreflightPacket") or {}).get("inventory")
         or {}
     )
+    sol_dir_raw = (
+        state.get("solutionRoot")
+        or state.get("solutionDir")
+        or state.get("solutionPath")
+        or (inv_block.get("solutionRoot") if isinstance(inv_block, Mapping) else None)
+        or state.get("solution")
+    )
+    sol_path_obj: Path | None = None
+    table_inv = None
+    if isinstance(sol_dir_raw, (str, Path)) and str(sol_dir_raw).strip():
+        cand_path = Path(str(sol_dir_raw).strip())
+        if not cand_path.is_dir():
+            repo_root = Path(__file__).resolve().parents[4]
+            for alt in (repo_root / cand_path, repo_root / "Solutions" / cand_path.name):
+                if alt.is_dir():
+                    cand_path = alt
+                    break
+        if cand_path.is_dir():
+            sol_path_obj = cand_path
+            table_inv = discover_solution_tables(cand_path)
+
+    discovered_custom_count = (
+        len(table_inv.custom_source_tables or table_inv.custom_packaged_tables) + len(table_inv.parse_errors)
+        if table_inv is not None
+        else 0
+    )
     has_custom_tables = bool(
         int(inv_block.get("customLogTableCount", 0) or 0) > 0
+        or int(ts_readiness.get("customTableCount", 0) or 0) > 0
         or ts_readiness.get("applicable") is True
+        or discovered_custom_count > 0
     )
-    if raw_ts_qual == "not_applicable" or (raw_ts_qual is None and not has_custom_tables):
-        table_schema_qualification_verified: bool | str = "not_applicable"
-    elif isinstance(raw_ts_qual, bool):
-        table_schema_qualification_verified = raw_ts_qual
+
+    def _has_verified_table_receipts(readiness_obj: Mapping[str, Any]) -> bool:
+        if not isinstance(readiness_obj, Mapping) or not readiness_obj:
+            return False
+        if readiness_obj.get("simulated") is True:
+            return False
+        if readiness_obj.get("status") != "passed" or readiness_obj.get("verified") is not True:
+            return False
+        static_val = readiness_obj.get("staticValidation")
+        if isinstance(static_val, Mapping) and static_val.get("passed") is False:
+            return False
+        receipt_target = readiness_obj.get("target")
+        if not isinstance(receipt_target, Mapping) or not receipt_target:
+            return False
+        state_target = state.get("target") or state.get("context")
+        if isinstance(state_target, Mapping) and state_target:
+            from .table_schema_readiness import _check_target_conflict
+            if _check_target_conflict(dict(state_target), dict(receipt_target), "QUAL-TBL") is not None:
+                return False
+
+        # 1. ARM readback receipt must contain non-empty evaluated table entries with HTTP 2xx and ok=True
+        arm_sub = readiness_obj.get("armTableReadback") or readiness_obj.get("armTables")
+        if not isinstance(arm_sub, Mapping) or arm_sub.get("ok") is False:
+            return False
+        arm_entries: list[Mapping[str, Any]] = []
+        if isinstance(arm_sub.get("tables"), list):
+            arm_entries = [x for x in arm_sub["tables"] if isinstance(x, Mapping)]
+        elif isinstance(arm_sub.get("tables"), Mapping):
+            arm_entries = [x for x in arm_sub["tables"].values() if isinstance(x, Mapping)]
+        elif isinstance(arm_sub.get("tableName"), str):
+            arm_entries = [arm_sub]
+        if not arm_entries:
+            return False
+        for entry in arm_entries:
+            if entry.get("ok") is not True:
+                return False
+            sc = entry.get("statusCode", entry.get("httpStatus"))
+            if not isinstance(sc, int) or isinstance(sc, bool) or not (200 <= sc < 300):
+                return False
+            if not str(entry.get("endpoint") or entry.get("requestUrl") or "").strip():
+                return False
+            t_desc = str(entry.get("tableDescription") or entry.get("description") or "").strip()
+            if not t_desc:
+                return False
+            e_cols = entry.get("columns")
+            if not isinstance(e_cols, list) or not e_cols:
+                return False
+            for col in e_cols:
+                if not isinstance(col, Mapping) or not str(col.get("description") or "").strip():
+                    return False
+
+        # 2. Hunting schema receipt must be complete, HTTP 2xx, ok=True, and contain non-empty tables
+        hs_sub = (
+            readiness_obj.get("huntingSchema")
+            or readiness_obj.get("graphHuntingSchema")
+            or readiness_obj.get("huntingSchemaTables")
+        )
+        if not isinstance(hs_sub, Mapping) or hs_sub.get("ok") is not True:
+            return False
+        hs_sc = hs_sub.get("statusCode", hs_sub.get("httpStatus"))
+        if not isinstance(hs_sc, int) or isinstance(hs_sc, bool) or not (200 <= hs_sc < 300):
+            return False
+        hs_complete = hs_sub.get("paginationComplete") if "paginationComplete" in hs_sub else hs_sub.get("complete")
+        if hs_complete is not True:
+            return False
+        if not str(hs_sub.get("endpoint") or hs_sub.get("requestUrl") or "").strip():
+            return False
+        hs_tables = hs_sub.get("tables") if hs_sub.get("tables") is not None else hs_sub.get("value")
+        if not isinstance(hs_tables, (list, Mapping)) or len(hs_tables) == 0:
+            return False
+        hs_entries = (
+            [x for x in hs_tables if isinstance(x, Mapping)]
+            if isinstance(hs_tables, list)
+            else [x for x in hs_tables.values() if isinstance(x, Mapping)]
+        )
+        if not hs_entries:
+            return False
+        for h_entry in hs_entries:
+            if not str(h_entry.get("description") or h_entry.get("tableDescription") or "").strip():
+                return False
+            h_cols = h_entry.get("columns")
+            if not isinstance(h_cols, list) or not h_cols:
+                return False
+
+        # 3. Workspace hunting query receipt must have HTTP 2xx, ok=True, and non-empty query entries
+        hq_sub = (
+            readiness_obj.get("workspaceHuntingQuery")
+            or readiness_obj.get("graphRunHuntingQuery")
+            or readiness_obj.get("huntingQuery")
+        )
+        if not isinstance(hq_sub, Mapping) or hq_sub.get("ok") is not True:
+            return False
+        hq_entries: list[Mapping[str, Any]] = []
+        if isinstance(hq_sub.get("queries"), list):
+            hq_entries = [x for x in hq_sub["queries"] if isinstance(x, Mapping)]
+        elif isinstance(hq_sub.get("tables"), list):
+            hq_entries = [x for x in hq_sub["tables"] if isinstance(x, Mapping)]
+        elif isinstance(hq_sub.get("tables"), Mapping):
+            hq_entries = [x for x in hq_sub["tables"].values() if isinstance(x, Mapping)]
+        elif isinstance(hq_sub.get("schema"), list):
+            hq_entries = [hq_sub]
+        if not hq_entries:
+            return False
+        for q_entry in hq_entries:
+            if q_entry.get("ok") is not True:
+                return False
+            q_sc = q_entry.get("statusCode", q_entry.get("httpStatus"))
+            if not isinstance(q_sc, int) or isinstance(q_sc, bool) or not (200 <= q_sc < 300):
+                return False
+            if not str(q_entry.get("endpoint") or q_entry.get("requestUrl") or "").strip():
+                return False
+
+        # 4. If the solution directory is available on disk, re-verify VAL-TBL-01..03 and QUAL-TBL-01..03 directly
+        if table_inv is not None and (table_inv.custom_source_tables or table_inv.custom_packaged_tables or table_inv.parse_errors):
+            eff_target = dict(state_target) if isinstance(state_target, Mapping) and state_target else dict(receipt_target)
+            for v_fn in (evaluate_val_tbl_01, evaluate_val_tbl_02, evaluate_val_tbl_03):
+                v_status, _ = v_fn(table_inv, enforce_blocking=True)
+                if v_status != "PASS":
+                    return False
+            q1_s, _ = evaluate_qual_tbl_01(table_inv, arm_sub, target=eff_target, static_passed=True, enforce_blocking=True)
+            q2_s, _ = evaluate_qual_tbl_02(table_inv, hs_sub, target=eff_target, static_passed=True, enforce_blocking=True)
+            q3_s, _ = evaluate_qual_tbl_03(table_inv, hq_sub, target=eff_target, static_passed=True, enforce_blocking=True)
+            if not (q1_s == "PASS" and q2_s == "PASS" and q3_s == "PASS"):
+                return False
+
+        return True
+
+    if has_custom_tables:
+        if raw_ts_qual is False or raw_ts_qual == "not_applicable":
+            table_schema_qualification_verified: bool | str = False
+        else:
+            table_schema_qualification_verified = _has_verified_table_receipts(ts_readiness)
+    elif raw_ts_qual is False:
+        table_schema_qualification_verified = False
+    elif raw_ts_qual is True:
+        if ts_readiness and ts_readiness.get("applicable") is False:
+            table_schema_qualification_verified = "not_applicable"
+        else:
+            table_schema_qualification_verified = _has_verified_table_receipts(ts_readiness)
     elif ts_readiness:
         if ts_readiness.get("applicable") is False:
             table_schema_qualification_verified = "not_applicable"
         else:
-            table_schema_qualification_verified = bool(
-                ts_readiness.get("status") == "passed"
-                and ts_readiness.get("verified") is True
-                and ts_readiness.get("simulated") is not True
-            )
+            table_schema_qualification_verified = _has_verified_table_receipts(ts_readiness)
     else:
-        table_schema_qualification_verified = False if has_custom_tables else "not_applicable"
+        table_schema_qualification_verified = "not_applicable"
 
     blockers: list[str] = []
     missing_gates: list[str] = []

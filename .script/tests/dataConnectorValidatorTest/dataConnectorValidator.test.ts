@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import chai, { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import { ExitCode } from "../../utils/exitCode";
@@ -90,6 +93,52 @@ describe("dataConnectorValidator", () => {
   });
 
   it("should pass customTableSchemaChecker when custom table and columns have meaningful descriptions", () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "sentinel-tbl-test-"));
+    try {
+      const solDir = path.join(tmpRoot, "Solutions", "Vendor");
+      fs.mkdirSync(path.join(solDir, "Data Connectors"), { recursive: true });
+      fs.mkdirSync(path.join(solDir, "Package"), { recursive: true });
+      const doc = {
+        name: "VendorAudit_CL",
+        type: "Microsoft.OperationalInsights/workspaces/tables",
+        apiVersion: "2022-10-01",
+        properties: {
+          schema: {
+            name: "VendorAudit_CL",
+            description: "Vendor audit and sign-in events collected via the polling CCP connector.",
+            columns: [
+              { name: "TimeGenerated", type: "datetime", description: "The timestamp (UTC) when the event was generated." },
+              { name: "EventId", type: "string", description: "Unique identifier for the vendor audit event." },
+              { name: "ActorUpn", type: "string", description: "User principal name of the actor." },
+            ],
+          },
+        },
+      };
+      const srcPath = path.join(solDir, "Data Connectors", "Vendor_tables.json");
+      const pkgPath = path.join(solDir, "Package", "mainTemplate.json");
+      fs.writeFileSync(srcPath, JSON.stringify(doc, null, 2), "utf8");
+      fs.writeFileSync(
+        pkgPath,
+        JSON.stringify(
+          {
+            $schema: "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            contentVersion: "1.0.0.0",
+            resources: [doc],
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      const res = isValidCustomTableSchemas(srcPath, doc);
+      expect(res.hasCustomTables).to.equal(true);
+      expect(res.hasAnyTables).to.equal(true);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("should fail customTableSchemaChecker when declared system-named columns (TimeGenerated, Computer, RawData) lack descriptions", () => {
     const doc = {
       name: "VendorAudit_CL",
       type: "Microsoft.OperationalInsights/workspaces/tables",
@@ -100,15 +149,16 @@ describe("dataConnectorValidator", () => {
           description: "Vendor audit and sign-in events collected via the polling CCP connector.",
           columns: [
             { name: "TimeGenerated", type: "datetime" },
+            { name: "Computer", type: "string", description: "   " },
+            { name: "RawData", type: "string", description: "" },
             { name: "EventId", type: "string", description: "Unique identifier for the vendor audit event." },
-            { name: "ActorUpn", type: "string", description: "User principal name of the actor." },
           ],
         },
       },
     };
-    const res = isValidCustomTableSchemas("Solutions/Vendor/Data Connectors/Vendor_tables.json", doc);
-    expect(res.hasCustomTables).to.equal(true);
-    expect(res.hasAnyTables).to.equal(true);
+    expect(() =>
+      isValidCustomTableSchemas("Solutions/Vendor/Data Connectors/Vendor_tables.json", doc),
+    ).to.throw(Error, /\[VAL-TBL-02\].*TimeGenerated.*Computer.*RawData/);
   });
 
   it("should fail customTableSchemaChecker when table or column descriptions are blank, placeholder, or unresolved ARM expressions", () => {

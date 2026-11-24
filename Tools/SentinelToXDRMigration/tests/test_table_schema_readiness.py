@@ -7,6 +7,7 @@ from typing import Any
 from unittest.mock import patch
 import urllib.error
 
+from solution_manager.qualification import evaluate_qualification_promotion_gate
 from solution_manager.qualification.pr_applicability import determine_pr_applicability
 from solution_manager.qualification.pr_check_runner import (
     SUBSTITUTABLE_MANUAL_CHECK_MAP,
@@ -129,7 +130,11 @@ def test_discover_solution_tables_supports_bare_root_and_nested_package_layouts(
                 "name": "OnePasswordEventLogs_CL",
                 "description": "1Password audit and sign-in events collected via the polling CCP connector.",
                 "columns": [
-                    {"name": "TimeGenerated", "type": "datetime"},
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime",
+                        "description": "The timestamp (UTC) when the 1Password event was generated.",
+                    },
                     {
                         "name": "EventUuid",
                         "type": "string",
@@ -383,7 +388,11 @@ def test_qual_tbl_evaluators_reject_simulated_wrong_workspace_incomplete_paginat
                 "name": "AcmeEvents_CL",
                 "description": "Acme security events ingested into Log Analytics.",
                 "columns": [
-                    {"name": "TimeGenerated", "type": "datetime"},
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime",
+                        "description": "The timestamp (UTC) when the Acme event was generated.",
+                    },
                     {"name": "EventId", "type": "string", "description": "Unique event identifier."},
                     {"name": "ActorUpn", "type": "string", "description": "User principal name of the actor."},
                 ],
@@ -413,14 +422,23 @@ def test_qual_tbl_evaluators_reject_simulated_wrong_workspace_incomplete_paginat
             "workspaceResourceId": ws_res_id,
         },
         "tableSchemaReadiness": {
+            "target": {
+                "workspaceId": ws_id,
+                "workspaceResourceId": ws_res_id,
+            },
             "armTables": {
                 "AcmeEvents_CL": {
                     "ok": True,
                     "httpStatus": 200,
+                    "requestUrl": f"https://management.azure.com{ws_res_id}/tables/AcmeEvents_CL?api-version=2025-02-01",
                     "workspaceResourceId": ws_res_id,
                     "tableDescription": "Acme security events ingested into Log Analytics.",
                     "columns": [
-                        {"name": "TimeGenerated", "type": "datetime", "description": ""},
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime",
+                            "description": "The timestamp (UTC) when the Acme event was generated.",
+                        },
                         {"name": "EventId", "type": "string", "description": "Unique event identifier."},
                         {"name": "ActorUpn", "type": "string", "description": "User principal name of the actor."},
                     ],
@@ -429,15 +447,21 @@ def test_qual_tbl_evaluators_reject_simulated_wrong_workspace_incomplete_paginat
             "huntingSchemaTables": {
                 "ok": True,
                 "httpStatus": 200,
+                "endpoint": f"https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId={ws_id})",
                 "workspaceId": ws_id,
                 "workspaceIdUnquoted": True,
                 "complete": True,
+                "paginationComplete": True,
                 "hasUnfetchedPages": False,
                 "tables": [
                     {
                         "name": "AcmeEvents_CL",
                         "description": "Acme security events ingested into Log Analytics.",
                         "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "description": "The timestamp (UTC) when the Acme event was generated.",
+                            },
                             {"name": "EventId", "description": "Unique event identifier."},
                             {"name": "ActorUpn", "description": "User principal name of the actor."},
                         ],
@@ -448,6 +472,7 @@ def test_qual_tbl_evaluators_reject_simulated_wrong_workspace_incomplete_paginat
                 "AcmeEvents_CL": {
                     "ok": True,
                     "httpStatus": 200,
+                    "requestUrl": f"https://graph.microsoft.com/beta/security/getRunHuntingQuery(query='AcmeEvents_CL%20%7C%20take%201',timespan='P1D',workspaceId={ws_id})",
                     "workspaceId": ws_id,
                     "workspaceIdUnquoted": True,
                     "query": "AcmeEvents_CL | take 1",
@@ -465,16 +490,18 @@ def test_qual_tbl_evaluators_reject_simulated_wrong_workspace_incomplete_paginat
     q3, _ = evaluate_qual_tbl_03(inv, good_evidence, enforce_blocking=True)
     assert (q1, q2, q3) == ("PASS", "PASS", "PASS")
 
-    # Verify per-check manual review substitution is attached when qualification checks pass
+    # Verify per-check manual review substitution is recorded as eligible but NOT active until agreed
     full_res = run_pr_qualification_checks(sol, run_qualification=True, qualification_evidence=good_evidence)
     for cid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
         chk = full_res["checksById"][cid]
         assert chk["status"] == "PASS"
         sub = chk.get("manualReviewSubstitution")
         assert isinstance(sub, dict)
-        assert sub["substituted"] is True
+        assert sub["substituted"] is False
+        assert sub["eligibleForPerCheckSubstitution"] is True
         assert sub["manualCheckId"] == SUBSTITUTABLE_MANUAL_CHECK_MAP[cid]["manualCheckId"]
-    assert len(full_res["SatisfiedManualChecksByQualificationEvidence"]) >= 3
+    assert full_res["SatisfiedManualChecksByQualificationEvidence"] == []
+    assert len(full_res["EligibleManualCheckSubstitutionsByQualificationEvidence"]) >= 3
 
     # 2. Simulated receipt -> rejected
     sim_evidence = json.loads(json.dumps(good_evidence))
@@ -545,10 +572,19 @@ def test_qual_tbl_evaluators_reject_simulated_wrong_workspace_incomplete_paginat
     # 6. Wrong/missing table or column evidence (HTTP 200 alone without matching columns/descriptions) -> rejected
     missing_fields_evidence = json.loads(json.dumps(good_evidence))
     missing_fields_evidence["tableSchemaReadiness"]["armTables"]["AcmeEvents_CL"]["columns"] = [
-        {"name": "EventId", "type": "string", "description": "Unique event identifier."}
+        {
+            "name": "TimeGenerated",
+            "type": "datetime",
+            "description": "The timestamp (UTC) when the Acme event was generated.",
+        },
+        {"name": "EventId", "type": "string", "description": "Unique event identifier."},
         # ActorUpn missing
     ]
     missing_fields_evidence["tableSchemaReadiness"]["huntingSchemaTables"]["tables"][0]["columns"] = [
+        {
+            "name": "TimeGenerated",
+            "description": "The timestamp (UTC) when the Acme event was generated.",
+        },
         {"name": "EventId", "description": "Unique event identifier."},
         {"name": "ActorUpn", "description": ""},  # empty description in AH schema
     ]
@@ -580,7 +616,11 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
                 "name": "AcmeEvents_CL",
                 "description": "Acme security events ingested into Log Analytics.",
                 "columns": [
-                    {"name": "TimeGenerated", "type": "datetime"},
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime",
+                        "description": "The timestamp (UTC) when the Acme event was generated.",
+                    },
                     {"name": "EventId", "type": "string", "description": "Unique event identifier."},
                 ],
             }
@@ -613,7 +653,11 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
                             "name": "AcmeEvents_CL",
                             "description": "Acme security events ingested into Log Analytics.",
                             "columns": [
-                                {"name": "TimeGenerated", "type": "datetime"},
+                                {
+                                    "name": "TimeGenerated",
+                                    "type": "datetime",
+                                    "description": "The timestamp (UTC) when the Acme event was generated.",
+                                },
                                 {"name": "EventId", "type": "string", "description": "Unique event identifier."},
                             ],
                         }
@@ -627,7 +671,13 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
                         {
                             "name": "AcmeEvents_CL",
                             "description": "Acme security events ingested into Log Analytics.",
-                            "columns": [{"name": "EventId", "description": "Unique event identifier."}],
+                            "columns": [
+                                {
+                                    "name": "TimeGenerated",
+                                    "description": "The timestamp (UTC) when the Acme event was generated.",
+                                },
+                                {"name": "EventId", "description": "Unique event identifier."},
+                            ],
                         }
                     ]
                 }
@@ -840,4 +890,291 @@ def test_security_validations_on_graph_and_arm_helpers() -> None:
         assert False, "Expected ValueError for invalid workspace_resource_id"
     except ValueError:
         pass
+
+
+def test_re_review_false_pass_regressions_bugs_1_through_5(tmp_path: Path) -> None:
+    """Covers the 5 reproducible high-severity false-pass bugs reported in PR #15714 re-review."""
+    sol = tmp_path / "ReReviewBugRegressionSol"
+    _build_minimal_solution(sol, data_connectors=["Data Connectors/Vendor_tables.json"])
+
+    # Bug 1: Declared system-named columns (TimeGenerated, Computer, RawData) in properties.schema.columns
+    # with blank/missing descriptions must FAIL VAL-TBL-02, VAL-TBL-03, QUAL-TBL-01, and QUAL-TBL-02.
+    sys_col_blank_src = {
+        "name": "VendorAudit_CL",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "properties": {
+            "schema": {
+                "name": "VendorAudit_CL",
+                "description": "Vendor audit events ingested via CCP.",
+                "columns": [
+                    {"name": "TimeGenerated", "type": "datetime", "description": ""},
+                    {"name": "Computer", "type": "string"},
+                    {"name": "RawData", "type": "string", "description": "   "},
+                    {"name": "EventId", "type": "string", "description": "Unique event identifier."},
+                ],
+            }
+        },
+    }
+    _write_json(sol / "Data Connectors" / "Vendor_tables.json", sys_col_blank_src)
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [sys_col_blank_src],
+        },
+    )
+    inv_bug1 = discover_solution_tables(sol)
+    b1_s2, b1_obs2 = evaluate_val_tbl_02(inv_bug1, enforce_blocking=True)
+    assert b1_s2 == "FAIL"
+    assert "TimeGenerated" in b1_obs2
+    assert "Computer" in b1_obs2
+    assert "RawData" in b1_obs2
+
+    # Now fix source descriptions for declared system-named columns, but drop TimeGenerated description in package
+    valid_src = {
+        "name": "VendorAudit_CL",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "properties": {
+            "schema": {
+                "name": "VendorAudit_CL",
+                "description": "Vendor audit events ingested via CCP.",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime",
+                        "description": "The timestamp (UTC) when the vendor audit event occurred.",
+                    },
+                    {"name": "EventId", "type": "string", "description": "Unique event identifier."},
+                ],
+            }
+        },
+    }
+    pkg_dropped_sys_desc = json.loads(json.dumps(valid_src))
+    pkg_dropped_sys_desc["properties"]["schema"]["columns"][0]["description"] = ""
+    _write_json(sol / "Data Connectors" / "Vendor_tables.json", valid_src)
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [pkg_dropped_sys_desc],
+        },
+    )
+    inv_bug1_drift = discover_solution_tables(sol)
+    b1_s3, b1_obs3 = evaluate_val_tbl_03(inv_bug1_drift, enforce_blocking=True)
+    assert b1_s3 == "FAIL"
+    assert "TimeGenerated" in b1_obs3
+
+    # Restore valid package so static VAL-TBL-01..03 pass for live evaluator tests
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [valid_src],
+        },
+    )
+    inv_valid = discover_solution_tables(sol)
+    ws_id = "8fb6e2d6-1b0a-4d0b-9d9f-9f3e2a5c7b21"
+    ws_res_id = (
+        "/subscriptions/00000000-0000-0000-0000-000000000001"
+        "/resourceGroups/rg-test/providers/Microsoft.OperationalInsights/workspaces/la-test"
+    )
+
+    # Bug 2: qualification_evidence.checks PASS overrides must NOT bypass live evaluators for QUAL-TBL-01..03
+    override_bypass_ev = {
+        "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        "checks": {
+            "QUAL-TBL-01": {"status": "PASS", "observation": "Spoofed override"},
+            "QUAL-TBL-02": {"status": "PASS", "observation": "Spoofed override"},
+            "QUAL-TBL-03": {"status": "PASS", "observation": "Spoofed override"},
+        },
+        "tableSchemaReadiness": {
+            "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+            "armTables": {"VendorAudit_CL": {"ok": False, "httpStatus": 403, "error": "Forbidden"}},
+            "huntingSchemaTables": {"ok": False, "httpStatus": 403, "error": "Forbidden"},
+            "huntingQuery": {"VendorAudit_CL": {"ok": False, "httpStatus": 403, "error": "Forbidden"}},
+        },
+    }
+    res_bug2 = run_pr_qualification_checks(sol, run_qualification=True, qualification_evidence=override_bypass_ev)
+    for cid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+        assert res_bug2["checksById"][cid]["status"] == "FAIL"
+
+    # Bug 3: tableSchemaReadiness.target conflicting with workflow_state.target must fail closed (not override)
+    other_ws_id = "11111111-2222-3333-4444-555555555555"
+    other_ws_res_id = (
+        "/subscriptions/00000000-0000-0000-0000-000000000001"
+        "/resourceGroups/rg-other/providers/Microsoft.OperationalInsights/workspaces/la-other"
+    )
+    conflicting_target_ev = {
+        "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        "tableSchemaReadiness": {
+            "target": {"workspaceId": other_ws_id, "workspaceResourceId": other_ws_res_id},
+            "armTables": {
+                "VendorAudit_CL": {
+                    "ok": True,
+                    "httpStatus": 200,
+                    "requestUrl": f"https://management.azure.com{other_ws_res_id}/tables/VendorAudit_CL?api-version=2025-02-01",
+                    "workspaceResourceId": other_ws_res_id,
+                    "tableDescription": "Vendor audit events ingested via CCP.",
+                    "columns": valid_src["properties"]["schema"]["columns"],
+                }
+            },
+            "huntingSchemaTables": {
+                "ok": True,
+                "httpStatus": 200,
+                "endpoint": f"https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId={other_ws_id})",
+                "workspaceId": other_ws_id,
+                "workspaceIdUnquoted": True,
+                "complete": True,
+                "paginationComplete": True,
+                "tables": [
+                    {
+                        "name": "VendorAudit_CL",
+                        "description": "Vendor audit events ingested via CCP.",
+                        "columns": valid_src["properties"]["schema"]["columns"],
+                    }
+                ],
+            },
+            "huntingQuery": {
+                "VendorAudit_CL": {
+                    "ok": True,
+                    "httpStatus": 200,
+                    "requestUrl": f"https://graph.microsoft.com/beta/security/getRunHuntingQuery(query='VendorAudit_CL%20%7C%20take%201',timespan='P1D',workspaceId={other_ws_id})",
+                    "workspaceId": other_ws_id,
+                    "workspaceIdUnquoted": True,
+                    "query": "VendorAudit_CL | take 1",
+                    "schema": [
+                        {"name": "TimeGenerated", "type": "DateTime"},
+                        {"name": "EventId", "type": "String"},
+                    ],
+                }
+            },
+        },
+    }
+    res_bug3 = run_pr_qualification_checks(sol, run_qualification=True, qualification_evidence=conflicting_target_ev)
+    for cid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+        assert res_bug3["checksById"][cid]["status"] == "FAIL"
+        assert "does not match approved target" in res_bug3["checksById"][cid]["whatWeObserved"]
+
+    # Bug 4: Missing execution metadata (omitted ok, httpStatus, requestUrl/endpoint, paginationComplete,
+    # or conflicting per-table workspaceId in QUAL-TBL-02) must fail closed
+    missing_meta_ev = {
+        "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        "tableSchemaReadiness": {
+            "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+            "armTables": {
+                "VendorAudit_CL": {
+                    # Missing ok, httpStatus, requestUrl
+                    "workspaceResourceId": ws_res_id,
+                    "tableDescription": "Vendor audit events ingested via CCP.",
+                    "columns": valid_src["properties"]["schema"]["columns"],
+                }
+            },
+            "huntingSchemaTables": {
+                "ok": True,
+                "httpStatus": 200,
+                "endpoint": f"https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId={ws_id})",
+                "workspaceId": ws_id,
+                "workspaceIdUnquoted": True,
+                # Missing complete / paginationComplete
+                "tables": [
+                    {
+                        "name": "VendorAudit_CL",
+                        "workspaceId": other_ws_id,  # Conflicting per-table workspaceId
+                        "description": "Vendor audit events ingested via CCP.",
+                        "columns": valid_src["properties"]["schema"]["columns"],
+                    }
+                ],
+            },
+            "huntingQuery": {
+                "VendorAudit_CL": {
+                    "ok": True,
+                    "httpStatus": 200,
+                    # Missing requestUrl / endpoint
+                    "workspaceId": ws_id,
+                    "workspaceIdUnquoted": True,
+                    "query": "VendorAudit_CL | take 1",
+                    "schema": [
+                        {"name": "TimeGenerated", "type": "DateTime"},
+                        {"name": "EventId", "type": "String"},
+                    ],
+                }
+            },
+        },
+    }
+    b4_q1, b4_obs1 = evaluate_qual_tbl_01(inv_valid, missing_meta_ev, enforce_blocking=True)
+    b4_q2, b4_obs2 = evaluate_qual_tbl_02(inv_valid, missing_meta_ev, enforce_blocking=True)
+    b4_q3, b4_obs3 = evaluate_qual_tbl_03(inv_valid, missing_meta_ev, enforce_blocking=True)
+    assert (b4_q1, b4_q2, b4_q3) == ("FAIL", "FAIL", "FAIL")
+    assert "missing required provider success metadata" in b4_obs1
+    assert "incomplete_hunting_schema_pagination" in b4_obs2
+    assert "missing required requestUrl/endpoint metadata" in b4_obs3
+
+    # Also verify QUAL-TBL-01 fails when requestUrl/endpoint is omitted even if ok=True and httpStatus=200 are present
+    arm_missing_url_ev = json.loads(json.dumps(missing_meta_ev))
+    arm_missing_url_ev["tableSchemaReadiness"]["armTables"]["VendorAudit_CL"]["ok"] = True
+    arm_missing_url_ev["tableSchemaReadiness"]["armTables"]["VendorAudit_CL"]["httpStatus"] = 200
+    b4_q1_url, b4_obs1_url = evaluate_qual_tbl_01(inv_valid, arm_missing_url_ev, enforce_blocking=True)
+    assert b4_q1_url == "FAIL"
+    assert "missing required requestUrl/endpoint metadata" in b4_obs1_url
+
+    # Also verify QUAL-TBL-02 and QUAL-TBL-03 reject URL fragment workspaceId spoofing (#<expected_ws_id>)
+    frag_spoof_ev = json.loads(json.dumps(conflicting_target_ev))
+    frag_spoof_ev["tableSchemaReadiness"]["target"] = {"workspaceId": ws_id, "workspaceResourceId": ws_res_id}
+    frag_spoof_ev["tableSchemaReadiness"]["huntingSchemaTables"]["workspaceId"] = ws_id
+    frag_spoof_ev["tableSchemaReadiness"]["huntingSchemaTables"]["endpoint"] = (
+        f"https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId={other_ws_id})#{ws_id}"
+    )
+    frag_spoof_ev["tableSchemaReadiness"]["huntingQuery"]["VendorAudit_CL"]["workspaceId"] = ws_id
+    frag_spoof_ev["tableSchemaReadiness"]["huntingQuery"]["VendorAudit_CL"]["requestUrl"] = (
+        f"https://graph.microsoft.com/beta/security/getRunHuntingQuery(query='VendorAudit_CL%20%7C%20take%201',timespan='P1D',workspaceId={other_ws_id})#{ws_id}"
+    )
+    f_q2, f_obs2 = evaluate_qual_tbl_02(inv_valid, frag_spoof_ev, enforce_blocking=True)
+    f_q3, f_obs3 = evaluate_qual_tbl_03(inv_valid, frag_spoof_ev, enforce_blocking=True)
+    assert (f_q2, f_q3) == ("FAIL", "FAIL")
+    assert "does not target approved workspaceCustomerId" in f_obs2
+    assert "does not match target workspaceId" in f_obs3
+
+    # Also verify QUAL-TBL-02 rejects conflicting per-table workspaceId even when paginationComplete=True
+    per_table_ws_conflict_ev = json.loads(json.dumps(missing_meta_ev))
+    per_table_ws_conflict_ev["tableSchemaReadiness"]["huntingSchemaTables"]["complete"] = True
+    per_table_ws_conflict_ev["tableSchemaReadiness"]["huntingSchemaTables"]["paginationComplete"] = True
+    b4_q2_ws, b4_obs2_ws = evaluate_qual_tbl_02(inv_valid, per_table_ws_conflict_ev, enforce_blocking=True)
+    assert b4_q2_ws == "FAIL"
+    assert "does not match approved target" in b4_obs2_ws
+
+    # Bug 5: Promotion gate must reject bare summary flags (tableSchemaQualificationVerified=True or
+    # tableSchemaReadiness.verified=True with empty table receipts) when custom tables exist
+    spoofed_promotion_state = {
+        "solutionRoot": str(sol),
+        "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        "expectedContentCounts": {
+            "sentinelRulesCount": 1,
+            "workbooksCount": 0,
+            "customDetectionsCount": 1,
+            "customTablesCount": 1,
+        },
+        "preflightPassed": True,
+        "deploymentVerified": True,
+        "mockIngestionVerified": True,
+        "ruleParityVerified": True,
+        "sanitizedEvidenceReady": True,
+        "tableSchemaQualificationVerified": True,
+        "tableSchemaReadiness": {
+            "status": "passed",
+            "verified": True,
+            "armTableReadback": {"ok": True, "tables": []},
+            "huntingSchema": {"ok": True, "complete": True, "tables": []},
+            "workspaceHuntingQuery": {"ok": True, "queries": []},
+        },
+    }
+    gate_spoofed = evaluate_qualification_promotion_gate(spoofed_promotion_state)
+    assert gate_spoofed["passed"] is False
+    assert gate_spoofed["tableSchemaQualificationVerified"] is False
+    assert "tableSchemaQualificationVerified" in gate_spoofed["missingGates"]
+
 

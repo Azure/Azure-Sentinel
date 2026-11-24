@@ -1426,6 +1426,7 @@ def fetch_graph_hunting_schema_tables(
         "tables": tables,
         "pagesFetched": pages_fetched,
         "complete": not has_unfetched,
+        "paginationComplete": not has_unfetched,
         "hasUnfetchedPages": has_unfetched,
         "error": (
             f"Incomplete pagination: stopped after {pages_fetched} page(s) with @odata.nextLink still present"
@@ -1576,7 +1577,10 @@ def fetch_arm_table_schema(
             return {
                 "ok": True,
                 "statusCode": status_code,
+                "httpStatus": status_code,
                 "apiVersion": ver,
+                "endpoint": url,
+                "requestUrl": url,
                 "workspaceResourceId": ws_id,
                 "tableName": tbl,
                 "tableDescription": str(schema.get("description") or "") if isinstance(schema, dict) else "",
@@ -1588,7 +1592,10 @@ def fetch_arm_table_schema(
             last_error = {
                 "ok": False,
                 "statusCode": exc.code,
+                "httpStatus": exc.code,
                 "apiVersion": ver,
+                "endpoint": url,
+                "requestUrl": url,
                 "workspaceResourceId": ws_id,
                 "tableName": tbl,
                 "tableDescription": "",
@@ -1602,7 +1609,10 @@ def fetch_arm_table_schema(
             return {
                 "ok": False,
                 "statusCode": 0,
+                "httpStatus": 0,
                 "apiVersion": ver,
+                "endpoint": url,
+                "requestUrl": url,
                 "workspaceResourceId": ws_id,
                 "tableName": tbl,
                 "tableDescription": "",
@@ -1862,6 +1872,7 @@ def collect_live_table_schema_readiness_evidence(
         hunting_query_receipt = {
             "ok": all_q_ok,
             "statusCode": first_q_code,
+            "endpoint": GRAPH_BETA_RUN_HUNTING_QUERY_ENDPOINT,
             "workspaceId": target_info["workspaceId"],
             "workspaceResourceId": target_info["workspaceResourceId"],
             "queries": query_entries,

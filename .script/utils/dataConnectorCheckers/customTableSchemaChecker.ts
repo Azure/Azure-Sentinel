@@ -6,22 +6,6 @@ const TABLE_RESOURCE_TYPE = "microsoft.operationalinsights/workspaces/tables";
 const WORKSPACE_RESOURCE_TYPE = "microsoft.operationalinsights/workspaces";
 const DEPLOYMENT_RESOURCE_TYPE = "microsoft.resources/deployments";
 
-const SYSTEM_TABLE_COLUMNS = new Set([
-  "timegenerated",
-  "tenantid",
-  "type",
-  "_resourceid",
-  "_subscriptionid",
-  "_itemid",
-  "_billedsize",
-  "_isbillable",
-  "sourcesystem",
-  "mg",
-  "managementgroupname",
-  "computer",
-  "rawdata",
-]);
-
 const KNOWN_MICROSOFT_STANDARD_TABLES = new Set([
   "aadmanagedidentitysigninlogs",
   "aadnoninteractivesigninlogs",
@@ -496,7 +480,10 @@ function parseTableResource(
       }
       const rawColType = colObj.type ?? colObj.dataType ?? "string";
       const colType = typeof rawColType === "string" ? rawColType.trim() : "string";
-      const isSystemColumn = listKey === "columns" && SYSTEM_TABLE_COLUMNS.has(colName.toLowerCase());
+      // Any column explicitly declared in schema.columns or schema.customColumns of an authored
+      // custom-log table declaration must have a valid description (even if named TimeGenerated,
+      // Computer, or RawData). Only provider-injected standardColumns are system-exempt.
+      const isSystemColumn = false;
       const descEval = evaluateDescriptionQuality(colObj.description, colName, ctx);
       allColumns.push({
         name: colName,

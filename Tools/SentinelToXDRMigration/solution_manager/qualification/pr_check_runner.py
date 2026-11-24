@@ -843,6 +843,10 @@ def _check_direct_override(
     simulated_flag: bool = False,
 ) -> Mapping[str, Any] | None:
     """Return per-check evidence override if caller supplied valid live qualification evidence."""
+    # Never allow summary check overrides to bypass live receipt evaluators or static
+    # VAL-TBL-01..03 prerequisites for QUAL-TBL-01..03.
+    if check_id in {"QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"}:
+        return None
     if check_def is not None:
         checklist = str(check_def.get("checklist") or "").strip().lower()
         category = str(check_def.get("category") or "").strip().lower()
@@ -1039,7 +1043,7 @@ def _build_check_result(
             "manualCheckId": manual_sub_spec["manualCheckId"],
             "manualCheckName": manual_sub_spec["manualCheckName"],
             "scope": manual_sub_spec["scope"],
-            "substituted": can_substitute,
+            "substituted": False,
             "eligibleForPerCheckSubstitution": can_substitute,
             "blanketHumanReviewWaiver": False,
             "policyStatus": "keep_existing_manual_checks_until_agreed",
@@ -3033,14 +3037,32 @@ def _evaluate_qualification_checks(
                 for r in validation_results
                 if r.get("id") in {"VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03"}
             )
-            target_ctx = (
-                (tbl_qual_root.get("target") if isinstance(tbl_qual_root, Mapping) else None)
+            authoritative_target_ctx = (
+                workflow_state.get("target")
+                or (workflow_state.get("context") if isinstance(workflow_state.get("context"), Mapping) else None)
                 or qualification_evidence.get("target")
                 or qualification_evidence.get("workspace")
-                or workflow_state.get("target")
-                or (workflow_state.get("context") if isinstance(workflow_state.get("context"), Mapping) else None)
+            )
+            receipt_target_ctx = tbl_qual_root.get("target") if isinstance(tbl_qual_root, Mapping) else None
+            target_ctx = (
+                authoritative_target_ctx
+                if isinstance(authoritative_target_ctx, Mapping) and authoritative_target_ctx
+                else receipt_target_ctx
             )
             target_dict = dict(target_ctx) if isinstance(target_ctx, Mapping) else None
+            root_target_conflict_error: str | None = None
+            if (
+                isinstance(authoritative_target_ctx, Mapping)
+                and authoritative_target_ctx
+                and isinstance(receipt_target_ctx, Mapping)
+                and receipt_target_ctx
+            ):
+                from solution_manager.qualification.table_schema_readiness import _check_target_conflict
+                root_target_conflict_error = _check_target_conflict(
+                    dict(authoritative_target_ctx),
+                    dict(receipt_target_ctx),
+                    cid,
+                )
 
             if simulated_flag:
                 results.append(
@@ -3050,6 +3072,19 @@ def _evaluate_qualification_checks(
                         what_we_checked=cdef["originalCriterion"],
                         what_we_observed=f"Detected simulated/dry-run indicators for {cid}: {', '.join(sim_reasons)}.",
                         why_passed_or_failed="Fail-closed: simulated or dry-run evidence is prohibited in Qualification mode.",
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
+                    )
+                )
+            elif root_target_conflict_error:
+                q_fail_status = "FAIL" if enforce_tbl_blocking else "WARN"
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status=q_fail_status,
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=root_target_conflict_error,
+                        why_passed_or_failed=f"Live {sub_key} verification failed: {root_target_conflict_error}",
                         evidence_refs=refs,
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
@@ -4146,17 +4181,23 @@ def run_pr_qualification_checks(
         for c in all_checks
         if isinstance(c.get("manualReviewSubstitution"), Mapping)
     ]
-    satisfied_manual_checks = [
+    eligible_manual_checks = [
         entry
         for entry in substitutable_entries
         if entry.get("eligibleForPerCheckSubstitution") is True
     ]
+    satisfied_manual_checks = [
+        entry
+        for entry in substitutable_entries
+        if entry.get("substituted") is True
+    ]
     manual_review_substitution_summary = {
         "policyStatus": "keep_existing_manual_checks_until_agreed",
         "blanketHumanReviewWaiver": False,
-        "eligibleSubstitutionsCount": len(satisfied_manual_checks),
+        "eligibleSubstitutionsCount": len(eligible_manual_checks),
         "totalMappedChecksCount": len(substitutable_entries),
         "satisfiedManualCheckIds": [entry["manualCheckId"] for entry in satisfied_manual_checks],
+        "eligibleManualCheckIds": [entry["manualCheckId"] for entry in eligible_manual_checks],
         "checks": substitutable_entries,
     }
 
@@ -4259,6 +4300,7 @@ def run_pr_qualification_checks(
         "summaryCounts": summary_counts,
         "manualReviewSubstitution": manual_review_substitution_summary,
         "SatisfiedManualChecksByQualificationEvidence": satisfied_manual_checks,
+        "EligibleManualCheckSubstitutionsByQualificationEvidence": eligible_manual_checks,
     }
 
 
