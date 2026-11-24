@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                         |
 |-------------|--------------------------------|--------------------------------------------------------------------------------------------|
+| 3.2.3       | 24-11-2026                     | Rebuilt the V3.1 solution package with a patch version increment; existing Sentinel and Defender XDR detections are unchanged. |
 | 3.2.2       | 09-11-2026                     | Added 3 Defender **XDR Detections** migrated from **Analytic Rules** and updated solution to V3.1 package format. |
 | 3.2.1       | 02-09-2026                     | Security Patch: Remove logResponseContent attribute from Polling Config                    |
 | 3.2.0       | 06-07-2026                     | Rebrand to Idira and remove deprecated Azure Functions Data Connector                      |
