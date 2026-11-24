@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                             |
 |-------------|--------------------------------|------------------------------------------------|
+| 3.2.4       | 24-11-2026                     | Added CCF **Data Connector** package (definition, poller, DCR) to enable the Add new collector connection. |
 | 3.2.3       | 19-11-2026                     | Updated **Data Connector** UI type from static to generic. |
 | 3.2.2       | 22-10-2026                     | Added Defender XDR custom detections and V3.1 hybrid solution package. |
 | 3.0.7       | 11-11-2025                     | Add New **Analytic Rules** and **Hunting Queries** |
