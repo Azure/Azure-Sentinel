@@ -401,7 +401,14 @@ run
 
 
 class SampleFixtureIngestionTests(unittest.TestCase):
-    def run_ingestion(self, fixtures, tables, table_type="builtin", upload_results=None):
+    def run_ingestion(
+        self,
+        fixtures,
+        tables,
+        table_type="builtin",
+        upload_results=None,
+        delete_dcr=None,
+    ):
         script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
         tree = ast.parse(script_path.read_text(encoding="utf-8"))
         initialization = next(
@@ -433,6 +440,7 @@ class SampleFixtureIngestionTests(unittest.TestCase):
             status_code=200,
             text=json.dumps({"properties": {"immutableId": "synthetic-dcr"}}),
         )
+        delete_dcr = delete_dcr or Mock()
         namespace = {
             "os": os,
             "json": json,
@@ -459,6 +467,7 @@ class SampleFixtureIngestionTests(unittest.TestCase):
             "get_table_status": Mock(),
             "create_dcr": Mock(return_value=({}, "dcr-url", "PUT", "synthetic-stream")),
             "hit_api": Mock(return_value=response),
+            "delete_dcr": delete_dcr,
             "_response_payload": lambda value: json.loads(value.text),
             "log_arm_response": Mock(),
             "senddtosentinel": Mock(
@@ -486,6 +495,9 @@ class SampleFixtureIngestionTests(unittest.TestCase):
                 result["senddtosentinel"].assert_called_once()
                 result["create_dcr"].assert_called_once()
                 result["rebase_time_generated"].assert_called_once()
+                result["delete_dcr"].assert_called_once_with(
+                    "dcr-url", "Synthetic_CL"
+                )
 
     def test_distinct_fixtures_and_destinations_are_not_deduplicated(self):
         for fixtures, tables in (
@@ -499,6 +511,7 @@ class SampleFixtureIngestionTests(unittest.TestCase):
                     result = self.run_ingestion(fixtures, tables, table_type)
                     self.assertEqual(result["senddtosentinel"].call_count, 2)
                     self.assertEqual(result["create_dcr"].call_count, 2)
+                    self.assertEqual(result["delete_dcr"].call_count, 2)
 
     def test_failed_upload_does_not_mark_fixture_as_ingested(self):
         for table_type in ("builtin", "custom_log"):
@@ -511,6 +524,78 @@ class SampleFixtureIngestionTests(unittest.TestCase):
                 )
                 self.assertEqual(result["senddtosentinel"].call_count, 2)
                 self.assertEqual(result["create_dcr"].call_count, 2)
+                self.assertEqual(result["delete_dcr"].call_count, 2)
+
+    def test_upload_exception_still_deletes_created_dcr(self):
+        delete_dcr = Mock()
+
+        with self.assertRaisesRegex(RuntimeError, "upload failed"):
+            self.run_ingestion(
+                [Path("fixtures/shared.csv")],
+                ["Synthetic_CL"],
+                upload_results=RuntimeError("upload failed"),
+                delete_dcr=delete_dcr,
+            )
+
+        delete_dcr.assert_called_once_with("dcr-url", "Synthetic_CL")
+
+
+class SampleDcrCleanupTests(unittest.TestCase):
+    def setUp(self):
+        script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
+        tree = ast.parse(script_path.read_text(encoding="utf-8"))
+        delete_dcr = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "delete_dcr"
+        )
+        self.hit_api = Mock(
+            return_value=SimpleNamespace(status_code=204, text="")
+        )
+        self.log_arm_response = Mock()
+        namespace = {
+            "hit_api": self.hit_api,
+            "log_arm_response": self.log_arm_response,
+        }
+        exec(
+            compile(
+                ast.Module(body=[delete_dcr], type_ignores=[]),
+                str(script_path),
+                "exec",
+            ),
+            namespace,
+        )
+        self.delete_dcr = namespace["delete_dcr"]
+
+    def test_dcr_cleanup_uses_created_resource_url(self):
+        resource_url = (
+            "https://management.azure.com/subscriptions/sub/resourceGroups/"
+            "rg/providers/Microsoft.Insights/dataCollectionRules/dcr"
+            "?api-version=2022-06-01"
+        )
+
+        with patch("sys.stdout", io.StringIO()):
+            self.delete_dcr(resource_url, "Contoso_CL")
+
+        url, request, method = self.hit_api.call_args.args
+        self.assertEqual(resource_url, url)
+        self.assertEqual({}, request)
+        self.assertEqual("DELETE", method)
+        self.log_arm_response.assert_called_once_with(
+            "DCR cleanup", "Contoso_CL", self.hit_api.return_value
+        )
+
+    def test_dcr_cleanup_failure_is_not_silenced(self):
+        self.hit_api.return_value = SimpleNamespace(
+            status_code=500, text=""
+        )
+
+        with (
+            patch("sys.stdout", io.StringIO()),
+            self.assertRaisesRegex(RuntimeError, "cleanup failed"),
+        ):
+            self.delete_dcr("dcr-url", "Contoso_CL")
 
 
 class LegacyKqlSecurityTests(unittest.TestCase):
@@ -1017,3 +1102,27 @@ class SampleFixtureSelectionTests(unittest.TestCase):
     def test_missing_source_specific_and_legacy_fixtures_fail_explicitly(self):
         with self.assertRaises(FileNotFoundError):
             self.resolve("ProofPointTAPClicksBlockedV2_CL | where true")
+
+    def test_rejects_unsafe_fixture_name_components(self):
+        cases = (
+            ("../Proofpoint", "TAP", "EmailEvent", "EventVendor"),
+            ("Proofpoint", "TAP/Other", "EmailEvent", "EventProduct"),
+            ("Proofpoint", "TAP", "../EmailEvent", "Normalization.Schema"),
+        )
+        for event_vendor, event_product, schema, label in cases:
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(ValueError, label):
+                    PARSER_FILE_UTILS.resolve_sample_data_path(
+                        self.sample_dir,
+                        event_vendor,
+                        event_product,
+                        schema,
+                        "Synthetic_CL | where true",
+                    )
+
+    def test_containment_guard_rejects_parent_path(self):
+        with self.assertRaisesRegex(ValueError, "outside"):
+            PARSER_FILE_UTILS._resolve_contained_path(
+                self.sample_dir.resolve(),
+                Path("..") / "outside.csv",
+            )
