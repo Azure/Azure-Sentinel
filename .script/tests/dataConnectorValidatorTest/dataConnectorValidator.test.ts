@@ -2,6 +2,10 @@ import chai, { expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
 import { ExitCode } from "../../utils/exitCode";
 import { IsValidDataConnectorSchema } from "../../dataConnectorValidator";
+import {
+  discoverTablesInJsonObject,
+  isValidCustomTableSchemas,
+} from "../../utils/dataConnectorCheckers/customTableSchemaChecker";
 
 chai.use(chaiAsPromised);
 
@@ -83,6 +87,69 @@ describe("dataConnectorValidator", () => {
 
   it("should throw an exception when Syslog data connector have Invalid set of permissions", async () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/invalidAzureDiagnosticsDataConnector.json","DataConnectorValidationError");
+  });
+
+  it("should pass customTableSchemaChecker when custom table and columns have meaningful descriptions", () => {
+    const doc = {
+      name: "VendorAudit_CL",
+      type: "Microsoft.OperationalInsights/workspaces/tables",
+      apiVersion: "2022-10-01",
+      properties: {
+        schema: {
+          name: "VendorAudit_CL",
+          description: "Vendor audit and sign-in events collected via the polling CCP connector.",
+          columns: [
+            { name: "TimeGenerated", type: "datetime" },
+            { name: "EventId", type: "string", description: "Unique identifier for the vendor audit event." },
+            { name: "ActorUpn", type: "string", description: "User principal name of the actor." },
+          ],
+        },
+      },
+    };
+    const res = isValidCustomTableSchemas("Solutions/Vendor/Data Connectors/Vendor_tables.json", doc);
+    expect(res.hasCustomTables).to.equal(true);
+    expect(res.hasAnyTables).to.equal(true);
+  });
+
+  it("should fail customTableSchemaChecker when table or column descriptions are blank, placeholder, or unresolved ARM expressions", () => {
+    const doc = {
+      name: "VendorAudit_CL",
+      type: "Microsoft.OperationalInsights/workspaces/tables",
+      apiVersion: "2022-10-01",
+      properties: {
+        schema: {
+          name: "VendorAudit_CL",
+          description: "   ",
+          columns: [
+            { name: "TimeGenerated", type: "datetime" },
+            { name: "EventId", type: "string", description: "TODO" },
+            { name: "ActorUpn", type: "string", description: "[parameters('actorDesc')]" },
+          ],
+        },
+      },
+    };
+    expect(() =>
+      isValidCustomTableSchemas("Solutions/Vendor/Data Connectors/Vendor_tables.json", doc),
+    ).to.throw(Error, /\[VAL-TBL-01\].*\[VAL-TBL-02\]/);
+  });
+
+  it("should exempt Microsoft-standard table configuration from customTableSchemaChecker", () => {
+    const doc = {
+      name: "[concat(parameters('workspace'), '/SecurityEvent')]",
+      type: "Microsoft.OperationalInsights/workspaces/tables",
+      apiVersion: "2022-10-01",
+      properties: {
+        plan: "Analytics",
+        retentionInDays: 90,
+      },
+    };
+    const discovered = discoverTablesInJsonObject(doc, "Solutions/Standard/Data Connectors/Retention.json");
+    expect(discovered.filter(t => t.classification === "custom_log")).to.be.empty;
+    expect(discovered.filter(t => t.classification === "microsoft_standard_config").length).to.equal(1);
+
+    const res = isValidCustomTableSchemas("Solutions/Standard/Data Connectors/Retention.json", doc);
+    expect(res.hasCustomTables).to.equal(false);
+    expect(res.hasAnyTables).to.equal(true);
   });
 
   async function checkValid(filePath: string): Promise<Chai.PromisedAssertion> {

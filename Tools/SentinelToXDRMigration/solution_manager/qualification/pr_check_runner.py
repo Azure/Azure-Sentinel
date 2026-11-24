@@ -26,7 +26,11 @@ from solution_manager.qualification.pr_applicability import (
     determine_pr_applicability,
 )
 from solution_manager.qualification.table_schema_readiness import (
+    build_expected_custom_table_map,
     discover_solution_tables,
+    evaluate_qual_tbl_01,
+    evaluate_qual_tbl_02,
+    evaluate_qual_tbl_03,
     evaluate_val_tbl_01,
     evaluate_val_tbl_02,
     evaluate_val_tbl_03,
@@ -891,6 +895,50 @@ def _check_direct_override(
     return candidate
 
 
+SUBSTITUTABLE_MANUAL_CHECK_MAP: dict[str, dict[str, str]] = {
+    "QUAL-TBL-01": {
+        "manualCheckId": "MANUAL-TBL-01",
+        "manualCheckName": "Manual Azure Portal / ARM custom table schema & description inspection",
+        "scope": "Replaces duplicate manual inspection of deployed custom table and column descriptions in Log Analytics when live ARM readback receipt passes.",
+    },
+    "QUAL-TBL-02": {
+        "manualCheckId": "MANUAL-TBL-02",
+        "manualCheckName": "Manual Defender XDR Advanced Hunting schema tree table & column description check",
+        "scope": "Replaces duplicate manual inspection of the Defender XDR Advanced Hunting schema explorer when live Graph beta getHuntingSchemaTables(workspaceId=...) receipt passes.",
+    },
+    "QUAL-TBL-03": {
+        "manualCheckId": "MANUAL-TBL-03",
+        "manualCheckName": "Manual Defender XDR Advanced Hunting custom table query execution check",
+        "scope": "Replaces duplicate manual ad-hoc Advanced Hunting query check against custom tables when live Graph beta getRunHuntingQuery(workspaceId=...) receipt passes.",
+    },
+    "QUAL-DEP-01": {
+        "manualCheckId": "MANUAL-DEP-01",
+        "manualCheckName": "Manual non-production solution template deployment check",
+        "scope": "Replaces duplicate manual ARM template deployment verification when live deployment receipt passes.",
+    },
+    "QUAL-ING-01": {
+        "manualCheckId": "MANUAL-ING-01",
+        "manualCheckName": "Manual mock data ingestion & row arrival check",
+        "scope": "Replaces duplicate manual DCR ingestion and KQL row-count check when live ingestion receipt passes.",
+    },
+    "QUAL-ACT-02": {
+        "manualCheckId": "MANUAL-ACT-02",
+        "manualCheckName": "Manual Analytic Rule & XDR Custom Detection query execution check",
+        "scope": "Replaces duplicate manual rule KQL execution check when live runtime query verification receipt passes.",
+    },
+    "QUAL-WB-01": {
+        "manualCheckId": "MANUAL-WB-01",
+        "manualCheckName": "Manual Workbook KQL panel query execution check",
+        "scope": "Replaces duplicate manual workbook panel KQL execution check when live workbook query receipt passes.",
+    },
+    "QUAL-URL-01": {
+        "manualCheckId": "MANUAL-URL-01",
+        "manualCheckName": "Manual documentation & asset URL reachability check",
+        "scope": "Replaces duplicate manual clicking of embedded URLs and image assets when automated URL verification receipt passes.",
+    },
+}
+
+
 def _build_check_result(
     check_def: Mapping[str, Any],
     *,
@@ -982,6 +1030,22 @@ def _build_check_result(
         elif sup_path.strip():
             author_exception["supportingEvidenceRef"] = sanitize_decision_text(sup_path)
 
+    manual_sub_spec = SUBSTITUTABLE_MANUAL_CHECK_MAP.get(cid)
+    manual_review_substitution: dict[str, Any] | None = None
+    if manual_sub_spec is not None:
+        has_non_empty_refs = bool(sanitized_refs)
+        can_substitute = bool(applicable and eff_status == "PASS" and has_non_empty_refs)
+        manual_review_substitution = {
+            "checkId": cid,
+            "manualCheckId": manual_sub_spec["manualCheckId"],
+            "manualCheckName": manual_sub_spec["manualCheckName"],
+            "scope": manual_sub_spec["scope"],
+            "substituted": can_substitute,
+            "eligibleForPerCheckSubstitution": can_substitute,
+            "blanketHumanReviewWaiver": False,
+            "policyStatus": "keep_existing_manual_checks_until_agreed",
+        }
+
     return {
         "id": cid,
         "checklist": str(check_def["checklist"]),
@@ -1000,6 +1064,7 @@ def _build_check_result(
         "authorException": author_exception,
         "reviewerActionRequired": eff_reviewer_action,
         "reviewerActionPrompt": sanitize_decision_text(eff_reviewer_prompt) if eff_reviewer_prompt else None,
+        "manualReviewSubstitution": manual_review_substitution,
     }
 
 
@@ -1047,7 +1112,7 @@ def _evaluate_validation_checks(
     enforce_tbl_blocking = resolve_table_schema_blocking_mode(
         dict(qualification_evidence) if isinstance(qualification_evidence, Mapping) else None,
         dict(workflow_state) if isinstance(workflow_state, Mapping) else None,
-        default_blocking=False,
+        default_blocking=True,
     )
     results: list[dict[str, Any]] = []
 
@@ -2026,7 +2091,7 @@ def _evaluate_validation_checks(
                     "a non-empty, meaningful properties.schema.description."
                 )
                 why_msg = (
-                    "All custom tables satisfy AI-ready table description requirements (or passed in adoption mode)."
+                    "All custom tables satisfy AI-ready table description requirements."
                     if tbl_status == "PASS"
                     else f"Custom table schema description validation failed: {tbl_obs}"
                 )
@@ -2037,7 +2102,7 @@ def _evaluate_validation_checks(
                     "for 100% meaningful column description coverage (system columns exempted)."
                 )
                 why_msg = (
-                    "All custom table columns satisfy 100% description coverage (or passed in adoption mode)."
+                    "All custom table columns satisfy 100% description coverage."
                     if tbl_status == "PASS"
                     else f"Custom table column description validation failed: {tbl_obs}"
                 )
@@ -2048,7 +2113,7 @@ def _evaluate_validation_checks(
                     "to verify preservation without omission or truncation."
                 )
                 why_msg = (
-                    "Packaged mainTemplate.json preserves all custom table and column descriptions (or passed in adoption mode)."
+                    "Packaged mainTemplate.json preserves all custom table and column descriptions."
                     if tbl_status == "PASS"
                     else f"Packaged custom table description preservation failed: {tbl_obs}"
                 )
@@ -2157,7 +2222,7 @@ def _evaluate_qualification_checks(
     enforce_tbl_blocking = resolve_table_schema_blocking_mode(
         dict(qualification_evidence) if isinstance(qualification_evidence, Mapping) else None,
         dict(workflow_state) if isinstance(workflow_state, Mapping) else None,
-        default_blocking=False,
+        default_blocking=True,
     )
 
     results: list[dict[str, Any]] = []
@@ -2927,16 +2992,27 @@ def _evaluate_qualification_checks(
                     )
                 )
             )
-            sub_key = {
-                "QUAL-TBL-01": "armTableReadback",
-                "QUAL-TBL-02": "huntingSchema",
-                "QUAL-TBL-03": "workspaceHuntingQuery",
+            sub_keys = {
+                "QUAL-TBL-01": ("armTableReadback", "armTables"),
+                "QUAL-TBL-02": ("huntingSchema", "graphHuntingSchema", "huntingSchemaTables"),
+                "QUAL-TBL-03": ("workspaceHuntingQuery", "graphRunHuntingQuery", "huntingQuery"),
             }[cid]
-            sub_ev = tbl_qual_root.get(sub_key) if isinstance(tbl_qual_root, Mapping) else None
+            sub_key = sub_keys[0]
+            sub_ev: Mapping[str, Any] | None = None
+            if isinstance(tbl_qual_root, Mapping):
+                for candidate_key in sub_keys:
+                    candidate_val = tbl_qual_root.get(candidate_key)
+                    if isinstance(candidate_val, Mapping):
+                        sub_ev = candidate_val
+                        sub_key = candidate_key
+                        break
             if not isinstance(sub_ev, Mapping):
-                direct_sub = qualification_evidence.get(sub_key)
-                if isinstance(direct_sub, Mapping):
-                    sub_ev = direct_sub
+                for candidate_key in sub_keys:
+                    direct_sub = qualification_evidence.get(candidate_key)
+                    if isinstance(direct_sub, Mapping):
+                        sub_ev = direct_sub
+                        sub_key = candidate_key
+                        break
 
             has_live_qual_context = bool(
                 qualification_evidence.get("providerReceipts")
@@ -2944,7 +3020,7 @@ def _evaluate_qualification_checks(
                 or qual_stages
                 or qualification_evidence.get("deployment")
             )
-            custom_tables = table_inventory.source_tables or table_inventory.packaged_tables
+            custom_tables = table_inventory.custom_source_tables or table_inventory.custom_packaged_tables
             refs = [
                 _make_evidence_ref(
                     f"Table schema readiness ({sub_key})",
@@ -2952,6 +3028,20 @@ def _evaluate_qualification_checks(
                     kind="receipt",
                 )
             ]
+
+            static_tbl_passed = all(
+                r.get("status") in {"PASS", "NOT_APPLICABLE", "WAIVED_WITH_AUTHOR_EVIDENCE"}
+                for r in validation_results
+                if r.get("id") in {"VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03"}
+            )
+            target_ctx = (
+                (tbl_qual_root.get("target") if isinstance(tbl_qual_root, Mapping) else None)
+                or qualification_evidence.get("target")
+                or qualification_evidence.get("workspace")
+                or workflow_state.get("target")
+                or (workflow_state.get("context") if isinstance(workflow_state.get("context"), Mapping) else None)
+            )
+            target_dict = dict(target_ctx) if isinstance(target_ctx, Mapping) else None
 
             if simulated_flag:
                 results.append(
@@ -2965,73 +3055,6 @@ def _evaluate_qualification_checks(
                         author_exceptions_by_id=author_exceptions_by_id,
                     )
                 )
-            elif isinstance(sub_ev, Mapping) and sub_ev:
-                passed_flag = bool(
-                    sub_ev.get("verified") is True
-                    or sub_ev.get("passed") is True
-                    or sub_ev.get("ok") is True
-                    or str(sub_ev.get("status") or "").strip().upper() in {"PASS", "PASSED"}
-                )
-                failed_flag = bool(
-                    sub_ev.get("verified") is False
-                    or sub_ev.get("passed") is False
-                    or sub_ev.get("ok") is False
-                    or str(sub_ev.get("status") or "").strip().upper() in {"FAIL", "FAILED", "ERROR"}
-                )
-                extra_errors: list[str] = []
-                if cid == "QUAL-TBL-02" and sub_ev.get("workspaceIdUnquoted") is False:
-                    extra_errors.append("workspaceId parameter in getHuntingSchemaTables must be an unquoted Edm.Guid")
-                if cid == "QUAL-TBL-03":
-                    if sub_ev.get("customTableQueried") is False:
-                        extra_errors.append("getRunHuntingQuery probe did not target the custom table")
-                    if sub_ev.get("schemaColumnsVerified") is False:
-                        extra_errors.append("getRunHuntingQuery response schema columns did not match expected custom table columns")
-
-                detail_msg = str(
-                    sub_ev.get("summary")
-                    or sub_ev.get("reason")
-                    or sub_ev.get("reasonCode")
-                    or f"Evaluated {sub_key} receipt for {len(custom_tables)} custom table(s)."
-                )
-                if extra_errors:
-                    detail_msg = f"{detail_msg}; {'; '.join(extra_errors)}"
-
-                if passed_flag and not failed_flag and not extra_errors:
-                    results.append(
-                        _build_check_result(
-                            cdef,
-                            status="PASS",
-                            what_we_checked=cdef["originalCriterion"],
-                            what_we_observed=detail_msg,
-                            why_passed_or_failed=f"Live {sub_key} verification passed.",
-                            evidence_refs=refs,
-                            author_exceptions_by_id=author_exceptions_by_id,
-                        )
-                    )
-                elif not enforce_tbl_blocking and not extra_errors:
-                    results.append(
-                        _build_check_result(
-                            cdef,
-                            status="PASS",
-                            what_we_checked=cdef["originalCriterion"],
-                            what_we_observed=f"[Advisory: adoption mode] {detail_msg}",
-                            why_passed_or_failed=f"Recorded {sub_key} finding in minimum-blocking adoption mode.",
-                            evidence_refs=refs,
-                            author_exceptions_by_id=author_exceptions_by_id,
-                        )
-                    )
-                else:
-                    results.append(
-                        _build_check_result(
-                            cdef,
-                            status="FAIL",
-                            what_we_checked=cdef["originalCriterion"],
-                            what_we_observed=detail_msg,
-                            why_passed_or_failed=f"Live {sub_key} verification failed: {detail_msg}",
-                            evidence_refs=refs,
-                            author_exceptions_by_id=author_exceptions_by_id,
-                        )
-                    )
             elif not custom_tables and not table_inventory.parse_errors:
                 if has_live_qual_context:
                     results.append(
@@ -3061,35 +3084,33 @@ def _evaluate_qualification_checks(
                         )
                     )
             else:
-                tbl_names = ", ".join(sorted({r.table_name for r in custom_tables}))
-                missing_msg = (
-                    f"No live {sub_key} receipt supplied for custom table(s) [{tbl_names}] "
-                    f"in qualification_evidence.tableSchemaReadiness.{sub_key}."
+                eval_fn = {
+                    "QUAL-TBL-01": evaluate_qual_tbl_01,
+                    "QUAL-TBL-02": evaluate_qual_tbl_02,
+                    "QUAL-TBL-03": evaluate_qual_tbl_03,
+                }[cid]
+                q_status, detail_msg = eval_fn(
+                    table_inventory,
+                    sub_ev,
+                    target=target_dict,
+                    static_passed=static_tbl_passed,
+                    enforce_blocking=enforce_tbl_blocking,
                 )
-                if not enforce_tbl_blocking and has_live_qual_context:
-                    results.append(
-                        _build_check_result(
-                            cdef,
-                            status="PASS",
-                            what_we_checked=cdef["originalCriterion"],
-                            what_we_observed=f"[Advisory: adoption mode] {missing_msg}",
-                            why_passed_or_failed="Passed in minimum-blocking adoption mode while Graph beta hunting schema receipts roll out.",
-                            evidence_refs=refs,
-                            author_exceptions_by_id=author_exceptions_by_id,
-                        )
+                results.append(
+                    _build_check_result(
+                        cdef,
+                        status=q_status,
+                        what_we_checked=cdef["originalCriterion"],
+                        what_we_observed=detail_msg,
+                        why_passed_or_failed=(
+                            f"Live {sub_key} verification passed: {detail_msg}"
+                            if q_status == "PASS"
+                            else f"Live {sub_key} verification failed: {detail_msg}"
+                        ),
+                        evidence_refs=refs,
+                        author_exceptions_by_id=author_exceptions_by_id,
                     )
-                else:
-                    results.append(
-                        _build_check_result(
-                            cdef,
-                            status="FAIL",
-                            what_we_checked=cdef["originalCriterion"],
-                            what_we_observed=missing_msg,
-                            why_passed_or_failed=f"Missing required live {sub_key} receipt for custom table(s) [{tbl_names}].",
-                            evidence_refs=refs,
-                            author_exceptions_by_id=author_exceptions_by_id,
-                        )
-                    )
+                )
 
         elif cid == "QUAL-HR-01":
             refs = []
@@ -4121,6 +4142,25 @@ def run_pr_qualification_checks(
     all_checks = validation_results + qualification_results + migration_results
     checks_by_id = {c["id"]: c for c in all_checks}
 
+    substitutable_entries = [
+        c["manualReviewSubstitution"]
+        for c in all_checks
+        if isinstance(c.get("manualReviewSubstitution"), Mapping)
+    ]
+    satisfied_manual_checks = [
+        entry
+        for entry in substitutable_entries
+        if entry.get("eligibleForPerCheckSubstitution") is True
+    ]
+    manual_review_substitution_summary = {
+        "policyStatus": "keep_existing_manual_checks_until_agreed",
+        "blanketHumanReviewWaiver": False,
+        "eligibleSubstitutionsCount": len(satisfied_manual_checks),
+        "totalMappedChecksCount": len(substitutable_entries),
+        "satisfiedManualCheckIds": [entry["manualCheckId"] for entry in satisfied_manual_checks],
+        "checks": substitutable_entries,
+    }
+
     summary = {
         "totalChecks": len(all_checks),
         "applicableChecks": sum(1 for c in all_checks if c["applicable"]),
@@ -4218,6 +4258,8 @@ def run_pr_qualification_checks(
         },
         "summary": summary,
         "summaryCounts": summary_counts,
+        "manualReviewSubstitution": manual_review_substitution_summary,
+        "SatisfiedManualChecksByQualificationEvidence": satisfied_manual_checks,
     }
 
 

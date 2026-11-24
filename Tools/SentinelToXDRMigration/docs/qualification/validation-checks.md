@@ -573,7 +573,7 @@ responsible: solution_manager.core.workflow, coordinator, budget, review_notific
 
 ## VAL-TBL-01 — Custom table schema description present and meaningful
 
-Ensures AI agents in Defender XDR and Security Copilot can understand the purpose of every custom table.
+Ensures AI agents in Defender XDR and Security Copilot can understand the purpose of every custom table. Enforced as a strict blocking acceptance gate in local validation, PR CI, and `pr-qualify`. Microsoft-standard table configuration resources (defining only `plan`, `retentionInDays`, `totalRetentionInDays`, `archiveRetentionInDays`, or `analyticsTier` without custom `columns`, `schema.columns`, `schema.description`, or `_CL` suffix) are classified as `microsoft_standard_config` and are exempt from custom-schema requirements.
 
 ```yaml check-definition
 id: VAL-TBL-01
@@ -581,19 +581,19 @@ checklist: validation
 contentType: data-connectors
 title: Custom table schema description present and meaningful (properties.schema.description)
 originalCriterion: Verify every custom Microsoft.OperationalInsights/workspaces/tables resource defines a non-empty, meaningful properties.schema.description.
-applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+applicability: Solutions defining authored custom-log Microsoft.OperationalInsights/workspaces/tables resources (excluding Microsoft-standard table retention/plan configuration resources).
 category: validation
-howPerformed: Scan source JSON and Package/mainTemplate.json across root resource objects, resources[], nested templates, and V3 content templates; verify properties.schema.description is non-empty, not a placeholder, and does not merely repeat the table name.
+howPerformed: Scan source JSON and Package/mainTemplate.json across root resource objects, resources[], nested templates, and V3 content templates; classify Microsoft-standard table config vs. custom-log schemas; verify properties.schema.description is non-empty, not whitespace-only, not an unresolved ARM expression, not a placeholder, and does not merely repeat the table name.
 expectedEvidence: [custom table resource path, table name, properties.schema.description value]
-passCriteria: Every custom table resource defines a meaningful properties.schema.description (or advisory pass when minimum-blocking adoption mode is active).
+passCriteria: Every authored custom-log table resource defines a meaningful properties.schema.description. Blocking FAIL when missing, empty, whitespace-only, placeholder, or unresolved ARM expression.
 sourceChecklist: ai-table-schema-readiness
 automationStatus: automated
-responsible: solution_manager.qualification.table_schema_readiness and pr_check_runner
+responsible: solution_manager.qualification.table_schema_readiness, .script/utils/dataConnectorCheckers/customTableSchemaChecker.ts, and pr_check_runner
 ```
 
 ## VAL-TBL-02 — 100% custom table column description coverage
 
-Ensures every custom column exposed in Advanced Hunting has semantic documentation for AI query generation.
+Ensures every custom column exposed in Advanced Hunting has semantic documentation for AI query generation. Enforced as a strict blocking acceptance gate in local validation, PR CI, and `pr-qualify`.
 
 ```yaml check-definition
 id: VAL-TBL-02
@@ -601,19 +601,19 @@ checklist: validation
 contentType: data-connectors
 title: 100% custom table column description coverage (properties.schema.columns[].description)
 originalCriterion: Verify 100% of custom columns in every Microsoft.OperationalInsights/workspaces/tables resource define a non-empty, meaningful description (system columns exempted).
-applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+applicability: Solutions defining authored custom-log Microsoft.OperationalInsights/workspaces/tables resources (excluding Microsoft-standard table retention/plan configuration resources).
 category: validation
-howPerformed: Inspect properties.schema.columns[] on every custom table resource; exempt standard Log Analytics system columns (TimeGenerated, TenantId, Type, _ResourceId, etc.) and verify 100% of custom columns have non-empty, non-placeholder descriptions that do not merely repeat the column name.
+howPerformed: Inspect properties.schema.columns[] on every authored custom-log table resource; exempt standard Log Analytics system columns (TimeGenerated, TenantId, Type, _ResourceId, etc.) only when not explicitly declared in properties.schema.columns[]; verify 100% of declared custom columns have non-empty, non-whitespace, non-placeholder descriptions that are not unresolved ARM expressions and do not merely repeat the column name.
 expectedEvidence: [custom table resource path, documented/total custom column counts, missing column names]
-passCriteria: 100% of custom columns across all custom tables have meaningful descriptions (or advisory pass when minimum-blocking adoption mode is active).
+passCriteria: 100% of declared custom columns across all authored custom-log tables have meaningful descriptions. Blocking FAIL when any declared custom column description is missing, empty, whitespace-only, placeholder, or an unresolved ARM expression.
 sourceChecklist: ai-table-schema-readiness
 automationStatus: automated
-responsible: solution_manager.qualification.table_schema_readiness and pr_check_runner
+responsible: solution_manager.qualification.table_schema_readiness, .script/utils/dataConnectorCheckers/customTableSchemaChecker.ts, and pr_check_runner
 ```
 
 ## VAL-TBL-03 — Packaged mainTemplate preserves custom table and column descriptions
 
-Prevents packaging drift where source table/column descriptions are omitted or truncated in `Package/mainTemplate.json`.
+Prevents packaging drift where source table/column descriptions are omitted, altered, or truncated in `Package/mainTemplate.json`, or where unresolved ARM expressions are compared as literal strings. Enforced as a strict blocking acceptance gate.
 
 ```yaml check-definition
 id: VAL-TBL-03
@@ -621,13 +621,13 @@ checklist: validation
 contentType: data-connectors,solution-package
 title: Packaged mainTemplate preserves custom table and column descriptions without loss or truncation
 originalCriterion: Verify Package/mainTemplate.json preserves every source custom table's properties.schema.description and per-column descriptions without omission or truncation.
-applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+applicability: Solutions defining authored custom-log Microsoft.OperationalInsights/workspaces/tables resources (excluding Microsoft-standard table retention/plan configuration resources).
 category: validation
-howPerformed: Reconcile every custom table discovered in source files against Package/mainTemplate.json (including V3 properties.mainTemplate.resources[]) and verify whitespace-normalized equality of table and column descriptions.
+howPerformed: Reconcile every authored custom-log table discovered in source files against Package/mainTemplate.json (including V3 properties.mainTemplate.resources[]), reject unresolved ARM expressions on either side, and verify whitespace-normalized equality of table and column descriptions without cross-file source conflicts or dropped tables/columns.
 expectedEvidence: [source table path, Package/mainTemplate.json path, reconciled table and column description counts]
-passCriteria: Every source custom table and custom column description is preserved identically in Package/mainTemplate.json (or advisory pass when minimum-blocking adoption mode is active).
+passCriteria: Every source custom-log table and custom column description is preserved identically in Package/mainTemplate.json without semantic drift, missing tables/columns, or unresolved ARM expressions. Blocking FAIL on any mismatch or missing package artifact.
 sourceChecklist: ai-table-schema-readiness
 automationStatus: automated
-responsible: solution_manager.qualification.table_schema_readiness and pr_check_runner
+responsible: solution_manager.qualification.table_schema_readiness, .script/utils/dataConnectorCheckers/customTableSchemaChecker.ts, and pr_check_runner
 ```
 

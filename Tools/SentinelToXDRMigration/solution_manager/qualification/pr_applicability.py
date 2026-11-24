@@ -764,6 +764,7 @@ def _evaluate_single_check_applicability(
     is_migration: bool,
     migration_reason: str,
     custom_table_count: int = 0,
+    standard_table_config_count: int = 0,
 ) -> tuple[bool, str]:
     """Determine (applicable, applicabilityReason) for a single check definition."""
     cid = check_def["id"]
@@ -856,6 +857,11 @@ def _evaluate_single_check_applicability(
             return (
                 True,
                 f"Applicable: solution defines {custom_table_count} custom Microsoft.OperationalInsights/workspaces/tables resource(s).",
+            )
+        if standard_table_config_count > 0:
+            return (
+                False,
+                f"Not applicable: solution contains {standard_table_config_count} Microsoft-standard table configuration resource(s) and 0 authored custom-log table schemas.",
             )
         if has_dc:
             return (
@@ -979,9 +985,13 @@ def determine_pr_applicability(
 
     table_inventory = discover_solution_tables(root)
     custom_table_count = (
-        len(table_inventory.source_tables)
-        + len(table_inventory.packaged_tables)
+        len(table_inventory.custom_source_tables)
+        + len(table_inventory.custom_packaged_tables)
         + len(table_inventory.parse_errors)
+    )
+    standard_table_config_count = (
+        len(table_inventory.standard_source_tables)
+        + len(table_inventory.standard_packaged_tables)
     )
 
     checks: list[dict[str, Any]] = []
@@ -994,6 +1004,7 @@ def determine_pr_applicability(
             is_migration=migration_flag,
             migration_reason=migration_reason,
             custom_table_count=custom_table_count,
+            standard_table_config_count=standard_table_config_count,
         )
         enriched = {
             **deepcopy(entry),

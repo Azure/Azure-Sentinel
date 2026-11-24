@@ -17,6 +17,10 @@ from solution_manager.migration.workbook_workflow import (
     plan_lab_deployment_preflight,
     record_lab_deployment_validation_findings,
 )
+from solution_manager.qualification.table_schema_readiness import (
+    build_expected_custom_table_map,
+    discover_solution_tables,
+)
 
 KNOWN_WORKBOOK_TABLES = (
     "AzureDiagnostics",
@@ -178,6 +182,11 @@ def discover_solution_qualification_inventory(
             for tbl in _extract_tables_from_kql(raw_text):
                 discovered_tables.add(tbl)
 
+    table_inventory = discover_solution_tables(root)
+    expected_custom_tables = build_expected_custom_table_map(table_inventory)
+    for custom_tbl_name in expected_custom_tables:
+        discovered_tables.add(custom_tbl_name)
+
     target_tables = sorted(discovered_tables) or ["Syslog"]
     target_streams = [
         {
@@ -201,6 +210,10 @@ def discover_solution_qualification_inventory(
         "sentinelWorkbookPaths": sentinel_wb_paths,
         "defenderWorkbookPaths": defender_wb_paths,
         "customDetectionPaths": detection_paths,
+        "customLogTableNames": list(expected_custom_tables.keys()),
+        "customLogTableCount": len(expected_custom_tables),
+        "standardTableConfigNames": table_inventory.standard_table_config_names,
+        "standardTableConfigCount": len(table_inventory.standard_table_configs),
         "targetTables": target_tables,
         "targetStreams": target_streams,
     }

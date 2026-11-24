@@ -41,7 +41,11 @@ def _setup_toolkit_imports(toolkit_root: Path) -> None:
     migration_root = toolkit_root / "Tools" / "SentinelToXDRMigration"
     if str(migration_root) not in sys.path:
         sys.path.insert(0, str(migration_root))
-    for pkg_name in ("solution_manager", "solution_manager.authoring"):
+    for pkg_name in (
+        "solution_manager",
+        "solution_manager.authoring",
+        "solution_manager.qualification",
+    ):
         pkg = sys.modules.get(pkg_name)
         if pkg is not None and hasattr(pkg, "__path__"):
             sub_dir = migration_root.joinpath(*pkg_name.split("."))
@@ -1319,6 +1323,91 @@ def _validate_packaged_defender_workbooks(
     return errors
 
 
+def validate_solution_table_schema_readiness(
+    solution_root: Path,
+    content_root: Path,
+    toolkit_root: Path,
+) -> dict[str, Any]:
+    _setup_toolkit_imports(toolkit_root)
+    from solution_manager.qualification.table_schema_readiness import (
+        discover_solution_tables,
+        evaluate_val_tbl_01,
+        evaluate_val_tbl_02,
+        evaluate_val_tbl_03,
+    )
+
+    discovery = discover_solution_tables(solution_root)
+    custom_source = [t for t in discovery.source_tables if not t.is_microsoft_standard_table_config]
+    custom_packaged = [t for t in discovery.packaged_tables if not t.is_microsoft_standard_table_config]
+    applicable = bool(custom_source or custom_packaged or discovery.parse_errors)
+    if not applicable:
+        skip_reason = (
+            f"Only Microsoft-standard table configuration found ({len(discovery.standard_table_configs)} table(s)); "
+            "authored custom-log schema requirements do not apply"
+            if discovery.standard_table_configs
+            else "No authored custom-log Microsoft.OperationalInsights/workspaces/tables resources found in solution"
+        )
+        return {
+            "applicable": False,
+            "customTableCount": 0,
+            "standardTableConfigCount": len(discovery.standard_table_configs),
+            "results": [
+                {
+                    "validator": "Custom Table Schema",
+                    "filePath": _rel_path(solution_root, content_root),
+                    "passed": True,
+                    "skipped": True,
+                    "skipReason": skip_reason,
+                }
+            ],
+        }
+
+    st01, det01 = evaluate_val_tbl_01(discovery, enforce_blocking=True)
+    st02, det02 = evaluate_val_tbl_02(discovery, enforce_blocking=True)
+    st03, det03 = evaluate_val_tbl_03(discovery, enforce_blocking=True)
+    checks = [
+        ("VAL-TBL-01", {"status": st01, "whatWeObserved": det01, "whyPassedOrFailed": det01}),
+        ("VAL-TBL-02", {"status": st02, "whatWeObserved": det02, "whyPassedOrFailed": det02}),
+        ("VAL-TBL-03", {"status": st03, "whatWeObserved": det03, "whyPassedOrFailed": det03}),
+    ]
+    failed_checks = [
+        f"[{check_id}] {ev.get('whatWeObserved') or ev.get('whyPassedOrFailed') or 'Failed'}"
+        for check_id, ev in checks
+        if ev.get("status") != "PASS"
+    ]
+    target_files = sorted(
+        {
+            *(t.file_rel_path for t in custom_source if t.file_rel_path),
+            *(t.file_rel_path for t in custom_packaged if t.file_rel_path),
+        }
+    )
+    primary_file = (
+        f"{_rel_path(solution_root, content_root)}/{target_files[0]}"
+        if target_files
+        else _rel_path(solution_root, content_root)
+    )
+    results = [
+        {
+            "validator": "Custom Table Schema",
+            "filePath": primary_file,
+            "passed": len(failed_checks) == 0,
+            "error": " | ".join(failed_checks) if failed_checks else None,
+        }
+    ]
+    return {
+        "applicable": True,
+        "customTableCount": len(
+            {
+                *(t.table_name.lower() for t in custom_source),
+                *(t.table_name.lower() for t in custom_packaged),
+            }
+        ),
+        "standardTableConfigCount": len(discovery.standard_table_configs),
+        "checks": {check_id: ev for check_id, ev in checks},
+        "results": results,
+    }
+
+
 def run_validation(
     *,
     content_root: Path,
@@ -1340,9 +1429,10 @@ def run_validation(
     all_results: list[dict[str, Any]] = []
     detections_reports: list[dict[str, Any]] = []
     workbooks_reports: list[dict[str, Any]] = []
+    tables_reports: list[dict[str, Any]] = []
 
     if not solutions:
-        if family in ("all", "detections"):
+        if family in ("all", "all-with-tables", "detections"):
             all_results.append(
                 {
                     "validator": "XDR Detection",
@@ -1352,7 +1442,7 @@ def run_validation(
                     "skipReason": "No solution scope found for XDR Detection validation",
                 }
             )
-        if family in ("all", "workbooks"):
+        if family in ("all", "all-with-tables", "workbooks"):
             all_results.append(
                 {
                     "validator": "XDR Workbook",
@@ -1362,16 +1452,30 @@ def run_validation(
                     "skipReason": "No solution scope found for XDR Workbook validation",
                 }
             )
+        if family in ("tables", "all-with-tables"):
+            all_results.append(
+                {
+                    "validator": "Custom Table Schema",
+                    "filePath": solution_path or "Solutions",
+                    "passed": True,
+                    "skipped": True,
+                    "skipReason": "No solution scope found for Custom Table Schema validation",
+                }
+            )
     else:
         for sol in solutions:
-            if family in ("all", "detections"):
+            if family in ("all", "all-with-tables", "detections"):
                 det_report = validate_solution_xdr_detections(sol, resolved_content, resolved_toolkit)
                 detections_reports.append(det_report)
                 all_results.extend(det_report["results"])
-            if family in ("all", "workbooks"):
+            if family in ("all", "all-with-tables", "workbooks"):
                 wb_report = validate_solution_xdr_workbooks(sol, resolved_content, resolved_toolkit)
                 workbooks_reports.append(wb_report)
                 all_results.extend(wb_report["results"])
+            if family in ("tables", "all-with-tables"):
+                tbl_report = validate_solution_table_schema_readiness(sol, resolved_content, resolved_toolkit)
+                tables_reports.append(tbl_report)
+                all_results.extend(tbl_report["results"])
 
     failed = sum(1 for r in all_results if not r.get("passed", True) and not r.get("skipped", False))
     passed = sum(1 for r in all_results if r.get("passed", True) and not r.get("skipped", False))
@@ -1386,6 +1490,7 @@ def run_validation(
         },
         "detections": detections_reports,
         "workbooks": workbooks_reports,
+        "tables": tables_reports,
         "results": all_results,
     }
 
@@ -1417,7 +1522,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--family",
-        choices=("all", "detections", "workbooks"),
+        choices=("all", "all-with-tables", "detections", "workbooks", "tables"),
         default="all",
         help="Content family to validate.",
     )

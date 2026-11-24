@@ -584,7 +584,7 @@ responsible: Planned PR check runner rollup/evidence reconciliation adapter
 
 ## QUAL-TBL-01 — Live ARM table readback preserves custom table and column descriptions
 
-Verifies that Azure Resource Manager retains custom table and column descriptions after deployment.
+Verifies that Azure Resource Manager retains custom table and column descriptions after deployment in the approved target workspace. Requires `VAL-TBL-01..03` static/preservation gates to pass and verifies target workspace identity, real-provider execution, and exact description equality.
 
 ```yaml check-definition
 id: QUAL-TBL-01
@@ -592,19 +592,19 @@ checklist: qualification
 contentType: data-connectors
 title: Live ARM table readback preserves custom table and column descriptions
 originalCriterion: Verify deployed Microsoft.OperationalInsights/workspaces/tables resources retain table and custom column descriptions via live ARM GET readback.
-applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+applicability: Solutions defining authored custom-log Microsoft.OperationalInsights/workspaces/tables resources (excluding Microsoft-standard table retention/plan configuration resources).
 category: qualification
-howPerformed: Perform GET against management.azure.com/{workspaceResourceId}/tables/{tableName}?api-version=2025-02-01 (with 2022-10-01 fallback) and reconcile properties.schema.description and properties.schema.columns[].description against authored values.
-expectedEvidence: [ARM table GET readback receipt, apiVersion used, verified custom column description counts]
-passCriteria: Deployed ARM table resource preserves table and custom column descriptions without loss.
+howPerformed: Require VAL-TBL-01..03 pass; perform GET against management.azure.com/{workspaceResourceId}/tables/{tableName}?api-version=2025-02-01 (with 2022-10-01 fallback), verify target workspaceResourceId matches the approved qualification target, reject simulated/dry-run receipts or authorization failures, and reconcile properties.schema.description and every expected custom column description against authored values.
+expectedEvidence: [ARM table GET readback receipt, workspaceResourceId, apiVersion used, verified custom column description counts]
+passCriteria: VAL-TBL-01..03 pass and deployed ARM table resource in the approved target workspace preserves table and 100% of expected custom column descriptions without drift. HTTP success alone, wrong-workspace evidence, simulated receipts, or missing verification fields fail or block.
 sourceChecklist: ai-table-schema-readiness
 automationStatus: automated
-responsible: solution_manager.qualification.runtime and pr_check_runner
+responsible: solution_manager.qualification.runtime, orchestrator, and pr_check_runner
 ```
 
 ## QUAL-TBL-02 — Graph Advanced Hunting schema exposes custom table and column descriptions
 
-Verifies that Microsoft Graph Security beta Advanced Hunting schema endpoints surface the custom table and its descriptions.
+Verifies that Microsoft Graph Security beta Advanced Hunting schema endpoints surface the custom table and all expected custom columns and descriptions in the approved target workspace with complete pagination.
 
 ```yaml check-definition
 id: QUAL-TBL-02
@@ -612,19 +612,19 @@ checklist: qualification
 contentType: data-connectors
 title: Graph Advanced Hunting schema exposes custom table and column descriptions
 originalCriterion: Verify Microsoft Graph Security beta getHuntingSchema / getHuntingSchemaTables(workspaceId=...) exposes the deployed custom table and its descriptions.
-applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+applicability: Solutions defining authored custom-log Microsoft.OperationalInsights/workspaces/tables resources (excluding Microsoft-standard table retention/plan configuration resources).
 category: qualification
-howPerformed: Call GET https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId=<unquoted-workspace-guid>) and/or getHuntingSchema, follow @odata.nextLink pagination, and verify the custom table and its column descriptions are exposed.
-expectedEvidence: [Graph hunting schema receipt, workspaceId, matched table and column description counts]
-passCriteria: Custom table and column descriptions are exposed by the Graph beta Advanced Hunting schema endpoint.
+howPerformed: Require VAL-TBL-01..03 pass; call GET https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId=<unquoted-workspace-guid>) and/or getHuntingSchema, follow @odata.nextLink pagination to completion (rejecting incomplete pagination or unfetched pages), verify target workspaceId matches the approved qualification target, and verify every expected custom column and description matches authored values.
+expectedEvidence: [Graph hunting schema receipt, workspaceId, pagination completeness, matched table and column description counts]
+passCriteria: VAL-TBL-01..03 pass and complete, workspace-matched Graph beta Advanced Hunting schema exposes the custom table and 100% of expected custom columns and descriptions. Incomplete pagination, wrong-target workspaceId, simulated receipts, or authorization/provider failures fail or block.
 sourceChecklist: ai-table-schema-readiness
 automationStatus: automated
-responsible: solution_manager.qualification.runtime and pr_check_runner
+responsible: solution_manager.qualification.runtime, orchestrator, and pr_check_runner
 ```
 
 ## QUAL-TBL-03 — Graph Advanced Hunting workspace-scoped query executes against custom table
 
-Verifies that the custom table is queryable through the workspace-scoped Graph beta Advanced Hunting query endpoint.
+Verifies that the custom table is queryable through the workspace-scoped Graph beta Advanced Hunting query endpoint in the approved target workspace and returns all expected custom columns.
 
 ```yaml check-definition
 id: QUAL-TBL-03
@@ -632,13 +632,13 @@ checklist: qualification
 contentType: data-connectors
 title: Graph Advanced Hunting workspace-scoped query executes against custom table
 originalCriterion: Verify Microsoft Graph Security beta getRunHuntingQuery(query=...,timespan=...,workspaceId=...) executes against each deployed custom table and returns expected schema columns.
-applicability: Solutions defining custom Microsoft.OperationalInsights/workspaces/tables resources or Data Connectors.
+applicability: Solutions defining authored custom-log Microsoft.OperationalInsights/workspaces/tables resources (excluding Microsoft-standard table retention/plan configuration resources).
 category: qualification
-howPerformed: Call GET https://graph.microsoft.com/beta/security/getRunHuntingQuery(query='<escaped-kql>',timespan='P1D',workspaceId=<unquoted-workspace-guid>) targeting the custom table (for example {TableName} | getschema) and verify returned schema columns match expected custom columns.
+howPerformed: Require VAL-TBL-01..03 pass; call GET https://graph.microsoft.com/beta/security/getRunHuntingQuery(query='<escaped-kql>',timespan='P1D',workspaceId=<unquoted-workspace-guid>) targeting the custom table (for example {TableName} | getschema | project ColumnName, DataType), verify target workspaceId and table reference, and verify every expected custom column is present in returned schema/results.
 expectedEvidence: [Graph getRunHuntingQuery receipt, workspaceId, query, returned schema columns]
-passCriteria: Workspace-scoped Graph beta hunting query succeeds against the custom table and returns matching schema columns.
+passCriteria: VAL-TBL-01..03 pass and workspace-scoped Graph beta hunting query against the custom table in the approved target workspace succeeds and returns 100% of expected custom columns. Generic non-custom-table queries, wrong-target workspaceId, simulated receipts, or authorization/provider failures fail or block.
 sourceChecklist: ai-table-schema-readiness
 automationStatus: automated
-responsible: solution_manager.qualification.runtime and pr_check_runner
+responsible: solution_manager.qualification.runtime, orchestrator, and pr_check_runner
 ```
 

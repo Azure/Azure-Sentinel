@@ -274,9 +274,19 @@ Preserve disabled status, source content and classification.
 
 #### AI-ready custom table and column description remediation (`VAL-TBL-01..03` & `QUAL-TBL-01..03`)
 
-When a solution defines custom `Microsoft.OperationalInsights/workspaces/tables`
-resources and `VAL-TBL-01`, `VAL-TBL-02`, or `VAL-TBL-03` reports missing,
-placeholder, or unpreserved table/column descriptions:
+Custom-log table schema readiness is an enforced, blocking acceptance gate across
+Validation (`VAL-TBL-01..03`), local/PR CI (`.script/dataConnectorValidator.ts`,
+`.script/SolutionValidations/solutionValidator.ts`, `.script/local-validation/validate.ts`,
+`.script/local-validation/validate-xdr-content.py`), and Qualification
+(`QUAL-TBL-01..03`). Microsoft-standard table configuration resources (defining
+only operational settings such as `plan`, `retentionInDays`, `totalRetentionInDays`,
+or `archiveRetentionInDays` without custom `properties.schema.columns` or a `_CL`
+suffix) are classified as `microsoft_standard_config` and exempt.
+
+When a solution defines authored custom `Microsoft.OperationalInsights/workspaces/tables`
+resources and `VAL-TBL-01`, `VAL-TBL-02`, or `VAL-TBL-03` fails on missing,
+empty, whitespace-only, placeholder, unresolved ARM expression, or drifted
+table/column descriptions:
 
 1. List the exact custom table names, source JSON paths, and custom column names
    missing meaningful `properties.schema.description` or
@@ -292,13 +302,25 @@ placeholder, or unpreserved table/column descriptions:
    files.
 4. After author approval, update the source table JSON definitions and re-run
    `package-v3-1` so `Package/mainTemplate.json` preserves the table and column
-   descriptions identically (`VAL-TBL-03`).
-5. During Qualification (`QUAL-TBL-01..03`), verify live ARM table GET readback
-   (`?api-version=2025-02-01` with `2022-10-01` fallback) and Microsoft Graph
-   Security beta Advanced Hunting schema/query endpoints
-   (`getHuntingSchema`, `getHuntingSchemaTables(workspaceId=<guid>)`, and
-   `getRunHuntingQuery(query='<escaped-kql>',timespan='P1D',workspaceId=<guid>)`
-   with unquoted `Edm.Guid` `workspaceId`).
+   descriptions identically without semantic drift (`VAL-TBL-03`). Unsupported
+   or unresolved ARM expressions fail closed on both sides.
+5. During Qualification (`QUAL-TBL-01..03`), `orchestrator.qualify()` wires
+   `runtime.collect_live_table_schema_readiness_evidence()` to verify complete
+   live schema evidence against the approved target workspace:
+   - Live ARM table GET readback (`?api-version=2025-02-01` with `2022-10-01`
+     fallback) matching expected tables, columns, and descriptions (`QUAL-TBL-01`).
+   - Microsoft Graph Security beta `getHuntingSchemaTables(workspaceId=<guid>)`
+     (unquoted `Edm.Guid`, complete `@odata.nextLink` pagination) exposing the
+     custom tables, columns, and descriptions (`QUAL-TBL-02`).
+   - Microsoft Graph Security beta
+     `getRunHuntingQuery(query='<escaped-kql>',timespan='P1D',workspaceId=<guid>)`
+     verifying the returned `schema` columns match the custom table (`QUAL-TBL-03`).
+   Simulated receipts, wrong-target workspace IDs, incomplete pagination, HTTP
+   200 without verification fields, and authorization failures fail closed.
+6. Where current, inspectable qualification evidence passes a check in
+   `SUBSTITUTABLE_MANUAL_CHECK_MAP`, the report records per-check
+   `manualReviewSubstitution` metadata for that specific manual check only (not
+   a blanket waiver of human review or other required approvals).
 
 #### Workbook dependency review
 

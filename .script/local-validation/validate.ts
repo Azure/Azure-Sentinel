@@ -49,6 +49,7 @@ import { isValidSchema } from "../utils/jsonSchemaChecker.js";
 import { isValidId } from "../utils/dataConnectorCheckers/idChecker.js";
 import { isValidDataType } from "../utils/dataConnectorCheckers/dataTypeChecker.js";
 import { isValidPermissions } from "../utils/dataConnectorCheckers/permissionsChecker.js";
+import { isValidCustomTableSchemas } from "../utils/dataConnectorCheckers/customTableSchemaChecker.js";
 import { ConnectorCategory } from "../utils/dataConnector.js";
 import { isValidLogoImage } from "../utils/LogoChecker/logoImageChecker.js";
 import { isValidLogoImageSVGContent } from "../utils/LogoChecker/logoImageSVGChecker.js";
@@ -464,8 +465,12 @@ async function validateDataConnector(filePath: string, _fileKind: string): Promi
     }
 
     const jsonFile = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const tableCheck = isValidCustomTableSchemas(filePath, jsonFile);
 
     if (!isPotentialConnectorJson(jsonFile)) {
+      if (tableCheck.hasAnyTables) {
+        return { validator: "Data Connector", filePath, passed: true };
+      }
       return { validator: "Data Connector", filePath, passed: true, skipped: true, skipReason: "Not a connector JSON" };
     }
 
@@ -821,6 +826,9 @@ async function validateSolution(filePath: string, _fileKind: string): Promise<Va
     IsValidSupportObject(filePath);
     IsValidBrandingContent(filePath);
     IsValidSolutionID(filePath);
+    if (filePath.endsWith("mainTemplate.json")) {
+      isValidCustomTableSchemas(filePath);
+    }
     return { validator: "Solution", filePath, passed: true };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

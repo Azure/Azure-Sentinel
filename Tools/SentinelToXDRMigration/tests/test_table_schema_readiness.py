@@ -8,10 +8,14 @@ from unittest.mock import patch
 import urllib.error
 
 from solution_manager.qualification.pr_applicability import determine_pr_applicability
-from solution_manager.qualification.pr_check_runner import run_pr_qualification_checks
+from solution_manager.qualification.pr_check_runner import (
+    SUBSTITUTABLE_MANUAL_CHECK_MAP,
+    run_pr_qualification_checks,
+)
 from solution_manager.qualification.runtime import (
     build_graph_hunting_schema_tables_url,
     build_graph_run_hunting_query_url,
+    collect_live_table_schema_readiness_evidence,
     fetch_arm_table_schema,
     fetch_graph_hunting_schema,
     fetch_graph_hunting_schema_tables,
@@ -19,6 +23,9 @@ from solution_manager.qualification.runtime import (
 )
 from solution_manager.qualification.table_schema_readiness import (
     discover_solution_tables,
+    evaluate_qual_tbl_01,
+    evaluate_qual_tbl_02,
+    evaluate_qual_tbl_03,
     evaluate_val_tbl_01,
     evaluate_val_tbl_02,
     evaluate_val_tbl_03,
@@ -175,7 +182,7 @@ def test_discover_solution_tables_supports_bare_root_and_nested_package_layouts(
     assert s3 == "PASS"
 
 
-def test_minimum_blocking_vs_strict_blocking_for_val_tbl_checks(tmp_path: Path) -> None:
+def test_strict_blocking_by_default_for_val_and_qual_tbl_checks(tmp_path: Path) -> None:
     sol = tmp_path / "UndocumentedTableSol"
     _build_minimal_solution(sol, data_connectors=["Data Connectors/Vendor_tables.json"])
 
@@ -212,49 +219,450 @@ def test_minimum_blocking_vs_strict_blocking_for_val_tbl_checks(tmp_path: Path) 
         },
     )
 
-    # Default rollout mode: minimum blocking (default_blocking=False) -> PASS with [Advisory: adoption mode]
-    assert resolve_table_schema_blocking_mode(None, None) is False
-    res_advisory = run_pr_qualification_checks(sol, run_qualification=False)
+    # Default mode is strictly blocking (default_blocking=True) -> FAIL
+    assert resolve_table_schema_blocking_mode(None, None) is True
+    res_default = run_pr_qualification_checks(sol, run_qualification=False)
     for cid in ("VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03"):
-        chk = res_advisory["checksById"][cid]
-        assert chk["applicable"] is True
-        assert chk["status"] == "PASS"
-        assert "[Advisory: adoption mode]" in chk["whatWeObserved"]
-    assert res_advisory["validationStatus"] == "Validated"
-
-    # Strict mode via qualification_evidence["enforceTableSchemaDescriptions"] = True -> FAIL
-    res_strict = run_pr_qualification_checks(
-        sol,
-        run_qualification=False,
-        qualification_evidence={"enforceTableSchemaDescriptions": True},
-    )
-    for cid in ("VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03"):
-        chk = res_strict["checksById"][cid]
+        chk = res_default["checksById"][cid]
         assert chk["applicable"] is True
         assert chk["status"] == "FAIL"
-    assert res_strict["validationStatus"] == "Validation Failed"
+    assert res_default["validationStatus"] == "Validation Failed"
 
-    # Qualification checks QUAL-TBL-01..03 also honor minimum blocking by default vs strict mode
-    res_qual_advisory = run_pr_qualification_checks(
+    # Qualification checks QUAL-TBL-01..03 also strictly block by default when live evidence is missing
+    res_qual_default = run_pr_qualification_checks(
         sol,
         run_qualification=True,
         qualification_evidence={"deployment": {"status": "passed"}},
     )
     for cid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
-        chk = res_qual_advisory["checksById"][cid]
-        assert chk["applicable"] is True
-        assert chk["status"] == "PASS"
-        assert "[Advisory: adoption mode]" in chk["whatWeObserved"]
-
-    res_qual_strict = run_pr_qualification_checks(
-        sol,
-        run_qualification=True,
-        qualification_evidence={"deployment": {"status": "passed"}, "enforceTableSchemaDescriptions": True},
-    )
-    for cid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
-        chk = res_qual_strict["checksById"][cid]
+        chk = res_qual_default["checksById"][cid]
         assert chk["applicable"] is True
         assert chk["status"] == "FAIL"
+
+
+def test_microsoft_standard_table_config_is_exempt_from_custom_table_gates(tmp_path: Path) -> None:
+    sol = tmp_path / "StandardTableConfigOnlySol"
+    _build_minimal_solution(sol, data_connectors=["Data Connectors/StandardTableRetention.json"])
+
+    # Microsoft-standard table config setting only retention/plan without custom schema columns or _CL suffix
+    std_table_config = {
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "name": "[concat(parameters('workspace'), '/SecurityEvent')]",
+        "properties": {
+            "plan": "Analytics",
+            "retentionInDays": 90,
+            "totalRetentionInDays": 180,
+        },
+    }
+    _write_json(sol / "Data Connectors" / "StandardTableRetention.json", std_table_config)
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [std_table_config],
+        },
+    )
+
+    inv = discover_solution_tables(sol)
+    assert inv.has_any_custom_tables is False
+    assert len(inv.standard_table_configs) == 2
+
+    app = determine_pr_applicability(sol)
+    for cid in ("VAL-TBL-01", "VAL-TBL-02", "VAL-TBL-03", "QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+        assert app["checksById"][cid]["applicable"] is False
+        assert "Microsoft-standard table configuration" in app["checksById"][cid]["applicabilityReason"]
+
+
+def test_preservation_drift_and_unresolved_arm_expressions_fail_val_tbl_03(tmp_path: Path) -> None:
+    sol = tmp_path / "PreservationDriftSol"
+    _build_minimal_solution(sol, data_connectors=["Data Connectors/Custom_tables.json"])
+
+    src_table = {
+        "name": "AcmeSecurity_CL",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "properties": {
+            "schema": {
+                "name": "AcmeSecurity_CL",
+                "description": "Acme security telemetry events collected via REST API.",
+                "columns": [
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {"name": "EventSeverity", "type": "string", "description": "Severity level assigned by Acme."},
+                    {"name": "SourceHost", "type": "string", "description": "Hostname of the originating endpoint."},
+                ],
+            }
+        },
+    }
+    # Packaged table has drifted table description, drifted column description, and dropped SourceHost column
+    pkg_table_drifted = {
+        "name": "AcmeSecurity_CL",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "properties": {
+            "schema": {
+                "name": "AcmeSecurity_CL",
+                "description": "Different packaged table description after packaging drift.",
+                "columns": [
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {"name": "EventSeverity", "type": "string", "description": "Drifted column description."},
+                ],
+            }
+        },
+    }
+    _write_json(sol / "Data Connectors" / "Custom_tables.json", src_table)
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [pkg_table_drifted],
+        },
+    )
+
+    inv = discover_solution_tables(sol)
+    s3, obs3 = evaluate_val_tbl_03(inv, enforce_blocking=True)
+    assert s3 == "FAIL"
+    assert "Table 'AcmeSecurity_CL' schema.description drift between" in obs3
+    assert "Table 'AcmeSecurity_CL' column 'EventSeverity' description drift" in obs3
+    assert "Table 'AcmeSecurity_CL' column 'SourceHost' missing from packaged" in obs3
+
+    # Unresolved ARM expressions on both source and package must NOT be treated as a matching value
+    unresolved_table = {
+        "name": "AcmeSecurity_CL",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "properties": {
+            "schema": {
+                "name": "AcmeSecurity_CL",
+                "description": "[concat(parameters('prefix'), ' description')]",
+                "columns": [
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {
+                        "name": "EventSeverity",
+                        "type": "string",
+                        "description": "[variables('missingVar')]",
+                    },
+                ],
+            }
+        },
+    }
+    _write_json(sol / "Data Connectors" / "Custom_tables.json", unresolved_table)
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [unresolved_table],
+        },
+    )
+    inv_unresolved = discover_solution_tables(sol)
+    s1_u, obs1_u = evaluate_val_tbl_01(inv_unresolved, enforce_blocking=True)
+    s2_u, obs2_u = evaluate_val_tbl_02(inv_unresolved, enforce_blocking=True)
+    s3_u, obs3_u = evaluate_val_tbl_03(inv_unresolved, enforce_blocking=True)
+    assert s1_u == "FAIL"
+    assert "unresolved_arm_expression" in obs1_u
+    assert s2_u == "FAIL"
+    assert "unresolved_arm_expression" in obs2_u
+    assert s3_u == "FAIL"
+    assert "unresolved_arm_expression" in obs3_u
+
+
+def test_qual_tbl_evaluators_reject_simulated_wrong_workspace_incomplete_pagination_and_auth_errors(
+    tmp_path: Path,
+) -> None:
+    sol = tmp_path / "QualLiveSol"
+    _build_minimal_solution(sol, data_connectors=["Data Connectors/Acme_tables.json"])
+    table_def = {
+        "name": "AcmeEvents_CL",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "properties": {
+            "schema": {
+                "name": "AcmeEvents_CL",
+                "description": "Acme security events ingested into Log Analytics.",
+                "columns": [
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {"name": "EventId", "type": "string", "description": "Unique event identifier."},
+                    {"name": "ActorUpn", "type": "string", "description": "User principal name of the actor."},
+                ],
+            }
+        },
+    }
+    _write_json(sol / "Data Connectors" / "Acme_tables.json", table_def)
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [table_def],
+        },
+    )
+    inv = discover_solution_tables(sol)
+    ws_id = "8fb6e2d6-1b0a-4d0b-9d9f-9f3e2a5c7b21"
+    ws_res_id = (
+        "/subscriptions/00000000-0000-0000-0000-000000000001"
+        "/resourceGroups/rg-test/providers/Microsoft.OperationalInsights/workspaces/la-test"
+    )
+
+    # 1. Positive case: complete live ARM, Graph hunting schema tables, and Graph hunting query receipts
+    good_evidence: dict[str, Any] = {
+        "target": {
+            "workspaceId": ws_id,
+            "workspaceResourceId": ws_res_id,
+        },
+        "tableSchemaReadiness": {
+            "armTables": {
+                "AcmeEvents_CL": {
+                    "ok": True,
+                    "httpStatus": 200,
+                    "workspaceResourceId": ws_res_id,
+                    "tableDescription": "Acme security events ingested into Log Analytics.",
+                    "columns": [
+                        {"name": "TimeGenerated", "type": "datetime", "description": ""},
+                        {"name": "EventId", "type": "string", "description": "Unique event identifier."},
+                        {"name": "ActorUpn", "type": "string", "description": "User principal name of the actor."},
+                    ],
+                }
+            },
+            "huntingSchemaTables": {
+                "ok": True,
+                "httpStatus": 200,
+                "workspaceId": ws_id,
+                "workspaceIdUnquoted": True,
+                "complete": True,
+                "hasUnfetchedPages": False,
+                "tables": [
+                    {
+                        "name": "AcmeEvents_CL",
+                        "description": "Acme security events ingested into Log Analytics.",
+                        "columns": [
+                            {"name": "EventId", "description": "Unique event identifier."},
+                            {"name": "ActorUpn", "description": "User principal name of the actor."},
+                        ],
+                    }
+                ],
+            },
+            "huntingQuery": {
+                "AcmeEvents_CL": {
+                    "ok": True,
+                    "httpStatus": 200,
+                    "workspaceId": ws_id,
+                    "workspaceIdUnquoted": True,
+                    "query": "AcmeEvents_CL | take 1",
+                    "schema": [
+                        {"name": "TimeGenerated", "type": "DateTime"},
+                        {"name": "EventId", "type": "String"},
+                        {"name": "ActorUpn", "type": "String"},
+                    ],
+                }
+            },
+        },
+    }
+    q1, _ = evaluate_qual_tbl_01(inv, good_evidence, enforce_blocking=True)
+    q2, _ = evaluate_qual_tbl_02(inv, good_evidence, enforce_blocking=True)
+    q3, _ = evaluate_qual_tbl_03(inv, good_evidence, enforce_blocking=True)
+    assert (q1, q2, q3) == ("PASS", "PASS", "PASS")
+
+    # Verify per-check manual review substitution is attached when qualification checks pass
+    full_res = run_pr_qualification_checks(sol, run_qualification=True, qualification_evidence=good_evidence)
+    for cid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+        chk = full_res["checksById"][cid]
+        assert chk["status"] == "PASS"
+        sub = chk.get("manualReviewSubstitution")
+        assert isinstance(sub, dict)
+        assert sub["substituted"] is True
+        assert sub["manualCheckId"] == SUBSTITUTABLE_MANUAL_CHECK_MAP[cid]["manualCheckId"]
+    assert len(full_res["SatisfiedManualChecksByQualificationEvidence"]) >= 3
+
+    # 2. Simulated receipt -> rejected
+    sim_evidence = json.loads(json.dumps(good_evidence))
+    sim_evidence["tableSchemaReadiness"]["armTables"]["AcmeEvents_CL"]["simulated"] = True
+    sim_evidence["tableSchemaReadiness"]["huntingSchemaTables"]["mode"] = "simulated"
+    sim_evidence["tableSchemaReadiness"]["huntingQuery"]["AcmeEvents_CL"]["isSimulated"] = True
+    s_q1, obs_q1 = evaluate_qual_tbl_01(inv, sim_evidence, enforce_blocking=True)
+    s_q2, obs_q2 = evaluate_qual_tbl_02(inv, sim_evidence, enforce_blocking=True)
+    s_q3, obs_q3 = evaluate_qual_tbl_03(inv, sim_evidence, enforce_blocking=True)
+    assert (s_q1, s_q2, s_q3) == ("FAIL", "FAIL", "FAIL")
+    assert "simulated/dry-run; simulated evidence cannot qualify as PASS" in obs_q1
+    assert "simulated/dry-run; simulated evidence cannot qualify as PASS" in obs_q2
+    assert "simulated/dry-run; simulated evidence cannot qualify as PASS" in obs_q3
+
+    # 3. Wrong target workspace -> rejected
+    wrong_ws_evidence = json.loads(json.dumps(good_evidence))
+    wrong_ws_evidence["tableSchemaReadiness"]["armTables"]["AcmeEvents_CL"]["workspaceResourceId"] = (
+        "/subscriptions/00000000-0000-0000-0000-000000000001"
+        "/resourceGroups/rg-other/providers/Microsoft.OperationalInsights/workspaces/la-other"
+    )
+    wrong_ws_evidence["tableSchemaReadiness"]["huntingSchemaTables"]["workspaceId"] = (
+        "11111111-2222-3333-4444-555555555555"
+    )
+    wrong_ws_evidence["tableSchemaReadiness"]["huntingQuery"]["AcmeEvents_CL"]["workspaceId"] = (
+        "11111111-2222-3333-4444-555555555555"
+    )
+    w_q1, w_obs1 = evaluate_qual_tbl_01(inv, wrong_ws_evidence, enforce_blocking=True)
+    w_q2, w_obs2 = evaluate_qual_tbl_02(inv, wrong_ws_evidence, enforce_blocking=True)
+    w_q3, w_obs3 = evaluate_qual_tbl_03(inv, wrong_ws_evidence, enforce_blocking=True)
+    assert (w_q1, w_q2, w_q3) == ("FAIL", "FAIL", "FAIL")
+    assert "does not match approved target" in w_obs1
+    assert "does not match approved target" in w_obs2
+    assert "does not match approved target" in w_obs3
+
+    # 4. Incomplete pagination -> rejected
+    inc_page_evidence = json.loads(json.dumps(good_evidence))
+    inc_page_evidence["tableSchemaReadiness"]["huntingSchemaTables"]["complete"] = False
+    inc_page_evidence["tableSchemaReadiness"]["huntingSchemaTables"]["hasUnfetchedPages"] = True
+    ip_q2, ip_obs2 = evaluate_qual_tbl_02(inv, inc_page_evidence, enforce_blocking=True)
+    assert ip_q2 == "FAIL"
+    assert "incomplete_hunting_schema_pagination" in ip_obs2
+
+    # 5. Provider/authorization failures -> rejected
+    auth_fail_evidence = json.loads(json.dumps(good_evidence))
+    auth_fail_evidence["tableSchemaReadiness"]["armTables"]["AcmeEvents_CL"] = {
+        "ok": False,
+        "httpStatus": 403,
+        "error": "AuthorizationFailed",
+    }
+    auth_fail_evidence["tableSchemaReadiness"]["huntingSchemaTables"] = {
+        "ok": False,
+        "httpStatus": 403,
+        "error": "Authorization_RequestDenied",
+    }
+    auth_fail_evidence["tableSchemaReadiness"]["huntingQuery"]["AcmeEvents_CL"] = {
+        "ok": False,
+        "httpStatus": 401,
+        "error": "InvalidAuthenticationToken",
+    }
+    a_q1, a_obs1 = evaluate_qual_tbl_01(inv, auth_fail_evidence, enforce_blocking=True)
+    a_q2, a_obs2 = evaluate_qual_tbl_02(inv, auth_fail_evidence, enforce_blocking=True)
+    a_q3, a_obs3 = evaluate_qual_tbl_03(inv, auth_fail_evidence, enforce_blocking=True)
+    assert (a_q1, a_q2, a_q3) == ("FAIL", "FAIL", "FAIL")
+    assert "authorization error" in a_obs1
+    assert "authorization error" in a_obs2
+    assert "authorization error" in a_obs3
+
+    # 6. Wrong/missing table or column evidence (HTTP 200 alone without matching columns/descriptions) -> rejected
+    missing_fields_evidence = json.loads(json.dumps(good_evidence))
+    missing_fields_evidence["tableSchemaReadiness"]["armTables"]["AcmeEvents_CL"]["columns"] = [
+        {"name": "EventId", "type": "string", "description": "Unique event identifier."}
+        # ActorUpn missing
+    ]
+    missing_fields_evidence["tableSchemaReadiness"]["huntingSchemaTables"]["tables"][0]["columns"] = [
+        {"name": "EventId", "description": "Unique event identifier."},
+        {"name": "ActorUpn", "description": ""},  # empty description in AH schema
+    ]
+    missing_fields_evidence["tableSchemaReadiness"]["huntingQuery"]["AcmeEvents_CL"]["schema"] = [
+        {"name": "TimeGenerated", "type": "DateTime"},
+        {"name": "EventId", "type": "String"},
+        # ActorUpn missing from query schema
+    ]
+    m_q1, m_obs1 = evaluate_qual_tbl_01(inv, missing_fields_evidence, enforce_blocking=True)
+    m_q2, m_obs2 = evaluate_qual_tbl_02(inv, missing_fields_evidence, enforce_blocking=True)
+    m_q3, m_obs3 = evaluate_qual_tbl_03(inv, missing_fields_evidence, enforce_blocking=True)
+    assert (m_q1, m_q2, m_q3) == ("FAIL", "FAIL", "FAIL")
+    assert "missing_in_live_arm_schema" in m_obs1
+    assert "ActorUpn (empty)" in m_obs2
+    assert "missing expected custom column(s): ActorUpn" in m_obs3
+
+
+def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoints(
+    tmp_path: Path,
+) -> None:
+    sol = tmp_path / "LiveCollectorSol"
+    _build_minimal_solution(sol, data_connectors=["Data Connectors/Acme_tables.json"])
+    table_def = {
+        "name": "AcmeEvents_CL",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "properties": {
+            "schema": {
+                "name": "AcmeEvents_CL",
+                "description": "Acme security events ingested into Log Analytics.",
+                "columns": [
+                    {"name": "TimeGenerated", "type": "datetime"},
+                    {"name": "EventId", "type": "string", "description": "Unique event identifier."},
+                ],
+            }
+        },
+    }
+    _write_json(sol / "Data Connectors" / "Acme_tables.json", table_def)
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [table_def],
+        },
+    )
+
+    ws_id = "8fb6e2d6-1b0a-4d0b-9d9f-9f3e2a5c7b21"
+    ws_res_id = (
+        "/subscriptions/00000000-0000-0000-0000-000000000001"
+        "/resourceGroups/rg-test/providers/Microsoft.OperationalInsights/workspaces/la-test"
+    )
+
+    def fake_urlopen(req: Any, timeout: int = 60) -> _FakeHttpResponse:
+        url = req.full_url
+        if "management.azure.com" in url:
+            return _FakeHttpResponse(
+                {
+                    "name": "AcmeEvents_CL",
+                    "properties": {
+                        "schema": {
+                            "name": "AcmeEvents_CL",
+                            "description": "Acme security events ingested into Log Analytics.",
+                            "columns": [
+                                {"name": "TimeGenerated", "type": "datetime"},
+                                {"name": "EventId", "type": "string", "description": "Unique event identifier."},
+                            ],
+                        }
+                    },
+                }
+            )
+        if "getHuntingSchemaTables" in url:
+            return _FakeHttpResponse(
+                {
+                    "value": [
+                        {
+                            "name": "AcmeEvents_CL",
+                            "description": "Acme security events ingested into Log Analytics.",
+                            "columns": [{"name": "EventId", "description": "Unique event identifier."}],
+                        }
+                    ]
+                }
+            )
+        if "getRunHuntingQuery" in url:
+            return _FakeHttpResponse(
+                {
+                    "schema": [
+                        {"name": "TimeGenerated", "type": "DateTime"},
+                        {"name": "EventId", "type": "String"},
+                    ],
+                    "results": [],
+                }
+            )
+        return _FakeHttpResponse({"tables": [{"name": "AcmeEvents_CL"}]})
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        receipt = collect_live_table_schema_readiness_evidence(
+            sol,
+            workspace_resource_id=ws_res_id,
+            workspace_id=ws_id,
+            arm_token="dummy-arm-token",
+            graph_token="dummy-graph-token",
+        )
+
+    assert receipt["status"] == "passed"
+    assert receipt["verified"] is True
+    assert receipt["target"]["workspaceId"] == ws_id
+    assert receipt["target"]["workspaceResourceId"] == ws_res_id
+    assert receipt["armTableReadback"]["ok"] is True
+    assert receipt["armTableReadback"]["tables"][0]["ok"] is True
+    assert receipt["huntingSchema"]["ok"] is True
+    assert receipt["huntingSchema"]["complete"] is True
+    assert receipt["workspaceHuntingQuery"]["ok"] is True
+    assert receipt["workspaceHuntingQuery"]["queries"][0]["ok"] is True
 
 
 def test_solution_without_custom_tables_marks_tbl_checks_not_applicable(tmp_path: Path) -> None:
