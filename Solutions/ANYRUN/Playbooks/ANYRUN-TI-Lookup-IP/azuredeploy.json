@@ -1,0 +1,588 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "ANY.RUN TI Lookup - IP Enrichment - Incident Trigger",
+    "description": "On a Microsoft Sentinel incident, enriches public IPv4 addresses using ANY.RUN Threat Intelligence. Filters out private, loopback and IPv6 addresses. Results are added as incident comments.",
+    "prerequisites": [
+      "1. ANY.RUN API key in Key Vault secret ANYRUN-APIKey."
+    ],
+    "postDeployment": [
+      "Authorize/Configure all the connections."
+    ],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "2026-11-25T00:00:00.000Z",
+    "entities": [
+      "IP"
+    ],
+    "tags": [
+      "Enrichment"
+    ],
+    "support": {
+      "tier": "partner",
+      "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+    },
+    "author": {
+      "name": "ANY.RUN"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "ANYRUN-TI-Lookup-IP",
+      "type": "string"
+    },
+    "Azure Tenant ID": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter value for Azure Tenant ID"
+      }
+    },
+    "Azure Client ID": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter value for Azure Client ID"
+      }
+    },
+    "Lookup Depht": {
+      "defaultValue": 180,
+      "type": "int",
+      "metadata": {
+        "description": "Enter value for Lookup Depht"
+      }
+    }
+  },
+  "variables": {
+    "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+    "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "properties": {
+        "provisioningState": "Succeeded",
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "Azure Tenant ID": {
+              "defaultValue": "[parameters('Azure Tenant ID')]",
+              "type": "String"
+            },
+            "Azure Client ID": {
+              "defaultValue": "[parameters('Azure Client ID')]",
+              "type": "String"
+            },
+            "Lookup Depht": {
+              "defaultValue": "[parameters('Lookup Depht')]",
+              "type": "int"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "All_Entities": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Entities",
+                    "type": "array",
+                    "value": "@triggerBody()?['object']?['properties']?['relatedEntities']"
+                  }
+                ]
+              }
+            },
+            "Initialize_Main_workflow_variables": {
+              "runAfter": {
+                "Get_secret_-_ANYRUN": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Lookup Depht",
+                    "type": "integer",
+                    "value": "[parameters('Lookup Depht')]"
+                  },
+                  {
+                    "name": "Analysis ID",
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "Get_secret_-_ANYRUN": {
+              "runAfter": {
+                "Entities_-_Get_IPs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['keyvault']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/secrets/@{encodeURIComponent('ANYRUN-APIKey')}/value"
+              },
+              "runtimeConfiguration": {
+                "secureData": {
+                  "properties": [
+                    "inputs",
+                    "outputs"
+                  ]
+                }
+              }
+            },
+            "Entities_-_Get_IPs": {
+              "runAfter": {
+                "All_Entities": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "path": "/entities/ip"
+              }
+            },
+            "For_each_-_IPs": {
+              "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+              "type": "Foreach",
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 1
+                }
+              },
+              "runAfter": {
+                "Initialize_Main_workflow_variables": [
+                  "Succeeded",
+                  "TimedOut",
+                  "Skipped",
+                  "Failed"
+                ]
+              },
+              "actions": {
+                "Filter_Public_IPv4": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "contains": [
+                            "@item()?['Address']",
+                            ":"
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "10."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "192.168."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.16."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.17."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.18."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.19."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.20."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.21."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.22."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.23."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.24."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.25."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.26."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.27."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.28."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.29."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.30."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "172.31."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "127."
+                          ]
+                        }
+                      },
+                      {
+                        "not": {
+                          "startsWith": [
+                            "@item()?['Address']",
+                            "169.254."
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "HTTP-RunLookup": {
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "https://api.any.run/v1/intelligence/api/search",
+                        "method": "POST",
+                        "headers": {
+                          "Authorization": "API-Key @{body('Get_secret_-_ANYRUN')?['value']}",
+                          "x-anyrun-connector": "MS_Sentinel:1.0.0"
+                        },
+                        "body": {
+                          "query": "@{item()?['Address']}",
+                          "startDate": "@{formatDateTime(addDays(utcNow(), mul(variables('Lookup Depht'), -1)), 'yyyy-MM-dd')}",
+                          "endDate": "@{formatDateTime(utcNow(), 'yyyy-MM-dd')}"
+                        }
+                      },
+                      "runtimeConfiguration": {
+                        "contentTransfer": {
+                          "transferMode": "Chunked"
+                        }
+                      }
+                    },
+                    "Parse_JSON_-_Get_TI_Lookup_Results": {
+                      "runAfter": {
+                        "HTTP-RunLookup": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@body('HTTP-RunLookup')",
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "industries": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "industryName": {
+                                    "type": "string"
+                                  },
+                                  "confidence": {
+                                    "type": "integer"
+                                  }
+                                }
+                              }
+                            },
+                            "summary": {
+                              "type": "object",
+                              "properties": {
+                                "threatLevel": {
+                                  "type": "integer"
+                                },
+                                "tags": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Check_ThreatLevel": {
+                      "actions": {
+                        "Add_comment_Unknown": {
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "message": "<h3>ANY.RUN TI Lookup</h3><p><strong>Query:</strong> @{replace(replace(replace(item()?['Address'], 'http://', 'hxxp://'), 'https://', 'hxxps://'), 'www.', 'www[.]')}</p><p><strong>Reputation:</strong> Unknown</p><p>ANY.RUN Threat Intelligence has no data indicating that the IP is malicious.</p><p>Link to detailed report in ANY.RUN: https://intelligence.any.run/analysis/lookup#@{encodeUriComponent(concat('{\"query\":\"', item()?['Address'], '\",\"dateRange\":', string(variables('Lookup Depht')), '}'))}</p>"
+                            },
+                            "path": "/Incidents/Comment"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Parse_JSON_-_Get_TI_Lookup_Results": [
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Format_Industries": {
+                            "type": "Select",
+                            "inputs": {
+                              "from": "@body('Parse_JSON_-_Get_TI_Lookup_Results')?['industries']",
+                              "select": "@concat(item()?['industryName'], ' (', string(item()?['confidence']), '%)')"
+                            }
+                          },
+                          "Add_comment_to_incident_-_TI_Lookup_Results": {
+                            "runAfter": {
+                              "Format_Industries": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "body": {
+                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                "message": "<h3>ANY.RUN TI Lookup</h3><p><strong>Query:</strong> @{replace(replace(replace(item()?['Address'], 'http://', 'hxxp://'), 'https://', 'hxxps://'), 'www.', 'www[.]')}</p><p><strong>Reputation:</strong> @{if(equals(body('Parse_JSON_-_Get_TI_Lookup_Results')?['summary']?['threatLevel'], 1), 'Suspicious', if(equals(body('Parse_JSON_-_Get_TI_Lookup_Results')?['summary']?['threatLevel'], 2), 'Malicious', if(equals(body('Parse_JSON_-_Get_TI_Lookup_Results')?['summary']?['threatLevel'], 3), 'Whitelisted', 'Unknown')))}</p><p><strong>Tags:</strong> @{join(body('Parse_JSON_-_Get_TI_Lookup_Results')?['summary']?['tags'], ', ')}</p><p><strong>Industries:</strong> @{join(body('Format_Industries'), ', ')}</p><p>Link to detailed report in ANY.RUN: https://intelligence.any.run/analysis/lookup#@{encodeUriComponent(concat('{\"query\":\"', item()?['Address'], '\",\"dateRange\":', string(variables('Lookup Depht')), '}'))}</p>"
+                              },
+                              "path": "/Incidents/Comment"
+                            }
+                          }
+                        }
+                      },
+                      "expression": {
+                        "equals": [
+                          "@body('Parse_JSON_-_Get_TI_Lookup_Results')?['summary']?['threatLevel']",
+                          0
+                        ]
+                      },
+                      "type": "If"
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "type": "Object",
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "keyvault": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "connectionName": "[variables('KeyvaultConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "Resource": "Microsoft Sentinel",
+        "PlaybookTrigger": "Incident",
+        "Custom": "ANYRUN",
+        "PlaybookType": "Enrichment",
+        "hidden-SentinelTemplateName": "ANYRUN-TI-Lookup-URL",
+        "hidden-SentinelTemplateVersion": "1.0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "apiVersion": "2017-07-01",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('MicrosoftSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('KeyvaultConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('KeyvaultConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+        }
+      }
+    }
+  ]
+}
