@@ -1,0 +1,93 @@
+[
+    {
+        "name": "CybleVisionIOCDCR",
+        "apiVersion": "2021-09-01-preview",
+        "type": "Microsoft.Insights/dataCollectionRules",
+        "location": "{{location}}",
+        "properties": {
+            "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
+            "streamDeclarations": {
+                "Custom-CybleVisionIOC": {
+                    "columns": [
+                        {
+                            "name": "ioc",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ioc_type",
+                            "type": "string"
+                        },
+                        {
+                            "name": "first_seen",
+                            "type": "long"
+                        },
+                        {
+                            "name": "last_seen",
+                            "type": "long"
+                        },
+                        {
+                            "name": "risk_score",
+                            "type": "int"
+                        },
+                        {
+                            "name": "sources",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "behaviour_tags",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "confidence_rating",
+                            "type": "string"
+                        },
+                        {
+                            "name": "target_countries",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "target_regions",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "target_industries",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "related_malware",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "related_threat_actors",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "is_whitelisted",
+                            "type": "boolean"
+                        }
+                    ]
+                }
+            },
+            "destinations": {
+                "logAnalytics": [
+                    {
+                        "workspaceResourceId": "{{workspaceResourceId}}",
+                        "name": "clv2ws1"
+                    }
+                ]
+            },
+            "dataFlows": [
+                {
+                    "streams": [
+                        "Custom-CybleVisionIOC"
+                    ],
+                    "destinations": [
+                        "clv2ws1"
+                    ],
+                    "outputStream": "Microsoft-ThreatIntelIndicators",
+                    "transformKql": "source\n| where isnotempty(ioc) and (isnull(is_whitelisted) or tobool(is_whitelisted) == false)\n| extend IocType = tolower(tostring(ioc_type))\n| extend ObservableKey = case(\n    IocType == 'ipv4', 'ipv4-addr:value',\n    IocType == 'ipv6', 'ipv6-addr:value',\n    IocType == 'domain', 'domain-name:value',\n    IocType == 'url', 'url:value',\n    IocType == 'email', 'email-addr:value',\n    IocType == 'filehash-md5', 'file:hashes.MD5',\n    IocType == 'filehash-sha1', \"file:hashes.'SHA-1'\",\n    IocType == 'filehash-sha256', \"file:hashes.'SHA-256'\",\n    '')\n| where isnotempty(ObservableKey)\n| extend RawValue = replace(@\"^\\s+|\\s+$\", \"\", tostring(ioc))\n| extend ObservableValue = iff(IocType == 'url', RawValue, tolower(RawValue))\n| extend FirstSeen = datetime(1970-01-01) + tolong(first_seen) * 1sec\n| extend LastSeen = datetime(1970-01-01) + tolong(last_seen) * 1sec\n| extend TimeGenerated = now()\n| extend ValidFrom = iff(isnull(FirstSeen), now(), FirstSeen)\n| extend Modified = iff(isnull(LastSeen), now(), LastSeen)\n| extend ValidUntil = datetime_add('day', 30, Modified)\n| extend Created = ValidFrom\n| extend Confidence = risk_score\n| extend Labels = iff(isnull(behaviour_tags), parse_json('[]'), behaviour_tags), Malware = related_malware, ThreatActors = related_threat_actors\n| extend MalwareText = replace(@'[\\[\\]\"]', '', tostring(Malware)), ThreatActorsText = replace(@'[\\[\\]\"]', '', tostring(ThreatActors))\n| extend patternValue = replace(@\"'\", @\"\\\\'\", replace(@\"\\\\\", @\"\\\\\\\\\", ObservableValue))\n| extend Pattern = strcat(\"[\", ObservableKey, \" = '\", patternValue, \"']\")\n| extend idHex = substring(tostring(hash_sha256(strcat('CybleVisionIOC|', ObservableKey, '|', ObservableValue))), 0, 32)\n| extend Id = strcat('indicator--', substring(idHex, 0, 8), '-', substring(idHex, 8, 4), '-', substring(idHex, 12, 4), '-', substring(idHex, 16, 4), '-', substring(idHex, 20, 12))\n| extend SourceSystem = 'CybleVisionIOC'\n| extend LastUpdateMethod = 'Cyble Vision IOC CCF'\n| extend IsActive = true, IsDeleted = false, Revoked = false\n| extend AdditionalFields = pack('iocType', tostring(ioc_type), 'riskScore', risk_score, 'confidenceRating', confidence_rating, 'sources', sources, 'behaviourTags', Labels, 'targetCountries', target_countries, 'targetRegions', target_regions, 'targetIndustries', target_industries, 'relatedMalware', Malware, 'relatedThreatActors', ThreatActors, 'firstSeen', FirstSeen, 'lastSeen', LastSeen)\n| extend Data = pack('type', 'indicator', 'spec_version', '2.1', 'id', Id, 'created', Created, 'modified', Modified, 'name', ObservableValue, 'description', strcat('Cyble Vision IOC (', tostring(ioc_type), '), risk score ', tostring(risk_score), ', confidence ', tostring(confidence_rating), iff(isnotempty(MalwareText), strcat(', malware: ', MalwareText), ''), iff(isnotempty(ThreatActorsText), strcat(', threat actors: ', ThreatActorsText), '')),'indicator_types', pack_array('malicious-activity'), 'pattern', Pattern, 'pattern_type', 'stix', 'valid_from', ValidFrom, 'valid_until', ValidUntil, 'confidence', Confidence, 'labels', Labels)\n| project TimeGenerated, Id, ObservableKey, ObservableValue, Pattern, SourceSystem, Confidence, IsActive, IsDeleted, Revoked, ValidFrom, ValidUntil, Created, Modified, LastUpdateMethod, AdditionalFields, Data"
+                }
+            ]
+        }
+    }
+]

@@ -276,6 +276,118 @@ class QueryConstructionTests(unittest.TestCase):
                 [TIMESTAMP_1],
             )
 
+    def test_qtp_query_rejects_privileged_kql_constructs(self):
+        queries = (
+            "workspace('workspace-id').SecurityEvent | take 1",
+            (
+                "cluster('https://example.kusto.windows.net')"
+                ".database('db').Table | take 1"
+            ),
+            (
+                "externaldata(Value:string)"
+                "['https://example.test/data.csv']"
+            ),
+            "Contoso_CL | evaluate bag_unpack(Payload)",
+            ".show tables",
+        )
+        for parser_query in queries:
+            with self.subTest(parser_query=parser_query):
+                with self.assertRaisesRegex(
+                    VALIDATION.ValidationError,
+                    "Unsupported KQL construct",
+                ):
+                    VALIDATION.build_query_time_parser_query(
+                        {
+                            "ParserParams": [],
+                            "ParserQuery": parser_query,
+                        },
+                        "Contoso_CL",
+                        [TIMESTAMP_1],
+                    )
+
+    def test_qtp_query_ignores_dangerous_words_in_comments_and_strings(self):
+        query = VALIDATION.build_query_time_parser_query(
+            {
+                "ParserParams": [],
+                "ParserQuery": (
+                    "Contoso_CL\n"
+                    "| extend Note = 'workspace(''other'')', "
+                    'Other = "evaluate externaldata("\n'
+                    "// cluster('ignored')\n"
+                    "| project TimeGenerated, Note, Other"
+                ),
+            },
+            "Contoso_CL",
+            [TIMESTAMP_1],
+        )
+
+        self.assertIn("workspace", query)
+
+    def test_qtp_query_rejects_unsafe_parameter_metadata(self):
+        with self.assertRaisesRegex(
+            VALIDATION.ValidationError,
+            "Parameter name must be a KQL identifier",
+        ):
+            VALIDATION.build_query_time_parser_query(
+                {
+                    "ParserParams": [
+                        {
+                            "Name": "disabled); workspace('other').Table",
+                            "Type": "bool",
+                            "Default": False,
+                        }
+                    ],
+                    "ParserQuery": "Contoso_CL | take 1",
+                },
+                "Contoso_CL",
+                [TIMESTAMP_1],
+            )
+
+    def test_qtp_query_accepts_canonical_typed_null_defaults(self):
+        query = VALIDATION.build_query_time_parser_query(
+            {
+                "ParserParams": [
+                    {
+                        "Name": "starttime",
+                        "Type": "datetime",
+                        "Default": "datetime(null)",
+                    },
+                    {
+                        "Name": "values_has_any",
+                        "Type": "dynamic",
+                        "Default": "dynamic([])",
+                    },
+                    {
+                        "Name": "event_count",
+                        "Type": "int",
+                        "Default": "int(null)",
+                    },
+                ],
+                "ParserQuery": "Contoso_CL | take 1",
+            },
+            "Contoso_CL",
+            [TIMESTAMP_1],
+        )
+
+        self.assertIn("starttime:datetime=datetime(null)", query)
+        self.assertIn("values_has_any:dynamic=dynamic([])", query)
+        self.assertIn("event_count:int=int(null)", query)
+
+    def test_filter_query_rejects_privileged_kql(self):
+        with self.assertRaisesRegex(
+            VALIDATION.ValidationError,
+            "Unsupported KQL construct",
+        ):
+            VALIDATION.build_filter_count_query(
+                "workspace('other').Table",
+                source_schema=[
+                    {"name": "TimeGenerated", "type": "datetime"}
+                ],
+                source_rows=[
+                    {"TimeGenerated": TIMESTAMP_1}
+                ],
+            )
+
 
 class FilterValidationTests(unittest.TestCase):
     def snapshot(self):
