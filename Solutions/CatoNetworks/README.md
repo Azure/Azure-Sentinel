@@ -12,7 +12,7 @@ Catalog 3.1.0 retains the reviewed field corrections: no URL-derived `DstFQDN` i
 
 ## Query the parsers
 
-Each schema has a `vim<Schema>Cato_CatoNetworksEvents_CL` source function with ASIM filter parameters and an `ASim<Schema>Cato_CatoNetworksEvents_CL` wrapper that does not filter. These examples use the source functions with valid parameter names and values; omit optional parameters to use their defaults.
+Each schema has a `vim<Schema>Cato_CatoNetworksEvents_CL` source function with ASIM filter parameters and an `ASim<Schema>Cato_CatoNetworksEvents_CL` nonfiltering source function. Both use the same normalization rules. These examples use valid parameter names and values; omit optional parameters to use their defaults.
 
 ```kusto
 vimNetworkSessionCato_CatoNetworksEvents_CL(
@@ -68,7 +68,11 @@ The other wrappers follow the same naming pattern: `ASimDnsCato_CatoNetworksEven
 
 ## Installation and parser updates
 
-After publication, install or update version 3.1.0 through the normal Microsoft Sentinel Content Hub workflow. The solution includes the CCF connector and its managed parser function definitions; generic Microsoft ASIM unifier registration is a separate, explicit configuration step and is not automatic.
+After publication, install or update version 3.1.0 through the normal Microsoft Sentinel Content Hub workflow. The solution includes the CCF connector and its managed parser definitions. Installing it does not replace the workspace's ASIM unifying functions.
+
+The Cato source definitions also belong to Microsoft's shared ASIM catalog, with entries in the six schema unifiers for `CatoNetworksEvents_CL`. Built-in availability depends on Microsoft's ASIM publication, separately from Content Hub solution installation. Until the applicable unifier update is available, use the direct calls above or explicitly add the Cato source to your existing custom unifiers without replacing other sources. Avoid registering the same source twice.
+
+ARM connectors with a different table name require their table-specific source functions and explicit custom-unifier registration. The shared catalog's CCF binding does not automatically discover custom ARM tables.
 
 ### Manual parser updates
 

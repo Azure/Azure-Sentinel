@@ -361,3 +361,25 @@ If the YAML Toolkit for PowerShell is not installed, you may experience errors r
 To resolve this issue, it's recommended that you install the YAML Toolkit for Powershell.
 
 See [Setup](#setup) to install the YAML Toolkit for PowerShell.
+
+## Shared ASIM parser sources
+
+A solution's `Parsers` array can reference native ASIM YAML in the shared repository catalog:
+
+```json
+"Parsers": [
+  "Parsers/ASimDns/Parsers/vimDnsExample.yaml"
+]
+```
+
+These paths are relative to the repository root, not `Solutions/<solution>`. Shared references are limited to `Parsers/ASim<Schema>/Parsers/<ParserName>.yaml`; traversal, external URLs and symlinks are rejected. Solution-local parser paths continue to resolve within the selected solution.
+
+Native ASIM documents use `ParserName`, `ParserQuery`, `ParserParams` and `Parser` release metadata. The packager uses these to create saved-search resources with the same function alias, query, parameters and release version. Existing solution `FunctionName`/`FunctionQuery`/`FunctionParams` documents remain supported.
+
+Shared source placement and solution installation do not, by themselves, register a provider with a generic ASIM unifier. Include the source in the appropriate shared unifier's query and `Parsers` list, retain disable-watchlist behavior, and supply the required synthetic source fixtures. Run ASIM metadata/schema/data validation in addition to package validation.
+
+To exercise native/legacy packaging compatibility and shared-path confinement locally:
+
+```powershell
+pwsh -NoProfile -File Tools/Create-Azure-Sentinel-Solution/tests/NativeAsimParsers.Tests.ps1
+```

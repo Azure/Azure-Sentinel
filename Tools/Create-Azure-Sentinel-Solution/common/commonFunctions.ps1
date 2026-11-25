@@ -42,7 +42,8 @@ function Resolve-SolutionContentPath {
         [Parameter(Mandatory = $true)][string]$SolutionRoot,
         [Parameter(Mandatory = $true)][string]$SolutionName,
         [Parameter(Mandatory = $true)][string]$ContentPath,
-        [switch]$RequireFile
+        [switch]$RequireFile,
+        [switch]$AllowSharedAsimParser
     )
 
     if ([string]::IsNullOrWhiteSpace($ContentPath) -or
@@ -54,6 +55,8 @@ function Resolve-SolutionContentPath {
     if ($normalized.StartsWith('/') -or $normalized.Contains('//')) {
         throw "Solution content path must be a local, relative path without traversal: $ContentPath"
     }
+    $isSharedAsimParser = $AllowSharedAsimParser -and
+        $normalized -cmatch '^Parsers/ASim[A-Za-z]+/Parsers/[A-Za-z][A-Za-z0-9_]*\.yaml$'
     $parts = $normalized.Split('/')
     if ($parts -contains '') {
         throw "Solution content path must be a local, relative path without traversal: $ContentPath"
@@ -72,6 +75,12 @@ function Resolve-SolutionContentPath {
         [System.IO.Path]::DirectorySeparatorChar,
         [System.IO.Path]::AltDirectorySeparatorChar
     )
+    if ($isSharedAsimParser) {
+        if ([System.IO.Path]::GetFileName([System.IO.Path]::GetDirectoryName($root)) -cne 'Solutions') {
+            throw "Shared ASIM content requires a solution under the repository's Solutions directory."
+        }
+        $root = [System.IO.Path]::GetFullPath((Join-Path $root '../..'))
+    }
     $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction Stop
     if (($rootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
         throw "Solution content root must not be a symlink: $root"
@@ -3848,6 +3857,16 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     if ($file -match "(\.yaml)$") {        
         try {
             $yaml = ConvertFrom-YAML $content
+            if ($null -ne $yaml.ParserName) {
+                $yaml = @{
+                    FunctionName   = $yaml.ParserName
+                    Function       = $yaml.Parser
+                    FunctionQuery  = $yaml.ParserQuery
+                    FunctionParams = $yaml.ParserParams
+                    Category       = "ASIM"
+                    Description    = $yaml.Description
+                }
+            }
             $isyaml = $true
         }
         catch {
