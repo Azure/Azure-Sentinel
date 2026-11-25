@@ -1,0 +1,89 @@
+{
+  "name": "WhoisXMLAPIFeeds",
+  "apiVersion": "2022-09-01-preview",
+  "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+  "location": "{{location}}",
+  "kind": "Customizable",
+  "properties": {
+    "connectorUiConfig": {
+      "id": "WhoisXMLAPIFeeds",
+      "title": "WhoisXML API Domain Feeds (via Codeless Connector Framework)",
+      "publisher": "WhoisXML API",
+      "descriptionMarkdown": "Brings three WhoisXML API data feeds into Microsoft Sentinel: **Newly Registered Domains 2.0**, **Threat Intelligence** (malicious domains) and **Bulk Registration Risk** (typosquatting groups). The solution's analytics rules match them against your DNS, web proxy, endpoint and email logs.\n\nThe connector polls WhoisXML API's feed service at `feeds-api.whoisxmlapi.com`, which checks your API key with WhoisXML API's download server on every delivery, so you receive only the feeds your subscription includes.\n\nNewly registered domains usually reach the feed within one to two days of registration. The Threat Intelligence feed is delivered as daily changes, with every active domain re-sent at least every 10 days so the rules always see the full list. Its listings carry a threat type but no confidence score, and a domain stays listed for up to 90 days after WhoisXML API last observed it, so the rules grade severity by threat type and by how recently the domain was seen.",
+      "graphQueriesTableName": "WhoisXMLNRD_CL",
+      "graphQueries": [
+        { "metricName": "Newly registered domains", "legend": "WhoisXMLNRD_CL", "baseQuery": "WhoisXMLNRD_CL" },
+        { "metricName": "Threat intelligence domain changes", "legend": "WhoisXMLThreatDomains_CL", "baseQuery": "WhoisXMLThreatDomains_CL" },
+        { "metricName": "Typosquatting domains", "legend": "WhoisXMLTyposquatting_CL", "baseQuery": "WhoisXMLTyposquatting_CL" }
+      ],
+      "sampleQueries": [
+        { "description": "Newly registered domains received in the last day", "query": "WhoisXMLNRD_CL\n| where TimeGenerated > ago(1d)\n| take 20" },
+        { "description": "Active threat intelligence domains by threat type", "query": "WhoisXMLThreatDomains_CL\n| where TimeGenerated > ago(14d)\n| extend StateKey = FeedDate + FeedVersion * 1s\n| summarize arg_max(StateKey, ChangeType) by DomainName, ThreatType\n| where ChangeType != \"removed\"\n| summarize Domains = count() by ThreatType" },
+        { "description": "Largest typosquatting groups received in the last day", "query": "WhoisXMLTyposquatting_CL\n| where TimeGenerated > ago(1d)\n| summarize Members = make_set(DomainName, 10), GroupSize = max(GroupSize) by FeedDate, GroupNumber\n| top 20 by GroupSize desc" },
+        { "description": "Ingestion volume by table, last 7 days", "query": "union WhoisXMLNRD_CL, WhoisXMLThreatDomains_CL, WhoisXMLTyposquatting_CL\n| where TimeGenerated > ago(7d)\n| summarize GB = round(sum(_BilledSize) / 1e9, 3) by Type, bin(TimeGenerated, 1d)" }
+      ],
+      "dataTypes": [
+        { "name": "WhoisXMLNRD_CL", "lastDataReceivedQuery": "WhoisXMLNRD_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" },
+        { "name": "WhoisXMLThreatDomains_CL", "lastDataReceivedQuery": "WhoisXMLThreatDomains_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" },
+        { "name": "WhoisXMLTyposquatting_CL", "lastDataReceivedQuery": "WhoisXMLTyposquatting_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)" }
+      ],
+      "connectivityCriteria": [ { "type": "HasDataConnectors" } ],
+      "availability": { "status": 1, "isPreview": true },
+      "permissions": {
+        "resourceProvider": [
+          {
+            "provider": "Microsoft.OperationalInsights/workspaces",
+            "permissionsDisplayText": "Read and write permissions on the workspace are required.",
+            "providerDisplayName": "Workspace",
+            "scope": "Workspace",
+            "requiredPermissions": { "read": true, "write": true, "delete": true }
+          }
+        ],
+        "customs": [
+          { "name": "WhoisXML API key", "description": "Your WhoisXML API account API key with a subscription to each feed you select." }
+        ]
+      },
+      "instructionSteps": [
+        {
+          "title": "Connect WhoisXML API feeds to Microsoft Sentinel",
+          "description": "Enter your API key, select the feeds your subscription includes, then select Connect. Only the selected feeds are provisioned.",
+          "instructions": [
+            { "type": "InfoMessage", "parameters": { "text": "IP allowlist: if your WhoisXML API account restricts its API key to an IP allowlist, add 44.194.11.104 to it first. Requests reach WhoisXML API from that address on your behalf, so anyone who holds your key can then retrieve your feeds through this connector. Keep the key secret. WhoisXML API will tell you before this address changes.", "visible": true, "inline": false } },
+            { "type": "InfoMessage", "parameters": { "text": "Cost: with all three feeds enabled, expect about 0.12 GB of ingestion a day, plus about 1 GB of history spread over the first day after you connect. The Threat Intelligence feed is most of it. Use a separate API key for each workspace. History is kept per API key, not per workspace: a workspace connected with a key that another workspace already polls for the same feeds and tier receives no history of its own, only whatever of that key's history is still being sent when it connects; one that reconnects while another keeps polling does not receive what it missed; and an outage of more than about 30 minutes can cost one of them a whole day's release. The Ingestion volume by table sample query shows your actual volume. To stop a feed's ingestion, select Disconnect, clear that feed, then select Connect.", "visible": true, "inline": false } },
+            { "type": "InfoMessage", "parameters": { "text": "Trial: to request a trial key for the WhoisXML API feeds, write to sales@whoisxmlapi.com.", "visible": true, "inline": false } },
+            { "type": "Textbox", "parameters": { "label": "WhoisXML API key", "placeholder": "Enter your API key", "type": "password", "name": "apiKey", "validations": { "required": true } } },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Feeds to enable", "name": "feedTypes", "isMultiSelect": true, "defaultAllSelected": false,
+                "required": true, "validations": { "required": true },
+                "options": [
+                  { "key": "nrd", "text": "Newly Registered Domains 2.0" },
+                  { "key": "threat", "text": "Threat Intelligence (malicious domains)" },
+                  { "key": "typosquatting", "text": "Bulk Registration Risk (typosquatting)" }
+                ]
+              }
+            },
+            {
+              "type": "Dropdown",
+              "parameters": {
+                "label": "Newly Registered Domains 2.0 subscription tier", "name": "nrdTier", "required": true,
+                "placeholder": "Select the tier your subscription includes",
+                "options": [
+                  { "key": "lite", "text": "Lite" },
+                  { "key": "basic", "text": "Basic" },
+                  { "key": "professional", "text": "Professional" },
+                  { "key": "enterprise", "text": "Enterprise" },
+                  { "key": "ultimate", "text": "Ultimate" }
+                ]
+              }
+            },
+            { "type": "InfoMessage", "parameters": { "text": "Your lists: the rules read your brand keywords from a watchlist named WhoisXMLBrandKeywordsCustom, domains to ignore from WhoisXMLDomainAllowlistCustom and any hosting platforms you add from WhoisXMLHostingPlatformsCustom, which you create. The WhoisXMLBrandKeywords and WhoisXMLDomainAllowlist lists installed with the solution are examples, and WhoisXMLHostingPlatforms is WhoisXML API's list of hosting platforms; all three are reset on every update.", "visible": true, "inline": false } },
+            { "type": "InfoMessage", "parameters": { "text": "The feed and tier selections are not read back after the page reloads. The Data received chart shows one line per feed. To change them, select Disconnect, change the selections, then select Connect.", "visible": true, "inline": false } },
+            { "type": "ConnectionToggleButton", "parameters": { "connectLabel": "Connect", "disconnectLabel": "Disconnect", "name": "toggle" } }
+          ]
+        }
+      ]
+    }
+  }
+}

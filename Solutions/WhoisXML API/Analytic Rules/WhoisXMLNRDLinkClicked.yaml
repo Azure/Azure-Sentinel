@@ -1,0 +1,129 @@
+id: b2f6c507-a28a-40d2-a6de-f5482ce484a3
+name: WhoisXML API - User clicked link to newly registered domain
+description: |
+  Identifies users who clicked a link in email, Teams or Office apps to a domain WhoisXML API lists as newly registered in the last 14 days, where the click was allowed or the user clicked through a warning.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: WhoisXMLAPIFeeds
+    dataTypes:
+      - WhoisXMLNRD_CL
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - UrlClickEvents
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1566.002
+  - T1204.001
+query: |
+  // Defender XDR click events can reach the workspace late; set from the live test's measurement
+  let ingestion_delay = 1h;
+  let rule_lookback = 1h;
+  let nrd_lookback = 14d;
+  // A user and domain pair this rule alerted on is not alerted on again for this long
+  let dedupe_lookback = 7d;
+  let Allowlisted = union
+      (_GetWatchlist('WhoisXMLDomainAllowlist') | project Domain = tolower(tostring(SearchKey))),
+      (_GetWatchlist('WhoisXMLDomainAllowlistCustom') | project Domain = tolower(tostring(SearchKey)));
+  let AlreadyAlerted = SecurityAlert
+      | where TimeGenerated >= ago(dedupe_lookback)
+      | where ProviderName == "ASI Scheduled Alerts"
+      | extend Details = todynamic(tostring(todynamic(ExtendedProperties)["Custom Details"]))
+      | where tostring(Details.WxaRule[0]) == "R3"
+      | project AlertKey = strcat(tolower(tostring(Details.WxaUser[0])), "|", tostring(Details.WxaDomain[0]));
+  let Clicks = materialize(
+      UrlClickEvents
+      | where TimeGenerated >= ago(ingestion_delay + rule_lookback)
+      | where coalesce(ingestion_time(), TimeGenerated) > ago(rule_lookback)
+      | where ActionType == "ClickAllowed" or IsClickedThrough == true
+      | extend ClickHost = tolower(trim_end(@"\.", tostring(parse_url(Url).Host)))
+      | where isnotempty(ClickHost)
+      | extend Labels = split(ClickHost, ".")
+      | extend LabelCount = array_length(Labels)
+      | extend Cand2 = iff(LabelCount >= 2, strcat(tostring(Labels[LabelCount - 2]), ".", tostring(Labels[LabelCount - 1])), "")
+      | extend Cand3 = iff(LabelCount >= 3, strcat(tostring(Labels[LabelCount - 3]), ".", Cand2), "")
+      | project ClickTime = TimeGenerated, AccountUpn, Url, ClickHost, Cand2, Cand3, Workload, ActionType, IsClickedThrough, IPAddress, NetworkMessageId
+  );
+  let Candidates = union
+      (Clicks | where isnotempty(Cand2) | distinct Domain = Cand2),
+      (Clicks | where isnotempty(Cand3) | distinct Domain = Cand3)
+      | distinct Domain;
+  WhoisXMLNRD_CL
+  | where TimeGenerated >= ago(nrd_lookback)
+  | where Reason == "added"
+  | where DomainName in (Candidates)
+  // Allowlisted domains drop out through an anti-join from the small side: an in() filter fails above 1,000,000
+  // values, which an imported list can reach
+  | join kind=leftanti Allowlisted on $left.DomainName == $right.Domain
+  | summarize FeedDate = max(FeedDate) by DomainName
+  | join kind=inner (
+      Clicks
+      | extend Candidate = pack_array(Cand2, Cand3)
+      | mv-expand Candidate to typeof(string)
+      | where isnotempty(Candidate)
+  ) on $left.DomainName == $right.Candidate
+  | summarize
+      StartTime = min(ClickTime),
+      EndTime = max(ClickTime),
+      ClickCount = count(),
+      Workloads = make_set(Workload, 3),
+      ClickedThrough = max(toint(IsClickedThrough)),
+      arg_max(ClickTime, Url, IPAddress, NetworkMessageId)
+      by AccountUpn, DomainName, FeedDate
+  | where strcat(tolower(AccountUpn), "|", DomainName) !in (AlreadyAlerted)
+  | extend
+      AccountName = tostring(split(AccountUpn, "@")[0]),
+      AccountUpnSuffix = tostring(split(AccountUpn, "@")[1]),
+      WxaRule = "R3"
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUpnSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+customDetails:
+  NrdFeedDate: FeedDate
+  ClickCount: ClickCount
+  ClickedThrough: ClickedThrough
+  Workloads: Workloads
+  WxaRule: WxaRule
+  WxaDomain: DomainName
+  WxaUser: AccountUpn
+alertDetailsOverride:
+  alertDisplayNameFormat: "{{AccountUpn}} clicked a link to newly registered domain {{DomainName}}"
+  alertDescriptionFormat: |
+    {{AccountUpn}} clicked a link to {{DomainName}}, which WhoisXML API lists as newly registered.
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - DNS
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,200 @@
+id: 01629fe7-a28a-49c3-9ef6-e06fc7af7e83
+name: WhoisXML API - Threat intelligence domain resolved by internal host
+description: |
+  Identifies hosts that resolved a domain listed in the WhoisXML API Threat Intelligence feed. Severity depends on the threat type, how recently WhoisXML API observed the domain, and whether it sits under a widely used domain other than a hosting platform.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: WhoisXMLAPIFeeds
+    dataTypes:
+      - WhoisXMLThreatDomains_CL
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+  - connectorId: ASimDnsActivityLogs
+    dataTypes:
+      - ASimDnsActivityLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071.004
+  - T1568
+  - T1566
+query: |
+  let ingestion_delay = 30m;
+  let rule_lookback = 1h;
+  // Every active indicator is re-sent at least every 10 days, so 14 days holds the full active set
+  let ti_lookback = 14d;
+  let high_types = dynamic(["c2", "malware", "phishing", "botnet"]);
+  // Severity by recency; LastSeen in the table can trail the real last observation by up to 10 days
+  let recent = 14d;
+  let aging = 30d;
+  // Listings under a registered domain ranked in the top 100,000 are informational only, unless it is a hosting platform
+  let popular_rank = 100000;
+  let Allowlisted = union
+      (_GetWatchlist('WhoisXMLDomainAllowlist') | project Domain = tolower(tostring(SearchKey))),
+      (_GetWatchlist('WhoisXMLDomainAllowlistCustom') | project Domain = tolower(tostring(SearchKey)))
+      | where isnotempty(Domain);
+  // Hosting platforms (free website hosts, site builders, dynamic DNS), where each subdomain is a different party's site
+  let HostingPlatformList = union
+      (_GetWatchlist('WhoisXMLHostingPlatforms') | project Domain = trim_end(@"\.", trim(@"\s+", tolower(tostring(SearchKey))))),
+      (_GetWatchlist('WhoisXMLHostingPlatformsCustom') | project Domain = trim_end(@"\.", trim(@"\s+", tolower(tostring(SearchKey)))))
+      | where isnotempty(Domain);
+  // At most 100,000 platforms, well inside the 1,000,000 values an in() filter allows
+  let HostingPlatforms = toscalar(HostingPlatformList | summarize make_set(Domain, 100000));
+  // The hour's lookups, read twice: once for every queried name, then again for the clients of the names that matched
+  let DnsRows = _Im_Dns(starttime=ago(ingestion_delay + rule_lookback))
+      | where isnotempty(DnsQuery)
+      | where coalesce(ingestion_time(), TimeGenerated) > ago(rule_lookback)
+      | extend Fqdn = tolower(trim_end(@"\.", DnsQuery));
+  // One row per queried name with only its time span and count, summarised before materialize: per-client detail
+  // for every name would exhaust the query's memory in estates that query millions of names an hour
+  let DnsByName = materialize(
+      DnsRows
+      | summarize
+          StartTime = min(TimeGenerated),
+          EndTime = max(TimeGenerated),
+          Queries = count()
+          by Fqdn
+      | extend Labels = split(Fqdn, ".")
+      | extend LabelCount = array_length(Labels)
+      | extend Cand2 = iff(LabelCount >= 2, strcat(tostring(Labels[LabelCount - 2]), ".", tostring(Labels[LabelCount - 1])), "")
+      | extend Cand3 = iff(LabelCount >= 3, strcat(tostring(Labels[LabelCount - 3]), ".", Cand2), "")
+      | project-away Labels, LabelCount
+  );
+  // Registered-domain candidates only (last two and three labels), which bounds the list
+  let Candidates = union
+      (DnsByName | where isnotempty(Cand2) | distinct Domain = Cand2),
+      (DnsByName | where isnotempty(Cand3) | distinct Domain = Cand3)
+      | distinct Domain;
+  let NCand = toscalar(Candidates | count);
+  // A listed host with three or more labels is reached through its last three labels
+  let Feed = WhoisXMLThreatDomains_CL
+      | where TimeGenerated >= ago(ti_lookback)
+      | extend FLabels = split(DomainName, ".")
+      | extend FCount = array_length(FLabels)
+      | extend F2 = iff(FCount >= 2, strcat(tostring(FLabels[FCount - 2]), ".", tostring(FLabels[FCount - 1])), "")
+      | extend F3 = iff(FCount >= 3, strcat(tostring(FLabels[FCount - 3]), ".", tostring(FLabels[FCount - 2]), ".", tostring(FLabels[FCount - 1])), "")
+      | project-away FLabels, FCount;
+  let ActiveThreats = materialize(
+      union
+          (Feed | where NCand <= 900000 | where DomainName in (Candidates) or F3 in (Candidates)),
+          (Feed | where NCand > 900000
+              | extend Key = pack_array(DomainName, F3)
+              | mv-expand Key to typeof(string)
+              | join kind=inner hint.shufflekey=Key (Candidates | project Key = Domain) on Key
+              | project-away Key, Key1)
+      // An allowlisted registered domain also covers every host listed under it. One anti-join from the small side per
+      // name (the listing, its last two labels, its last three): an in() filter fails above 1,000,000 values
+      | join kind=leftanti Allowlisted on $left.DomainName == $right.Domain
+      | join kind=leftanti Allowlisted on $left.F2 == $right.Domain
+      | join kind=leftanti Allowlisted on $left.F3 == $right.Domain
+      // A listing under a hosting platform (its last two to four labels, the most specific entry first) is a different
+      // party's site and keeps its severity; the platform itself and its own www host (www.weebly.com) do not
+      | extend Labels = split(DomainName, ".")
+      | extend F4 = iff(array_length(Labels) >= 4, strcat(tostring(Labels[array_length(Labels) - 4]), ".", F3), "")
+      | extend Platform = iff(F4 in (HostingPlatforms), F4, iff(F3 in (HostingPlatforms), F3, iff(F2 in (HostingPlatforms), F2, "")))
+      | extend OwnHost = array_length(Labels) == array_length(split(Platform, ".")) + 1 and tostring(Labels[0]) == "www"
+      | extend Hosted = isnotempty(Platform) and DomainName != Platform and not(OwnHost)
+      | project-away Labels, F4
+      // Latest state per indicator: newest file date, then newest version of that file
+      | extend StateKey = FeedDate + FeedVersion * 1s
+      | summarize arg_max(StateKey, ChangeType, FirstSeen, LastSeen, ParentRank, IsPublicSuffix, Hosted) by DomainName, ThreatType
+      | where ChangeType != "removed"
+      | summarize
+          ThreatTypes = make_set(ThreatType, 10),
+          FeedFirstSeen = min(FirstSeen),
+          FeedLastSeen = max(LastSeen),
+          ParentRank = max(ParentRank),
+          SuffixListing = max(toint(IsPublicSuffix)),
+          HostedListing = max(toint(Hosted))
+          by DomainName
+      | extend IsHighType = array_length(set_intersect(ThreatTypes, high_types)) > 0
+      | extend LastSeenAge = now() - FeedLastSeen
+      | extend AlertSeverity = case(
+          ParentRank between (1 .. popular_rank) and HostedListing == 0, "Informational",
+          IsHighType and LastSeenAge <= recent, "High",
+          LastSeenAge <= aging, "Medium",
+          "Low")
+      | extend ThreatTypeList = strcat_array(ThreatTypes, ", ")
+  );
+  let MatchKeys = ActiveThreats | project DomainName;
+  // A listing that is itself a public suffix (mysynology.net, s3.amazonaws.com) matches only its own name: the hosts under it belong to unrelated parties
+  let SuffixKeys = ActiveThreats | where SuffixListing == 1 | project DomainName;
+  let Resolved = DnsByName
+      | where Fqdn in (MatchKeys) or Cand2 in (MatchKeys) or Cand3 in (MatchKeys)
+      | extend Candidate = set_union(pack_array(Fqdn), pack_array(Cand2, Cand3))
+      | mv-expand Candidate to typeof(string)
+      | where Candidate in (MatchKeys)
+      | where Candidate == Fqdn or Candidate !in (SuffixKeys);
+  let MatchedNames = Resolved | distinct Fqdn;
+  // Clients only for the names that matched, joined from the small side: an in() filter fails above 1,000,000
+  // values, which one domain used for DNS tunnelling can reach
+  let ClientsByName = MatchedNames
+      | join kind=rightsemi DnsRows on Fqdn
+      // Windows DNS and most other sources leave SrcHostname empty; the client's IP address stands in for it
+      | extend SrcClient = coalesce(column_ifexists("SrcHostname", ""), column_ifexists("SrcIpAddr", ""))
+      | summarize
+          HostHll = hll_if(SrcClient, isnotempty(SrcClient)),
+          SourceIps = make_set(column_ifexists("SrcIpAddr", ""), 20),
+          SourceHosts = make_set_if(SrcClient, isnotempty(SrcClient), 20),
+          ReportedBy = make_set(column_ifexists("EventProduct", ""), 5)
+          by Fqdn;
+  ActiveThreats
+  | join kind=inner Resolved on $left.DomainName == $right.Candidate
+  | join kind=inner ClientsByName on Fqdn
+  | summarize
+      StartTime = min(StartTime),
+      EndTime = max(EndTime),
+      QueryCount = sum(Queries),
+      HostHll = hll_merge(HostHll),
+      SampleFqdns = make_set(Fqdn, 10),
+      arg_max(Queries, SourceIps, SourceHosts, ReportedBy)
+      by DomainName, ThreatTypeList, AlertSeverity, FeedFirstSeen, FeedLastSeen, ParentRank
+  | extend HostCount = dcount_hll(HostHll)
+  | extend SourceIp = tostring(SourceIps[0]), SourceHost = tostring(SourceHosts[0])
+  | project-away HostHll, Queries
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SourceHost
+customDetails:
+  ThreatTypes: ThreatTypeList
+  FeedFirstSeen: FeedFirstSeen
+  FeedLastSeen: FeedLastSeen
+  ParentRank: ParentRank
+  QueryCount: QueryCount
+  HostCount: HostCount
+  SampleFqdns: SampleFqdns
+alertDetailsOverride:
+  alertDisplayNameFormat: "Threat intelligence domain {{DomainName}} resolved by {{SourceHost}}"
+  alertDescriptionFormat: |
+    {{DomainName}} is listed in the WhoisXML API Threat Intelligence feed as {{ThreatTypeList}} and was resolved inside the estate.
+  alertSeverityColumnName: AlertSeverity
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: Selected
+    groupByEntities:
+      - DNS
+version: 1.0.0
+kind: Scheduled
