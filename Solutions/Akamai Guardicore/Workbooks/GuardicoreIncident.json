@@ -71,9 +71,9 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "// Get slot identifiers for the selected incident\nlet incident_slots = GuardicoreProcessedIncidents_CL\n| where TimeGenerated >= ago(24h)\n| where incidentTitle == '{SelectedIncident}'\n| distinct slot_id;\n\n// Get connections for those slot identifiers and count distinct connections by destination port\nGuardicoreEnrichingConnections_CL\n| where slot_identifier in (incident_slots)\n| distinct id, destination_port, source_ip, destination_ip, slot_identifier\n| where destination_port > 0\n| summarize DistinctConnections = count() by tostring(toint(destination_port))\n| top 10 by DistinctConnections desc\n| extend Port = strcat(destination_port, \" \", case(\n  toint(destination_port) == 80, \"(HTTP)\",\n  toint(destination_port) == 443, \"(HTTPS)\",\n  toint(destination_port) == 22, \"(SSH)\",\n  toint(destination_port) == 3389, \"(RDP)\",\n  toint(destination_port) == 21, \"(FTP)\",\n  toint(destination_port) == 25, \"(SMTP)\",\n  toint(destination_port) == 53, \"(DNS)\",\n  toint(destination_port) == 445, \"(SMB)\",\n  toint(destination_port) == 3306, \"(MySQL)\",\n  toint(destination_port) == 1433, \"(MSSQL)\",\n  toint(destination_port) == 8086, \"(InfluxDB)\",\n  toint(destination_port) == 8442, \"(Custom)\",\n  \"\"))\n| project Port, Count = DistinctConnections",
+              "query": "// Get slot identifiers for the selected incident\nlet incident_slots = GuardicoreProcessedIncidents_CL\n| where TimeGenerated >= ago(24h)\n| where incidentTitle == '{SelectedIncident}'\n| distinct slot_id;\n\n// Connection events per destination port (Centra `count` = events aggregated in one connection record),\n// one row per Centra record id, split by direction like the Internet Traffic Connections pie\nGuardicoreEnrichingConnections_CL\n| where slot_identifier in (incident_slots)\n| summarize arg_max(TimeGenerated, *) by id\n| where destination_port > 0\n| extend Direction = case(\n    source_node_type == \"internet\", \"From Internet\",\n    destination_node_type == \"internet\", \"To Internet\",\n    \"Internal\")\n| extend events = tolong(['count'])\n| summarize Total = sum(events),\n            FromInternet = sumif(events, Direction == \"From Internet\"),\n            ToInternet = sumif(events, Direction == \"To Internet\"),\n            Internal = sumif(events, Direction == \"Internal\")\n            by destination_port\n| top 10 by Total desc\n| extend Port = strcat(destination_port, \" \", case(\n  destination_port == 21, \"(FTP)\",\n  destination_port == 22, \"(SSH)\",\n  destination_port == 23, \"(Telnet)\",\n  destination_port == 25, \"(SMTP)\",\n  destination_port == 53, \"(DNS)\",\n  destination_port == 80, \"(HTTP)\",\n  destination_port == 443, \"(HTTPS)\",\n  destination_port == 445, \"(SMB)\",\n  destination_port == 1433, \"(MSSQL)\",\n  destination_port == 3306, \"(MySQL)\",\n  destination_port == 3389, \"(RDP)\",\n  destination_port == 5432, \"(PostgreSQL)\",\n  destination_port == 8080, \"(HTTP-alt)\",\n  destination_port == 8086, \"(InfluxDB)\",\n  destination_port == 8443, \"(HTTPS-alt)\",\n  \"\"))\n| order by Total desc\n| project Port, ['From Internet'] = FromInternet, ['To Internet'] = ToInternet, Internal",
               "size": 0,
-              "title": "Top Destination Ports",
+              "title": "Top 10 Destination Ports (connections)",
               "noDataMessage": "No connection data found for selected incident",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -81,12 +81,22 @@
               "chartSettings": {
                 "xAxis": "Port",
                 "yAxis": [
-                  "Count"
+                  "From Internet",
+                  "To Internet",
+                  "Internal"
                 ],
                 "seriesLabelSettings": [
                   {
-                    "seriesName": "Count",
-                    "color": "#0078D4"
+                    "seriesName": "From Internet",
+                    "color": "purple"
+                  },
+                  {
+                    "seriesName": "To Internet",
+                    "color": "blue"
+                  },
+                  {
+                    "seriesName": "Internal",
+                    "color": "gray"
                   }
                 ],
                 "ySettings": {
@@ -97,7 +107,9 @@
                       "useGrouping": true
                     }
                   }
-                }
+                },
+                "showLegend": true,
+                "showMetrics": false
               }
             },
             "customWidth": "50",
@@ -121,13 +133,15 @@
                 "seriesLabelSettings": [
                   {
                     "seriesName": "From Internet",
-                    "color": "orange"
+                    "color": "purple"
                   },
                   {
                     "seriesName": "To Internet",
                     "color": "blue"
                   }
-                ]
+                ],
+                "showLegend": true,
+                "showMetrics": false
               }
             },
             "customWidth": "50",
@@ -140,9 +154,9 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "// Get slot identifiers for the selected incident\nlet incident_slots = GuardicoreProcessedIncidents_CL\n| where TimeGenerated >= ago(24h)\n| where incidentTitle == '{SelectedIncident}'\n| distinct slot_id;\n\n// Get detailed connection information for internet traffic only\nGuardicoreEnrichingConnections_CL\n| where slot_identifier in (incident_slots)\n| extend Direction = case(\n    source_node_type == \"internet\", \"From Internet\",\n    destination_node_type == \"internet\", \"To Internet\",\n    \"Internal\"\n)\n| where Direction != \"Internal\"  // Only show internet traffic\n| extend ConnectionTime = datetime_add('millisecond', tolong(slot_start_time), datetime(1970-01-01))\n| project \n    ConnectionTime,\n    SourceIP = source_ip,\n    DestinationIP = destination_ip,\n    DestinationPort = destination_port,\n    Protocol = ip_protocol,\n    ConnectionType = connection_type,\n    ConnectionCount = count,\n    Direction,\n    PolicyVerdict = policy_verdict\n| order by ConnectionTime desc\n| limit toint({RowCount})",
+              "query": "// Get slot identifiers for the selected incident\nlet incident_slots = GuardicoreProcessedIncidents_CL\n| where TimeGenerated >= ago(24h)\n| where incidentTitle == '{SelectedIncident}'\n| distinct slot_id;\n\n// Get detailed connection information for internet traffic only\nGuardicoreEnrichingConnections_CL\n| where slot_identifier in (incident_slots)\n| extend Direction = case(\n    source_node_type == \"internet\", \"From Internet\",\n    destination_node_type == \"internet\", \"To Internet\",\n    \"Internal\"\n)\n| where Direction != \"Internal\"  // Only show internet traffic\n| extend ConnectionTime = datetime_add('millisecond', tolong(slot_start_time), datetime(1970-01-01))\n| project \n    ConnectionTime,\n    SourceIP = source_ip,\n    DestinationIP = destination_ip,\n    DestinationPort = destination_port,\n    Protocol = ip_protocol,\n    ConnectionType = connection_type,\n    ConnectionCount = count,\n    Direction,\n    // Centra UI wording for the policy verdicts returned by /api/v3.0/connections\n    PolicyVerdict = case(\n        policy_verdict == \"blocked_by_source\", \"Blocked by source\",\n        policy_verdict == \"blocked_by_destination\", \"Blocked by destination\",\n        policy_verdict == \"will_be_blocked_by_source\", \"Will be blocked by source\",\n        policy_verdict == \"will_be_blocked_by_destination\", \"Will be blocked by destination\",\n        policy_verdict == \"blocked_by_management\", \"Could not block\",\n        policy_verdict == \"alerted_by_management\", \"Alerted\",\n        policy_verdict == \"allowed\", \"Allowed\",\n        policy_verdict == \"allowed_and_encrypted\", \"Allowed and encrypted\",\n        isempty(policy_verdict), \"\",\n        // any other value: replace '_' with spaces and capitalize the first letter\n        strcat(toupper(substring(policy_verdict, 0, 1)), replace_string(substring(policy_verdict, 1), \"_\", \" \")))\n| order by ConnectionTime desc\n| limit toint({RowCount})",
               "size": 0,
-              "title": "Internet Traffic Connections ({RowCount} entries)",
+              "title": "Internet Traffic Connections ({$rowCount} entries)",
               "noDataMessage": "No internet traffic found for selected incident",
               "queryType": 0,
               "resourceType": "microsoft.operationalinsights/workspaces",
@@ -158,13 +172,13 @@
                         {
                           "operator": "==",
                           "thresholdValue": "From Internet",
-                          "representation": "redBright",
+                          "representation": "purple",
                           "text": "{0}{1}"
                         },
                         {
                           "operator": "==",
                           "thresholdValue": "To Internet",
-                          "representation": "orange",
+                          "representation": "blue",
                           "text": "{0}{1}"
                         },
                         {
@@ -184,14 +198,44 @@
                       "thresholdsGrid": [
                         {
                           "operator": "==",
-                          "thresholdValue": "allowed",
+                          "thresholdValue": "Blocked by source",
+                          "representation": "redBright",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Blocked by destination",
+                          "representation": "redBright",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Alerted",
+                          "representation": "orange",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Will be blocked by source",
+                          "representation": "orange",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Will be blocked by destination",
+                          "representation": "orange",
+                          "text": "{0}{1}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Allowed",
                           "representation": "green",
                           "text": "{0}{1}"
                         },
                         {
                           "operator": "==",
-                          "thresholdValue": "blocked",
-                          "representation": "red",
+                          "thresholdValue": "Allowed and encrypted",
+                          "representation": "green",
                           "text": "{0}{1}"
                         },
                         {
