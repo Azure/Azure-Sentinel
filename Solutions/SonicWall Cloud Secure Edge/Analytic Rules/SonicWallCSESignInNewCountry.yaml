@@ -1,0 +1,70 @@
+id: 503ad035-2d18-43d5-b059-3ab2e1551707
+name: SonicWall CSE - Sign-in from a new country for a user
+description: |
+  'A user signed in to, or was refused by, SonicWall Cloud Secure Edge (CSE) from a country not
+  seen for that user in the previous 14 days. This can indicate stolen credentials or a stolen
+  device, and also normal travel. Users with no earlier sign-ins in the period are skipped, so
+  new users do not alert; the "New users" hunting query lists them.
+  Evaluates events by when they reached Sentinel, so events that arrive late (connector
+  delay or a backfill) are evaluated once, when they arrive. Country is from the CSE sign-in
+  event (Identity events); the query period of 14 days is the history compared against.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let RunWindow = 1h;
+  let SignIns = CSEEvents
+      | where EventType == "Identity" and Action in ("Grant", "Deny")
+      | where isnotempty(UserEmail) and isnotempty(ClientCountry);
+  let Known = SignIns
+      | where IngestedAt <= ago(RunWindow)
+      | summarize KnownCountries = make_set(ClientCountry, 50) by UserEmail;
+  SignIns
+  | where IngestedAt > ago(RunWindow)
+  | join kind=inner Known on UserEmail
+  | where not(set_has_element(KnownCountries, ClientCountry))
+  | summarize
+      SignIns = count(),
+      Granted = countif(Action == "Grant"),
+      FirstSeen = min(EventTime),
+      LastSeen = max(EventTime),
+      Cities = make_set_if(ClientCity, isnotempty(ClientCity), 5),
+      ClientIp = take_anyif(ClientIp, isnotempty(ClientIp)),
+      Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),
+      KnownCountries = take_any(KnownCountries)
+      by UserEmail, ClientCountry
+  | extend
+      AccountName = tostring(split(UserEmail, "@")[0]),
+      UPNSuffix = tostring(split(UserEmail, "@")[1])
+customDetails:
+  Country: ClientCountry
+  KnownCountries: KnownCountries
+  Granted: Granted
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SonicWall CSE: {{UserEmail}} signed in from a new country, {{ClientCountry}}'
+  alertDescriptionFormat: 'First sign-in from {{ClientCountry}} for {{UserEmail}} in 14 days, at {{FirstSeen}}.'
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.0.1
+kind: Scheduled

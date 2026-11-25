@@ -7,10 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 
 ALLOWED_FILTER_OPERATORS = {
-    "extend",
-    "parse",
-    "parse-kv",
-    "project-rename",
     "where",
 }
 QUERY_TIME_PARAMETER_TYPES = {
