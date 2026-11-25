@@ -1582,6 +1582,7 @@ def fetch_arm_table_schema(
                 "endpoint": url,
                 "requestUrl": url,
                 "workspaceResourceId": ws_id,
+                "resourceId": str(body.get("id") or "").strip() if isinstance(body, dict) else "",
                 "tableName": tbl,
                 "tableDescription": str(schema.get("description") or "") if isinstance(schema, dict) else "",
                 "columns": sanitized_columns,
@@ -1653,6 +1654,7 @@ def collect_live_table_schema_readiness_evidence(
         evaluate_val_tbl_01,
         evaluate_val_tbl_02,
         evaluate_val_tbl_03,
+        serialize_expected_custom_tables,
     )
 
     root = Path(solution).expanduser().resolve()
@@ -1901,6 +1903,7 @@ def collect_live_table_schema_readiness_evidence(
         "enforceBlocking": True,
         "target": target_info,
         "customTableCount": len(expected_map),
+        "expectedCustomTables": serialize_expected_custom_tables(inventory),
         "standardTableConfigCount": len(inventory.standard_table_configs),
         "standardTableConfigNames": inventory.standard_table_config_names,
         "staticValidation": {

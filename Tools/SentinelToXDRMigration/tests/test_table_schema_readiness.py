@@ -643,10 +643,14 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
     )
 
     def fake_urlopen(req: Any, timeout: int = 60) -> _FakeHttpResponse:
+        from urllib.parse import urlsplit
+
         url = req.full_url
-        if url.startswith("https://management.azure.com/"):
+        parsed = urlsplit(url)
+        if parsed.scheme == "https" and parsed.netloc == "management.azure.com":
             return _FakeHttpResponse(
                 {
+                    "id": f"{ws_res_id}/tables/AcmeEvents_CL",
                     "name": "AcmeEvents_CL",
                     "properties": {
                         "schema": {
@@ -664,7 +668,9 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
                     },
                 }
             )
-        if url.startswith("https://graph.microsoft.com/beta/security/getHuntingSchemaTables"):
+        if parsed.scheme == "https" and parsed.netloc == "graph.microsoft.com" and parsed.path.startswith(
+            "/beta/security/getHuntingSchemaTables"
+        ):
             return _FakeHttpResponse(
                 {
                     "value": [
@@ -682,7 +688,9 @@ def test_collect_live_table_schema_readiness_evidence_wires_arm_and_graph_endpoi
                     ]
                 }
             )
-        if url.startswith("https://graph.microsoft.com/beta/security/getRunHuntingQuery"):
+        if parsed.scheme == "https" and parsed.netloc == "graph.microsoft.com" and parsed.path.startswith(
+            "/beta/security/getRunHuntingQuery"
+        ):
             return _FakeHttpResponse(
                 {
                     "schema": [
@@ -1178,3 +1186,255 @@ def test_re_review_false_pass_regressions_bugs_1_through_5(tmp_path: Path) -> No
     assert "tableSchemaQualificationVerified" in gate_spoofed["missingGates"]
 
 
+def test_rereview_round2_casing_nested_sim_missing_sol_and_arm_exact_path(tmp_path: Path) -> None:
+    """Regression tests for round-2 review comments:
+    1. Custom table names preserve exact casing in readiness_support.py for ingestion planning consent matching.
+    2. Nested simulation/error flags on tableSchemaReadiness fail QUAL-TBL-01..03 in pr_check_runner.py.
+    3. Promotion fails closed when solutionRoot is missing on disk or lacks an expectedCustomTables manifest.
+    4. ARM readback verification enforces exact URL path and resourceId matching (rejects substring/prefix table names).
+    """
+    from solution_manager.qualification.readiness_support import (
+        assess_qualification_readiness,
+        discover_solution_qualification_inventory,
+    )
+
+    sol = tmp_path / "AcmeRound2Sol"
+    _build_minimal_solution(sol)
+    table_def = {
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "apiVersion": "2022-10-01",
+        "name": "VendorAudit_CL",
+        "properties": {
+            "schema": {
+                "name": "VendorAudit_CL",
+                "description": "Vendor security audit logs ingested into Microsoft Sentinel.",
+                "columns": [
+                    {
+                        "name": "TimeGenerated",
+                        "type": "datetime",
+                        "description": "Timestamp (UTC) when the vendor audit event occurred.",
+                    },
+                    {
+                        "name": "ActorEmail",
+                        "type": "string",
+                        "description": "Email address of the user who triggered the audit event.",
+                    },
+                ],
+            }
+        },
+    }
+    _write_json(sol / "Data Connectors" / "VendorAudit_tables.json", table_def)
+    _write_json(
+        sol / "Package" / "mainTemplate.json",
+        {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "1.0.0.0",
+            "resources": [table_def],
+        },
+    )
+
+    # 1. Exact table name casing preserved in inventory and qualification readiness targetTables/targetStreams
+    disc_inv = discover_solution_qualification_inventory(sol)
+    assert "VendorAudit_CL" in disc_inv["customLogTableNames"]
+    assert "vendoraudit_cl" not in disc_inv["customLogTableNames"]
+    assert "VendorAudit_CL" in disc_inv["targetTables"]
+    assert any(
+        s["table"] == "VendorAudit_CL" and s["streamName"] == "Custom-VendorAudit_CL"
+        for s in disc_inv["targetStreams"]
+    )
+
+    readiness = assess_qualification_readiness(sol)
+    assert "VendorAudit_CL" in readiness["targetTables"]
+    assert "vendoraudit_cl" not in readiness["targetTables"]
+
+    # 2. Nested simulated=True / mode='simulated' / status='failed' on tableSchemaReadiness fails QUAL-TBL-01..03 in pr_check_runner
+    ws_id = "8fb6e2d6-1b0a-4d0b-9d9f-9f3e2a5c7b21"
+    ws_res_id = (
+        "/subscriptions/00000000-0000-0000-0000-000000000001"
+        "/resourceGroups/rg-test/providers/Microsoft.OperationalInsights/workspaces/la-test"
+    )
+    valid_ts_readiness = {
+        "status": "passed",
+        "verified": True,
+        "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        "armTableReadback": {
+            "ok": True,
+            "statusCode": 200,
+            "tables": [
+                {
+                    "tableName": "VendorAudit_CL",
+                    "ok": True,
+                    "statusCode": 200,
+                    "workspaceResourceId": ws_res_id,
+                    "resourceId": f"{ws_res_id}/tables/VendorAudit_CL",
+                    "endpoint": f"https://management.azure.com{ws_res_id}/tables/VendorAudit_CL?api-version=2025-02-01",
+                    "tableDescription": "Vendor security audit logs ingested into Microsoft Sentinel.",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "description": "Timestamp (UTC) when the vendor audit event occurred.",
+                        },
+                        {
+                            "name": "ActorEmail",
+                            "description": "Email address of the user who triggered the audit event.",
+                        },
+                    ],
+                }
+            ],
+        },
+        "huntingSchema": {
+            "ok": True,
+            "statusCode": 200,
+            "complete": True,
+            "paginationComplete": True,
+            "workspaceId": ws_id,
+            "workspaceIdUnquoted": True,
+            "endpoint": f"https://graph.microsoft.com/beta/security/getHuntingSchemaTables(workspaceId={ws_id})",
+            "tables": [
+                {
+                    "name": "VendorAudit_CL",
+                    "description": "Vendor security audit logs ingested into Microsoft Sentinel.",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "description": "Timestamp (UTC) when the vendor audit event occurred.",
+                        },
+                        {
+                            "name": "ActorEmail",
+                            "description": "Email address of the user who triggered the audit event.",
+                        },
+                    ],
+                }
+            ],
+        },
+        "workspaceHuntingQuery": {
+            "ok": True,
+            "statusCode": 200,
+            "workspaceId": ws_id,
+            "queries": [
+                {
+                    "tableName": "VendorAudit_CL",
+                    "ok": True,
+                    "statusCode": 200,
+                    "workspaceId": ws_id,
+                    "workspaceIdUnquoted": True,
+                    "query": "VendorAudit_CL | take 1",
+                    "endpoint": (
+                        "https://graph.microsoft.com/beta/security/getRunHuntingQuery"
+                        f"(query='VendorAudit_CL%20%7C%20take%201',timespan='P1D',workspaceId={ws_id})"
+                    ),
+                    "schema": [
+                        {"name": "TimeGenerated", "type": "DateTime"},
+                        {"name": "ActorEmail", "type": "String"},
+                    ],
+                }
+            ],
+        },
+    }
+
+    nested_sim_ev = {
+        "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        "tableSchemaReadiness": {
+            **json.loads(json.dumps(valid_ts_readiness)),
+            "simulated": True,
+            "mode": "simulated",
+        },
+    }
+    sim_report = run_pr_qualification_checks(
+        sol,
+        run_qualification=True,
+        qualification_evidence=nested_sim_ev,
+        workflow_state={"target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id}},
+    )
+    for qid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+        assert sim_report["checksById"][qid]["status"] == "FAIL", f"{qid} should FAIL on nested tableSchemaReadiness.simulated=True"
+
+    # Also verify parent error/unverified on tableSchemaReadiness fails QUAL-TBL-01..03 in pr_check_runner
+    nested_err_ev = {
+        "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        "tableSchemaReadiness": {
+            **json.loads(json.dumps(valid_ts_readiness)),
+            "status": "failed",
+            "verified": False,
+            "error": "Live qualification aborted midway",
+        },
+    }
+    err_report = run_pr_qualification_checks(
+        sol,
+        run_qualification=True,
+        qualification_evidence=nested_err_ev,
+        workflow_state={"target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id}},
+    )
+    for qid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+        assert err_report["checksById"][qid]["status"] == "FAIL", f"{qid} should FAIL on nested tableSchemaReadiness.error"
+
+    # 3. Promotion fails closed when solutionRoot does not exist on disk or when descriptions are drifted
+    drifted_ts = json.loads(json.dumps(valid_ts_readiness))
+    drifted_ts["armTableReadback"]["tables"][0]["tableDescription"] = "Completely different drifted description."
+    missing_sol_state = {
+        "solutionRoot": str(tmp_path / "DoesNotExistOnDiskSol"),
+        "target": {"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        "inventory": {"customLogTableCount": 1},
+        "expectedContentCounts": {
+            "sentinelRulesCount": 1,
+            "workbooksCount": 0,
+            "customDetectionsCount": 1,
+            "customTablesCount": 1,
+        },
+        "preflightPassed": True,
+        "deploymentVerified": True,
+        "mockIngestionVerified": True,
+        "ruleParityVerified": True,
+        "sanitizedEvidenceReady": True,
+        "tableSchemaQualificationVerified": True,
+        "tableSchemaReadiness": drifted_ts,
+    }
+    gate_missing_sol = evaluate_qualification_promotion_gate(missing_sol_state)
+    assert gate_missing_sol["passed"] is False
+    assert gate_missing_sol["tableSchemaQualificationVerified"] is False
+
+    # Even with valid-looking receipts, a non-existent solutionRoot on state must fail closed
+    valid_ts_missing_sol_state = {
+        **missing_sol_state,
+        "tableSchemaReadiness": valid_ts_readiness,
+    }
+    gate_missing_sol_valid_ts = evaluate_qualification_promotion_gate(valid_ts_missing_sol_state)
+    assert gate_missing_sol_valid_ts["passed"] is False
+    assert gate_missing_sol_valid_ts["tableSchemaQualificationVerified"] is False
+
+    # And when solutionRoot IS found on disk, valid receipts pass promotion while drifted receipts fail
+    valid_sol_state = {
+        **missing_sol_state,
+        "solutionRoot": str(sol),
+        "tableSchemaReadiness": valid_ts_readiness,
+    }
+    gate_valid_sol = evaluate_qualification_promotion_gate(valid_sol_state)
+    assert gate_valid_sol["tableSchemaQualificationVerified"] is True
+
+    # 4. ARM readback verification rejects substring/prefix table names in requestUrl and resourceId
+    inv_valid = discover_solution_tables(sol)
+    substring_url_ev = json.loads(json.dumps(valid_ts_readiness))
+    substring_url_ev["armTableReadback"]["tables"][0]["endpoint"] = (
+        f"https://management.azure.com{ws_res_id}/tables/VendorAudit_CL_Extra?api-version=2025-02-01"
+    )
+    q1_sub_url, obs_sub_url = evaluate_qual_tbl_01(
+        inv_valid,
+        substring_url_ev["armTableReadback"],
+        target={"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        enforce_blocking=True,
+    )
+    assert q1_sub_url == "FAIL"
+    assert "does not target approved table resource" in obs_sub_url
+
+    substring_res_id_ev = json.loads(json.dumps(valid_ts_readiness))
+    substring_res_id_ev["armTableReadback"]["tables"][0]["resourceId"] = (
+        f"{ws_res_id}/tables/OtherTable_CL"
+    )
+    q1_sub_res, obs_sub_res = evaluate_qual_tbl_01(
+        inv_valid,
+        substring_res_id_ev["armTableReadback"],
+        target={"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        enforce_blocking=True,
+    )
+    assert q1_sub_res == "FAIL"
+    assert "resourceId" in obs_sub_res and "does not match target table resource" in obs_sub_res

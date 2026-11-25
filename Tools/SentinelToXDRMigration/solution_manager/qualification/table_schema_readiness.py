@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
@@ -1037,6 +1038,213 @@ def _check_target_conflict(
     return None
 
 
+def serialize_expected_custom_tables(inventory: SolutionTableInventory) -> List[Dict[str, Any]]:
+    """Serialize canonical expected custom-log table schemas for receipt/state persistence."""
+    expected_map = build_expected_custom_table_map(inventory)
+    manifest: List[Dict[str, Any]] = []
+    for _, rec in sorted(expected_map.items()):
+        manifest.append(
+            {
+                "tableName": rec.table_name,
+                "tableDescription": rec.table_description,
+                "columns": [
+                    {
+                        "name": col.name,
+                        "type": col.column_type,
+                        "description": col.description,
+                        "isSystemColumn": col.is_system_column,
+                    }
+                    for col in rec.columns
+                ],
+            }
+        )
+    return manifest
+
+
+def inventory_from_expected_custom_tables(manifest: Any) -> Optional[SolutionTableInventory]:
+    """Reconstruct a SolutionTableInventory from a persisted expectedCustomTables manifest."""
+    if not isinstance(manifest, (list, dict)) or not manifest:
+        return None
+
+    items: List[Dict[str, Any]] = []
+    if isinstance(manifest, list):
+        for entry in manifest:
+            if not isinstance(entry, dict):
+                return None
+            items.append(entry)
+    else:
+        for k_name, entry in manifest.items():
+            if not isinstance(entry, dict):
+                return None
+            merged = dict(entry)
+            merged.setdefault("tableName", str(k_name))
+            items.append(merged)
+
+    if not items:
+        return None
+
+    source_records: List[TableSchemaRecord] = []
+    packaged_records: List[TableSchemaRecord] = []
+    for entry in items:
+        t_name = str(entry.get("tableName") or entry.get("name") or "").strip()
+        if not t_name or t_name == "<unresolved_table>":
+            return None
+        t_desc = str(
+            entry.get("tableDescription")
+            if entry.get("tableDescription") is not None
+            else (entry.get("description") or "")
+        ).strip()
+        raw_cols = entry.get("columns")
+        if not isinstance(raw_cols, list) or not raw_cols:
+            return None
+        cols: List[ColumnSchemaRecord] = []
+        for c_entry in raw_cols:
+            if not isinstance(c_entry, dict):
+                return None
+            c_name = str(c_entry.get("name") or c_entry.get("columnName") or "").strip()
+            if not c_name:
+                return None
+            c_type = str(c_entry.get("type") or c_entry.get("dataType") or "").strip()
+            c_desc = str(c_entry.get("description") or "").strip()
+            cols.append(
+                ColumnSchemaRecord(
+                    name=c_name,
+                    column_type=c_type,
+                    description=c_desc,
+                    is_system_column=False,
+                    is_unresolved_expression=_is_arm_expression_string(c_desc),
+                )
+            )
+        unres_errs: List[str] = []
+        if _is_arm_expression_string(t_desc):
+            unres_errs.append(f"Table '{t_name}' description is an unresolved ARM expression")
+        source_records.append(
+            TableSchemaRecord(
+                table_name=t_name,
+                file_rel_path=f"expectedCustomTables/{t_name}",
+                is_packaged=False,
+                table_description=t_desc,
+                columns=list(cols),
+                unresolved_errors=list(unres_errs),
+                table_kind="custom_log",
+                is_microsoft_standard_table_config=False,
+            )
+        )
+        packaged_records.append(
+            TableSchemaRecord(
+                table_name=t_name,
+                file_rel_path="Package/mainTemplate.json",
+                is_packaged=True,
+                table_description=t_desc,
+                columns=list(cols),
+                unresolved_errors=list(unres_errs),
+                table_kind="custom_log",
+                is_microsoft_standard_table_config=False,
+            )
+        )
+
+    return SolutionTableInventory(
+        source_tables=source_records,
+        packaged_tables=packaged_records,
+        standard_table_configs=[],
+        parse_errors=[],
+    )
+
+
+def _has_simulation_indicators_in_mapping(obj: Any) -> bool:
+    """Return True if a mapping carries simulation, stub, or dry-run indicators at its top level."""
+    if not isinstance(obj, dict):
+        return False
+    for flag_key in (
+        "simulated",
+        "isSimulated",
+        "dryRun",
+        "dry_run",
+        "mock",
+        "useSimulatedFallback",
+        "fallbackUsed",
+    ):
+        if obj.get(flag_key) is True:
+            return True
+    for mode_key in ("mode", "providerMode", "executionMode"):
+        val = str(obj.get(mode_key) or "").strip().lower()
+        if val in {"simulated", "dry-run", "dry_run", "stub", "mock", "mock-stub", "offline-fallback"}:
+            return True
+    if str(obj.get("status") or "").strip().lower() == "simulated":
+        return True
+    return False
+
+
+def _extract_parent_envelope_error(envelope: Any, check_id: str) -> Optional[str]:
+    """Check an enclosing evidence envelope (qualification_evidence or tableSchemaReadiness) for simulation or failure."""
+    if not isinstance(envelope, dict):
+        return None
+    if _has_simulation_indicators_in_mapping(envelope):
+        return f"{check_id} receipt is marked simulated/dry-run; simulated evidence cannot qualify as PASS."
+    status_code = envelope.get("statusCode") if envelope.get("statusCode") is not None else envelope.get("httpStatus")
+    if status_code is not None and not isinstance(status_code, bool):
+        try:
+            code_int = int(status_code)
+        except (TypeError, ValueError):
+            code_int = 0
+        if code_int in (401, 403):
+            return f"{check_id} failed with HTTP {code_int} authorization error."
+        if code_int < 200 or code_int >= 300:
+            return f"{check_id} failed with HTTP status {status_code}."
+    elif isinstance(status_code, bool):
+        return f"{check_id} receipt has invalid boolean HTTP status metadata."
+    if envelope.get("authorizationFailed") is True or envelope.get("authError"):
+        return f"{check_id} reported an authorization failure: {envelope.get('authError') or 'authorizationFailed'}."
+    err_msg = envelope.get("error") or envelope.get("providerError") or envelope.get("errorMessage")
+    if err_msg:
+        return f"{check_id} reported provider/execution error: {err_msg}"
+    if envelope.get("ok") is False:
+        return f"{check_id} receipt explicitly reports ok=False."
+    checks_map = envelope.get("checks")
+    this_check_explicitly_passed = False
+    has_other_check_failure = False
+    if isinstance(checks_map, dict):
+        this_check_entry = checks_map.get(check_id)
+        if isinstance(this_check_entry, dict):
+            this_status = str(this_check_entry.get("status") or "").strip().upper()
+            if this_status in {"FAIL", "FAILED", "ERROR", "BLOCKED"}:
+                return (
+                    str(this_check_entry.get("detail") or "").strip()
+                    or f"{check_id} failed in enclosing tableSchemaReadiness.checks."
+                )
+            if this_status in {"PASS", "PASSED"}:
+                this_check_explicitly_passed = True
+        for other_id, other_entry in checks_map.items():
+            if other_id != check_id and isinstance(other_entry, dict):
+                other_status = str(other_entry.get("status") or "").strip().upper()
+                if other_status in {"FAIL", "FAILED", "ERROR", "BLOCKED"}:
+                    has_other_check_failure = True
+                    break
+    sibling_sub_receipt_failed = False
+    sub_key_for_check = {
+        "QUAL-TBL-01": ("armTableReadback", "armTables"),
+        "QUAL-TBL-02": ("huntingSchema", "graphHuntingSchema", "huntingSchemaTables"),
+        "QUAL-TBL-03": ("workspaceHuntingQuery", "graphRunHuntingQuery", "huntingQuery"),
+    }
+    for other_cid, sub_keys in sub_key_for_check.items():
+        if other_cid == check_id:
+            continue
+        for sk in sub_keys:
+            sub_obj = envelope.get(sk)
+            if isinstance(sub_obj, dict) and (sub_obj.get("ok") is False or sub_obj.get("error")):
+                sibling_sub_receipt_failed = True
+                break
+    excuse_overall_failure = bool(this_check_explicitly_passed and has_other_check_failure and sibling_sub_receipt_failed)
+    env_status = str(envelope.get("status") or "").strip().lower()
+    if env_status in {"error", "blocked"}:
+        return f"{check_id} enclosing readiness status is '{envelope.get('status')}'."
+    if env_status in {"fail", "failed"} and not excuse_overall_failure:
+        return f"{check_id} enclosing readiness status is '{envelope.get('status')}'."
+    if envelope.get("verified") is False and not excuse_overall_failure:
+        return f"{check_id} enclosing readiness receipt reports verified=False."
+    return None
+
+
 def _check_receipt_integrity_and_target(
     receipt: Any,
     check_id: str,
@@ -1054,12 +1262,10 @@ def _check_receipt_integrity_and_target(
     if receipt.get("_targetConflictError"):
         return str(receipt["_targetConflictError"])
 
-    if (
-        receipt.get("simulated") is True
-        or receipt.get("isSimulated") is True
-        or receipt.get("dryRun") is True
-        or str(receipt.get("mode") or "").strip().lower() in {"simulated", "dry-run", "dry_run", "mock"}
-    ):
+    if receipt.get("_parentEnvelopeError"):
+        return str(receipt["_parentEnvelopeError"])
+
+    if _has_simulation_indicators_in_mapping(receipt):
         return f"{check_id} receipt is marked simulated/dry-run; simulated evidence cannot qualify as PASS."
 
     status_code = receipt.get("statusCode") if receipt.get("statusCode") is not None else receipt.get("httpStatus")
@@ -1085,6 +1291,12 @@ def _check_receipt_integrity_and_target(
 
     if receipt.get("ok") is False:
         return f"{check_id} receipt explicitly reports ok=False."
+
+    rec_status_norm = str(receipt.get("status") or "").strip().lower()
+    if rec_status_norm in {"fail", "failed", "error", "blocked"}:
+        return f"{check_id} receipt explicitly reports status='{receipt.get('status')}'."
+    if receipt.get("verified") is False:
+        return f"{check_id} receipt explicitly reports verified=False."
 
     if require_execution_metadata:
         if receipt.get("ok") is not True:
@@ -1297,9 +1509,18 @@ def _unwrap_qual_receipt_and_target(
             unwrapped = root[key]
             break
 
-    if target_conflict and isinstance(unwrapped, dict):
+    parent_envelope_error: Optional[str] = None
+    if unwrapped is not receipt:
+        parent_envelope_error = _extract_parent_envelope_error(receipt, check_id)
+    if not parent_envelope_error and unwrapped is not root:
+        parent_envelope_error = _extract_parent_envelope_error(root, check_id)
+
+    if (target_conflict or parent_envelope_error) and isinstance(unwrapped, dict):
         unwrapped = dict(unwrapped)
-        unwrapped["_targetConflictError"] = target_conflict
+        if target_conflict:
+            unwrapped["_targetConflictError"] = target_conflict
+        if parent_envelope_error:
+            unwrapped["_parentEnvelopeError"] = parent_envelope_error
     return unwrapped, resolved_target
 
 
@@ -1386,23 +1607,41 @@ def evaluate_qual_tbl_01(
             continue
 
         entry_req_url = str(effective_entry.get("requestUrl") or effective_entry.get("endpoint") or "").strip()
-        entry_req_no_frag = entry_req_url.split("#", 1)[0].lower()
-        if exp_ws_res and (
-            not entry_req_no_frag.startswith("https://management.azure.com/")
-            or exp_ws_res not in entry_req_no_frag
-            or f"/tables/{exp_rec.table_name.lower()}" not in entry_req_no_frag
+        try:
+            parsed_req = urllib.parse.urlsplit(entry_req_url)
+            _ = parsed_req.port
+        except ValueError:
+            issues.append(
+                f"Table '{exp_rec.table_name}' ARM requestUrl '{entry_req_url}' is malformed"
+            )
+            continue
+        req_scheme = (parsed_req.scheme or "").lower()
+        req_host = (parsed_req.hostname or "").lower()
+        req_path = urllib.parse.unquote(parsed_req.path or "").rstrip("/").lower()
+        expected_table_path = f"{exp_ws_res}/tables/{exp_rec.table_name.lower()}" if exp_ws_res else f"/tables/{exp_rec.table_name.lower()}"
+        if (
+            req_scheme != "https"
+            or req_host != "management.azure.com"
+            or "@" in (parsed_req.netloc or "")
+            or bool(parsed_req.username or parsed_req.password)
+            or (exp_ws_res and req_path != expected_table_path)
+            or (not exp_ws_res and not req_path.endswith(f"/tables/{exp_rec.table_name.lower()}"))
         ):
             issues.append(
-                f"Table '{exp_rec.table_name}' ARM requestUrl '{entry_req_url}' does not target approved workspace '{exp_ws_res}'"
+                f"Table '{exp_rec.table_name}' ARM requestUrl '{entry_req_url}' does not target approved table resource '{expected_table_path}'"
             )
             continue
 
-        entry_res_id = str(live_entry.get("resourceId") or live_entry.get("id") or "").strip().lower()
-        if exp_ws_res and entry_res_id and not entry_res_id.startswith(exp_ws_res + "/tables/"):
-            issues.append(
-                f"Table '{exp_rec.table_name}' ARM resourceId '{entry_res_id}' does not belong to target workspace '{exp_ws_res}'"
-            )
-            continue
+        entry_res_id = str(live_entry.get("resourceId") or live_entry.get("id") or "").strip()
+        if entry_res_id:
+            res_id_norm = urllib.parse.unquote(entry_res_id.split("?", 1)[0].split("#", 1)[0]).rstrip("/").lower()
+            if (exp_ws_res and res_id_norm != expected_table_path) or (
+                not exp_ws_res and not res_id_norm.endswith(f"/tables/{exp_rec.table_name.lower()}")
+            ):
+                issues.append(
+                    f"Table '{exp_rec.table_name}' ARM resourceId '{entry_res_id}' does not match target table resource '{expected_table_path}'"
+                )
+                continue
 
         live_t_desc = _extract_live_table_description(live_entry)
         ok_t, reason_t = is_meaningful_description(live_t_desc, exp_rec.table_name)
@@ -1516,19 +1755,37 @@ def evaluate_qual_tbl_02(
             "FAIL",
             "QUAL-TBL-02 receipt is missing required requestUrl/endpoint metadata for getHuntingSchemaTables.",
         )
-    req_url_no_frag = req_url.split("#", 1)[0]
-    if "gethuntingschematables" not in req_url_no_frag.lower():
+    try:
+        parsed_hs_url = urllib.parse.urlsplit(req_url)
+        _ = parsed_hs_url.port
+    except ValueError:
+        return (
+            "FAIL",
+            f"QUAL-TBL-02 requestUrl '{req_url}' is malformed.",
+        )
+    if (
+        (parsed_hs_url.scheme or "").lower() != "https"
+        or (parsed_hs_url.hostname or "").lower() != "graph.microsoft.com"
+        or "@" in (parsed_hs_url.netloc or "")
+        or bool(parsed_hs_url.username or parsed_hs_url.password)
+    ):
+        return (
+            "FAIL",
+            f"QUAL-TBL-02 requestUrl '{req_url}' did not use https://graph.microsoft.com.",
+        )
+    hs_path_unquoted = urllib.parse.unquote(parsed_hs_url.path or "")
+    if "gethuntingschematables" not in hs_path_unquoted.lower():
         return (
             "FAIL",
             f"QUAL-TBL-02 requestUrl '{req_url}' did not use the getHuntingSchemaTables endpoint.",
         )
-    if "workspaceId='" in req_url_no_frag or 'workspaceId="' in req_url_no_frag or "workspaceId=%27" in req_url_no_frag:
+    if "workspaceId='" in hs_path_unquoted or 'workspaceId="' in hs_path_unquoted or "workspaceId=%27" in (parsed_hs_url.path or ""):
         return (
             "FAIL",
             f"QUAL-TBL-02 invalid OData syntax in requestUrl '{req_url}': workspaceId is Edm.Guid and must not be quoted.",
         )
     exp_guid = str((target or {}).get("workspaceCustomerId") or (target or {}).get("workspaceId") or "").strip().lower()
-    if not exp_guid or not re.search(rf"workspaceid={re.escape(exp_guid)}(?:[),\s]|$)", req_url_no_frag, re.IGNORECASE):
+    if not exp_guid or not re.search(rf"workspaceid={re.escape(exp_guid)}(?:[),\s]|$)", hs_path_unquoted, re.IGNORECASE):
         return (
             "FAIL",
             f"QUAL-TBL-02 requestUrl '{req_url}' does not target approved workspaceCustomerId '{exp_guid}'.",
@@ -1729,18 +1986,37 @@ def evaluate_qual_tbl_03(
                 f"Table '{exp_rec.table_name}' receipt is missing required requestUrl/endpoint metadata for getRunHuntingQuery"
             )
             continue
-        req_url_no_frag = req_url.split("#", 1)[0]
-        if "getrunhuntingquery" not in req_url_no_frag.lower():
+        try:
+            parsed_hq_url = urllib.parse.urlsplit(req_url)
+            _ = parsed_hq_url.port
+        except ValueError:
+            issues.append(
+                f"Table '{exp_rec.table_name}' requestUrl '{req_url}' is malformed"
+            )
+            continue
+        if (
+            (parsed_hq_url.scheme or "").lower() != "https"
+            or (parsed_hq_url.hostname or "").lower() != "graph.microsoft.com"
+            or "@" in (parsed_hq_url.netloc or "")
+            or bool(parsed_hq_url.username or parsed_hq_url.password)
+        ):
+            issues.append(
+                f"Table '{exp_rec.table_name}' requestUrl '{req_url}' did not use https://graph.microsoft.com"
+            )
+            continue
+        hq_path_raw = parsed_hq_url.path or ""
+        hq_path_unquoted = urllib.parse.unquote(hq_path_raw)
+        if "getrunhuntingquery" not in hq_path_unquoted.lower():
             issues.append(
                 f"Table '{exp_rec.table_name}' requestUrl '{req_url}' did not use getRunHuntingQuery endpoint"
             )
             continue
-        if "workspaceId='" in req_url_no_frag or 'workspaceId="' in req_url_no_frag or "workspaceId=%27" in req_url_no_frag:
+        if "workspaceId='" in hq_path_raw or 'workspaceId="' in hq_path_raw or "workspaceId=%27" in hq_path_raw:
             issues.append(
                 f"Table '{exp_rec.table_name}' requestUrl '{req_url}' quotes Edm.Guid workspaceId"
             )
             continue
-        if not exp_guid or not re.search(rf"workspaceid={re.escape(exp_guid)}(?:[),\s]|$)", req_url_no_frag, re.IGNORECASE):
+        if not exp_guid or not re.search(rf"workspaceid={re.escape(exp_guid)}(?:[),\s]|$)", hq_path_unquoted, re.IGNORECASE):
             issues.append(
                 f"Table '{exp_rec.table_name}' requestUrl '{req_url}' does not match target workspaceId '{exp_guid}'"
             )

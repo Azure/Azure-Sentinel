@@ -130,7 +130,7 @@ def plan_qualification_pipeline(
         inventory = discover_solution_qualification_inventory(root, state=wf_state)
         table_inventory = discover_solution_tables(root)
         expected_custom_tables = build_expected_custom_table_map(table_inventory)
-        inventory["customLogTableNames"] = list(expected_custom_tables.keys())
+        inventory["customLogTableNames"] = [rec.table_name for rec in expected_custom_tables.values()]
         inventory["customLogTableCount"] = len(expected_custom_tables)
         inventory["standardTableConfigNames"] = table_inventory.standard_table_config_names
         inventory["standardTableConfigCount"] = len(table_inventory.standard_table_configs)
@@ -459,18 +459,23 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
         or (inv_block.get("solutionRoot") if isinstance(inv_block, Mapping) else None)
         or state.get("solution")
     )
-    sol_path_obj: Path | None = None
+    sol_dir_requested = isinstance(sol_dir_raw, (str, Path)) and bool(str(sol_dir_raw).strip())
+    sol_dir_found = False
     table_inv = None
-    if isinstance(sol_dir_raw, (str, Path)) and str(sol_dir_raw).strip():
-        cand_path = Path(str(sol_dir_raw).strip())
-        if not cand_path.is_dir():
+    if sol_dir_requested:
+        raw_str = str(sol_dir_raw).strip()
+        cand_path = Path(raw_str)
+        if not cand_path.is_dir() and not cand_path.is_absolute():
             repo_root = Path(__file__).resolve().parents[4]
-            for alt in (repo_root / cand_path, repo_root / "Solutions" / cand_path.name):
-                if alt.is_dir():
-                    cand_path = alt
-                    break
+            rel_alt = repo_root / cand_path
+            if rel_alt.is_dir():
+                cand_path = rel_alt
+            elif "/" not in raw_str and "\\" not in raw_str:
+                sol_name_alt = repo_root / "Solutions" / raw_str
+                if sol_name_alt.is_dir():
+                    cand_path = sol_name_alt
         if cand_path.is_dir():
-            sol_path_obj = cand_path
+            sol_dir_found = True
             table_inv = discover_solution_tables(cand_path)
 
     discovered_custom_count = (
@@ -478,9 +483,17 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
         if table_inv is not None
         else 0
     )
+    exp_counts = state.get("expectedContentCounts") if isinstance(state.get("expectedContentCounts"), Mapping) else {}
+    if not exp_counts and isinstance(inv_block, Mapping):
+        exp_counts = inv_block.get("expectedContentCounts") if isinstance(inv_block.get("expectedContentCounts"), Mapping) else {}
     has_custom_tables = bool(
         int(inv_block.get("customLogTableCount", 0) or 0) > 0
+        or int(inv_block.get("customTablesCount", 0) or 0) > 0
+        or int(exp_counts.get("customLogTableCount", 0) or 0) > 0
+        or int(exp_counts.get("customTablesCount", 0) or 0) > 0
+        or bool(inv_block.get("customLogTableNames"))
         or int(ts_readiness.get("customTableCount", 0) or 0) > 0
+        or bool(ts_readiness.get("expectedCustomTables"))
         or ts_readiness.get("applicable") is True
         or discovered_custom_count > 0
     )
@@ -488,8 +501,17 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
     def _has_verified_table_receipts(readiness_obj: Mapping[str, Any]) -> bool:
         if not isinstance(readiness_obj, Mapping) or not readiness_obj:
             return False
-        if readiness_obj.get("simulated") is True:
+        from .table_schema_readiness import (
+            _check_target_conflict,
+            _extract_parent_envelope_error,
+            _has_simulation_indicators_in_mapping,
+        )
+        readiness_dict = dict(readiness_obj)
+        if _has_simulation_indicators_in_mapping(readiness_dict):
             return False
+        for cid in ("QUAL-TBL-01", "QUAL-TBL-02", "QUAL-TBL-03"):
+            if _extract_parent_envelope_error(readiness_dict, cid) is not None:
+                return False
         if readiness_obj.get("status") != "passed" or readiness_obj.get("verified") is not True:
             return False
         static_val = readiness_obj.get("staticValidation")
@@ -500,9 +522,22 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
             return False
         state_target = state.get("target") or state.get("context")
         if isinstance(state_target, Mapping) and state_target:
-            from .table_schema_readiness import _check_target_conflict
             if _check_target_conflict(dict(state_target), dict(receipt_target), "QUAL-TBL") is not None:
                 return False
+
+        # Fail closed unless the solution directory was resolved on disk and custom tables were discovered from disk
+        if not sol_dir_found or table_inv is None:
+            return False
+
+        authoritative_inv = table_inv
+        expected_count = max(
+            int(inv_block.get("customLogTableCount", 0) or 0),
+            int(readiness_obj.get("customTableCount", 0) or 0),
+            1,
+        )
+        inv_custom_tables = authoritative_inv.custom_source_tables or authoritative_inv.custom_packaged_tables
+        if len(inv_custom_tables) < expected_count or authoritative_inv.parse_errors:
+            return False
 
         # 1. ARM readback receipt must contain non-empty evaluated table entries with HTTP 2xx and ok=True
         arm_sub = readiness_obj.get("armTableReadback") or readiness_obj.get("armTables")
@@ -596,18 +631,17 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
             if not str(q_entry.get("endpoint") or q_entry.get("requestUrl") or "").strip():
                 return False
 
-        # 4. If the solution directory is available on disk, re-verify VAL-TBL-01..03 and QUAL-TBL-01..03 directly
-        if table_inv is not None and (table_inv.custom_source_tables or table_inv.custom_packaged_tables or table_inv.parse_errors):
-            eff_target = dict(state_target) if isinstance(state_target, Mapping) and state_target else dict(receipt_target)
-            for v_fn in (evaluate_val_tbl_01, evaluate_val_tbl_02, evaluate_val_tbl_03):
-                v_status, _ = v_fn(table_inv, enforce_blocking=True)
-                if v_status != "PASS":
-                    return False
-            q1_s, _ = evaluate_qual_tbl_01(table_inv, arm_sub, target=eff_target, static_passed=True, enforce_blocking=True)
-            q2_s, _ = evaluate_qual_tbl_02(table_inv, hs_sub, target=eff_target, static_passed=True, enforce_blocking=True)
-            q3_s, _ = evaluate_qual_tbl_03(table_inv, hq_sub, target=eff_target, static_passed=True, enforce_blocking=True)
-            if not (q1_s == "PASS" and q2_s == "PASS" and q3_s == "PASS"):
+        # 4. Always run full VAL-TBL-01..03 and QUAL-TBL-01..03 evaluators against the authoritative table inventory
+        eff_target = dict(state_target) if isinstance(state_target, Mapping) and state_target else dict(receipt_target)
+        for v_fn in (evaluate_val_tbl_01, evaluate_val_tbl_02, evaluate_val_tbl_03):
+            v_status, _ = v_fn(authoritative_inv, enforce_blocking=True)
+            if v_status != "PASS":
                 return False
+        q1_s, _ = evaluate_qual_tbl_01(authoritative_inv, readiness_dict, target=eff_target, static_passed=True, enforce_blocking=True)
+        q2_s, _ = evaluate_qual_tbl_02(authoritative_inv, readiness_dict, target=eff_target, static_passed=True, enforce_blocking=True)
+        q3_s, _ = evaluate_qual_tbl_03(authoritative_inv, readiness_dict, target=eff_target, static_passed=True, enforce_blocking=True)
+        if not (q1_s == "PASS" and q2_s == "PASS" and q3_s == "PASS"):
+            return False
 
         return True
 
@@ -619,12 +653,16 @@ def evaluate_qualification_promotion_gate(state: Mapping[str, Any]) -> dict[str,
     elif raw_ts_qual is False:
         table_schema_qualification_verified = False
     elif raw_ts_qual is True:
-        if ts_readiness and ts_readiness.get("applicable") is False:
+        if sol_dir_requested and not sol_dir_found:
+            table_schema_qualification_verified = False
+        elif ts_readiness and ts_readiness.get("applicable") is False:
             table_schema_qualification_verified = "not_applicable"
         else:
             table_schema_qualification_verified = _has_verified_table_receipts(ts_readiness)
     elif ts_readiness:
-        if ts_readiness.get("applicable") is False:
+        if sol_dir_requested and not sol_dir_found:
+            table_schema_qualification_verified = False
+        elif ts_readiness.get("applicable") is False:
             table_schema_qualification_verified = "not_applicable"
         else:
             table_schema_qualification_verified = _has_verified_table_receipts(ts_readiness)
@@ -1184,27 +1222,32 @@ class QualificationOrchestrator:
 
             q1_st, q1_dt = evaluate_qual_tbl_01(
                 table_inv,
-                raw_ts.get("armTableReadback") if isinstance(raw_ts.get("armTableReadback"), Mapping) else raw_ts,
+                raw_ts,
                 target=eff_target_for_tbl,
                 static_passed=static_ok,
                 enforce_blocking=True,
             )
             q2_st, q2_dt = evaluate_qual_tbl_02(
                 table_inv,
-                raw_ts.get("huntingSchema") if isinstance(raw_ts.get("huntingSchema"), Mapping) else raw_ts,
+                raw_ts,
                 target=eff_target_for_tbl,
                 static_passed=static_ok,
                 enforce_blocking=True,
             )
             q3_st, q3_dt = evaluate_qual_tbl_03(
                 table_inv,
-                raw_ts.get("workspaceHuntingQuery") if isinstance(raw_ts.get("workspaceHuntingQuery"), Mapping) else raw_ts,
+                raw_ts,
                 target=eff_target_for_tbl,
                 static_passed=static_ok,
                 enforce_blocking=True,
             )
+            from .table_schema_readiness import _has_simulation_indicators_in_mapping
             table_schema_ok = bool(
-                static_ok and q1_st == "PASS" and q2_st == "PASS" and q3_st == "PASS" and raw_ts.get("simulated") is not True
+                static_ok
+                and q1_st == "PASS"
+                and q2_st == "PASS"
+                and q3_st == "PASS"
+                and not _has_simulation_indicators_in_mapping(raw_ts)
             )
             raw_ts["applicable"] = True
             raw_ts["verified"] = table_schema_ok

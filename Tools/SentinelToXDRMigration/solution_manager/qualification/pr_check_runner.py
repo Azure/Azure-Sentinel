@@ -2173,32 +2173,70 @@ def _has_simulated_or_dry_run_evidence(
     """Detect whether any simulated, dry-run, or stubbed fallback was used."""
     reasons: list[str] = []
 
+    def _scan_sim_mapping(prefix: str, obj: Any) -> None:
+        if not isinstance(obj, Mapping):
+            return
+        if obj.get("simulated") is True or obj.get("isSimulated") is True:
+            reasons.append(f"{prefix}.simulated=True")
+        if obj.get("dryRun") is True or obj.get("dry_run") is True or obj.get("mock") is True:
+            reasons.append(f"{prefix}.dryRun=True")
+        if obj.get("useSimulatedFallback") is True or obj.get("fallbackUsed") is True:
+            reasons.append(f"{prefix}.useSimulatedFallback=True")
+        mode_val = str(obj.get("providerMode") or obj.get("executionMode") or obj.get("mode") or "").lower()
+        if mode_val in {"simulated", "dry-run", "dry_run", "stub", "mock", "mock-stub", "offline-fallback"}:
+            reasons.append(f"{prefix}.mode='{mode_val}'")
+        if str(obj.get("status") or "").strip().lower() == "simulated":
+            reasons.append(f"{prefix}.status='simulated'")
+
     for label, mapping in (("qualification_evidence", qualification_evidence), ("workflow_state", workflow_state)):
         if not isinstance(mapping, Mapping):
             continue
-        if mapping.get("simulated") is True:
-            reasons.append(f"{label}.simulated=True")
-        if mapping.get("dryRun") is True or mapping.get("dry_run") is True:
-            reasons.append(f"{label}.dryRun=True")
-        if mapping.get("useSimulatedFallback") is True or mapping.get("fallbackUsed") is True:
-            reasons.append(f"{label}.useSimulatedFallback=True")
-        mode = str(mapping.get("providerMode") or mapping.get("executionMode") or mapping.get("mode") or "").lower()
-        if mode in {"simulated", "dry-run", "dry_run", "stub", "mock-stub", "offline-fallback"}:
-            reasons.append(f"{label}.mode='{mode}'")
+        _scan_sim_mapping(label, mapping)
+
+        ts_root = mapping.get("tableSchemaReadiness")
+        if isinstance(ts_root, Mapping):
+            _scan_sim_mapping(f"{label}.tableSchemaReadiness", ts_root)
+            for sub_name in (
+                "armTableReadback",
+                "armTables",
+                "huntingSchema",
+                "graphHuntingSchema",
+                "huntingSchemaTables",
+                "workspaceHuntingQuery",
+                "graphRunHuntingQuery",
+                "huntingQuery",
+            ):
+                if isinstance(ts_root.get(sub_name), Mapping):
+                    _scan_sim_mapping(f"{label}.tableSchemaReadiness.{sub_name}", ts_root[sub_name])
+
+        stages_map = mapping.get("stages")
+        if isinstance(stages_map, Mapping):
+            for st_key in ("table_schema_readiness", "tableSchemaReadiness"):
+                if isinstance(stages_map.get(st_key), Mapping):
+                    _scan_sim_mapping(f"{label}.stages.{st_key}", stages_map[st_key])
+
+        for direct_sub_name in (
+            "armTableReadback",
+            "armTables",
+            "huntingSchema",
+            "graphHuntingSchema",
+            "huntingSchemaTables",
+            "workspaceHuntingQuery",
+            "graphRunHuntingQuery",
+            "huntingQuery",
+        ):
+            if isinstance(mapping.get(direct_sub_name), Mapping):
+                _scan_sim_mapping(f"{label}.{direct_sub_name}", mapping[direct_sub_name])
 
         receipts = mapping.get("providerReceipts") or mapping.get("liveReceipts")
         if isinstance(receipts, list):
             for idx, r in enumerate(receipts):
                 if isinstance(r, Mapping):
-                    rmode = str(r.get("mode") or r.get("providerMode") or "").lower()
-                    if r.get("simulated") is True or r.get("dryRun") is True or rmode in {"simulated", "dry-run", "stub"}:
-                        reasons.append(f"{label}.providerReceipts[{idx}] is simulated/dry-run")
+                    _scan_sim_mapping(f"{label}.providerReceipts[{idx}]", r)
         elif isinstance(receipts, Mapping):
             for k, r in receipts.items():
                 if isinstance(r, Mapping):
-                    rmode = str(r.get("mode") or r.get("providerMode") or "").lower()
-                    if r.get("simulated") is True or r.get("dryRun") is True or rmode in {"simulated", "dry-run", "stub"}:
-                        reasons.append(f"{label}.providerReceipts.{k} is simulated/dry-run")
+                    _scan_sim_mapping(f"{label}.providerReceipts.{k}", r)
 
     return len(reasons) > 0, reasons
 
@@ -3118,6 +3156,19 @@ def _evaluate_qualification_checks(
                         )
                     )
             else:
+                from solution_manager.qualification.table_schema_readiness import _extract_parent_envelope_error
+
+                parent_env_error: str | None = None
+                if isinstance(tbl_qual_root, Mapping) and tbl_qual_root:
+                    parent_env_error = _extract_parent_envelope_error(dict(tbl_qual_root), cid)
+                if not parent_env_error and isinstance(qualification_evidence, Mapping) and qualification_evidence:
+                    parent_env_error = _extract_parent_envelope_error(dict(qualification_evidence), cid)
+
+                effective_sub_ev: Any = sub_ev
+                if parent_env_error and isinstance(sub_ev, Mapping):
+                    effective_sub_ev = dict(sub_ev)
+                    effective_sub_ev["_parentEnvelopeError"] = parent_env_error
+
                 eval_fn = {
                     "QUAL-TBL-01": evaluate_qual_tbl_01,
                     "QUAL-TBL-02": evaluate_qual_tbl_02,
@@ -3125,7 +3176,7 @@ def _evaluate_qualification_checks(
                 }[cid]
                 q_status, detail_msg = eval_fn(
                     table_inventory,
-                    sub_ev,
+                    effective_sub_ev,
                     target=target_dict,
                     static_passed=static_tbl_passed,
                     enforce_blocking=enforce_tbl_blocking,

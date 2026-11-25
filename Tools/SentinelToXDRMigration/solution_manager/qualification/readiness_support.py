@@ -184,8 +184,14 @@ def discover_solution_qualification_inventory(
 
     table_inventory = discover_solution_tables(root)
     expected_custom_tables = build_expected_custom_table_map(table_inventory)
-    for custom_tbl_name in expected_custom_tables:
-        discovered_tables.add(custom_tbl_name)
+    custom_log_table_names: list[str] = []
+    for rec in expected_custom_tables.values():
+        canonical_name = rec.table_name
+        custom_log_table_names.append(canonical_name)
+        existing_ci_matches = [t for t in discovered_tables if t.lower() == canonical_name.lower()]
+        for existing_name in existing_ci_matches:
+            discovered_tables.discard(existing_name)
+        discovered_tables.add(canonical_name)
 
     target_tables = sorted(discovered_tables) or ["Syslog"]
     target_streams = [
@@ -210,8 +216,8 @@ def discover_solution_qualification_inventory(
         "sentinelWorkbookPaths": sentinel_wb_paths,
         "defenderWorkbookPaths": defender_wb_paths,
         "customDetectionPaths": detection_paths,
-        "customLogTableNames": list(expected_custom_tables.keys()),
-        "customLogTableCount": len(expected_custom_tables),
+        "customLogTableNames": custom_log_table_names,
+        "customLogTableCount": len(custom_log_table_names),
         "standardTableConfigNames": table_inventory.standard_table_config_names,
         "standardTableConfigCount": len(table_inventory.standard_table_configs),
         "targetTables": target_tables,
