@@ -383,6 +383,33 @@ class QueryTimeParserExecutionRoutingTests(unittest.TestCase):
                     expected,
                 )
 
+    def test_filtering_stops_when_local_change_discovery_fails(self):
+        output = io.StringIO()
+        with (
+            patch.object(FILTERING_VALIDATOR, "WORKSPACE_ID", "unit-test-workspace"),
+            patch.object(FILTERING_VALIDATOR, "attempt_to_connect"),
+            patch.object(
+                FILTERING_VALIDATOR.parser_file_utils,
+                "get_query_time_modified_files",
+                return_value=None,
+            ),
+            patch.object(
+                FILTERING_VALIDATOR.subprocess, "run",
+                side_effect=[
+                    SimpleNamespace(stdout="upstream\n"),
+                    SimpleNamespace(stdout=""),
+                    subprocess.CalledProcessError(1, "git diff"),
+                ],
+            ),
+            patch.object(FILTERING_VALIDATOR, "FilteringTest") as test,
+            patch.object(FILTERING_VALIDATOR.sys, "stdout", output),
+        ):
+            with self.assertRaises(SystemExit) as error:
+                FILTERING_VALIDATOR.main()
+        self.assertEqual(1, error.exception.code)
+        self.assertIn("::error::An error occurred while executing the command", output.getvalue())
+        test.assert_not_called()
+
     def test_filtering_reads_pr_data_without_fetching_upstream(self):
         data_dir = str(Path("approved PR data").resolve())
         parser_path = "Parsers/ASimDns/Parsers/vimDnsContoso.yaml"

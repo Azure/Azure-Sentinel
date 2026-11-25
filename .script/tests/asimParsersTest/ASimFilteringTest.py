@@ -310,6 +310,7 @@ def main():
         except subprocess.CalledProcessError as e:
             print(f"::error::An error occurred while executing the command: {e}")
             sys.stdout.flush()  # Explicitly flush stdout
+            sys.exit(1)
         changed_files = modified_files.stdout.splitlines()
     
     modified_yaml_files = filter_query_time_parser_files(changed_files)

@@ -1558,19 +1558,20 @@ class WorkflowTopologyTests(unittest.TestCase):
         )
 
     def test_workflow_has_no_manual_or_pr_head_checkout(self):
-        workflow = self.isolated_path.read_text(encoding="utf-8")
-
-        self.assertNotIn("workflow_dispatch:", workflow)
-        self.assertNotIn(
-            "ref: ${{ github.event.pull_request.head.sha }}",
-            workflow,
-        )
-        self.assertEqual(
-            3,
-            workflow.count(
-                "ref: ${{ github.event.pull_request.base.sha }}"
-            ),
-        )
+        for path, checkout_count in ((self.legacy_path, 4), (self.isolated_path, 3)):
+            with self.subTest(workflow=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                self.assertNotIn("workflow_dispatch:", workflow)
+                self.assertNotIn(
+                    "ref: ${{ github.event.pull_request.head.sha }}",
+                    workflow,
+                )
+                self.assertEqual(
+                    checkout_count,
+                    workflow.count(
+                        "ref: ${{ github.event.pull_request.base.sha }}"
+                    ),
+                )
 
     def test_workflow_runs_on_initial_pull_request_events(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
