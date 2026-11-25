@@ -1633,6 +1633,11 @@ def evaluate_qual_tbl_01(
             continue
 
         entry_res_id = str(live_entry.get("resourceId") or live_entry.get("id") or "").strip()
+        if exp_ws_res and not entry_res_id:
+            issues.append(
+                f"Table '{exp_rec.table_name}' ARM readback is missing required returned resourceId/id"
+            )
+            continue
         if entry_res_id:
             res_id_norm = urllib.parse.unquote(entry_res_id.split("?", 1)[0].split("#", 1)[0]).rstrip("/").lower()
             if (exp_ws_res and res_id_norm != expected_table_path) or (

@@ -432,6 +432,7 @@ def test_qual_tbl_evaluators_reject_simulated_wrong_workspace_incomplete_paginat
                     "httpStatus": 200,
                     "requestUrl": f"https://management.azure.com{ws_res_id}/tables/AcmeEvents_CL?api-version=2025-02-01",
                     "workspaceResourceId": ws_res_id,
+                    "resourceId": f"{ws_res_id}/tables/AcmeEvents_CL",
                     "tableDescription": "Acme security events ingested into Log Analytics.",
                     "columns": [
                         {
@@ -1438,3 +1439,14 @@ def test_rereview_round2_casing_nested_sim_missing_sol_and_arm_exact_path(tmp_pa
     )
     assert q1_sub_res == "FAIL"
     assert "resourceId" in obs_sub_res and "does not match target table resource" in obs_sub_res
+
+    missing_res_id_ev = json.loads(json.dumps(valid_ts_readiness))
+    missing_res_id_ev["armTableReadback"]["tables"][0].pop("resourceId", None)
+    q1_no_res, obs_no_res = evaluate_qual_tbl_01(
+        inv_valid,
+        missing_res_id_ev["armTableReadback"],
+        target={"workspaceId": ws_id, "workspaceResourceId": ws_res_id},
+        enforce_blocking=True,
+    )
+    assert q1_no_res == "FAIL"
+    assert "missing required returned resourceId/id" in obs_no_res
