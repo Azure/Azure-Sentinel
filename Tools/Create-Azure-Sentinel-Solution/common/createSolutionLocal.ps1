@@ -359,7 +359,8 @@ try {
                         -SolutionRoot $solutionFolderBasePath `
                         -SolutionName $solutionName `
                         -ContentPath ([string]$reference) `
-                        -RequireFile
+                        -RequireFile `
+                        -AllowSharedAsimParser:($property.Name.ToLowerInvariant() -eq 'parsers')
                 }
             }
         }
@@ -473,7 +474,8 @@ try {
                         -SolutionRoot $solutionFolderBasePath `
                         -SolutionName $solutionName `
                         -ContentPath ([string]$file) `
-                        -RequireFile
+                        -RequireFile `
+                        -AllowSharedAsimParser:($objectProperties.Name.ToLowerInvariant() -eq 'parsers')
                     $file = $resolvedContent.RelativePath
                     $finalPath = $resolvedContent.FullPath
                     $rawData = $null

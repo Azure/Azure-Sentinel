@@ -183,17 +183,17 @@ try {
                 Write-Host "isCCPConnector $isCCPConnector"
                 $ccpConnectorCodeExecutionCounter = 1
                 foreach ($file in $filesList) {
-                    $null = Resolve-SolutionContentPath `
+                    $resolvedContent = Resolve-SolutionContentPath `
                         -SolutionRoot $solutionFolderBasePath `
                         -SolutionName $pipelineSolutionName `
-                        -ContentPath ([string]$file)
+                        -ContentPath ([string]$file) `
+                        -AllowSharedAsimParser:($objectKeyLowercase -eq 'parsers')
                     $fileExtension = $file -split '\.' | Select-Object -Last 1
                     Write-Host "Current file is $file, File extension is $fileExtension"
                     switch ($objectKeyLowercase) {
                         'parsers' 
                         { 
-                            $finalPath = Join-Path $pipelineBasePath "Solutions/$pipelineSolutionName/Parsers/"; 
-                            $finalPath += $file.Replace('Parsers/', '') 
+                            $finalPath = $resolvedContent.FullPath
                         }
                         'data connectors' 
                         { 
@@ -253,11 +253,17 @@ try {
                         $fileName = [System.IO.Path]::GetFileName($finalPath)
                         $actualFile = Get-ChildItem -Path $parentDir -Filter "*" | Where-Object { $_.Name -ieq $fileName }
                         if ($null -ne $actualFile) {
+                            $actualContentPath = [System.IO.Path]::GetRelativePath($solutionFolderBasePath, $actualFile.FullName)
+                            if ($objectKeyLowercase -eq 'parsers' -and
+                                $file -cmatch '^Parsers/ASim[A-Za-z]+/Parsers/[A-Za-z][A-Za-z0-9_]*\.yaml$') {
+                                $actualContentPath = [System.IO.Path]::GetRelativePath($pipelineBasePath, $actualFile.FullName)
+                            }
                             $resolvedActual = Resolve-SolutionContentPath `
                                 -SolutionRoot $solutionFolderBasePath `
                                 -SolutionName $pipelineSolutionName `
-                                -ContentPath ([System.IO.Path]::GetRelativePath($solutionFolderBasePath, $actualFile.FullName)) `
-                                -RequireFile
+                                -ContentPath $actualContentPath `
+                                -RequireFile `
+                                -AllowSharedAsimParser:($objectKeyLowercase -eq 'parsers')
                             Write-Host "Found file: $($resolvedActual.FullPath)"
                             $rawData = Get-Content -LiteralPath $resolvedActual.FullPath -Raw
                         } else {

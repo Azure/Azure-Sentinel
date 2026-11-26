@@ -370,8 +370,20 @@ try {
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
             if ($objectProperties.Value -is [System.Array] -and $objectProperties.Name.ToLower() -ne 'dependentdomainsolutionids' -and $objectProperties.Name.ToLower() -ne 'staticdataconnectorids') {
                 foreach ($file in $objectProperties.Value) {
-                    $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
-                    $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")
+                    if ($objectProperties.Name.ToLower() -eq 'parsers' -and
+                        $file -cmatch '^Parsers/ASim[A-Za-z]+/Parsers/[A-Za-z][A-Za-z0-9_]*\.yaml$') {
+                        $resolvedParser = Resolve-SolutionContentPath `
+                            -SolutionRoot (Join-Path $basePath $solutionName) `
+                            -SolutionName $solutionName `
+                            -ContentPath $file `
+                            -AllowSharedAsimParser `
+                            -RequireFile
+                        $finalPath = $resolvedParser.FullPath
+                    }
+                    else {
+                        $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
+                        $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")
+                    }
                     $rawData = $null
                     try {
                         Write-Host "Downloading $finalPath"
