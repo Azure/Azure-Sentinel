@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.3       | 26-11-2026                     | Secured the Dossier lookup endpoint in InfobloxCloudDataConnector with Microsoft Entra authentication, added input validation for the type and target parameters, and escaped user input as KQL string literals. |
 | 3.1.2       |   01-09-2026                   | Migrated Dossier data ingestion in InfobloxCloudDataConnector to the Log Ingestion API (DCE/DCR) and updated the Data Connector UI page. |
 | 3.1.1       | 26-08-2026                     | Protected Infoblox API keys using secure workflow parameters and secured HTTP action inputs and outputs. |
 | 3.1.0       |   17-07-2026                   | Updated playbooks, parsers, workbooks and analytic rule from SOC insight v1 to Infoblox for IQ for Threat Defense (SOC insight v2). |
