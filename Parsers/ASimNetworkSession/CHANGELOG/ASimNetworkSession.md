@@ -1,5 +1,9 @@
 # Changelog for ASimNetworkSession.yaml
 
+## Version 0.7.8
+
+- (2026-11-26) Forward the `pack` parameter to the Gigamon V-Series Network Session parser - [PR #15704](https://github.com/Azure/Azure-Sentinel/pull/15704)
+
 ## Version 0.7.7
 
 - (2026-10-26) Add the CrowdStrike Falcon Data Replicator Network Session parser - [PR #15438](https://github.com/Azure/Azure-Sentinel/pull/15438)
