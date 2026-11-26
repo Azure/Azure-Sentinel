@@ -872,6 +872,48 @@ class ReportTests(unittest.TestCase):
         )
         self.assertIn("InvalidStream", output.getvalue())
 
+    def test_workspace_qtp_replay_is_not_applicable(self):
+        validation = self.base_validation()
+        validation["rawDcr"] = None
+        validation["rawUpload"] = []
+        validation["qtpSourceReplay"] = {
+            "status": "not-applicable",
+            "inputStream": "none",
+            "error": None,
+        }
+        detail = "Skipped because this parser has no replayable InputStream."
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "blocked",
+            "detail": detail,
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "blocked",
+            "detail": detail,
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual("passed", report["status"])
+        self.assertFalse(report["requiredFailure"])
+        self.assertEqual(
+            "not-applicable",
+            report["stages"]["rawDcr"]["status"],
+        )
+        self.assertEqual(
+            "not-applicable",
+            report["stages"]["rawIngestion"]["status"],
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(detail, report["stages"]["qtpExecution"]["detail"])
+        self.assertEqual("blocked", report["stages"]["parity"]["status"])
+        output = io.StringIO()
+        with redirect_stdout(output):
+            WORKFLOW.emit_annotations(report)
+        self.assertNotIn("ASIM rawDcr warning", output.getvalue())
+
     def test_qtp_raw_ingestion_failure_fails_overall(self):
         validation = self.base_validation()
         validation["status"] = "failed"
@@ -930,6 +972,39 @@ class ReportTests(unittest.TestCase):
                     "qtpSourceReplay"
                 ]["observedRows"]
             ),
+        )
+
+    def test_qtp_execution_error_is_reported_as_failed(self):
+        validation = self.base_validation()
+        validation["status"] = "failed"
+        validation["outputValidation"]["queryTimeExecution"] = {
+            "status": "not-applicable",
+        }
+        validation["outputValidation"]["parity"] = {
+            "status": "not-applicable",
+        }
+        validation["error"] = {
+            "stage": "qtp-execution",
+            "message": "POST failed with HTTP 400.",
+        }
+
+        report = self.build(validation)
+
+        self.assertEqual(
+            "failed",
+            report["stages"]["qtpExecution"]["status"],
+        )
+        self.assertEqual(
+            "POST failed with HTTP 400.",
+            report["stages"]["qtpExecution"]["detail"],
+        )
+        self.assertEqual(
+            "blocked",
+            report["stages"]["parity"]["status"],
+        )
+        self.assertEqual(
+            "Blocked because QTP execution failed.",
+            report["stages"]["parity"]["detail"],
         )
 
     def test_target_visibility_failure_marks_parser_ingestion_failed(self):
@@ -1179,7 +1254,17 @@ class CleanupTests(unittest.TestCase):
             pull_request="123",
             run_id="456",
             run_attempt=2,
-            config=WORKFLOW.CanaryConfig(),
+            config=WORKFLOW.CanaryConfig(
+                subscription_id="subscription",
+                resource_group="resource-group",
+                workspace_name="workspace",
+                workspace_id="workspace-id",
+                dce_name="dce",
+                ingestion_endpoint=(
+                    "https://example.ingest.monitor.azure.com"
+                ),
+                location="eastus2euap",
+            ),
         )
 
         names = WORKFLOW.build_resource_names(
@@ -1209,6 +1294,10 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.isolated_path = (
             self.repo_root
             / ".github/workflows/runAsimIngestionTimeValidation.yaml"
+        )
+        self.unit_test_path = (
+            self.repo_root
+            / ".github/workflows/runAsimIngestionTimeValidationTests.yaml"
         )
 
     def test_security_gate_matches_legacy_except_initial_events(self):
@@ -1243,20 +1332,6 @@ class WorkflowTopologyTests(unittest.TestCase):
         isolated_gate = isolated_gate.replace(
             initial_event_branch, "", 1
         )
-        label_removal_always = """\
-      - name: Auto-remove SafeToRun label on synchronize for fork PRs
-        if: |
-          always() &&
-"""
-        self.assertIn(label_removal_always, isolated_gate)
-        isolated_gate = isolated_gate.replace(
-            label_removal_always,
-            """\
-      - name: Auto-remove SafeToRun label on synchronize for fork PRs
-        if: |
-""",
-            1,
-        )
 
         normalize = lambda value: "\n".join(
             line.rstrip() for line in value.splitlines()
@@ -1265,6 +1340,70 @@ class WorkflowTopologyTests(unittest.TestCase):
             normalize(legacy_gate),
             normalize(isolated_gate),
         )
+
+    def test_security_gate_uses_environment_for_shell_inputs(self):
+        expected_environment = (
+            "IS_FORK: ${{ github.event.pull_request.head.repo.fork }}",
+            "PR_LABELS_JSON: "
+            "${{ toJson(github.event.pull_request.labels.*.name) }}",
+            "TRIGGER_EVENT: ${{ github.event.action }}",
+            "LABEL_NAME: ${{ github.event.label.name }}",
+        )
+        expected_assignments = (
+            'is_fork="$IS_FORK"',
+            'labels="$PR_LABELS_JSON"',
+            'trigger_event="$TRIGGER_EVENT"',
+            'label_added="$LABEL_NAME"',
+        )
+        unsafe_assignments = (
+            'is_fork="${{ github.event.pull_request.head.repo.fork }}"',
+            "labels='${{ "
+            "toJson(github.event.pull_request.labels.*.name) }}'",
+            'trigger_event="${{ github.event.action }}"',
+            'label_added="${{ github.event.label.name }}"',
+        )
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                for value in expected_environment:
+                    self.assertIn(value, workflow)
+                for value in expected_assignments:
+                    self.assertIn(value, workflow)
+                for value in unsafe_assignments:
+                    self.assertNotIn(value, workflow)
+
+    def test_fork_gate_protects_testers_and_workflows(self):
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                self.assertIn(
+                    "const protectedPrefixes = [", workflow
+                )
+                self.assertIn(
+                    "'.script/tests/asimParsersTest/'", workflow
+                )
+                self.assertIn("'ASIM/'", workflow)
+                self.assertIn("'.github/'", workflow)
+                self.assertIn(
+                    "protectedPrefixes.some(prefix => "
+                    "name.startsWith(prefix))",
+                    workflow,
+                )
+
+    def test_query_time_jobs_use_ingestion_time_trusted_data_pattern(self):
+        legacy = yaml.safe_load(self.legacy_path.read_text(encoding="utf-8"))
+        isolated = yaml.safe_load(self.isolated_path.read_text(encoding="utf-8"))
+        reference_steps = isolated["jobs"]["discover"]["steps"][:2]
+        for name, job in legacy["jobs"].items():
+            if name == "security-gate":
+                continue
+            with self.subTest(job=name):
+                self.assertEqual(reference_steps, job["steps"][:2])
+                self.assertNotIn("defaults", job)
+                for step in job["steps"]:
+                    self.assertNotIn("working-directory", step)
+                    command = step.get("run", "") + step.get("with", {}).get("inlineScript", "")
+                    self.assertNotIn('cd "$ASIM_PR_DATA_DIR"', command)
 
     def test_isolated_workflow_has_requested_job_topology(self):
         document = yaml.safe_load(
@@ -1300,6 +1439,105 @@ class WorkflowTopologyTests(unittest.TestCase):
             jobs["report"]["needs"],
         )
 
+    def test_workflows_build_pinned_kusto_analyzer(self):
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+        unit_tests = self.unit_test_path.read_text(encoding="utf-8")
+        job_markers = (
+            ("  discover:\n", "\n  templateValidate:"),
+            ("  templateValidate:\n", "\n  ingestionValidation:"),
+            ("  ingestionValidation:\n", "\n  report:"),
+        )
+        analyzer_jobs = [
+            isolated[
+                isolated.index(start):isolated.index(
+                    end,
+                    isolated.index(start),
+                )
+            ]
+            for start, end in job_markers
+        ]
+        setup_action = (
+            "actions/setup-dotnet@"
+            "67a3573c9a986a3f9c594539f4ab511d57bb3ce9"
+        )
+
+        for workflow in (unit_tests, *analyzer_jobs):
+            self.assertIn(setup_action, workflow)
+            self.assertIn('dotnet-version: "8.0.x"', workflow)
+            self.assertIn(
+                "kusto_analyzer/kusto_analyzer.csproj",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet restore "$analyzer_project" '
+                "--locked-mode --nologo",
+                workflow,
+            )
+            self.assertIn(
+                'dotnet build "$analyzer_project"',
+                workflow,
+            )
+            self.assertIn(
+                "ASIM_KUSTO_ANALYZER_DLL=",
+                workflow,
+            )
+        for workflow in analyzer_jobs:
+            self.assertIn(
+                "Trusted base predates the Kusto analyzer; "
+                "using its legacy validator.",
+                workflow,
+            )
+
+    def test_workflows_pin_supply_chain_inputs(self):
+        legacy = self.legacy_path.read_text(encoding="utf-8")
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+        convert_yaml = (
+            self.repo_root
+            / ".script/tests/asimParsersTest/convertYamlToObject.ps1"
+        ).read_text(encoding="utf-8")
+
+        for workflow in (legacy, isolated):
+            for line in workflow.splitlines():
+                stripped = line.strip()
+                if stripped.startswith("uses:"):
+                    self.assertRegex(
+                        stripped,
+                        r"^uses: [^@\s]+@[0-9a-f]{40}(?:\s+#.*)?$",
+                    )
+            self.assertNotIn("python-version: \"3.x\"", workflow)
+            self.assertNotIn(
+                "python -m pip install --upgrade", workflow
+            )
+            self.assertNotIn("curl ", workflow)
+            self.assertNotIn("Invoke-WebRequest", workflow)
+            self.assertIn("pip==26.3", workflow)
+            self.assertIn("requests==2.34.2", workflow)
+            self.assertIn("PyYAML==6.0.4", workflow)
+            self.assertEqual(
+                6, workflow.count("--only-binary=:all:")
+            )
+
+        self.assertNotIn("allow-unsafe-pr-checkout", legacy)
+        self.assertNotIn("raw.githubusercontent.com", legacy)
+        self.assertIn('azPSVersion: "17.0.0"', legacy)
+        self.assertIn("azure-core==1.41.0", legacy)
+        self.assertIn("azure-identity==1.27.0", legacy)
+        self.assertIn("azure-monitor-ingestion==1.1.0", legacy)
+        self.assertIn("azure-monitor-query==1.4.1", legacy)
+        self.assertIn("tabulate==0.10.0", legacy)
+        self.assertGreaterEqual(
+            legacy.count('PYTHONSAFEPATH: "1"'), 6
+        )
+        self.assertIn("azure-core==1.41.0", isolated)
+        self.assertIn("azure-identity==1.27.0", isolated)
+        self.assertIn(
+            '$requiredVersion = [version]"0.4.12"',
+            convert_yaml,
+        )
+        self.assertIn(
+            "-RequiredVersion $requiredVersion", convert_yaml
+        )
+
     def test_workflow_never_masks_validation_failures(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
@@ -1320,19 +1558,20 @@ class WorkflowTopologyTests(unittest.TestCase):
         )
 
     def test_workflow_has_no_manual_or_pr_head_checkout(self):
-        workflow = self.isolated_path.read_text(encoding="utf-8")
-
-        self.assertNotIn("workflow_dispatch:", workflow)
-        self.assertNotIn(
-            "ref: ${{ github.event.pull_request.head.sha }}",
-            workflow,
-        )
-        self.assertEqual(
-            3,
-            workflow.count(
-                "ref: ${{ github.event.pull_request.base.sha }}"
-            ),
-        )
+        for path, checkout_count in ((self.legacy_path, 4), (self.isolated_path, 3)):
+            with self.subTest(workflow=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                self.assertNotIn("workflow_dispatch:", workflow)
+                self.assertNotIn(
+                    "ref: ${{ github.event.pull_request.head.sha }}",
+                    workflow,
+                )
+                self.assertEqual(
+                    checkout_count,
+                    workflow.count(
+                        "ref: ${{ github.event.pull_request.base.sha }}"
+                    ),
+                )
 
     def test_workflow_runs_on_initial_pull_request_events(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
@@ -1359,18 +1598,80 @@ class WorkflowTopologyTests(unittest.TestCase):
         )
 
     def test_safe_to_run_removal_runs_after_failed_gate(self):
-        workflow = self.isolated_path.read_text(encoding="utf-8")
-
-        self.assertIn(
-            """\
+        expected = """\
       - name: Auto-remove SafeToRun label on synchronize for fork PRs
         if: |
           always() &&
           github.event.pull_request.head.repo.fork == true &&
           github.event.action == 'synchronize' &&
           steps.check-approval.outputs.should_remove_label == 'true'
-""",
-            workflow,
+"""
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                self.assertIn(
+                    expected, path.read_text(encoding="utf-8")
+                )
+
+    def test_approval_is_bound_to_verified_head_sha(self):
+        legacy = self.legacy_path.read_text(encoding="utf-8")
+        isolated = self.isolated_path.read_text(encoding="utf-8")
+
+        for workflow in (legacy, isolated):
+            self.assertIn(
+                "approved_sha: "
+                "${{ steps.check-approval.outputs.approved_sha }}",
+                workflow,
+            )
+            self.assertIn(
+                "APPROVAL_HEAD_SHA: "
+                "${{ github.event.pull_request.head.sha }}",
+                workflow,
+            )
+            self.assertEqual(
+                2,
+                workflow.count(
+                    'echo "approved_sha=$APPROVAL_HEAD_SHA" '
+                    ">> $GITHUB_OUTPUT"
+                ),
+            )
+            self.assertIn(
+                "Verify approved SHA is still the pull request head",
+                workflow,
+            )
+            self.assertIn(
+                "if (pr.head.sha !== approvedSha)", workflow
+            )
+
+        self.assertEqual(
+            4,
+            legacy.count(
+                "needs.security-gate.outputs.approved_sha == "
+                "github.event.pull_request.head.sha"
+            ),
+        )
+        self.assertEqual(
+            4,
+            legacy.count(
+                "PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}"
+            ),
+        )
+        self.assertNotIn(
+            "ref: ${{ github.event.pull_request.head.sha }}",
+            legacy,
+        )
+        self.assertEqual(
+            4,
+            isolated.count(
+                "needs.security-gate.outputs.approved_sha == "
+                "github.event.pull_request.head.sha"
+            ),
+        )
+        self.assertEqual(
+            2,
+            isolated.count(
+                "PR_HEAD_SHA: "
+                "${{ needs.security-gate.outputs.approved_sha }}"
+            ),
         )
 
     def test_untrusted_pr_content_is_materialized_only_as_data(self):
@@ -1395,7 +1696,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             workflow,
         )
 
-    def test_comparison_refs_are_pinned_to_event_shas(self):
+    def test_comparison_refs_are_pinned_to_approved_sha(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
 
         self.assertEqual(
@@ -1409,7 +1710,7 @@ class WorkflowTopologyTests(unittest.TestCase):
             2,
             workflow.count(
                 "PR_HEAD_SHA: "
-                "${{ github.event.pull_request.head.sha }}"
+                "${{ needs.security-gate.outputs.approved_sha }}"
             ),
         )
         self.assertEqual(

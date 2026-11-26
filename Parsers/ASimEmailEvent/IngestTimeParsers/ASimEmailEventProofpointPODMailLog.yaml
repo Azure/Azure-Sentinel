@@ -1,7 +1,7 @@
 Parser:
-  DisplayName: 'Ingestion-time Email Event ASIM parser for Proofpoint POD MailLog'
-  Version: '0.1.3'
-  LastUpdated: '2026-10-30'
+  DisplayName: 'ProofpointPODMailLog_CL EmailEvent ASIM parser'
+  Version: '1.0.0'
+  LastUpdated: '2026-11-23'
 Product:
   Name: 'Proofpoint POD MailLog'
 Normalization:
@@ -19,8 +19,7 @@ SourceRawTable: 'ProofpointPODMailLog_CL'
 TargetASIMTable: 'ASimEmailEventLogs'
 ParserFilterQuery: |
   source
-  | extend EnvelopeRecipients = iif(isnull(sm["to"]), parse_json('[]'), sm["to"])
-  | where isnotempty(tostring(sm.qid)) and (isnotnull(sm["from"]) or array_length(EnvelopeRecipients) > 0)
+  | where isnotempty(tostring(sm.qid)) and (isnotnull(sm["from"]) or array_length(iif(isnull(sm["to"]), parse_json('[]'), sm["to"])) > 0)
 ParserQuery: |
   source
   | extend EnvelopeRecipients = iif(isnull(sm["to"]), parse_json('[]'), sm["to"])
@@ -36,11 +35,19 @@ ParserQuery: |
       Dsn = tostring(sm.dsn),
       DeliveryStatus = tostring(sm.stat)
   | parse Relay with RelayHost " [" RelayIp "]" *
+  // A valid IPv4 tail occupies two IPv6 groups; normalize only the validation copy.
+  | extend _RelayIpForValidation = replace(@":(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}\z", ":0:0", RelayIp)
   | extend RelayHostParts = split(iif(isnotempty(RelayHost), RelayHost, Relay), "@")
   | extend
       EmailMailFromAddress = iff(EmailMailFromAddress contains "@", EmailMailFromAddress, ""),
       RelayHost = extract(@"^([\s\S]*?)[.]*$", 1, tostring(RelayHostParts[(array_length(RelayHostParts) - 1)])),
-      RelayIp = iff(isnotnull(parse_ipv4(RelayIp)) or isnotempty(parse_ipv6(RelayIp)), RelayIp, ""),
+      RelayIp = iff(
+          RelayIp matches regex @"\A(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}\z"
+          or _RelayIpForValidation matches regex @"\A(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}\z"
+          // :: must omit a group; boundary compression adds two empty split components rather than one.
+          or (_RelayIpForValidation matches regex @"\A(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?\z"
+              and array_length(split(_RelayIpForValidation, ":")) <= iff(_RelayIpForValidation startswith ":" or _RelayIpForValidation endswith ":", 9, 8)),
+          RelayIp, ""),
       EventResult = case(Dsn startswith "2.", "Success", Dsn startswith "4." or Dsn startswith "5.", "Failure", "NA"),
       EmailProtocolName = case(tostring(sm.proto) =~ "SMTP" or tolower(tostring(sm.mailer)) in ("smtp", "esmtp"), "SMTP", ""),
       EventSubType = iff(IsDelivery, "EmailSent", "EmailReceived")
@@ -89,5 +96,5 @@ ParserQuery: |
       EmailMailFromAddress, EmailMailFromDomain, EmailSizeBytes, EmailProtocolName, EmailDirection,
       AdditionalFields, AdditionalEntities
 Change:
-  Date: '2026-10-30'
-  Description: 'Normalize missing envelope recipients before filtering and delivery classification.'
+  Date: '2026-11-23'
+  Description: 'Inline the envelope-recipient expression in the filter predicate to preserve selection with a where-only pipeline.'

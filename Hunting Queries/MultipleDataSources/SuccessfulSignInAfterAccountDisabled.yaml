@@ -1,0 +1,114 @@
+id: a48850af-8d89-4f31-9a6c-d0217f5ea4f6
+name: Entra ID successful sign-in after account disabled
+description: |
+  Identifies successful interactive or non-interactive sign-ins for a user after a "Disable account" audit event and before a later "Enable account" event. A disabled account should not sign in, so a hit can mean containment failed or was undone.
+description-detailed: |
+  When an Entra ID account is disabled during incident response, offboarding, or containment, new sign-ins for that account should fail. This hunt pairs each successful "Disable account" audit event with any successful sign-in for the same user that happens after a short grace period and before a later "Enable account" event.
+  Results can point to a containment step that did not take effect, a re-enable that was not recorded as an "Enable account" event, or a gap between on-premises and cloud account state in hybrid environments. Sign-ins inside the grace period are excluded because changes can take a few minutes to apply. Tune the lookback and grace period for your environment.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - InitialAccess
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1078.004
+query: |
+  let lookback = 7d;
+  // Sign-ins inside this window after the disable are excluded while the change applies
+  let gracePeriod = 15m;
+  // Correlate on the stable object ID (TargetResources.id / sign-in UserId) so renamed users,
+  // guest UPN differences, and reused UPNs don't cause missed or misattributed results.
+  // UPNs are kept for display only.
+  let AccountStateChanges = materialize(
+      AuditLogs
+      | where TimeGenerated >= ago(lookback)
+      | where OperationName in~ ("Disable account", "Enable account")
+      | where Result =~ "success"
+      | mv-expand TargetResource = TargetResources
+      | where tostring(TargetResource.type) =~ "User"
+      | extend TargetUserId = tostring(TargetResource.id)
+      | where isnotempty(TargetUserId)
+      | extend TargetUpn = tolower(tostring(TargetResource.userPrincipalName))
+      | extend ChangedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)),
+                               tostring(InitiatedBy.user.userPrincipalName),
+                               tostring(InitiatedBy.app.displayName))
+      | project TimeGenerated, OperationName, TargetUserId, TargetUpn, ChangedBy);
+  let Disables =
+      AccountStateChanges
+      | where OperationName =~ "Disable account"
+      | project DisabledTime = TimeGenerated, TargetUserId, DisabledUpn = TargetUpn, DisabledBy = ChangedBy;
+  let DisabledUserIds = Disables | distinct TargetUserId;
+  let Enables =
+      AccountStateChanges
+      | where OperationName =~ "Enable account"
+      | project EnabledTime = TimeGenerated, EnabledUserId = TargetUserId;
+  // For each disable, find the first re-enable that follows it, if any
+  let DisabledWindows =
+      Disables
+      | join kind=leftouter Enables on $left.TargetUserId == $right.EnabledUserId
+      | extend EnabledAfter = iff(EnabledTime > DisabledTime, EnabledTime, datetime(null))
+      | summarize ReEnabledTime = min(EnabledAfter) by TargetUserId, DisabledUpn, DisabledTime, DisabledBy;
+  union
+      (SigninLogs
+      | where TimeGenerated >= ago(lookback)
+      | where ResultType == "0"
+      | where UserId in (DisabledUserIds)
+      | extend SignInType = "Interactive"),
+      (AADNonInteractiveUserSignInLogs
+      | where TimeGenerated >= ago(lookback)
+      | where ResultType == "0"
+      | where UserId in (DisabledUserIds)
+      | extend SignInType = "NonInteractive")
+  | join kind=inner DisabledWindows on $left.UserId == $right.TargetUserId
+  | where TimeGenerated > DisabledTime + gracePeriod
+  | where isnull(ReEnabledTime) or TimeGenerated < ReEnabledTime
+  | summarize
+      FirstSignInAfterDisable = min(TimeGenerated),
+      LastSignInAfterDisable = max(TimeGenerated),
+      SignInCount = count(),
+      SignInTypes = make_set(SignInType, 2),
+      SignInUpns = make_set(tolower(UserPrincipalName), 5),
+      Apps = make_set(AppDisplayName, 20),
+      IPAddresses = make_set(IPAddress, 20),
+      SampleIPAddress = take_any(IPAddress)
+      by UserId, DisabledUpn, DisabledTime, DisabledBy, ReEnabledTime
+  // Display UPN: the UPN at disable time, or the sign-in UPN if the audit event had none
+  | extend UserUpn = iff(isnotempty(DisabledUpn), DisabledUpn, tostring(SignInUpns[0]))
+  | extend AccountName = tostring(split(UserUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
+  | sort by FirstSignInAfterDisable desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: AadUserId
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SampleIPAddress
+customDetails:
+  DisabledTime: DisabledTime
+  DisabledBy: DisabledBy
+  SignInCount: SignInCount
+  FirstSignIn: FirstSignInAfterDisable
+version: 1.0.1
+metadata:
+    source:
+        kind: Community
+    author:
+        name: mikedsosa
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]

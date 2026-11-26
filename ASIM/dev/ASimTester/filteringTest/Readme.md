@@ -64,6 +64,10 @@ The filtering tests support EmailEvent parsers, including recipient matching acr
 
 EmailEvent source-parser controls include `disabled` as well as `pack`. Recipient checks sample each populated array independently and compare individual and combined matches with baseline row multisets. Single-column IPv4-prefix checks use KQL `has_any_ipv4_prefix`, including addresses embedded in DNS responses. Filters spanning multiple fields (`ipaddr_has_any_prefix`, `hostname_has_any`, `username_has_any`, and `hashes_has_any`) retain the default, positive, absent-value, and union checks, but explicitly report partial coverage for per-value assertions because the mapped alias may omit the field that matched.
 
+Both validator copies compare single-column IPv4-prefix results by row values, not Azure Monitor SDK row object identity. Result order is ignored, but differences in addresses, event counts, or row multiplicities still fail. This comparison applies across schemas; it does not change parser queries or the multi-field alias checks.
+
+Offline regression coverage for both validators can be run from the repository root with `python -m unittest discover -s .script\tests\asimParsersTest -p test_asim_filtering_validator.py`. The tests require PyYAML and use independently created, identity-compared iterable rows to reproduce SDK equality behavior without querying a workspace.
+
 - If all the validations that the test script performed have passed you will receive an "ok" message:
 
 	![enter image description here](https://github.com/Azure/Azure-Sentinel/assets/126081432/e3e130e1-6f73-4479-9e1f-2cdfd8023c45)

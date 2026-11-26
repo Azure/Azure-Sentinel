@@ -1,5 +1,9 @@
 # Changelog for ASimAuditEvent.yaml
 
+## Version 0.1.14
+
+- (2026-10-30) Add Salesforce Real-Time Event Monitoring AuditEvent parser. - [PR #15514](https://github.com/Azure/Azure-Sentinel/pull/15514)
+
 ## Version 0.1.13
 
 - (2026-10-23) Add the CrowdStrike Falcon Data Replicator AuditEvent parser - [PR #15414](https://github.com/Azure/Azure-Sentinel/pull/15414)

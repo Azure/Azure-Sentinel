@@ -1,0 +1,100 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Bitglass
+  dataTypes:
+  - Bitglass
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - BitglassLogs_CL
+  requiredDataConnectors:
+  - connectorId: Bitglass
+    dataTypes:
+    - BitglassLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: bfca0251-1581-4185-906b-4805099e3216
+    path: Analytic Rules/BitglassNewDevice.yaml
+    version: 1.0.0
+    querySha256: 626b2ac62b221ddae358ac00096bf104b1321a28410f114a365ac07a14fa56a0
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=14d; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped
+      to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise
+      project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - InitialAccess
+    originalTechniques:
+    - T1078
+    reviewScope:
+      sourceDocumentSha256: 4e9ce0a3431352414941f42282cca6abd19280a059671739898ad10e1c525ee1
+      targetQuerySha256: 6e0c963ec9025928d94db21f18f30068bc0cdd5c9efd42c99d0a7667ae11cbc8
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    reviewDecisions:
+    - decision: approved
+      reason: Entity mapping AccountCustomEntity to Account.upnColumn reviewed and
+        approved for Defender XDR custom detection.
+      reviewedAt: '2026-04-20T21:15:00Z'
+properties:
+  id: xdr-bfca0251-1581-4185-906b-4805099e3216
+  displayName: Bitglass - Login from new device
+  status: disabled
+  queryCondition:
+    queryText: "Bitglass\n| where EventType =~ 'access'\n| where EventMessage =~ 'Login'\n\
+      | summarize dev = makeset(Dvc) by User\n| join (Bitglass\n        | where EventType\
+      \ =~ 'access'\n        | where EventMessage =~ 'Login') on User\n| where dev\
+      \ !contains Dvc\n| extend AccountCustomEntity = User"
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Bitglass - Login from new device
+      description: '''Detects when a user logins from new device.'''
+      severity: medium
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: InitialAccess
+        techniques:
+        - technique: T1078
+      customDetails:
+        AccountName: AccountCustomEntity

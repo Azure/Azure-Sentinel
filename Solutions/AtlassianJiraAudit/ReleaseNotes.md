@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                        |
 |-------------|--------------------------------|---------------------------------------------------------------------------|
+| 3.2.4       | 26-10-2026                     | Removed unused "WEBSITE_NODE_DEFAULT_VERSION": "~10" from the Sync-CommentsFunctionApp **Playbook** deployment configuration. |
 | 3.2.3 | 22-10-2026 | Fixed duplicate **Custom Detection** names and alert titles by correcting the site admin password-change rule name and description in both the **Analytic Rule** and **Custom Detection**. |
 | 3.2.2       | 20-10-2026                     | Added 10 **Defender XDR Custom Detections** migrated from **Analytic Rules**. |
 | 3.0.6       | 13-04-2026                     | Deprecate Atlassian Jira Audit (using Azure Function)  |

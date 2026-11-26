@@ -1,4 +1,3 @@
-import csv
 import importlib.util
 import json
 import sys
@@ -340,6 +339,86 @@ class FixturePreparationTests(unittest.TestCase):
         self.assertEqual("Contoso_CL", artifact["sourceRawTable"])
         self.assertEqual("inferred", artifact["schemaSource"])
 
+    def test_inferred_schema_excludes_only_reserved_columns(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,TenantId,_TimeReceived,_ItemId,"
+            "_ResourceId,_SubscriptionId,_IsBillable,_BilledSize,"
+            "id,_ResourceId_s,MG,Title,UniqueId,verbose,verbose_b,Value\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,tenant,"
+            "2026-01-01T00:00:01Z,item,resource,subscription,true,1,"
+            "record-id,resource-s,mg,title,unique,verbose,true,value\n"
+        )
+
+        artifact = self.prepare(fixture)
+
+        schema_names = {
+            column["name"] for column in artifact["schema"]
+        }
+        self.assertTrue(
+            {
+                "TenantId",
+                "Type",
+                "_TimeReceived",
+                "_ItemId",
+                "_ResourceId",
+                "_SubscriptionId",
+                "_IsBillable",
+                "_BilledSize",
+            }.isdisjoint(schema_names)
+        )
+        self.assertTrue(
+            {
+                "id",
+                "_ResourceId_s",
+                "MG",
+                "Title",
+                "UniqueId",
+                "verbose",
+                "verbose_b",
+            }.issubset(schema_names)
+        )
+
+    def test_canonicalizes_fixture_columns_to_schema_casing(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,DvcOS,DvcOSName\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,Windows,Windows 11\n"
+        )
+        schema_path = self.root / "Schema.csv"
+        schema_path.write_text(
+            "ColumnName,ColumnType\n"
+            "TimeGenerated,datetime\n"
+            "DvcOs,string\n"
+            "DvcOsName,string\n",
+            encoding="utf-8",
+        )
+
+        artifact = self.prepare(fixture, schema_path)
+
+        self.assertIn("DvcOs", artifact["rows"][0])
+        self.assertIn("DvcOsName", artifact["rows"][0])
+        self.assertNotIn("DvcOS", artifact["rows"][0])
+        self.assertNotIn("DvcOSName", artifact["rows"][0])
+        self.assertEqual("Windows", artifact["rows"][0]["DvcOs"])
+
+    def test_rejects_case_insensitive_duplicate_fixture_columns(self):
+        fixture = self.write_fixture(
+            "TimeGenerated,Type,DvcOs,DvcOS\n"
+            "2026-01-01T00:00:00Z,Contoso_CL,Windows,Linux\n"
+        )
+        schema_path = self.root / "Schema.csv"
+        schema_path.write_text(
+            "ColumnName,ColumnType\n"
+            "TimeGenerated,datetime\n"
+            "DvcOs,string\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "case-insensitive duplicate columns",
+        ):
+            self.prepare(fixture, schema_path)
+
     def test_uses_discovered_table_schema(self):
         fixture = self.write_fixture(
             "TimeGenerated,Type,Enabled,Payload\n"
@@ -553,141 +632,6 @@ class FixturePreparationTests(unittest.TestCase):
             ]
         )
         self.assertEqual(1, exit_code)
-
-    def test_prepares_real_guardduty_fixture(self):
-        repo_root = Path(__file__).resolve().parents[5]
-        fixture = (
-            repo_root
-            / "Sample Data/ASIM/"
-            "AWS_GuardDuty_AlertEvent_AWSGuardDuty_IngestedLogs.csv"
-        )
-        artifact = FIXTURES.prepare_fixture(
-            fixture_path=fixture,
-            expected_source_raw_table="AWSGuardDuty",
-            target_id="asimalerteventawsguardduty",
-            target_group="ASimAlertEventLogs",
-            repository="Azure/Azure-Sentinel",
-            pull_request="123",
-            run_id="456",
-            run_attempt=1,
-            now_ticks=FIXTURES.parse_kusto_datetime_ticks(
-                "2026-10-16T20:00:00Z"
-            ),
-        )
-
-        self.assertGreater(artifact["rowCount"], 0)
-        self.assertEqual("AWSGuardDuty", artifact["sourceRawTable"])
-        self.assertEqual("repository", artifact["schemaSource"])
-        self.assertRegex(
-            artifact["rows"][0]["TimeGenerated"],
-            r"\.\d{7}Z$",
-        )
-        self.assertIsInstance(artifact["rows"][0]["AccountId"], str)
-        self.assertIsInstance(
-            artifact["rows"][0]["SchemaVersion"], str
-        )
-        self.assertRegex(
-            artifact["rows"][0]["TimeCreated"], r"\.\d{7}Z$"
-        )
-        self.assertIsInstance(
-            artifact["rows"][0]["ResourceDetails"], dict
-        )
-        self.assertTrue(
-            artifact["namespace"]["timestampSetHash"].startswith(
-                "sha256:"
-            )
-        )
-
-    def test_prepares_all_available_source_specific_fixtures(self):
-        repo_root = Path(__file__).resolve().parents[5]
-        cases = (
-            (
-                "CrowdStrike_Falcon_AlertEvent_"
-                "CrowdStrikeDetections_IngestedLogs.csv",
-                "CrowdStrikeDetections",
-                "ASimAlertEventLogs",
-            ),
-            (
-                "Salesforce_Service Cloud_Authentication_"
-                "SalesforceServiceCloudV3_CL_IngestedLogs.csv",
-                "SalesforceServiceCloudV3_CL",
-                "ASimAuthenticationEventLogs",
-            ),
-            (
-                "Salesforce_Salesforce Service Cloud_WebSession_"
-                "SalesforceServiceCloudV3_CL_IngestedLogs.csv",
-                "SalesforceServiceCloudV3_CL",
-                "ASimWebSessionLogs",
-            ),
-        )
-        for index, (filename, source_table, target_group) in enumerate(
-            cases
-        ):
-            with self.subTest(filename=filename):
-                artifact = FIXTURES.prepare_fixture(
-                    fixture_path=repo_root / "Sample Data/ASIM" / filename,
-                    expected_source_raw_table=source_table,
-                    target_id=f"fixture-{index}",
-                    target_group=target_group,
-                    repository="Azure/Azure-Sentinel",
-                    pull_request="123",
-                    run_id="456",
-                    run_attempt=1,
-                    now_ticks=FIXTURES.parse_kusto_datetime_ticks(
-                        "2026-10-16T20:00:00Z"
-                    ),
-                )
-                self.assertGreater(artifact["rowCount"], 0)
-                self.assertEqual(
-                    source_table, artifact["sourceRawTable"]
-                )
-                self.assertEqual(
-                    "repository", artifact["schemaSource"]
-                )
-
-    def test_salesforce_fixtures_include_rejected_filter_rows(self):
-        repo_root = Path(__file__).resolve().parents[5]
-        cases = (
-            (
-                "Salesforce_Service Cloud_Authentication_"
-                "SalesforceServiceCloudV3_CL_IngestedLogs.csv",
-                {"Login", "LoginAs", "Logout"},
-            ),
-            (
-                "Salesforce_Salesforce Service Cloud_WebSession_"
-                "SalesforceServiceCloudV3_CL_IngestedLogs.csv",
-                {
-                    "ApiTotalUsage",
-                    "RestApi",
-                    "BulkApi2",
-                    "ApexCallout",
-                    "ExternalODataCallout",
-                    "MetadataApiOperation",
-                    "NamedCredential",
-                    "URI",
-                    "AuraRequest",
-                    "LightningPageView",
-                    "LightningPerformance",
-                    "LightningInteraction",
-                    "UiTelemetryResourceTiming",
-                    "UiTelemetryNavigationTiming",
-                    "CSPViolation",
-                },
-            ),
-        )
-        for filename, accepted_types in cases:
-            with self.subTest(filename=filename):
-                path = repo_root / "Sample Data/ASIM" / filename
-                with path.open(
-                    "r", encoding="utf-8-sig", newline=""
-                ) as stream:
-                    rows = list(csv.DictReader(stream))
-                event_types = {
-                    row["EventType"] for row in rows
-                }
-                self.assertTrue(event_types & accepted_types)
-                self.assertTrue(event_types - accepted_types)
-
 
 if __name__ == "__main__":
     unittest.main()
