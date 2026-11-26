@@ -1,0 +1,110 @@
+id: 1de4ac58-8f57-44a3-aa14-dc053ff3bcc1
+name: Entra ID sign-in from pre-revocation IP after sessions were revoked
+description: |
+  Identifies successful sign-ins from an IP the user used before an "Update StsRefreshTokenValidFrom Timestamp" audit event, after a grace period. A later success from that IP can mean the password or another path still works.
+description-detailed: |
+  Revoking a user's sessions invalidates refresh tokens, but it does not change the password or remove MFA methods, and already-issued access tokens can remain valid until they expire (the documented default lifetime is a random value between 60 and 90 minutes, 75 minutes on average). Continuous Access Evaluation can cut this shorter for CAE-capable apps, with latency of up to about 15 minutes, but it does not apply to every app. Tenants that do not use Conditional Access have a default access token lifetime of two hours for clients such as Microsoft Teams and Microsoft 365, so tune the grace period if that applies. This hunt pairs each successful "Update StsRefreshTokenValidFrom Timestamp" audit event (the activity logged when sessions are revoked; other admin updates to the STS refresh-token valid-from timestamp can also produce it) with successful interactive or non-interactive sign-ins for the same user that happen after a grace period and come from an IP address seen for that user in the pre-revocation window (default 1 day) before the event.
+  A hit is a lead, not a verdict: the legitimate user often signs in again from their usual IP after a revocation. Review hits together with password-reset and MFA-method changes for the same user. Tune the lookback, pre-revocation window and grace period for your environment.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078.004
+query: |
+  let lookback = 7d;
+  // How far before the revocation to collect the user's sign-in IPs
+  let preWindow = 1d;
+  // Already-issued access tokens can stay valid for a while after revocation
+  let gracePeriod = 90m;
+  // Correlate on the stable object ID (TargetResources.id / sign-in UserId) so renamed users,
+  // guest UPN differences, and reused UPNs don't cause missed or misattributed results.
+  // UPNs are kept for display only.
+  let Revocations =
+      AuditLogs
+      | where TimeGenerated >= ago(lookback)
+      | where OperationName =~ "Update StsRefreshTokenValidFrom Timestamp"
+      | where Result =~ "success"
+      | mv-expand TargetResource = TargetResources
+      | where tostring(TargetResource.type) =~ "User"
+      | extend TargetUserId = tostring(TargetResource.id)
+      | where isnotempty(TargetUserId)
+      | extend RevokedUpn = tolower(tostring(TargetResource.userPrincipalName))
+      | extend RevokedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)),
+                               tostring(InitiatedBy.user.userPrincipalName),
+                               tostring(InitiatedBy.app.displayName))
+      | project RevokedTime = TimeGenerated, TargetUserId, RevokedUpn, RevokedBy;
+  let RevokedUserIds = Revocations | distinct TargetUserId;
+  let SuccessfulSignIns = materialize(
+      union
+          (SigninLogs
+          | where TimeGenerated >= ago(lookback + preWindow)
+          | where ResultType == "0"
+          | where UserId in (RevokedUserIds)
+          | extend SignInType = "Interactive"
+          | project TimeGenerated, UserId, UserPrincipalName, IPAddress, AppDisplayName, SignInType),
+          (AADNonInteractiveUserSignInLogs
+          | where TimeGenerated >= ago(lookback + preWindow)
+          | where ResultType == "0"
+          | where UserId in (RevokedUserIds)
+          | extend SignInType = "NonInteractive"
+          | project TimeGenerated, UserId, UserPrincipalName, IPAddress, AppDisplayName, SignInType)
+      | where isnotempty(IPAddress)
+      | extend SignInUpn = tolower(UserPrincipalName)
+      | project TimeGenerated, UserId, SignInUpn, IPAddress, AppDisplayName, SignInType);
+  let PreRevocationIps =
+      SuccessfulSignIns
+      | join kind=inner Revocations on $left.UserId == $right.TargetUserId
+      | where TimeGenerated between ((RevokedTime - preWindow) .. RevokedTime)
+      | distinct UserId, RevokedTime, IPAddress;
+  SuccessfulSignIns
+  | join kind=inner Revocations on $left.UserId == $right.TargetUserId
+  | where TimeGenerated > RevokedTime + gracePeriod
+  | join kind=inner PreRevocationIps on UserId, RevokedTime, IPAddress
+  | summarize
+      FirstSignInAfterRevocation = min(TimeGenerated),
+      LastSignInAfterRevocation = max(TimeGenerated),
+      SignInCount = count(),
+      SignInTypes = make_set(SignInType, 2),
+      SignInUpns = make_set(SignInUpn, 5),
+      Apps = make_set(AppDisplayName, 20)
+      by UserId, RevokedUpn, IPAddress, RevokedTime, RevokedBy
+  // Display UPN: the UPN at revocation time, or the sign-in UPN if the audit event had none
+  | extend UserUpn = iff(isnotempty(RevokedUpn), RevokedUpn, tostring(SignInUpns[0]))
+  | extend AccountName = tostring(split(UserUpn, "@")[0])
+  | extend AccountUPNSuffix = tostring(split(UserUpn, "@")[1])
+  | sort by FirstSignInAfterRevocation desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: AadUserId
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+customDetails:
+  RevokedTime: RevokedTime
+  RevokedBy: RevokedBy
+  SignInCount: SignInCount
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: mikedsosa
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection", "Identity" ]
