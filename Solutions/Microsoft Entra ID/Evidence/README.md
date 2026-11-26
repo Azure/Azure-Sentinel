@@ -1,8 +1,9 @@
-# Reviewer Guide: Microsoft Entra ID (`3.3.20`) Qualification Evidence
+# Reviewer Guide: Microsoft Entra ID (`3.3.22` Offline Validation & `3.3.20` Baseline Qualification Evidence)
 
-This folder holds the qualification evidence and PR verification reports for **Microsoft Entra ID (`3.3.20`)**, produced by the Sentinel-to-Defender-XDR Qualification Flow. It follows the same layout as the Azure DDoS Protection reference PR.
+This folder holds the current offline PR validation reports for **Microsoft Entra ID (`3.3.22`)** (packaged via V3.1 without lab deployment), alongside the retained baseline live lab qualification receipts from **`3.3.20`**.
 
-**Rollup:** Validation **Validated** | Qualification **Qualified** | Migration **Migration Verified** — overall **Qualified** (`72 Passed | 0 Waived | 4 Human Review Required | 0 Failed`, 5 N/A of 81)
+- **`3.3.22` Offline PR Validation Rollup (`Evidence/pr-qualification/`):** Validation **Validated** | Qualification **Not Run** (no lab deployment) | Migration **Not Applicable** — overall **Validated** (`29 Passed | 0 Waived | 0 Human Review Required | 0 Failed | 28 Skipped`, 24 N/A of 81)
+- **Historical `3.3.20` Baseline Qualification Rollup (`Evidence/qualification-evidence.json`, `Evidence/receipts/`):** Validation **Validated** | Qualification **Qualified** | Migration **Migration Verified** — overall **Qualified** (`72 Passed | 0 Waived | 4 Human Review Required | 0 Failed`, 5 N/A of 81)
 
 ---
 
@@ -12,12 +13,12 @@ Start your human review by opening **`Evidence/pr-qualification/qualification-re
 
 | Artifact | Path | Purpose |
 |---|---|---|
-| **Interactive HTML Report (Primary Entry Point)** | `Evidence/pr-qualification/qualification-report.html` | Self-contained 4-tab visual report (**Summary & Applicability**, **Validation**, **Qualification**, **Migration & Reviewer Actions**) with the **Reviewer Action Queue**, filterable check cards, and clickable evidence links. |
-| **Markdown PR Summary** | `Evidence/pr-qualification/qualification-summary.md` | GitHub-rendered summary of the Validation, Qualification and Migration checklists (`Validated` \| `Qualified` \| `Migration Verified`, `72 Passed \| 0 Waived \| 4 Human Review Required \| 0 Failed`). |
-| **Machine-Readable Result** | `Evidence/pr-qualification/pr-qualification-result.json` | All 81 checklist items (`checkId`, `status`, `whatWeChecked`, `whatWeObserved`, `whyPassedOrFailed`, `evidenceRefs`). |
-| **Sanitized Decision Manifest** | `Evidence/decision-manifest.json` | Sanitized record of reviewed migration and qualification decisions (`authorExceptions: []`). |
-| **Live Lab Qualification Bundle** | `Evidence/qualification-evidence.json` | Consolidated live lab qualification evidence bundle consumed by `pr-qualify`. |
-| **Workflow State** | `Evidence/workflow-state.json` | Sanitized copy of the run's `workflow-state.json` reflecting all passed stages. |
+| **Interactive HTML Report (Primary Entry Point)** | `Evidence/pr-qualification/qualification-report.html` | Self-contained 4-tab visual report (**Summary & Applicability**, **Validation**, **Qualification**, **Migration & Reviewer Actions**) for **`3.3.22`** offline validation (`Validated`, `0 Failed`). |
+| **Markdown PR Summary** | `Evidence/pr-qualification/qualification-summary.md` | GitHub-rendered summary of the **`3.3.22`** offline Validation checklist (`Validated`, Qualification `Not Run`). |
+| **Machine-Readable Result** | `Evidence/pr-qualification/pr-qualification-result.json` | All 81 checklist items evaluated against **`3.3.22`** (`checkId`, `status`, `whatWeChecked`, `whatWeObserved`, `whyPassedOrFailed`, `evidenceRefs`). |
+| **Sanitized Decision Manifest (Baseline `3.3.20`)** | `Evidence/decision-manifest.json` | Historical sanitized record of reviewed migration and qualification decisions from `3.3.20` (`authorExceptions: []`). |
+| **Live Lab Qualification Bundle (Baseline `3.3.20`)** | `Evidence/qualification-evidence.json` | Historical live lab qualification evidence bundle from `3.3.20` (retained unchanged; no lab deployment was run for `3.3.22`). |
+| **Workflow State (Baseline `3.3.20`)** | `Evidence/workflow-state.json` | Historical sanitized copy of the `3.3.20` qualification run's `workflow-state.json`. |
 | **Raw Live Receipts** | `Evidence/receipts/` | Timestamped JSON receipts for ARM disabled deployment/readback, Graph custom detection creation/readback, dual-surface workbook/connector KQL execution, alert parity, and URL/SVG verification. |
 | **Shared Mock Telemetry** | `Sample Data/Tables/*_mock.json` & `Sample Data/SigninLogs_mock.json` | Schema-valid synthetic records covering all 9 Entra ID tables (`SigninLogs`, `AuditLogs`, `AADNonInteractiveUserSignInLogs`, `AADServicePrincipalSignInLogs`, `AADManagedIdentitySignInLogs`, `AADProvisioningLogs`, `AADRiskyUsers`, `AADUserRiskEvents`, `ADFSSignInLogs`). |
 
@@ -51,7 +52,18 @@ Start your human review by opening **`Evidence/pr-qualification/qualification-re
 
 ---
 
-## 5. Re-Running Qualification Locally
+## 5. Re-Running Validation / Qualification Locally
+
+Offline validation (no lab deployment):
+
+```powershell
+sentinel-xdr-migration pr-qualify `
+  --solution "Solutions/Microsoft Entra ID" `
+  --mode validation `
+  --no-migration
+```
+
+Full migration + qualification (requires current live lab receipts):
 
 ```powershell
 $env:PYTHONPATH = "Tools/SentinelToXDRMigration"
