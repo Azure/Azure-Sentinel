@@ -2,13 +2,13 @@
 
 ## Summary
 
-This playbook runs automatically on a Recurrence schedule (every 60 minutes) and calls the Google Threat Intelligence Threat List API for the `ransomware` category to retrieve the current STIX indicators for that period. The returned indicators are chunked into batches of 100 and uploaded to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects action, so no manual trigger or workbook wiring is required.
+This playbook runs automatically on a Recurrence schedule (every 60 minutes) and calls the Google Threat Intelligence Threat List API for the `ransomware` category to retrieve the STIX indicators of the hourly threat list. Threat lists are generated hourly with a 2 hour delay, so each run requests the list for the hour two hours before the current UTC time (`yyyyMMddHH`, T-2h). The returned indicators are chunked into batches of 100 and uploaded to Microsoft Sentinel Threat Intelligence via the Upload STIX Objects action, so no manual trigger or workbook wiring is required.
 
 ### Prerequisites
 
 1. Register for Google Threat Intelligence and obtain an API key (see https://developers.virustotal.com/v3.0/reference#getting-started).
 2. Deploy the Google Threat Intelligence Custom Connector (`GTICustomConnector`) in the same resource group, and configure its API connection with the GTI API key.
-3. Ensure you have a Log Analytics Workspace onboarded to Microsoft Sentinel to receive the ingested Threat Intelligence indicators.
+3. Ensure you have a Log Analytics Workspace onboarded to Microsoft Sentinel to receive the ingested Threat Intelligence indicators. The workspace must be in the same resource group as the playbook.
 4. Grant the playbook's managed identity the **Microsoft Sentinel Contributor** (or **Threat Intelligence Contributor**) role so it can upload STIX objects via the Microsoft Sentinel connector.
 
 ### Deployment Instructions
@@ -17,6 +17,7 @@ This playbook runs automatically on a Recurrence schedule (every 60 minutes) and
 2. Fill in the required parameters:
    * PlaybookName: Enter the playbook name here (default: GTI-ThreatList).
    * ConnectorName: Name of the previously deployed Google Threat Intelligence custom connector resource (default: GoogleThreatIntelligence-CustomConnector).
+   * WorkspaceName: Name of the Log Analytics workspace (with Microsoft Sentinel enabled) to which the threat intelligence is uploaded. The workspace ID is resolved from this name and passed to the Upload STIX Objects action.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FGoogle%2520Threat%2520Intelligence%2FPlaybooks%2FGTIThreatList%2Fazuredeploy.json) [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FGoogle%2520Threat%2520Intelligence%2FPlaybooks%2FGTIThreatList%2Fazuredeploy.json)
 
