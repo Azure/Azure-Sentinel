@@ -53,7 +53,7 @@ place of its charts.
 ## Fields on each indicator
 
 `Confidence` grades the evidence behind an indicator: 90 means 100 or more observed attacks, 60
-means a single sighting. It is there so you can pick an alerting threshold rather than mute the
+means one or two. It is there so you can pick an alerting threshold rather than mute the
 feed. Labels carry the source network (`asn:ASxxxx`), origin (`country:XX`) and the indicator
 kind. On paid plans the attacker-IP collection also carries CVE probers, each labelled with the
 CVE ids that source went after, and the query window extends from 7 to 30 days.
