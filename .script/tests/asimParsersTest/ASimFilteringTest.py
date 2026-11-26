@@ -18,6 +18,9 @@ extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
 filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
+validate_query_time_parser_document = (
+    parser_file_utils.validate_query_time_parser_document
+)
 
 __unittest = True #prevents stacktrace during most assertions
 
@@ -96,9 +99,14 @@ client = None
 def get_parser(parser_path):
     try:
         with open(parser_path, 'r') as file_stream:
-            return yaml.safe_load(file_stream)
-    except:
-        raise Exception()
+            parser = yaml.safe_load(file_stream)
+        validate_query_time_parser_document(parser, parser_path)
+        return parser
+    except (OSError, ValueError, yaml.YAMLError) as error:
+        raise ValueError(
+            f"Unable to load a safe query-time parser from "
+            f"{parser_path}: {error}"
+        ) from error
 
 
 # Creating a string of the parameters of a parser. 
@@ -107,7 +115,11 @@ def get_parser(parser_path):
 def create_parameters_string(parser_file):
     paramsList = []
     for param in parser_file['ParserParams']:
-        paramDefault = f"\'{param['Default']}\'" if param['Type']=="string" else param['Default']
+        paramDefault = (
+            "'" + str(param['Default']).replace("'", "''") + "'"
+            if param['Type'] == "string"
+            else param['Default']
+        )
         paramsList.append(f"{param['Name']}:{param['Type']}={paramDefault}")
     return ','.join(paramsList)
 
@@ -280,24 +292,28 @@ def main():
     # Get modified ASIM Parser files along with their status
     current_directory = os.path.dirname(os.path.abspath(__file__))
 
-    # Add upstream remote if not already present
-    git_remote_command = "git remote"
-    remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
-    if 'upstream' not in remote_result.stdout.split():
-        git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
-        subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
-    # Fetch from upstream
-    git_fetch_upstream_command = "git fetch upstream"
-    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    changed_files = parser_file_utils.get_query_time_modified_files()
+    if changed_files is None:
+        # Add upstream remote if not already present
+        git_remote_command = "git remote"
+        remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
+        if 'upstream' not in remote_result.stdout.split():
+            git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
+            subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
+        # Fetch from upstream
+        git_fetch_upstream_command = "git fetch upstream"
+        subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
 
-    GetModifiedFiles = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
-    try:
-        modified_files = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"::error::An error occurred while executing the command: {e}")
-        sys.stdout.flush()  # Explicitly flush stdout
+        GetModifiedFiles = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
+        try:
+            modified_files = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"::error::An error occurred while executing the command: {e}")
+            sys.stdout.flush()  # Explicitly flush stdout
+            sys.exit(1)
+        changed_files = modified_files.stdout.splitlines()
     
-    modified_yaml_files = filter_query_time_parser_files(modified_files.stdout.splitlines())
+    modified_yaml_files = filter_query_time_parser_files(changed_files)
     print(f"{YELLOW}Following files has been detected as modified:{RESET}")
     sys.stdout.flush()  # Explicitly flush stdout
     for file in modified_yaml_files:
@@ -311,6 +327,8 @@ def main():
         if is_union_parser(parser_filename, SchemaName) or is_empty_parser(parser_filename):
             continue
         parser_file_path = PARSER_FILE_NAME
+        if os.getenv("ASIM_PR_DATA_DIR"):
+            parser_file_path = os.path.join(os.environ["ASIM_PR_DATA_DIR"], PARSER_FILE_NAME)
         sys.stdout.flush()  # Explicitly flush stdout
 
         suite = unittest.TestSuite()

@@ -40,6 +40,44 @@ FILTERING_SPEC.loader.exec_module(FILTERING_VALIDATOR)
 
 
 class QueryTimeParserFileSelectionTests(unittest.TestCase):
+    def test_pinned_pr_data_diff_is_independent_of_validator_checkout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data_root = Path(temporary)
+            parser = data_root / "Parsers" / "ASimDns" / "Parsers" / "ASimDnsContoso.yaml"
+            parser.parent.mkdir(parents=True)
+
+            def git(*arguments):
+                return subprocess.check_output(
+                    ["git", "-C", str(data_root), *arguments],
+                    text=True, stderr=subprocess.PIPE,
+                ).strip()
+
+            git("init")
+            git("config", "user.name", "ASIM tests")
+            git("config", "user.email", "asim-tests@example.invalid")
+            parser.write_text("ParserName: original\n", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-m", "Trusted base")
+            base_ref = "refs/remotes/origin/asim-trusted-base"
+            git("update-ref", base_ref, "HEAD")
+            parser.write_text("ParserName: approved-pr\n", encoding="utf-8")
+            expected = ["Parsers/ASimDns/Parsers/ASimDnsContoso.yaml"]
+            with patch.dict(os.environ, {
+                "ASIM_PR_DATA_DIR": str(data_root),
+                "ASIM_TRUSTED_BASE_REF": base_ref,
+            }):
+                self.assertEqual(expected, PARSER_FILE_UTILS.get_query_time_modified_files())
+                self.assertEqual(
+                    expected, TEMPLATE_VERIFIER.get_modified_files(str(MODULE_PATH.parent)),
+                )
+        for context in (
+            {"ASIM_PR_DATA_DIR": "pr-data"},
+            {"ASIM_TRUSTED_BASE_REF": base_ref},
+        ):
+            with patch.dict(os.environ, context, clear=True):
+                with self.assertRaisesRegex(ValueError, "must be set together"):
+                    PARSER_FILE_UTILS.get_query_time_modified_files()
+
     def test_mixed_changes_select_only_query_time_parser_files(self):
         changed_files = [
             "Parsers/ASimEmailEvent/Parsers/ASimEmailEventContoso.yaml",
@@ -103,6 +141,34 @@ class ParentParserRoutingTests(unittest.TestCase):
         return TEMPLATE_VERIFIER.get_parent_parser(
             parser, str(path), "AuditEvent", file_type
         )
+
+    def test_template_runner_reads_pr_parsers_parents_and_sample_directory(self):
+        data_root = self.directory
+        self.directory = data_root / "Parsers" / "ASimAuditEvent" / "Parsers"
+        self.directory.mkdir(parents=True)
+        for prefix, root in (("ASim", "ASimAuditEvent"), ("vim", "imAuditEvent")):
+            self.write_parser(root, [prefix + "AuditEventContoso"])
+            self.write_parser(prefix + "AuditEventContoso")
+        with (
+            patch.dict(os.environ, {"ASIM_PR_DATA_DIR": str(data_root)}),
+            patch.object(
+                TEMPLATE_VERIFIER, "get_modified_files",
+                return_value=["Parsers/ASimAuditEvent/Parsers/ASimAuditEventContoso.yaml"],
+            ),
+            patch.object(
+                TEMPLATE_VERIFIER, "extract_and_check_properties", return_value=[],
+            ) as validate,
+            patch.object(TEMPLATE_VERIFIER, "print_results_table"),
+            patch("sys.stdout", io.StringIO()),
+        ):
+            TEMPLATE_VERIFIER.run()
+        self.assertEqual(2, validate.call_count)
+        for call, prefix, root in zip(
+            validate.call_args_list, ("ASim", "vim"), ("ASimAuditEvent", "imAuditEvent"),
+        ):
+            self.assertEqual(prefix + "AuditEventContoso", call.args[0]["ParserName"])
+            self.assertEqual(root, call.args[1]["ParserName"])
+            self.assertEqual(data_root / "Sample Data" / "ASIM", Path(call.args[3]))
 
     def test_missing_null_and_empty_parent_keep_schema_unifier_defaults(self):
         for file_type, prefix, root in (
@@ -317,6 +383,56 @@ class QueryTimeParserExecutionRoutingTests(unittest.TestCase):
                     expected,
                 )
 
+    def test_filtering_stops_when_local_change_discovery_fails(self):
+        output = io.StringIO()
+        with (
+            patch.object(FILTERING_VALIDATOR, "WORKSPACE_ID", "unit-test-workspace"),
+            patch.object(FILTERING_VALIDATOR, "attempt_to_connect"),
+            patch.object(
+                FILTERING_VALIDATOR.parser_file_utils,
+                "get_query_time_modified_files",
+                return_value=None,
+            ),
+            patch.object(
+                FILTERING_VALIDATOR.subprocess, "run",
+                side_effect=[
+                    SimpleNamespace(stdout="upstream\n"),
+                    SimpleNamespace(stdout=""),
+                    subprocess.CalledProcessError(1, "git diff"),
+                ],
+            ),
+            patch.object(FILTERING_VALIDATOR, "FilteringTest") as test,
+            patch.object(FILTERING_VALIDATOR.sys, "stdout", output),
+        ):
+            with self.assertRaises(SystemExit) as error:
+                FILTERING_VALIDATOR.main()
+        self.assertEqual(1, error.exception.code)
+        self.assertIn("::error::An error occurred while executing the command", output.getvalue())
+        test.assert_not_called()
+
+    def test_filtering_reads_pr_data_without_fetching_upstream(self):
+        data_dir = str(Path("approved PR data").resolve())
+        parser_path = "Parsers/ASimDns/Parsers/vimDnsContoso.yaml"
+        with (
+            patch.dict(os.environ, {"ASIM_PR_DATA_DIR": data_dir}),
+            patch.object(FILTERING_VALIDATOR, "WORKSPACE_ID", "unit-test-workspace"),
+            patch.object(FILTERING_VALIDATOR, "attempt_to_connect"),
+            patch.object(
+                FILTERING_VALIDATOR.parser_file_utils,
+                "get_query_time_modified_files",
+                return_value=[parser_path],
+            ),
+            patch.object(FILTERING_VALIDATOR.subprocess, "run") as git,
+            patch.object(FILTERING_VALIDATOR, "FilteringTest") as test,
+            patch.object(FILTERING_VALIDATOR.unittest, "TestSuite"),
+            patch.object(FILTERING_VALIDATOR.unittest, "TextTestRunner") as runner,
+            patch.object(FILTERING_VALIDATOR.sys, "stdout", io.StringIO()),
+        ):
+            runner.return_value.run.return_value.wasSuccessful.return_value = True
+            FILTERING_VALIDATOR.main()
+        git.assert_not_called()
+        self.assertEqual(os.path.join(data_dir, parser_path), test.call_args.args[1])
+
     @unittest.skipUnless(shutil.which("pwsh"), "PowerShell 7 is required")
     def test_workflow_schema_data_runner_selects_only_query_time_parsers(self):
         repo_root = MODULE_PATH.parents[3]
@@ -362,6 +478,13 @@ function Invoke-Expression([string]$Command) {
     }
     throw "Unexpected command: $Command"
 }
+function git {
+    if (($args -join ' ') -ne '-C approved-pr-data diff --name-status refs/remotes/origin/asim-trusted-base Parsers/') {
+        throw "Unexpected git arguments: $args"
+    }
+    $global:LASTEXITCODE = 0
+    return $global:statusLines
+}
 function testSchema([string]$ParserFile) {
     $global:selected += $ParserFile
 }
@@ -383,11 +506,25 @@ run
             ],
             ["Parsers/ASimDns/Parsers/New.yaml"],
         ))
-        for statuses, expected in status_cases:
-            with self.subTest(statuses=statuses):
+        for statuses, expected, use_pr_data in (
+            (statuses, expected, use_pr_data)
+            for statuses, expected in status_cases
+            for use_pr_data in (False, True)
+        ):
+            with self.subTest(statuses=statuses, use_pr_data=use_pr_data):
+                environment = {
+                    key: value for key, value in os.environ.items()
+                    if key not in {"ASIM_PR_DATA_DIR", "ASIM_TRUSTED_BASE_REF"}
+                }
+                if use_pr_data:
+                    environment.update(
+                        ASIM_PR_DATA_DIR="approved-pr-data",
+                        ASIM_TRUSTED_BASE_REF="refs/remotes/origin/asim-trusted-base",
+                    )
                 result = subprocess.run(
                     ["pwsh", "-NoProfile", "-NonInteractive", "-Command", command],
                     input=json.dumps(statuses),
+                    env=environment,
                     text=True,
                     capture_output=True,
                     check=True,
@@ -401,7 +538,14 @@ run
 
 
 class SampleFixtureIngestionTests(unittest.TestCase):
-    def run_ingestion(self, fixtures, tables, table_type="builtin", upload_results=None):
+    def run_ingestion(
+        self,
+        fixtures,
+        tables,
+        table_type="builtin",
+        upload_results=None,
+        delete_dcr=None,
+    ):
         script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
         tree = ast.parse(script_path.read_text(encoding="utf-8"))
         initialization = next(
@@ -433,6 +577,7 @@ class SampleFixtureIngestionTests(unittest.TestCase):
             status_code=200,
             text=json.dumps({"properties": {"immutableId": "synthetic-dcr"}}),
         )
+        delete_dcr = delete_dcr or Mock()
         namespace = {
             "os": os,
             "json": json,
@@ -459,6 +604,9 @@ class SampleFixtureIngestionTests(unittest.TestCase):
             "get_table_status": Mock(),
             "create_dcr": Mock(return_value=({}, "dcr-url", "PUT", "synthetic-stream")),
             "hit_api": Mock(return_value=response),
+            "delete_dcr": delete_dcr,
+            "_response_payload": lambda value: json.loads(value.text),
+            "log_arm_response": Mock(),
             "senddtosentinel": Mock(
                 side_effect=upload_results if upload_results is not None else None,
                 return_value=True,
@@ -473,6 +621,22 @@ class SampleFixtureIngestionTests(unittest.TestCase):
             exec(code, namespace)
         return namespace
 
+    def test_parser_and_fixture_lookup_use_separate_pr_data_root(self):
+        data_dir = str(Path("approved PR data").resolve())
+        with patch.dict(os.environ, {"ASIM_PR_DATA_DIR": data_dir}):
+            result = self.run_ingestion(
+                [Path("fixtures/shared.csv")], ["Synthetic_CL"],
+            )
+        self.assertEqual(
+            os.path.join(
+                data_dir, "Parsers/ASimAuditEvent/Parsers/ASimAuditEventContoso0.yaml",
+            ),
+            result["asim_parser_path"],
+        )
+        self.assertEqual(
+            os.path.join(data_dir, "Sample Data", "ASIM"), result["sample_data_dir"],
+        )
+
     def test_shared_fixture_is_ingested_once_for_all_changed_parsers(self):
         for table_type in ("builtin", "custom_log"):
             with self.subTest(table_type=table_type):
@@ -484,6 +648,9 @@ class SampleFixtureIngestionTests(unittest.TestCase):
                 result["senddtosentinel"].assert_called_once()
                 result["create_dcr"].assert_called_once()
                 result["rebase_time_generated"].assert_called_once()
+                result["delete_dcr"].assert_called_once_with(
+                    "dcr-url", "Synthetic_CL"
+                )
 
     def test_distinct_fixtures_and_destinations_are_not_deduplicated(self):
         for fixtures, tables in (
@@ -497,6 +664,7 @@ class SampleFixtureIngestionTests(unittest.TestCase):
                     result = self.run_ingestion(fixtures, tables, table_type)
                     self.assertEqual(result["senddtosentinel"].call_count, 2)
                     self.assertEqual(result["create_dcr"].call_count, 2)
+                    self.assertEqual(result["delete_dcr"].call_count, 2)
 
     def test_failed_upload_does_not_mark_fixture_as_ingested(self):
         for table_type in ("builtin", "custom_log"):
@@ -509,6 +677,356 @@ class SampleFixtureIngestionTests(unittest.TestCase):
                 )
                 self.assertEqual(result["senddtosentinel"].call_count, 2)
                 self.assertEqual(result["create_dcr"].call_count, 2)
+                self.assertEqual(result["delete_dcr"].call_count, 2)
+
+    def test_upload_exception_still_deletes_created_dcr(self):
+        delete_dcr = Mock()
+
+        with self.assertRaisesRegex(RuntimeError, "upload failed"):
+            self.run_ingestion(
+                [Path("fixtures/shared.csv")],
+                ["Synthetic_CL"],
+                upload_results=RuntimeError("upload failed"),
+                delete_dcr=delete_dcr,
+            )
+
+        delete_dcr.assert_called_once_with("dcr-url", "Synthetic_CL")
+
+
+class SampleDcrCleanupTests(unittest.TestCase):
+    def setUp(self):
+        script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
+        tree = ast.parse(script_path.read_text(encoding="utf-8"))
+        delete_dcr = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "delete_dcr"
+        )
+        self.hit_api = Mock(
+            return_value=SimpleNamespace(status_code=204, text="")
+        )
+        self.log_arm_response = Mock()
+        namespace = {
+            "hit_api": self.hit_api,
+            "log_arm_response": self.log_arm_response,
+        }
+        exec(
+            compile(
+                ast.Module(body=[delete_dcr], type_ignores=[]),
+                str(script_path),
+                "exec",
+            ),
+            namespace,
+        )
+        self.delete_dcr = namespace["delete_dcr"]
+
+    def test_dcr_cleanup_uses_created_resource_url(self):
+        resource_url = (
+            "https://management.azure.com/subscriptions/sub/resourceGroups/"
+            "rg/providers/Microsoft.Insights/dataCollectionRules/dcr"
+            "?api-version=2022-06-01"
+        )
+
+        with patch("sys.stdout", io.StringIO()):
+            self.delete_dcr(resource_url, "Contoso_CL")
+
+        url, request, method = self.hit_api.call_args.args
+        self.assertEqual(resource_url, url)
+        self.assertEqual({}, request)
+        self.assertEqual("DELETE", method)
+        self.log_arm_response.assert_called_once_with(
+            "DCR cleanup", "Contoso_CL", self.hit_api.return_value
+        )
+
+    def test_dcr_cleanup_failure_is_not_silenced(self):
+        self.hit_api.return_value = SimpleNamespace(
+            status_code=500, text=""
+        )
+
+        with (
+            patch("sys.stdout", io.StringIO()),
+            self.assertRaisesRegex(RuntimeError, "cleanup failed"),
+        ):
+            self.delete_dcr("dcr-url", "Contoso_CL")
+
+
+class LegacyKqlSecurityTests(unittest.TestCase):
+    def parser_document(self, parser_query="Contoso_CL | take 1"):
+        return {
+            "Parser": {"Version": "1.0.0"},
+            "Normalization": {"Schema": "Authentication"},
+            "ParserName": "ASimAuthenticationContoso",
+            "EquivalentBuiltInParser": "_ASim_Authentication_Contoso",
+            "ParserParams": [
+                {
+                    "Name": "disabled",
+                    "Type": "bool",
+                    "Default": False,
+                },
+                {
+                    "Name": "eventtype_in",
+                    "Type": "dynamic",
+                    "Default": "dynamic([])",
+                },
+            ],
+            "ParserQuery": parser_query,
+        }
+
+    def test_rejects_privileged_query_time_kql(self):
+        queries = (
+            "workspace('workspace-id').SecurityEvent | take 1",
+            (
+                "cluster('https://example.kusto.windows.net')"
+                ".database('db').Table | take 1"
+            ),
+            (
+                "externaldata(Value:string)"
+                "['https://example.test/data.csv']"
+            ),
+            "Contoso_CL | evaluate bag_unpack(Payload)",
+            ".show tables",
+        )
+        for parser_query in queries:
+            with self.subTest(parser_query=parser_query):
+                with self.assertRaisesRegex(
+                    ValueError, "disallowed KQL construct"
+                ):
+                    PARSER_FILE_UTILS.validate_query_time_parser_document(
+                        self.parser_document(parser_query)
+                    )
+
+    def test_ignores_dangerous_words_in_comments_and_strings(self):
+        PARSER_FILE_UTILS.validate_query_time_parser_document(
+            self.parser_document(
+                "Contoso_CL\n"
+                "| extend Note = 'workspace(''other'')'\n"
+                "// evaluate externaldata('ignored')\n"
+                "| take 1"
+            )
+        )
+
+    def test_rejects_unsafe_execution_metadata(self):
+        cases = (
+            ("Normalization", {"Schema": "Auth'); workspace('x')"}),
+            ("ParserName", "Parser); cluster('x')"),
+            (
+                "ParserParams",
+                [
+                    {
+                        "Name": "disabled); evaluate python()",
+                        "Type": "bool",
+                        "Default": False,
+                    }
+                ],
+            ),
+        )
+        for field, value in cases:
+            with self.subTest(field=field):
+                document = self.parser_document()
+                document[field] = value
+                with self.assertRaises(ValueError):
+                    PARSER_FILE_UTILS.validate_query_time_parser_document(
+                        document
+                    )
+
+    def test_legacy_runners_call_trusted_document_validator(self):
+        run_testers = (
+            MODULE_PATH.with_name("runAsimTesters.ps1")
+            .read_text(encoding="utf-8")
+        )
+        filtering = (
+            MODULE_PATH.with_name("ASimFilteringTest.py")
+            .read_text(encoding="utf-8")
+        )
+
+        self.assertIn("assertSafeParserDocument", run_testers)
+        self.assertIn(
+            '.Replace("\'", "\'\'")',
+            run_testers,
+        )
+        self.assertIn(
+            "validate_query_time_parser_document(parser, parser_path)",
+            filtering,
+        )
+
+    def test_validator_cli_rejects_unsafe_document(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "parser.json"
+            path.write_text(
+                json.dumps(self.parser_document()),
+                encoding="utf-8",
+            )
+            safe = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(MODULE_PATH),
+                    "validate-query-document",
+                    str(path),
+                ],
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(0, safe.returncode, safe.stderr)
+
+            path.write_text(
+                json.dumps(
+                    self.parser_document(
+                        "workspace('other').Table | take 1"
+                    )
+                ),
+                encoding="utf-8",
+            )
+            unsafe = subprocess.run(
+                [
+                    os.sys.executable,
+                    str(MODULE_PATH),
+                    "validate-query-document",
+                    str(path),
+                ],
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(1, unsafe.returncode)
+            self.assertIn(
+                "disallowed KQL construct", unsafe.stderr
+            )
+
+
+class SampleTableNameSecurityTests(unittest.TestCase):
+    def setUp(self):
+        script_path = MODULE_PATH.with_name("ingestASimSampleData.py")
+        tree = ast.parse(script_path.read_text(encoding="utf-8"))
+        function_names = {
+            "validate_table_name",
+            "_response_payload",
+            "log_arm_response",
+            "convert_data_csv_to_json",
+            "check_for_custom_table",
+            "create_table",
+            "create_dcr",
+        }
+        functions = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name in function_names
+        ]
+        built_in_tables = next(
+            ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "lia_supported_builtin_table"
+                for target in node.targets
+            )
+        )
+        namespace = {
+            "csv": csv,
+            "json": json,
+            "re": re,
+            "CUSTOM_LOG_TABLE_RE": re.compile(
+                r"^[A-Za-z][A-Za-z0-9_]{0,60}_CL$"
+            ),
+            "lia_supported_builtin_table": built_in_tables,
+            "subscriptionId": "subscription",
+            "resourceGroupName": "resource-group",
+            "workspaceName": "workspace",
+            "workspace_id": "workspace-id",
+            "dataCollectionEndpointname": "dce",
+            "prnumber": "123",
+        }
+        exec(
+            compile(
+                ast.Module(body=functions, type_ignores=[]),
+                str(script_path),
+                "exec",
+            ),
+            namespace,
+        )
+        self.functions = namespace
+
+    def write_fixture(self, types):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name) / "fixture.csv"
+        with path.open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(
+                stream, fieldnames=["Type", "TimeGenerated"]
+            )
+            writer.writeheader()
+            for table_name in types:
+                writer.writerow(
+                    {
+                        "Type": table_name,
+                        "TimeGenerated": "2026-01-01T00:00:00Z",
+                    }
+                )
+        return path
+
+    def test_accepts_allowlisted_builtin_and_strict_custom_table(self):
+        validate = self.functions["validate_table_name"]
+
+        self.assertEqual("AWSCloudTrail", validate("AWSCloudTrail"))
+        self.assertEqual(
+            "AZFWIdpsSignature", validate("AZFWIdpsSignature")
+        )
+        self.assertEqual("Contoso_CL", validate("Contoso_CL"))
+
+    def test_rejects_table_name_path_and_url_manipulation(self):
+        validate = self.functions["validate_table_name"]
+
+        for value in (
+            "../../Contoso_CL",
+            "Contoso/Other_CL",
+            "Contoso_CL?api-version=2022-10-01",
+            "Contoso-Logs_CL",
+            "Contoso_CL/../Other_CL",
+            " Contoso_CL",
+            "A" * 62 + "_CL",
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    validate(value)
+
+    def test_fixture_requires_one_valid_type(self):
+        convert = self.functions["convert_data_csv_to_json"]
+
+        with self.assertRaisesRegex(ValueError, "exactly one Type"):
+            convert(self.write_fixture(["First_CL", "Second_CL"]))
+        with self.assertRaises(ValueError):
+            convert(self.write_fixture(["../../Contoso_CL"]))
+
+    def test_arm_builders_validate_table_before_building_url(self):
+        for function_name, args in (
+            ("create_table", ("[]", "../../Contoso_CL")),
+            ("create_dcr", ("[]", "../../Contoso_CL", "Custom")),
+        ):
+            with self.subTest(function=function_name):
+                with self.assertRaises(ValueError):
+                    self.functions[function_name](*args)
+
+    def test_arm_logging_omits_raw_response_message(self):
+        output = io.StringIO()
+        response = SimpleNamespace(
+            status_code=400,
+            text=json.dumps(
+                {
+                    "error": {
+                        "code": "InvalidPayload",
+                        "message": "untrusted response content",
+                    }
+                }
+            ),
+        )
+
+        with patch("sys.stdout", output):
+            self.functions["log_arm_response"](
+                "DCR creation", "Contoso_CL", response
+            )
+
+        self.assertIn("InvalidPayload", output.getvalue())
+        self.assertNotIn("untrusted response content", output.getvalue())
 
 
 class SampleFixtureSelectionTests(unittest.TestCase):
@@ -737,3 +1255,27 @@ class SampleFixtureSelectionTests(unittest.TestCase):
     def test_missing_source_specific_and_legacy_fixtures_fail_explicitly(self):
         with self.assertRaises(FileNotFoundError):
             self.resolve("ProofPointTAPClicksBlockedV2_CL | where true")
+
+    def test_rejects_unsafe_fixture_name_components(self):
+        cases = (
+            ("../Proofpoint", "TAP", "EmailEvent", "EventVendor"),
+            ("Proofpoint", "TAP/Other", "EmailEvent", "EventProduct"),
+            ("Proofpoint", "TAP", "../EmailEvent", "Normalization.Schema"),
+        )
+        for event_vendor, event_product, schema, label in cases:
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(ValueError, label):
+                    PARSER_FILE_UTILS.resolve_sample_data_path(
+                        self.sample_dir,
+                        event_vendor,
+                        event_product,
+                        schema,
+                        "Synthetic_CL | where true",
+                    )
+
+    def test_containment_guard_rejects_parent_path(self):
+        with self.assertRaisesRegex(ValueError, "outside"):
+            PARSER_FILE_UTILS._resolve_contained_path(
+                self.sample_dir.resolve(),
+                Path("..") / "outside.csv",
+            )

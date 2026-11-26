@@ -1,0 +1,63 @@
+id: efeba9d3-9f43-47b5-8fff-be22e0c62208
+name: SonicWall CSE - Failed Command Center admin login
+description: |
+  'A sign-in to the SonicWall Cloud Secure Edge (CSE) Command Center failed (AdminLogin Deny).
+  CSE logs failed admin logins at INFO severity, so alerting on severity misses them. Admin
+  sign-in normally goes through MySonicWall single sign-on; a failed sign-in with a local
+  account, such as the built-in provisioning account, deserves review.
+  Evaluates events by when they reached Sentinel, so events that arrive late (connector
+  delay or a backfill) are evaluated once, when they arrive. The query period is 2 days to
+  include backfilled events, which keep their own time for up to 48 hours.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - InitialAccess
+relevantTechniques:
+  - T1110
+  - T1078
+query: |
+  CSEEvents
+  | where IngestedAt > ago(1h)
+  | where EventType == "AdminLogin" and Action == "Deny"
+  | summarize
+      FailedLogins = count(),
+      FirstFailure = min(EventTime),
+      LastFailure = max(EventTime),
+      SubTypes = make_set(EventSubType),
+      ClientIps = make_set_if(ClientIp, isnotempty(ClientIp), 10),
+      ClientIp = take_anyif(ClientIp, isnotempty(ClientIp)),
+      UserAgent = take_any(ClientUserAgent)
+      by UserEmail, UserName
+  | extend
+      AccountName = tostring(split(UserEmail, "@")[0]),
+      UPNSuffix = tostring(split(UserEmail, "@")[1])
+customDetails:
+  FailedLogins: FailedLogins
+  SubTypes: SubTypes
+  ClientIps: ClientIps
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SonicWall CSE: {{FailedLogins}} failed admin login(s) for {{UserEmail}}'
+  alertDescriptionFormat: 'Failed Command Center sign-in for {{UserEmail}} between {{FirstFailure}} and {{LastFailure}}.'
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+version: 1.1.0
+kind: Scheduled

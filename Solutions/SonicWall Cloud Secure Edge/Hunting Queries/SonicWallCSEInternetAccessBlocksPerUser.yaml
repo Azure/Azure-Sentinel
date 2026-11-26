@@ -1,0 +1,40 @@
+id: 9e3e97b0-450b-4914-ac6d-a9639bf53360
+name: SonicWall CSE - Internet Access blocks per user
+description: |
+  'This query searches for users with the most SonicWall Cloud Secure Edge (CSE) Internet Access blocks, with the blocked domains, categories, and reasons.'
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+tactics:
+  - CommandAndControl
+  - InitialAccess
+relevantTechniques:
+  - T1071
+  - T1189
+query: |
+  CSEEvents
+  | where EventType in ("Threat", "Compliance", "Malware", "SAASSecurity") and Action == "Denied"
+  | where isnotempty(UserEmail)
+  | summarize
+      Blocks = count(),
+      Domains = make_set(UrlDomain, 20),
+      Categories = make_set_if(UrlCategory, isnotempty(UrlCategory), 10),
+      Reasons = make_set(BlockReason, 10),
+      Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),
+      LastSeen = max(EventTime)
+      by UserEmail
+  | extend
+      AccountName = tostring(split(UserEmail, "@")[0]),
+      UPNSuffix = tostring(split(UserEmail, "@")[1])
+  | order by Blocks desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserEmail
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.0
