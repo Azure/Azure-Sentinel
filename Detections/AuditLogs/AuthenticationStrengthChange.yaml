@@ -43,7 +43,18 @@ query: |
   | extend CombinationsAfter = trim('"', tostring(PropertyBag.AllowedCombinations.new))
   | extend StrengthId = trim('"', tostring(PropertyBag.Id.new))
   | where isnotempty(CombinationsAfter)
-  | where tostring(array_sort_asc(extract_all(@"([A-Za-z0-9]+)", CombinationsBefore))) != tostring(array_sort_asc(extract_all(@"([A-Za-z0-9]+)", CombinationsAfter)))
+  | mv-apply Combination = split(CombinationsBefore, "|") to typeof(string) on (
+      extend Methods = strcat_array(array_sort_asc(split(replace_string(Combination, " ", ""), ",")), ",")
+      | where isnotempty(Methods)
+      | summarize NormalizedBefore = tostring(array_sort_asc(make_set(Methods)))
+    )
+  | mv-apply Combination = split(CombinationsAfter, "|") to typeof(string) on (
+      extend Methods = strcat_array(array_sort_asc(split(replace_string(Combination, " ", ""), ",")), ",")
+      | where isnotempty(Methods)
+      | summarize NormalizedAfter = tostring(array_sort_asc(make_set(Methods)))
+    )
+  | where NormalizedBefore != NormalizedAfter
+  | project-away NormalizedBefore, NormalizedAfter
   | project-reorder TimeGenerated, OperationName, StrengthId, CombinationsBefore, CombinationsAfter, InitiatingUserPrincipalName, InitiatingAppName, InitiatingIPAddress
 eventGroupingSettings:
   aggregationKind: AlertPerResult
