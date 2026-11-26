@@ -11,7 +11,14 @@ from typing import Any
 
 import yaml
 
-from solution_manager.core.artifacts import conversion_scope, existing_artifact_path, report_directory, portable_artifact, write_json_artifact
+from solution_manager.core.artifacts import (
+    conversion_scope,
+    existing_artifact_path,
+    load_config,
+    portable_artifact,
+    report_directory,
+    write_json_artifact,
+)
 from jsonschema import Draft202012Validator
 
 from solution_manager import __version__
@@ -38,8 +45,13 @@ from solution_manager.core.content_paths import (
     _load_git_head_yaml,
     _version_tuple,
     _without_version,
+    analytic_rule_files,
     content_path,
+    custom_detail_schema_errors,
+    is_sentinel_derived,
     scan_solution_urls,
+    solution_paths,
+    xdr_detection_files,
     yaml_files,
 )
 from solution_manager.migration.parser_bindings import normalize_parser_bindings
@@ -316,55 +328,6 @@ def iso_duration(value: Any, default: str = "PT1H") -> tuple[str, str | None]:
         "h": f"PT{amount}H",
         "d": f"P{amount}D",
     }[unit], None
-
-
-def solution_paths(solution: str | Path, *, require_analytic_rules: bool = True) -> tuple[Path, Path, Path]:
-    root = Path(solution).expanduser().resolve()
-    analytic = root / "Analytic Rules"
-    output = root / "XDR Detections"
-    if not root.is_dir():
-        raise ValueError(f"solution path does not exist: {root}")
-    if not analytic.is_dir():
-        legacy_analytic = root / "Analytics Rules"
-        if legacy_analytic.is_dir():
-            analytic = legacy_analytic
-        elif require_analytic_rules:
-            raise ValueError(
-                f"solution has no 'Analytic Rules' or 'Analytics Rules' folder: {root}"
-            )
-    return root, analytic, output
-
-
-def load_config(output_dir: Path, explicit: str | Path | None = None) -> dict[str, Any]:
-    path = (
-        Path(explicit).expanduser().resolve()
-        if explicit
-        else existing_artifact_path(output_dir.parent, "migration-config.yaml")
-    )
-    if not path.exists():
-        return {}
-    with path.open(encoding="utf-8") as handle:
-        value = yaml.safe_load(handle) or {}
-    if not isinstance(value, dict):
-        raise ValueError(f"migration config must contain a YAML object: {path}")
-    return value
-
-
-def analytic_rule_files(
-    solution: str | Path,
-    *,
-    require_analytic_rules: bool = True,
-) -> list[Path]:
-    _, analytic, _ = solution_paths(solution, require_analytic_rules=require_analytic_rules)
-    return yaml_files(analytic) if analytic.is_dir() else []
-
-
-def xdr_detection_files(output: Path) -> list[Path]:
-    return list(
-        path
-        for path in yaml_files(output)
-        if path.name.lower() not in {"migration-config.yaml", "migration-config.yml"}
-    )
 
 
 def inspect_solution(solution: str | Path) -> dict[str, Any]:
@@ -2110,23 +2073,6 @@ def _supplemental_custom_details(
     return details, evidence, warnings, information, errors
 
 
-def custom_detail_schema_errors(document: dict[str, Any], schema: list[dict[str, Any]]) -> list[str]:
-    alert = ((document.get("properties") or {}).get("detectionAction") or {}).get("alertTemplate") or {}
-    details = alert.get("customDetails") or {}
-    if not isinstance(details, dict):
-        return ["customDetails must be an object"]
-    if not isinstance(schema, list):
-        return ["customDetails binding verification requires a runtime output schema"]
-    columns = {
-        str(item.get("name") or item.get("Name") or "")
-        for item in schema if isinstance(item, dict)
-    }
-    return [
-        f"customDetails {key!r} column `{column}` is absent from the runtime output schema"
-        for key, column in details.items() if not isinstance(column, str) or column not in columns
-    ]
-
-
 def custom_detail_binding_warnings(document: dict[str, Any]) -> list[str]:
     properties = document.get("properties") or {}
     query = ((properties.get("queryCondition") or {}).get("queryText") or "")
@@ -2650,21 +2596,6 @@ def xdr_version_error(version: Any) -> str | None:
         "--overwrite (initial version 3.1.0), or explicitly author the XDR version. "
         "Do not change contentProvenance.source.version."
     )
-
-
-def is_sentinel_derived(document: dict[str, Any]) -> bool:
-    provenance = document.get("contentProvenance") or {}
-    source = provenance.get("source") if isinstance(provenance, dict) else None
-    conversion = provenance.get("conversion") if isinstance(provenance, dict) else None
-    if isinstance(source, dict):
-        platform = source.get("platform")
-        if isinstance(platform, str) and platform.strip():
-            if platform.strip() in {"Microsoft Sentinel", "Sentinel"} and source.get("kind") in (None, "", "AnalyticsRule"):
-                return True
-            return False
-    if isinstance(conversion, dict) and conversion.get("tool") == "sentinel-to-xdr-migration":
-        return True
-    return False
 
 
 def _existing_identity_error(

@@ -11,6 +11,8 @@ from typing import Any
 
 import yaml
 
+from solution_manager.core.artifacts import load_config
+from solution_manager.core.content_paths import runtime_validation_plan
 from solution_manager.migration.catalog import NATIVE_XDR_TABLES, query_table_references
 
 WORKLOADS = (
@@ -355,10 +357,6 @@ def plan_solution_dependencies(
     solution: str | Path, *, results_path: str | Path | None = None,
     workspace_id: str | None = None,
 ) -> dict[str, Any]:
-    # Import here because conversion itself uses the pure dependency helpers.
-    from solution_manager.migration.converter import load_config
-    from solution_manager.qualification.runtime import runtime_validation_plan
-
     root = Path(solution).expanduser().resolve()
     rules = runtime_validation_plan(root)["rules"]
     if not rules:

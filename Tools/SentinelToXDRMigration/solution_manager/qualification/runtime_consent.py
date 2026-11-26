@@ -19,9 +19,9 @@ from solution_manager.core.artifacts import (
     existing_artifact_path,
     write_json_artifact,
 )
-from solution_manager.core.content_paths import content_path
-from solution_manager.migration.converter import (
+from solution_manager.core.content_paths import (
     analytic_rule_files,
+    content_path,
     is_sentinel_derived,
     xdr_detection_files,
 )

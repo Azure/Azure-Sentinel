@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
+import hashlib
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
@@ -326,3 +328,211 @@ def detection_reference(requested: str, available: list[str]) -> str:
     if not matches:
         raise ValueError(f"unknown detection: {requested}")
     return matches[0]
+
+
+def solution_paths(solution: str | Path, *, require_analytic_rules: bool = True) -> tuple[Path, Path, Path]:
+    root = Path(solution).expanduser().resolve()
+    analytic = root / "Analytic Rules"
+    output = root / "XDR Detections"
+    if not root.is_dir():
+        raise ValueError(f"solution path does not exist: {root}")
+    if not analytic.is_dir():
+        legacy_analytic = root / "Analytics Rules"
+        if legacy_analytic.is_dir():
+            analytic = legacy_analytic
+        elif require_analytic_rules:
+            raise ValueError(
+                f"solution has no 'Analytic Rules' or 'Analytics Rules' folder: {root}"
+            )
+    return root, analytic, output
+
+
+def analytic_rule_files(
+    solution: str | Path,
+    *,
+    require_analytic_rules: bool = True,
+) -> list[Path]:
+    _, analytic, _ = solution_paths(solution, require_analytic_rules=require_analytic_rules)
+    return yaml_files(analytic) if analytic.is_dir() else []
+
+
+def xdr_detection_files(output: Path) -> list[Path]:
+    return list(
+        path
+        for path in yaml_files(output)
+        if path.name.lower() not in {"migration-config.yaml", "migration-config.yml"}
+    )
+
+
+def custom_detail_schema_errors(document: dict[str, Any], schema: list[dict[str, Any]]) -> list[str]:
+    alert = ((document.get("properties") or {}).get("detectionAction") or {}).get("alertTemplate") or {}
+    details = alert.get("customDetails") or {}
+    if not isinstance(details, dict):
+        return ["customDetails must be an object"]
+    if not isinstance(schema, list):
+        return ["customDetails binding verification requires a runtime output schema"]
+    columns = {
+        str(item.get("name") or item.get("Name") or "")
+        for item in schema if isinstance(item, dict)
+    }
+    return [
+        f"customDetails {key!r} column `{column}` is absent from the runtime output schema"
+        for key, column in details.items() if not isinstance(column, str) or column not in columns
+    ]
+
+
+def is_sentinel_derived(document: dict[str, Any]) -> bool:
+    provenance = document.get("contentProvenance") or {}
+    source = provenance.get("source") if isinstance(provenance, dict) else None
+    conversion = provenance.get("conversion") if isinstance(provenance, dict) else None
+    if isinstance(source, dict):
+        platform = source.get("platform")
+        if isinstance(platform, str) and platform.strip():
+            if platform.strip() in {"Microsoft Sentinel", "Sentinel"} and source.get("kind") in (None, "", "AnalyticsRule"):
+                return True
+            return False
+    if isinstance(conversion, dict) and conversion.get("tool") == "sentinel-to-xdr-migration":
+        return True
+    return False
+
+
+def _query_sha256(query: str) -> str:
+    return hashlib.sha256(query.encode("utf-8")).hexdigest()
+
+
+def _extract_detection_query_text(document: Any) -> str:
+    if not isinstance(document, dict):
+        return ""
+    properties = document.get("properties")
+    if isinstance(properties, dict):
+        qc = properties.get("queryCondition")
+        if isinstance(qc, dict) and isinstance(qc.get("queryText"), str) and qc["queryText"].strip():
+            return qc["queryText"]
+        if isinstance(properties.get("queryText"), str) and properties["queryText"].strip():
+            return properties["queryText"]
+        qd = properties.get("queryDefinition")
+        if isinstance(qd, dict) and isinstance(qd.get("query"), str) and qd["query"].strip():
+            return qd["query"]
+    if isinstance(document.get("queryText"), str) and document["queryText"].strip():
+        return document["queryText"]
+    if isinstance(document.get("query"), str) and document["query"].strip():
+        return document["query"]
+    return ""
+
+
+def compute_query_sha256(query_or_document: Any) -> str:
+    """Compute SHA-256 of a KQL query string or a Custom Detection document's queryText."""
+    if isinstance(query_or_document, dict):
+        query_text = _extract_detection_query_text(query_or_document)
+    else:
+        query_text = str(query_or_document or "")
+    return _query_sha256(query_text)
+
+
+def resolve_detection_query_sha256(
+    document: Any,
+    fallback_query: str | None = None,
+) -> str:
+    """Return contentProvenance.source.querySha256 if present, otherwise compute sha256(queryText) in memory."""
+    if isinstance(document, dict):
+        provenance = document.get("contentProvenance")
+        if isinstance(provenance, dict):
+            source = provenance.get("source")
+            if isinstance(source, dict):
+                source_sha = str(source.get("querySha256") or "").strip()
+                if source_sha:
+                    return source_sha
+    query_text = (
+        fallback_query
+        if fallback_query is not None
+        else _extract_detection_query_text(document)
+    )
+    return compute_query_sha256(query_text)
+
+
+def _is_explicitly_non_converted(document: Any) -> bool:
+    """Return True only when conversion metadata explicitly marks a detection as non-converted (e.g., blocked/skipped)."""
+    if not isinstance(document, dict):
+        return False
+    provenance = document.get("contentProvenance")
+    if not isinstance(provenance, dict):
+        return False
+    conversion = provenance.get("conversion")
+    if not isinstance(conversion, dict):
+        return False
+    status = str(conversion.get("status") or "").strip()
+    if status and status != "converted":
+        return True
+    return False
+
+
+def _runnable_detection_files(output: Path) -> list[Path]:
+    files = xdr_detection_files(output) if output.is_dir() else []
+    runnable: list[Path] = []
+    for path in files:
+        try:
+            with path.open(encoding="utf-8-sig") as handle:
+                doc = yaml.safe_load(handle) or {}
+        except Exception:
+            runnable.append(path)
+            continue
+        if not _is_explicitly_non_converted(doc):
+            runnable.append(path)
+    return runnable
+
+
+def runtime_validation_plan(solution: str | Path) -> dict[str, Any]:
+    """Build the runtime validation plan supporting both Sentinel-migrated and native target-only detections."""
+    root = Path(solution).expanduser().resolve()
+    output = root / "XDR Detections"
+    plan: list[dict[str, Any]] = []
+    for path in _runnable_detection_files(output):
+        with path.open(encoding="utf-8-sig") as handle:
+            document = yaml.safe_load(handle) or {}
+        source_ref = ((document.get("contentProvenance") or {}).get("source") or {})
+        source_path_value = source_ref.get("path") if isinstance(source_ref, dict) else None
+        source_path: Path | None = None
+        source: dict[str, Any] = {}
+        if isinstance(source_path_value, str) and source_path_value.strip():
+            candidate = content_path(root, source_path_value)
+            if candidate.is_file():
+                source_path = candidate
+                with source_path.open(encoding="utf-8-sig") as handle:
+                    source = yaml.safe_load(handle) or {}
+        sentinel_query = str(source.get("query") or "")
+        ah_query = _extract_detection_query_text(document)
+        ah_query_sha = compute_query_sha256(ah_query)
+        sentinel_query_sha = (
+            compute_query_sha256(sentinel_query)
+            if source_path is not None
+            else resolve_detection_query_sha256(document, ah_query)
+        )
+        plan.append(
+            {
+                "detection": path.relative_to(output).as_posix(),
+                "sourceRule": str(source_path) if source_path is not None else None,
+                "targetOnly": source_path is None and not is_sentinel_derived(document),
+                "sentinelQuery": sentinel_query,
+                "advancedHuntingQuery": ah_query,
+                "querySha256": sentinel_query_sha or ah_query_sha,
+                "sentinelQuerySha256": sentinel_query_sha,
+                "advancedHuntingQuerySha256": ah_query_sha,
+                "customDetailBindings": deepcopy(
+                    (((document.get("properties") or {}).get("detectionAction") or {}).get("alertTemplate") or {}).get("customDetails") or {}
+                ),
+            }
+        )
+    return {
+        "solution": str(root),
+        "instructions": (
+            "Run sentinelQuery and advancedHuntingQuery through Microsoft Sentinel and "
+            "the configured runtime providers. Include sentinelQuerySha256 as querySha256 "
+            "for every imported Sentinel result. The Advanced Hunting validator records "
+            "the exact target-query hash itself. Missing or stale query hashes cannot "
+            "qualify current KQL. Record execution errors and compare output entities. "
+            "Verify every customDetailBindings value against the returned Advanced Hunting output schema; "
+            "query success alone does not prove these bindings. Check the combined custom-detail runtime "
+            "value size against the documented 4 KB per-alert limit."
+        ),
+        "rules": plan,
+    }
