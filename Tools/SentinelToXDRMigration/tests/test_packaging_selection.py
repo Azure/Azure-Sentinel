@@ -1743,7 +1743,7 @@ class PackagingSelectionTests(unittest.TestCase):
         shutil.rmtree(self.solution / "Analytic Rules")
         (self.solution / "XDR Detections" / "Keep.yaml").unlink(missing_ok=True)
         (self.solution / "XDR Detections" / "Drop.yaml").unlink(missing_ok=True)
-        native_id = "22222222-2222-2222-2222-222222222222"
+        native_id = "xdr-22222222-2222-2222-2222-222222222222"
         native_path = self.solution / "XDR Detections" / "Native.yaml"
         native_doc = {
             "schemaVersion": "1.0.0",
@@ -1819,7 +1819,7 @@ class PackagingSelectionTests(unittest.TestCase):
                 "requiredDataConnectors": [],
             },
             "properties": {
-                "id": "33333333-3333-3333-3333-333333333333",
+                "id": "xdr-33333333-3333-3333-3333-333333333333",
                 "displayName": "Native Valid",
                 "status": "disabled",
                 "queryCondition": {
