@@ -1,93 +1,145 @@
-# Luminar Threat Intelligence Connector - Azure Sentinel
-
+# Cognyte Luminar Threat Intelligence Connector - Microsoft Sentinel
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Luminar API Account](#prerequisites)
-3. [Register an Azure AD App for TI Indicators Graph API Write Access](#graphapiaccess)
-4. [Deployment](#deployment)
-5. [Detection & Investigation](#investigation)
-
-<a name="overview">
+2. [What is ingested](#what-is-ingested)
+3. [Luminar API account](#luminar-api-account)
+4. [Register a Microsoft Entra application for the upload API](#entra-app)
+5. [Deployment](#deployment)
+6. [Configuration reference](#configuration-reference)
+7. [Detection & investigation](#detection--investigation)
+8. [Local development and tests](#local-development-and-tests)
 
 ## Overview
-Cognyte is a global leader in security analytics software that empowers governments and enterprises with Actionable Intelligence for a safer world. Our open software fuses, analyzes and visualizes disparate data sets at scale to help security organizations find the needles in the haystacks. Over 1,000 government and enterprise customers in more than 100 countries rely on Cognyte’s solutions to accelerate security investigations and connect the dots to successfully identify, neutralize, and prevent threats to national security, business continuity and cyber security.
 
-Luminar is an asset-based cybersecurity intelligence platform that empowers enterprise organizations to build and maintain a proactive threat intelligence operation that enables to anticipate and mitigate cyber threats, reduce risk and enhance security resilience. Luminar enables security teams to define a customized, dynamic monitoring plan to uncover malicious activity in its earliest stages on all layers of the Web.
+Cognyte is a global leader in security analytics software that empowers governments and enterprises with Actionable Intelligence for a safer world. Luminar is an asset-based cybersecurity intelligence platform that enables enterprise organizations to build and maintain a proactive threat intelligence operation.
 
-**Luminar IOCs and Leaked Credentials** connector allows integration of intelligence-based IOC data and customer-related leaked records identified by Luminar.
+This connector is an Azure Function that pulls STIX 2.1 objects from the Luminar TAXII 2.1 server and uploads them to Microsoft Sentinel threat intelligence through the [STIX objects upload API](https://learn.microsoft.com/azure/sentinel/stix-objects-api). Objects land in the `ThreatIntelIndicators` and `ThreatIntelObjects` tables.
 
+```
+Luminar TAXII 2.1  --(luminar_manager.py)-->  batches
+  --(stix_transform.py)-->  indicator / threat-actor / identity / relationship
+  --(sentinel_client.py)-->  api.ti.sentinel.azure.com  -->  ThreatIntelIndicators, ThreatIntelObjects
+```
 
-<a name="prerequisites">
+## What is ingested
 
-## Luminar API Account
-To utilize Luminar Threat Intelligence, you'll want to have Luminar Credentials.
-- Luminar API Account ID
-- Luminar API Client ID  
-- Luminar API Client Secret
-For registration and more details please contact luminar@cognyte.com
+| Luminar collection | Uploaded | Not uploaded (unsupported by the upload API) |
+|---|---|---|
+| `iocs` | indicators (URL, IPv4, with Luminar confidence, labels and 7-day validity), relationships to identities / threat actors | `software` and the relationships pointing at it |
+| `cyberfeeds` | indicators (SHA-256, MD5, SHA-1, IPv4, domain), threat actors, identities, relationships between them | `malware`, `report`, `vulnerability`, `campaign`, `software`, `location` |
+| `leakedrecords` | nothing | the collection contains only `incident`, `user-account`, `malware` and `relationship` objects, none of which the upload API accepts |
 
+The upload API accepts five STIX types: `indicator`, `attack-pattern`, `identity`, `threat-actor`, `relationship`. Every object is uploaded with:
 
-<a name="graphapiaccess>
+- Luminar's own STIX `id`, so re-ingestion updates rather than duplicates.
+- Luminar's `extensions` block (score, ASN, country, resolving domains, ...) untouched; it is stored in the `Data` column.
+- A `luminar:<collection>` label, a TLP marking (`TLPLevel`), and an `external_references` entry carrying the Luminar id.
+- Indicators without `valid_until` (all of `cyberfeeds`) get `valid_from + DefaultIndicatorValidityDays`; indicators without `confidence` get `DefaultConfidence`.
+- Indicators that are already expired at upload time are skipped (`SkipExpiredIndicators`), together with relationships that point at them.
+- `cyberfeeds` indicators are enriched from the Luminar reports that reference them: report titles are appended to `description`, and `malware:<name>` / `actor:<name>` / `campaign:<name>` labels are added for objects referenced by the same report.
 
-## Register an Azure AD App for TI Indicators Graph API Write Access
-This connector requires some basic information to allow you to connect to Luminar Threat Intelligence and send it threat indicators in microsoft sentinel. The three pieces of information you need are:
-- Application (client) ID
-- Directory (tenant) ID
-- Client Secret
+## Luminar API account
 
-To obtain the above values please follow the below
+You need a Luminar API **Account ID**, **Client ID** and **Client Secret**. For registration contact luminar@cognyte.com.
 
-- Go to Azure Active Directory / App Registrations
-- Create +New Registration
-- Give it a name. Click Register
-- Click API Permissions Blade
-- Click Add a Permission
-- Click Microsoft Graph
-- Click Application Permissions
-- Check permissions for ThreatIndicators (ThreatIndicators.ReadWrite.OwnedBy). Click Add permissions
-- Click grant admin consent for domain.com
-- Click Certificates and Secrets
-- Click New Client Secret
-- Enter a description, select never. Click Add
-- **IMPORTANT**. Click copy next to the new secret and paste it somewhere temporarily. You cannot come back to get the secret once you leave the blade
-- Copy the client ID from the application properties and paste it somewhere as you will need it to be added to the Playbooks
-- Also copy the tenant ID from the AAD directory properties blade
+<a name="entra-app"></a>
+## Register a Microsoft Entra application for the upload API
 
-for more information please refer https://learn.microsoft.com/en-us/azure/sentinel/connect-threat-intelligence-tip
+The upload API authenticates with a Microsoft Entra application that holds the **Microsoft Sentinel Contributor** role on the workspace. No Microsoft Graph permission is needed.
 
-<a name="deployment">
+1. Go to **Microsoft Entra ID > App registrations > New registration**, give it a name and register it.
+2. On the **Overview** tab copy the **Application (client) ID** and **Directory (tenant) ID**.
+3. Under **Certificates & secrets > New client secret** create a secret and copy its value immediately.
+4. Open the Log Analytics workspace that backs Microsoft Sentinel, go to **Access control (IAM) > Add > Add role assignment**, pick **Microsoft Sentinel Contributor**, then **Members > User, group, or service principal** and select the application by name.
+5. Copy the **Workspace ID** from the workspace **Overview** page.
+
+Reference: [Connect your TIP with the upload API](https://learn.microsoft.com/azure/sentinel/connect-threat-intelligence-upload-api).
 
 ## Deployment
-- Go to Microsoft Sentinel
-- Go to Content Hub
-- Search for Luminar, Click on Install.
-- Please follow the onscreen deployment screen and provide the required values.
 
-<a name="investigation">
+1. In Microsoft Sentinel open **Content hub**, search for **Cognyte Luminar** and install it.
+2. Open the data connector page and use one of the **Deploy to Azure** buttons (Flex Consumption or Premium plan).
+3. Fill in the parameters listed in the next section and deploy.
 
-## Detection & Investigation
-Now that we have Luminar Threat Intelligence data, you can use out of the box TI analytics rules for you hunting and investigation (or) write custom analytical rules.
+Upgrading from 3.0.x: redeploy with the new parameters (`WorkspaceID` is mandatory) and assign the Sentinel Contributor role to the existing app. The old single checkpoint stored in the function's file share is migrated automatically to per-collection checkpoints.
 
-A sample Azure Sentinel Analytics rule to identify a match in Azure AD SigninLogs from any malicious IP address from luminar threat intelligence
+## Configuration reference
 
+| App setting | Required | Default | Description |
+|---|---|---|---|
+| `TenantID`, `ApplicationID`, `ClientSecret` | yes | | Entra application with Microsoft Sentinel Contributor on the workspace |
+| `WorkspaceID` | yes | | Log Analytics workspace ID |
+| `LuminarAPIClientID`, `LuminarAPIClientSecret`, `LuminarAPIAccountID` | yes | | Luminar API credentials |
+| `LuminarBaseURL` | yes | `https://www.cyberluminar.com` | Luminar API base URL |
+| `LuminarInitialFetchDate` | yes | | `YYYY-MM-DD` (or full ISO timestamp); used only when a collection has no checkpoint |
+| `LuminarCollections` | no | `iocs,cyberfeeds` | Comma-separated collections to ingest |
+| `DefaultIndicatorValidityDays` | no | `90` | Expiry for indicators published without `valid_until` |
+| `DefaultConfidence` | no | `50` | Confidence for indicators published without one; `none` leaves it unset |
+| `TLPLevel` | no | `green` | `white`, `green`, `amber` or `red` |
+| `EnrichFromReports` | no | `true` | Enrich `cyberfeeds` indicators from Luminar reports |
+| `SkipExpiredIndicators` | no | `true` | Do not upload indicators whose `valid_until` (Luminar's, or the defaulted one) is already in the past, nor relationships that point at them |
+| `SourceSystem` | no | `Cognyte Luminar` | Value of `SourceSystem` in the TI tables |
+| `LuminarPageLimit` / `LuminarPagesPerBatch` | no | `9999` / `1` | TAXII page size (9999 is the server maximum) and pages per upload batch |
+| `MaxRunMinutes` | no | `25` | Stop cleanly after this long; the next run resumes from the checkpoint. Keep it well under the platform's execution limit. |
+| `ResumeOverlapSeconds` | no | `1` | Re-read this much history when resuming from a checkpoint |
+| `Polling` | yes | from `TimeInterval` | Timer CRON expression |
+
+Checkpoints are the `X-TAXII-Date-Added-Last` header of the last batch uploaded for each collection, saved after the upload succeeds. A run that stops part-way resumes from the last uploaded batch.
+
+## Detection & investigation
+
+Luminar indicators are available to the built-in threat intelligence analytics rules. Sample queries:
+
+```kusto
+// Latest version of every Luminar indicator
+ThreatIntelIndicators
+| where SourceSystem == 'Cognyte Luminar'
+| summarize arg_max(TimeGenerated, *) by Id
+| where IsDeleted == false
+| project ObservableKey, ObservableValue, Confidence, ValidUntil, Tags, Data
 ```
-let ipIndicators =
 
-ThreatIntelligenceIndicator
-
-| where NetworkIP != ""
-
-| project IPAddress = NetworkIP;
-
-ipIndicators
-
-| join (SigninLogs) on IPAddress
-
+```kusto
+// Sign-ins from IPs that Luminar flagged
+let ips = ThreatIntelIndicators
+| where SourceSystem == 'Cognyte Luminar' and ObservableKey == 'ipv4-addr:value'
+| summarize arg_max(TimeGenerated, *) by Id
+| where IsDeleted == false and ValidUntil > now()
+| project IPAddress = ObservableValue, Confidence, Tags;
+SigninLogs | join kind=inner ips on IPAddress
 ```
 
-What this query is doing is creating a temporary table (“ipIndicators”) that is composed of just the IPv4 addresses from the ThreatIntelligenceIndicator table. This is then joined to the SigninLogs table using IPAddress as they key for the join (e.g. where the field values match in both tables).
+```kusto
+// Threat actors and the organisations they target
+let actors = ThreatIntelObjects | where SourceSystem == 'Cognyte Luminar' and StixType == 'threat-actor'
+  | extend ActorId = tostring(Data.id), Actor = tostring(Data.name);
+let rels = ThreatIntelObjects | where SourceSystem == 'Cognyte Luminar' and StixType == 'relationship'
+  | extend Src = tostring(Data.source_ref), Tgt = tostring(Data.target_ref), Rel = tostring(Data.relationship_type);
+let idents = ThreatIntelObjects | where SourceSystem == 'Cognyte Luminar' and StixType == 'identity'
+  | extend IdentityId = tostring(Data.id), Target = tostring(Data.name);
+actors | join kind=inner rels on $left.ActorId == $right.Src
+| join kind=inner idents on $left.Tgt == $right.IdentityId
+| project Actor, Rel, Target
+```
 
- 
-Happy hunting!
+## Local development and tests
+
+```bash
+cd "Data Connectors"
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt pytest
+python -m pytest tests
+```
+
+Module layout:
+
+| File | Role |
+|---|---|
+| `main.py` | timer entry point and per-collection orchestration |
+| `luminar_manager.py` | shared Luminar TAXII client (auth, paging, stale-cursor recovery, reference hydration) |
+| `stix_transform.py` | pure transform from Luminar objects to upload-ready STIX |
+| `sentinel_client.py` | Entra token, upload API, batching, rate limiting, per-record error parsing |
+| `state_manager.py` | per-collection checkpoints in the function's Azure File Share |
+| `config.py` | app-settings parsing and validation |
