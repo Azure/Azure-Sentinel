@@ -1,0 +1,55 @@
+id: deb9b2cb-3ada-4276-bf1f-b2e3de3adb01
+name: SonicWall CSE - Event connector failing to fetch data
+description: |
+  'The SonicWall Cloud Secure Edge (CSE) event connector reported a failed data fetch, for
+  example HTTP 401 after the API key was deleted or expired. While it fails, no CSE events are
+  ingested, and events from the failure period are not fetched later: after fixing the cause,
+  disconnect and connect the connector, then backfill the gap.
+  The rule matches both health records the poller writes: a "Data fetch status change" with
+  Status Failure (written once, when the status changes) and the hourly "Data fetch failure
+  summary" (written while failures continue). A poller that stops polling without failing
+  writes neither; the rule "SonicWall CSE - No events ingested" covers that case.'
+severity: High
+requiredDataConnectors:
+  - connectorId: SonicWallCSEEvents
+    dataTypes:
+      - CSEEvents_CL
+queryFrequency: 15m
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  // Only records ingested since the previous run, so each record alerts once although the
+  // query period overlaps runs to allow for health ingestion delay.
+  SentinelHealth
+  | where ingestion_time() > ago(15m)
+  | where SentinelResourceType == "Data connector" and SentinelResourceKind == "ApiPolling"
+  | where SentinelResourceName endswith "CSEEventsPoller"
+  | where Status == "Failure" or OperationName == "Data fetch failure summary"
+  | extend Failures = ExtendedProperties.FailureSummary
+  | mv-expand Failure = iff(array_length(Failures) > 0, Failures, dynamic([{}]))
+  | extend
+      StatusCode = coalesce(tostring(Failure.StatusCode), Reason),
+      FailureType = tostring(Failure.HealthResultType),
+      StatusMessage = coalesce(tostring(Failure.StatusMessage), Description),
+      FailureStart = todatetime(ExtendedProperties.StartTime),
+      FailureEnd = todatetime(ExtendedProperties.EndTime)
+  | project TimeGenerated, SentinelResourceName, OperationName, Status, StatusCode, FailureType,
+      StatusMessage, FailureStart, FailureEnd, SentinelResourceId
+customDetails:
+  StatusCode: StatusCode
+  FailureType: FailureType
+alertDetailsOverride:
+  alertDisplayNameFormat: 'SonicWall CSE connector fetch failure: {{StatusCode}}'
+  alertDescriptionFormat: '{{StatusMessage}}'
+entityMappings:
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: SentinelResourceId
+version: 1.0.0
+kind: Scheduled

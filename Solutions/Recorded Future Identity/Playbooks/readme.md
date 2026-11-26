@@ -77,8 +77,8 @@ Permissions required to deploy Option A (Entra ID only):
 
 | Deployment step       | Permission                                                                                                                                                                                                                                                                                                                                                                                            |
 |-----------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| A1 - Custom connector | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level.   |
-| A2 - Logic app        | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level.   |
+| A1 - Custom connector | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> permissions on a **Resource Group** level.   |
+| A2 - Logic app        | <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> permissions on a **Resource Group** level.   |
 
 Permissions required to deploy Option B (Entra ID + Log Analytics + Incident Creation):
 
@@ -97,7 +97,7 @@ Permissions required to deploy Option B (Entra ID + Log Analytics + Incident Cre
     </tr>
     <tr>
       <td>B2 - Custom connector</td>
-      <td><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank"><em><strong>Logic App Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank"><em><strong>Microsoft Sentinel Contributor</strong></em></a> permissions on a <strong>Resource Group</strong> level.</td>
+      <td><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank"><em><strong>Logic App Contributor</strong></em></a> permissions on a <strong>Resource Group</strong> level.</td>
     </tr>
     <tr>
       <td>B3 - Logic app (create_role_assignment=true)</td>
@@ -105,14 +105,14 @@ Permissions required to deploy Option B (Entra ID + Log Analytics + Incident Cre
         Either:
         <ol>
         <li><a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#owner" target="_blank"><em><strong>Owner</strong></em></a> permissions on a <strong>Resource Group</strong> level.</li>
-        <li><strong>or</strong> <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank"><em><strong>Logic App Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank"><em><strong>Microsoft Sentinel Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#role-based-access-control-administrator" target="_blank"><em><strong>Role Based Access Control Administrator</strong></em></a> on a <strong>Resource Group</strong> level.</li>
+        <li><strong>or</strong> <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank"><em><strong>Logic App Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/privileged#role-based-access-control-administrator" target="_blank"><em><strong>Role Based Access Control Administrator</strong></em></a> on a <strong>Resource Group</strong> level.</li>
         </ol>
       </td>
     </tr>
     <tr>
       <td>B3 - Logic app (create_role_assignment=false)</td>
       <td>
-        <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank"><em><strong>Logic App Contributor</strong></em></a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank"><em><strong>Microsoft Sentinel Contributor</strong></em></a> permissions on a <strong>Resource Group</strong> level.
+        <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank"><em><strong>Logic App Contributor</strong></em></a> permissions on a <strong>Resource Group</strong> level.
         <br/><strong>Note: </strong> if you use create_role_assignment=false, an Azure administrator needs to manually assign <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/monitor#monitoring-metrics-publisher" target="_blank"><em><strong>Monitoring Metrics Publisher</strong></em></a> role on the recorded-future-identity-dcr-playbook-alerts Data Collection Rule to the Logic App's managed identity after deployment.
       </td>
     </tr>

@@ -1341,6 +1341,37 @@ class WorkflowTopologyTests(unittest.TestCase):
             normalize(isolated_gate),
         )
 
+    def test_security_gate_uses_environment_for_shell_inputs(self):
+        expected_environment = (
+            "IS_FORK: ${{ github.event.pull_request.head.repo.fork }}",
+            "PR_LABELS_JSON: "
+            "${{ toJson(github.event.pull_request.labels.*.name) }}",
+            "TRIGGER_EVENT: ${{ github.event.action }}",
+            "LABEL_NAME: ${{ github.event.label.name }}",
+        )
+        expected_assignments = (
+            'is_fork="$IS_FORK"',
+            'labels="$PR_LABELS_JSON"',
+            'trigger_event="$TRIGGER_EVENT"',
+            'label_added="$LABEL_NAME"',
+        )
+        unsafe_assignments = (
+            'is_fork="${{ github.event.pull_request.head.repo.fork }}"',
+            "labels='${{ "
+            "toJson(github.event.pull_request.labels.*.name) }}'",
+            'trigger_event="${{ github.event.action }}"',
+            'label_added="${{ github.event.label.name }}"',
+        )
+        for path in (self.legacy_path, self.isolated_path):
+            with self.subTest(path=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                for value in expected_environment:
+                    self.assertIn(value, workflow)
+                for value in expected_assignments:
+                    self.assertIn(value, workflow)
+                for value in unsafe_assignments:
+                    self.assertNotIn(value, workflow)
+
     def test_fork_gate_protects_testers_and_workflows(self):
         for path in (self.legacy_path, self.isolated_path):
             with self.subTest(path=path.name):
@@ -1359,18 +1390,20 @@ class WorkflowTopologyTests(unittest.TestCase):
                     workflow,
                 )
 
-    def test_legacy_live_runner_restores_trusted_kql_validator(self):
-        workflow = self.legacy_path.read_text(encoding="utf-8")
-
-        self.assertIn(
-            '$filePath_helper = '
-            '".script/tests/asimParsersTest/asim_parser_file_utils.py"',
-            workflow,
-        )
-        self.assertIn(
-            "Restore-TrustedFile $filePath_helper",
-            workflow,
-        )
+    def test_query_time_jobs_use_ingestion_time_trusted_data_pattern(self):
+        legacy = yaml.safe_load(self.legacy_path.read_text(encoding="utf-8"))
+        isolated = yaml.safe_load(self.isolated_path.read_text(encoding="utf-8"))
+        reference_steps = isolated["jobs"]["discover"]["steps"][:2]
+        for name, job in legacy["jobs"].items():
+            if name == "security-gate":
+                continue
+            with self.subTest(job=name):
+                self.assertEqual(reference_steps, job["steps"][:2])
+                self.assertNotIn("defaults", job)
+                for step in job["steps"]:
+                    self.assertNotIn("working-directory", step)
+                    command = step.get("run", "") + step.get("with", {}).get("inlineScript", "")
+                    self.assertNotIn('cd "$ASIM_PR_DATA_DIR"', command)
 
     def test_isolated_workflow_has_requested_job_topology(self):
         document = yaml.safe_load(
@@ -1479,34 +1512,13 @@ class WorkflowTopologyTests(unittest.TestCase):
             self.assertNotIn("Invoke-WebRequest", workflow)
             self.assertIn("pip==26.3", workflow)
             self.assertIn("requests==2.34.2", workflow)
-            self.assertIn("PyYAML==6.0.3", workflow)
+            self.assertIn("PyYAML==6.0.4", workflow)
             self.assertEqual(
                 6, workflow.count("--only-binary=:all:")
             )
 
-        self.assertEqual(
-            4, legacy.count("sparse-checkout-cone-mode: false")
-        )
-        for pattern in (
-            "/Parsers/**/*.yaml",
-            "/Parsers/**/*.yml",
-            "/Sample Data/ASIM/**/*.csv",
-            "/ASIM/dev/ASimTester/Testers/*.yaml",
-        ):
-            self.assertEqual(4, legacy.count(pattern))
         self.assertNotIn("allow-unsafe-pr-checkout", legacy)
         self.assertNotIn("raw.githubusercontent.com", legacy)
-        self.assertEqual(
-            3,
-            legacy.count(
-                'git show "$TRUSTED_BASE_SHA:$path" > "$path"'
-            ),
-        )
-        self.assertIn(
-            '$content = & git show '
-            '"$($env:TRUSTED_BASE_SHA):$Path"',
-            legacy,
-        )
         self.assertIn('azPSVersion: "17.0.0"', legacy)
         self.assertIn("azure-core==1.41.0", legacy)
         self.assertIn("azure-identity==1.27.0", legacy)
@@ -1546,19 +1558,20 @@ class WorkflowTopologyTests(unittest.TestCase):
         )
 
     def test_workflow_has_no_manual_or_pr_head_checkout(self):
-        workflow = self.isolated_path.read_text(encoding="utf-8")
-
-        self.assertNotIn("workflow_dispatch:", workflow)
-        self.assertNotIn(
-            "ref: ${{ github.event.pull_request.head.sha }}",
-            workflow,
-        )
-        self.assertEqual(
-            3,
-            workflow.count(
-                "ref: ${{ github.event.pull_request.base.sha }}"
-            ),
-        )
+        for path, checkout_count in ((self.legacy_path, 4), (self.isolated_path, 3)):
+            with self.subTest(workflow=path.name):
+                workflow = path.read_text(encoding="utf-8")
+                self.assertNotIn("workflow_dispatch:", workflow)
+                self.assertNotIn(
+                    "ref: ${{ github.event.pull_request.head.sha }}",
+                    workflow,
+                )
+                self.assertEqual(
+                    checkout_count,
+                    workflow.count(
+                        "ref: ${{ github.event.pull_request.base.sha }}"
+                    ),
+                )
 
     def test_workflow_runs_on_initial_pull_request_events(self):
         workflow = self.isolated_path.read_text(encoding="utf-8")
@@ -1639,7 +1652,7 @@ class WorkflowTopologyTests(unittest.TestCase):
         self.assertEqual(
             4,
             legacy.count(
-                "ref: ${{ needs.security-gate.outputs.approved_sha }}"
+                "PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}"
             ),
         )
         self.assertNotIn(

@@ -95,7 +95,9 @@ VIM_CONTROL_PARAMS = {'disabled'}
 def run():
     """Main function to execute the script logic."""
     current_directory = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.normpath(os.path.join(current_directory, '..', '..', '..'))
+    repo_root = os.getenv("ASIM_PR_DATA_DIR") or os.path.normpath(
+        os.path.join(current_directory, '..', '..', '..')
+    )
     modified_files = get_modified_files(current_directory)
     sample_data_path = os.path.join(repo_root, SAMPLE_DATA_PATH)
     parser_yaml_files = filter_query_time_parser_files(modified_files)
@@ -390,7 +392,9 @@ def validate_vim_parser_params(parser_file, union_parser_file):
     )
 
 def get_modified_files(current_directory):
-
+    modified_files = parser_file_utils.get_query_time_modified_files()
+    if modified_files is not None:
+        return modified_files
     # Add upstream remote if not already present
     git_remote_command = "git remote"
     remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)

@@ -66,10 +66,12 @@ Determine the API domain based on your TrendAI Vision One tenant region:
 | JP | `api.xdr.trendmicro.co.jp` |
 | AU | `api.au.xdr.trendmicro.com` |
 | IN | `api.in.xdr.trendmicro.com` |
-| MEA | `api.mea.xdr.trendmicro.com` |
 | UK | `api.uk.xdr.trendmicro.com` |
 | CA | `api.ca.xdr.trendmicro.com` |
 | ZA (South Africa) | `api.za.xdr.trendmicro.com` |
+| US Stg | `api-stg.visionone.trendmicro.com` |
+| EU Stg| `api-eu-stg.visionone.trendmicro.com` |
+| US Int| `api-int.visionone.trendmicro.com` |
 
 ---
 

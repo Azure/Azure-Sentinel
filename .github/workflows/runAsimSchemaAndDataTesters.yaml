@@ -8,7 +8,8 @@
 #   Identity permissions: Canary RG/workspace only; deny cross-workspace and out-of-RG access
 # - Fork PRs require explicit "SafeToRun" label approval from maintainer
 # - Label is auto-removed on new commits (synchronize event) to prevent TOCTOU
-# - All validation scripts are re-downloaded from master branch before execution
+# - Validators and tester definitions run from the pinned trusted base revision.
+# - PR parser YAML and fixtures are materialized separately as untrusted data.
 name: Run ASIM query-time parser validation
 
 env:
@@ -40,9 +41,6 @@ on:
       - "Parsers/ASimAssetEntity/Parsers/**"
       - "Parsers/ASimAgentEvent/Parsers/**"
       - "Parsers/ASimEmailEvent/Parsers/**"
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -112,6 +110,10 @@ jobs:
       - name: Check if PR needs approval
         id: check-approval
         env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          PR_LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+          TRIGGER_EVENT: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name }}
           APPROVAL_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           # Function to log with consistent formatting
@@ -125,23 +127,23 @@ jobs:
           fi
 
           # Check if this is a fork PR
-          is_fork="${{ github.event.pull_request.head.repo.fork }}"
+          is_fork="$IS_FORK"
           log_info "Fork PR: $is_fork"
 
           if [ "$is_fork" = "true" ]; then
             log_info "FORK PR DETECTED - Proceeding with security checks"
             
             # Check if "SafeToRun" label is present
-            labels='${{ toJson(github.event.pull_request.labels.*.name) }}'
+            labels="$PR_LABELS_JSON"
             log_info "Available labels: $labels"
             
             # For fork PRs, only approve on 'labeled' events where SafeToRun is being added
-            trigger_event="${{ github.event.action }}"
+            trigger_event="$TRIGGER_EVENT"
             log_info "Workflow triggered by event: $trigger_event"
             
             if [ "$trigger_event" = "labeled" ]; then
               # Check if the label being added is 'SafeToRun'
-              label_added="${{ github.event.label.name }}"
+              label_added="$LABEL_NAME"
               log_info "Label event: $label_added"
               
               if [ "$label_added" = "SafeToRun" ]; then
@@ -400,33 +402,96 @@ jobs:
        (github.event.action == 'labeled' && github.event.label.name == 'SafeToRun'))
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout pull request branch
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+      - name: Checkout trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ needs.security-gate.outputs.approved_sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
-          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /Parsers/**/*.yaml
-            /Parsers/**/*.yml
-            /Sample Data/ASIM/**/*.csv
-            /ASIM/dev/ASimTester/Testers/*.yaml
-            /.script/tests/asimParsersTest/ExclusionListForASimTests.csv
-      - name: Setup git config
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Materialize pull request content as untrusted data
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "<>"
-      - name: Merge master into pull request branch
-        run: |
-          git merge origin/master
-          Conflicts=$(git ls-files -u | wc -l)
-          if [ "$Conflicts" -gt 0 ] ; then
-            echo "There is a merge conflict. Aborting"
-            git merge --abort
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request base SHA."
             exit 1
           fi
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
+          pr_data_dir="$RUNNER_TEMP/asim-pr-data"
+          trusted_base_ref="refs/remotes/origin/asim-trusted-base"
+          pr_head_ref="refs/remotes/origin/asim-pr-head"
+          merge_base=""
+
+          # Fetch only the pinned base and PR histories, deepening until Git
+          # can establish their relationship.
+          for depth in 1 32 128 512 2048 8192; do
+            echo "Fetching ASIM comparison refs at depth $depth."
+            git fetch --force --no-tags --filter=blob:none \
+              --depth="$depth" origin \
+              "+$BASE_SHA:$trusted_base_ref" \
+              "+refs/pull/$PR_NUMBER/head:$pr_head_ref"
+
+            fetched_base_sha="$(
+              git rev-parse --verify "$trusted_base_ref^{commit}"
+            )"
+            fetched_head_sha="$(
+              git rev-parse --verify "$pr_head_ref^{commit}"
+            )"
+            if [ "$fetched_base_sha" != "$BASE_SHA" ]; then
+              echo "::error::Trusted base revision does not match the workflow event."
+              exit 1
+            fi
+            if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+              echo "::error::Pull request head changed after this workflow was triggered."
+              exit 1
+            fi
+
+            if merge_base="$(
+              git merge-base "$trusted_base_ref" "$pr_head_ref"
+            )"; then
+              echo "Found merge base $merge_base at depth $depth."
+              break
+            fi
+          done
+
+          if [ -z "$merge_base" ]; then
+            echo "::error::Unable to establish a merge base within 8192 commits."
+            exit 1
+          fi
+
+          git worktree add --detach \
+            "$pr_data_dir" "$pr_head_ref"
+          git -C "$pr_data_dir" config user.name "github-actions[bot]"
+          git -C "$pr_data_dir" config user.email "<>"
+          set +e
+          git -C "$pr_data_dir" merge \
+            --no-edit \
+            --no-commit \
+            "$trusted_base_ref"
+          merge_exit=$?
+          set -e
+          conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
+          if [ "$conflicts" -gt 0 ]; then
+            echo "There is a merge conflict. Aborting"
+            git -C "$pr_data_dir" merge --abort
+            exit 1
+          fi
+          if [ "$merge_exit" -ne 0 ]; then
+            exit "$merge_exit"
+          fi
+          echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_BASE_REF=$trusted_base_ref" >> "$GITHUB_ENV"
       - name: Set up Python
         uses: actions/setup-python@e9aba2c848f5ebd159c070c61ea2c4e2b122355e # v2.3.4
         with:
@@ -439,30 +504,14 @@ jobs:
           python -m pip install --disable-pip-version-check --quiet --only-binary=:all: pip==26.3
           python -m pip install --disable-pip-version-check --quiet --only-binary=:all: \
             requests==2.34.2 \
-            PyYAML==6.0.3 \
+            PyYAML==6.0.4 \
             tabulate==0.10.0
       - name: Run ASim parsers template validations python script
         env:
           PYTHONNOUSERSITE: "1"
           PYTHONSAFEPATH: "1"
-          TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          set -euo pipefail
-          if ! [[ "$TRUSTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Invalid trusted base SHA."
-            exit 1
-          fi
-          restore_trusted_file() {
-            local path="$1"
-            rm -f "$path"
-            mkdir -p "$(dirname "$path")"
-            git show "$TRUSTED_BASE_SHA:$path" > "$path"
-          }
-          helperPath=".script/tests/asimParsersTest/asim_parser_file_utils.py"
-          filePath=".script/tests/asimParsersTest/VerifyASimParserTemplate.py"
-          restore_trusted_file "$helperPath"
-          restore_trusted_file "$filePath"
-          python "$filePath"
+          python .script/tests/asimParsersTest/VerifyASimParserTemplate.py
   Run-ASim-Sample-Data-Ingest:
     needs:
       - security-gate
@@ -478,33 +527,96 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Checkout pull request branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Checkout trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ needs.security-gate.outputs.approved_sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
-          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /Parsers/**/*.yaml
-            /Parsers/**/*.yml
-            /Sample Data/ASIM/**/*.csv
-            /ASIM/dev/ASimTester/Testers/*.yaml
-            /.script/tests/asimParsersTest/ExclusionListForASimTests.csv
-      - name: Setup git config
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Materialize pull request content as untrusted data
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "<>"
-      - name: Merge master into pull request branch
-        run: |
-          git merge origin/master
-          Conflicts=$(git ls-files -u | wc -l)
-          if [ "$Conflicts" -gt 0 ] ; then
-            echo "There is a merge conflict. Aborting"
-            git merge --abort
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request base SHA."
             exit 1
           fi
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
+          pr_data_dir="$RUNNER_TEMP/asim-pr-data"
+          trusted_base_ref="refs/remotes/origin/asim-trusted-base"
+          pr_head_ref="refs/remotes/origin/asim-pr-head"
+          merge_base=""
+
+          # Fetch only the pinned base and PR histories, deepening until Git
+          # can establish their relationship.
+          for depth in 1 32 128 512 2048 8192; do
+            echo "Fetching ASIM comparison refs at depth $depth."
+            git fetch --force --no-tags --filter=blob:none \
+              --depth="$depth" origin \
+              "+$BASE_SHA:$trusted_base_ref" \
+              "+refs/pull/$PR_NUMBER/head:$pr_head_ref"
+
+            fetched_base_sha="$(
+              git rev-parse --verify "$trusted_base_ref^{commit}"
+            )"
+            fetched_head_sha="$(
+              git rev-parse --verify "$pr_head_ref^{commit}"
+            )"
+            if [ "$fetched_base_sha" != "$BASE_SHA" ]; then
+              echo "::error::Trusted base revision does not match the workflow event."
+              exit 1
+            fi
+            if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+              echo "::error::Pull request head changed after this workflow was triggered."
+              exit 1
+            fi
+
+            if merge_base="$(
+              git merge-base "$trusted_base_ref" "$pr_head_ref"
+            )"; then
+              echo "Found merge base $merge_base at depth $depth."
+              break
+            fi
+          done
+
+          if [ -z "$merge_base" ]; then
+            echo "::error::Unable to establish a merge base within 8192 commits."
+            exit 1
+          fi
+
+          git worktree add --detach \
+            "$pr_data_dir" "$pr_head_ref"
+          git -C "$pr_data_dir" config user.name "github-actions[bot]"
+          git -C "$pr_data_dir" config user.email "<>"
+          set +e
+          git -C "$pr_data_dir" merge \
+            --no-edit \
+            --no-commit \
+            "$trusted_base_ref"
+          merge_exit=$?
+          set -e
+          conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
+          if [ "$conflicts" -gt 0 ]; then
+            echo "There is a merge conflict. Aborting"
+            git -C "$pr_data_dir" merge --abort
+            exit 1
+          fi
+          if [ "$merge_exit" -ne 0 ]; then
+            exit "$merge_exit"
+          fi
+          echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_BASE_REF=$trusted_base_ref" >> "$GITHUB_ENV"
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -520,7 +632,7 @@ jobs:
             azure-identity==1.27.0 \
             azure-monitor-ingestion==1.1.0 \
             requests==2.34.2 \
-            PyYAML==6.0.3
+            PyYAML==6.0.4
       - name: Login to Azure Public Cloud
         # SECURITY: AZURE_ASIM_CLIENT_ID_MC01 federated identity must be scoped to canary resources only:
         # - Workspace: ASIM-GithubShared-Canary
@@ -538,24 +650,9 @@ jobs:
         env:
           PYTHONNOUSERSITE: "1"
           PYTHONSAFEPATH: "1"
-          TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          set -euo pipefail
-          if ! [[ "$TRUSTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Invalid trusted base SHA."
-            exit 1
-          fi
-          restore_trusted_file() {
-            local path="$1"
-            rm -f "$path"
-            mkdir -p "$(dirname "$path")"
-            git show "$TRUSTED_BASE_SHA:$path" > "$path"
-          }
-          helperPath=".script/tests/asimParsersTest/asim_parser_file_utils.py"
-          filePath=".script/tests/asimParsersTest/ingestASimSampleData.py"
-          restore_trusted_file "$helperPath"
-          restore_trusted_file "$filePath"
-          python "$filePath" "${{ github.event.pull_request.number }}"
+          python .script/tests/asimParsersTest/ingestASimSampleData.py "$PR_NUMBER"
   Run-ASim-Schema-Data-tests:
     needs:
       - security-gate
@@ -571,20 +668,96 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Checkout pull request branch
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+      - name: Checkout trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ needs.security-gate.outputs.approved_sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
           persist-credentials: false
-          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /Parsers/**/*.yaml
-            /Parsers/**/*.yml
-            /Sample Data/ASIM/**/*.csv
-            /ASIM/dev/ASimTester/Testers/*.yaml
-            /.script/tests/asimParsersTest/ExclusionListForASimTests.csv
+          fetch-depth: 1
+
+      - name: Materialize pull request content as untrusted data
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}
+        run: |
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request base SHA."
+            exit 1
+          fi
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
+          pr_data_dir="$RUNNER_TEMP/asim-pr-data"
+          trusted_base_ref="refs/remotes/origin/asim-trusted-base"
+          pr_head_ref="refs/remotes/origin/asim-pr-head"
+          merge_base=""
+
+          # Fetch only the pinned base and PR histories, deepening until Git
+          # can establish their relationship.
+          for depth in 1 32 128 512 2048 8192; do
+            echo "Fetching ASIM comparison refs at depth $depth."
+            git fetch --force --no-tags --filter=blob:none \
+              --depth="$depth" origin \
+              "+$BASE_SHA:$trusted_base_ref" \
+              "+refs/pull/$PR_NUMBER/head:$pr_head_ref"
+
+            fetched_base_sha="$(
+              git rev-parse --verify "$trusted_base_ref^{commit}"
+            )"
+            fetched_head_sha="$(
+              git rev-parse --verify "$pr_head_ref^{commit}"
+            )"
+            if [ "$fetched_base_sha" != "$BASE_SHA" ]; then
+              echo "::error::Trusted base revision does not match the workflow event."
+              exit 1
+            fi
+            if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+              echo "::error::Pull request head changed after this workflow was triggered."
+              exit 1
+            fi
+
+            if merge_base="$(
+              git merge-base "$trusted_base_ref" "$pr_head_ref"
+            )"; then
+              echo "Found merge base $merge_base at depth $depth."
+              break
+            fi
+          done
+
+          if [ -z "$merge_base" ]; then
+            echo "::error::Unable to establish a merge base within 8192 commits."
+            exit 1
+          fi
+
+          git worktree add --detach \
+            "$pr_data_dir" "$pr_head_ref"
+          git -C "$pr_data_dir" config user.name "github-actions[bot]"
+          git -C "$pr_data_dir" config user.email "<>"
+          set +e
+          git -C "$pr_data_dir" merge \
+            --no-edit \
+            --no-commit \
+            "$trusted_base_ref"
+          merge_exit=$?
+          set -e
+          conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
+          if [ "$conflicts" -gt 0 ]; then
+            echo "There is a merge conflict. Aborting"
+            git -C "$pr_data_dir" merge --abort
+            exit 1
+          fi
+          if [ "$merge_exit" -ne 0 ]; then
+            exit "$merge_exit"
+          fi
+          echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_BASE_REF=$trusted_base_ref" >> "$GITHUB_ENV"
 
       - name: Login to Azure Public Cloud with AzPowershell
         # SECURITY: AZURE_ASIM_CLIENT_ID_MC01 federated identity must be scoped to canary resources only:
@@ -600,51 +773,11 @@ jobs:
           enable-AzPSSession: true
           allow-no-subscriptions: true
 
-      - name: Setup git config
-        run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "<>"
-
-      - name: Merge master into pull request branch
-        run: |
-          git merge origin/master
-          Conflicts=$(git ls-files -u | wc -l)
-          if [ "$Conflicts" -gt 0 ] ; then
-            echo "There is a merge conflict. Aborting"
-            git merge --abort
-            exit 1
-          fi
       - name: Run ASIM Schema and Data tests PowerShell script
         uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709
-        env:
-          TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         with:
           inlineScript: |
-            if ($env:TRUSTED_BASE_SHA -notmatch '^[0-9a-f]{40}$') {
-              throw "Invalid trusted base SHA."
-            }
-            function Restore-TrustedFile([string] $Path) {
-              if (Test-Path $Path) {
-                Remove-Item -LiteralPath $Path -Force
-              }
-              $parent = Split-Path -Parent $Path
-              New-Item -ItemType Directory -Path $parent -Force | Out-Null
-              $content = & git show "$($env:TRUSTED_BASE_SHA):$Path"
-              if ($LASTEXITCODE -ne 0) {
-                throw "Unable to restore trusted file $Path"
-              }
-              [System.IO.File]::WriteAllText(
-                $Path,
-                ([string]::Join("`n", [string[]]$content) + "`n"),
-                [System.Text.UTF8Encoding]::new($false)
-              )
-            }
             $filePath = ".script/tests/asimParsersTest/runAsimTesters.ps1"
-            $filePath_convert_yaml = ".script/tests/asimParsersTest/convertYamlToObject.ps1"
-            $filePath_helper = ".script/tests/asimParsersTest/asim_parser_file_utils.py"
-            Restore-TrustedFile $filePath
-            Restore-TrustedFile $filePath_convert_yaml
-            Restore-TrustedFile $filePath_helper
             & $filePath
           azPSVersion: "17.0.0"
   Run-ASim-Parser-Filtering-Tests:
@@ -664,33 +797,96 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Checkout pull request branch
-        uses: actions/checkout@a37ce9120846195fa4ece8f58b268e6043cb2f26 # v3.7.0
+      - name: Checkout trusted base revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ needs.security-gate.outputs.approved_sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           repository: ${{ github.repository }}
-          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /Parsers/**/*.yaml
-            /Parsers/**/*.yml
-            /Sample Data/ASIM/**/*.csv
-            /ASIM/dev/ASimTester/Testers/*.yaml
-            /.script/tests/asimParsersTest/ExclusionListForASimTests.csv
-      - name: Setup git config
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Materialize pull request content as untrusted data
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ needs.security-gate.outputs.approved_sha }}
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "<>"
-      - name: Merge master into pull request branch
-        run: |
-          git merge origin/master
-          Conflicts=$(git ls-files -u | wc -l)
-          if [ "$Conflicts" -gt 0 ] ; then
-            echo "There is a merge conflict. Aborting"
-            git merge --abort
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request base SHA."
             exit 1
           fi
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Invalid pull request number."
+            exit 1
+          fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Invalid pull request head SHA."
+            exit 1
+          fi
+          pr_data_dir="$RUNNER_TEMP/asim-pr-data"
+          trusted_base_ref="refs/remotes/origin/asim-trusted-base"
+          pr_head_ref="refs/remotes/origin/asim-pr-head"
+          merge_base=""
+
+          # Fetch only the pinned base and PR histories, deepening until Git
+          # can establish their relationship.
+          for depth in 1 32 128 512 2048 8192; do
+            echo "Fetching ASIM comparison refs at depth $depth."
+            git fetch --force --no-tags --filter=blob:none \
+              --depth="$depth" origin \
+              "+$BASE_SHA:$trusted_base_ref" \
+              "+refs/pull/$PR_NUMBER/head:$pr_head_ref"
+
+            fetched_base_sha="$(
+              git rev-parse --verify "$trusted_base_ref^{commit}"
+            )"
+            fetched_head_sha="$(
+              git rev-parse --verify "$pr_head_ref^{commit}"
+            )"
+            if [ "$fetched_base_sha" != "$BASE_SHA" ]; then
+              echo "::error::Trusted base revision does not match the workflow event."
+              exit 1
+            fi
+            if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+              echo "::error::Pull request head changed after this workflow was triggered."
+              exit 1
+            fi
+
+            if merge_base="$(
+              git merge-base "$trusted_base_ref" "$pr_head_ref"
+            )"; then
+              echo "Found merge base $merge_base at depth $depth."
+              break
+            fi
+          done
+
+          if [ -z "$merge_base" ]; then
+            echo "::error::Unable to establish a merge base within 8192 commits."
+            exit 1
+          fi
+
+          git worktree add --detach \
+            "$pr_data_dir" "$pr_head_ref"
+          git -C "$pr_data_dir" config user.name "github-actions[bot]"
+          git -C "$pr_data_dir" config user.email "<>"
+          set +e
+          git -C "$pr_data_dir" merge \
+            --no-edit \
+            --no-commit \
+            "$trusted_base_ref"
+          merge_exit=$?
+          set -e
+          conflicts=$(git -C "$pr_data_dir" ls-files -u | wc -l)
+          if [ "$conflicts" -gt 0 ]; then
+            echo "There is a merge conflict. Aborting"
+            git -C "$pr_data_dir" merge --abort
+            exit 1
+          fi
+          if [ "$merge_exit" -ne 0 ]; then
+            exit "$merge_exit"
+          fi
+          echo "ASIM_PR_DATA_DIR=$pr_data_dir" >> "$GITHUB_ENV"
+          echo "ASIM_TRUSTED_BASE_REF=$trusted_base_ref" >> "$GITHUB_ENV"
       - name: Setup Python
         uses: actions/setup-python@e9aba2c848f5ebd159c070c61ea2c4e2b122355e # v2.3.4
         with:
@@ -704,7 +900,7 @@ jobs:
           python -m pip install --disable-pip-version-check --quiet --only-binary=:all: \
             azure-identity==1.27.0 \
             azure-monitor-query==1.4.1 \
-            PyYAML==6.0.3
+            PyYAML==6.0.4
       - name: Login to Azure Public Cloud
         # SECURITY: AZURE_ASIM_CLIENT_ID_MC01 federated identity must be scoped to canary resources only:
         # - Workspace: ASIM-GithubShared-Canary
@@ -721,21 +917,5 @@ jobs:
         env:
           PYTHONNOUSERSITE: "1"
           PYTHONSAFEPATH: "1"
-          TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          set -euo pipefail
-          if ! [[ "$TRUSTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Invalid trusted base SHA."
-            exit 1
-          fi
-          restore_trusted_file() {
-            local path="$1"
-            rm -f "$path"
-            mkdir -p "$(dirname "$path")"
-            git show "$TRUSTED_BASE_SHA:$path" > "$path"
-          }
-          helperPath=".script/tests/asimParsersTest/asim_parser_file_utils.py"
-          filePath=".script/tests/asimParsersTest/ASimFilteringTest.py"
-          restore_trusted_file "$helperPath"
-          restore_trusted_file "$filePath"
-          python "$filePath"
+          python .script/tests/asimParsersTest/ASimFilteringTest.py
