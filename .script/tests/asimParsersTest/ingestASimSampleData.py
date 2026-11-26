@@ -3,9 +3,10 @@
 # This script ingests ASIM parser sample data into a Log Analytics workspace for testing.
 #
 # It expects the Azure-Sentinel repo to be checked out locally and works as follows:
-#   1. Detects modified ASIM parser YAML files by comparing the current branch against upstream/master.
+#   1. Detects modified ASIM query-time parser YAML files, excluding IngestTimeParsers,
+#      using the pinned PR data context in CI or upstream/master locally.
 #   2. Reads each parser YAML from the local repo to extract schema, vendor, and product info.
-#   3. Loads the corresponding sample data and schema CSV files from "Sample Data/ASIM/".
+#   3. Retains matching legacy sample CSVs, using source-specific files for target collisions.
 #   4. For custom log tables: creates the table and a Data Collection Rule (DCR), then ingests data.
 #   5. For built-in tables: creates a DCR (handling GUID column mismatches) and ingests data.
 #
@@ -30,6 +31,8 @@ spec.loader.exec_module(parser_file_utils)
 extract_schema_name = parser_file_utils.extract_schema_name
 is_empty_parser = parser_file_utils.is_empty_parser
 is_union_parser = parser_file_utils.is_union_parser
+filter_query_time_parser_files = parser_file_utils.filter_query_time_parser_files
+resolve_sample_data_path = parser_file_utils.resolve_sample_data_path
 
 import requests
 import yaml
@@ -45,8 +48,52 @@ import time
 
 TIME_GENERATED_SAFETY_DELAY = timedelta(minutes=5)
 MAX_TIME_GENERATED_SPAN = timedelta(hours=36)
+CUSTOM_LOG_TABLE_RE = re.compile(
+    r"^[A-Za-z][A-Za-z0-9_]{0,60}_CL$"
+)
+
+
+def validate_table_name(table_name):
+    if not isinstance(table_name, str):
+        raise ValueError("Sample data Type must be a string")
+    normalized = table_name.strip()
+    if normalized != table_name:
+        raise ValueError("Sample data Type must not contain surrounding whitespace")
+    if normalized in lia_supported_builtin_table:
+        return normalized
+    if CUSTOM_LOG_TABLE_RE.fullmatch(normalized):
+        return normalized
+    raise ValueError(
+        "Sample data Type must be an allowlisted built-in table or match "
+        "^[A-Za-z][A-Za-z0-9_]{0,60}_CL$"
+    )
+
+
+def _response_payload(response):
+    try:
+        payload = response.json()
+    except (AttributeError, ValueError):
+        try:
+            payload = json.loads(response.text)
+        except (AttributeError, json.JSONDecodeError, TypeError):
+            return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def log_arm_response(operation, resource_name, response):
+    payload = _response_payload(response)
+    error = payload.get("error")
+    error_code = error.get("code") if isinstance(error, dict) else None
+    suffix = f", Azure code: {error_code}" if error_code else ""
+    print(
+        f"{operation} for {resource_name}: "
+        f"HTTP {response.status_code}{suffix}"
+    )
 
 def get_modified_files(current_directory):
+    modified_files = parser_file_utils.get_query_time_modified_files()
+    if modified_files is not None:
+        return modified_files
     # Add upstream remote if not already present
     git_remote_command = "git remote"
     remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
@@ -62,11 +109,6 @@ def get_modified_files(current_directory):
     except subprocess.CalledProcessError as e:
         print(f"::error::Error occurred while executing the command: {e}")
         return []
-
-def filter_yaml_files(modified_files):
-    # Take only the YAML files
-    return [line for line in modified_files if line.endswith('.yaml')]
-
 
 def convert_schema_csv_to_json(csv_file):
     """Reads a schema CSV file with 'ColumnName' and 'ColumnType' headers and returns a list of
@@ -149,7 +191,7 @@ def convert_data_csv_to_json(csv_file):
                 return value
 
     data = []
-    table_name = None
+    table_names = set()
     datetime_keys = set()
     try:
         with open(csv_file, 'r', encoding='utf-8-sig') as file:
@@ -157,7 +199,7 @@ def convert_data_csv_to_json(csv_file):
             for row in reader:
                 if 'Type' not in row:
                     raise KeyError(f"'Type' column not found in CSV file '{csv_file}'. Available columns: {list(row.keys())}")
-                table_name = row['Type']
+                table_names.add(validate_table_name(row['Type']))
                 # Convert each value in the row to its appropriate type
                 processed_row = {key: convert_value(value) for key, value in row.items()}
                 data.append(processed_row)
@@ -180,10 +222,15 @@ def convert_data_csv_to_json(csv_file):
 
     if not data:
         raise ValueError(f"No data rows found in CSV file '{csv_file}'")
-    if table_name is None:
+    if not table_names:
         raise ValueError(f"Could not determine table name from CSV file '{csv_file}'")
+    if len(table_names) != 1:
+        raise ValueError(
+            f"Sample data CSV '{csv_file}' must contain exactly one Type; "
+            f"found {sorted(table_names)!r}"
+        )
 
-    return data, table_name, list(datetime_keys)
+    return data, next(iter(table_names)), list(datetime_keys)
 
 def parse_sample_datetime(value):
     if isinstance(value, datetime):
@@ -270,6 +317,7 @@ def rebase_time_generated(data_result, now=None):
     return data_result
 
 def check_for_custom_table(table_name):
+    table_name = validate_table_name(table_name)
     if table_name in lia_supported_builtin_table:
         log_ingestion_supported=True
         table_type="builtin"
@@ -283,6 +331,7 @@ def check_for_custom_table(table_name):
     return log_ingestion_supported,table_type
 
 def create_table(schema,table):
+     table = validate_table_name(table)
      request_object = {
     "properties": {
         "schema": {
@@ -298,6 +347,7 @@ def create_table(schema,table):
      return request_object , url , method
 
 def get_table_status(table):
+    table = validate_table_name(table)
     while True:
         table_name=table
         url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}/tables/{table_name}?api-version=2022-10-01"
@@ -310,6 +360,7 @@ def get_table_status(table):
     return response.status_code  
 
 def get_schema_for_builtin(query_table):
+    query_table = validate_table_name(query_table)
     # Obtain the access token
     credential = DefaultAzureCredential()
     token = credential.get_token('https://api.loganalytics.io/.default').token
@@ -346,6 +397,7 @@ def get_schema_for_builtin(query_table):
 
 
 def create_dcr(schema,table,table_type):
+    table = validate_table_name(table)
     #suffic_num = str(random.randint(100,999))
     dcrname=table+"_DCR"+str(prnumber)
     request_object={ 
@@ -384,6 +436,15 @@ def create_dcr(schema,table,table_type):
     method="PUT"
     url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Insights/dataCollectionRules/{dcrname}?api-version=2022-06-01"
     return request_object , url , method ,"Custom-dcringest"+str(prnumber)
+
+def delete_dcr(url, table):
+    response = hit_api(url, {}, "DELETE")
+    log_arm_response("DCR cleanup", table, response)
+    if response.status_code not in (200, 202, 204, 404):
+        raise RuntimeError(
+            f"DCR cleanup failed for {table} "
+            f"(HTTP {response.status_code})"
+        )
 
 def get_access_token():
     credential = DefaultAzureCredential()
@@ -472,22 +533,31 @@ def convert_data_type(schema_result, data_result):
 
 #main starting point of script
 
-workspace_id = "cb6a2b4f-7073-4e59-9ab0-803cde6b2221"
-workspaceName = "ASIM-SchemaDataTester-GithubShared-Canary"
-resourceGroupName = "asim-schemadatatester-githubshared-canary"
-subscriptionId = "419581d6-4853-49bd-83b6-d94bb8a77887"
-dataCollectionEndpointname = "ASIM-SchemaDataTester-GithubShared-Canary"
-endpoint_uri = "https://asim-schemadatatester-githubshared-canary-qa1f.eastus2euap-1.canary.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
-dcr_directory=[]
+def require_environment_variable(name):
+    value = os.getenv(name)
+    if not value:
+        print(f"::error::{name} must be set.")
+        sys.stdout.flush()
+        sys.exit(1)
+    return value
 
-lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics', 'AZFWNetworkRule', 'AZFWNatRule', 'AZFWApplicationRule', 'AZFWDnsQuery', 'AZFWIdspSignature', 'AZFWThreatIntel']
+
+workspace_id = require_environment_variable("ASIM_CANARY_WORKSPACE_ID")
+workspaceName = require_environment_variable("ASIM_CANARY_WORKSPACE_NAME")
+resourceGroupName = require_environment_variable("ASIM_CANARY_RESOURCE_GROUP")
+subscriptionId = require_environment_variable("ASIM_CANARY_SUBSCRIPTION_ID")
+dataCollectionEndpointname = require_environment_variable("ASIM_CANARY_DCE_NAME")
+endpoint_uri = require_environment_variable("ASIM_CANARY_INGESTION_ENDPOINT")
+
+lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','AlertEvidence','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AWSWAF','AzureAssessmentRecommendation','CommonSecurityLog','CrowdStrikeDetections','DeviceLogonEvents','DeviceProcessEvents','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','EmailEvents','Event','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','GoogleWorkspaceReports','SalesforceAuditTrail','SalesforceLoginHistory','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation','NTANetAnalytics', 'AZFWNetworkRule', 'AZFWNatRule', 'AZFWApplicationRule', 'AZFWDnsQuery', 'AZFWIdpsSignature', 'AZFWThreatIntel']
 reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG","_ResourceId_s"]
 
 SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
 current_directory = os.path.dirname(os.path.abspath(__file__))
 modified_files = get_modified_files(current_directory)
 
-parser_yaml_files = filter_yaml_files(modified_files)
+parser_yaml_files = filter_query_time_parser_files(modified_files)
+ingested_fixtures = set()
 
 prnumber = sys.argv[1]
 
@@ -499,7 +569,9 @@ for file in parser_yaml_files:
         print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")
-    repo_root = os.path.abspath(os.path.join(current_directory, '..', '..', '..'))
+    repo_root = os.getenv("ASIM_PR_DATA_DIR") or os.path.abspath(
+        os.path.join(current_directory, '..', '..', '..')
+    )
     asim_parser_path = os.path.join(repo_root, file)
     print(f"Reading Asim Parser file from local path: {asim_parser_path}")
     try:
@@ -514,9 +586,10 @@ for file in parser_yaml_files:
     equivalent_built_in_parser = asim_parser.get('EquivalentBuiltInParser')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
-    SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_dir = os.path.join(repo_root, 'Sample Data', 'ASIM')
-    sample_data_path = os.path.join(sample_data_dir, SampleDataFile)
+    sample_data_path = resolve_sample_data_path(
+        sample_data_dir, event_vendor, event_product, schema, parser_query
+    )
     print(f"Sample data log file reading from local path: {sample_data_path}")
     try:
         with open(sample_data_path, 'rb') as f:
@@ -525,6 +598,10 @@ for file in parser_yaml_files:
     except Exception as e:
         print(f"::error::An error occurred while trying to read Sample Data file at {sample_data_path}: {e}")
     data_result,table_name,datetime_keys = convert_data_csv_to_json('tempfile.csv')
+    fixture_key = (os.path.normcase(os.path.realpath(sample_data_path)), table_name)
+    if fixture_key in ingested_fixtures:
+        print(f"Skipping sample fixture already ingested into {table_name}: {sample_data_path}")
+        continue
     data_result = rebase_time_generated(data_result)
     print(f"Table Name : {table_name}")
     log_ingestion_supported,table_type=check_for_custom_table(table_name)
@@ -552,7 +629,7 @@ for file in parser_yaml_files:
         # create table 
         request_body, url_to_call , method_to_use = create_table(json.dumps(schema_result, indent=4),table_name)
         response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of table creation: {response_body.text} {response_body.status_code}")
+        log_arm_response("Table creation", table_name, response_body)
         if response_body.status_code != 202 and response_body.status_code != 200:
             print(
                 f"::error::Table creation failed for {table_name} "
@@ -562,70 +639,106 @@ for file in parser_yaml_files:
             sys.exit(1)
         else:
             get_table_status(table_name)
-        #Once table is created now creating DCR
-        request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema_result, indent=4),table_name,"Custom")  
-        response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of DCR creation: {response_body.text}")
-        dcr_directory.append({
-        'DCRname':table_name+'_DCR'+str(prnumber),
-        'imutableid':json.loads(response_body.text).get('properties').get('immutableId'),
-        'stream_name':stream_name
-        })
-        print(dcr_directory)
-        #ingestion start for sending data via DCR
-        for dcr in dcr_directory:
-            if table_name in dcr['DCRname'] and str(prnumber) in dcr['DCRname'] :
-                immutable_id = dcr['imutableid']
-                stream_name = dcr['stream_name']
-                flag=1
-                break 
-        print(f"Ingestion started for {table_name}") 
-        print(f"{immutable_id},{stream_name},{table_name}")      
-        senddtosentinel(immutable_id,data_result,stream_name,flag)
+        dcr_created = False
+        dcr_url = None
+        try:
+            #Once table is created now creating DCR
+            request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema_result, indent=4),table_name,"Custom")
+            response_body=hit_api(url_to_call,request_body,method_to_use)
+            log_arm_response("DCR creation", table_name, response_body)
+            dcr_created = response_body.status_code in (200, 201, 202)
+            if not dcr_created:
+                raise RuntimeError(
+                    f"DCR creation failed for {table_name} "
+                    f"(HTTP {response_body.status_code})"
+                )
+            dcr_url = url_to_call
+            response_payload = _response_payload(response_body)
+            immutable_id = response_payload.get(
+                'properties', {}
+            ).get('immutableId')
+            if not immutable_id:
+                raise RuntimeError(
+                    f"DCR creation response for {table_name} did not include "
+                    "properties.immutableId"
+                )
+            flag=1
+            print(f"Ingestion started for {table_name}")
+            print(f"{immutable_id},{stream_name},{table_name}")
+            if senddtosentinel(immutable_id,data_result,stream_name,flag):
+                ingested_fixtures.add(fixture_key)
+        finally:
+            if dcr_created and dcr_url:
+                delete_dcr(dcr_url, table_name)
     elif log_ingestion_supported == True and table_type == "builtin":
         flag=0 #flag value is used to check if DCR is created for the table or not
         #create dcr for ingestion
         guid_columns = []
         schema = get_schema_for_builtin(table_name)
         data_result = convert_data_type(schema, data_result)
-        request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
-        response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of DCR creation: {response_body.text}")
-        if response_body.status_code == 400 and "InvalidTransformOutput" in response_body.text:
-            guid_flag=0
-            print("*********Checking if failure reason is GUID Type columns and present in schema***********")
-            str_match = json.loads(response_body.text).get('error').get('details')[0].get('message')
-            match = re.findall(r'(\w+\s*\[produced:\s*\'String\',\s*output:\s*\'Guid\'\])', str_match)
-            print(f"Mismatched Column and there types : {match}")
-            for item in match:
-                if "Guid" not in item:
-                    guid_flag=1
-                    print(f"Provided column Type other than GUID TYPE is not matching with Output Stream : {item}")
-            if guid_flag == 1:
-                print("Please provide Same Type of columns in stream declaration that matches with output stream of DCR")
-                exit(1)
-            cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
-            guid_columns = cleaned_guid_columns
-            print("Re trying DCR creation after removing GUID columns")
-            schema = get_schema_for_builtin(table_name)
+        dcr_created = False
+        dcr_url = None
+        try:
             request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
             response_body=hit_api(url_to_call,request_body,method_to_use)
-            print(f"Response of DCR creation: {response_body.text}")       
-        dcr_directory.append({
-        'DCRname':table_name+'_DCR'+str(prnumber),
-        'imutableid':json.loads(response_body.text).get('properties').get('immutableId'),
-        'stream_name':stream_name
-        })
-        print(dcr_directory)
-        for dcr in dcr_directory:
-            if table_name in dcr['DCRname'] and str(prnumber) in dcr['DCRname'] :
-                immutable_id = dcr['imutableid']
-                stream_name = dcr['stream_name']
-                flag=1
-                break
-        print(dcr_directory)    
-        print(f"Ingestion started for {table_name}")       
-        senddtosentinel(immutable_id,data_result,stream_name,flag)
+            log_arm_response("DCR creation", table_name, response_body)
+            dcr_created = response_body.status_code in (200, 201, 202)
+            if dcr_created:
+                dcr_url = url_to_call
+            response_payload = _response_payload(response_body)
+            error_payload = response_payload.get('error', {})
+            error_details = error_payload.get('details', [])
+            if (
+                response_body.status_code == 400
+                and error_payload.get('code') == "InvalidTransformOutput"
+            ):
+                guid_flag=0
+                print("*********Checking if failure reason is GUID Type columns and present in schema***********")
+                str_match = (
+                    error_details[0].get('message', '')
+                    if error_details and isinstance(error_details[0], dict)
+                    else ''
+                )
+                match = re.findall(r'(\w+\s*\[produced:\s*\'String\',\s*output:\s*\'Guid\'\])', str_match)
+                print(f"Mismatched Column and there types : {match}")
+                for item in match:
+                    if "Guid" not in item:
+                        guid_flag=1
+                        print(f"Provided column Type other than GUID TYPE is not matching with Output Stream : {item}")
+                if guid_flag == 1:
+                    print("Please provide Same Type of columns in stream declaration that matches with output stream of DCR")
+                    sys.exit(1)
+                cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
+                guid_columns = cleaned_guid_columns
+                print("Re trying DCR creation after removing GUID columns")
+                schema = get_schema_for_builtin(table_name)
+                request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
+                response_body=hit_api(url_to_call,request_body,method_to_use)
+                log_arm_response("DCR creation retry", table_name, response_body)
+                dcr_created = response_body.status_code in (200, 201, 202)
+                dcr_url = url_to_call if dcr_created else None
+                response_payload = _response_payload(response_body)
+            dcr_created = response_body.status_code in (200, 201, 202)
+            if not dcr_created:
+                raise RuntimeError(
+                    f"DCR creation failed for {table_name} "
+                    f"(HTTP {response_body.status_code})"
+                )
+            immutable_id = response_payload.get(
+                'properties', {}
+            ).get('immutableId')
+            if not immutable_id:
+                raise RuntimeError(
+                    f"DCR creation response for {table_name} did not include "
+                    "properties.immutableId"
+                )
+            flag=1
+            print(f"Ingestion started for {table_name}")
+            if senddtosentinel(immutable_id,data_result,stream_name,flag):
+                ingested_fixtures.add(fixture_key)
+        finally:
+            if dcr_created and dcr_url:
+                delete_dcr(dcr_url, table_name)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
         continue

@@ -36,13 +36,6 @@ from asim_ingestion.workflow.reporting import (
     render_summary,
 )
 from asim_ingestion.azure.common import (
-    DEFAULT_DCE_NAME,
-    DEFAULT_INGESTION_ENDPOINT,
-    DEFAULT_LOCATION,
-    DEFAULT_RESOURCE_GROUP,
-    DEFAULT_SUBSCRIPTION_ID,
-    DEFAULT_WORKSPACE_ID,
-    DEFAULT_WORKSPACE_NAME,
     CanaryConfig,
     build_resource_names,
 )
@@ -78,48 +71,31 @@ def _config_from_args(args: argparse.Namespace) -> CanaryConfig:
 def _add_canary_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--subscription-id",
-        default=os.getenv(
-            "ASIM_CANARY_SUBSCRIPTION_ID",
-            DEFAULT_SUBSCRIPTION_ID,
-        ),
+        default=os.getenv("ASIM_CANARY_SUBSCRIPTION_ID"),
     )
     parser.add_argument(
         "--resource-group",
-        default=os.getenv(
-            "ASIM_CANARY_RESOURCE_GROUP",
-            DEFAULT_RESOURCE_GROUP,
-        ),
+        default=os.getenv("ASIM_CANARY_RESOURCE_GROUP"),
     )
     parser.add_argument(
         "--workspace-name",
-        default=os.getenv(
-            "ASIM_CANARY_WORKSPACE_NAME",
-            DEFAULT_WORKSPACE_NAME,
-        ),
+        default=os.getenv("ASIM_CANARY_WORKSPACE_NAME"),
     )
     parser.add_argument(
         "--workspace-id",
-        default=os.getenv(
-            "ASIM_CANARY_WORKSPACE_ID",
-            DEFAULT_WORKSPACE_ID,
-        ),
+        default=os.getenv("ASIM_CANARY_WORKSPACE_ID"),
     )
     parser.add_argument(
         "--dce-name",
-        default=os.getenv("ASIM_CANARY_DCE_NAME", DEFAULT_DCE_NAME),
+        default=os.getenv("ASIM_CANARY_DCE_NAME"),
     )
     parser.add_argument(
         "--ingestion-endpoint",
-        default=os.getenv(
-            "ASIM_CANARY_INGESTION_ENDPOINT",
-            DEFAULT_INGESTION_ENDPOINT,
-        ),
+        default=os.getenv("ASIM_CANARY_INGESTION_ENDPOINT"),
     )
     parser.add_argument(
         "--location",
-        default=os.getenv(
-            "ASIM_CANARY_LOCATION", DEFAULT_LOCATION
-        ),
+        default=os.getenv("ASIM_CANARY_LOCATION"),
     )
 
 
@@ -131,7 +107,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     matrix.add_argument("--manifest", type=Path, required=True)
     matrix.add_argument("--output", type=Path, required=True)
     matrix.add_argument("--repo-root", type=Path, default=Path("."))
-    matrix.add_argument("--max-targets", type=int, default=25)
+    matrix.add_argument("--max-targets", type=int, default=100)
     matrix.add_argument(
         "--max-fixture-bytes", type=int, default=5 * 1024 * 1024
     )
@@ -302,6 +278,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         WorkflowContractError,
         KeyError,
         TypeError,
+        ValueError,
     ) as exc:
         print(
             f"::error::{_github_command_message(exc)}",

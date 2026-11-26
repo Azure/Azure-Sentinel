@@ -113,22 +113,20 @@ def _technique_ids(tactics: Any) -> list[dict[str, Any]]:
 def project_graph_tactics(
     alert_template: dict[str, Any],
 ) -> dict[str, Any]:
-    """Project the authored tactics to the V3.1 single-tactic Graph contract.
+    """Preserve all authored tactics and compatible techniques for the Graph contract.
 
-    The first authored tactic and its complete nested techniques/subtechniques
-    are retained. This is an API-shape projection, not classification parity.
-    The caller must keep the authored document and provenance unchanged.
+    All authored tactics in source order and their nested techniques/subtechniques
+    are retained. The caller keeps the authored document and provenance unchanged.
     """
     authored = alert_template.get("tactics")
     source_tactics = authored if isinstance(authored, list) else []
-    projected = deepcopy(source_tactics[:1])
-    omitted = deepcopy(source_tactics[1:])
+    projected = deepcopy(source_tactics)
+    omitted: list[dict[str, Any]] = []
     diagnostic = {
-        "status": "projected" if omitted else "not-required",
+        "status": "preserved" if source_tactics else "not-required",
         "reason": (
-            "Graph Custom Detection deployment uses the V3.1 single-tactic "
-            "projection: preserve the first authored tactic and all techniques "
-            "nested under it; omit later tactics and their techniques."
+            "Graph Custom Detection deployment preserves all authored tactics "
+            "in source order and all techniques nested under each tactic."
         ),
         "authoredTactics": [
             item.get("tactic") if isinstance(item, dict) else None
@@ -144,7 +142,7 @@ def project_graph_tactics(
         ],
         "projectedTechniques": _technique_ids(projected),
         "omittedTechniques": _technique_ids(omitted),
-        "classificationParity": "not-established",
+        "classificationParity": "preserved" if source_tactics else "not-required",
     }
     if isinstance(authored, list):
         alert_template["tactics"] = projected

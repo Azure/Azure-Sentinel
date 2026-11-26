@@ -1,0 +1,49 @@
+id: 9a8236a5-f283-4482-ac97-1bd6fab5f4b2
+name: ClickFix and FileFix execution correlated with RunMRU
+description: |
+  Identifies ClickFix and FileFix execution by correlating suspicious explorer.exe child processes with RunMRU entries.
+description-detailed: |
+  Identifies ClickFix and FileFix social engineering, where a fake CAPTCHA or "fix" page tricks the user into pasting a command into the Windows Run dialog (Win+R) or the File Explorer address bar.
+  The query finds explorer.exe launching a script host or LOLBin with download or obfuscation indicators, then correlates it with a suspicious RunMRU registry entry written up to 2 minutes earlier on the same device.
+  Results with a matching RunMRU entry are marked "Confirmed ClickFix (Run dialog)". Results without one are marked "Possible FileFix / ClickFix variant", because FileFix pastes into the File Explorer address bar and does not write to RunMRU.
+  Benign RunMRU entries such as "mshta\1" or "notepad\1" are ignored by stripping the "\1" suffix before matching. This complements the "RunMRU with non-ASCII characters" hunting query.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceRegistryEvents
+tactics:
+- Execution
+relevantTechniques:
+- T1204.004
+- T1059
+query: |
+  let lookback = 7d;
+  let LOLBins = dynamic(["powershell.exe","pwsh.exe","mshta.exe","cmd.exe","curl.exe","wscript.exe","cscript.exe","rundll32.exe","msiexec.exe","certutil.exe","bitsadmin.exe"]);
+  let Indicators = dynamic(["http","https","iwr","irm","iex","webrequest","restmethod","downloadstring","downloadfile","frombase64string","curl","enc","encodedcommand","hidden","bypass"]);
+  // Signal 1 - Execution: explorer.exe launches a LOLBin with download or obfuscation indicators
+  let Exec = DeviceProcessEvents
+  | where Timestamp > ago(lookback)
+  | where InitiatingProcessFileName =~ "explorer.exe"
+  | where FileName in~ (LOLBins)
+  | where ProcessCommandLine has_any (Indicators)
+  | project ExecTime = Timestamp, DeviceName, AccountName, FileName, ProcessCommandLine;
+  // Signal 2 - Intent: user pasted a suspicious command into the Run dialog (Win+R)
+  let Intent = DeviceRegistryEvents
+  | where Timestamp > ago(lookback)
+  | where ActionType == "RegistryValueSet"
+  | where InitiatingProcessFileName =~ "explorer.exe"
+  | where RegistryKey has "RunMRU" and RegistryValueName != "MRUList"
+  | extend RunCommand = trim_end(@"\\1", RegistryValueData)
+  | where RunCommand has_any (Indicators)
+  | project IntentTime = Timestamp, DeviceName, RunCommand;
+  // Correlate: RunMRU entry written up to 2 minutes before the process started
+  Exec
+  | join kind=leftouter Intent on DeviceName
+  | extend Matched = isnotnull(IntentTime) and IntentTime between ((ExecTime - 2m) .. ExecTime)
+  | summarize Confirmed = max(toint(Matched)), RunCommand = take_anyif(RunCommand, Matched)
+      by ExecTime, DeviceName, AccountName, FileName, ProcessCommandLine
+  | extend Verdict = iff(Confirmed == 1, "Confirmed ClickFix (Run dialog)", "Possible FileFix / ClickFix variant")
+  | project ExecTime, DeviceName, AccountName, Verdict, FileName, ProcessCommandLine, RunCommand
+  | order by ExecTime asc
+version: 1.0.0

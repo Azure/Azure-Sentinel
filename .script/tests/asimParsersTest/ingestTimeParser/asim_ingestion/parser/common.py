@@ -12,7 +12,7 @@ import yaml
 MANIFEST_VERSION = 2
 VALIDATION_RESULT_VERSION = 2
 MAX_YAML_BYTES = 1024 * 1024
-MAX_DCR_TRANSFORM_KQL_CHARS = 15_360
+MAX_DCR_TRANSFORM_KQL_CHARS = 14_800
 
 QUERY_TIME_PATH_RE = re.compile(
     r"^Parsers/ASim(?P<schema>[^/]+)/Parsers/(?P<name>ASim[^/]+)\.yaml$"
@@ -26,7 +26,14 @@ FIXTURE_PATH_RE = re.compile(
 PARSER_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]+$")
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 STREAM_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
-VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+VERSION_RE = re.compile(
+    r"^(?:0|[1-9][0-9]*)\."
+    r"(?:0|[1-9][0-9]*)\."
+    r"(?:0|[1-9][0-9]*)"
+    r"(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
 
 ADDITIONAL_UNION_PARSERS = {
     "ProcessEvent": {

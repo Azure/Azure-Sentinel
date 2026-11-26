@@ -1,0 +1,131 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: Bitglass
+  dataTypes:
+  - Bitglass
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - BitglassLogs_CL
+  requiredDataConnectors:
+  - connectorId: Bitglass
+    dataTypes:
+    - BitglassLogs_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 7c570bfc-9f20-490e-80e8-b898c7ce4bda
+    path: Analytic Rules/BitglassMultipleFailedLogins.yaml
+    version: 1.0.1
+    querySha256: faf71db84ae797c2a27fa8b5d6b41f840b371b9bdf59f151695ff0cc410b8855
+    schedule:
+      queryFrequency: 1h
+      queryPeriod: 1h
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=1h, lookback=1h; target frequency=PT1H,
+      native lookback=unknown/unconfigured; mixed, Sentinel-only, or unknown query
+      surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - 'Entity confirmation required: `AccountCustomEntity` was provisionally mapped
+      to Account.upnColumn. Confirm that the source always emits a complete UPN; otherwise
+      project an Entra user ID, SID, or account name plus domain'
+    - Account.Name value is retained as customDetails.AccountName from query column
+      `AccountCustomEntity`, but its target output binding requires runtime-schema
+      verification; custom details do not restore entity identity or correlation
+    - Supplemental customDetails.AccountName column `AccountCustomEntity` requires
+      runtime output-schema binding verification
+    - Custom-detail values must remain within the documented combined 4 KB per-alert
+      limit; runtime values are unverified and the service drops all custom details
+      if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CredentialAccess
+    originalTechniques:
+    - T1110
+    reviewScope:
+      sourceDocumentSha256: 4c8d1cc8351067a44490e09c2260c7328b3f13d9fd65a4374a78204cb04e0995
+      targetQuerySha256: ff327f71d1a0785ac55d404473c3f2e0339ae97e542c5c5a2330ceade5e9f5e8
+    eventTimeWindow:
+      status: default-native-lookback
+      appliedDefault: hourly-1h-to-native-4h-lookback
+      queryFrequency: 1h
+      queryPeriod: 1h
+      targetFrequency: PT1H
+      effectiveLookback: PT4H
+      originalSentinelLookbackSeconds: 3600
+      effectiveEventWindowSeconds: 14400
+      xdrServiceWindowSeconds: 14400
+      filterInjected: false
+      parityClaimed: false
+      hasAggregation: true
+      aggregationWindowDifference: true
+      timingDifference: Four hours (PT4H / 14400s) is the native XDR ingestion-based
+        lookback window for PT1H execution frequency, not the execution frequency;
+        original Sentinel queryPeriod was 1h (3600s).
+      aggregationDifference: Query contains summarize/make-series aggregation; evaluating
+        over the native 4-hour XDR lookback window without an injected 1h event-time
+        filter may aggregate up to 4 hours of events per hourly run instead of 1 hour.
+      sourceDocumentSha256: 4c8d1cc8351067a44490e09c2260c7328b3f13d9fd65a4374a78204cb04e0995
+      targetQuerySha256: ff327f71d1a0785ac55d404473c3f2e0339ae97e542c5c5a2330ceade5e9f5e8
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: Name
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: runtime-binding-pending
+      customDetailKey: AccountName
+    reviewDecisions:
+    - decision: approved
+      reason: Entity mapping AccountCustomEntity to Account.upnColumn reviewed and
+        approved for Defender XDR custom detection.
+      reviewedAt: '2026-04-20T21:15:00Z'
+properties:
+  id: xdr-7c570bfc-9f20-490e-80e8-b898c7ce4bda
+  displayName: Bitglass - Multiple failed logins
+  status: disabled
+  queryCondition:
+    queryText: 'let threshold = 10;
+
+      Bitglass
+
+      | where EventType =~ ''access''
+
+      | where EventResultDetails =~ ''Failed login attempt.''
+
+      | summarize count() by User, bin(TimeGenerated, 10m)
+
+      | where count_ >= threshold
+
+      | extend AccountCustomEntity = User'
+  schedule:
+    frequency: PT1H
+  detectionAction:
+    alertTemplate:
+      title: Bitglass - Multiple failed logins
+      description: '''Detects multiple failed logins.'''
+      severity: high
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: AccountCustomEntity
+      tactics:
+      - tactic: CredentialAccess
+        techniques:
+        - technique: T1110
+      customDetails:
+        AccountName: AccountCustomEntity

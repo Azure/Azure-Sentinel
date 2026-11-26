@@ -1,0 +1,137 @@
+schemaVersion: 1.0.0
+version: 3.2.2
+kind: CustomDetection
+resourceType: Microsoft.Security/detectionRules
+apiVersion: 2026-06-01-preview
+requiredDataConnectors:
+- connectorId: SlackAuditAPI
+  dataTypes:
+  - SlackAudit_CL
+contentProvenance:
+  requiredWorkloads:
+  - workload: sentinel
+    dataTypes:
+    - SlackAuditV2_CL
+    - SlackAudit_CL
+  requiredDataConnectors:
+  - connectorId: SlackAuditAPI
+    dataTypes:
+    - SlackAudit_CL
+  dependencyReviewRequired: false
+  source:
+    platform: Microsoft Sentinel
+    kind: AnalyticsRule
+    id: 3b11f06e-4afd-4ae6-8477-c61136619ac8
+    path: Analytic Rules/SlackAuditUnknownUA.yaml
+    version: 1.0.2
+    querySha256: cb179babcf5ffc0d60e8f8a4381ad6e0fdb60256755bad9f68c5983ca896dd9d
+    schedule:
+      queryFrequency: 24h
+      queryPeriod: 14d
+  conversion:
+    tool: sentinel-to-xdr-migration
+    version: 0.1.0
+    status: converted
+    reviewRequired: false
+    reviewReasons: []
+    requiredWorkloads:
+    - sentinel
+    warnings:
+    - 'Schedule assessment: source frequency=24h, lookback=14d; target frequency=PT24H, native lookback=unknown/unconfigured;
+      mixed, Sentinel-only, or unknown query surface; no custom lookback is configured in the payload. See https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules#lookback'
+    - Account mapping is incomplete and was removed
+    - Custom-detail values must remain within the documented combined 4 KB per-alert limit; runtime values are unverified
+      and the service drops all custom details if exceeded
+    informational: []
+    errors: []
+    originalTactics:
+    - CommandAndControl
+    originalTechniques:
+    - T1071
+    - T1071.001
+    reviewScope:
+      sourceDocumentSha256: 9a2dbb72f6068f593252f1260754a84d83ffe0d0ba7acbbc3b5f6e7b0b3773af
+      targetQuerySha256: 2f7f261a7b7e1f93c6df14ac7fc0688a83c0c57ae1940d697a27cc88179aa447
+    supplementalEntityDetails:
+    - entityType: Account
+      entityIndex: 1
+      identifier: FullName
+      sourceColumn: AccountCustomEntity
+      column: AccountCustomEntity
+      status: available
+      customDetailKey: Account
+properties:
+  id: xdr-3b11f06e-4afd-4ae6-8477-c61136619ac8
+  displayName: SlackAudit - Unknown User Agent
+  status: disabled
+  queryCondition:
+    queryText: |-
+      let _SlackAudit = union isfuzzy=true
+          (SlackAuditV2_CL),
+          (SlackAudit_CL),
+          (datatable(TimeGenerated:datetime, Id:string, DateCreate:string, Action:string, Actor:dynamic, Entity:dynamic, Context:dynamic, Details:dynamic, ActionDescription:string)[])
+      | extend TimeGenerated = iff(isnotempty(column_ifexists('DateCreate', '')) and isnotnull(todatetime(column_ifexists('DateCreate', ''))), todatetime(column_ifexists('DateCreate', '')), TimeGenerated)
+      | extend actor = todynamic(Actor), entity = todynamic(Entity), context = todynamic(Context), details = todynamic(Details)
+      | extend
+          EventVendor = 'Slack',
+          EventProduct = 'Audit',
+          EventSchemaVersion = '0.1.0',
+          EventId = column_ifexists('Id', ''),
+          EventEndTime = column_ifexists('DateCreate', ''),
+          Action = column_ifexists('Action', ''),
+          DvcAction = column_ifexists('Action', ''),
+          DvcActionDesc = column_ifexists('ActionDescription', ''),
+          ActorType = tostring(actor.type),
+          SrcUserIdentity = tostring(actor.user.id),
+          SrcUserName = tostring(actor.user.name),
+          SrcUserEmail = tostring(actor.user.email),
+          SrcUserTeam = tostring(actor.user.team),
+          EntityType = tostring(entity.type),
+          EntityFileId = tostring(entity.file.id),
+          EntityFileName = tostring(entity.file.name),
+          EntityFileFiletype = tostring(entity.file.filetype),
+          EntityFileTitle = tostring(entity['file']['title']),
+          EntityUserId = tostring(entity.user.id),
+          EntityUserName = tostring(entity.user.name),
+          EntityUserEmail = tostring(entity.user.email),
+          EntityUserTeam = tostring(entity.user.team),
+          UserAgentOriginal = tostring(context.ua),
+          SrcIpAddr = tostring(context.ip_address),
+          SessionId = tostring(context.session_id),
+          DetailsType = tostring(details.type),
+          DetailsNewValue = tostring(details.new_value),
+          DetailsPreviousValue = tostring(details.previous_value);
+      let lbperiod = 14d;
+      let known_UAs = _SlackAudit
+      | where TimeGenerated > ago(lbperiod)
+      | where isnotempty(UserAgentOriginal)
+      | summarize makeset(UserAgentOriginal);
+      _SlackAudit
+      | where UserAgentOriginal !in (known_UAs)
+      | extend AccountCustomEntity = SrcUserName
+      | project TimeGenerated, SrcUserName, SrcUserEmail, SrcIpAddr, UserAgentOriginal, AccountCustomEntity
+  schedule:
+    frequency: PT24H
+  detectionAction:
+    alertTemplate:
+      title: SlackAudit - Unknown User Agent
+      description: |-
+        'Detects Slack workspace activity from unknown user agents by comparing recent UserAgentOriginal values against
+        a 14d baseline of known user agents.'
+      severity: low
+      entityMappings:
+        accounts:
+        - id: account1
+          upnColumn: SrcUserEmail
+        ips:
+        - id: ip1
+          addressColumn: SrcIpAddr
+      tactics:
+      - tactic: CommandAndControl
+        techniques:
+        - technique: T1071
+          subTechniques:
+          - T1071.001
+      customDetails:
+        Account: AccountCustomEntity
+        UserAgent: UserAgentOriginal

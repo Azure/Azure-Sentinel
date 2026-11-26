@@ -226,6 +226,86 @@ Your repo might use `master` instead of `main`. Try:
 node .script/local-validation/validate.js --diff master
 ```
 
+### Workbook version increment reported missing despite a committed bump
+
+[Azure/Azure-Sentinel#15541](https://github.com/Azure/Azure-Sentinel/issues/15541)
+tracks a false positive in the PR-aware
+[version checker](../utils/workbookCheckers/isVersionIncrementedOnModification.ts).
+This section is a proposed maintainer fix, not an implemented parser change or
+permission to bypass validation.
+
+The checker extracts version pairs from a full-context metadata diff. Its inner
+loop recognizes only a trimmed `}` as the end of a workbook object, not `},`.
+It can scan into the following entry and overwrite `templateRelativePath` while
+retaining the previous entry's version pair. Nested objects and diff prefixes
+make a closing-brace-only repair insufficient without regression coverage.
+
+The exact affected comparison is reproducible with:
+
+```powershell
+git diff cc043cefcb1ec58776fa420c271be95c31cd8966 9dafaa0525eb21803f38c6091ba115fd4add7efe -W -- Workbooks\WorkbooksMetadata.json
+```
+
+In [Azure/Azure-Sentinel#15452](https://github.com/Azure/Azure-Sentinel/pull/15452),
+the committed `AzureSentinelCost.json` metadata increases from `1.5.1` to
+`1.6.2`. The existing helper instead returns that pair under `ADXvsLA.json`,
+leaving the changed cost workbook without a version pair.
+
+#### Suggested implementation
+
+Replace diff-boundary extraction with a comparison of complete metadata
+snapshots, using the existing Git client and metadata contracts:
+
+1. Retain the existing changed-workbook discovery and validation gates.
+2. Read `Workbooks/WorkbooksMetadata.json` at the exact PR base and head commit
+   SHAs, not mutable branch names, and parse both JSON arrays.
+3. Index the validated entries by `templateRelativePath`, following existing
+   path and metadata-identity rules. Do not silently overwrite ambiguous entries.
+4. Compare each changed existing workbook's own old and new versions. Missing,
+   unchanged or decreased versions must remain explicit validation failures.
+5. Preserve established behavior for additions, removals, renames and shared
+   template paths after verifying the existing contracts. Keep version-ordering
+   changes separate unless their behavior is explicitly covered and reviewed.
+6. Preserve explicit errors for Git failures, invalid JSON and ambiguous
+   metadata. Never convert an unsuccessful read or parse into a passing check.
+
+For the affected fixture, the expected version-pair mapping is:
+
+```json
+{
+  "AzureSentinelCost.json": {
+    "oldVersion": "1.5.1",
+    "newVersion": "1.6.2"
+  }
+}
+```
+
+The unchanged `ADXvsLA.json` entry must not inherit that pair. Do not reorder
+production metadata, bump unrelated workbook versions, or disable the checker
+to conceal the defect.
+
+#### Required regression coverage
+
+- The exact cost-workbook bump, its nested `source` object, and the following
+  unchanged workbook; assert both correct attribution and no neighbor leakage.
+- Multiple changed workbooks, nested arrays/objects, braces in strings,
+  reordered fields, minified/pretty JSON, and LF/CRLF input.
+- Modified workbooks with missing, unchanged or decreased versions still fail.
+- Invalid JSON, ambiguous metadata and Git/read failures remain failures.
+- Existing addition, removal, rename and shared-template behavior is retained
+  or explicitly documented and tested.
+
+Acceptance requires TypeScript compilation, existing and focused workbook
+metadata tests, and a rerun of the real PR-aware workflow against the affected
+content. A file-scoped metadata pass does not exercise the failing diff check.
+
+Any temporary exception must be separately recorded by a maintainer against
+the exact head and failed check. The issue documents evidence, not an applied
+bypass or merge approval. It does not waive package/source parity, calculation
+regressions, ARM-TTK acceptance or deployed-workbook evidence. Implementing the
+protected parser/test changes requires the repository's explicit
+maintainer-development authorization.
+
 ### ".NET SDK not found"
 The .NET validators (KQL, Detection Schema, Non-ASCII) require .NET SDK. Install it or skip them:
 ```bash

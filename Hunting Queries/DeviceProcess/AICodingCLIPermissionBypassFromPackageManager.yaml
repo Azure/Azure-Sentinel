@@ -1,0 +1,84 @@
+id: 367a59ec-219b-4614-9eea-f306e682ddff
+name: AI coding CLI launched with permission bypass by a package manager process
+description: |
+  Identifies AI coding command-line tools (Claude Code, Gemini CLI, Codex CLI, Amazon Q Developer CLI)
+  started with the flag that disables their approval prompts, where the launching process is Node.js or
+  a package manager. In the August 2025 Nx supply chain compromise, a malicious postinstall script ran
+  Claude Code, Gemini CLI and Amazon Q with these flags and asked them to inventory sensitive files on the host.
+  A developer starting one of these tools by hand normally launches it from a shell, so a package manager
+  or node parent is the unusual part. npx and similar launchers will also match, so review the parent
+  command line before treating a result as malicious.
+  References:
+  https://github.com/advisories/GHSA-cxm3-wv7p-598c
+  https://www.stepsecurity.io/blog/supply-chain-security-alert-popular-nx-build-system-package-compromised-with-data-stealing-malware
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - InitialAccess
+  - Execution
+  - DefenseEvasion
+relevantTechniques:
+  - T1195.002
+  - T1059
+  - T1562.001
+query: |
+  let timeframe = 7d;
+  let BypassFlags = dynamic([
+      "--dangerously-skip-permissions",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "--trust-all-tools",
+      "--yolo"
+  ]);
+  let AiCliNames = dynamic(["claude", "gemini", "codex", "q"]);
+  let LauncherNames = dynamic([
+      "node", "node.exe", "npm", "npm.cmd", "npx", "npx.cmd",
+      "pnpm", "pnpm.exe", "yarn", "yarn.cmd", "bun", "bun.exe"
+  ]);
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where ProcessCommandLine has_any (BypassFlags)
+      or ProcessCommandLine has_all ("--approval-mode", "yolo")
+  | extend CliName = tolower(tostring(split(FileName, ".")[0]))
+  | where CliName in (AiCliNames)
+      or (CliName == "node" and ProcessCommandLine has_any ("claude", "gemini", "codex"))
+  | where InitiatingProcessFileName in~ (LauncherNames)
+      or InitiatingProcessParentFileName in~ (LauncherNames)
+  | extend AccountCustomEntity = AccountName
+  | extend HostCustomEntity = DeviceName
+  | project
+      TimeGenerated,
+      DeviceName,
+      HostCustomEntity,
+      AccountName,
+      AccountCustomEntity,
+      AccountDomain,
+      FileName,
+      ProcessCommandLine,
+      InitiatingProcessFileName,
+      InitiatingProcessCommandLine,
+      InitiatingProcessParentFileName,
+      ReportId
+  | sort by TimeGenerated desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: eeee2345
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

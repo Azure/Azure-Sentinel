@@ -13,7 +13,14 @@ from asim_ingestion.fixtures.timestamps import (
     parse_kusto_datetime_ticks,
     ticks_to_kusto_datetime,
 )
-from asim_ingestion.parser.kql import split_kql_statements, split_pipeline
+from asim_ingestion.parser.kql import (
+    iter_untrusted_kql_rule_matches,
+    query_time_parameter_errors,
+)
+from asim_ingestion.parser.kusto_analyzer import (
+    KustoAnalyzerError,
+    analyze_kql,
+)
 
 MAX_MISMATCH_EXAMPLES = 10
 IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
@@ -56,6 +63,45 @@ def _quote_column_name(value: str) -> str:
     if IDENTIFIER_RE.fullmatch(value):
         return value
     return "['" + value.replace("'", "''") + "']"
+
+
+def _validate_untrusted_query(query: str, stage: str) -> None:
+    try:
+        analysis = analyze_kql(query)
+    except KustoAnalyzerError as exc:
+        raise ValidationError(
+            stage,
+            f"Trusted Kusto.Language analyzer failed: {exc}",
+        ) from exc
+    diagnostics = [
+        diagnostic
+        for diagnostic in analysis["diagnostics"]
+        if diagnostic["severity"] == "Error"
+    ]
+    if diagnostics:
+        diagnostic = diagnostics[0]
+        raise ValidationError(
+            stage,
+            "Kusto syntax diagnostic "
+            f"{diagnostic['code']} at line {diagnostic['line']}, "
+            f"column {diagnostic['column']}: "
+            f"{diagnostic['message']}",
+        )
+    matches = iter_untrusted_kql_rule_matches(analysis, query)
+    if matches:
+        rule, fact = min(
+            matches,
+            key=lambda match: match[1].get("location", {}).get(
+                "start", -1
+            ),
+        )
+        line = fact.get("location", {}).get("line")
+        suffix = f" at line {line}" if isinstance(line, int) else ""
+        raise ValidationError(
+            stage,
+            f"Unsupported KQL construct '{rule.construct}'{suffix}. "
+            f"{rule.message}",
+        )
 
 
 def _timestamp_literals(timestamps: Sequence[str]) -> str:
@@ -170,11 +216,13 @@ def build_exact_slice_expression(
 
 
 def _is_source_passthrough(filter_query: str) -> bool:
-    statements = split_kql_statements(filter_query)
-    if not statements:
-        return False
-    stages = split_pipeline(statements[-1])
-    return len(stages) == 1 and stages[0].casefold() == "source"
+    analysis = analyze_kql(filter_query)
+    pipeline = analysis.get("pipeline")
+    return (
+        analysis["sourcePipeline"]["isValid"]
+        and isinstance(pipeline, dict)
+        and not pipeline["operators"]
+    )
 
 
 def build_filter_count_query(
@@ -183,6 +231,7 @@ def build_filter_count_query(
     source_schema: Sequence[Mapping[str, str]],
     source_rows: Sequence[Mapping[str, Any]],
 ) -> str:
+    _validate_untrusted_query(filter_query, "filter")
     source_expression = build_fixture_datatable(
         source_schema,
         source_rows,
@@ -323,20 +372,33 @@ def _render_kql_default(value: Any, parameter_type: str) -> str:
                 "qtp-execution", "Boolean parameter default is invalid."
             )
         return "true" if value else "false"
+    if normalized_type == "string":
+        return _quote_kql_string(str(value))
+    if normalized_type == "datetime":
+        if value == "datetime(null)":
+            return value
+        try:
+            parse_kusto_datetime_ticks(str(value))
+        except ValueError as exc:
+            raise ValidationError(
+                "qtp-execution",
+                "Datetime parameter default is invalid.",
+            ) from exc
+        return f"datetime({value})"
+    if normalized_type == "dynamic":
+        if value == "dynamic([])":
+            return value
+        return "dynamic(" + json.dumps(
+            value, ensure_ascii=True, separators=(",", ":")
+        ) + ")"
     if normalized_type in {"int", "long", "real"}:
+        if value == f"{normalized_type}(null)":
+            return value
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValidationError(
                 "qtp-execution", "Numeric parameter default is invalid."
             )
         return str(value)
-    if normalized_type == "string":
-        return _quote_kql_string(str(value))
-    if normalized_type == "datetime":
-        return f"datetime({value})"
-    if normalized_type == "dynamic":
-        return "dynamic(" + json.dumps(
-            value, ensure_ascii=True, separators=(",", ":")
-        ) + ")"
     raise ValidationError(
         "qtp-execution",
         f"Unsupported query-time parser parameter type: {parameter_type}",
@@ -354,10 +416,13 @@ def build_query_time_parser_query(
             "qtp-execution",
             "Query-time parser is missing ParserQuery.",
         )
+    _validate_untrusted_query(parser_query, "qtp-execution")
     parser_params = query_time_document.get("ParserParams", [])
-    if not isinstance(parser_params, list):
+    parameter_errors = query_time_parameter_errors(parser_params)
+    if parameter_errors:
+        field, message = parameter_errors[0]
         raise ValidationError(
-            "qtp-execution", "ParserParams must be an array."
+            "qtp-execution", f"{field}: {message}"
         )
 
     signature: list[str] = []
@@ -385,7 +450,8 @@ def build_query_time_parser_query(
         default = _render_kql_default(
             parameter["Default"], parameter_type
         )
-        signature.append(f"{name}:{parameter_type}={default}")
+        normalized_type = parameter_type.strip().casefold()
+        signature.append(f"{name}:{normalized_type}={default}")
         if name.casefold() == "disabled":
             if parameter_type.casefold() not in {"bool", "boolean"}:
                 raise ValidationError(
@@ -470,6 +536,12 @@ def build_asim_tester_query(
                 'column_ifexists("ThreatOriginalRiskLevel_s", ""), '
                 'tostring(column_ifexists("ThreatOriginalRiskLevel", int(null))))'
             )
+        elif target_table in {
+            "ASimAlertEventLogs",
+            "ASimWebSessionLogs",
+        }:
+            # Physical table types differ; logical ASIM uses long.
+            target_expression += "\n| extend FileSize = tolong(FileSize)"
         signature = "T:(*), selected_schema:string=''"
         invocation = (
             "_AsimValidationTargetRows\n"
