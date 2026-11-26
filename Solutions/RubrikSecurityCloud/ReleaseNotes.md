@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.5.6       | 23-11-2026                     | Fixed Deploy failure of the Push (CCF) connector on workspaces upgraded from the Function App connector. All Rubrik tables now share one schema (all webhook fields on Anomaly, Ransomware, ThreatHunt and Events) and the `_g` columns are typed string instead of guid. The same schema is applied to the Function App ARM template. |
 | 3.5.5       | 26-10-2026                     | Added support of DSPM & IR Violation events collection as part of Azure function app based dta connector, Added analytic rules and playbooks rleated DSPM & IR Violation and quarntine.
 | 3.5.4       | 12-10-2026                     | Updated Events Data table schema for CCF Connector.
 | 3.5.3       | 03-09-2026                     | Added RubrikCCFConnector to ingest Anomaly, Ransomware, ThreatHunt and other events data along with audit logs via webhook. |
