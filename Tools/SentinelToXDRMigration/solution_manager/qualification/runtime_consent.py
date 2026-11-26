@@ -21,7 +21,6 @@ from solution_manager.core.artifacts import (
 )
 from solution_manager.core.content_paths import (
     analytic_rule_files,
-    content_path,
     is_sentinel_derived,
     xdr_detection_files,
 )

@@ -13,7 +13,6 @@ import yaml
 
 from solution_manager.core.artifacts import (
     conversion_scope,
-    existing_artifact_path,
     load_config,
     portable_artifact,
     report_directory,

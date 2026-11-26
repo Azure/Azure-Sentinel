@@ -33,7 +33,6 @@ from solution_manager.core.content_paths import (
     custom_detail_schema_errors,
     is_sentinel_derived,
     resolve_detection_query_sha256,
-    runtime_validation_plan,
     solution_paths,
     xdr_detection_files,
 )

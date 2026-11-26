@@ -766,12 +766,12 @@ class AdvancedHuntingProviderBoundsTests(unittest.TestCase):
             ])
 
     def test_native_detection_without_source_conversion_or_query_sha256_plans_and_validates(self):
+        from solution_manager.core.content_paths import runtime_validation_plan
         from solution_manager.qualification.runtime import (
             compute_query_sha256,
             current_runtime_evidence,
             current_runtime_query_hash,
             resolve_detection_query_sha256,
-            runtime_validation_plan,
         )
 
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as temp:
