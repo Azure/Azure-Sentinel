@@ -38,10 +38,14 @@ query: |
   | extend TargetResourceName = tostring(TargetResources[0].displayName)
   | extend TargetResourceType = tostring(TargetResources[0].type)
   | extend ModifiedProperties = TargetResources[0].modifiedProperties
-  | extend SecurityDefaultsEnabledBefore = tostring(parse_json(tostring(ModifiedProperties[0].oldValue)).isEnabled)
-  | extend SecurityDefaultsEnabledAfter = tostring(parse_json(tostring(ModifiedProperties[0].newValue)).isEnabled)
-  | where SecurityDefaultsEnabledAfter !~ "true"
-  | where not(SecurityDefaultsEnabledBefore =~ "false" and SecurityDefaultsEnabledAfter =~ "false")
+  | mv-apply Property = ModifiedProperties on (
+      extend PropertyOld = parse_json(tostring(Property.oldValue)), PropertyNew = parse_json(tostring(Property.newValue))
+      | where isnotempty(tostring(PropertyNew.isEnabled)) or isnotempty(tostring(PropertyOld.isEnabled))
+      | project SecurityDefaultsEnabledBefore = tostring(PropertyOld.isEnabled), SecurityDefaultsEnabledAfter = tostring(PropertyNew.isEnabled)
+      | take 1
+    )
+  | where SecurityDefaultsEnabledAfter =~ "false"
+  | where not(SecurityDefaultsEnabledBefore =~ "false")
   | project-reorder TimeGenerated, OperationName, TargetResourceName, TargetResourceType, SecurityDefaultsEnabledBefore, SecurityDefaultsEnabledAfter, InitiatingUserPrincipalName, InitiatingAppName, InitiatingIPAddress, ModifiedProperties
 eventGroupingSettings:
   aggregationKind: AlertPerResult
