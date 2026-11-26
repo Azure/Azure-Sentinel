@@ -416,6 +416,30 @@ function Convert-ToParameterFormat($propValue) {
     return $result
 }
 
+function Convert-CCPPropertyPlaceholders($Value, $templateContentConnections) {
+    # Only string leaves are interpolated. PowerShell's pipeline otherwise
+    # flattens singleton/empty arrays or stringifies nested addOnAttributes.
+    if ($Value -is [string]) {
+        return Convert-ToParameterFormat -propValue $Value
+    }
+    if ($Value -is [System.Collections.IDictionary]) {
+        foreach ($key in @($Value.Keys)) {
+            $Value[$key] = Convert-CCPPropertyPlaceholders -Value $Value[$key] -templateContentConnections $templateContentConnections
+        }
+    }
+    elseif ($Value -is [PSCustomObject]) {
+        foreach ($property in @($Value.PSObject.Properties)) {
+            $property.Value = Convert-CCPPropertyPlaceholders -Value $property.Value -templateContentConnections $templateContentConnections
+        }
+    }
+    elseif ($Value -is [array]) {
+        for ($i = 0; $i -lt $Value.Count; $i++) {
+            $Value[$i] = Convert-CCPPropertyPlaceholders -Value $Value[$i] -templateContentConnections $templateContentConnections
+        }
+    }
+    return ,$Value
+}
+
 # THIS IS THE STARTUP FUNCTION FOR CCP RESOURCE CREATOR
 function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict, $solutionBasePath, $solutionName, $ccpTables, $ccpTablesCounter) {
     Write-Host "Inside of CCP Connector Code!"
@@ -529,6 +553,30 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 exit 1;
             }
 
+            $perInstancePollers = @($fileContent | Where-Object { $_.PSObject.Properties.Name -contains 'connectionDeployment' })
+            $isPerInstance = $perInstancePollers.Count -gt 0
+            if ($isPerInstance) {
+                if (@($fileContent).Count -ne 1 -or $perInstancePollers[0].kind -ne 'StorageAccountBlobContainer') {
+                    throw 'connectionDeployment requires a single StorageAccountBlobContainer poller per connector definition.'
+                }
+                $perInstanceSource = $perInstancePollers[0]
+                foreach ($name in $perInstanceSource.PSObject.Properties.Name) {
+                    if ($name -notin @('name', 'type', 'apiVersion', 'location', 'kind', 'properties', 'tags', 'dependsOn',
+                            'UseRandomGuid', 'connectionDeployment', 'eventGridUseManagedIdentity', 'eventGridAdvancedFilters', 'copy', 'condition')) {
+                        throw "Unsupported per-instance poller metadata '$name'."
+                    }
+                }
+                if ($global:commaSeparatedTextFieldName -ne '' -or
+                    $perInstanceSource.PSObject.Properties.Name -contains 'copy' -or
+                    $perInstanceSource.PSObject.Properties.Name -contains 'condition') {
+                    throw 'Per-instance storage does not support poller copy, condition, or comma-separated instance expansion.'
+                }
+                if ($perInstanceSource.PSObject.Properties.Name -contains 'UseRandomGuid' -and
+                    ($perInstanceSource.UseRandomGuid -isnot [bool] -or $perInstanceSource.UseRandomGuid)) {
+                    throw 'Per-instance storage requires UseRandomGuid to be false or omitted.'
+                }
+            }
+
             function GetDataConnectorPollerResourceName ($dataConnectorName, $useRandomGuid = $true) {
                 $splitNamesBySlash = $dataConnectorName -split '/'
                 $concatenateParts = @()
@@ -625,7 +673,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             function CCPDataConnectorsResource($fileContent) {
                 if ($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
                     # Check for UseRandomGuid property, default to true for backward compatibility
-                    $useRandomGuid = if ($null -ne $fileContent.UseRandomGuid) { $fileContent.UseRandomGuid } else { $true }
+                    $useRandomGuid = if ($isPerInstance) { $false } elseif ($null -ne $fileContent.UseRandomGuid) { $fileContent.UseRandomGuid } else { $true }
                     Write-Host "UseRandomGuid setting: $useRandomGuid"
 
                     if ($global:commaSeparatedTextFieldName -ne "") {
@@ -656,6 +704,13 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     if ($fileContent.PSObject.Properties.Name -contains "eventGridUseManagedIdentity") {
                         $armResource | Add-Member -MemberType NoteProperty -Name "eventGridUseManagedIdentity" -Value $fileContent.eventGridUseManagedIdentity -Force
+                    }
+                    if ($isPerInstance) {
+                        foreach ($name in @('apiVersion', 'tags', 'dependsOn')) {
+                            if ($fileContent.PSObject.Properties.Name -contains $name) {
+                                $armResource | Add-Member -NotePropertyName $name -NotePropertyValue $fileContent.$name -Force
+                            }
+                        }
                     }
 
                     if ($null -ne $fileContent.condition) {
@@ -774,7 +829,16 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     }
                     elseif ($armResource.kind.ToLower() -eq 'storageaccountblobcontainer') {
                         . "$PSScriptRoot/storageAccountDeploymentTemplate.ps1" # load storage resource creator
-                        CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType -instructionParameters $paramItems
+                        if ($isPerInstance) {
+                            . "$PSScriptRoot/perInstanceStorageDeploymentTemplate.ps1"
+                            CreatePerInstanceStorageAccountBlobContainerResourceProperties `
+                                -ArmResource $armResource -TemplateContentConnections $templateContentConnections `
+                                -DeploymentConfig $fileContent.connectionDeployment -CcpItem $ccpItem `
+                                -InstructionParameters $paramItems
+                        }
+                        else {
+                            CreateStorageAccountBlobContainerResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType -instructionParameters $paramItems
+                        }
                     }
                     elseif ($armResource.kind.ToLower() -eq 'oci') {                        
                         CreateOciResourceProperties -armResource $armResource -templateContentConnections $templateContentConnections -fileType $fileType
@@ -823,7 +887,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 exit 1;
             }
 
-            if ($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
+            if ($isPerInstance) {
+                Write-Host 'Per-instance DCR is emitted only in the connection template.'
+            }
+            elseif ($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
                 Write-Host "Processing for CCP DCR file path: $ccpDCRFilePath"
                 if (-not $fileContent.properties.destinations.PSObject.Properties.Name -contains "logAnalytics") {
                     # if logAnalytics array is not specified
@@ -1033,6 +1100,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
             ## Build the full package resources
             $finalParameters = $templateContentConnections.properties.mainTemplate.parameters;
             foreach ($paramItem in $paramItems.PSObject.Properties) {
+                if ($isPerInstance -and $paramItem.Name -in @('dcrConfig', 'guidValue')) { continue }
                 $existingParam = $finalParameters.PSObject.Properties[$paramItem.Name]
             
                 if (-not $existingParam) {
@@ -1471,6 +1539,12 @@ function AddOnAttributes($armResource) {
             if ($global:commaSeparatedTextFieldName -ne "" -and $fieldName -eq $global:commaSeparatedTextFieldName) {
                 # WHEN MULTIPLE PLACEHOLDERS ARE PRESENT IN THE SAME FIELD
                 $armResource.properties.addOnAttributes.$fieldName = "[[variables('commaSeparatedArray')[copyIndex()]]"
+            }
+            elseif ($addOnAttributeProps.Value -is [PSCustomObject] -or
+                    $addOnAttributeProps.Value -is [System.Collections.IDictionary] -or
+                    $addOnAttributeProps.Value -is [array]) {
+                $armResource.properties.addOnAttributes.$fieldName = Convert-CCPPropertyPlaceholders `
+                    -Value $addOnAttributeProps.Value -templateContentConnections $templateContentConnections
             }
             else {
                 ProcessPropertyPlaceholders -armResource $armResource `
