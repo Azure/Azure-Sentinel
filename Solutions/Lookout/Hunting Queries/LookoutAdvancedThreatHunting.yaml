@@ -1,10 +1,10 @@
 id: lookout-advanced-threat-hunting
 name: Lookout Advanced Threat Hunting - Multi-Vector Attacks
-description: Identifies devices experiencing multiple threat types within a short timeframe, indicating coordinated attacks
+description: Identifies devices hit through two or more attack vectors (distinct medium/high threat types and smishing) within the hunting window, indicating a coordinated or multi-stage mobile attack
 requiredDataConnectors:
-  - connectorId: LookoutAPI
+  - connectorId: LookoutStreaming_Definition
     dataTypes:
-      - LookoutEvents
+      - LookoutMtdV2_CL
 tactics:
   - Discovery
   - Persistence
@@ -14,38 +14,46 @@ relevantTechniques:
   - T1418
   - T1566
 query: |
-  let timeWindow = 24h;
+  let timeWindow = 7d;
   let threatEvents = LookoutEvents
   | where TimeGenerated > ago(timeWindow)
   | where EventType == "THREAT"
-  | where ThreatSeverity in ("CRITICAL", "HIGH")
-  | summarize 
+  | where ThreatSeverity in ("HIGH", "MEDIUM")
+  | summarize
       ThreatTypes = make_set(ThreatType),
-      ThreatCount = count(),
+      ThreatCount = dcount(ThreatId),
+      HighThreatCount = dcountif(ThreatId, ThreatSeverity == "HIGH"),
       FirstThreat = min(TimeGenerated),
       LastThreat = max(TimeGenerated),
-      ThreatClassifications = make_set(ThreatClassifications)
+      ThreatClassifications = make_set(ThreatClassification)
       by DeviceGuid, DeviceEmailAddress;
   let smishingEvents = LookoutEvents
   | where TimeGenerated > ago(timeWindow)
   | where EventType == "SMISHING_ALERT"
-  | where SmishingAlertSeverity in ("CRITICAL", "HIGH")
-  | summarize 
+  | summarize
       SmishingTypes = make_set(SmishingAlertType),
-      SmishingCount = count(),
+      SmishingCount = dcount(SmishingAlertId),
       FirstSmishing = min(TimeGenerated)
-      by DeviceGuid;
+      by DeviceGuid, SmishingDeviceEmail = DeviceEmailAddress;
   threatEvents
-  | join kind=inner (smishingEvents) on DeviceGuid
-  | where ThreatCount >= 2 or SmishingCount >= 1
-  | extend AttackDuration = LastThreat - FirstThreat
+  | join kind=fullouter (smishingEvents) on DeviceGuid
+  | extend
+      DeviceGuid = coalesce(DeviceGuid, DeviceGuid1),
+      DeviceEmailAddress = coalesce(DeviceEmailAddress, SmishingDeviceEmail),
+      ThreatCount = coalesce(ThreatCount, 0),
+      HighThreatCount = coalesce(HighThreatCount, 0),
+      SmishingCount = coalesce(SmishingCount, 0)
+  | extend VectorCount = array_length(ThreatTypes) + iff(SmishingCount > 0, 1, 0)
+  | where VectorCount >= 2
+  | extend AttackDuration = max_of(LastThreat, FirstSmishing) - min_of(FirstThreat, FirstSmishing)
   | extend MultiVectorRisk = case(
-      ThreatCount >= 3 and SmishingCount >= 1, "Critical",
-      ThreatCount >= 2 and SmishingCount >= 1, "High", 
-      ThreatCount >= 3, "High",
+      SmishingCount > 0 and HighThreatCount > 0, "Critical",
+      VectorCount >= 3, "High",
+      HighThreatCount > 0, "High",
       "Medium"
   )
-  | project DeviceGuid, DeviceEmailAddress, ThreatTypes, SmishingTypes, 
-            ThreatCount, SmishingCount, AttackDuration, MultiVectorRisk,
+  | project DeviceGuid, DeviceEmailAddress, VectorCount, ThreatTypes, SmishingTypes,
+            ThreatCount, HighThreatCount, SmishingCount, AttackDuration, MultiVectorRisk,
             FirstThreat, LastThreat, ThreatClassifications
-  | order by MultiVectorRisk desc, ThreatCount desc
+  | order by VectorCount desc, HighThreatCount desc
+version: 1.1.0

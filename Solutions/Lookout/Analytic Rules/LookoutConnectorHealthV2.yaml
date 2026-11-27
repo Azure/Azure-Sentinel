@@ -1,0 +1,46 @@
+id: 8384f1df-d854-45b3-adb4-0d4d3e62c3cc
+name: Lookout - Mobile Threat Defense connector not ingesting data (v2)
+description: |
+  'Detects when the Lookout Mobile Threat Detection CCF connector has not ingested any events into LookoutMtdV2_CL for 24 hours or more.
+  The Lookout Mobile Risk API only serves the last 10 days of events, so an unnoticed outage permanently loses data. Common causes are an expired or revoked API key, a connector instance created by an older solution version (disconnect and reconnect the connector to apply the current configuration), or Lookout API errors visible in the SentinelHealth table.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: LookoutStreaming_Definition
+    dataTypes:
+      - LookoutMtdV2_CL
+queryFrequency: 1h
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  let SilenceThreshold = 24h;
+  LookoutMtdV2_CL
+  | summarize LastIngestion = max(ingestion_time()), EventsLast2Days = count()
+  | where isnull(LastIngestion) or LastIngestion < ago(SilenceThreshold)
+  | extend HoursSinceLastIngestion = iff(isnull(LastIngestion), 48, datetime_diff('hour', now(), LastIngestion))
+  | extend AlertMessage = strcat("No Lookout events ingested into LookoutMtdV2_CL for ", HoursSinceLastIngestion, "+ hours")
+  | project LastIngestion, HoursSinceLastIngestion, EventsLast2Days, AlertMessage
+customDetails:
+  LastIngestion: LastIngestion
+  HoursSilent: HoursSinceLastIngestion
+alertDetailsOverride:
+  alertDisplayNameFormat: "Lookout connector has not ingested data for {{HoursSinceLastIngestion}}+ hours"
+  alertDescriptionFormat: "{{AlertMessage}}. Check SentinelHealth for the LookoutMtd connector and reconnect it if needed; events older than 10 days cannot be recovered from the Lookout API."
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: P1D
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionEnabled: true
+suppressionDuration: PT23H
+version: 1.0.0
+kind: Scheduled
