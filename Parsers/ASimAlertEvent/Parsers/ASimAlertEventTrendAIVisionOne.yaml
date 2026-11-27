@@ -1,0 +1,218 @@
+Parser:
+  Title: Alert Event ASIM parser for TrendAI VisionOne
+  Version: '0.1.0'
+  LastUpdated: Nov 27, 2026
+Product:
+  Name: TrendAI Vision One
+Normalization:
+  Schema: AlertEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Alert Event Schema
+  Link: https://aka.ms/ASimAlertEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Developer
+  Link: https://www.bluevoyant.com/
+Description: |
+  This ASIM parser supports normalizing TrendAI Workbench Alerts ingested in TrendAI_XDR_WORKBENCH_V2_CL table (via Codeless Connector Framework) to the ASIM Alert normalized schema.
+ParserName: ASimAlertEventTrendAIVisionOne
+EquivalentBuiltInParser: _ASim_AlertEvent_TrendAIVisionOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      disabled: bool = false,
+      pack: bool = false
+  ){
+  TrendAI_XDR_WORKBENCH_V2_CL
+  | where not(disabled)
+  | project-rename 
+      EventStartTime = createdTime_t
+      , EventEndTime = updatedTime_t
+      , EventUid = workbenchId_s
+      , EventSeverity = severity_s
+      , EventMessage = description_s
+      , EventOwner = xdrCustomerID_g
+      , RuleName = model_s
+      , AlertName = workbenchName_s
+      , ThreatName = MalwareName_s
+      , EventReportUrl = workbenchLink_s
+  | extend
+      EventResult = "Success"
+      , EventType = "Alert"
+      , EventVendor = "TrendAI"
+      , EventProduct = "Vision One"
+      , EventSchema = "AlertEvent"
+      , EventSchemaVersion = "1.0.0"
+      , EventCount = int(1)
+      , ThreatRiskLevel = toint(priorityScore_d)
+      , RuleNumber = toint(modelId_g)
+      , AlertOriginalStatus = alertStatus_s
+  | extend 
+      AlertStatus = 
+          case(
+              alertStatus_s in~("new","in_progress"), "Active",
+              alertStatus_s =~ "resolved", "Closed",
+              "Active"
+          )
+      , AlertVerdict = 
+          case(
+              investigationResult_s =~ "True Positive", "True Positive",
+              investigationResult_s =~ "False Positive", "False Positive",
+              investigationResult_s has "Benign", "Benign Positive",
+              "Unknown"
+          )
+  //parse host and user
+  | mv-apply entities on (
+      extend type = tostring(entities.entityType)
+      | extend value = entities.entityValue
+      | summarize value = make_list(value) by type
+      | summarize entities = make_bag(bag_pack(type, value))
+  )
+  | extend 
+      Username = coalesce(UserAccountName_s, tostring(entities.account[0]))
+      , DvcIpAddr = tostring(entities.host[0].ips[0])
+      , host_ = coalesce(HostHostName_s, tostring(entities.host[0].name))
+  | extend 
+      DvcHostname = 
+          case (
+              host_ contains "\\", split(host_,"\\")[1],
+              host_ contains ".", split(host_,".")[0],
+              host_
+          )
+      , DvcDomain = 
+          case (
+              host_ contains "\\", split(host_,"\\")[0],
+              host_ contains ".", tostring(strcat_array(array_slice(split(host_,"."), 1, -1), '.')),
+              ""
+          )
+      , DvcDomainType = 
+          case(
+              host_ contains "\\", "Windows",
+              host_ contains ".", "FQDN",
+              ""
+          )
+      , UsernameType = 
+          case(
+              Username contains "@", "UPN",
+              Username contains "\\", "Windows",
+              Username contains "OU=", "DN",
+              Username matches regex @"^\d{11}$","AWSId",
+              "Simple"
+          )
+  //parse indicators
+  | mv-apply indicators on (
+      extend type = tostring(indicators.type)
+      | extend value = tostring(indicators.value)
+      | summarize value = make_list(value) by type
+      | summarize indicators = make_bag(bag_pack(type, value))
+  )
+  | extend 
+      ProcessCommandLine = coalesce(ProcessCommandLine_s, indicators.command_line)
+      , FileName = coalesce(FileName_s, indicators.filename)
+      , FilePath = coalesce(FileDirectory_s, indicators.fullpath)
+      , FileSHA1 = tostring(indicators.file_sha1)
+      , FileSHA256 = tostring(indicators.file_sha256)
+      , Url = coalesce(URL_s, indicators.url)
+      , RegistryKey = coalesce(RegistryKey_s, indicators.registry_key) 
+      , RegistryValue = coalesce(RegistryValueName_s, indicators.registry_value)  
+      , RegistryValueData = coalesce(RegistryValue_s, indicators.registry_value_data)  
+  //parse mitre
+  | mv-apply matched_rule = matchedRules on(
+      extend mitre_id = matched_rule.matchedFilters[0].mitreTechniqueIds
+      | summarize AttackTechniques = strcat_array(make_set(mitre_id),", ")
+  )
+  //additional details
+  | extend AdditionalFields = 
+      iff(pack == true,
+          bag_pack(
+              "AlertTriggerTimestamp_t", alertTriggerTimestamp_t,
+              "IncidentId", incidentId_s,
+              "InvestigationStatus", investigationStatus_s,
+              "AlertOriginalVerdict", investigationResult_s,
+              "AlertProvider",alertProvider_s,
+              "ModelType", modelType_s,
+              "SchemaVersion", schemaVersion_s,
+              "SourceSystem", SourceSystem,
+              "TenantId", TenantId,
+              "WorkbenchCompleteTimestamp", workbenchCompleteTimestamp_t,
+              "UserAccountNTDomain", UserAccountNTDomain_s,
+              "MailboxPrimaryAddress", MailboxPrimaryAddress_s,
+              "FileHashValue",FileHashValue_s,
+              "DomainNameIOC", DomainName_s,
+              "IPAddressIOC", IPAddress,
+              "ImpactScope", impactScope_s,
+              "RawData", RawData,
+              "Indicators", indicators,
+              "Entities", entities,
+              "MatchedRules", matchedRules
+          )
+          , dynamic({}))
+  //alias
+  | extend 
+      AlertDescription = EventMessage
+      , AlertId = EventUid
+      , Dvc = DvcHostname
+      , Rule = RuleName
+      , Hostname = DvcHostname
+      , IpAddr = DvcIpAddr
+      , User = Username
+  | project-away *_*,IPAddress,Computer,MG, ManagementGroupName,RawData,SourceSystem,TenantId, entities, indicators, matchedRules
+  | project-reorder
+      TimeGenerated
+      , EventSeverity
+      , AlertId
+      , AlertName
+      , AlertDescription
+      , AlertVerdict
+      , AlertStatus
+      , AlertOriginalStatus
+      , ThreatRiskLevel
+      , DvcHostname
+      , DvcDomain
+      , DvcDomainType
+      , DvcIpAddr
+      , Username
+      , UsernameType
+      , ProcessCommandLine
+      , FileName
+      , FilePath
+      , FileSHA1
+      , FileSHA256
+      , Url
+      , RegistryKey
+      , RegistryValue
+      , RegistryValueData
+      , IpAddr
+      , User
+      , Rule
+      , RuleNumber
+      , RuleName
+      , EventReportUrl
+      , EventUid
+      , EventType
+      , EventCount
+      , EventMessage
+      , EventStartTime
+      , EventEndTime
+      , EventProduct
+      , EventVendor
+      , EventResult
+      , EventSchema
+      , EventSchemaVersion
+      , Type
+      , Dvc
+      , Hostname
+      , AdditionalFields 
+  };
+  parser
+  (
+      disabled = disabled
+      , pack = pack
+  )

@@ -1,5 +1,9 @@
 # Changelog for ASimAlertEvent.yaml
 
+## Version 0.2.5
+
+- (2026-11-27) Add TrendAI Visione One Workbench AlertEvent parsers - [PR #15761](https://github.com/Azure/Azure-Sentinel/pull/15761)
+
 ## Version 0.2.4
 
 - (2026-11-09) Add Google Cloud Security Command Center AlertEvent parser. - [PR #15638](https://github.com/Azure/Azure-Sentinel/pull/15638)
