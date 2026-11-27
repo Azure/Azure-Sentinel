@@ -9,16 +9,21 @@ import stat
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, NoReturn
 from urllib.parse import parse_qsl, urlsplit
+
+REQUIRED_CHECK_KINDS = frozenset({
+    "pickers", "dependent-refresh", "filters", "drill-down", "reload", "layout", "conditional-visibility",
+})
+OPTIONAL_CHECK_KINDS = frozenset({"data", "tabs", "reset"})
 
 
 class BrowserQualificationError(ValueError):
     """Sanitized failure: browser exceptions can contain credentials and URLs."""
 
 
-def _fail(message: str) -> None:
-    raise BrowserQualificationError(message)
+def _fail(message: str) -> NoReturn:
+    raise BrowserQualificationError(message) from None
 
 
 def observation_digest(value: Any) -> str:
@@ -49,6 +54,16 @@ def _assertion(value: Any) -> None:
             _fail("attribute name is only permitted for attribute assertions")
         if "bounds" in value:
             _fail("bounds are only permitted for layout assertions")
+    elif kind == "count":
+        if set(value) != {"selector", "kind", "expected"} or type(value["expected"]) is not int or not 0 <= value["expected"] <= 10000:
+            _fail("count assertions require an exact bounded nonnegative integer")
+    elif kind == "texts":
+        if (
+            set(value) != {"selector", "kind", "expected"}
+            or not isinstance(value["expected"], list) or not 1 <= len(value["expected"]) <= 100
+            or any(not isinstance(text, str) or len(text) > 4096 for text in value["expected"])
+        ):
+            _fail("texts assertions require a bounded ordered list of exact strings")
     elif kind in {"visible", "hidden"}:
         if set(value) != {"selector", "kind"}:
             _fail("visibility assertions do not accept expected values")
@@ -78,17 +93,35 @@ def _assertions(values: Any) -> None:
 def _url(value: Any, origin: str | None) -> None:
     if not isinstance(value, str):
         _fail("reviewed browser URL is required")
-    parsed = urlsplit(value)
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+    except ValueError:
+        _fail("browser URL is malformed")
     if (
         (parsed.scheme + "://" + parsed.netloc != origin if origin else parsed.scheme != "https" or not parsed.hostname)
         or parsed.username or parsed.password
         or "*" in value
+        or "\\" in value or any(character.isspace() or ord(character) < 32 for character in value)
         or any(key.casefold().replace("_", "").replace("-", "") in {
             "accesstoken", "refreshtoken", "idtoken", "token", "code", "sig",
             "signature", "clientsecret", "authorization", "cookie", "apikey",
         } for key, _ in parse_qsl(parsed.query) + parse_qsl(parsed.fragment.split("?", 1)[-1]))
     ):
         _fail("browser URLs must be exact approved URLs without credentials or signatures")
+
+
+def validate_portal_url(value: Any) -> str:
+    """Return the exact supported portal host, never infer tenant scope from URLs."""
+    _url(value, None)
+    parsed = urlsplit(value)
+    if (
+        parsed.hostname not in {"security.microsoft.com", "portal.azure.com"}
+        or parsed.netloc not in {parsed.hostname, f"{parsed.hostname}:443"}
+        or not parsed.path.strip("/") and not parsed.fragment.strip("/")
+    ):
+        _fail("workbook URL must use the exact Defender portal or Azure portal HTTPS host")
+    return parsed.hostname
 
 
 def validate_browser_config(plan: dict[str, Any], config: dict[str, Any]) -> None:
@@ -105,19 +138,29 @@ def validate_browser_config(plan: dict[str, Any], config: dict[str, Any]) -> Non
     _keys(config["viewport"], {"width", "height"})
     if any(type(value) is not int or not 320 <= value <= 4096 for value in config["viewport"].values()):
         _fail("browser viewport must have bounded reviewed dimensions")
-    _keys(config["readiness"], {"tenantId", "contentId", "instanceId", "ready"})
+    _keys(config["readiness"], {"tenantId", "contentId", "instanceId", "ready"}, {"workspaceResourceId", "workspaceCustomerId"})
     identities = {
         "tenantId": plan["target"]["tenantId"], "contentId": plan["contentId"],
         "instanceId": plan["instanceId"], "ready": "true",
     }
     selectors = {"tenantId": "tenant", "contentId": "workbook", "instanceId": "workbook", "ready": "ready"}
+    for key in ("workspaceResourceId", "workspaceCustomerId"):
+        if key in config["readiness"]:
+            if not isinstance(plan["target"].get(key), str) or not plan["target"][key]:
+                _fail("workspace readiness requires an exact locked target identity")
+            identities[key] = plan["target"][key]
+            selectors[key] = "workspace"
+    if (
+        urlsplit(plan["url"]).hostname == "portal.azure.com" or plan["target"].get("workspaceResourceId")
+    ) and "workspaceResourceId" not in identities:
+        _fail("workspace-scoped browser testing requires observed exact workspace resource identity")
     for key, expected in identities.items():
         assertion = config["readiness"][key]
         _assertion(assertion)
         if (
             assertion["kind"] not in {"text", "attribute"}
             or assertion["expected"] != expected
-            or assertion["selector"] != plan["readinessSelectors"][selectors[key]]
+            or assertion["selector"] != plan["readinessSelectors"].get(selectors[key])
         ):
             _fail("browser readiness must observe both exact identities, tenant, and ready state")
     if config["readiness"]["contentId"] == config["readiness"]["instanceId"]:
@@ -163,10 +206,9 @@ def validate_browser_config(plan: dict[str, Any], config: dict[str, Any]) -> Non
         for step in plan["steps"]
     ):
         _fail("browser check identities and kinds must be explicit bounded strings")
+    kinds = {step.get("kind") for step in plan["steps"]}
     if (
-        {step.get("kind") for step in plan["steps"]} != {
-            "pickers", "dependent-refresh", "filters", "drill-down", "reload", "layout", "conditional-visibility",
-        }
+        not REQUIRED_CHECK_KINDS <= kinds or kinds - REQUIRED_CHECK_KINDS - OPTIONAL_CHECK_KINDS
         or len({step.get("id") for step in plan["steps"]}) != len(plan["steps"])
     ):
         _fail("browser check kinds and identities must be complete and unique")
@@ -175,14 +217,14 @@ def validate_browser_config(plan: dict[str, Any], config: dict[str, Any]) -> Non
             "before", "selector", "value", "expectedUrl", "selectMode", "optionSelector",
         })
         _assertions(step["assertions"])
-        if not any(a["kind"] in {"text", "attribute", "value", "layout"} for a in step["assertions"]):
+        if not any(a["kind"] in {"text", "attribute", "value", "layout", "texts", "count"} for a in step["assertions"]):
             _fail("every step must assert visible panel content or layout")
         if "before" in step:
             _assertions(step["before"])
         action = step["action"]
-        if action not in {"observe", "select", "reload", "drill-down"}:
+        if action not in {"observe", "select", "reload", "drill-down", "click"}:
             _fail("unsupported browser action")
-        if action in {"select", "drill-down"}:
+        if action in {"select", "drill-down", "click"}:
             _selector(step.get("selector"))
         if action == "select":
             if not isinstance(step.get("value"), str) or not step["value"]:
@@ -204,7 +246,7 @@ def validate_browser_config(plan: dict[str, Any], config: dict[str, Any]) -> Non
                 _fail("drill-down needs an exact reviewed destination URL")
         elif "expectedUrl" in step:
             _fail("only drill-down accepts a destination URL")
-        if action not in {"select", "drill-down"} and "selector" in step:
+        if action not in {"select", "drill-down", "click"} and "selector" in step:
             _fail("observation and reload do not accept action selectors")
         if step["kind"] in {"pickers", "filters", "dependent-refresh"} and action != "select":
             _fail("picker, filter and dependent refresh checks must exercise selection")
@@ -214,6 +256,37 @@ def validate_browser_config(plan: dict[str, Any], config: dict[str, Any]) -> Non
             _fail("layout check requires measured visible panel bounds")
         if step["kind"] == "conditional-visibility" and not any(a["kind"] in {"visible", "hidden"} for a in step["assertions"]):
             _fail("conditional visibility check needs an explicit visibility assertion")
+        if action == "click" and step["kind"] not in {"tabs", "reset", "conditional-visibility"}:
+            _fail("click is limited to reviewed tab, reset or conditional-visibility checks")
+        if step["kind"] == "tabs" and action != "click":
+            _fail("tabs must exercise a reviewed tab control")
+        if step["kind"] == "tabs" and not any(
+            a["selector"] == step["selector"] and a["kind"] == "attribute"
+            and a.get("attribute") == "aria-selected" and a.get("expected") == "true"
+            for a in step["assertions"]
+        ):
+            _fail("tabs require an independently observed selected tab state")
+        if step["kind"] in {"tabs", "reset"} and not any(
+            a["selector"] != step["selector"] and a["kind"] in {"text", "attribute", "texts", "count", "layout"}
+            for a in step["assertions"]
+        ):
+            _fail("tab and reset checks must also observe the resulting panel content or layout")
+        if step["kind"] == "data" and not any(a["kind"] in {"text", "texts", "count"} for a in step["assertions"]):
+            _fail("data checks require exact rendered text, rows or counts")
+        if step["kind"] == "reset" and (
+            action not in {"select", "click"}
+            or not any(
+                before["kind"] in {"text", "attribute", "value", "texts", "count"}
+                and any(
+                    after["selector"] == before["selector"] and after["kind"] == before["kind"]
+                    and after.get("attribute") == before.get("attribute")
+                    and after.get("expected") != before.get("expected")
+                    for after in step["assertions"]
+                )
+                for before in step.get("before", [])
+            )
+        ):
+            _fail("reset must exercise a reviewed control and prove a changed value returns to its expected baseline")
         if step["kind"] == "dependent-refresh":
             if not any(
                 before["kind"] in {"text", "attribute", "value"}
@@ -306,17 +379,27 @@ class _DOMRun:
         self.check()
         return max(1, min(self.config["timeoutMs"], int((self.deadline - time.monotonic()) * 1000)))
 
-    def observe(self, page: Any, assertion: dict[str, Any]) -> str | bool | dict[str, float]:
+    def observe(self, page: Any, assertion: dict[str, Any]) -> str | bool | int | list[str] | dict[str, float] | None:
         self.check()
         locator = page.locator(assertion["selector"])
         kind = assertion["kind"]
-        locator.wait_for(state="attached", timeout=self.timeout())
-        if locator.count() != 1:
-            _fail("reviewed DOM assertion does not resolve exactly one element")
-        locator.wait_for(state="hidden" if kind == "hidden" else "visible", timeout=self.timeout())
+        if kind not in {"count", "texts"}:
+            locator.wait_for(state="attached", timeout=self.timeout())
+            if locator.count() != 1:
+                _fail("reviewed DOM assertion does not resolve exactly one element")
+            locator.wait_for(state="hidden" if kind == "hidden" else "visible", timeout=self.timeout())
         until = time.monotonic() + self.timeout() / 1000
         while True:
-            if kind == "text":
+            if kind in {"count", "texts"}:
+                count = locator.count()
+                if count > 10000:
+                    _fail("rendered data assertion exceeds the bounded element count")
+                visible = all(locator.nth(index).is_visible() for index in range(count))
+                actual = count if kind == "count" else (
+                    [locator.nth(index).inner_text(timeout=self.timeout()) for index in range(count)]
+                    if count == len(assertion["expected"]) else None
+                )
+            elif kind == "text":
                 actual = locator.inner_text(timeout=self.timeout())
             elif kind == "attribute":
                 actual = locator.get_attribute(assertion["attribute"], timeout=self.timeout())
@@ -331,7 +414,9 @@ class _DOMRun:
                     bounds[0] <= actual[axis] <= bounds[1] for axis, bounds in assertion["bounds"].items()
                 )
             else:
-                matched = kind not in {"text", "attribute", "value"} or actual == assertion["expected"]
+                matched = kind not in {"text", "attribute", "value", "count", "texts"} or actual == assertion["expected"]
+                if kind in {"count", "texts"}:
+                    matched = matched and visible
             if matched:
                 break
             if time.monotonic() >= until:
@@ -355,10 +440,12 @@ class _DOMRun:
         self.check()
         for assertion in self.config["sessionAssertions"]:
             self.observe(page, assertion)
-        observed = {
-            key: self.observe(page, assertion)
-            for key, assertion in self.config["readiness"].items()
-        }
+        observed: dict[str, str | bool] = {}
+        for key, assertion in self.config["readiness"].items():
+            value = self.observe(page, assertion)
+            if not isinstance(value, str):
+                _fail("browser readiness identity observation is not an exact string")
+            observed[key] = value
         observed["ready"] = observed["ready"] == "true"
         self.observed = observed
 
@@ -432,7 +519,7 @@ class _DOMRun:
             before = [self.proof(page, assertion) for assertion in step.get("before", [])]
             self.check()
             action = step["action"]
-            if action in {"select", "drill-down"}:
+            if action in {"select", "drill-down", "click"}:
                 locator = self.action_locator(page, step["selector"])
                 self.check()
                 if action == "select":
@@ -444,11 +531,13 @@ class _DOMRun:
                         option = self.action_locator(page, step["optionSelector"])
                         self.check()
                         option.click(timeout=self.timeout(), no_wait_after=True)
-                else:
+                elif action == "drill-down":
                     locator.click(timeout=self.timeout(), no_wait_after=True)
                     page.wait_for_url(step["expectedUrl"], timeout=self.timeout())
                     if page.url != step["expectedUrl"]:
                         _fail("drill-down navigation did not match the reviewed URL")
+                else:
+                    locator.click(timeout=self.timeout(), no_wait_after=True)
             elif action == "reload":
                 page.reload(wait_until="domcontentloaded", timeout=self.timeout())
             self.ready(page)
@@ -488,6 +577,7 @@ def capture_workbook_browser(
     config = plan.get("browserConfig")
     if config is None:
         _fail("real browser execution requires a reviewed versioned browser configuration")
+    validate_portal_url(plan.get("url"))
     validate_browser_config(plan, config)
     before_action()
     state = _private_storage(storage_state, config["storageStateSha256"])
@@ -549,7 +639,7 @@ def validate_browser_step_proofs(step: dict[str, Any], actual: dict[str, Any]) -
                 ):
                     _fail("browser capture is missing reviewed visible panel measurements")
             else:
-                observed = assertion.get("expected") if assertion["kind"] in {"text", "attribute", "value"} else assertion["kind"] == "visible"
+                observed = assertion.get("expected") if assertion["kind"] in {"text", "attribute", "value", "count", "texts"} else assertion["kind"] == "visible"
             if proof.get("actualSha256") != observation_digest(observed):
                 _fail("browser capture DOM observations did not match the exact expectations")
 

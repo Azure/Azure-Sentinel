@@ -350,6 +350,19 @@ All workbooks require a `WorkbooksMetadata.json` entry following this structure:
 
 ## Validation Issues and Common Errors
 
+### Optional browser validation in the Defender portal
+
+For rendering, data-panel and interaction testing, use the
+[validate-sentinel-workbook-browser skill](../skills/validate-sentinel-workbook-browser/SKILL.md)
+and [Sentinel browser testing walkthrough](../../Tools/SentinelToXDRMigration/docs/workbook-browser-testing.md).
+Use `security.microsoft.com` as the primary Sentinel surface. Require
+separate exact tenant/workspace and browser-scope approval before live access;
+do not infer consent from repository maintenance or static validation.
+Keep native Sentinel testing separate from XDR conversion, and distinguish
+offline/synthetic tests, standalone browser evidence and accepted toolkit
+Qualification. Static validators remain required; a smoke pass does not prove
+data panels, filter propagation, drill-through or reset.
+
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | Invalid workbook JSON | Missing required top-level fields | Include version, items, fromTemplateId, $schema; ensure fallbackResourceIds is empty array |

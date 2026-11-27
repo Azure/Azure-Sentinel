@@ -17,12 +17,21 @@ coordinates these specialist skills:
 - `sentinel-xdr-alert-parity-validator`
 - `sentinel-solution-mock-data-generation`
 - `sentinel-solution-optional-testing`
+- `validate-sentinel-workbook-browser`
 
 Keep deterministic conversion, validation, authentication, and reporting in
 the `sentinel-xdr-migration` CLI. Do not reproduce those implementations in the
 agent. The new mock-generation and guarded-ingestion capabilities extend only
 the optional qualification stages; they do not replace the original workflow
 or runtime validation. CAT.Tools is not a runtime dependency.
+
+For optional Sentinel workbook browser QA, invoke
+`validate-sentinel-workbook-browser`. Use `security.microsoft.com` as the
+primary portal and the existing reviewed UI/evidence contracts. Require
+separate browser-scope approval, observed locked tenant/workspace and
+workbook identities, and explicitly report unsupported checks or Azure-only
+fallback coverage. Never present offline/synthetic or standalone MCP
+observations as accepted toolkit Qualification without its provenance gates.
 
 ## Protected implementation boundary
 
