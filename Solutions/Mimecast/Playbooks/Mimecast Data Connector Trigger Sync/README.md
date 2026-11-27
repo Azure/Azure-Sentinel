@@ -32,7 +32,7 @@ Playbook to sync timer trigger of all Mimecast data connectors.
     * Resource Group Name : Enter the Azure Resource Group Name in which your Mimecast data connectors are available.
     * Subscription ID : Enter the Azure Subscription ID in which your Mimecast data connectors are available.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMehul-web%2FMimecast_Maintemplate%2Fmain%2FPlaybooks%2FMimecast%2520Data%2520Connector%2520Trigger%2520Sync%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMehul-web%2FMimecast_Maintemplate%2Fmain%2FPlaybooks%2FMimecast%2520Data%2520Connector%2520Trigger%2520Sync%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMehul-web%2FMimecast_Maintemplate%2Fmain%2FPlaybooks%2FMimecast%2520Data%2520Connector%2520Trigger%2520Sync%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovernbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMehul-web%2FMimecast_Maintemplate%2Fmain%2FPlaybooks%2FMimecast%2520Data%2520Connector%2520Trigger%2520Sync%2Fazuredeploy.json)
 
 ### Post-Deployment instructions<a name="Post-Deployment-instructions"></a>
 
