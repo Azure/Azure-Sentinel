@@ -1,0 +1,66 @@
+id: 7d1b9c84-2f3a-4e6d-9a10-5c7e2b4f8a19
+name: EDRSilencer - WFP Filter Added to Block Security Product Traffic
+description: |
+  'Identifies the EDRSilencer technique, where an adversary adds Windows Filtering Platform (WFP) filters to block the outbound traffic of EDR / security agents. The agents keep running but can no longer reach their management console, so alerts are never delivered. Trend Micro has observed EDRSilencer being repurposed by threat actors.
+  Detection is based on WFP filter add/change events (5441 at boot, 5447 at runtime) carrying the tool''s default filter name "Custom Outbound Filter".
+  PREREQUISITES: (1) Enable Success auditing for the "Other Policy Change Events" (5447) and "Filtering Platform Policy Change" (5441) subcategories; the Windows security baseline does not. (2) Events 5441/5447 are not in the Common or Minimal Windows Security Events collection tiers; ingest them with a custom XPath DCR: Security!*[System[(EventID=5441 or EventID=5447)]].
+  References:
+  https://github.com/netero1010/EDRSilencer
+  https://www.trendmicro.com/en_us/research/24/j/edrsilencer-disrupting-endpoint-security-solutions.html'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+  - T1562.004
+query: |
+  // EDRSilencer adds persistent WFP filters named "Custom Outbound Filter" that block outbound
+  // traffic of detected EDR processes. The raw-string match is the detection gate; parsed fields
+  // are best-effort enrichment for entity mapping.
+  SecurityEvent
+  | where EventID in (5441, 5447)
+  | where EventData has "Custom Outbound Filter"
+  | extend EventData = parse_xml(EventData).EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
+  | evaluate pivot(Key, any(Value), TimeGenerated, Computer, EventID, Activity)
+  | extend FilterName        = column_ifexists("FilterName", ""),
+           ActorProcessId    = column_ifexists("ProcessId", ""),
+           SubjectUserName   = column_ifexists("SubjectUserName", ""),
+           SubjectDomainName = column_ifexists("SubjectDomainName", "")
+  | extend SubjectAccount = iff(SubjectDomainName == "", SubjectUserName, strcat(SubjectDomainName, @'\', SubjectUserName))
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project TimeGenerated, Computer, HostName, HostNameDomain, EventID, Activity, FilterName, SubjectAccount, SubjectUserName, SubjectDomainName, ActorProcessId
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SubjectAccount
+      - identifier: Name
+        columnName: SubjectUserName
+      - identifier: NTDomain
+        columnName: SubjectDomainName
+version: 1.0.0
+kind: Scheduled
