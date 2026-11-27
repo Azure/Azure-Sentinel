@@ -1,0 +1,123 @@
+id: bf7bf5a2-01a8-44dc-afc6-06dded24db33
+name: Agentic offensive framework - burst of offensive tools launched by one process
+description: |
+  Identifies a single process launching three or more different offensive security tools (for example nmap, nuclei,
+  httpx, katana, ffuf, sqlmap, netexec, kerbrute) within one minute on the same device. This machine-speed pattern is
+  typical of agentic offensive frameworks, where an LLM drives scanners and exploitation tools in short bursts.
+  GTIG and Mandiant have observed ARTEX, Cairn, HexStrike and PentAGI in live intrusions since August 2026, the FBI
+  issued a FLASH alert on ARTEX in November 2026, and ARTEX executes in bursts of roughly 2 to 25 seconds. HexStrike
+  starts tools through a shell, so tools launched by cmd, PowerShell or bash are attributed to the shell's parent
+  (the driving process). Tools run as interpreter scripts (for example python sqlmap.py) are also identified.
+  Results are labelled:
+  - High: the driving process or a tool command line names a known agentic framework (ARTEX, HexStrike, PentAGI,
+    Cairn, CyberStrikeAI).
+  - High: four or more distinct tools launched within seconds by a script or agent runtime (Python, Node, Docker or
+    an AI coding CLI such as Claude Code, Gemini CLI or Codex).
+  - Medium: three distinct tools launched by a script or agent runtime.
+  - Low: a burst from any other process. Review for authorized testing.
+  False positives and exclusions:
+  - Authorized penetration tests, red team exercises and attack-surface scanning platforms produce the same burst.
+    Exclude known assessment hosts, scanner service accounts or approved engagement windows.
+  - A human operator typing commands rarely launches three different tools within one minute, and a scheduled scan
+    that repeats one tool (for example nmap only) does not match because tools are counted as distinct names.
+  - Security training labs, CTF environments and tool development machines can match. Tune by device group.
+  Known limits:
+  - Bursts are grouped in fixed one-minute bins, so a burst that crosses a bin boundary can be split and fall below
+    the threshold. Lower MinDistinctTools or widen BurstWindow if this matters in your environment.
+  - Tool detection is name-based. Renamed binaries are missed, and the framework tag can match unrelated command
+    lines containing words such as "cairn".
+  - The driving process command line is looked up by device and process ID within the timeframe, so process ID
+    reuse can attach the wrong command line. ReportId and DriverPid are projected so an analyst can confirm the link.
+  This query complements request-log hunts (web server, proxy and cloud audit User-Agents) for the same frameworks by
+  covering endpoint process telemetry.
+  References:
+  https://cloud.google.com/blog/topics/threat-intelligence/agentic-threat-activity-crosses-a-significant-threshold
+  https://www.elastic.co/security-labs/threat-command/agentic-offensive-frameworks-detection-artex
+  https://unit42.paloaltonetworks.com/cairn-framework-ai-autonomous-attacks/
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - Reconnaissance
+  - Discovery
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1595
+  - T1046
+  - T1190
+  - T1059
+query: |
+  let timeframe = 7d;
+  let BurstWindow = 1m;
+  let MinDistinctTools = 3;
+  let ToolBinaries = dynamic(["nmap", "masscan", "naabu", "rustscan", "nuclei", "httpx", "katana", "ffuf", "gobuster", "feroxbuster", "subfinder", "amass", "hydra", "nikto", "wpscan", "sqlmap", "kerbrute", "rubeus", "mimikatz", "netexec", "nxc", "crackmapexec", "certipy", "chisel", "ligolo"]);
+  let ToolScripts = @"(?i)\b(sqlmap|dirsearch|secretsdump|getuserspns|getnpusers|wmiexec|smbexec|psexec|certipy|bloodhound-python|netexec|nxc|crackmapexec|responder|wpscan|kerbrute)(\.py)?\b";
+  let Interpreters = dynamic(["python", "python.exe", "python3", "python3.exe", "py.exe", "perl", "perl.exe", "ruby", "ruby.exe"]);
+  let Shells = dynamic(["cmd.exe", "powershell.exe", "pwsh", "pwsh.exe", "bash", "bash.exe", "sh", "sh.exe", "zsh", "dash"]);
+  let AgentRuntimes = dynamic(["python", "python.exe", "python3", "python3.exe", "node", "node.exe", "docker", "docker.exe", "containerd-shim", "containerd-shim-runc-v2", "claude", "claude.exe", "gemini", "gemini.exe", "codex", "codex.exe"]);
+  let FrameworkPattern = @"(?i)\b(artex|hexstrike|pentagi|cairn|cyberstrike)";
+  // Command line of the process that drove the tools (the agent / framework process)
+  let DriverInfo = DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | where FileName in~ (AgentRuntimes)
+  | summarize arg_max(TimeGenerated, ProcessCommandLine, InitiatingProcessFileName) by DeviceName, ProcessId
+  | project DeviceName, DriverPid = ProcessId, DriverCommandLine = ProcessCommandLine, DriverParent = InitiatingProcessFileName;
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(timeframe)
+  | extend Exe = tolower(FileName)
+  | extend ExeBase = trim_end(@"\.exe", Exe)
+  // Identify the offensive tool: a known binary, or an interpreter running a known tool script (e.g. python sqlmap.py)
+  | extend Tool = case(
+      ExeBase in (ToolBinaries), ExeBase,
+      Exe in (Interpreters), tolower(extract(ToolScripts, 1, ProcessCommandLine)),
+      "")
+  | where isnotempty(Tool)
+  // Frameworks such as HexStrike start tools through a shell, so attribute the tool to the shell's parent
+  | extend ShellLaunched = InitiatingProcessFileName in~ (Shells)
+  | extend DriverProcess = iff(ShellLaunched, InitiatingProcessParentFileName, InitiatingProcessFileName)
+  | extend DriverPid = iff(ShellLaunched, InitiatingProcessParentId, InitiatingProcessId)
+  | extend FrameworkHit = ProcessCommandLine matches regex FrameworkPattern or InitiatingProcessCommandLine matches regex FrameworkPattern
+  // Burst: several different offensive tools from the same driver process within one minute
+  | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated),
+      DistinctTools = dcount(Tool), Tools = make_set(Tool, 25), SampleCommands = make_set(ProcessCommandLine, 10),
+      FrameworkHits = max(toint(FrameworkHit)),
+      AccountName = take_any(AccountName), AccountDomain = take_any(AccountDomain), ReportId = take_any(ReportId)
+      by DeviceName, DriverProcess, DriverPid, Window = bin(TimeGenerated, BurstWindow)
+  | where DistinctTools >= MinDistinctTools
+  | join kind=leftouter DriverInfo on DeviceName, DriverPid
+  | extend FrameworkMarker = FrameworkHits == 1 or DriverCommandLine matches regex FrameworkPattern
+  | extend DriverIsAgentRuntime = DriverProcess in~ (AgentRuntimes)
+  | extend BurstSeconds = datetime_diff('second', LastSeen, FirstSeen)
+  | extend Verdict = case(
+      FrameworkMarker, "High - offensive tool burst from a process tied to a known agentic framework (ARTEX, HexStrike, PentAGI, Cairn, CyberStrikeAI)",
+      DriverIsAgentRuntime and DistinctTools >= 4, "High - 4+ distinct offensive tools launched within seconds by a script or agent runtime",
+      DriverIsAgentRuntime, "Medium - offensive tool burst launched by a script or agent runtime",
+      "Low - offensive tool burst from another process (check for authorized testing)")
+  | extend AccountCustomEntity = AccountName
+  | extend HostCustomEntity = DeviceName
+  | project FirstSeen, LastSeen, BurstSeconds, DeviceName, HostCustomEntity, AccountName, AccountCustomEntity, AccountDomain, Verdict, DriverProcess, DriverPid, DriverCommandLine, DriverParent, DistinctTools, Tools, SampleCommands, ReportId
+  | sort by FirstSeen desc
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Syed Ishrar Ali
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]
