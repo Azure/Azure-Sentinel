@@ -517,7 +517,7 @@ def test_local_lifecycle_commands_require_explicit_run_and_no_implicit_write_con
     assert exc.value.code == 2
 
 
-def emit_current_package(root):
+def emit_current_package(root, *, env=None):
     from test_defender_workbooks_packaging import literal
     data_path = root / "Data/Solution_Fixture.json"
     data = json.loads(data_path.read_bytes())
@@ -548,7 +548,7 @@ def emit_current_package(root):
         "Write-Output '__RESULT__'; $i | ConvertTo-Json -Depth 100 -Compress"
     )
     completed = REAL_SUBPROCESS_RUN(["pwsh", "-NoProfile", "-NonInteractive", "-Command", command],
-                                   capture_output=True, text=True, check=False)
+                                   capture_output=True, text=True, check=False, env=env)
     assert completed.returncode == 0, completed.stderr
     document = json.loads(completed.stdout.split("__RESULT__", 1)[1])
     package = root / "Package"
@@ -575,6 +575,225 @@ def package_candidate(root, bump="none"):
         return subprocess.CompletedProcess(command, 0, "Starting Package Creation using V3.1 tool", "")
     with mock.patch.object(packaging.subprocess, "run", side_effect=mocked_packager):
         return workflow.package_workflow_v3_1(root, requested_version_bump=bump, toolkit_root=ROOT)
+
+
+@pytest.fixture
+def maintenance_case(tmp_path):
+    from solution_manager.authoring.workbook_maintenance import plan_maintenance
+
+    repository = tmp_path / "repository"
+    root = repository / "Solutions" / "Fixture"
+    (root / "Data").mkdir(parents=True)
+    (root / "XDR Workbooks").mkdir()
+    (repository / ".gitignore").write_text("Logs/\n")
+    path = root / "XDR Workbooks/published.json"
+    path.write_text(json.dumps({
+        "version": "Notebook/1.0",
+        "items": [{"type": 3, "content": {
+            "queryType": "advancedHunting", "query": "DeviceEvents | take 1",
+        }}],
+        "xdrMetadata": {
+            "schemaVersion": "1.0.0", "contentId": str(uuid4()),
+            "instanceId": str(uuid4()), "displayName": "Published workbook", "version": "3.2.2",
+        },
+        "contentProvenance": {
+            "format": "public-workbook-v1", "origin": "native-xdr",
+            "requiredWorkloads": [{"workload": "mde", "dataTypes": ["DeviceEvents"]}],
+            "requiredDataConnectors": [], "requiredWorkspaceFunctions": [],
+        },
+    }))
+    (root / "Data/Solution_Fixture.json").write_text(json.dumps({
+        "Name": "Fixture", "Version": "3.2.2",
+        "XDR Workbooks": ["XDR Workbooks/published.json"],
+    }))
+    remote = "https://example.invalid/approved/workbooks.git"
+    for command in (
+        ["init", "--quiet"], ["remote", "add", "origin", remote], ["add", "."],
+        ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+         "commit", "--quiet", "-m", "Published fixture"],
+    ):
+        REAL_SUBPROCESS_RUN(["git", "-C", str(repository), *command], check=True, capture_output=True)
+    commit = REAL_SUBPROCESS_RUN(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    review = plan_maintenance(root, public_ref=commit, repository_url=remote)
+    review.update(actor="Fixture reviewer", reference="Explicit fixture publication approval", decision="accept")
+    return root, path, review
+
+
+def test_maintenance_preserves_public_workbook_without_source_or_private_receipt(maintenance_case):
+    root, workbook_path, review = maintenance_case
+    before = workbook_path.read_bytes()
+    state = initialize(root, workbook_maintenance_review=review)
+    assert state["workbooks"]["selection"]["included"] == ["XDR Workbooks/published.json"]
+    assert not (root / "Logs/workbook-reviews").exists()
+    with mock.patch("sentinel_xdr_migration.workbooks.convert_workbooks") as reconvert:
+        inspection, result = content_pass(root)
+    reconvert.assert_not_called()
+    assert inspection["workbookCount"] == inspection["workbookQueryCount"] == 1
+    assert result["workbooks"]["preserved"] == 1
+    assert result["workbooks"]["converted"] == 0
+    assert result["workbooks"]["results"][0]["acceptance"] == "published-baseline"
+    assert workbook_path.read_bytes() == before
+    assert initialize(root)["resumed"] is True
+    assert integration.validate_content(root)["workbooks"]["valid"] == 1
+
+
+def test_maintenance_cli_plans_read_only_and_initializes_approved_new_run(maintenance_case, tmp_path):
+    root, _, review = maintenance_case
+    review.update(actor="PRIVATE_MAINTENANCE_ACTOR", reference="PRIVATE_MAINTENANCE_REFERENCE")
+    code, plan, error = cli_run([
+        "workbook-maintenance-plan", "--solution", str(root),
+        "--published-ref", review["commit"], "--repository-url", review["repository"],
+    ])
+    assert code == 0, error
+    assert plan["planSha256"] == review["planSha256"]
+    assert plan["decision"] is None
+    assert plan["actor"] == plan["reference"] == ""
+    assert not (root / "Logs").exists()
+    review_path = tmp_path / "reviewed-plan.json"
+    review_path.write_text(json.dumps(review))
+    arguments = [
+        "workflow-init", "--solution", str(root), "--new-run",
+        "--workflow-profile", "authoring", "--arm-validation-method", "arm-ttk",
+        "--version-bump", "none", "--workbook-maintenance-review", str(review_path),
+    ]
+    public_review = {key: value for key, value in review.items() if key not in {"actor", "reference"}}
+    for command in ("init", "resume", "status"):
+        with mock.patch.object(cli, "_print", wraps=cli._print) as output:
+            code, state, error = cli_run(arguments)
+        assert code == 0, error
+        assert state["workbooks"]["maintenanceReview"] == public_review
+        for private in (review["actor"], review["reference"]):
+            assert private not in json.dumps(state)
+        assert output.call_args.args[0]["workbooks"]["maintenanceReview"] == review
+        with using_run(root, state["runId"]):
+            assert workflow._load(root)[1]["workbooks"]["maintenanceReview"] == review
+        if command == "resume":
+            assert state["resumed"] is True
+        arguments = (
+            ["workflow-init", "--workflow-profile", "authoring"]
+            if command == "init" else ["workflow-status"]
+        ) + ["--solution", str(root), "--run-id", state["runId"]]
+
+
+def test_maintenance_cli_redacts_nested_approvals_without_mutating_results():
+    review = {
+        "format": "workbook-maintenance-v1", "decision": "accept",
+        "actor": "PRIVATE_MAINTENANCE_ACTOR", "reference": "PRIVATE_MAINTENANCE_REFERENCE",
+        "commit": "a" * 40,
+    }
+    unrelated = {"actor": "public actor", "reference": "public reference"}
+    result = {"runs": [
+        {"state": {"workbooks": {"maintenanceReview": review}}},
+        {"approved": [review]},
+        unrelated,
+    ]}
+    original = deepcopy(result)
+    stdout = io.StringIO()
+    with mock.patch("sys.stdout", stdout):
+        cli._print(result)
+    assert result == original
+    for private in (review["actor"], review["reference"]):
+        assert private not in stdout.getvalue()
+    visible = json.loads(stdout.getvalue())
+    public_review = {key: value for key, value in review.items() if key not in {"actor", "reference"}}
+    assert visible["runs"][0]["state"]["workbooks"]["maintenanceReview"] == public_review
+    assert visible["runs"][1]["approved"] == [public_review]
+    assert visible["runs"][2] == unrelated
+
+
+def test_maintenance_invalid_approval_does_not_create_run_or_consume_version(maintenance_case):
+    root, _, review = maintenance_case
+    review["decision"] = None
+    data = root / "Data/Solution_Fixture.json"
+    before = data.read_bytes()
+    with pytest.raises(ValueError):
+        initialize(root, workbook_maintenance_review=review, new_run=True)
+    assert not (root / "Logs").exists()
+    assert data.read_bytes() == before
+
+
+def test_maintenance_preflight_blocks_before_conversion_mutates_rules(maintenance_case):
+    root, workbook_path, review = maintenance_case
+    initialize(root, workbook_maintenance_review=review)
+    workbook_path.write_bytes(workbook_path.read_bytes() + b"\n")
+    with mock.patch("sentinel_xdr_migration.converter.convert_solution") as convert:
+        with pytest.raises(ValueError):
+            integration.convert_content(root, overwrite=True)
+    convert.assert_not_called()
+    assert not (root / "XDR Detections").exists()
+
+
+def test_maintenance_ar_update_keeps_final_hashes_and_workbook_stable(maintenance_case):
+    root, workbook_path, review = maintenance_case
+    rules = root / "Analytic Rules"
+    rules.mkdir()
+    source = rules / "SampleRule.yaml"
+    source.write_text(RULE.replace("version: 1.0.0", "version: 1.0.1"))
+    initialize(root, workbook_maintenance_review=review)
+    before = workbook_path.read_bytes()
+    first = integration.convert_content(root)
+    detection = root / "XDR Detections/SampleRule.yaml"
+    initial = yaml.safe_load(detection.read_bytes())
+    source_bytes = source.read_bytes()
+    second = integration.convert_content(root, overwrite=True)
+    final = yaml.safe_load(detection.read_bytes())
+    assert first["workbooks"]["preserved"] == second["workbooks"]["preserved"] == 1
+    assert initial["contentProvenance"]["conversion"]["reviewScope"] == final["contentProvenance"]["conversion"]["reviewScope"]
+    assert initial["contentProvenance"]["source"]["querySha256"] == final["contentProvenance"]["source"]["querySha256"]
+    assert source.read_bytes() == source_bytes
+    assert workbook_path.read_bytes() == before
+
+
+def test_maintenance_approval_cannot_be_added_to_existing_run(maintenance_case):
+    root, _, review = maintenance_case
+    workflow.initialize_workflow(root, workflow_profile="authoring")
+    with pytest.raises(ValueError, match="new run|resumption"):
+        initialize(root, workbook_maintenance_review=review)
+
+
+def test_maintenance_revalidates_manifest_acceptance_and_selection(maintenance_case):
+    root, _, review = maintenance_case
+    initialize(root, workbook_maintenance_review=review)
+    content_pass(root)
+    manifest_path = report_directory(root) / "workbooks-manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    manifest["results"][0]["acceptance"] = "local-review"
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="acceptance evidence"):
+        integration.validate_content(root)
+
+
+def test_maintenance_python_and_powershell_packaging_needs_no_private_receipt(maintenance_case):
+    root, workbook_path, review = maintenance_case
+    state = initialize(root, workbook_maintenance_review=review)
+    content_pass(root)
+    before = workbook_path.read_bytes()
+
+    def package_only(command, **kwargs):
+        if "-SolutionDataFolderPath" not in command:
+            return REAL_SUBPROCESS_RUN(command, **kwargs)
+        data_path = root / "Data/Solution_Fixture.json"
+        data = json.loads(data_path.read_bytes())
+        data["Version"] = "3.2.3"
+        data_path.write_text(json.dumps(data))
+        emit_current_package(root, env=kwargs["env"])
+        return subprocess.CompletedProcess(command, 0, "Starting Package Creation using V3.1 tool", "")
+
+    with mock.patch.object(packaging.subprocess, "run", side_effect=package_only), \
+         mock.patch.object(packaging, "_validate_v31_toolkit_root", return_value=ROOT):
+        receipt = packaging.package_solution_v3_1(
+            root, version_bump="patch", toolkit_root=ROOT, workflow_run_id=state["runId"],
+            workbook_maintenance_review=review,
+        )
+    assert receipt["version"] == "3.2.3"
+    assert workbook_path.read_bytes() == before
+    assert receipt["workbookMaintenance"]["commit"] == review["commit"]
+    assert receipt["workbookMaintenance"]["qualificationEstablished"] is False
+    assert receipt["packageAccepted"] is False
+    assert not (root / "Logs/workbook-reviews").exists()
 
 
 @pytest.fixture

@@ -44,7 +44,7 @@ def _digest(value: Any) -> str:
     ).hexdigest()
 
 
-def _inventory(solution: Path) -> list[dict[str, str]]:
+def _inventory(solution: Path, *, maintenance: bool = False) -> list[dict[str, str]]:
     from solution_manager.migration.workbooks import inventory_workbooks
 
     rows = inventory_workbooks(solution)
@@ -52,6 +52,12 @@ def _inventory(solution: Path) -> list[dict[str, str]]:
         {"path": row["path"], "sha256": row["sha256"]}
         for row in rows
     ]
+    if maintenance:
+        inventory.extend(
+            {"path": path.relative_to(solution).as_posix(),
+             "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+            for path in selected_workbook_references(solution)
+        )
     inventory.sort(key=lambda row: row["path"])
     if len({row["path"] for row in inventory}) != len(inventory):
         raise ValueError("workbook inventory contains duplicate source paths")
@@ -108,9 +114,14 @@ def selected_workbook_references(
     return paths
 
 
-def freeze_inventory(solution: str | Path) -> dict[str, Any]:
+def freeze_inventory(
+    solution: str | Path, *, maintenance_review: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     root = Path(solution).expanduser().resolve()
-    inventory = _inventory(root)
+    if maintenance_review is not None:
+        from solution_manager.authoring.workbook_maintenance import validate_maintenance
+        validate_maintenance(root, maintenance_review)
+    inventory = _inventory(root, maintenance=maintenance_review is not None)
     included = [row["path"] for row in inventory]
     excluded: list[dict[str, str]] = []
     explicit_selection = False
@@ -121,10 +132,17 @@ def freeze_inventory(solution: str | Path) -> dict[str, Any]:
             included = []
             known_sources = {row["path"] for row in inventory}
             for path in selected_workbook_references(root, document):
+                if maintenance_review is not None:
+                    included.append(path.relative_to(root).as_posix())
+                    continue
                 target = json.loads(path.read_text(encoding="utf-8-sig"))
                 source = target.get("contentProvenance", {}).get("source", {}).get("path")
                 if source not in known_sources or source in included:
-                    raise ValueError("explicit workbook selection does not match the source inventory")
+                    raise ValueError(
+                        "explicit workbook selection does not match the source inventory; "
+                        "for clean published workbooks, use workbook-maintenance-plan and "
+                        "initialize a new run with --workbook-maintenance-review"
+                    )
                 expected_output = root / "XDR Workbooks" / source.removeprefix("Workbooks/")
                 if path != expected_output:
                     raise ValueError("explicit workbook selection must preserve the original relative workbook path")
@@ -142,6 +160,7 @@ def freeze_inventory(solution: str | Path) -> dict[str, Any]:
         "selection": selection,
         "selectionSha256": _digest(selection),
         "selectionExplicit": explicit_selection,
+        **({"maintenanceReview": maintenance_review} if maintenance_review is not None else {}),
     }
 
 
@@ -149,7 +168,11 @@ def verify_inventory(solution: str | Path, state: dict[str, Any]) -> None:
     if not enabled(state):
         return
     frozen = state["workbooks"]
-    current = _inventory(Path(solution).expanduser().resolve())
+    maintenance = frozen.get("maintenanceReview")
+    if maintenance is not None:
+        from solution_manager.authoring.workbook_maintenance import validate_maintenance
+        validate_maintenance(solution, maintenance)
+    current = _inventory(Path(solution).expanduser().resolve(), maintenance=maintenance is not None)
     if current != frozen["inventory"] or _digest(current) != frozen["inventorySha256"]:
         raise ValueError(
             "frozen workbook inventory changed; preserve this run and initialize a new run"
@@ -170,8 +193,11 @@ def verify_inventory(solution: str | Path, state: dict[str, Any]) -> None:
         _, document = _data(root)
         present = any(key.casefold() == "xdr workbooks" for key in document)
         if present:
-            expected = {root / "XDR Workbooks" / reference.removeprefix("Workbooks/")
-                        for reference in included}
+            expected = {
+                content_path(root, reference) if maintenance is not None
+                else root / "XDR Workbooks" / reference.removeprefix("Workbooks/")
+                for reference in included
+            }
             if set(selected_workbook_references(
                 root, document,
                 require_existing=state["stages"]["conversion"]["status"] == "passed",
@@ -207,6 +233,25 @@ def bind_conversion(
     for row in results:
         if row.get("sourceSha256") != inventory[row["sourceRelativePath"]]:
             raise ValueError("workbook conversion manifest has stale source evidence")
+        maintenance = state["workbooks"].get("maintenanceReview")
+        if maintenance is not None:
+            selected = {
+                item["path"]: item for item in maintenance["workbooks"]
+            }
+            preserved = selected.get(row["sourceRelativePath"])
+            if preserved is None:
+                if row.get("status") != "excluded" or row.get("outputRelativePath") is not None:
+                    raise ValueError("maintenance must not convert excluded source workbooks")
+            elif (
+                row.get("status") != "preserved"
+                or row.get("outputRelativePath") != preserved["path"]
+                or row.get("outputSha256") != preserved["fileSha256"]
+                or row.get("acceptance") != preserved["acceptance"]
+                or row.get("reviewRequired") is not False
+                or row.get("maintenancePlanSha256") != maintenance["planSha256"]
+            ):
+                raise ValueError("workbook maintenance manifest has stale acceptance evidence")
+            continue
         if row.get("outputRelativePath"):
             output = content_path(root, row["outputRelativePath"])
             if (
@@ -245,6 +290,8 @@ def bind_conversion(
         "workbookManifestSha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         "workbookSelectionSha256": _digest(state["workbooks"]["selection"]),
     }
+    if state["workbooks"].get("maintenanceReview") is not None:
+        binding["workbookMaintenancePlanSha256"] = state["workbooks"]["maintenanceReview"]["planSha256"]
     function_records = []
     for row in results:
         if row["sourceRelativePath"] in state["workbooks"]["selection"]["included"] and row.get("outputRelativePath"):
@@ -274,7 +321,9 @@ def validate_evidence(solution: str | Path, state: dict[str, Any]) -> dict[str, 
         row for row in manifest["results"] if row["sourceRelativePath"] in included
     ]
     if any(
-        row.get("status") != "converted" or row.get("reviewRequired") is not False
+        row.get("status") != (
+            "preserved" if state["workbooks"].get("maintenanceReview") is not None else "converted"
+        ) or row.get("reviewRequired") is not False
         for row in selected
     ):
         raise ValueError("selected workbooks have unresolved conversion or review blockers")
@@ -287,7 +336,7 @@ def validate_evidence(solution: str | Path, state: dict[str, Any]) -> dict[str, 
     from solution_manager.authoring.workbook_publication import is_public, publication_errors
     for path in selected_workbook_references(root):
         document = json.loads(path.read_bytes())
-        if is_public(document):
+        if is_public(document) and state["workbooks"].get("maintenanceReview") is None:
             blockers = publication_errors(root, document)
             if blockers:
                 raise ValueError("; ".join(blockers))
@@ -300,6 +349,38 @@ def validate_evidence(solution: str | Path, state: dict[str, Any]) -> dict[str, 
     ):
         raise ValueError("selected workbooks must individually pass current structural validation")
     return result
+
+
+def _preserve_maintenance_workbooks(root: Path, state: dict[str, Any]) -> dict[str, Any]:
+    from solution_manager.core.workflow import _atomic_json
+
+    frozen = state["workbooks"]
+    review = frozen["maintenanceReview"]
+    selected = {row["path"]: row for row in review["workbooks"]}
+    results = []
+    for source in frozen["inventory"]:
+        authored = selected.get(source["path"])
+        row = {
+            "sourceRelativePath": source["path"], "sourceSha256": source["sha256"],
+            "outputRelativePath": authored["path"] if authored else None,
+            "outputSha256": authored["fileSha256"] if authored else None,
+            "status": "preserved" if authored else "excluded",
+            "reviewRequired": False, "issues": [],
+        }
+        if authored:
+            row.update(acceptance=authored["acceptance"],
+                       maintenancePlanSha256=review["planSha256"])
+        results.append(row)
+    summary = {
+        "total": len(results), "converted": 0, "preserved": len(selected),
+        "blocked": 0, "selectedBlocked": 0, "results": results,
+    }
+    manifest = report_directory(root) / "workbooks-manifest.json"
+    _atomic_json(manifest, {
+        "schemaVersion": "1.0.0", "scope": "solution",
+        "inventory": frozen["inventory"], **summary,
+    })
+    return {**summary, "manifestPath": str(manifest)}
 
 
 def inspect_content(solution: str | Path) -> dict[str, Any]:
@@ -316,6 +397,20 @@ def inspect_content(solution: str | Path) -> dict[str, Any]:
         "existingXdrDetectionCount": 0,
     }
     inventory = inventory_workbooks(root)
+    if state["workbooks"].get("maintenanceReview") is not None:
+        from solution_manager.migration._workbook_core import workbook
+        for row in state["workbooks"]["maintenanceReview"]["workbooks"]:
+            document = json.loads(content_path(root, row["path"]).read_bytes())
+            inventory.append({
+                "path": row["path"], "sha256": row["fileSha256"],
+                "identity": document["xdrMetadata"]["contentId"],
+                "acceptance": row["acceptance"],
+                "queries": [
+                    {"path": surface["path"],
+                     "querySha256": workbook.query_hash(surface["node"]["query"])}
+                    for surface in workbook.query_surfaces(document)
+                ],
+            })
     return {**result, "workbookCount": len(inventory),
             "workbookQueryCount": sum(len(row["queries"]) for row in inventory),
             "workbooks": inventory, "workbookSelection": state["workbooks"]["selection"]}
@@ -335,6 +430,11 @@ def convert_content(solution: str | Path, *, overwrite: bool = False,
             raise ValueError("--overwrite-workbooks requires a workbook-capable frozen workflow run.")
         return convert_solution(root, overwrite=overwrite, config_path=config_path, rule_id=rule_id)
     verify_inventory(root, state)
+    if overwrite_workbooks and state["workbooks"].get("maintenanceReview") is not None:
+        raise ValueError(
+            "maintenance preserves approved authored workbooks; review workbook edits "
+            "and initialize a new maintenance plan instead of --overwrite-workbooks"
+        )
     if rule_id:
         if overwrite_workbooks:
             raise ValueError("--overwrite-workbooks cannot be combined with rule-scoped conversion.")
@@ -360,6 +460,15 @@ def convert_content(solution: str | Path, *, overwrite: bool = False,
         return {**result, "workbooks": {"total": 0, "converted": 0, "blocked": 0,
                                        "selectedBlocked": 0, "results": []},
                 "workbookArtifacts": {}, "workbookExcluded": []}
+    if state["workbooks"].get("maintenanceReview") is not None:
+        # Preserve reviewed published content; do not recreate removed conversion history.
+        verify_inventory(root, state)
+        workbook_result = _preserve_maintenance_workbooks(root, state)
+        return {
+            **result, "workbooks": workbook_result,
+            "workbookArtifacts": bind_conversion(root, state),
+            "workbookExcluded": state["workbooks"]["selection"]["excluded"],
+        }
     if selected_version is None:
         current_version = solution_data_version(root)
         try:
@@ -657,7 +766,9 @@ def expected_content_counts(
     if data_wb is not None:
         sentinel_workbooks_count = len(data_wb)
     elif state and enabled(state):
-        sentinel_workbooks_count = len(state["workbooks"]["inventory"])
+        sentinel_workbooks_count = sum(
+            row["path"].startswith("Workbooks/") for row in state["workbooks"]["inventory"]
+        )
     else:
         try:
             sentinel_workbooks_count = len(_inventory(root))
@@ -1174,6 +1285,15 @@ def summary(solution: str | Path, state: dict[str, Any]) -> dict[str, Any] | Non
         "labDeploymentPreflightPrompt": preflight_summary["labDeploymentPreflightPrompt"],
         "contractSupport": contract_support,
         "issues": issues,
+        **({
+            "maintenance": {
+                "planSha256": workbook_state["maintenanceReview"]["planSha256"],
+                "repository": workbook_state["maintenanceReview"]["repository"],
+                "commit": workbook_state["maintenanceReview"]["commit"],
+                "workbooks": workbook_state["maintenanceReview"]["workbooks"],
+                "qualificationEstablished": False,
+            },
+        } if workbook_state.get("maintenanceReview") is not None else {}),
         "sources": [{
             **source, "selected": source["path"] in workbook_state["selection"]["included"],
             "status": rows.get(source["path"], {}).get("status", "not-converted"),

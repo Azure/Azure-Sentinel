@@ -78,6 +78,32 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual("notRun", checks["sentinelAuthentication"]["status"])
         self.assertEqual("notRun", checks["advancedHunting"]["status"])
         self.assertEqual("passed", checks["sentinelWorkspace"]["status"])
+        self.assertIn("playwright", checks)
+
+    @mock.patch("sentinel_xdr_migration.onboarding.shutil.which", return_value="az")
+    @mock.patch("importlib.util.find_spec", return_value=None)
+    def test_doctor_warns_when_playwright_is_not_installed(
+        self, _find_spec: mock.Mock, _which: mock.Mock
+    ) -> None:
+        state_dir = Path(self.temp.name) / "state-no-pw"
+        configure_workspace(
+            WORKSPACE,
+            workspace_customer_id=CUSTOMER_ID,
+            tenant_id=TENANT_ID,
+            subscription_id=SUBSCRIPTION_ID,
+            state_dir=state_dir,
+        )
+        report = doctor(
+            state_dir=state_dir,
+            runner=lambda command, **_kwargs: CompletedProcess(command, 0, "{}", ""),
+            environment={},
+        )
+        checks = {check["name"]: check for check in report["checks"]}
+        self.assertEqual("notAvailable", checks["playwright"]["status"])
+        self.assertIn("KQL validation only", checks["playwright"]["detail"])
+        self.assertTrue(
+            any("Playwright is not installed" in action for action in report["recommendedActions"])
+        )
 
     @mock.patch("sentinel_xdr_migration.onboarding.shutil.which", return_value="az")
     def test_default_preflight_is_offline_and_does_not_materialize_target(

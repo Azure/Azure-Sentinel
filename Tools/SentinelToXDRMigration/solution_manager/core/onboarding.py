@@ -247,6 +247,26 @@ def _advanced_hunting_status(
     }
 
 
+def _playwright_status() -> dict[str, Any]:
+    try:
+        import importlib.util
+
+        spec = importlib.util.find_spec("playwright.sync_api")
+    except Exception:
+        spec = None
+    if spec is not None:
+        return {
+            "name": "playwright",
+            "status": "passed",
+            "detail": "Playwright is installed; both KQL and portal UI workbook verification are available",
+        }
+    return {
+        "name": "playwright",
+        "status": "notAvailable",
+        "detail": "Playwright is not installed; workbook verification will be limited to KQL validation only (no portal UI check)",
+    }
+
+
 def _sentinel_authentication_status(
     *, runner: CommandRunner, probe: bool, azure_config_dir: str | None = None
 ) -> dict[str, Any]:
@@ -360,7 +380,8 @@ def doctor(
     hunting = _advanced_hunting_status(
         state_root, config.get("tenantId"), probe=probe_authentication
     )
-    checks = [python_status, azure_cli, sentinel_auth, workspace, hunting]
+    playwright_check = _playwright_status()
+    checks = [python_status, azure_cli, sentinel_auth, workspace, hunting, playwright_check]
     runtime_ready = False
 
     actions: list[str] = []
@@ -373,6 +394,10 @@ def doctor(
     if sentinel_auth["status"] != "passed" or hunting["status"] != "passed":
         actions.append(
             "Authentication, authorization, table access, and query access remain unverified until an explicitly scoped runtime read."
+        )
+    if playwright_check["status"] != "passed":
+        actions.append(
+            "Playwright is not installed; XDR workbook verification will only run KQL validation unless Playwright (`pip install playwright && playwright install chromium`) is installed."
         )
 
     result = {
