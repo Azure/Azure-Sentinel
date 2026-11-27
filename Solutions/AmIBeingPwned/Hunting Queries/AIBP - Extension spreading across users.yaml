@@ -1,0 +1,32 @@
+id: 6d2f8b1e-4c7a-4e39-9b05-3a1d7c9e2f48
+name: AIBP - Extension spreading across users
+description: |
+  'Finds browser extensions that Am I Being Pwned alerted on in the last day and that run for five or more users. One risky extension on many people's machines in a day is usually a campaign or a bad update, not one user's choice.'
+requiredDataConnectors:
+  - connectorId: AmIBeingPwnedEventsConnector
+    dataTypes:
+      - AIBPEvents_CL
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1176
+  - T1185
+query: |-
+  AIBPEvents_CL
+  | where TimeGenerated > ago(1d)
+  | where EventType == "alert.raised"
+  | summarize arg_max(TimeGenerated, *) by AlertId
+  | mv-expand Machine = Affected
+  | extend UserEmail = tostring(Machine.userEmail)
+  | where isnotempty(UserEmail)
+  | summarize Users = dcount(UserEmail), SomeUsers = make_set(UserEmail, 20), Machines = max(AffectedMachines), LastAlert = max(TimeGenerated) by ExtensionId, ExtensionName
+  | where Users >= 5
+  | extend MalwareName = iif(isnotempty(ExtensionName), ExtensionName, ExtensionId)
+  | sort by Users desc
+entityMappings:
+  - entityType: Malware
+    fieldMappings:
+      - identifier: Name
+        columnName: MalwareName
+version: 1.0.1

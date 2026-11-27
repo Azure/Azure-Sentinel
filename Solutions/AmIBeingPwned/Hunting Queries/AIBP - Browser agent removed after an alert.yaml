@@ -1,0 +1,39 @@
+id: 9a4e1c63-2b8f-4d17-a6c0-5e3f7b2d1c94
+name: AIBP - Browser agent removed after an alert
+description: |
+  'Finds machines whose Am I Being Pwned browser agent was removed within a day of an alert about an extension on that machine. Removing the agent stops extension monitoring there, so right after an alert it can mean someone is avoiding the response.'
+requiredDataConnectors:
+  - connectorId: AmIBeingPwnedEventsConnector
+    dataTypes:
+      - AIBPEvents_CL
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |-
+  let Alerted = AIBPEvents_CL
+  | where TimeGenerated > ago(7d)
+  | where EventType == "alert.raised"
+  | summarize arg_max(TimeGenerated, *) by AlertId
+  | mv-expand Machine = Affected
+  | mv-expand AgentDeviceId = Machine.agentDeviceIds to typeof(string)
+  | project AlertTime = TimeGenerated, AgentDeviceId, ExtensionName, AlertTier, AlertReason, DashboardUrl;
+  AIBPEvents_CL
+  | where TimeGenerated > ago(7d)
+  | where EventType == "device.uninstalled"
+  | summarize arg_max(TimeGenerated, *) by EventId
+  | project RemovedAt = TimeGenerated, AgentDeviceId = DeviceId, IdentityEmail, MachineName
+  | join kind=inner Alerted on AgentDeviceId
+  | where RemovedAt between (AlertTime .. (AlertTime + 1d))
+  | project RemovedAt, AlertTime, MachineName, IdentityEmail, ExtensionName, AlertTier, AlertReason, DashboardUrl
+  | sort by RemovedAt desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: IdentityEmail
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: MachineName
+version: 1.0.1

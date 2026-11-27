@@ -1,0 +1,53 @@
+[
+  {
+    "name": "AIBPEventsDCR",
+    "apiVersion": "2022-06-01",
+    "type": "Microsoft.Insights/dataCollectionRules",
+    "location": "{{location}}",
+    "properties": {
+      "dataCollectionEndpointId": "{{dataCollectionEndpointId}}",
+      "streamDeclarations": {
+        "Custom-AIBPEvents_CL": {
+          "columns": [
+            {
+              "name": "schemaVersion",
+              "type": "int"
+            },
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "type",
+              "type": "string"
+            },
+            {
+              "name": "occurredAt",
+              "type": "string"
+            },
+            {
+              "name": "data",
+              "type": "dynamic"
+            }
+          ]
+        }
+      },
+      "destinations": {
+        "logAnalytics": [
+          {
+            "workspaceResourceId": "{{workspaceResourceId}}",
+            "name": "clv2ws1"
+          }
+        ]
+      },
+      "dataFlows": [
+        {
+          "streams": ["Custom-AIBPEvents_CL"],
+          "destinations": ["clv2ws1"],
+          "transformKql": "source | extend EventType = tostring(['type']) | extend TimeGenerated = iif(isnotnull(todatetime(occurredAt)), todatetime(occurredAt), now()), EventId = tostring(id), Data = data | extend AlertId = tostring(data['alertId']), AlertTier = tostring(data['tier']), AlertReason = tostring(data['reason']), IssueKind = tostring(data['issue']['kind']), IssueState = tostring(data['issue']['state']), StealsLogins = tobool(data['issue']['stealsLogins']), RemoteCode = tobool(data['issue']['remoteCode']) | extend ThreatId = iif(EventType == \"alert.raised\", tostring(data['issue']['threatId']), tostring(data['threatId'])), ExtensionId = iif(EventType == \"threat.detected\", tostring(data['threats'][0]['chromeExtensionId']), iif(EventType == \"threat.resolved\", tostring(data['chromeExtensionId']), tostring(data['issue']['chromeExtensionId']))), ExtensionName = iif(EventType == \"threat.detected\", tostring(data['threats'][0]['extensionName']), tostring(data['issue']['extensionName'])), Severity = iif(EventType == \"threat.detected\", tostring(data['threats'][0]['riskLevel']), tostring(data['issue']['severity'])), InstallCount = iif(EventType == \"threat.detected\", toint(data['installCount']), toint(data['issue']['installCount'])) | extend SchemaVersion = toint(schemaVersion), AffectedMachines = toint(data['affectedMachines']), Affected = data['affected'], DashboardUrl = tostring(data['dashboardUrl']), Resolution = tostring(data['resolution']) | extend DeviceId = tostring(data['deviceId']), MachineName = tostring(data['machineName']), IdentityEmail = tostring(data['identityEmail']), Platform = tostring(data['platform']) | project TimeGenerated, EventId, EventType, SchemaVersion, AlertId, AlertTier, AlertReason, ThreatId, ExtensionId, ExtensionName, IssueKind, Severity, IssueState, StealsLogins, RemoteCode, InstallCount, AffectedMachines, Affected, DashboardUrl, Resolution, DeviceId, MachineName, IdentityEmail, Platform, Data",
+          "outputStream": "Custom-AIBPEvents_CL"
+        }
+      ]
+    }
+  }
+]
