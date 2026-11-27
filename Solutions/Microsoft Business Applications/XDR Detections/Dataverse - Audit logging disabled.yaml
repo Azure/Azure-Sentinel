@@ -1,5 +1,5 @@
 schemaVersion: 1.0.0
-version: 3.2.4
+version: 3.2.5
 kind: CustomDetection
 resourceType: Microsoft.Security/detectionRules
 apiVersion: 2026-06-01-preview
@@ -22,8 +22,8 @@ contentProvenance:
     kind: AnalyticsRule
     id: ea07523b-e6b8-469b-9e25-cdef1ae6fb45
     path: Analytic Rules/Dataverse - Audit logging disabled.yaml
-    version: 3.2.1
-    querySha256: 773e88a24b3c182369dff725fef292d7c0f3740f38ab8c4e6718bd6a99646922
+    version: 3.2.2
+    querySha256: f5dec243c9fea1a12acaaa1f987f12586aa760775a15a5d6099d84d5dc58a819
     schedule:
       queryFrequency: 1h
       queryPeriod: 14d
@@ -52,8 +52,8 @@ contentProvenance:
     originalTechniques:
     - T1562
     reviewScope:
-      sourceDocumentSha256: f5dbc3270ac57bb112aa3f4562705fca1c80fb5729e36501dcf8fe27eedc9ca9
-      targetQuerySha256: 959ea1fa7790a2447a0c258931dd302c2235d857e3c2d8007bd86c46725b959d
+      sourceDocumentSha256: f371e98e155a72caa273c5f176d08a5f4ef41321d8f9dffe9f9ee59f7d8e3027
+      targetQuerySha256: ab3d579d8244ecdf16cfbabd1936b96eb51aa96c9932f578538d581c3be0abb8
     supplementalEntityDetails:
     - entityType: CloudApplication
       entityIndex: 3
@@ -70,13 +70,23 @@ properties:
     queryText: |-
       let query_frequency = 1h;
       let audit_properties = dynamic(['isauditenabled', 'isuseraccessauditenabled','isreadauditenabled']);
-      DataverseActivity
-      | where TimeGenerated >= ago(query_frequency)
-      | where Message in~ ("Update", "UpdateAuditSettings")
-      | where Fields has_any (audit_properties)
-      | mv-expand Fields
-      | extend AuditValue = Fields.Name, AuditEnabled = tobool(Fields.Value)
-      | where AuditValue in~ (audit_properties) and not (AuditEnabled)
+      let audit_events = DataverseActivity
+          | where TimeGenerated >= ago(query_frequency)
+          | where Message in~ ("Update", "UpdateAuditSettings", "Disable Organization Audit");
+      union
+          (
+          audit_events
+          | where Message in~ ("Update", "UpdateAuditSettings")
+          | where Fields has_any (audit_properties)
+          | mv-expand Fields
+          | extend AuditValue = Fields.Name, AuditEnabled = tobool(Fields.Value)
+          | where AuditValue in~ (audit_properties) and not (AuditEnabled)
+          ),
+          (
+          audit_events
+          | where Message =~ "Disable Organization Audit"
+          | extend AuditValue = dynamic("isauditenabled"), AuditEnabled = false
+          )
       | extend
           CloudAppId = int(32780),
           AccountName = tostring(split(UserId, '@')[0]),
